@@ -661,7 +661,7 @@ public sealed partial class WebUiSession : IWebUiBackend, IDisposable
     public IReadOnlyList<string> Waiting => [.. WaitingLines.Select(l => l.Text)];
 
     /// <summary>
-    /// The messages waiting now with their keys (2026-11-16, #42, the Queue tab's "From this page"), oldest first: the ones held after a cancel, the
+    /// The messages waiting now with their keys (2026-11-16, #42, the Queue tab's "From the pages"), oldest first: the ones held after a cancel, the
     /// queue's, then the screen's pended ones (<see cref="HeldForPc"/>).
     /// </summary>
     public IReadOnlyList<WebQueueLine> WaitingLines
@@ -671,7 +671,7 @@ public sealed partial class WebUiSession : IWebUiBackend, IDisposable
             List<WebQueueLine> lines;
             lock (_linesGate)
             {
-                lines = [.. _cancelHeld.Concat(_lines).Select(l => new WebQueueLine(l.Key, l.Text, l.Chord))];
+                lines = [.. _cancelHeld.Concat(_lines).Select(l => new WebQueueLine(l.Key, l.Text, l.Chord, l.Attachments?.Count ?? 0))];   // a picture-only line shows its count (2026-11-16, the review's #4)
             }
 
             lines.AddRange(HeldForPc?.Invoke() ?? []);   // outside the lock: the screen's own list
@@ -687,6 +687,23 @@ public sealed partial class WebUiSession : IWebUiBackend, IDisposable
             lock (_linesGate)
             {
                 return _lines.Count + _cancelHeld.Count;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the line <see cref="TryTakeLine"/> would take next carries attachments (2026-11-16, the review's #24, #23 and #126): a botchat's or
+    /// a loop's interjections stop at it, so it stays here (counted, unsaved, in order) for the idle line, and the lines behind it wait too.
+    /// </summary>
+    public bool NextLineHasAttachments
+    {
+        get
+        {
+            bool holding = CancelHolding;
+            lock (_linesGate)
+            {
+                var from = !holding && _cancelHeld.Count > 0 ? _cancelHeld : _lines;
+                return from.Count > 0 && from[0].Attachments is { Count: > 0 };
             }
         }
     }
@@ -893,7 +910,7 @@ public sealed partial class WebUiSession : IWebUiBackend, IDisposable
         var voice = page is not null && VoiceSnapshot is { } pieces ? pieces(page) : default;
         return new WebSnapshot(Feed.Snapshot((Func<string, string, string>)WebUiMarkdown.ToHtml, defer: true), Asks.OpenAsks().Select(View).ToList(), _state(), WebUiText.Words, TakeDrafts(), StatusNow?.Invoke().Status,
             StripView?.Invoke(), PointNow?.Invoke(), page, voice.Heard, voice.Speaking, voice.Listen,
-            page is not null ? ChipsOf(page) : null, NeonSidekick.Files.ImageFile.MaxFileBytes, NeonSidekick.Files.ImageFile.MaxPixels);
+            page is not null ? ChipsOf(page) : null, NeonSidekick.Files.ImageFile.MaxFileBytes, NeonSidekick.Files.ImageFile.MaxPixels, MaxHeldPerPage);
     }
 
     /// <summary>The Chat tab's voice (2026-11-13, the webui-voice plan), filled by the screen, as <see cref="Video"/> is; null without one.</summary>
@@ -919,6 +936,11 @@ public sealed partial class WebUiSession : IWebUiBackend, IDisposable
         var ids = page is not null && request.Attachments is { Count: > 0 } named
             ? named.Where(id => !string.IsNullOrEmpty(id)).Distinct(StringComparer.Ordinal).Take(MaxHeldPerPage).ToList()
             : [];
+        if (ids.Count > 0 && text.Trim().Length == 0)
+        {
+            text = "";   // a picture sent with blanks alone goes as a picture alone, no blank message beside it (2026-11-16, the review's #77)
+        }
+
         if (text.Trim().Length == 0 && ids.Count == 0)
         {
             return new WebReply(WebOutcome.Refused, WebUiText.EmptyMessage);

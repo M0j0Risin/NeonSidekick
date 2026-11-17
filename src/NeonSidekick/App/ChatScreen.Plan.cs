@@ -1110,14 +1110,8 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
         {
-            return false;
-        }
-
-        if (_session.Assistant is null)
-        {
-            _transcript.Error(NoAssistantError);
             return false;
         }
 
@@ -1665,11 +1659,5 @@ internal sealed partial class ChatScreen
     private void SyncPlanChrome() => _pane.Placeholder = !_plan.Active ? InputPlaceholder : _plan.Talking ? PlanText.TalkingPlaceholder : PlanText.Placeholder;
 
     /// <summary>Plan mode into the session row at once (an enter, a cancel, an approval), not only at the turn's end; nothing without a row.</summary>
-    private void SavePlanState()
-    {
-        if (_session.Assistant is { } assistant)
-        {
-            SaveSessionHistory(assistant);
-        }
-    }
+    private void SavePlanState() => SaveSessionHistory();   // unloaded too (2026-11-16, the review's #109)
 }

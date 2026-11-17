@@ -94,17 +94,29 @@ public static class EmbeddedLlmText
 
     /// <summary>
     /// The idle unload's dim line, at the PC and on the page (2026-11-16, plan lucid-roaming-lantern #44): <c>🦙 Unloaded Gemma 4 26B after
-    /// 20 min idle; the next message or command loads it again</c>, or for a model parked behind another server <c>🦙 Unloaded Gemma 4 26B,
-    /// parked behind LM Studio, after 20 min idle</c>. Pinned.
+    /// 20 min idle; the next message loads it again</c> when the main model is kept for a reload (<paramref name="reloads"/>); for a model
+    /// parked behind another server <c>🦙 Unloaded Gemma 4 26B, parked behind LM Studio, after 20 min idle</c>, which waits for <c>/server</c>;
+    /// and with neither, the bare <c>🦙 Unloaded Gemma 4 26B after 20 min idle</c> (2026-11-16, the review's #59 and #133: a parked model
+    /// with no server in front of it promised a reload nothing kept, and "or command" overpromised). Pinned.
     /// </summary>
-    public static string IdleUnloadedNotice(EmbeddedModel model, TimeSpan idle, string? parkedBehind)
+    public static string IdleUnloadedNotice(EmbeddedModel model, TimeSpan idle, string? parkedBehind, bool reloads)
     {
         ArgumentNullException.ThrowIfNull(model);
         string minutes = string.Create(CultureInfo.InvariantCulture, $"{idle.TotalMinutes:0} min idle");
-        return parkedBehind is null
-            ? $"🦙 Unloaded {model.Display} after {minutes}; the next message or command loads it again"
-            : $"🦙 Unloaded {model.Display}, parked behind {parkedBehind}, after {minutes}";
+        return parkedBehind is not null
+            ? $"🦙 Unloaded {model.Display}, parked behind {parkedBehind}, after {minutes}"
+            : reloads
+                ? $"🦙 Unloaded {model.Display} after {minutes}; the next message loads it again"
+                : $"🦙 Unloaded {model.Display} after {minutes}";
     }
+
+    /// <summary>The idle unload's log line for the main model (2026-11-16, review #16: formatted invariant).</summary>
+    public static string IdleUnloadedLogLine(string modelId, TimeSpan idle) =>
+        string.Create(CultureInfo.InvariantCulture, $"Unloaded {modelId} after {idle.TotalMinutes:0} min idle.");
+
+    /// <summary>The idle unload's log line for a model parked behind <paramref name="behind"/> (null: no server in front of it).</summary>
+    public static string IdleUnloadedParkedLogLine(string modelId, string? behind, TimeSpan idle) =>
+        string.Create(CultureInfo.InvariantCulture, $"Unloaded {modelId}, parked behind {behind ?? "no server"}, after {idle.TotalMinutes:0} min idle.");
 
     /// <summary>The fit marks (2026-11-16, #43): ✅ fits, ⚠️ small context only, ✗ won't fit, 🐢 partly on the CPU. Pinned.</summary>
     public static string FitGlyph(FitMark mark) => mark switch
@@ -131,6 +143,7 @@ public static class EmbeddedLlmText
     public static string FitNoneCaption(FitNone why) => why switch
     {
         FitNone.Cpu => "No fit marks: the CPU backend runs every model, slower.",
+        FitNone.VramOnlyOnCpu => "No fit marks: " + VramOnlyOnCpu + ".",
         FitNone.NoRead => "No fit marks: no GPU memory was read.",
         _ => "No fit marks: Embedded GPU layers is a count; auto or all marks each model.",
     };

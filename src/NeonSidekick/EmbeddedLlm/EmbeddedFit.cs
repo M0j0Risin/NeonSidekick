@@ -24,6 +24,12 @@ public enum FitNone
     /// <summary>The CPU backend: there is no GPU to fit.</summary>
     Cpu,
 
+    /// <summary>
+    /// The CPU backend with <c>Embedded VRAM only</c> on (2026-11-16, the review's #87): no model launches at all, as the launch's own refusal
+    /// says, so "the CPU runs every model" would be untrue.
+    /// </summary>
+    VramOnlyOnCpu,
+
     /// <summary>No GPU memory was read (or a read of 0, a driver that reports nothing).</summary>
     NoRead,
 
@@ -62,7 +68,7 @@ public static class EmbeddedFit
         ArgumentNullException.ThrowIfNull(effective);
         if (backend == LlamaBackend.Cpu)
         {
-            return FitNone.Cpu;
+            return effective.EmbeddedVramOnly ? FitNone.VramOnlyOnCpu : FitNone.Cpu;
         }
 
         if (gpuBytes is not > 0)
@@ -72,9 +78,6 @@ public static class EmbeddedFit
 
         return Layers(effective) is EmbeddedGpuLayers.Auto or EmbeddedGpuLayers.All ? null : FitNone.LayerCount;
     }
-
-    /// <summary>Whether a mark can be given here: the filter's <c>size: fits</c> stop is offered only then.</summary>
-    public static bool CanMark(AppSettingsData effective, long? gpuBytes, LlamaBackend backend) => WhyNone(effective, gpuBytes, backend) is null;
 
     /// <summary><paramref name="model"/>'s mark under <paramref name="effective"/> on a GPU of <paramref name="gpuBytes"/>; null where <see cref="WhyNone"/> says.</summary>
     public static FitMark? Mark(EmbeddedModel model, AppSettingsData effective, long? gpuBytes, LlamaBackend backend)

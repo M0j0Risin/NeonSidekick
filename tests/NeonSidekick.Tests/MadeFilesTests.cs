@@ -227,6 +227,51 @@ public sealed class MadeFilesTests : IDisposable
         Assert.False(MadeFiles.IsUnder(_root, _root));
     }
 
+    /// <summary>A drive's root holds its files (the review's #1), the root itself never one.</summary>
+    [WindowsFact]
+    public void ADrivesRoot_HoldsItsFiles()
+    {
+        const string Drive = @"C:\";
+        Assert.True(MadeFiles.IsUnder(@"C:\a.txt", Drive));
+        Assert.True(MadeFiles.IsUnder(@"c:\out\a.txt", Drive));   // a drive's case rule: case-blind
+        Assert.False(MadeFiles.IsUnder(Drive, Drive));
+        Assert.False(MadeFiles.IsUnder(@"E:\a.txt", Drive));
+    }
+
+    /// <summary>A capture's write is never listed (the review's #127); the write itself still lands.</summary>
+    [Fact]
+    public void AnUnlistedWrite_LandsButIsNotListed()
+    {
+        Call(Turn("snap"), f => Assert.Equal(FileOutcome.Ok, MadeFiles.Unlisted(() => f.WriteText("camera.jpg", "x", overwrite: false)).Outcome));
+        Assert.True(File.Exists(Path.Combine(_root, "camera.jpg")));
+        Assert.Empty(Names());
+    }
+
+    /// <summary>
+    /// A mid-turn compaction's rebuilt message shares the turn's dictionary, so its key (the review's #103 and #128): a save finds the turn's
+    /// ordinal on the rebuilt message, and a second write under it is the same turn's one row.
+    /// </summary>
+    [Fact]
+    public void ACompactionsRebuiltMessage_IsTheSameTurn()
+    {
+        var turn = Turn("make it");
+        ConversationHistory.SetTurnOrdinal(turn, 7);
+        Call(turn, f => f.WriteText("a.txt", "a", overwrite: false));
+        var rebuilt = new ChatMessage(ChatRole.User, "make it (summarised)") { AdditionalProperties = turn.AdditionalProperties };
+        Call(rebuilt, f => f.WriteText("a.txt", "aa", overwrite: true));
+
+        Assert.Equal([7], _made.Saved([rebuilt]).Select(s => s.Ordinal));   // one entry, tied to the rebuilt message's ordinal
+    }
+
+    /// <summary>A move of a file the list never held lists it at its new place (the review's #106).</summary>
+    [Fact]
+    public void AMoveOfAnUnheldFile_IsListed()
+    {
+        File.WriteAllText(Path.Combine(_root, "old.txt"), "o");
+        Call(Turn("move"), f => Assert.Equal(FileOutcome.Ok, f.Move("old.txt", "new.txt", overwrite: false).Outcome));
+        Assert.Equal(["new.txt"], Names());
+    }
+
     [Fact]
     public void WithNoListEntered_NothingIsRecorded()
     {

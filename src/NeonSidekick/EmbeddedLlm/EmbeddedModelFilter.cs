@@ -28,7 +28,7 @@ namespace NeonSidekick.EmbeddedLlm;
 /// <c>size: any|fits|8GB|16GB</c> on S (<see cref="NextSize"/>), and the catalog's installed and uninstalled one more,
 /// <c>show: all|installed|uninstalled</c> on I (<see cref="NextInstalled"/>), each lit while it thins the list; sort moved to O.</para>
 /// <para><see cref="Fits"/> (2026-11-16, plan lucid-roaming-lantern #43): the size button's first stop after any, offered where a fit mark
-/// can be given (<see cref="EmbeddedFit.CanMark"/>), keeps the ✅ and ⚠️ rows. Never saved, as the rest.</para>
+/// can be given (<see cref="EmbeddedFit.WhyNone"/> is null), keeps the ✅ and ⚠️ rows. Never saved, as the rest.</para>
 /// Pure: the tests drive it.
 /// </summary>
 public sealed record EmbeddedModelFilter(int? MaxGb, bool Uncensored, bool? Installed = null, bool SortSize = false, bool Drafter = false, bool Fits = false)

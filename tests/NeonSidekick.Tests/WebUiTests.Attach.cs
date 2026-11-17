@@ -43,7 +43,7 @@ public sealed partial class WebUiTests
         Assert.Equal([picture.Chip.Id, pdf.Id], _session.ChipsOf(PageA).Select(c => c.Id));
         Assert.Empty(_session.ChipsOf(PageB));
         Assert.Equal(_session.ChipsOf(PageA), _session.Snapshot(PageA).Chips);
-        Assert.Equal((ImageFile.MaxFileBytes, ImageFile.MaxPixels), (_session.Snapshot(PageA).AttachMaxBytes, _session.Snapshot(PageA).AttachMaxPixels));
+        Assert.Equal((ImageFile.MaxFileBytes, ImageFile.MaxPixels, WebUiSession.MaxHeldPerPage), (_session.Snapshot(PageA).AttachMaxBytes, _session.Snapshot(PageA).AttachMaxPixels, _session.Snapshot(PageA).AttachMaxHeld));
     }
 
     [Fact]
@@ -73,6 +73,21 @@ public sealed partial class WebUiTests
     {
         Assert.Equal((422, WebUiText.AttachHeic), Refusal(HeifBytes()));
         Assert.True(WebAttachSniff.IsHeif(HeifBytes()));
+    }
+
+    /// <summary>Every HEIF brand ImageIO knows is a HEIF here too (the review's #65), and an AVIF is sniffed as one (#69).</summary>
+    [Fact]
+    public void EveryHeifBrand_IsHeif_AndAnAvif_IsSniffed()
+    {
+        foreach (string brand in Images.ImageIOFormats.HeifBrands)
+        {
+            byte[] bytes = [0, 0, 0, 24, .. "ftyp"u8.ToArray(), .. System.Text.Encoding.ASCII.GetBytes(brand), 0, 0, 0, 0];
+            Assert.True(WebAttachSniff.IsHeif(bytes), brand);
+            Assert.Equal("image/heic", WebAttachSniff.SourceType(bytes));
+        }
+
+        Assert.Equal("image/avif", WebAttachSniff.SourceType([0, 0, 0, 24, .. "ftypavif"u8.ToArray(), 0, 0, 0, 0]));
+        Assert.False(WebAttachSniff.IsHeif([0, 0, 0, 24, .. "ftypavif"u8.ToArray(), 0, 0, 0, 0]));
     }
 
     /// <summary>A Mac reads HEIC itself: a HEIF brand that fails to load is a broken file.</summary>
@@ -134,7 +149,12 @@ public sealed partial class WebUiTests
         var mine = Held(PageA);
         var theirs = Held(PageB);
         Assert.Equal(WebOutcome.Ok, _session.Send(new WebSendRequest { Text = "", Page = PageA, Attachments = [mine.Id, theirs.Id] }, null).Outcome);
+        Assert.Equal(1, _session.WaitingLines.Single().Pictures);   // the Queue tab counts a picture-only line's picture (the review's #4)
         Assert.True(_session.TryTakeLine(out var line));
+        var blanks = Held(PageA);
+        Assert.Equal(WebOutcome.Ok, _session.Send(new WebSendRequest { Text = " \n ", Page = PageA, Attachments = [blanks.Id] }, null).Outcome);
+        Assert.True(_session.TryTakeLine(out var blankLine));
+        Assert.Equal("", blankLine.Text);   // blanks with a picture are no text at all (the review's #77)
         Assert.Equal([mine.Id], line.Attachments!.Select(a => a.Id));
         Assert.Empty(_session.ChipsOf(PageA));
         Assert.Equal([theirs.Id], _session.ChipsOf(PageB).Select(c => c.Id));   // B's chip stays held
@@ -238,6 +258,50 @@ public sealed partial class WebUiTests
         Assert.Equal(WebUiSession.MaxHeldPerPage, _session.ChipsOf(PageA).Count);
         Assert.Contains(sent.Id, _session.ChipsOf(PageA).Select(c => c.Id));
         Assert.Equal(WebUiText.AttachTrimmed, ChipsIn(Drain(mine).Single(e => e.Name == "chips")).Message);
+    }
+
+    [Fact]
+    public void AGiveBackAcrossAProfileSwitch_IsDropped()
+    {
+        // 2026-11-16, the review's #5: a line taken under the last profile hands nothing back under the new one.
+        var sent = Held(PageA);
+        _session.Send(new WebSendRequest { Text = "go", Page = PageA, Attachments = [sent.Id] }, null);
+        Assert.True(_session.TryTakeLine(out var line));
+        _session.ForgetAttachments();
+
+        _session.Withdrawn("go", line.Attachments);
+
+        Assert.Equal(0, _session.HeldCount);
+    }
+
+    [Fact]
+    public void AGiveBackPastTheBytes_LetsGoOfItsOwnPagesUploads_NeverAnotherPages()
+    {
+        // 2026-11-16, the review's #46: page B's uploads stay; page A's oldest goes to make room for its own give-back.
+        Held(PageB, PdfBody(20_000_000));
+        Held(PageB, PdfBody(20_000_000));
+        var sent = Held(PageA, PdfBody(20_000_000));
+        _session.Send(new WebSendRequest { Text = "go", Page = PageA, Attachments = [sent.Id] }, null);
+        Assert.True(_session.TryTakeLine(out var line));
+        var older = Held(PageA, PdfBody(15_000_000));
+
+        _session.Withdrawn("go", line.Attachments);
+
+        Assert.Equal(2, _session.ChipsOf(PageB).Count);
+        Assert.Equal([sent.Id], _session.ChipsOf(PageA).Select(c => c.Id));
+        Assert.DoesNotContain(older.Id, _session.ChipsOf(PageA).Select(c => c.Id));
+    }
+
+    [Fact]
+    public void AFifthUpload_IsRefusedBeforeItsBytesAreRead()
+    {
+        // 2026-11-16, the review's #41: the page's count is checked first, so bytes that aren't a picture at all get the 409, not a 415.
+        for (int i = 0; i < WebUiSession.MaxHeldPerPage; i++)
+        {
+            Held(PageA);
+        }
+
+        Assert.Equal((409, WebUiText.AttachFull), Refusal([1, 2, 3, 4]));
     }
 
     [Fact]

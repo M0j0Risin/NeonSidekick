@@ -771,8 +771,9 @@ internal sealed partial class ChatScreen
             VoiceSpeak: WebVoiceSpeakState(effective),
             // The 🗂️ sheet's Queue tab re-reads when this moves (2026-11-16, #42).
             QueueTag: WebQueueTagNow(),
-            // Its Files tab re-reads when this moves (2026-11-16, #41).
-            FilesTag: WebFilesTagNow());
+            // Its Files tab re-reads when this moves (2026-11-16, #41), and its Sessions tab when this one does (the review's #78).
+            FilesTag: WebFilesTagNow(),
+            SessionsTag: WebSessionsTagNow());
     }
 
     /// <summary>
@@ -974,20 +975,32 @@ internal sealed partial class ChatScreen
             return new WebReply(WebOutcome.Refused, verdict.Reason);
         }
 
+        // A tap on another thread that got there first is a quiet OK.
+        return QueueWebChord(BotChat.ResumeLine, remote, request.Page, request.Speak, profile: null, busy: WebReply.Ok,
+            WebUiText.BotResumeLogLine(remote), WebUiText.BotResumedFlash);
+    }
+
+    /// <summary>
+    /// A chord line from the page queued for the idle line (2026-11-16, the review's #55: the botchat's resume and a session's shared the steps):
+    /// one at a time (<c>_webChordInFlight</c>, <paramref name="busy"/> while one waits), the flag let go when the queue refused it, then the
+    /// audit line, the PC's hint row and the state.
+    /// </summary>
+    private WebReply QueueWebChord(string line, IPAddress? remote, string? page, bool? speak, string? profile, WebReply busy, string logLine, string flash)
+    {
         if (Interlocked.CompareExchange(ref _webChordInFlight, 1, 0) != 0)
         {
-            return WebReply.Ok;   // a tap on another thread got there first
+            return busy;
         }
 
-        var queued = _webUi.QueueChord(BotChat.ResumeLine, remote, request.Page, request.Speak);
+        var queued = _webUi.QueueChord(line, remote, page, speak, profile);
         if (queued.Outcome != WebOutcome.Ok)
         {
             Interlocked.Exchange(ref _webChordInFlight, 0);
             return queued;
         }
 
-        DiagnosticLog.Info(WebUiCategory, WebUiText.BotResumeLogLine(remote));
-        _webUi.FlashPc(WebUiText.BotResumedFlash);
+        DiagnosticLog.Info(WebUiCategory, logLine);
+        _webUi.FlashPc(flash);
         _webUi.PublishState();
         return WebReply.Ok;
     }
@@ -1029,14 +1042,16 @@ internal sealed partial class ChatScreen
         return line.Attachments is { Count: > 0 } attachments ? PhoneLine(built, attachments, line.Page) ?? TakeWebLine() : built;
     }
 
+    /// <summary>A line's label on one row: its line breaks as spaces (2026-11-16, the review's #56: a page's line and a phone line's shared it).</summary>
+    private static string OneRow(string text) => text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
+
     /// <summary>
     /// A page's line from its text alone (2026-10-16, out of <see cref="TakeWebLine"/> for a saved prompt the page's <c>/prompts &lt;n&gt;</c>
     /// sends): never through the PC's paste store, its label one row, routed back to the page when withdrawn.
     /// </summary>
     private static SubmittedLine WebLine(string text, bool asText, System.Net.IPAddress? remote, WebPageRef? page, bool chord = false)
     {
-        string label = text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
-        return new SubmittedLine(text, text.TrimEnd(), [], label) { FromWeb = true, AsText = asText, Remote = remote, WebPage = page?.Page, Speak = page?.Speak == true, Chord = chord };
+        return new SubmittedLine(text, text.TrimEnd(), [], OneRow(text)) { FromWeb = true, AsText = asText, Remote = remote, WebPage = page?.Page, Speak = page?.Speak == true, Chord = chord };
     }
 
     /// <summary>

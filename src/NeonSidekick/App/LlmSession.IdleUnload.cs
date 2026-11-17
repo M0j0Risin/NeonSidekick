@@ -18,11 +18,17 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class LlmSession
 {
-    /// <summary>The model a main embedded connection had when it was unloaded or crashed, and the settings it connected under, for the reload (2026-11-16, #44).</summary>
-    public sealed record IdleUnload(AppSettingsData Effective, EmbeddedModel Model);
+    /// <summary>
+    /// The model a main embedded connection had when it was unloaded or crashed, and the URL it connected to, for the reload (2026-11-16, #44;
+    /// the URL alone since the review's #83, not a whole settings copy).
+    /// </summary>
+    public sealed record IdleUnload(string LlmUrl, EmbeddedModel Model);
 
-    /// <summary>What an idle unload stopped, for the screen's line: the model, the minutes, and the server it was parked behind (null for the main one).</summary>
-    public sealed record IdleUnloadDone(EmbeddedModel Model, TimeSpan Idle, string? ParkedBehind);
+    /// <summary>
+    /// What an idle unload stopped, for the screen's line: the model, the minutes, the server it was parked behind (null for the main one, or a
+    /// parked one with nothing in front of it), and whether it is kept for the next message's reload (the review's #59).
+    /// </summary>
+    public sealed record IdleUnloadDone(EmbeddedModel Model, TimeSpan Idle, string? ParkedBehind, bool Reloads);
 
     /// <summary>The due flag's values: none, an idle unload, a crash.</summary>
     public enum UnloadDue
@@ -41,6 +47,14 @@ internal sealed partial class LlmSession
     private DateTimeOffset _idleSince;
     private int _unloadDue;
     private IdleUnload? _idleUnloaded;
+    private long _idleEpoch;
+
+    /// <summary>
+    /// Bumped by <see cref="ForgetIdleUnload"/> alone (2026-11-16, the review's #2): a reload reads it before its connect, and
+    /// <see cref="RestoreIdleUnload"/> puts the model back only when no forget came between (a kill switch pressed during the reload stays a
+    /// kill). A connect's own clearing doesn't bump it, so a failed reload still keeps the model for the next try.
+    /// </summary>
+    public long IdleEpoch => Interlocked.Read(ref _idleEpoch);
 
     /// <summary>The model unloaded by an idle unload or a crash, until a connect (any) or the kill switch; null otherwise. Read from any thread.</summary>
     public IdleUnload? IdleUnloaded => Volatile.Read(ref _idleUnloaded);
@@ -158,6 +172,13 @@ internal sealed partial class LlmSession
     public UnloadDue TakeUnloadDue() => (UnloadDue)Interlocked.Exchange(ref _unloadDue, (int)UnloadDue.None);
 
     /// <summary>
+    /// Takes a crash's due alone, leaving an idle one (2026-11-16, the review's #45): the reload before a request finds a crashed server even
+    /// when the idle line never drained it (a loop, a botchat, Ralph or an audit's passes run on without one).
+    /// </summary>
+    public bool TakeCrashDue() =>
+        Interlocked.CompareExchange(ref _unloadDue, (int)UnloadDue.None, (int)UnloadDue.Crashed) == (int)UnloadDue.Crashed;
+
+    /// <summary>
     /// The screen's drain after an idle due, on its task: the checks again (a message may have started since), the setting (it may be off
     /// now) and the idle time (a pane held the drain while another model loaded); a failed check re-arms from the last use. Then the
     /// unload: a parked model only stopped; the main one stopped and let go, kept as <see cref="IdleUnloaded"/> for the reload. Null when
@@ -176,7 +197,13 @@ internal sealed partial class LlmSession
             return null;
         }
 
-        if (Busy() || _time.GetUtcNow() - _idleSince < span)
+        DateTimeOffset since;
+        lock (_idleLock)
+        {
+            since = _idleSince;   // a DateTimeOffset is two words: read under the lock that writes it (the review's #7)
+        }
+
+        if (Busy() || _time.GetUtcNow() - since < span)
         {
             RearmIdle();
             return null;
@@ -195,8 +222,9 @@ internal sealed partial class LlmSession
                 DisposeIdleTimerLocked();
             }
 
-            DiagnosticLog.Info(Category, $"Unloaded {parked.ModelId}, parked behind {Endpoint?.Source ?? "no server"}, after {span.TotalMinutes:0} min idle.");
-            return new IdleUnloadDone(parkedModel, span, Endpoint is { } behind ? ServerNameOf(behind) : null);
+            var front = Endpoint;
+            DiagnosticLog.Info(Category, EmbeddedLlmText.IdleUnloadedParkedLogLine(parked.ModelId, front?.Source, span));
+            return new IdleUnloadDone(parkedModel, span, front is { } behind ? ServerNameOf(behind) : null, Reloads: false);
         }
 
         if (Endpoint is not { } endpoint || !EmbeddedEndpoint.IsEmbedded(endpoint.BaseUrl)
@@ -205,14 +233,10 @@ internal sealed partial class LlmSession
             return null;
         }
 
-        var effective = _effective;
         embedded.Stop();
-        Disconnect();
-        EmbeddedServer = null;
-        Endpoint = null;
-        Volatile.Write(ref _idleUnloaded, new IdleUnload(effective, model));
-        DiagnosticLog.Info(Category, $"Unloaded {model.Id} after {span.TotalMinutes:0} min idle.");
-        return new IdleUnloadDone(model, span, null);
+        LetGoMain(model);
+        DiagnosticLog.Info(Category, EmbeddedLlmText.IdleUnloadedLogLine(model.Id, span));
+        return new IdleUnloadDone(model, span, null, Reloads: true);
     }
 
     /// <summary>
@@ -228,26 +252,29 @@ internal sealed partial class LlmSession
             return false;
         }
 
-        var effective = _effective;
-        Disconnect();
-        EmbeddedServer = null;
-        Endpoint = null;
-        Volatile.Write(ref _idleUnloaded, new IdleUnload(effective, model));
+        LetGoMain(model);
         return true;
     }
 
-    /// <summary>A reload that was cancelled or failed puts back what it held, so the next message tries again (<c>EnsureLlmAsync</c>).</summary>
-    public void RestoreIdleUnload(IdleUnload? kept)
+    /// <summary>
+    /// A reload that was cancelled or failed puts back what it held, so the next message tries again (<c>EnsureLlmAsync</c>); not when a
+    /// forget came since <paramref name="epoch"/> was read (<see cref="IdleEpoch"/>) or a model is connected.
+    /// </summary>
+    public void RestoreIdleUnload(IdleUnload? kept, long epoch)
     {
-        if (kept is not null && Assistant is null)
+        if (kept is not null && Assistant is null && IdleEpoch == epoch)
         {
             Volatile.Write(ref _idleUnloaded, kept);
         }
     }
 
-    /// <summary>The kill switch: the unloaded model forgotten (the next message asks for a server), a parked model's timer and any due dropped.</summary>
+    /// <summary>
+    /// The unloaded model forgotten (the kill switch, the model removed, embedded servers turned off): the next message asks for a server; a
+    /// parked model's timer and any due dropped, and the epoch bumped so a reload under way doesn't put it back.
+    /// </summary>
     public void ForgetIdleUnload()
     {
+        Interlocked.Increment(ref _idleEpoch);
         Volatile.Write(ref _idleUnloaded, null);
         Interlocked.Exchange(ref _unloadDue, (int)UnloadDue.None);
         lock (_idleLock)
@@ -278,7 +305,10 @@ internal sealed partial class LlmSession
         {
             lock (_idleLock)
             {
-                DisposeIdleTimerLocked();
+                if (ReferenceEquals(state, _use))
+                {
+                    DisposeIdleTimerLocked();   // a stale fire never disposes the new connection's timer (the review's #130)
+                }
             }
 
             return;
@@ -336,6 +366,19 @@ internal sealed partial class LlmSession
         }
 
         Interlocked.Exchange(ref _unloadDue, (int)UnloadDue.None);
+    }
+
+    /// <summary>
+    /// The main embedded model let go and kept for the reload (an idle unload after its stop, a crash): the client dropped, the endpoint
+    /// cleared, the configured URL and the model remembered (2026-11-16, the review's #30: one block for both).
+    /// </summary>
+    private void LetGoMain(EmbeddedModel model)
+    {
+        string url = _configuredUrl;
+        Disconnect();
+        EmbeddedServer = null;
+        Endpoint = null;
+        Volatile.Write(ref _idleUnloaded, new IdleUnload(url, model));
     }
 
     private static string ServerNameOf(LlmEndpoint endpoint) => LlmServer.NameFor(endpoint.BaseUrl, ownedBy: null);

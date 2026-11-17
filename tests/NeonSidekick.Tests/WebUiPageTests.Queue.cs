@@ -130,6 +130,45 @@ public sealed partial class WebUiPageTests
     }
 
     /// <summary>
+    /// A sheet still reading counts as open (the review's #132): sent away before its read answers, it never shows and leaves no history entry.
+    /// </summary>
+    [WindowsFact]
+    public async Task ASheetSentAwayWhileItReads_NeverShows()
+    {
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("window.NeonManage !== undefined", "manage.js");
+        await page.EvalAsync("(() => { const real = Neon.get; window.__release = null; Neon.get = (p, e) => new Promise(r => { window.__release = () => real(p, e).then(r); }); })()");
+        await page.EvalAsync("setTimeout(() => window.NeonManage.open('queue'), 0)");   // its promise waits on the held read
+        await page.WaitAsync("window.__release !== null && manageOpen() && " + ManageHidden, "open while it reads, not shown");
+        await page.EvalAsync("window.NeonManage.close(false); window.__release(); window.__released = true");
+        await page.WaitAsync("window.__released === true && !manageOpen()", "called off");
+        await Task.Delay(300);
+        Assert.True((await page.EvalAsync(ManageHidden + " && history.state === null")).GetBoolean(), "it never showed");
+    }
+
+    /// <summary>A re-read the PC answers with a 304 draws nothing (the review's #91): an armed ✕ stays armed.</summary>
+    [WindowsFact]
+    public async Task AReReadAnsweredWith304_KeepsAnArmedX()
+    {
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await OpenManageAsync(page);
+        await page.EvalAsync("document.querySelectorAll('#manage-list .manage-remove')[0].click()");
+        await page.WaitAsync("document.querySelectorAll('#manage-list .manage-remove')[0].classList.contains('armed')", "armed");
+        await page.EvalAsync("(() => { const real = Neon.get; window.__status = 0; Neon.get = (p, e) => real(p, e).then(r => { window.__status = r.status; return r; }); })()");
+        await page.EvalAsync("window.NeonManage.reset()");
+        await page.WaitAsync("window.__status === 304", "the 304");
+        Assert.True((await page.EvalAsync("document.querySelectorAll('#manage-list .manage-remove')[0].classList.contains('armed')")).GetBoolean(), "still armed");
+    }
+
+    /// <summary>
     /// At a phone's width the chat page's header holds 🗂️ whole beside 🔈 and the nav, the profile's name keeping 40% of it (its ellipsis gives
     /// the rest), and nothing overflows.
     /// </summary>

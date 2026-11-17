@@ -64,8 +64,18 @@ public static class ImageIOFormats
     /// </summary>
     public static string? MimeTypeOf(string? uti) => ByUti(uti)?.MimeType;
 
+    /// <summary>The first extension of the format a MIME type names (any of its types, any case); null for one the table does not know. Pure.</summary>
+    public static string? ExtensionOfMime(string? mimeType) =>
+        All.FirstOrDefault(f => f.MimeTypes.Contains(mimeType, StringComparer.OrdinalIgnoreCase))?.Extensions[0];
+
+    /// <summary>
+    /// The ISO media brands (at offset 8, after <c>ftyp</c>) of a HEIF picture, an iPhone's HEIC among them (2026-11-16, the review's #65: the one
+    /// list the phone upload's sniffer and the page read too). Declared before <see cref="Brands"/>.
+    /// </summary>
+    public static readonly IReadOnlyList<string> HeifBrands = ["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1"];
+
     /// <summary>The ISO media brands (at offset 8, after <c>ftyp</c>) that mean a picture ImageIO reads. Declared before <see cref="Patterns"/>, which is built from it.</summary>
-    public static readonly IReadOnlyList<string> Brands = ["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1", "avif", "avis"];
+    public static readonly IReadOnlyList<string> Brands = [.. HeifBrands, "avif", "avis"];
 
     /// <summary>
     /// The magic bytes MagicScaler hands a stream to ImageIO by (offset, bytes, mask), one decoder for all of them: PNG, JPEG,

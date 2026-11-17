@@ -204,7 +204,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, on Wind
 * **Switch:** needs *Embedded servers enabled*; Connect a model's *Download an embedded model* turns it on once your model is ready.
 * **Use:** `/server` and the startup picker list an **Embedded** row per installed model; `/model` picks between them.
 * **Loading:** the status bar shows `🦙 loading <model>`; Esc, Ctrl+C or a double-click on the spinner cancels.
-* **Each row:** a fit mark for this GPU alone (`✅` fits, `⚠️` small context only, `✗` won't fit, `🐢` partly on the CPU), size, state (`installed`, `download`, `partial · 42%`), quantization, then ⚡ a drafter, 👁️ images, 🛠️ tool calls, ⛓️‍💥 uncensored.
+* **Each row:** the name, quantization, size and state (`installed`, `download`, `partial · 42%`), a fit mark for this GPU alone (`✅` fits, `⚠️` small context only, `✗` won't fit, `🐢` partly on the CPU), then ⚡ a drafter, 👁️ images, 🛠️ tool calls, ⛓️‍💥 uncensored.
 * **Buttons** filter by size (any, `fits` when the GPU is read, up to 8 GB, up to 16 GB), installed or not and drafter, and sort by name or size; uncensored builds show only under **uncensored** (`x`). Keys: [Pane keys](INTERFACE.md#pane-keys).
 
 The catalog, one row per model; the pane lists each build with its size.
@@ -240,7 +240,7 @@ The catalog, one row per model; the pane lists each build with its size.
 | Embedded servers enabled | Offers the embedded models. Off, `/server` lists none and a running one stops; installed models stay on disk. Connect a model turns it on for the model you pick. | off |
 | Embedded models | The catalog. Enter on an installed model offers *Use now* and *Remove* (asks, then deletes its folder); on any other, *Install*. | — |
 | Embedded download mode | `parallel` fetches each file over 8 connections (about twice as fast); `single` uses one. | `parallel` |
-| Embedded idle unload (min) | Unloads the embedded model, or one parked behind another server, after this many idle minutes; the next message or command reloads it (Esc cancels). `off` keeps it. Extra servers stay; [not in headless runs](HEADLESS.md#flags-in-headless-runs). | `off` |
+| Embedded idle unload (min) | Unloads the embedded model after this many idle minutes (0–1440; 0 is off); the next message reloads it. One parked behind another server waits for `/server`; [not in headless runs](HEADLESS.md#flags-in-headless-runs). | `off` |
 | Embedded backend | The llama.cpp build: `auto` (CUDA with NVIDIA driver 580+, else Vulkan, else CPU), `cuda`, `vulkan` or `cpu`. On a Mac, `auto` and `metal` both pick Metal. | `auto` |
 | Embedded context length | The context window in tokens: 0 (**fit**) is the largest that fits on the GPU within *Embedded VRAM budget (%)*, else 512–262,144. | 0 (fit) |
 | Embedded GPU layers | Layers on the GPU: `auto` (as many as free VRAM holds), `all`, or a number (0 runs on the CPU). | `auto` |

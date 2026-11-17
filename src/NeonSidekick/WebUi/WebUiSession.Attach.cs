@@ -75,6 +75,16 @@ public sealed partial class WebUiSession
         }
 
         ExpireHeld();
+        // The cheap refusals before the decode (2026-11-16, the review's #41): a fifth upload, the bytes in all or a profile switch never costs a
+        // picture's decode and fit. Checked again under the lock after it, as the lists may have moved meanwhile.
+        lock (_linesGate)
+        {
+            if (CapRefusalLocked(page, body.LongLength, epoch) is { } early)
+            {
+                return early;
+            }
+        }
+
         var read = WebAttachSniff.Read(body);
         if (read.Status != 0)
         {
@@ -85,22 +95,13 @@ public sealed partial class WebUiSession
         {
             Expires = Later(),
             MediaType = read.MediaType,
+            Epoch = epoch,
         };
         lock (_linesGate)
         {
-            if (epoch != _heldEpoch)
+            if (CapRefusalLocked(page, body.LongLength, epoch) is { } refused)
             {
-                return new WebAttachReply(409, WebUiText.AttachProfileSwitched, null);
-            }
-
-            if (_held.Count(h => h.Page == page) >= MaxHeldPerPage)
-            {
-                return new WebAttachReply(409, WebUiText.AttachFull, null);
-            }
-
-            if (HeldBytesLocked() + body.LongLength > MaxHeldBytes)
-            {
-                return new WebAttachReply(507, WebUiText.AttachTooMuch, null);
+                return refused;
             }
 
             _held.Add(held);
@@ -156,7 +157,9 @@ public sealed partial class WebUiSession
 
     /// <summary>
     /// Uploads handed back with a line (withdrawn, dropped, taken off the Queue tab): held again under their own page, each with a fresh
-    /// <see cref="HeldFor"/>, their saved path kept; past the caps the oldest go, which the page is told. The pages touched get their rows.
+    /// <see cref="HeldFor"/>, their saved path kept; past the caps the oldest of the pages handed back go (2026-11-16, the review's #46: another
+    /// page's uploads are never let go for them), which the page is told. One held before a profile switch is dropped (#5). The pages touched get
+    /// their rows.
     /// </summary>
     public void Rehold(IReadOnlyList<WebHeldAttachment>? attachments)
     {
@@ -172,6 +175,11 @@ public sealed partial class WebUiSession
         {
             foreach (var attachment in attachments)
             {
+                if (attachment.Epoch != _heldEpoch)
+                {
+                    continue;   // held under the last profile
+                }
+
                 _held.RemoveAll(h => h.Id == attachment.Id);
                 _held.Add(attachment with { Expires = expires });
                 pages.Add(attachment.Page);
@@ -186,11 +194,10 @@ public sealed partial class WebUiSession
                 }
             }
 
-            while (_held.Count > 0 && HeldBytesLocked() > MaxHeldBytes)
+            while (HeldBytesLocked() > MaxHeldBytes && _held.FindIndex(h => pages.Contains(h.Page)) is var at and >= 0)
             {
-                pages.Add(_held[0].Page);
-                trimmedPages.Add(_held[0].Page);
-                _held.RemoveAt(0);
+                trimmedPages.Add(_held[at].Page);
+                _held.RemoveAt(at);
             }
         }
 
@@ -250,6 +257,13 @@ public sealed partial class WebUiSession
 
         return taken;
     }
+
+    /// <summary>Why an upload of <paramref name="length"/> bytes can't be held for <paramref name="page"/> now, or null. Under <c>_linesGate</c>.</summary>
+    private WebAttachReply? CapRefusalLocked(string page, long length, long epoch) =>
+        epoch != _heldEpoch ? new WebAttachReply(409, WebUiText.AttachProfileSwitched, null)
+        : _held.Count(h => h.Page == page) >= MaxHeldPerPage ? new WebAttachReply(409, WebUiText.AttachFull, null)
+        : HeldBytesLocked() + length > MaxHeldBytes ? new WebAttachReply(507, WebUiText.AttachTooMuch, null)
+        : null;
 
     private long HeldBytesLocked() =>
         _held.Sum(h => h.Bytes.LongLength) + _cancelHeld.Concat(_lines).Sum(l => l.Attachments?.Sum(a => a.Bytes.LongLength) ?? 0);

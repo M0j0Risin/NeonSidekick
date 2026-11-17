@@ -24,7 +24,9 @@ internal sealed class AdvisorHost : IAdvisorHost, IDisposable
     private readonly object _gate = new();
     private readonly Dictionary<string, Kept> _links = new(StringComparer.OrdinalIgnoreCase);
 
-    private sealed record Kept(BotLink Link, LlmEndpoint? Main, DateTime Written, BotEmbeddedMode Mode);
+    // Running: the embedded server as the link was made (2026-11-16, the review's #75): a parked model's idle unload or kill stops it with the
+    // endpoint unchanged, and a link kept over it would point at the dead port. Compared by reference: each start is a new record.
+    private sealed record Kept(BotLink Link, LlmEndpoint? Main, EmbeddedLlm.EmbeddedServerInfo? Running, DateTime Written, BotEmbeddedMode Mode);
 
     /// <param name="session">The session the links are made by (and whose server a blank URL borrows).</param>
     /// <param name="home">The home the profiles live under.</param>
@@ -54,12 +56,13 @@ internal sealed class AdvisorHost : IAdvisorHost, IDisposable
         BotChatMultiEmbedded.TryParse(_effective().AdvisorEmbedded, out var mode);
         DateTime written = WrittenAt(profile.Name);
         var main = _session.Endpoint;
+        var running = _session.Embedded?.Running;
         Kept? stale = null;
         lock (_gate)
         {
             if (_links.TryGetValue(profile.Name, out var kept))
             {
-                if (ReferenceEquals(kept.Main, main) && kept.Written == written && kept.Mode == mode)
+                if (ReferenceEquals(kept.Main, main) && ReferenceEquals(kept.Running, running) && kept.Written == written && kept.Mode == mode)
                 {
                     return (Wrap(kept.Link), null);
                 }
@@ -80,7 +83,7 @@ internal sealed class AdvisorHost : IAdvisorHost, IDisposable
         lock (_gate)
         {
             _links.Remove(profile.Name, out raced);
-            _links[profile.Name] = new Kept(link, main, written, mode);
+            _links[profile.Name] = new Kept(link, main, running, written, mode);
         }
 
         raced?.Link.Dispose();

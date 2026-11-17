@@ -132,7 +132,7 @@ public static partial class HaCamera
         ArgumentNullException.ThrowIfNull(images);
         ArgumentNullException.ThrowIfNull(image);
         string stem = CameraCapture.Under(FolderName, ObjectId(entityId) + "-" + CameraCapture.Stem(local));
-        var (written, error) = Images.ImageOutput.WriteNumbered(images, stem, ImageFile.ExtensionOf(image.Bytes), image.Bytes);
+        var (written, error) = Files.MadeFiles.Unlisted(() => Images.ImageOutput.WriteNumbered(images, stem, ImageFile.ExtensionOf(image.Bytes), image.Bytes));   // never on the Files tab (#127)
         if (error is not null)
         {
             return new HaCameraSave(image with { Path = "" }, null, HaText.CameraNotSaved(error));

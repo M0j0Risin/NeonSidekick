@@ -62,7 +62,7 @@ public sealed partial class WebUiTests
         var view = new WebQueueView([new WebQueuePcLine(0, "a", 1)], [new WebQueueLine(2, "b", true, 1)], "automatic", "empty", true, false, ["automatic"], ["empty"]);
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(view, WebUiJsonContext.Default.WebQueueView));
         Assert.Equal(["pc", "page", "mode", "cancelMode", "held", "sendOffered", "modes", "cancelModes"], json.RootElement.EnumerateObject().Select(p => p.Name));
-        Assert.Equal(["index", "label", "pictures"], json.RootElement.GetProperty("pc")[0].EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["index", "label", "pictures", "removable"], json.RootElement.GetProperty("pc")[0].EnumerateObject().Select(p => p.Name));
         Assert.Equal(["key", "text", "chord", "pictures"], json.RootElement.GetProperty("page")[0].EnumerateObject().Select(p => p.Name));
 
         var remove = JsonSerializer.Deserialize("{\"index\":1,\"label\":\"a\"}", WebUiJsonContext.Default.WebQueueRemoveRequest)!;

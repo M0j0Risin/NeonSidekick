@@ -163,6 +163,13 @@ internal static class MediaFileServer
                 return;
             }
 
+            if (made is { Sandboxed: true })
+            {
+                // Before the 304 too (2026-11-16, the review's #105): a cache takes a 304's headers over its copy's, so a revalidated made file
+                // would otherwise run under the page's own policy, unsandboxed.
+                response.Headers.ContentSecurityPolicy = WebUiHost.ContentSecurityPolicy + "; sandbox";
+            }
+
             if (WebFileResponse.NotModified(context, tag))
             {
                 return;
@@ -262,12 +269,7 @@ internal static class MediaFileServer
             WebFileResponse.Attachment(response, name);
         }
 
-        if (made.Sandboxed)
-        {
-            response.Headers.ContentSecurityPolicy = WebUiHost.ContentSecurityPolicy + "; sandbox";
-        }
-
-        return true;
+        return true;   // a sandboxed type's policy is set before the 304's check
     }
 
     // Plain digits only (no sign, no blanks inside), as the RFC's range numbers are.

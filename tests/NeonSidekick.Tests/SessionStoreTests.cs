@@ -265,6 +265,49 @@ public class SessionStoreTests : IDisposable
         Assert.Contains("tax", Assert.Single(plain, h => h.Session.Id == a).Snippet, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A column the caller rejects never stands for its session (the review's #8 and #21): the reply's match is taken over the user's, and a
+    /// session's lower turn over its top one; a session none of whose turns pass is left out.
+    /// </summary>
+    [Fact]
+    public void Search_WithAnAccept_TakesTheFirstColumnAndTurnItPasses()
+    {
+        long a = Begin("a");
+        _store.AppendTurn(a, "look at secret tax", "The tax is due in May.", 0, [], [], 0, 0, 0, false);
+        long b = Begin("b");
+        _store.AppendTurn(b, "secret tax tax tax", "nothing here", 0, [], [], 0, 0, 0, false);
+        _store.AppendTurn(b, "later", "Your tax refund came.", 0, [], [], 0, 0, 0, false);
+        long c = Begin("c");
+        _store.AppendTurn(c, "secret tax", "no", 0, [], [], 0, 0, 0, false);
+
+        // Reject any column whose first match is the word after "secret", as a match inside a saved path would be.
+        static bool Accept(string marked) => marked.Contains('<', StringComparison.Ordinal) && !marked.Contains("secret <tax>", StringComparison.Ordinal);
+        var hits = _store.Search("tax", 10, marks: ("<", ">"), accept: Accept);
+
+        Assert.Equal("The <tax> is due in May.", Assert.Single(hits, h => h.Session.Id == a).Snippet);
+        var forB = Assert.Single(hits, h => h.Session.Id == b);
+        Assert.Equal((2, "Your <tax> refund came."), (forB.Turn, forB.Snippet));
+        Assert.DoesNotContain(hits, h => h.Session.Id == c);
+    }
+
+    /// <summary>The store's version moves with each write to the sessions (the review's #15), never with a read.</summary>
+    [Fact]
+    public void Version_MovesWithEachWrite()
+    {
+        long v0 = _store.Version;
+        long a = Begin("a");
+        long v1 = _store.Version;
+        _store.AppendTurn(a, "hi", "hello", 0, [], [], 0, 0, 0, false);
+        long v2 = _store.Version;
+        _store.SetTitle(a, "renamed", TitleSource.User);
+        long v3 = _store.Version;
+        _store.List(0);
+        _store.Search("hello", 5);
+        Assert.Equal(v3, _store.Version);
+        _store.Purge(a);
+        Assert.True(v0 < v1 && v1 < v2 && v2 < v3 && v3 < _store.Version);
+    }
+
     [Fact]
     public void Search_NeverTripsOnFts5Syntax()
     {

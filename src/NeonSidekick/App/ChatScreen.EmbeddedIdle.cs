@@ -51,7 +51,7 @@ internal sealed partial class ChatScreen
         switch (_session.TakeUnloadDue())
         {
             case LlmSession.UnloadDue.Idle when _session.UnloadIfIdle() is { } done:
-                _transcript.Notice(EmbeddedLlmText.IdleUnloadedNotice(done.Model, done.Idle, done.ParkedBehind));
+                _transcript.Notice(EmbeddedLlmText.IdleUnloadedNotice(done.Model, done.Idle, done.ParkedBehind, done.Reloads));
                 break;
 
             case LlmSession.UnloadDue.Crashed:
@@ -68,13 +68,29 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool> EnsureLlmAsync(CancellationToken cancellationToken)
     {
+        // A crash no idle line drained (a loop, a botchat or passes run on): marked here, so the request below restarts it rather than
+        // hitting the dead server (2026-11-16, the review's #45).
+        if (_session.TakeCrashDue())
+        {
+            _session.MarkCrashed();
+        }
+
         if (_session.Assistant is not null || _session.IdleUnloaded is not { } kept)
         {
             return true;
         }
 
+        // Nothing to reload any more (the review's #3 and #76): embedded servers turned off, or the model removed since. Forgotten, so the
+        // caller's own check refuses as with no model, and a connect never scans its way to some other server.
+        if (!EmbeddedOffered || _session.Embedded is not { } embedded || !embedded.State(kept.Model).IsInstalled)
+        {
+            _session.ForgetIdleUnload();
+            return true;
+        }
+
+        long epoch = _session.IdleEpoch;
         var effective = AppSettings.Copy(_effective());
-        effective.LlmUrl = kept.Effective.LlmUrl;
+        effective.LlmUrl = kept.LlmUrl;
         effective.LlmModel = kept.Model.Id;
         await ConnectUnderLoadAsync(effective, quiet: true, cancellationToken).ConfigureAwait(false);
         if (_session.Assistant is not null)
@@ -82,8 +98,28 @@ internal sealed partial class ChatScreen
             return true;
         }
 
-        _session.RestoreIdleUnload(kept);
+        _session.RestoreIdleUnload(kept, epoch);   // a kill switch pressed during the reload stays a kill (the review's #2)
         return false;
+    }
+
+    /// <summary>
+    /// The model for a command that needs one (2026-11-16, the review's #11 and #27): the reload first (<see cref="EnsureLlmAsync"/>), then the
+    /// refusal with no model at all. False when either said why. <see cref="RunMessageAsync"/> keeps its own pair: its failures put the line back.
+    /// </summary>
+    private async Task<bool> ModelOrSayAsync(CancellationToken cancellationToken)
+    {
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
+        if (_session.Assistant is null)
+        {
+            _transcript.Error(NoAssistantError);
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>

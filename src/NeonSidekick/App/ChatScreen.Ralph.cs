@@ -163,14 +163,14 @@ internal sealed partial class ChatScreen
             return await ResumeRalphAsync(path, passes, cancellationToken).ConfigureAwait(false);
         }
 
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return false;
-        }
-
         if (RalphRefusal() is { } refused)
         {
             _transcript.Error(refused);
+            return false;
+        }
+
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
+        {
             return false;
         }
 
@@ -212,14 +212,14 @@ internal sealed partial class ChatScreen
     /// <summary>The paused loop again (<c>/plan ralph</c>): no confirm; the file read again (a plan done meanwhile clears the state), the baseline, the loop.</summary>
     private async Task<bool> ResumeRalphAsync(string path, int? passes, CancellationToken cancellationToken)
     {
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return false;
-        }
-
         if (RalphRefusal() is { } refused)
         {
             _transcript.Error(refused);
+            return false;
+        }
+
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
+        {
             return false;
         }
 
@@ -285,10 +285,12 @@ internal sealed partial class ChatScreen
         return true;
     }
 
-    /// <summary>What refuses a loop's start: no assistant, tools off, an audit running.</summary>
+    /// <summary>
+    /// What refuses a loop's start: tools off, an audit running. The model is checked after these, past its reload (2026-11-16, the review's
+    /// #11: a refusal never waits on a reload first).
+    /// </summary>
     private string? RalphRefusal() =>
-        _session.Assistant is null ? NoAssistantError
-        : !_effective().LlmOfferTools ? RalphText.NeedsToolsError
+        !_effective().LlmOfferTools ? RalphText.NeedsToolsError
         : _audit.Active ? RalphText.UnderAuditError
         : null;
 
@@ -322,15 +324,22 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return false;
-        }
-
         if (RalphRefusal() is { } refused)
         {
             _plan.ClearApproval();
             _transcript.Error(refused);
+            return false;
+        }
+
+        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        {
+            return false;   // a reload cancelled or failed: the approval kept for the next try
+        }
+
+        if (_session.Assistant is null)
+        {
+            _plan.ClearApproval();
+            _transcript.Error(NoAssistantError);
             return false;
         }
 

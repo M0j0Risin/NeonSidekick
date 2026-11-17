@@ -69,7 +69,8 @@ const { el, post } = Neon;
 const say = text => Neon.say(text);
 // The 🗂️ sheet (2026-11-16, manage.js, loaded after this script): reached through its hooks alone, at call time.
 const manage = () => window.NeonManage || null;
-const manageOpen = () => !!(manage() && manage().isOpen());
+const manageOpen = () => !!(manage() && manage().isOpen());   // open or still reading (the review's #132)
+const manageShown = () => !!(manage() && (manage().isShown ? manage().isShown() : manage().isOpen()));   // on the screen, with its history entry
 const sayWith = Neon.say;
 
 function nearBottom() {
@@ -524,7 +525,7 @@ function openOverlayOn(list, id, fromStrip) {
   shown = { list, at, fromStrip };
   showPicture();
   overlayEl.classList.remove('hidden');
-  if (!wasOpen) history.pushState({ overlay: true, drawer: drawerOpen, prompts: promptsOpen, manage: manageOpen() }, '');
+  if (!wasOpen) history.pushState({ overlay: true, drawer: drawerOpen, prompts: promptsOpen, manage: manageShown() }, '');
   floatSoon();
 }
 
@@ -1432,14 +1433,17 @@ function questionForm(card, ask) {
 const attachBtn = document.getElementById('attach');
 const attachInput = document.getElementById('attach-input');
 const chipsEl = document.getElementById('draft-chips');
-const AttachMaxHeld = 4;
+let AttachMaxHeld = 4;   // the server's MaxHeldPerPage once a snapshot says it (the review's #82)
 const AttachSide = 4096;
 const AttachTries = 3;
-const HeifBrands = ['heic', 'heix', 'mif1', 'msf1'];
+const HeifBrands = ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'];   // ImageIOFormats.HeifBrands (the review's #65)
 let attachMaxBytes = 0;
 let attachMaxPixels = 0;
 let chips = [];   // { id, kind, size, thumb, state: 'queued'|'uploading'|'waiting'|'held', progress, file, xhr, done, settle }
 let uploadChain = Promise.resolve();
+// The server ids a ✕ let go (the review's #33 and #101): a chips event or a 200 that comes after the ✕ never brings one back.
+const forgotten = new Set();
+const AttachStallMs = 30000;   // an upload with no progress this long is cut off, then tried again (the review's #131)
 
 attachBtn.addEventListener('click', () => attachInput.click());
 attachInput.addEventListener('change', () => {
@@ -1476,15 +1480,16 @@ async function uploadChip(chip) {
       drawChips();
       const r = await xhrUpload(body, type, chip);
       if (!chips.includes(chip)) {
-        if (r.status === 200 && r.json && r.json.chip) post('/api/attach/forget', { id: r.json.chip.id, page: chatPage });   // ✕ while it went
+        if (r.status === 200 && r.json && r.json.chip) forgetServerChip(r.json.chip.id);   // ✕ while it went
         return;
       }
       if (r.status === 200 && r.json && r.json.chip) { adoptChip(chip, r.json.chip); return; }
       if (r.status === 401) { location.reload(); return; }
-      if (r.status === 429 && tries < AttachTries) {
+      // A 429's wait, or a connection cut (status 0: a reset mid-body, the stall watchdog), tried again (the review's #100).
+      if ((r.status === 429 || r.status === 0) && tries < AttachTries) {
         chip.state = 'waiting';
         drawChips();
-        await sleep(Math.max(1, r.retryAfter || 1) * 1000);
+        await sleep(r.status === 429 ? Math.max(1, r.retryAfter || 1) * 1000 : 1000);
         if (!chips.includes(chip)) return;
         continue;
       }
@@ -1503,25 +1508,33 @@ function xhrUpload(body, type, chip) {
     x.open('POST', '/api/attach?page=' + encodeURIComponent(chatPage));
     x.setRequestHeader('Content-Type', type);   // set by hand: a typeless file would go with none, and the gate wants one
     x.setRequestHeader('X-Neon', '1');
+    let stall = null;
+    const watch = () => {
+      clearTimeout(stall);
+      stall = setTimeout(() => { try { x.abort(); } catch { /* done */ } }, AttachStallMs);
+    };
     x.upload.onprogress = ev => {
+      watch();
       if (!ev.lengthComputable) return;
       chip.progress = ev.loaded / ev.total;
       if (chip.bar) chip.bar.value = chip.progress;
     };
     x.onload = () => {
+      clearTimeout(stall);
       let j = null;
       try { j = JSON.parse(x.responseText); } catch { /* a bare status */ }
       resolve({ status: x.status, json: j, retryAfter: Number(x.getResponseHeader('Retry-After')) || null });
     };
-    x.onerror = x.onabort = x.ontimeout = () => resolve({ status: 0, json: null });
+    x.onerror = x.onabort = x.ontimeout = () => { clearTimeout(stall); resolve({ status: 0, json: null }); };
     x.send(body);
+    watch();
   });
 }
 
-// The server's chip for an upload: the pending one becomes it, unless a chips event showed it already.
+// The server's chip for an upload: the pending one becomes it, unless a chips event showed it already, or a ✕ let it go meanwhile.
 function adoptChip(chip, server) {
   chip.xhr = null;
-  if (chips.some(c => c !== chip && c.id === server.id)) {
+  if (forgotten.has(server.id) || chips.some(c => c !== chip && c.id === server.id)) {
     chips = chips.filter(c => c !== chip);
   } else {
     Object.assign(chip, server, { state: 'held', file: null });
@@ -1536,17 +1549,26 @@ function dropChip(chip, why) {
   if (why) say(why);
 }
 
+// A ✕: an upload still sending is cut off; one whose body went is left to answer, and its 200 lets it go (the review's #33: an abort then
+// could leave it held at the PC, and the chips event put it back).
 function removeChip(chip) {
   chips = chips.filter(c => c !== chip);
-  if (chip.xhr) { try { chip.xhr.abort(); } catch { /* done */ } }
-  if (chip.id) post('/api/attach/forget', { id: chip.id, page: chatPage });
+  if (chip.xhr && !(chip.progress >= 1)) { try { chip.xhr.abort(); } catch { /* done */ } }
+  if (chip.id) forgetServerChip(chip.id);
   drawChips();
 }
 
-// The page's row as the server holds it, a chip still uploading kept after them (an event, a snapshot).
+// One upload let go at the PC, and never shown again here.
+function forgetServerChip(id) {
+  forgotten.add(id);
+  post('/api/attach/forget', { id: id, page: chatPage });
+  if (chips.some(c => c.id === id)) { chips = chips.filter(c => c.id !== id); drawChips(); }
+}
+
+// The page's row as the server holds it, a chip still uploading kept after them (an event, a snapshot); one a ✕ let go stays gone.
 function applyChips(list, message) {
   const pending = chips.filter(c => !c.id);
-  chips = (list || []).map(s => Object.assign(chips.find(c => c.id === s.id) || {}, s, { state: 'held' })).concat(pending);
+  chips = (list || []).filter(s => !forgotten.has(s.id)).map(s => Object.assign(chips.find(c => c.id === s.id) || {}, s, { state: 'held' })).concat(pending);
   drawChips();
   if (message) say(message);
 }
@@ -1670,10 +1692,17 @@ function isHeif(b) {
 // JPEG; anything else as it is. Past the cap it decodes straight to the smaller size, the upright one (a JPEG's orientation read above).
 async function shrinkForUpload(file) {
   if (file.type === 'application/pdf') return file;
-  const head = new Uint8Array(await file.slice(0, 65536).arrayBuffer());
+  let head = new Uint8Array(await file.slice(0, 65536).arrayBuffer());
   const heic = /^image\/hei[cf]$/i.test(file.type) || (!file.type && isHeif(head));
-  const size = imageSize(head);
-  const big = !!size && attachMaxPixels > 0 && size.width * size.height > attachMaxPixels;
+  let size = imageSize(head);
+  if (!size && head.length >= 3 && head[0] === 0xFF && head[1] === 0xD8 && head[2] === 0xFF && file.size > head.length) {
+    // A JPEG whose metadata pushes its size past the first 64 KB (the review's #32): a 1 MB look.
+    head = new Uint8Array(await file.slice(0, 1048576).arrayBuffer());
+    size = imageSize(head);
+  }
+  const gif = head.length >= 4 && head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x38;
+  const big = (!!size && attachMaxPixels > 0 && size.width * size.height > attachMaxPixels)
+    || (attachMaxBytes > 0 && file.size > attachMaxBytes && !gif);   // too many bytes: re-encoded too, a GIF never (the review's #36)
   if (!heic && !big) return file;
   let bitmap;
   if (size) {
@@ -1686,7 +1715,10 @@ async function shrinkForUpload(file) {
   const canvas = document.createElement('canvas');
   canvas.width = Math.max(1, Math.round(bitmap.width * scale));
   canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-  canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const g = canvas.getContext('2d');
+  g.fillStyle = '#fff';   // a JPEG has no transparency: white under a PNG's or WebP's, never black (the review's #62)
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   if (bitmap.close) bitmap.close();
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9));
   return blob || file;
@@ -1714,6 +1746,7 @@ function grow() {
 }
 
 function putBack(text) {
+  if (!text) return;   // a picture-only line handed back: nothing for the box (the review's #90)
   draft.value = draft.value ? text + '\n' + draft.value : text;
   saveDraft();
   grow();
@@ -1731,7 +1764,6 @@ async function sendText(text, opts) {
   const asText = !!(opts && opts.asText);
   const attaching = fromDraft && chips.length > 0;   // the draft's ➤ takes the chips (2026-11-16, #39); a saved prompt's doesn't
   if (!text.trim() && !attaching) return;
-  if (pendingText !== text) { pendingId = newId(); pendingText = text; }
   if (speakOn()) unlockPlayback();   // before any await: the reply plays from this gesture's unlock (2026-11-13)
   sendBtn.disabled = true;
   let attachments;
@@ -1741,6 +1773,9 @@ async function sendText(text, opts) {
     attachments = heldIds();
     if (!text.trim() && attachments.length === 0) { sendBtn.disabled = false; return; }
   }
+  // A retry is the same text with the same chips (the review's #6: new chips after a failed post are a new message, not a retry the app drops).
+  const sending = text + '\u0001' + (attachments || []).join(',');
+  if (pendingText !== sending) { pendingId = newId(); pendingText = sending; }
   // The page and its 🔊 (2026-11-13): a reply speaks where its message came from.
   const r = await post('/api/send', { id: pendingId, text: text, asText: asText, page: chatPage, speak: speakOn(), attachments: attachments });
   sendBtn.disabled = false;
@@ -2060,7 +2095,8 @@ async function openPrompts(tab) {
   if (!sheet || promptsOpen) return;
   closeUsage();
   renderSheet(want, sheet);
-  if ((drawerOpen || manageOpen()) && !shown) {
+  if (manage() && !manageShown()) manage().hide(false);   // one still reading is called off; it has no entry to hand over
+  if ((drawerOpen || manageShown()) && !shown) {
     hideDrawer();
     if (manage()) manage().hide(false);
     history.replaceState({ prompts: true }, '');   // the drawer's or the 🗂️ sheet's entry becomes the sheet's
@@ -2206,7 +2242,7 @@ function floatSoon() {
 }
 
 function updateFloaters() {
-  const blocked = !!shown || !usageCard.classList.contains('hidden') || promptsOpen;
+  const blocked = !!shown || !usageCard.classList.contains('hidden') || promptsOpen || manageOpen();   // the 🗂️ sheet too (the review's #86)
   const any = entries.size > 0;
   const fits = document.body.scrollHeight <= window.innerHeight + 80;
   expandBtn.classList.toggle('hidden', blocked || !any || !(expandAll || anyFold()));
@@ -2388,7 +2424,8 @@ function showDrawer(on) {
 function openDrawer() {
   if (!strip || drawerOpen) return;
   closeUsage();
-  if (promptsOpen || manageOpen()) {
+  if (manage() && !manageShown()) manage().hide(false);   // one still reading is called off
+  if (promptsOpen || manageShown()) {
     hidePrompts(true);
     if (manage()) manage().hide(false);
     history.replaceState({ drawer: true }, '');   // the sheet's (either) entry becomes the drawer's
@@ -2758,7 +2795,10 @@ async function finishListen(l) {
     await new Promise(resolve => setTimeout(resolve, 50));
   }
   if (l.done) return;
-  const r = await post('/api/voice/end', { page: chatPage, listen: l.id, how: 'finish', speak: speakOn() });
+  // The chips as held now go with what's heard (2026-11-16, the review's #9): one picked or removed during the listen counts, once it landed.
+  await settleUploads();
+  if (l.done) return;
+  const r = await post('/api/voice/end', { page: chatPage, listen: l.id, how: 'finish', speak: speakOn(), attachments: heldIds() });
   if (r.json && r.json.listen) applyListenState(l, r.json.listen);
 }
 
@@ -2815,7 +2855,7 @@ function onVoice(v) {
     case 'nothing': say(words.voiceHeardNothing || 'Heard nothing.'); break;
     case 'failed': say(v.detail || words.voiceFailed || 'The listen did not work.'); break;
     case 'heard': heardText(v.text, v.detail); break;
-    case 'sent': say(''); break;
+    case 'sent': say(v.detail || ''); break;   // a chip left off says so (the review's #51)
     default: break;
   }
 }
@@ -2830,7 +2870,7 @@ function heardText(text, detail) {
 // Esc on a desktop cancels a listen once none of Esc's other uses applies (the overlay, the sheet, the drawer, the usage card, the list).
 document.addEventListener('keydown', ev => {
   if (ev.key !== 'Escape' || ev.defaultPrevented || !listen || listen.phase !== 'listening') return;
-  if (shown || promptsOpen || drawerOpen || !usageCard.classList.contains('hidden') || completion) return;
+  if (shown || promptsOpen || drawerOpen || manageOpen() || !usageCard.classList.contains('hidden') || completion) return;   // the 🗂️ sheet's Esc first (#85)
   ev.preventDefault();
   cancelListen();
 });
@@ -3158,6 +3198,7 @@ function connect() {
     applyWords();
     attachMaxBytes = s.attachMaxBytes || 0;   // the upload's caps, checked on the page first (2026-11-16, #39)
     attachMaxPixels = s.attachMaxPixels || 0;
+    AttachMaxHeld = s.attachMaxHeld || 4;
     applyChips(s.chips || []);
     applyState(s.state);
     applyStatus(s.status);
@@ -3218,7 +3259,8 @@ grow();
 // or a two-tap delete half done); the banner instead.
 Neon.watchBlocked = () => !!draft.value.trim() || asks.length > 0 || !promptsEl.classList.contains('hidden')
   || (document.activeElement && document.activeElement.tagName === 'INPUT')
-  || !!listen || speechOwed();   // listening, or audio still owed (2026-11-13)
+  || !!listen || speechOwed()   // listening, or audio still owed (2026-11-13)
+  || chips.length > 0 || manageOpen();   // an upload held or in flight, the 🗂️ sheet open (the review's #129)
 draft.addEventListener('input', () => { saveDraft(); grow(); });
 draft.addEventListener('keydown', ev => {
   if (ev.key === 'Enter' && desktop && !ev.shiftKey && !ev.isComposing && !completion) {

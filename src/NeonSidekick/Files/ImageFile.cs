@@ -508,8 +508,9 @@ public static class ImageFile
         : ".png";
 
     /// <summary>
-    /// The extension a picture is saved with: its media type's (png, jpeg/jpg, gif, webp, bmp), else what its bytes say (<see cref="ExtensionOf"/>).
-    /// Lifted out of the plan's references on 2026-10-29 so a session export names its pictures the same way. Pinned.
+    /// The extension a picture is saved with: its media type's (png, jpeg/jpg, gif, webp, bmp, then any the ImageIO table names: a phone's HEIC is
+    /// <c>.heic</c>, not <c>.png</c>, 2026-11-16, the review's #80), else what its bytes say (<see cref="ExtensionOf"/>). Lifted out of the plan's
+    /// references on 2026-10-29 so a session export names its pictures the same way. Pinned.
     /// </summary>
     public static string ExtensionFor(string mediaType, ReadOnlySpan<byte> bytes)
     {
@@ -521,7 +522,7 @@ public static class ImageFile
             "image/gif" => ".gif",
             "image/webp" => ".webp",
             "image/bmp" => ".bmp",
-            _ => ExtensionOf(bytes),
+            var other => Images.ImageIOFormats.ExtensionOfMime(other) ?? ExtensionOf(bytes),
         };
     }
 

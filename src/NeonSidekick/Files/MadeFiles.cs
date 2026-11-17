@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Llm;
 
@@ -18,9 +19,12 @@ public readonly record struct MadeFile(string Full, string Token);
 /// <item>The hooks run before the disk is touched, so each notes the path's state then (absent, or a length and a write time) and the call's
 /// close keeps an add only where it changed: a failed or refused write lists nothing. A task the call started, writing after the close, is
 /// never counted. App writes are skipped, as the journal skips them; so is anything outside today's working and images folders.</item>
-/// <item>Each entry is a fact about its turn (the user message, by reference). A path added again under the same turn moves to the newest
-/// place; under a later turn it adds a second entry, so a rewind of that turn leaves the first one listed. A move of a held path adds its new
-/// path; a remove drops nothing (the list's existence check hides it, and an <c>/undo</c> brings the row back).</item>
+/// <item>Each entry is a fact about its turn, held by the turn's key (<see cref="ConversationHistory.EnsureTurnKey"/>, 2026-11-16, the review's
+/// #103 and #128: never the message itself, which kept a compacted turn's pictures alive and missed the rebuilt one a mid-turn compaction makes).
+/// A path added again under the same turn moves to the newest place; under a later turn it adds a second entry, so a rewind of that turn leaves
+/// the first one listed. A move adds its new path (a held path's, or the moved file's own); a remove drops nothing (the list's existence check
+/// hides it, and an <c>/undo</c> brings the row back).</item>
+/// <item>A camera's or the screen's picture is never listed (<see cref="Unlisted"/>, the review's #127): the Files tab can reach the internet.</item>
 /// <item>The newest <see cref="Keep"/> entries are kept. Each path keeps one token while it is listed. Lock-guarded: the page reads it from a
 /// Kestrel thread.</item>
 /// </list>
@@ -31,6 +35,7 @@ public sealed class MadeFiles
     public const int Keep = 200;
 
     private static readonly AsyncLocal<Call?> s_current = new();
+    private static readonly AsyncLocal<StrongBox<int>?> s_unlisted = new();
 
     private readonly object _gate = new();
     private readonly List<Entry> _entries = [];
@@ -70,7 +75,7 @@ public sealed class MadeFiles
     public static IDisposable Enter(MadeFiles? list, ChatMessage? turn)
     {
         var previous = s_current.Value;
-        var call = list is null ? null : new Call(list, turn);
+        var call = list is null ? null : new Call(list, turn is null ? null : ConversationHistory.EnsureTurnKey(turn));
         s_current.Value = call;
         return new Closer(() =>
         {
@@ -83,13 +88,34 @@ public sealed class MadeFiles
         });
     }
 
+    /// <summary>
+    /// The writes inside never listed (2026-11-16, the review's #127): a camera's, the screen's or a home camera's picture is the user's private
+    /// view, and the Files tab can be reached over Funnel. Not <see cref="WriteGuard.AsApp{T}"/>, which would lift the write's guard too.
+    /// </summary>
+    public static IDisposable Unlisted()
+    {
+        var previous = s_unlisted.Value;
+        s_unlisted.Value = new StrongBox<int>(1);
+        return new Closer(() => s_unlisted.Value = previous);
+    }
+
+    /// <summary><paramref name="write"/> run inside <see cref="Unlisted()"/>: a capture's own synchronous write.</summary>
+    public static T Unlisted<T>(Func<T> write)
+    {
+        ArgumentNullException.ThrowIfNull(write);
+        using (Unlisted())
+        {
+            return write();
+        }
+    }
+
     // ---- the hooks (FileJournal's, before it records) ----
 
     internal static void Writing(string full)
     {
         if (Noting() is { } call)
         {
-            call.List.Note(call, full);
+            Note(call, full, call.List.Roots());
         }
     }
 
@@ -100,9 +126,13 @@ public sealed class MadeFiles
             return;
         }
 
-        foreach (string moved in call.List.HeldUnder(from, to))
+        // The roots read once for the lot (the review's #14). A move of a file the list never held adds the file at its new place (#106): its
+        // stat is none now and the file's after the move. A folder isn't a file, so a moved folder adds nothing.
+        var roots = call.List.Roots();
+        var held = call.List.HeldUnder(from, to);
+        foreach (string moved in held.Count > 0 ? held : [to])
         {
-            call.List.Note(call, moved);
+            Note(call, moved, roots);
         }
     }
 
@@ -119,16 +149,17 @@ public sealed class MadeFiles
         if (Noting() is { } call)
         {
             // An unzip or a folder copy can name thousands: only the newest Keep could be listed, so only they are stat'ed.
+            var roots = call.List.Roots();
             foreach (string full in files.TakeLast(Keep))
             {
-                call.List.Note(call, full);
+                Note(call, full, roots);
             }
         }
     }
 
-    private static Call? Noting() => s_current.Value is { Open: true } call && !WriteGuard.InAppWrites ? call : null;
+    private static Call? Noting() => s_current.Value is { Open: true } call && !WriteGuard.InAppWrites && s_unlisted.Value is null ? call : null;
 
-    private void Note(Call call, string full)
+    private static void Note(Call call, string full, IReadOnlyList<string> roots)
     {
         string path;
         try
@@ -140,14 +171,15 @@ public sealed class MadeFiles
             return;
         }
 
-        if (!Roots().Any(root => IsUnder(path, root)))
+        if (!roots.Any(root => IsUnder(path, root)))
         {
             return;   // a vault, a share or a database export elsewhere
         }
 
+        var before = Stat(path);
         lock (call.Pending)
         {
-            call.Pending.Add((path, Stat(path)));
+            call.Pending.Add((path, before));
         }
     }
 
@@ -169,12 +201,15 @@ public sealed class MadeFiles
         {
             return _entries.Select(e => e.Full).Distinct(WorkingDirectory.PathComparer)
                 .Where(p => WorkingDirectory.PathComparer.Equals(p, source) || IsUnder(p, source))
-                .Select(p => WorkingDirectory.PathComparer.Equals(p, source) ? target : target + p[source.Length..])
+                .Select(p => WorkingDirectory.PathComparer.Equals(p, source) ? target : Path.Join(target, WorkingDirectory.Under(source, p)))
                 .ToList();
         }
     }
 
-    /// <summary>The call's close: each noted path kept where it changed (a new file, a new length or time), in order.</summary>
+    /// <summary>
+    /// The call's close: each noted path kept where it changed (a new file, a new length or time), in order. The disk is asked before the lock
+    /// (the review's #107: a page's read never waits on it).
+    /// </summary>
     private void Settle(Call call)
     {
         List<(string Full, PathStat? Before)> pending;
@@ -184,27 +219,26 @@ public sealed class MadeFiles
             call.Pending.Clear();
         }
 
-        lock (_gate)
+        var changedPaths = pending.Where(p => Stat(p.Full) is { } after && after != p.Before).Select(p => p.Full).ToList();
+        if (changedPaths.Count > 0)
         {
-            bool changed = call.Removed;
-            foreach (var (full, before) in pending)
+            lock (_gate)
             {
-                if (Stat(full) is { } after && after != before)
+                foreach (string full in changedPaths)
                 {
-                    Add(full, call.Turn);
-                    changed = true;
+                    Add(full, call.TurnKey);
                 }
             }
+        }
 
-            if (changed)
-            {
-                _version++;
-            }
+        if (changedPaths.Count > 0 || call.Removed)
+        {
+            Interlocked.Increment(ref _version);
         }
     }
 
     // Under _gate.
-    private void Add(string full, ChatMessage? turn)
+    private void Add(string full, long? turn)
     {
         string? token = null;
         for (int i = _entries.Count - 1; i >= 0; i--)
@@ -216,7 +250,7 @@ public sealed class MadeFiles
             }
 
             token ??= entry.Token;
-            if (ReferenceEquals(entry.Turn, turn))
+            if (entry.TurnKey == turn)
             {
                 _entries.RemoveAt(i);   // the same turn's file written again: one entry, at the newest place
             }
@@ -239,8 +273,9 @@ public sealed class MadeFiles
         {
             _entries.Clear();
             _trimmed = false;
-            _version++;
         }
+
+        Interlocked.Increment(ref _version);
     }
 
     /// <summary>Something outside the list may show or hide rows (an <c>/undo</c>, a rewind's files, a working folder change).</summary>
@@ -254,13 +289,17 @@ public sealed class MadeFiles
     {
         ArgumentNullException.ThrowIfNull(before);
         ArgumentNullException.ThrowIfNull(after);
-        var kept = new HashSet<ChatMessage>(after, ReferenceEqualityComparer.Instance);
+        var cut = KeysOf(before);
+        cut.ExceptWith(KeysOf(after));
         lock (_gate)
         {
-            _entries.RemoveAll(e => e.Turn is { } turn && before.Contains(turn) && !kept.Contains(turn));
-            _version++;
+            _entries.RemoveAll(e => e.TurnKey is { } key && cut.Contains(key));
         }
+
+        Interlocked.Increment(ref _version);
     }
+
+    private static HashSet<long> KeysOf(IEnumerable<ChatMessage> messages) => [.. messages.Select(ConversationHistory.TurnKey).OfType<long>()];
 
     /// <summary>
     /// What a save keeps: each entry's path, with its turn's store ordinal only when that message is in <paramref name="history"/>, the one
@@ -269,10 +308,18 @@ public sealed class MadeFiles
     public IReadOnlyList<StoredMadeFile> Saved(IEnumerable<ChatMessage> history)
     {
         ArgumentNullException.ThrowIfNull(history);
-        var held = new HashSet<ChatMessage>(history, ReferenceEqualityComparer.Instance);
+        var ordinals = new Dictionary<long, int?>();
+        foreach (var message in history)
+        {
+            if (ConversationHistory.TurnKey(message) is { } key)
+            {
+                ordinals.TryAdd(key, ConversationHistory.TurnOrdinal(message));
+            }
+        }
+
         lock (_gate)
         {
-            return [.. _entries.Select(e => new StoredMadeFile(e.Full, e.Turn is { } turn && held.Contains(turn) ? ConversationHistory.TurnOrdinal(turn) : null))];
+            return [.. _entries.Select(e => new StoredMadeFile(e.Full, e.TurnKey is { } key && ordinals.TryGetValue(key, out int? ordinal) ? ordinal : null))];
         }
     }
 
@@ -283,12 +330,12 @@ public sealed class MadeFiles
     public void Restore(IEnumerable<StoredMadeFile>? stored, IEnumerable<ChatMessage> restored, int turns)
     {
         ArgumentNullException.ThrowIfNull(restored);
-        var byOrdinal = new Dictionary<int, ChatMessage>();
+        var byOrdinal = new Dictionary<int, long>();
         foreach (var message in restored)
         {
             if (ConversationHistory.IsTurnStart(message) && ConversationHistory.TurnOrdinal(message) is { } ordinal)
             {
-                byOrdinal.TryAdd(ordinal, message);
+                byOrdinal.TryAdd(ordinal, ConversationHistory.EnsureTurnKey(message));
             }
         }
 
@@ -303,11 +350,11 @@ public sealed class MadeFiles
                     continue;
                 }
 
-                Add(file.Path, file.Ordinal is { } at && byOrdinal.TryGetValue(at, out var turn) ? turn : null);
+                Add(file.Path, file.Ordinal is { } at && byOrdinal.TryGetValue(at, out long key) ? key : null);
             }
-
-            _version++;
         }
+
+        Interlocked.Increment(ref _version);
     }
 
     /// <summary>The listed files, newest first, each path once at its newest entry's place, where <paramref name="shown"/> says so.</summary>
@@ -342,20 +389,16 @@ public sealed class MadeFiles
         }
     }
 
-    /// <summary>Whether <paramref name="full"/> lies inside <paramref name="root"/> (compared as the file system does).</summary>
+    /// <summary>
+    /// Whether <paramref name="full"/> lies inside <paramref name="root"/>, never the root itself, by the root's own case rule (2026-11-16, the
+    /// review's #1 and #17: <see cref="WorkingDirectory.IsInside"/>'s, so a drive's root holds its files too).
+    /// </summary>
     public static bool IsUnder(string full, string root)
     {
         ArgumentNullException.ThrowIfNull(full);
         ArgumentNullException.ThrowIfNull(root);
-        string trimmed = Path.TrimEndingDirectorySeparator(root);
-        if (trimmed.Length == 0 || full.Length <= trimmed.Length + 1)
-        {
-            return false;
-        }
-
-        char separator = full[trimmed.Length];
-        return (separator == Path.DirectorySeparatorChar || separator == Path.AltDirectorySeparatorChar)
-            && WorkingDirectory.PathComparer.Equals(full[..trimmed.Length], trimmed);
+        return root.Length > 0 && WorkingDirectory.IsInside(root, full) && !string.Equals(full, root, CaseRule.Comparison(root))
+            && !string.Equals(full, Path.TrimEndingDirectorySeparator(root), CaseRule.Comparison(root));
     }
 
     private static PathStat? Stat(string full)
@@ -373,13 +416,13 @@ public sealed class MadeFiles
 
     private readonly record struct PathStat(long Length, DateTime Written);
 
-    private sealed record Entry(string Full, ChatMessage? Turn, string Token);
+    private sealed record Entry(string Full, long? TurnKey, string Token);
 
-    private sealed class Call(MadeFiles list, ChatMessage? turn)
+    private sealed class Call(MadeFiles list, long? turnKey)
     {
         public MadeFiles List { get; } = list;
 
-        public ChatMessage? Turn { get; } = turn;
+        public long? TurnKey { get; } = turnKey;
 
         public List<(string Full, PathStat? Before)> Pending { get; } = [];
 

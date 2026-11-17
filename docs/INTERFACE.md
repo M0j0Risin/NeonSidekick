@@ -643,12 +643,12 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 * **Drafts:** the page and the PC never see each other's drafts (one set aside with Esc at the PC included). Sent lines share the profile's message history, so ↑/↓ on either side bring them back.
 * **Sending:** Enter sends on a desktop; on a phone it adds a line (tap ➤). ✕ clears the box and *Undo* puts it back. Stop (■) shows while a reply runs or this page's voice plays on.
-* **📎 Attach:** up to 4 pictures or PDFs go with your next message: 20 MB each, 60 MB in all, counting waiting messages'. An unsent one is let go after 15 minutes.
+* **📎 Attach:** up to 4 pictures or PDFs go with your next message: 20 MB each, 60 MB in all, counting waiting messages'.
 * **Attachments are saved** under *Pasted images folder*, a picture's location data stripped. An iPhone's HEIC photo needs Windows' HEIF extension, or *Most Compatible* in its camera settings (Windows only; [MAC.md](MAC.md#what-works)).
 * **The dropdown** completes the `@ # $ % ^ *` mentions and, with *Web UI commands* on, the commands the page may run. `@` lists files only while *File tools* is on. *Web UI connection details* adds a `%` or `*` connection's server and database.
 * **Queued:** a message goes after the PC's queue. During a reply it waits (in Queued and on the 🗂️ [Queue tab](#sessions-files-and-queue), not in `/queue`) and goes when the reply ends, even under *Queue mode* `manual`. At most 20 wait, 48 KB each.
 * **After a cancel** under *Queue cancel mode* `hold`, waiting messages are held under a **Resume** banner; a new message runs first.
-* **Dropped** by `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty`, their text and attachments sent back to the page; `/queue clear` leaves them.
+* **Dropped** by `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty`. Their text and attachments go back to the page, except on a profile switch; `/queue clear` leaves them.
 * **Stop** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or a `/loop`, and stops speech (after the reply, only this page's voice); before the reply's first word it takes the message back. It never stops a model loading (Esc or Ctrl+C at the PC) or your editor under `/draft`.
 
 #### What the page shows
@@ -673,7 +673,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 #### Sessions, files and queue
 
 * **🗂️** at the top opens a sheet on its last tab; Back or Esc closes it. It opens with *Web UI commands* off too.
-* **Sessions:** the newest 50, the one on screen marked. Two taps on another resume it, as `/sessions <id>` at the PC; it needs *Web UI commands* and waits for the PC to be free. The filter searches titles, and from three letters what was said.
+* **Sessions:** the newest 50, the one on screen marked; the filter searches titles, and from three letters what was said. Two taps on another resume it, as `/sessions <id>` does; it needs *Web UI commands* and an idle PC.
 * **Files:** what the model made in this conversation with the file tools, newest first; a tap opens it. It lists what `/undo` covers ([not covered](TOOLS.md#undoing-file-changes)), and `/clear` or `/new` empties it.
 * **What opens:** PDFs, pictures and text show in the browser; Office files download for Word or Excel; anything else downloads as is.
 * **Queue:** the PC's waiting messages and the page's. Two taps on ✕ take one back (a page's goes to the draft); *Send now* and *Resume* show when they apply, and both queue modes can be set.

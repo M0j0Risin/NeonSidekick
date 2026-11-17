@@ -88,15 +88,17 @@ public class EmbeddedFitTests
         Assert.Null(Mark(1 * GiB, Plain(), gpu: null));
         Assert.Null(Mark(1 * GiB, Plain(), gpu: 0));
         Assert.Null(Mark(1 * GiB, Plain(vramOnly: false, layers: "20")));
-        Assert.Equal(FitNone.Cpu, EmbeddedFit.WhyNone(Plain(), Gpu, LlamaBackend.Cpu));
+        Assert.Equal(FitNone.Cpu, EmbeddedFit.WhyNone(Plain(vramOnly: false), Gpu, LlamaBackend.Cpu));
+        Assert.Equal(FitNone.VramOnlyOnCpu, EmbeddedFit.WhyNone(Plain(vramOnly: true), Gpu, LlamaBackend.Cpu));   // nothing launches: no "runs every model"
+        Assert.Contains(EmbeddedLlmText.VramOnlyOnCpu, EmbeddedLlmText.FitNoneCaption(FitNone.VramOnlyOnCpu), StringComparison.Ordinal);
         Assert.Equal(FitNone.NoRead, EmbeddedFit.WhyNone(Plain(), -1, LlamaBackend.Vulkan));
         Assert.Equal(FitNone.LayerCount, EmbeddedFit.WhyNone(Plain(vramOnly: false, layers: "20"), Gpu, LlamaBackend.Cuda));
-        Assert.False(EmbeddedFit.CanMark(Plain(vramOnly: false, layers: "20"), Gpu, LlamaBackend.Cuda));
+
 
         // VRAM only passes all whatever the count, so the count takes no mark away; a bad value launches as auto.
         Assert.Equal(FitMark.WontFit, Mark(30 * GiB, Plain(vramOnly: true, layers: "20")));
         Assert.Equal(FitMark.PartlyCpu, Mark(30 * GiB, Plain(vramOnly: false, layers: "lots")));
-        Assert.True(EmbeddedFit.CanMark(Plain(), Gpu, LlamaBackend.Metal));
+        Assert.Null(EmbeddedFit.WhyNone(Plain(), Gpu, LlamaBackend.Metal));
     }
 
     [Fact]

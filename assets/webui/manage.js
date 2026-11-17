@@ -24,7 +24,9 @@
   let tab = ManageTabs[0];
   try { if (ManageTabs.includes(sessionStorage.getItem('neon.manageTab'))) tab = sessionStorage.getItem('neon.manageTab'); } catch { /* private mode */ }
   let queueTag = null;   // the state's queue tag the open Queue tab was drawn at
-  let reading = 0;   // a read's serial: an older answer never draws over a newer one
+  let reading = 0;   // a read's serial, the search's too: an older answer never draws over a newer one (the review's #112)
+  let openSerial = 0;   // bumped by hide and close: an open still reading when the sheet was sent away never shows (the review's #132)
+  let drawn = null;   // the view last drawn: a 304 bringing it back draws nothing, so an armed ✕ survives (the review's #91)
 
   function setTab(t) {
     tab = t;
@@ -78,10 +80,11 @@
 
   let lastQueue = null;   // the view last read: a 304 draws it again
 
+  // Each reader answers {view, fresh} (fresh false: a 304's view the page held already), or null when the read failed.
   async function readQueue() {
     const r = await Neon.get('/api/queue', true);
-    if (r.ok && r.json) lastQueue = r.json;   // a 304 keeps the view the page holds
-    return r.ok && lastQueue ? lastQueue : null;
+    if (r.ok && r.json) { lastQueue = r.json; return { view: lastQueue, fresh: true }; }
+    return r.ok && lastQueue ? { view: lastQueue, fresh: false } : null;   // a 304 keeps the view the page holds
   }
 
   // A ✕: two taps, as the 📣 sheet's 🗑️ (its own class, so the 📣 sheet's tests never meet it).
@@ -138,11 +141,13 @@
     if (pc.length) {
       parts.push(el('div', 'manage-head', words.queueAtPc || 'At the PC'));
       for (const line of pc) {
-        parts.push(queueRow(line.label, line.pictures || 0, () => queueAct('/api/queue/remove', { index: line.index, label: line.label }), false));
+        // A line already sent now waits behind the reply: listed, no ✕ (the review's #114).
+        const removable = line.removable !== false;
+        parts.push(queueRow(line.label, line.pictures || 0, removable ? () => queueAct('/api/queue/remove', { index: line.index, label: line.label }) : null, false));
       }
     }
     if (page.length) {
-      parts.push(el('div', 'manage-head', words.queueFromPage || 'From this page'));
+      parts.push(el('div', 'manage-head', words.queueFromPage || 'From the pages'));
       for (const line of page) {
         const removable = !line.chord && line.key > 0;
         parts.push(queueRow(line.text, line.pictures || 0, removable ? () => queueAct('/api/queue/remove', { key: line.key }) : null, line.chord));
@@ -174,19 +179,20 @@
   // loses to an older one. Rows dim while the PC is busy; a refused resume's reason shows in the note.
 
   let sessionsView = null;
-  let searchSerial = 0;
   let searchTimer = null;
+  let lastSessions = null;   // {path, view}: the last answer alone, so a 304 draws it (the review's #29: never one kept per search)
 
   async function readSessions(q) {
     const path = '/api/sessions' + (q ? '?q=' + encodeURIComponent(q) : '');
-    const r = await Neon.get(path, true);
+    let r = await Neon.get(path, !q);   // a search never asks for a 304: its answer isn't kept
+    if (r.ok && !r.json && (!lastSessions || lastSessions.path !== path)) r = await Neon.get(path, false);   // a 304 for a view let go
     if (r.ok && r.json) {
       if (!r.json.found) r.json.found = [];
-      cache.set(path, r.json);
+      lastSessions = { path, view: r.json };
+      return { view: r.json, fresh: true };
     }
-    return r.ok ? cache.get(path) || null : null;
+    return r.ok && lastSessions && lastSessions.path === path ? { view: lastSessions.view, fresh: false } : null;
   }
-  const cache = new Map();   // per ask: a 304 draws the view it last answered
 
   function snippetEl(parts) {
     const s = el('div', 'manage-snippet');
@@ -256,10 +262,11 @@
     filterNow();
     clearTimeout(searchTimer);
     searchTimer = setTimeout(async () => {
-      const serial = ++searchSerial;
-      const view = await readSessions(filter.value.trim());
-      if (!view || serial !== searchSerial || !open || tab !== 'sessions') return;
-      drawSessions(view);
+      const serial = ++reading;
+      const got = await readSessions(filter.value.trim());
+      if (serial !== reading || !open || tab !== 'sessions') return;
+      if (!got) { sayNote(words.manageReadFailed || ''); return; }
+      draw('sessions', got.view);
     }, 300);
   });
 
@@ -270,11 +277,12 @@
 
   let lastFiles = null;
   let filesTag = null;   // the state's files tag the open Files tab was drawn at
+  let sessionsTag = null;   // the state's sessions tag the open Sessions tab was drawn at (the review's #78)
 
   async function readFiles() {
     const r = await Neon.get('/api/files', true);
-    if (r.ok && r.json) lastFiles = r.json;
-    return r.ok && lastFiles ? lastFiles : null;
+    if (r.ok && r.json) { lastFiles = r.json; return { view: lastFiles, fresh: true }; }
+    return r.ok && lastFiles ? { view: lastFiles, fresh: false } : null;
   }
 
   function standalone() {
@@ -320,19 +328,37 @@
     paintTabs();
     list.classList.remove('dim');
     if (t !== 'sessions') filter.classList.add('hidden');
-    if (t === 'queue') queueTag = state ? state.queueTag : null;
-    if (t === 'files') filesTag = state ? state.filesTag : null;
+    drawn = data;
     Tabs[t].draw(data);
   }
 
-  // The open tab read again and drawn (a change made here, a new queue tag, the feed's reset); an armed ✕ survives only a 304.
+  // The state's tags now: each read takes them before it asks, and its tab is stamped with those (the review's #39: a view read before a change
+  // was marked current with the change's tag, and never read again).
+  function tagsNow() {
+    return { queue: state ? state.queueTag : null, files: state ? state.filesTag : null, sessions: state ? state.sessionsTag : null };
+  }
+
+  // A read's answer shown: drawn unless a 304 brought back the view drawn already, the tab stamped with the tags taken before the read, and read
+  // again (once the caller is done) when the state's moved meanwhile.
+  function land(t, got, tags) {
+    if (got.fresh || got.view !== drawn) draw(t, got.view);
+    if (t === 'queue') queueTag = tags.queue;
+    if (t === 'files') filesTag = tags.files;
+    if (t === 'sessions') sessionsTag = tags.sessions;
+    const now = tagsNow();
+    if ((t === 'queue' && now.queue !== queueTag) || (t === 'files' && now.files !== filesTag) || (t === 'sessions' && now.sessions !== sessionsTag)) Promise.resolve().then(refresh);
+  }
+
+  // The open tab read again and drawn (a change made here, a new queue tag, the feed's reset); an armed ✕ survives a 304.
   async function refresh() {
     if (!open) return;
     const t = tab;
     const serial = ++reading;
-    const data = await read(t);
-    if (!data || !open || t !== tab || serial !== reading) return;
-    draw(t, data);
+    const tags = tagsNow();
+    const got = await read(t);
+    if (!open || t !== tab || serial !== reading) return;
+    if (!got) { sayNote(words.manageReadFailed || ''); return; }   // the rows read last stay (the review's #111)
+    land(t, got, tags);
   }
 
   function focusTab() {
@@ -347,9 +373,11 @@
     filter.value = '';
     paintTabs();
     const serial = ++reading;
-    const data = await read(t);
-    if (!data || !open || t !== tab || serial !== reading) return;
-    draw(t, data);
+    const tags = tagsNow();
+    const got = await read(t);
+    if (!open || t !== tab || serial !== reading) return;
+    if (!got) { drawn = null; sessionsView = null; list.replaceChildren(); filter.classList.add('hidden'); sayNote(words.manageReadFailed || ''); return; }
+    land(t, { view: got.view, fresh: true }, tags);   // another tab's rows are showing: always drawn
   }
 
   // Opens on t, or the tab used last. The 📣 sheet or the drawer, if open, gives its history entry to this one (replaceState), as they
@@ -364,13 +392,29 @@
     if (t) setTab(t);
     filter.value = '';
     opening = true;
+    const serial = ++openSerial;
     const want = tab;
-    const data = await read(want);
+    const tags = tagsNow();
+    const got = await read(want);
+    if (serial !== openSerial) return;   // sent away while it read (an ask, Esc, Back, a tap on the transcript): it never shows
     opening = false;
-    if (!data || open) return;
+    if (open) return;
     closeUsage();
     sayNote('');
-    draw(want, data);
+    if (got) {
+      land(want, { view: got.view, fresh: true }, tags);
+    } else {
+      // Opened all the same, saying why it's empty (the review's #111).
+      drawn = null;
+      sessionsView = null;
+      paintTabs();
+      list.replaceChildren();
+      filter.classList.add('hidden');
+      queueTag = tags.queue;
+      filesTag = tags.files;
+      sessionsTag = tags.sessions;
+      sayNote(words.manageReadFailed || '');
+    }
     if ((drawerOpen || promptsOpen) && !shown) {
       hideDrawer();
       hidePrompts(true);
@@ -382,8 +426,16 @@
     focusTab();
   }
 
+  // An open still reading is called off: it pushed no history entry yet, so there is none to take back.
+  function stopOpening() {
+    if (!opening) return;
+    opening = false;
+    openSerial++;
+  }
+
   // Gone now, its entry left to the caller. Focus goes back to 🗂️ when asked (Esc, Back, ✕, 🗂️ again), never on a tap outside.
   function hide(toButton) {
+    stopOpening();
     if (!open) return;
     const focused = sheet.contains(document.activeElement);
     show(false);
@@ -393,6 +445,7 @@
 
   // ✕, Esc, 🗂️ again, a tap on the transcript, a question arriving: the sheet goes now, and its own history entry with it.
   function close(toButton) {
+    stopOpening();
     if (!open) return;
     hide(toButton);
     if (history.state && history.state.manage && !history.state.overlay) history.back();
@@ -412,7 +465,7 @@
   }
   // Esc: an armed ✕ first, then the sheet; not under the overlay or the usage card, as the 📣 sheet's.
   document.addEventListener('keydown', ev => {
-    if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !open || !usageCard.classList.contains('hidden')) return;
+    if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !(open || opening) || !usageCard.classList.contains('hidden')) return;
     ev.preventDefault();
     if (Neon.armed()) { Neon.disarm(); return; }
     close(true);
@@ -432,17 +485,21 @@
   paintWords();
 
   window.NeonManage = {
-    isOpen: () => open,
+    // Open or opening (the review's #85, #86, #129 and #132): a sheet still reading counts, so an ask, Esc or a tap sends it away before it
+    // shows. isShown is the sheet on the screen alone, for the history entries: one still reading has none yet.
+    isOpen: () => open || opening,
+    isShown: () => open,
     has: t => ManageTabs.includes(t),
     open: t => openSheet(t),
     hide: toButton => hide(toButton),
     close: toButton => close(toButton),
     // The feed's reset (a new conversation, a reconnect): an open tab is the new conversation's.
     reset: () => refresh(),
-    // Each state: the open Queue or Files tab re-reads when its tag moved.
+    // Each state: the open Queue, Files or Sessions tab re-reads when its tag moved.
     state: s => {
       if (open && tab === 'queue' && s && s.queueTag !== queueTag) { queueTag = s.queueTag; refresh(); }
       if (open && tab === 'files' && s && s.filesTag !== filesTag) { filesTag = s.filesTag; refresh(); }
+      if (open && tab === 'sessions' && s && s.sessionsTag !== sessionsTag) { sessionsTag = s.sessionsTag; refresh(); }
       if (open && tab === 'sessions') paintBusy();
     },
     paintWords,

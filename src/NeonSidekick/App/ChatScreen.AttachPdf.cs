@@ -32,44 +32,58 @@ internal sealed partial class ChatScreen
     /// leaves it to finish into the cache, where a <c>read_pdf</c> of the same file finds it (the plan's gap 28 cancelled it; the cache made
     /// that not worth tracking the draft for).
     /// </summary>
-    private (ImageAttachment? Document, string? Error) LoadAttachedPdf(string full)
+    private (ImageAttachment? Document, string? Error) LoadAttachedPdf(string full) => LoadAttachedPdfNamed(full) is var (document, error, _) ? (document, error) : default;
+
+    /// <summary>
+    /// <see cref="LoadAttachedPdf"/>, and whether its error names the file alone (2026-11-16, the review's #110: a phone's page reads the size and
+    /// header refusals as they are, never a missing file's full path or a read's system message, told by kind rather than by comparing strings).
+    /// </summary>
+    private (ImageAttachment? Document, string? Error, bool NamesTheFileAlone) LoadAttachedPdfNamed(string full)
     {
         try
         {
             var info = new FileInfo(full);
             if (!info.Exists)
             {
-                return (null, FileText.Missing(full));
+                return (null, FileText.Missing(full), false);
             }
 
-            // A server sent the text alone (a local one, the Claude Code server) is held to what the reader takes, not to the
-            // request's byte cap: only the text goes out (2026-10-20, review: a 19 MB PDF was refused as 25 MB of base64 there).
-            // The send weighs the line again for the endpoint it goes to (ReadyAttachedPdfsAsync).
-            if (!TakesPdf())
+            if (PdfSizeRefusal(info.Name, info.Length) is { } tooBig)
             {
-                if (info.Length > BrowserPdfReader.MaxBytes)
-                {
-                    return (null, PdfText.TooBigToAttachAsText(info.Name, info.Length));
-                }
-            }
-            else if (AttachWireCap(_effective().LlmPictureMegabytes) is var cap && (info.Length + 2) / 3 * 4 > cap)
-            {
-                return (null, PdfText.TooBigToAttach(info.Name, info.Length, cap * 3 / 4));
+                return (null, tooBig, true);
             }
 
             byte[] bytes = File.ReadAllBytes(info.FullName);
             if (!PdfFile.HasPdfHeader(bytes))
             {
-                return (null, PdfText.NotAPdf(info.Name));
+                return (null, PdfText.NotAPdf(info.Name), true);
             }
 
             var key = new PdfDocKey(info.FullName, info.Length, info.LastWriteTimeUtc);
-            return (new ImageAttachment(info.FullName, bytes, PdfFile.MediaType, 0, 0) { DocumentText = ReadAttachedAsync(key, info.Name, bytes) }, null);
+            return (new ImageAttachment(info.FullName, bytes, PdfFile.MediaType, 0, 0) { DocumentText = ReadAttachedAsync(key, info.Name, bytes) }, null, true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return (null, PdfText.ReadFailed(Path.GetFileName(full), ex.Message));
+            return (null, PdfText.ReadFailed(Path.GetFileName(full), ex.Message), false);
         }
+    }
+
+    /// <summary>
+    /// Why a PDF of <paramref name="length"/> bytes can't be attached, naming it <paramref name="name"/>, or null (out of
+    /// <see cref="LoadAttachedPdf"/> on 2026-11-16, the review's #58: a phone's PDF is checked before it is saved, so a refused one leaves no file).
+    /// A server sent the text alone (a local one, the Claude Code server) is held to what the reader takes, not to the request's byte cap: only
+    /// the text goes out (2026-10-20, review: a 19 MB PDF was refused as 25 MB of base64 there). The send weighs the line again for the endpoint
+    /// it goes to (<see cref="ReadyAttachedPdfsAsync"/>).
+    /// </summary>
+    private string? PdfSizeRefusal(string name, long length)
+    {
+        if (!TakesPdf())
+        {
+            return length > BrowserPdfReader.MaxBytes ? PdfText.TooBigToAttachAsText(name, length) : null;
+        }
+
+        long cap = AttachWireCap(_effective().LlmPictureMegabytes);
+        return (length + 2) / 3 * 4 > cap ? PdfText.TooBigToAttach(name, length, cap * 3 / 4) : null;
     }
 
     /// <summary>An attached PDF's text: its first <see cref="AttachPages"/> pages under their headings, up to <see cref="AttachChars"/>. Never throws.</summary>

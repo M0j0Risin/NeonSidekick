@@ -18,8 +18,8 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class ChatScreen
 {
-    /// <summary>A phone attachment's file name before its extension, as <see cref="Comfy.ComfyStudio.PastedStem"/> is a PC paste's.</summary>
-    public static string PhoneStem(DateTimeOffset local) => "phone-" + local.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+    /// <summary>A phone attachment's file name before its extension, as <see cref="Comfy.ComfyStudio.PastedStem(DateTimeOffset)"/> is a PC paste's (the review's #89: one stamp).</summary>
+    public static string PhoneStem(DateTimeOffset local) => Comfy.ComfyStudio.PastedStem("phone-", local);
 
     /// <summary>
     /// <paramref name="line"/> (a page's line from its text alone) with its uploads saved and attached: <see cref="SubmittedLine.Text"/> the saved
@@ -37,10 +37,18 @@ internal sealed partial class ChatScreen
         foreach (var attachment in attachments)
         {
             number++;
-            var held = attachment.Saved is { } before && File.Exists(before) ? attachment : SavePhone(attachment, number, page);
-            kept.Add(held);
+            bool saved = attachment.Saved is { } before && File.Exists(before);
+            if (!saved && attachment.Kind == WebAttachKind.Pdf && PdfSizeRefusal(WebUiText.PhonePdfLabel(number), attachment.Bytes.LongLength) is { } tooBig)
+            {
+                // Checked before the save (2026-11-16, the review's #58): a PDF too big to send is never saved, and its words name no file.
+                LeftOff(tooBig, tooBig);
+                continue;
+            }
+
+            var held = saved ? attachment : SavePhone(attachment, number, page);
             if (held.Kind == WebAttachKind.Picture && held.Picture is { } picture)
             {
+                kept.Add(held);
                 images.Add(held.Saved is { } path ? picture with { Path = path } : picture);
                 sent.Add(held.Saved is { } savedAs ? PasteBlocks.SavedLabel(number, savedAs) : PasteBlocks.ImageLabel(number));
                 bare.Add(PasteBlocks.ImageLabel(number));
@@ -52,16 +60,16 @@ internal sealed partial class ChatScreen
                 continue;   // its save failed: said already, at the PC and on the page
             }
 
-            var (document, error) = LoadAttachedPdf(full);
+            var (document, error, namesTheFileAlone) = LoadAttachedPdfNamed(full);
             if (document is null)
             {
                 string why = error ?? FileText.Missing(full);
-                DiagnosticLog.Warn(WebUiCategory, "A phone PDF was left off: " + why);
-                _transcript.WarningAtPc(why);
-                SayToPage(page, PhonePdfWords(why, full, number));
+                LeftOff(why, namesTheFileAlone ? why : WebUiText.PhoneNotSaved(number, pdf: true));
                 continue;
             }
 
+            // Only what goes is kept for a give-back (2026-11-16, the review's #37): a PDF left off never comes back as a chip.
+            kept.Add(held);
             string where = _files.Contains(full) && _files.Resolve(full, forWrite: false, out string inside) == FileOutcome.Ok ? _files.Relative(inside) : full;
             images.Add(document);
             sent.Add(PdfText.DocumentSentLabel(number, where));
@@ -76,8 +84,15 @@ internal sealed partial class ChatScreen
 
         string text = Joined(sent, typed);
         string shown = Joined(bare, typed);
-        string label = shown.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\n', ' ').Replace('\r', ' ');
-        return line with { Text = text, Images = images, Label = label, Shown = shown, WebAttachments = kept };
+        return line with { Text = text, Images = images, Label = OneRow(shown), Shown = shown, WebAttachments = kept };
+
+        // A PDF left off: the PC's warning with the reason, the page's own words.
+        void LeftOff(string why, string pageWords)
+        {
+            DiagnosticLog.Warn(WebUiCategory, WebUiText.PhonePdfLeftOffLogLine(why));
+            _transcript.WarningAtPc(why);
+            SayToPage(page, pageWords);
+        }
 
         static string Joined(List<string> labels, string typed) =>
             labels.Count == 0 ? typed : typed.Length == 0 ? string.Join(' ', labels) : string.Join(' ', labels) + " " + typed;
@@ -115,38 +130,25 @@ internal sealed partial class ChatScreen
         bool pdf = attachment.Kind == WebAttachKind.Pdf;
         if (why is not null)
         {
-            string label = pdf ? "[PDF #" + number.ToString(CultureInfo.InvariantCulture) + "]" : PasteBlocks.ImageLabel(number);
-            DiagnosticLog.Warn(WebUiCategory, label + " from the phone not saved: " + why);
+            string label = pdf ? WebUiText.PhonePdfLabel(number) : PasteBlocks.ImageLabel(number);
+            DiagnosticLog.Warn(WebUiCategory, WebUiText.PhoneNotSavedLogLine(label, why));
             _transcript.WarningAtPc(pdf ? WebUiText.PhonePdfNotSavedWarning(number, why) : PastedNotSavedWarning(number, why));
             SayToPage(page, WebUiText.PhoneNotSaved(number, pdf));
             return attachment;
         }
 
-        DiagnosticLog.Debug(WebUiCategory, "A phone " + (pdf ? "PDF" : "picture") + " saved as " + written.Relative);
+        DiagnosticLog.Debug(WebUiCategory, WebUiText.PhoneSavedLogLine(pdf, written.Relative));
         return attachment with { Saved = written.Relative };
     }
 
     /// <summary>
-    /// What the page reads for a phone PDF left off: the wire cap's and the header's words as they are (they name the <c>phone-…</c> file
-    /// alone), anything else (a missing file, a read's system message, which may name the PC's path) <see cref="WebUiText.PhoneNotSaved"/>.
-    /// </summary>
-    private string PhonePdfWords(string error, string full, int number)
-    {
-        var info = new FileInfo(full);
-        bool safe = error == PdfText.NotAPdf(info.Name)
-            || (info.Exists && (error == PdfText.TooBigToAttachAsText(info.Name, info.Length)
-                || error == PdfText.TooBigToAttach(info.Name, info.Length, AttachWireCap(_effective().LlmPictureMegabytes) * 3 / 4)));
-        return safe ? error : WebUiText.PhoneNotSaved(number, pdf: true);
-    }
-
-    /// <summary>
     /// A page's line refused before its turn (no server, a PDF the send-time check refused, an embedded model without vision): its typed text and
-    /// its chips back to its page's draft, the reason said there too, as a withdrawn line goes; false for any other line (a PC line, an app's pass),
-    /// which the caller handles as before.
+    /// its chips back to its page's draft, the reason said there too, as a withdrawn line goes; false for any other line (a PC line, an app's pass,
+    /// a Ralph pass: 2026-11-16, the review's #122, a stale page flag never hands a pass's text to a phone), which the caller handles as before.
     /// </summary>
     private bool PutBackPageLine(string text, string? error, bool pass)
     {
-        if (!_sentFromWeb || pass)
+        if (!_sentFromWeb || pass || InRalphPass)
         {
             return false;
         }

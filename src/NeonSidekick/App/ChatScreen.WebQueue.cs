@@ -50,13 +50,14 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The page's queue tag: the PC's queue, the session's lines and the screen's pended ones, each by its version, and what the view's buttons
-    /// follow (the saved modes, a reply running), so an open tab re-reads when anything it shows moved.
+    /// follow (the saved modes, the mode in force — manual reads as automatic while menus are off, 2026-11-16, the review's #115 — a reply
+    /// running), so an open tab re-reads when anything it shows moved.
     /// </summary>
     private string WebQueueTagNow()
     {
         var saved = _settings.Current;
         return string.Create(System.Globalization.CultureInfo.InvariantCulture,
-            $"{_queue.Version}.{_webUi.Version}.{Interlocked.Read(ref _pendingVersion)}.{saved.QueueMode}.{saved.QueueCancelMode}.{(_turnRunning ? 1 : 0)}");
+            $"{_queue.Version}.{_webUi.Version}.{Interlocked.Read(ref _pendingVersion)}.{saved.QueueMode}.{saved.QueueCancelMode}.{(int)QueueModeNow()}.{(_turnRunning ? 1 : 0)}");
     }
 
     /// <summary>The Queue tab's view (any thread, reads only): the modes as saved, as the PC pane's buttons show them.</summary>
@@ -65,7 +66,7 @@ internal sealed partial class ChatScreen
         var saved = _settings.Current;
         var pc = _queue.Snapshot().Select((m, i) => new WebQueuePcLine(i, m.Label, m.Line.Images.Count)).ToList();
         return new WebQueueView(
-            pc,
+            [.. PendedPcLines(), .. pc],
             _webUi.WaitingLines,
             QueueMode.Name(SavedQueueMode(saved)),
             QueueCancelMode.Name(SavedQueueCancel(saved)),
@@ -139,6 +140,13 @@ internal sealed partial class ChatScreen
         if (!SendOffered(underReply))
         {
             return new WebReply(WebOutcome.Conflict, QueueSendsItselfNotice);
+        }
+
+        // A front line Pend would refuse stays queued, its reason the answer (2026-11-16, the review's #113): taken off first, it was refused and
+        // lost. The queue has no peek; if the screen took the front meanwhile, the line taken below goes through Pend as before.
+        if (_queue.Snapshot() is [var front, ..] && PendRefusal(front.Line) is { } refused)
+        {
+            return new WebReply(WebOutcome.Conflict, refused);
         }
 
         if (!_queue.TryDequeue(out var next))

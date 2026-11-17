@@ -5059,7 +5059,7 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        string current = session.Endpoint?.ModelId ?? _settings.Current.LlmModel;
+        string current = session.ShownModelId ?? _settings.Current.LlmModel;   // the unloaded model too (2026-11-16, the review's #19)
         return await PickModelFromListAsync(listed.Value, current, cancellationToken).ConfigureAwait(false);
     }
 
@@ -9053,7 +9053,10 @@ internal sealed partial class SettingsMenu
             + Markup.Escape(NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityColumns(model, detail, detailWidth, fit));
     }
 
-    /// <summary>The catalog's rows, the details as wide as the widest one so each capability column is one column; each led by <paramref name="fit"/>'s mark when given (2026-11-16, #43).</summary>
+    /// <summary>
+    /// The catalog's rows, the details as wide as the widest one so each capability column is one column: name, quantization, size and state,
+    /// then <paramref name="fit"/>'s mark when given (2026-11-16, #43) before the capability glyphs.
+    /// </summary>
     public static IReadOnlyList<string> EmbeddedModelLabels(IReadOnlyList<NeonSidekick.EmbeddedLlm.EmbeddedModel> models, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.EmbeddedModelState> state, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, long>? download = null, Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.FitMark?>? fit = null)
     {
         ArgumentNullException.ThrowIfNull(models);

@@ -250,6 +250,15 @@ public sealed class ConversationHistory
     public const string CheckpointKey = "neon.checkpoint";
 
     /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on a turn's user message that holds its process-wide key, a <see cref="long"/>
+    /// (2026-11-16, the review's #103 and #128): what the made files' list ties an entry to, never the message, so a mid-turn compaction's rebuilt
+    /// message (which shares the dictionary) is the same turn. Stamped at the turn's start (<see cref="EnsureTurnKey"/>). Never sent, never saved.
+    /// </summary>
+    public const string MadeTurnKey = "neon.turnKey";
+
+    private static long s_nextTurnKey;
+
+    /// <summary>
     /// The <see cref="ChatMessage.AdditionalProperties"/> key on a turn's user message that holds its <c>/undo</c> note, a <see cref="string"/>
     /// (2026-10-28, the checkpoints plan). The note goes into the message's one text, ahead of what the user typed and a blank line
     /// (2026-10-28, review P10-01 and P4-10: a part of its own made a two-part array some servers refuse, and Claude's <c>.Text</c> ran the
@@ -498,6 +507,27 @@ public sealed class ConversationHistory
 
     /// <summary>What sits between an <c>/undo</c> note and the user's text.</summary>
     public const string NoteBreak = "\n\n";
+
+    /// <summary>The turn key stamped on <paramref name="message"/> (<see cref="MadeTurnKey"/>); null when none is.</summary>
+    public static long? TurnKey(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties && properties.TryGetValue(MadeTurnKey, out object? value) && value is long key ? key : null;
+    }
+
+    /// <summary>The turn key on <paramref name="message"/>, stamped first with a new one when it has none (<see cref="MadeTurnKey"/>).</summary>
+    public static long EnsureTurnKey(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (TurnKey(message) is { } key)
+        {
+            return key;
+        }
+
+        long made = Interlocked.Increment(ref s_nextTurnKey);
+        (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[MadeTurnKey] = made;
+        return made;
+    }
 
     /// <summary>Stamps <paramref name="ordinal"/> on <paramref name="message"/> (<see cref="TurnOrdinalKey"/>), replacing any earlier stamp.</summary>
     public static void SetTurnOrdinal(ChatMessage message, int ordinal)

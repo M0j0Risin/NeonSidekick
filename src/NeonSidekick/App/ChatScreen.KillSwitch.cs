@@ -82,9 +82,22 @@ internal sealed partial class ChatScreen
         Volatile.Write(ref _killArmedUntil, 0);
         _pane.SetAlertHint(null, TimeSpan.Zero);
         // An idle-unloaded model is forgotten too (2026-11-16, #44), even with nothing loaded: the next message asks for a server, as after any
-        // kill, and a parked model's countdown goes with it.
+        // kill, and a parked model's countdown goes with it. Its name joins the notice beside whatever else is killed (the review's #49).
         var forgotten = _session.IdleUnloaded;
         _session.ForgetIdleUnload();
+        if (embedded.Running is null && embedded.Extras.Count == 0 && !embedded.Starting)
+        {
+            // Only the unloaded model (the review's #67): no server to stop, so no work is cancelled — a botchat or a reply on a hosted server
+            // goes on. A reload under way is Starting, and is cancelled below as any load.
+            DiagnosticLog.Debug(AppCategory, KillSwitchIdleLog);
+            if (forgotten is not null)
+            {
+                RunOrPost(() => _transcript.Notice(EmbeddedLlmText.KilledNotice([forgotten.Model.Display])));
+            }
+
+            return;
+        }
+
         if (_session.EmbeddedParked && embedded.Extras.Count == 0 && !embedded.Starting && Volatile.Read(ref _botLadder) is null)
         {
             // Nothing running uses it (2026-11-11, the review): the chat is on another server, so its work is left alone.
@@ -92,10 +105,15 @@ internal sealed partial class ChatScreen
             if (parked.Count == 0)
             {
                 DiagnosticLog.Debug(AppCategory, KillSwitchIdleLog);
+                if (forgotten is not null)
+                {
+                    RunOrPost(() => _transcript.Notice(EmbeddedLlmText.KilledNotice([forgotten.Model.Display])));
+                }
+
                 return;
             }
 
-            string parkedNotice = EmbeddedLlmText.KilledParkedNotice(parked.Select(id => EmbeddedModelCatalog.Find(id, embedded.Catalog)?.Display ?? id).ToList());
+            string parkedNotice = EmbeddedLlmText.KilledParkedNotice(KilledNames(parked, embedded, forgotten));
             RunOrPost(() => FinishKill(parkedNotice));
             return;
         }
@@ -117,7 +135,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        string notice = EmbeddedLlmText.KilledNotice(ids.Select(id => EmbeddedModelCatalog.Find(id, embedded.Catalog)?.Display ?? id).ToList());
+        string notice = EmbeddedLlmText.KilledNotice(KilledNames(ids, embedded, forgotten));
         if (scope is null)
         {
             // Nothing of the model's running: the idle line, a pane over it, or work that is not the model's (a /claude turn).
@@ -126,6 +144,18 @@ internal sealed partial class ChatScreen
         }
 
         scope.Notice = notice;
+    }
+
+    /// <summary>The killed models' names for the notice, and the forgotten unloaded one's when it isn't among them (2026-11-16, the review's #49).</summary>
+    private static List<string> KilledNames(IReadOnlyList<string> ids, IEmbeddedLlm embedded, LlmSession.IdleUnload? forgotten)
+    {
+        var names = ids.Select(id => EmbeddedModelCatalog.Find(id, embedded.Catalog)?.Display ?? id).ToList();
+        if (forgotten is not null && !ids.Contains(forgotten.Model.Id, StringComparer.OrdinalIgnoreCase))
+        {
+            names.Add(forgotten.Model.Display);
+        }
+
+        return names;
     }
 
     /// <summary>The kill's last act, on the screen's task: the session lets the embedded model go, and the notice.</summary>

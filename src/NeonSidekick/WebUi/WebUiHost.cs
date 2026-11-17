@@ -976,6 +976,9 @@ public sealed class WebUiHost : IWebUiHost
         type is { } t && (t.StartsWith("image/", StringComparison.OrdinalIgnoreCase) || t.StartsWith(Files.PdfFile.MediaType, StringComparison.OrdinalIgnoreCase)
             || t.StartsWith("application/octet-stream", StringComparison.OrdinalIgnoreCase));
 
+    /// <summary>The most an upload's buffer is presized to from its <c>Content-Length</c>; past it the buffer grows as the bytes come.</summary>
+    private const int AttachPresize = 1024 * 1024;
+
     /// <summary>
     /// A phone's upload (2026-11-16, plan lucid-roaming-lantern #39). The sign-in and the tab are checked already. Here, before a byte is read:
     /// <c>X-Neon</c> (403), a <c>Sec-Fetch-Site</c> of <c>cross-site</c> or <c>same-site</c> (403; none passes, as for a GET), an allowed content type
@@ -1016,8 +1019,10 @@ public sealed class WebUiHost : IWebUiHost
             return;
         }
 
+        // Presized to the claimed length up to 1 MB (2026-11-16, the review's #28: a header claiming the whole cap reserved it before a byte
+        // came); a body that fits its buffer exactly is handed over without a copy (#96).
         long epoch = _backend.AttachEpoch;
-        using var body = new MemoryStream(request.ContentLength is > 0 and <= Files.ImageFile.MaxFileBytes ? (int)request.ContentLength.Value : 64 * 1024);
+        using var body = new MemoryStream(request.ContentLength is > 0 and var claimed ? (int)Math.Min(claimed, AttachPresize) : 64 * 1024);
         await request.Body.CopyToAsync(body, context.RequestAborted).ConfigureAwait(false);
         if (body.Length > Files.ImageFile.MaxFileBytes)
         {
@@ -1025,7 +1030,8 @@ public sealed class WebUiHost : IWebUiHost
             return;
         }
 
-        var reply = _backend.Attach(page, body.ToArray(), epoch, remote);
+        byte[] bytes = body.TryGetBuffer(out var buffer) && buffer.Offset == 0 && buffer.Count == buffer.Array!.Length ? buffer.Array : body.ToArray();
+        var reply = _backend.Attach(page, bytes, epoch, remote);
         if (reply.Status == StatusCodes.Status200OK)
         {
             await JsonAsync(context, StatusCodes.Status200OK, new WebAttachResult(true, Chip: reply.Chip), WebUiJsonContext.Default.WebAttachResult).ConfigureAwait(false);
@@ -1234,7 +1240,7 @@ public sealed class WebUiHost : IWebUiHost
     {
         int slash = rest.IndexOf('/', StringComparison.Ordinal);
         string token = slash < 0 ? rest : rest[..slash];
-        if (token.Length != 32 || !token.All(char.IsAsciiHexDigitLower) || _backend.MadeFilePath(token) is not { } full)
+        if (!Viewer.VideoFile.IsToken(token) || _backend.MadeFilePath(token) is not { } full)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;

@@ -17,9 +17,6 @@ internal sealed class UseCount(Action? began = null, Action? ended = null)
     /// <summary>The requests in flight now.</summary>
     public int InFlight => Volatile.Read(ref _inFlight);
 
-    /// <summary>Whether <see cref="Retire"/> ran: its connection is gone.</summary>
-    public bool Retired => _retired;
-
     /// <summary>The connection is gone: ends from now on call nothing.</summary>
     public void Retire() => _retired = true;
 

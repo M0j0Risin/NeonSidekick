@@ -147,6 +147,30 @@ public partial class ChatScreenTests
         Assert.Empty(Web.Queue()!.Page);
     }
 
+    [Fact]
+    public async Task APcLineSentNow_WaitingAtTheScreen_IsListedAtThePc_WithNoRemove()
+    {
+        // 2026-11-16, the review's #114: a PC line sent now under a reply waits in the screen's queue; the tab lists it first, with no ✕.
+        _settings.Update(d => d.TtsOutput = false);
+        WebQueueView? view = null;
+        SubmittedLine? taken = null;
+        StepsWhenIdle(
+            i =>
+            {
+                var screen = _running!;
+                screen.PendForTests(new SubmittedLine("later", "later", [], "later"));
+                view = Web.Queue();
+                taken = screen.TakePendingLineForTests();   // so the idle line sends nothing
+                PushLine(i, "/exit");
+            });
+
+        await RunAsync();
+
+        Assert.Equal([new WebQueuePcLine(-1, "later", 0, Removable: false)], view!.Pc);
+        Assert.Empty(view.Page);
+        Assert.Equal("later", taken?.Draft);
+    }
+
     /// <summary>
     /// A page line pended at the screen (as a command under a botchat is): listed with its key; the first claim owns it, so a removal that wins
     /// hands it back and the idle line's take skips it, and a take that wins leaves the removal a Conflict.

@@ -54,8 +54,9 @@ internal sealed partial class ChatScreen
         AuditFiles.List(_files, _audit.Path).Select(r => new CompletionItem(r.Name, AuditText.CompletionNote(r))).ToList();
 
     /// <summary>
-    /// Why an audit cannot start now, or null (2026-10-18): plan mode on, tools off, no assistant, or a turn that would not offer
-    /// <c>read_file</c> (File tools off, or <c>read_file</c> off on <c>/tools</c>) — a pass could verify nothing.
+    /// Why an audit cannot start now, or null (2026-10-18): plan mode on, tools off, or a turn that would not offer <c>read_file</c> (File
+    /// tools off, or <c>read_file</c> off on <c>/tools</c>) — a pass could verify nothing. The model is checked after these, by
+    /// <see cref="ModelOrSayAsync"/>, so a refusal never waits on a reload first (2026-11-16, the review's #11).
     /// </summary>
     private string? AuditRefusal(AppSettingsData effective)
     {
@@ -67,11 +68,6 @@ internal sealed partial class ChatScreen
         if (!effective.LlmOfferTools)
         {
             return AuditText.NeedsToolsError;
-        }
-
-        if (_session.Assistant is null)
-        {
-            return NoAssistantError;
         }
 
         return effective.FileTools && Without(_fileTools, TurnDisabled(effective)).Any(t => t.Name == ReadFileTool.ToolName) ? null : AuditText.NeedsReadFileError;
@@ -108,15 +104,15 @@ internal sealed partial class ChatScreen
     private async Task<bool> StartAuditAsync(AuditArguments parsed, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken)
     {
         _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return false;
-        }
-
         var effective = _effective();
         if (AuditRefusal(effective) is { } refused)
         {
             _transcript.Error(refused);
+            return false;
+        }
+
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
+        {
             return false;
         }
 
@@ -230,15 +226,15 @@ internal sealed partial class ChatScreen
     private async Task<bool> ResumeAuditAsync(string? name, PlanReviewer? reviewer, int? passes, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, bool said = true)
     {
         _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return false;
-        }
-
         var effective = _effective();
         if (AuditRefusal(effective) is { } refused)
         {
             _transcript.Error(refused);
+            return false;
+        }
+
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
+        {
             return false;
         }
 
@@ -837,14 +833,8 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
         {
-            return false;
-        }
-
-        if (_session.Assistant is null)
-        {
-            _transcript.Error(NoAssistantError);
             return false;
         }
 

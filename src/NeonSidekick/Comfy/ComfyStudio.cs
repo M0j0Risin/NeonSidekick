@@ -486,7 +486,10 @@ public sealed class ComfyStudio : IDisposable
     /// <c>pasted-N</c>, whose N began again with every run): <c>pasted-20260924-153012</c>. The <c>Pasted images folder</c>'s
     /// names since 2026-10-09. Pinned.
     /// </summary>
-    public static string PastedStem(DateTimeOffset local) => "pasted-" + local.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+    public static string PastedStem(DateTimeOffset local) => PastedStem("pasted-", local);
+
+    /// <summary>A saved picture's stem with its own <paramref name="prefix"/> (a phone's <c>phone-</c>, 2026-11-16): the same stamp.</summary>
+    public static string PastedStem(string prefix, DateTimeOffset local) => prefix + local.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// A pasted picture as the input (later still on 2026-09-24): the paste's own bytes — a clipboard picture before the 2048

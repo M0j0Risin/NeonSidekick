@@ -11,15 +11,18 @@ namespace NeonSidekick.App;
 
 internal sealed partial class ChatScreen
 {
-    /// <summary>The working folder and the images folder, as today's settings place them; the made files' list takes only writes under these.</summary>
-    private IReadOnlyList<string> MadeFileRoots()
+    /// <summary>
+    /// The working folder and the images folder as today's settings place them, each with its root and the folder name a row shows before its
+    /// own (2026-11-16, the review's #31: the roots and the serve check read them in one place).
+    /// </summary>
+    private List<(WorkingDirectory Directory, string Root, string Prefix)> MadeFileFolders()
     {
-        var roots = new List<string>(2);
-        foreach (var directory in (WorkingDirectory[])[_files, _images])
+        var folders = new List<(WorkingDirectory, string, string)>(2);
+        foreach (var (directory, prefix) in (ReadOnlySpan<(WorkingDirectory, string)>)[(_files, ""), (_images, "images")])
         {
             try
             {
-                roots.Add(directory.Root);
+                folders.Add((directory, directory.Root, prefix));
             }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException)
             {
@@ -27,28 +30,22 @@ internal sealed partial class ChatScreen
             }
         }
 
-        return roots;
+        return folders;
     }
+
+    /// <summary>The working folder and the images folder's roots; the made files' list takes only writes under these.</summary>
+    private IReadOnlyList<string> MadeFileRoots() => [.. MadeFileFolders().Select(f => f.Root)];
 
     /// <summary>
     /// The serve check (2026-11-16, #41), at every request and for every listed row: <paramref name="full"/> under today's working or images
     /// folder, passing that root's read-side <see cref="WorkingDirectory.Resolve(string, bool, out string)"/> (no link out of it, no stream
-    /// name). The folder it is in and the path it resolves to; null: refused, as an unknown token is.
+    /// name). The folder it is in and the path it resolves to; null: refused, as an unknown token is. A root that refuses it hands it to the next
+    /// (the review's #10: an images folder inside the working folder).
     /// </summary>
     private (string Resolved, string Folder)? MadeFileServable(string full)
     {
-        foreach (var (directory, prefix) in (ReadOnlySpan<(WorkingDirectory, string)>)[(_files, ""), (_images, "images")])
+        foreach (var (directory, root, prefix) in MadeFileFolders())
         {
-            string root;
-            try
-            {
-                root = directory.Root;
-            }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException)
-            {
-                continue;
-            }
-
             if (!MadeFiles.IsUnder(full, root))
             {
                 continue;
@@ -57,7 +54,7 @@ internal sealed partial class ChatScreen
             string relative = Path.GetRelativePath(root, full);
             if (directory.Resolve(relative, forWrite: false, out string resolved) != FileOutcome.Ok)
             {
-                return null;
+                continue;
             }
 
             // Joined with '/' on every system: a phone sees out/sub, never out\sub.
@@ -69,11 +66,14 @@ internal sealed partial class ChatScreen
         return null;
     }
 
-    /// <summary>The Files tab's view (any thread, reads only): the made files still there and servable, newest first.</summary>
+    /// <summary>
+    /// The Files tab's view (any thread, reads only): the made files still there and servable, newest first; one serve check and one look at the
+    /// disk per row (the review's #13).
+    /// </summary>
     private WebFilesView WebFilesNow()
     {
         var rows = new List<WebFileRow>();
-        foreach (var file in _madeFiles.Listed(full => MadeFileServable(full) is { } served && File.Exists(served.Resolved)))
+        foreach (var file in _madeFiles.Listed(_ => true))
         {
             if (MadeFileServable(file.Full) is not { } served)
             {
@@ -83,7 +83,13 @@ internal sealed partial class ChatScreen
             long length;
             try
             {
-                length = new FileInfo(served.Resolved).Length;
+                var info = new FileInfo(served.Resolved);
+                if (!info.Exists)
+                {
+                    continue;
+                }
+
+                length = info.Length;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

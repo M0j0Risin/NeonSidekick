@@ -20,6 +20,12 @@ public sealed record WebHeldAttachment(string Id, WebAttachKind Kind, byte[] Byt
     /// <summary>When it is let go (a <see cref="TimeProvider.GetTimestamp"/> reading).</summary>
     public long Expires { get; init; }
 
+    /// <summary>
+    /// The session's attach epoch when it was held (2026-11-16, the review's #5): a give-back across a profile switch (the epoch bumped) is
+    /// dropped, never held again under the new profile.
+    /// </summary>
+    public long Epoch { get; init; }
+
     /// <summary>The full path it was saved as under <i>Pasted images folder</i>; null until then, or when the save failed.</summary>
     public string? Saved { get; init; }
 
@@ -39,9 +45,6 @@ public sealed record WebHeldAttachment(string Id, WebAttachKind Kind, byte[] Byt
 /// </summary>
 public static class WebAttachSniff
 {
-    /// <summary>The <c>ftyp</c> brands of a HEIF picture (an iPhone's HEIC among them).</summary>
-    public static readonly IReadOnlyList<string> HeifBrands = ["heic", "heix", "mif1", "msf1"];
-
     /// <summary>
     /// <paramref name="bytes"/> read: on success the kind, a picture's attachment (named <c>phone</c> and the sniffed extension, never the phone's
     /// name) and the sniffed media type, with a 0 status; else the status and the page's words.
@@ -75,17 +78,13 @@ public static class WebAttachSniff
 
     /// <summary>Whether <paramref name="bytes"/> open with an <c>ftyp</c> box naming a HEIF brand (bytes 4 to 11).</summary>
     public static bool IsHeif(ReadOnlySpan<byte> bytes) =>
-        bytes.Length >= 12 && bytes[4..8].SequenceEqual("ftyp"u8) && HeifBrands.Contains(System.Text.Encoding.ASCII.GetString(bytes[8..12]));
+        bytes.Length >= 12 && bytes[4..8].SequenceEqual("ftyp"u8) && Images.ImageIOFormats.HeifBrands.Contains(System.Text.Encoding.ASCII.GetString(bytes[8..12]));
 
-    /// <summary>A picture container's media type by its first bytes (JPEG, PNG, GIF, WebP, BMP, a HEIF brand); null for anything else.</summary>
-    public static string? SourceType(ReadOnlySpan<byte> bytes) =>
-        bytes.StartsWith((ReadOnlySpan<byte>)[0xFF, 0xD8, 0xFF]) ? ImageFile.Jpeg
-        : bytes.StartsWith((ReadOnlySpan<byte>)[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) ? ImageFile.Png
-        : bytes.StartsWith("GIF87a"u8) || bytes.StartsWith("GIF89a"u8) ? "image/gif"
-        : bytes.Length >= 12 && bytes.StartsWith("RIFF"u8) && bytes[8..12].SequenceEqual("WEBP"u8) ? "image/webp"
-        : bytes.StartsWith("BM"u8) ? "image/bmp"
-        : IsHeif(bytes) ? "image/heic"
-        : null;
+    /// <summary>
+    /// A picture container's media type by its first bytes: what the picture server sniffs (PNG, JPEG, GIF, WebP, AVIF, BMP), else a HEIF brand's
+    /// <c>image/heic</c>; null for anything else (2026-11-16, the review's #69: one sniffer, AVIF included).
+    /// </summary>
+    public static string? SourceType(ReadOnlySpan<byte> bytes) => PictureServer.Sniff(bytes) ?? (IsHeif(bytes) ? "image/heic" : null);
 
     /// <summary>The chip's small picture as a data URL (<see cref="PictureSize.Chip"/>), or null when the codecs won't shrink it.</summary>
     public static string? Thumb(ImageAttachment picture)

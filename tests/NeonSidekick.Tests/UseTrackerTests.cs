@@ -77,7 +77,6 @@ public class UseTrackerTests
         await stream.MoveNextAsync();
         count.Retire();
         await stream.DisposeAsync();
-        Assert.True(count.Retired);
         Assert.Equal((1, 0, 0), (_began, _ended, count.InFlight));
     }
 }

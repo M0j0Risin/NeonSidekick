@@ -38,19 +38,27 @@ public partial class ChatScreenTests
     /// <summary>Waits for the PC's models, starts a listen from the page, sends one chunk, and waits for the listen's end on the page's stream.</summary>
     private List<WebVoicePhase> ListenFromThePhone() => ListenFromThePhoneUntil();
 
-    /// <summary><see cref="ListenFromThePhone"/>, also ending at <paramref name="alsoEnd"/> when given (a canceled listen).</summary>
-    private List<WebVoicePhase> ListenFromThePhoneUntil(string? alsoEnd = null)
+    /// <summary>
+    /// <see cref="ListenFromThePhone"/>, also ending at <paramref name="alsoEnd"/> when given (a canceled listen); the start carries
+    /// <paramref name="attachments"/>, and with <paramref name="finish"/> the page's second tap ends it, carrying those chips instead.
+    /// </summary>
+    private List<WebVoicePhase> ListenFromThePhoneUntil(string? alsoEnd = null, List<string>? attachments = null, List<string>? finish = null)
     {
         Assert.True(SpinWait.SpinUntil(() => Web.Snapshot().State.VoiceListen == "", TimeSpan.FromSeconds(20)), "the voice models never got ready");
         var voice = Web.Voice!;
         var seen = new List<WebEvent>();
         using var stream = Web.Events.Subscribe(PhonePage, PhoneLoad);
-        _vad.EndAfterBuffers = 1;
+        _vad.EndAfterBuffers = finish is null ? 1 : int.MaxValue;
 
-        var start = voice.Start(new WebVoiceStart { Page = PhonePage, Listen = PhoneListen, Speak = false }, IPAddress.Loopback);
+        var start = voice.Start(new WebVoiceStart { Page = PhonePage, Listen = PhoneListen, Speak = false, Attachments = attachments }, IPAddress.Loopback);
         Assert.Equal((WebOutcome.Ok, "listening"), (start.Outcome, start.Listen));
         var chunk = voice.Chunk(new WebVoiceChunk { Page = PhonePage, Listen = PhoneListen, Seq = 0, Pcm = Convert.ToBase64String(new byte[3200]) }, IPAddress.Loopback);
         Assert.Equal(WebOutcome.Ok, chunk.Outcome);
+        if (finish is not null)
+        {
+            var end = voice.End(new WebVoiceEnd { Page = PhonePage, Listen = PhoneListen, How = "finish", Attachments = finish }, IPAddress.Loopback);
+            Assert.Equal(WebOutcome.Ok, end.Outcome);
+        }
 
         Assert.True(SpinWait.SpinUntil(() =>
         {
@@ -103,6 +111,39 @@ public partial class ChatScreenTests
         Assert.All(phases!, p => Assert.Equal(PhoneListen, p.Listen));
         Assert.Equal("/clear what the phone heard", LastUser(_chat.Requests[0]));   // a message, never a command
         Assert.Equal(0, _capture.Started);
+    }
+
+    [Fact]
+    public async Task APhoneListen_WhoseChipWasLetGo_SaysSoWithItsSent()
+    {
+        WebVoiceOn();
+        _recognizer.Text = "what is this";
+        _chat.EnqueueText("Heard you.");
+        List<WebVoicePhase>? phases = null;
+        var input = WhenIdle(
+            _ => phases = ListenFromThePhoneUntil(attachments: ["gone-0123456789abcdef"]),
+            i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        Assert.Equal(("sent", WebUiText.AttachExpired), (phases![^1].Phase, phases[^1].Detail));   // the review's #51: the page is told
+    }
+
+    [Fact]
+    public async Task APhoneListen_FinishedByTheSecondTap_TakesTheChipsHeldThen_NotTheStarts()
+    {
+        WebVoiceOn();
+        _recognizer.Text = "what is this";
+        _chat.EnqueueText("Heard you.");
+        List<WebVoicePhase>? phases = null;
+        var input = WhenIdle(
+            _ => phases = ListenFromThePhoneUntil(attachments: ["gone-0123456789abcdef"], finish: []),
+            i => PushLine(i, "/exit"));
+
+        await RunAsync(input);
+
+        Assert.Equal(("sent", (string?)null), (phases![^1].Phase, phases[^1].Detail));   // the review's #9: the start's let-go chip was removed since
+        Assert.Equal("what is this", LastUser(_chat.Requests[0]));
     }
 
     [Fact]

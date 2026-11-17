@@ -1141,7 +1141,16 @@ public sealed class Assistant
 
     private ChatMessage? _lastUser;
 
-    private void PublishUser() => Volatile.Write(ref _lastUser, _history.Messages[^1]);
+    /// <summary>
+    /// The turn's message published, its turn key stamped first (the review's #103 and #128): before any tool call or compaction can run, so the
+    /// dictionary a compaction's rebuilt message shares already holds it.
+    /// </summary>
+    private void PublishUser()
+    {
+        var message = _history.Messages[^1];
+        ConversationHistory.EnsureTurnKey(message);
+        Volatile.Write(ref _lastUser, message);
+    }
 
     /// <summary>
     /// The sampling every request of this assistant carries (2026-09-28, the setting <c>LLM sampling</c>): the turn's, the
@@ -1302,6 +1311,10 @@ public sealed class Assistant
             var (summary, usage) = await SummarizeAsync(step.Instruction, step.Transcript, step.RequestLine, cancellationToken).ConfigureAwait(false);
             var messages = step.Rebuild(summary);
             _history.Replace(messages);
+            if (_history.LastTurnStart() is { } rebuilt)
+            {
+                Volatile.Write(ref _lastUser, rebuilt);   // the rebuilt turn's message (its key the same): a file made after this is its turn's (#128)
+            }
             return new MidTurnCompactDone(new ConversationCompactor.Result(before, messages.Count, 0, usage, Summarised: true)
             {
                 Summary = summary.Trim(),

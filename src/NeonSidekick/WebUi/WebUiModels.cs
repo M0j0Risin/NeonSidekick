@@ -95,6 +95,12 @@ public sealed class WebVoiceEnd
     public string? How { get; set; }
 
     public bool? Speak { get; set; }
+
+    /// <summary>
+    /// A finish's chips as the page holds them then (2026-11-16, the review's #9): one picked or ✕'d during the listen counts. Null (a cancel, an
+    /// old page) keeps the start's.
+    /// </summary>
+    public List<string>? Attachments { get; set; }
 }
 
 /// <summary>A page's 🔊 tapped (2026-11-13).</summary>
@@ -570,7 +576,8 @@ public sealed record WebState(
     string? VoiceListen = null,
     string? VoiceSpeak = null,
     string QueueTag = "",
-    string FilesTag = "");
+    string FilesTag = "",
+    string SessionsTag = "");
 
 /// <summary>
 /// What a page gets on (re)connecting: the transcript, the open asks, the state, the app's words the page shows of its own, the drafts held for
@@ -580,10 +587,11 @@ public sealed record WebState(
 /// </summary>
 /// <remarks>
 /// <see cref="Chips"/> (2026-11-16, plan lucid-roaming-lantern #39): the page's held uploads, so a reloaded or returning page rebuilds its chip row;
-/// <see cref="AttachMaxBytes"/> and <see cref="AttachMaxPixels"/> the upload's caps the page checks first (0: it doesn't).
+/// <see cref="AttachMaxBytes"/> and <see cref="AttachMaxPixels"/> the upload's caps the page checks first (0: it doesn't); <see cref="AttachMaxHeld"/>
+/// the chips a page may hold (2026-11-16, the review's #82: the server's count, 0 from an old app, where the page keeps its own 4).
 /// </remarks>
 public sealed record WebSnapshot(IReadOnlyList<WebEntry> Entries, IReadOnlyList<WebAskView> Asks, WebState State, WebWords? Words = null, IReadOnlyList<string>? Drafts = null, WebStatus? Status = null, WebStrip? Strip = null, WebPoint? Point = null,
-    string? Page = null, WebHeard? Heard = null, WebSpeaking? Speaking = null, string? Listen = null, IReadOnlyList<WebChip>? Chips = null, long AttachMaxBytes = 0, long AttachMaxPixels = 0);
+    string? Page = null, WebHeard? Heard = null, WebSpeaking? Speaking = null, string? Listen = null, IReadOnlyList<WebChip>? Chips = null, long AttachMaxBytes = 0, long AttachMaxPixels = 0, int AttachMaxHeld = 0);
 
 /// <summary>
 /// The PC's picture strip as the page's drawer shows it (later on 2026-10-15): its ComfyUI pictures newest first and the one the PC has
@@ -649,7 +657,7 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string SessionsCurrent = "", string SessionsBusy = "", string SessionsLoading = "", string SessionsNotSaved = "",
     string FilesNone = "", string FilesTrimmed = "", string FilesHint = "",
     string AttachButton = "", string AttachRemove = "", string AttachWaiting = "", string AttachTooBig = "", string AttachRoom = "", string AttachStopped = "",
-    string AttachLeftOut = "", string AttachPdf = "");
+    string AttachLeftOut = "", string AttachPdf = "", string ManageReadFailed = "");
 
 /// <summary>
 /// The 🗂️ sheet's Queue tab (2026-11-16, plan lucid-roaming-lantern #42): the PC's queued lines (<see cref="Pc"/>, the <c>/queue</c> pane's), the
@@ -660,8 +668,11 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
 public sealed record WebQueueView(IReadOnlyList<WebQueuePcLine> Pc, IReadOnlyList<WebQueueLine> Page, string Mode, string CancelMode, bool Held, bool SendOffered,
     IReadOnlyList<string> Modes, IReadOnlyList<string> CancelModes);
 
-/// <summary>A line of the PC's queue: its place now, its label (what a remove names with it, so a shifted queue refuses), its pictures, PDFs included.</summary>
-public sealed record WebQueuePcLine(int Index, string Label, int Pictures);
+/// <summary>
+/// A line of the PC's queue: its place now, its label (what a remove names with it, so a shifted queue refuses), its pictures, PDFs included;
+/// <see cref="Removable"/> false for one already sent now and waiting behind the reply (2026-11-16, the review's #114: listed, no ✕).
+/// </summary>
+public sealed record WebQueuePcLine(int Index, string Label, int Pictures, bool Removable = true);
 
 /// <summary>
 /// A page's line waiting (2026-11-16, #42): the session's own key for it (never reused, so a stale ✕ names nothing), its text, whether it is a

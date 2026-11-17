@@ -26,6 +26,7 @@ public sealed partial class WebUiPageTests
           const u = { count: 0, open: 0, most: 0 };
           window.__uploads = u;
           window.__fail429 = 0;
+          window.__fail0 = 0;
           window.XMLHttpRequest = function () {
             const x = new Real();
             let url = '';
@@ -35,6 +36,11 @@ public sealed partial class WebUiPageTests
             x.send = body => {
               if (!url.startsWith('/api/attach?')) return send(body);
               u.count++;
+              if (window.__fail0 > 0) {
+                window.__fail0--;
+                setTimeout(() => x.onerror && x.onerror(), 10);   // a connection cut mid-body: status 0
+                return;
+              }
               if (window.__fail429 > 0) {
                 window.__fail429--;
                 Object.defineProperty(x, 'status', { value: 429 });
@@ -75,6 +81,53 @@ public sealed partial class WebUiPageTests
         + "const input = document.getElementById('attach-input'); input.files = dt.files; input.dispatchEvent(new Event('change')); })()";
 
     private const string Message = "document.getElementById('message').textContent";
+
+    /// <summary>An upload whose connection was cut (status 0) is tried again, as a 429 is (the review's #100).</summary>
+    [WindowsFact]
+    public async Task ACutOffUpload_IsTriedAgain_AndLands()
+    {
+        if (await AttachPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        await page.EvalAsync("window.__fail0 = 1");
+        await page.EvalAsync(Pick((ImageFixtures.ExifJpeg(), "a.jpg", "image/jpeg")));
+        await page.WaitAsync("chips.length === 1 && chips[0].id !== null", "the chip landed on the second try");
+        Assert.Equal(2, (await page.EvalAsync("window.__uploads.count")).GetInt32());
+    }
+
+    /// <summary>
+    /// A ✕ once the body went leaves the upload to answer, never aborting it (the review's #33); one let go never comes back with a chips event or
+    /// a 200 (#101); a chip held blocks a watch's navigation (#129); a picture-only hand-back leaves the box alone (#90).
+    /// </summary>
+    [WindowsFact]
+    public async Task TheChipsEdges_AreHeld_OnThePage()
+    {
+        if (await AttachPageAsync() is not { } page)
+        {
+            return;
+        }
+
+        Assert.Equal("false|true", await page.TextAsync(
+            "(() => { const seen = []; for (const progress of [1, 0.5]) { let aborted = false; "
+            + "const c = { id: null, kind: 'picture', progress, state: 'uploading', xhr: { abort() { aborted = true; } } }; "
+            + "chips.push(c); removeChip(c); seen.push(String(aborted)); } return seen.join('|'); })()"));
+
+        await page.EvalAsync("forgotten.add('gone1'); applyChips([{ id: 'gone1', kind: 'picture', size: '1 KB' }])");
+        Assert.Equal(0, (await page.EvalAsync("chips.length")).GetInt32());
+        Assert.Equal("dropped", await page.TextAsync(
+            "(() => { const c = { id: null, kind: 'picture', progress: 1, state: 'uploading' }; chips.push(c); "
+            + "adoptChip(c, { id: 'gone1', kind: 'picture', size: '1 KB' }); return chips.includes(c) ? 'kept' : 'dropped'; })()"));
+
+        await page.EvalAsync("draft.value = ''");
+        Assert.False((await page.EvalAsync("Neon.watchBlocked()")).GetBoolean());
+        await page.EvalAsync(Pick((ImageFixtures.ExifJpeg(), "a.jpg", "image/jpeg")));
+        await page.WaitAsync("chips.length === 1 && chips[0].id !== null", "the chip landed");
+        Assert.True((await page.EvalAsync("Neon.watchBlocked()")).GetBoolean());
+
+        Assert.Equal("keep", await page.TextAsync("draft.value = 'keep'; putBack(''); draft.value"));
+    }
 
     [WindowsFact]
     public async Task APickedPicture_UploadsWithAChip_AndTheSendCarriesItsId()
@@ -282,6 +335,6 @@ public sealed partial class WebUiPageTests
         await page.WaitAsync("document.documentElement.scrollWidth <= window.innerWidth", "no sideways scroll at 360 px");
         Assert.Equal("rgb(13, 14, 15)", await ComputedAsync(page, "#draft-chips .draft-chip", "borderTopColor"));
         Assert.Equal("true", await page.TextAsync("String(document.getElementById('attach').classList.contains('hidden'))"));   // four held: no 📎
-        Assert.Equal("image/jpeg,image/png,image/webp,image/gif,application/pdf", await page.TextAsync("document.getElementById('attach-input').accept"));
+        Assert.Equal("image/jpeg,image/png,image/webp,image/gif,application/pdf,image/bmp", await page.TextAsync("document.getElementById('attach-input').accept"));
     }
 }

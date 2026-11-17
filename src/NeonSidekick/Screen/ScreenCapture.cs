@@ -69,7 +69,7 @@ public sealed class ScreenCapture
         }, cancellationToken).ConfigureAwait(false);
         var files = _files();
         string stem = CameraCapture.Under(CameraCapture.OutputFolder(_folder()), CameraCapture.Stem(TimeZoneInfo.ConvertTime(_time.GetUtcNow(), _time.LocalTimeZone)));
-        var (written, error) = Images.ImageOutput.WriteNumbered(files, stem, ".jpg", image.Bytes);
+        var (written, error) = Files.MadeFiles.Unlisted(() => Images.ImageOutput.WriteNumbered(files, stem, ".jpg", image.Bytes));   // never on the Files tab (#127)
         if (error is not null)
         {
             throw new ScreenException(ScreenText.NotSaved(error));

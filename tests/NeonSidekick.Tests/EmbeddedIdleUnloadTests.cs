@@ -28,14 +28,17 @@ public class EmbeddedIdleUnloadTests
     [Theory]
     [InlineData(1441)]
     [InlineData(-1)]
-    public void Resolve_OutOfRange_WarnsAndReadsAsOff(int minutes)
+    public void Resolve_OutOfRange_WarnsOnceAndReadsAsOff(int minutes)
     {
+        // Another bad value first, outside the capture: whatever ran before, this one is new and warns (2026-11-16, the review's #12).
+        EmbeddedIdleUnload.Resolve(new AppSettingsData { EmbeddedIdleUnloadMinutes = int.MinValue });
         var warnings = new List<DiagnosticEvent>();
         Action<DiagnosticEvent> capture = e => { if (e.Category == "EmbeddedLlm" && e.Level == DiagnosticLevel.Warning) warnings.Add(e); };
         DiagnosticLog.Emitted += capture;
         try
         {
             Assert.Equal(TimeSpan.Zero, EmbeddedIdleUnload.Resolve(new AppSettingsData { EmbeddedIdleUnloadMinutes = minutes }));
+            Assert.Equal(TimeSpan.Zero, EmbeddedIdleUnload.Resolve(new AppSettingsData { EmbeddedIdleUnloadMinutes = minutes }));   // every arming reads it: still one warning
         }
         finally
         {

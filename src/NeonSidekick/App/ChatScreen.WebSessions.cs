@@ -36,10 +36,47 @@ internal sealed partial class ChatScreen
     /// <summary>Whether a code audit, a gap review or a Ralph loop runs (any thread; read unlocked, so the chord's own check is the one that holds).</summary>
     private bool WebLoopRunning => _ralph is not null || _audit.Active || _plan.Closing is not null;
 
+    /// <summary>
+    /// The session store and the profile it belongs to, set together after a profile switch rebuilds the store (2026-11-16, the review's #60: the
+    /// profile's name changes first, so a page reading the two apart could get the new name with the old store's rows). Read once per request.
+    /// </summary>
+    private sealed record SessionsFor(SessionStore Store, string Profile);
+
+    private volatile SessionsFor? _webSessions;
+
+    /// <summary>The pair now: set at the screen's start, before the Web UI can ask.</summary>
+    private SessionsFor WebSessionsPair => _webSessions ?? new SessionsFor(_sessions, _settings.ProfileName);
+
+    /// <summary>
+    /// Every session as the page sees it, for a filter, kept while the store's <see cref="SessionStore.Version"/> holds (2026-11-16, the review's
+    /// #15: a filter's keystrokes read the whole list once, not once each).
+    /// </summary>
+    private sealed record PageSessions(SessionStore Store, long Version, IReadOnlyList<SessionSummary> Sessions);
+
+    private volatile PageSessions? _pageSessions;
+
+    private IReadOnlyList<SessionSummary> PageSessionsOf(SessionStore store)
+    {
+        long version = store.Version;
+        if (_pageSessions is { } held && ReferenceEquals(held.Store, store) && held.Version == version)
+        {
+            return held.Sessions;
+        }
+
+        var sessions = store.List(0).Select(ForThePage).ToList();
+        _pageSessions = new PageSessions(store, version, sessions);
+        return sessions;
+    }
+
+    /// <summary>The Sessions tab's tag (2026-11-16, the review's #78): the store's version and the session on screen, so an open tab reads again.</summary>
+    private string WebSessionsTagNow() =>
+        WebSessionsPair.Store.Version.ToString(System.Globalization.CultureInfo.InvariantCulture) + "-"
+        + (_sessionId is { } id ? id.ToString(System.Globalization.CultureInfo.InvariantCulture) : "none");
+
     /// <summary>The Sessions tab's view for <paramref name="query"/> (any thread, reads only).</summary>
     private WebSessionsView WebSessionsNow(string? query)
     {
-        var store = _sessions;
+        var (store, profile) = WebSessionsPair;
         long? current = _sessionId;
         string q = (query ?? "").Trim();
         var zone = _time.LocalTimeZone;
@@ -47,11 +84,13 @@ internal sealed partial class ChatScreen
 
         var rows = q.Length == 0
             ? store.List(WebSessionRows).Select(ForThePage).Select(Row).ToList()
-            : store.List(0).Select(ForThePage).Where(s => SessionsMenu.Matches(q, s)).Take(WebSessionRows).Select(Row).ToList();
+            : PageSessionsOf(store).Where(s => SessionsMenu.Matches(q, s)).Take(WebSessionRows).Select(Row).ToList();
         var found = new List<WebSessionRow>();
         if (q.Length >= WebSessionSearchFrom)
         {
-            foreach (var hit in store.Search(q, WebSessionHits, exclude: current, marks: (WebSnippet.Open, WebSnippet.Close)))
+            // A column counts only when a match survives the cleaning (the review's #8): one inside a saved path never stands for the session.
+            static bool Shown(string marked) => WebSnippet.Parts(marked).Any(p => p.Match);
+            foreach (var hit in store.Search(q, WebSessionHits, exclude: current, marks: (WebSnippet.Open, WebSnippet.Close), accept: Shown))
             {
                 var snippet = WebSnippet.Parts(hit.Snippet);
                 if (!snippet.Any(p => p.Match))
@@ -72,7 +111,7 @@ internal sealed partial class ChatScreen
         }
 
         var verdict = WebCommands.Check(SlashCommand.Session, "1", "/sessions 1", WebCommandSettingsNow());
-        return new WebSessionsView(_settings.ProfileName, rows, found, verdict.Allowed, verdict.Allowed ? null : verdict.Reason, !_effective().SessionLogging);
+        return new WebSessionsView(profile, rows, found, verdict.Allowed, verdict.Allowed ? null : verdict.Reason, !_effective().SessionLogging);
     }
 
     /// <summary>
@@ -82,7 +121,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private WebReply WebResumeSession(WebSessionResume request, IPAddress? remote)
     {
-        string profile = _settings.ProfileName;
+        var (store, profile) = WebSessionsPair;
         if (!Profiles.NameEquals(request.Profile ?? "", profile))
         {
             return new WebReply(WebOutcome.Conflict, WebUiText.ProfileSwitched);
@@ -104,7 +143,7 @@ internal sealed partial class ChatScreen
             return new WebReply(WebOutcome.Conflict, SessionsMenu.CurrentNotice);
         }
 
-        if (_sessions.Summary(request.Id) is null)
+        if (store.Summary(request.Id) is null)
         {
             return new WebReply(WebOutcome.Conflict, SessionMissingError(request.Id));
         }
@@ -116,22 +155,8 @@ internal sealed partial class ChatScreen
             return new WebReply(WebOutcome.Refused, verdict.Reason);
         }
 
-        if (Interlocked.CompareExchange(ref _webChordInFlight, 1, 0) != 0)
-        {
-            return new WebReply(WebOutcome.Conflict, WebUiText.ChordWaiting);
-        }
-
-        var queued = _webUi.QueueChord(line, remote, null, null, profile);
-        if (queued.Outcome != WebOutcome.Ok)
-        {
-            Interlocked.Exchange(ref _webChordInFlight, 0);
-            return queued;
-        }
-
-        DiagnosticLog.Info(WebUiCategory, WebUiText.SessionResumeLogLine(request.Id, remote));
-        _webUi.FlashPc(WebUiText.SessionResumedFlash(request.Id));
-        _webUi.PublishState();
-        return WebReply.Ok;
+        return QueueWebChord(line, remote, page: null, speak: null, profile, new WebReply(WebOutcome.Conflict, WebUiText.ChordWaiting),
+            WebUiText.SessionResumeLogLine(request.Id, remote), WebUiText.SessionResumedFlash(request.Id));
     }
 
     /// <summary>

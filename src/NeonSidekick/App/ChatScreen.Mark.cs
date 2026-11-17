@@ -44,9 +44,9 @@ internal sealed partial class ChatScreen
 
         SetMark(name);
         _transcript.Notice(name is null ? MarkText.DefaultNotice : MarkText.SetNotice(name));
-        if (!midTurn && _session.Assistant is { } assistant)
+        if (!midTurn)
         {
-            SaveSessionHistory(assistant);
+            SaveSessionHistory();   // unloaded too (2026-11-16, the review's #109)
         }
     }
 

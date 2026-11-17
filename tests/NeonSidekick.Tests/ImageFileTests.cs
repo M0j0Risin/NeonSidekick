@@ -40,6 +40,8 @@ public class ImageFileTests : IDisposable
     [InlineData("image/gif", ".gif")]
     [InlineData("image/webp", ".webp")]
     [InlineData("image/bmp", ".bmp")]
+    [InlineData("image/heic", ".heic")]
+    [InlineData("image/avif", ".avif")]
     public void ExtensionFor_GoesByTheMediaType(string mediaType, string extension) => Assert.Equal(extension, ImageFile.ExtensionFor(mediaType, [1, 2, 3]));
 
     [Fact]

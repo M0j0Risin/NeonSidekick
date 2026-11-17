@@ -89,6 +89,9 @@ public static class VideoFile
     /// <summary>A new play's token: 128 random bits as 32 lower-case hex digits.</summary>
     public static string NewToken() => Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
 
-    /// <summary>Whether <paramref name="text"/> has a token's shape: exactly 32 hex digits.</summary>
-    public static bool IsToken(string? text) => text is { Length: 32 } && text.All(char.IsAsciiHexDigit);
+    /// <summary>
+    /// Whether <paramref name="text"/> has a token's shape: exactly 32 lower-case hex digits, as <see cref="NewToken"/> makes them (2026-11-16, the
+    /// review's #44: the made files' gate checks with it too, as strictly as its own check did).
+    /// </summary>
+    public static bool IsToken(string? text) => text is { Length: 32 } && text.All(char.IsAsciiHexDigitLower);
 }

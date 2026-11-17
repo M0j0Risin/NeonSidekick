@@ -1158,6 +1158,7 @@ internal sealed partial class ChatScreen
     private async Task EndTurnAsync(bool closePane, CancellationToken cancellationToken)
     {
         _toolsOfferedDirty = true;   // 2026-10-16: the toolbar's 🛠️ worked out again at the next idle line
+        _madeFiles.Touch();   // a shell command may have deleted a listed file: the Files tab reads again (2026-11-16, the review's #26)
         // The hand-overs are a pane's, the PC's hand (later on 2026-10-14): never asked on the page, whatever started the turn.
         s_origin.Value = CommandOrigin.Pc;
         await EndWatchAsync(closePane).ConfigureAwait(false);

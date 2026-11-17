@@ -77,7 +77,8 @@ internal sealed partial class ChatScreen : IWebVoice
         public string Id { get; } = id;
 
         /// <summary>The page's chips its heard line takes (2026-11-16, plan lucid-roaming-lantern #39): ids only, taken at the send, so a listen cancelled or refused leaves them held.</summary>
-        public List<string>? Attachments { get; } = attachments;
+        /// <summary>The chips the heard line takes: the start's, replaced by a finish's (the review's #9). Read and written under <c>_voiceGate</c>.</summary>
+        public List<string>? Attachments { get; set; } = attachments;
 
         public WebAudioCapture Capture { get; } = capture;
 
@@ -206,6 +207,14 @@ internal sealed partial class ChatScreen : IWebVoice
         }
         else
         {
+            if (request.Attachments is { } held)
+            {
+                lock (_voiceGate)
+                {
+                    listen.Attachments = [.. held];   // before the finish wakes the listen, so its send takes these
+                }
+            }
+
             VoiceSession.SafeCancel(listen.Finish);
         }
 
@@ -322,15 +331,18 @@ internal sealed partial class ChatScreen : IWebVoice
         if (SttDestinationMode.Resolve(_effective()) == SttTarget.Chat)
         {
             bool? speak;
+            List<string>? attachments;
             lock (_voiceGate)
             {
                 speak = _voicePages.TryGetValue(page, out var entry) ? entry.Speak : null;
+                attachments = listen.Attachments;
             }
 
-            var sent = _webUi.Send(new WebSendRequest { Id = listen.Id, Text = text, AsText = true, Page = page, Speak = speak, Attachments = listen.Attachments }, listen.Remote);
+            var sent = _webUi.Send(new WebSendRequest { Id = listen.Id, Text = text, AsText = true, Page = page, Speak = speak, Attachments = attachments }, listen.Remote);
             if (sent.Outcome == WebOutcome.Ok)
             {
-                EndListen(page, listen, VoicePhases.Sent);
+                // Its word too (2026-11-16, the review's #51): a send that went with a chip left off says so, as a typed one's does.
+                EndListen(page, listen, VoicePhases.Sent, detail: sent.Message);
                 return;
             }
 

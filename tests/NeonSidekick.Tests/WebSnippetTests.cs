@@ -51,6 +51,23 @@ public sealed class WebSnippetTests
         Assert.EndsWith("<match>", joined, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A match is a whole word (the review's #68: "cat" in "category" isn't one), never a label's own word (#102), and a blank at either end is no
+    /// cut (#63).
+    /// </summary>
+    [Fact]
+    public void AMatch_IsAWholeWord_OutsideALabel_AndBlankEndsAreNoCut()
+    {
+        string sent = @"[Image #1, saved as C:\pics\cat.png] a category of things";
+        Assert.DoesNotContain(WebSnippet.Parts(Marked(sent, "cat.png").Replace(WebSnippet.Open + "cat.png", WebSnippet.Open + "cat", StringComparison.Ordinal)
+            .Replace(".png" + WebSnippet.Close, WebSnippet.Close + ".png", StringComparison.Ordinal)), p => p.Match);
+
+        Assert.DoesNotContain(WebSnippet.Parts(Marked("[Image #1] the photo", "Image")), p => p.Match);
+        Assert.Equal("an <image> of [Image #1]", Joined(WebSnippet.Parts(Marked("an image of [Image #1]", "image"))));
+
+        Assert.Equal("the <taxes>", Joined(WebSnippet.Parts("  the " + WebSnippet.Open + "taxes" + WebSnippet.Close + " \n ")));
+    }
+
     [Fact]
     public void AStrayMarker_IsShownAsText()
     {

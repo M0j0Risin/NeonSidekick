@@ -19,6 +19,9 @@ public static class EmbeddedIdleUnload
 
     public const int Max = AppSettingsData.MaxEmbeddedIdleUnloadMinutes;
 
+    // The last out-of-range value warned about.
+    private static int _warned;
+
     /// <summary>The idle time for <paramref name="effective"/>; <see cref="TimeSpan.Zero"/> for off, and for a value out of range (warned).</summary>
     public static TimeSpan Resolve(AppSettingsData effective)
     {
@@ -29,8 +32,14 @@ public static class EmbeddedIdleUnload
             return TimeSpan.FromMinutes(minutes);
         }
 
-        DiagnosticLog.Warn(Category, string.Create(CultureInfo.InvariantCulture,
-            $"{nameof(AppSettingsData.EmbeddedIdleUnloadMinutes)}={minutes} is not {Min} to {Max}. Using {Default} (off)."));
+        // Read at every arming (2026-11-16, the review's #12): warned once per value, as EmbeddedHfDownloadType.Resolve does. The field starts
+        // at 0, a value in range, so the first bad one always warns.
+        if (Interlocked.Exchange(ref _warned, minutes) != minutes)
+        {
+            DiagnosticLog.Warn(Category, string.Create(CultureInfo.InvariantCulture,
+                $"{nameof(AppSettingsData.EmbeddedIdleUnloadMinutes)}={minutes} is not {Min} to {Max}. Using {Default} (off)."));
+        }
+
         return TimeSpan.FromMinutes(Default);
     }
 }

@@ -67,6 +67,15 @@ public sealed partial class WebUiHostTests
                 Assert.Equal("inline; filename*=UTF-8''notes.txt", whole.Content.Headers.ContentDisposition?.ToString());
                 Assert.Equal(WebUiHost.ContentSecurityPolicy + "; sandbox", Assert.Single(whole.Headers.GetValues("Content-Security-Policy")));
                 Assert.Equal("nosniff", Assert.Single(whole.Headers.GetValues("X-Content-Type-Options")));
+                if (range is null)
+                {
+                    // A revalidation's 304 carries the sandbox too (the review's #105): a cache takes its headers over its copy's.
+                    var again = Get(WebUiHost.MadeFilePrefix + MadeToken + "/notes.txt");
+                    again.Headers.IfNoneMatch.Add(whole.Headers.ETag!);
+                    using var same = await _client.SendAsync(again);
+                    Assert.Equal(HttpStatusCode.NotModified, same.StatusCode);
+                    Assert.Equal(WebUiHost.ContentSecurityPolicy + "; sandbox", Assert.Single(same.Headers.GetValues("Content-Security-Policy")));
+                }
             }
 
             foreach (string unknown in new[] { "ffffffffffffffffffffffffffffffff/notes.txt", "notatoken/notes.txt", MadeToken.ToUpperInvariant() + "/notes.txt" })

@@ -78,21 +78,24 @@ public class LlmSessionIdleUnloadTests
 
         Assert.Equal(LlmSession.UnloadDue.Idle, session.TakeUnloadDue());
         var done = session.UnloadIfIdle()!;
-        Assert.Equal(("gemma-4-e2b", Twenty, (string?)null), (done.Model.Id, done.Idle, done.ParkedBehind));
+        Assert.Equal(("gemma-4-e2b", Twenty, (string?)null, true), (done.Model.Id, done.Idle, done.ParkedBehind, done.Reloads));
         Assert.Null(_embedded.Running);
         Assert.Null(session.Assistant);
         Assert.Null(session.Endpoint);
         Assert.Equal("gemma-4-e2b", session.IdleUnloaded!.Model.Id);
         Assert.Equal(("gemma-4-e2b", EmbeddedEndpoint.BaseUrl, true), (session.ShownModelId, session.ShownBaseUrl, session.ShownUnloaded));
         Assert.Equal(0, _time.TimerCount);
-        Assert.Equal("🦙 Unloaded Gemma 4 E2B after 20 min idle; the next message or command loads it again", EmbeddedLlmText.IdleUnloadedNotice(done.Model, done.Idle, null));
+        Assert.Equal("🦙 Unloaded Gemma 4 E2B after 20 min idle; the next message loads it again", EmbeddedLlmText.IdleUnloadedNotice(done.Model, done.Idle, null, done.Reloads));
+        Assert.Equal("🦙 Unloaded Gemma 4 E2B after 20 min idle", EmbeddedLlmText.IdleUnloadedNotice(done.Model, done.Idle, null, reloads: false));
 
         // The reload's connect clears the mark; a failed one puts it back.
         var kept = session.IdleUnloaded;
+        long epoch = session.IdleEpoch;
         Assert.True(await session.ConnectAsync(Embedded(), CancellationToken.None));
         Assert.Null(session.IdleUnloaded);
         Assert.False(session.ShownUnloaded);
-        session.RestoreIdleUnload(kept);
+        Assert.Equal(epoch, session.IdleEpoch);   // a connect's own clearing never bumps it: a failed reload still keeps the model
+        session.RestoreIdleUnload(kept, epoch);
         Assert.Null(session.IdleUnloaded);   // a model is connected: nothing put back
     }
 
@@ -197,7 +200,8 @@ public class LlmSessionIdleUnloadTests
         Assert.NotNull(session.Assistant);
         Assert.Equal(new Uri("http://127.0.0.1:1234/v1"), session.Endpoint!.BaseUrl);
         Assert.Null(session.IdleUnloaded);
-        Assert.Equal("🦙 Unloaded Gemma 4 E2B, parked behind LM Studio, after 20 min idle", EmbeddedLlmText.IdleUnloadedNotice(done.Model, done.Idle, done.ParkedBehind));
+        Assert.False(done.Reloads);
+        Assert.Equal("🦙 Unloaded Gemma 4 E2B, parked behind LM Studio, after 20 min idle", EmbeddedLlmText.IdleUnloadedNotice(done.Model, done.Idle, done.ParkedBehind, done.Reloads));
     }
 
     [Fact]
@@ -239,6 +243,61 @@ public class LlmSessionIdleUnloadTests
         _time.Advance(Twenty * 2);
         Assert.Equal(0, _dues);
         Assert.Null(session.IdleUnloaded);
+    }
+
+    [Fact]
+    public async Task AForget_DuringAReload_KeepsItForgotten()
+    {
+        // 2026-11-16, the review's #2: the reload reads the epoch, the kill switch forgets the model meanwhile, the reload fails; the
+        // restore sees the epoch moved and puts nothing back, so the kill stays a kill.
+        using var session = Session();
+        await session.ConnectAsync(Embedded(), CancellationToken.None);
+        _time.Advance(Twenty);
+        session.TakeUnloadDue();
+        session.UnloadIfIdle();
+        var kept = session.IdleUnloaded!;
+        long epoch = session.IdleEpoch;
+
+        session.ForgetIdleUnload();
+        session.RestoreIdleUnload(kept, epoch);
+        Assert.Null(session.IdleUnloaded);
+
+        // With no forget between, a failed reload's restore keeps it for the next try.
+        session.RestoreIdleUnload(kept, session.IdleEpoch);
+        Assert.Same(kept, session.IdleUnloaded);
+    }
+
+    [Fact]
+    public async Task ACrashDue_IsTakenAlone_AnIdleOneLeft()
+    {
+        // 2026-11-16, the review's #45: the reload before a request takes a crash's due without draining an idle one.
+        using var session = Session();
+        await session.ConnectAsync(Embedded(), CancellationToken.None);
+        _time.Advance(Twenty);
+        Assert.False(session.TakeCrashDue());
+        Assert.Equal(LlmSession.UnloadDue.Idle, session.TakeUnloadDue());
+
+        _embedded.Crash();
+        Assert.True(session.TakeCrashDue());
+        Assert.False(session.UnloadPending);
+        Assert.True(session.MarkCrashed());
+        Assert.Equal("gemma-4-e2b", session.IdleUnloaded!.Model.Id);
+        Assert.Equal("embedded", session.IdleUnloaded.LlmUrl);
+    }
+
+    [Fact]
+    public async Task AReconnect_ArmsTheNewConnectionsOwnTimer()
+    {
+        // The old count's timer goes with its connection and the new one's fires on time. (A fire already running for the old count is
+        // checked against the count under the lock, the review's #130; the manual clock never fires a disposed timer, so that race is not
+        // reached here.)
+        using var session = Session();
+        await session.ConnectAsync(Embedded(), CancellationToken.None);
+        await session.ConnectAsync(Embedded("gemma-4-12b"), CancellationToken.None);
+        Assert.Equal(1, _time.TimerCount);
+        _time.Advance(Twenty - TimeSpan.FromSeconds(1));
+        _time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal(1, _dues);   // the new connection's own timer fired
     }
 
     [Fact]

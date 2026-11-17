@@ -1632,7 +1632,7 @@ internal sealed partial class ChatScreen
             TrailerMark = () => HintOn(StatusBarItems.Model) ? ModelMark(_session.ShownModelId, _effective().LlmReasoning, _session.ShownUnloaded) : "",
             // The queued count after the row's lead in both states (2026-09-18): the pane draws it
             // and records where, so a double-click on it can open /queue mid-turn and at idle.
-            Queued = () => _queue.Count + _webUi.WaitingCount is > 0 and var queued && HintOn(StatusBarItems.Queued) ? QueuedHintPart(queued) : "",
+            Queued = () => _queue.Count + _webUi.WaitingCount + PendedPcLines().Count is > 0 and var queued && HintOn(StatusBarItems.Queued) ? QueuedHintPart(queued) : "",   // a PC line sent now counts while it waits (the review's #114)
             // The tally as HintText carries it (2026-09-21): the pane finds it in the drawn row and
             // records where, so a double-click on it (or on the spinner under a turn) opens /usage.
             Usage = () => HintOn(StatusBarItems.Usage) ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : "",
@@ -4688,12 +4688,9 @@ internal sealed partial class ChatScreen
             return;
         }
 
+        // The model's reload (2026-11-16, #44) after every refusal that needs none (the review's #11): a bad count, sessions not logged or no
+        // turn yet never loads a model only to refuse.
         var action = ParseLearnArgs(args);
-        if (action.Kind != LearnKind.BadCount && !await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
-        {
-            return;   // an unloaded model's reload cancelled or failed (2026-11-16, #44): its words said
-        }
-
         switch (action.Kind)
         {
             case LearnKind.BadCount:
@@ -4701,7 +4698,17 @@ internal sealed partial class ChatScreen
                 return;
 
             case LearnKind.Sessions:
-                LearnFromSessions(action, effective, cancellationToken);
+                if (!effective.SessionLogging)
+                {
+                    _transcript.Error(LearnSessionsOffError);
+                    return;
+                }
+
+                if (await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    LearnFromSessions(action, effective, cancellationToken);
+                }
+
                 return;
         }
 
@@ -4711,7 +4718,10 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        MaybeLearn(action.Note, forced: true, cancellationToken);
+        if (await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
+        {
+            MaybeLearn(action.Note, forced: true, cancellationToken);
+        }
     }
 
     /// <summary>
@@ -6782,6 +6792,7 @@ internal sealed partial class ChatScreen
         // by its first use; the retention purge runs here, at startup and after every switch.
         _sessions?.Dispose();
         _sessions = new SessionStore(_settings.ProfileDirectory, _time);
+        _webSessions = new SessionsFor(_sessions, _settings.ProfileName);   // the page's pair, the store and its profile as one (the review's #60)
         // A purged session takes its file checkpoints with it (2026-10-28): subscribed before the retention purge below.
         _sessions.Purged += OnSessionsPurged;
         _sessionTools = SessionTools(_sessions, _effective, () => _sessionId, _time);
@@ -12225,7 +12236,7 @@ internal sealed partial class ChatScreen
                     _watchTurn = true;   // its own budget, the watch's (DP7)
                     try
                     {
-                        ended = await RunMessageAsync(CameraText.WatchNudgeMessage, [watched.Image], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
+                        ended = await RunMessageAsync(CameraText.WatchNudgeMessage, [watched.Image], cancellationToken, Llm.TurnMark.App, putBack: false).ConfigureAwait(false);
                     }
                     finally
                     {
@@ -13022,14 +13033,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task CompactAsync(string? focus, int? autoPercent, CancellationToken cancellationToken)
     {
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false) || _session.Assistant is not { } assistant)
         {
-            return;
-        }
-
-        if (_session.Assistant is not { } assistant)
-        {
-            _transcript.Error(NoAssistantError);
             return;
         }
 
@@ -13108,7 +13113,7 @@ internal sealed partial class ChatScreen
             // The last turn is a summary or a stubbed shape now: nothing for /learn to read.
             _lastTrace = null;
             // The store follows: the rewritten history replaces the row's (2026-09-18).
-            SaveSessionHistory(assistant);
+            SaveSessionHistory();
         }
 
         DrainDiagnostics();
@@ -16189,6 +16194,7 @@ internal sealed partial class ChatScreen
         // What each pass sends: the message, or a custom command's expansion (2026-10-30), the typed line still each pass's user row.
         string sent = message;
         Llm.TurnMark? mark = null;
+        CustomCommand? sentCustom = null;
         if (message.StartsWith('/'))
         {
             var (command, commandArgs) = ParseWithCustom(message);
@@ -16204,12 +16210,7 @@ internal sealed partial class ChatScreen
                     return false;
                 }
 
-                if (_session.Assistant is not null || _session.ShownUnloaded)
-                {
-                    _transcript.Notice(CustomCommandText.SentNotice(custom));
-                    DiagnosticLog.Debug(CustomCommandCatalog.Category, CustomCommandText.RunLogLine(custom, prompt.Length));
-                }
-
+                sentCustom = custom;   // its notice once the model is there (2026-11-16, the review's #50), as RunCustomCommandAsync says it
                 sent = prompt;
                 mark = Llm.TurnMark.TypedAs(message.Trim(), prompt);
                 command = SlashCommand.None;
@@ -16239,17 +16240,17 @@ internal sealed partial class ChatScreen
             }
         }
 
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        // A message loop with no model refused once, up front (2026-10-31, review P3-2): each pass said NoAssistantError and set neither stop
+        // flag, so /loop 3 hello said it three times and an endless loop never stopped. A looped built-in (above) needs no model.
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
         {
             return false;
         }
 
-        // A message loop with no model refused once, up front (2026-10-31, review P3-2): each pass said NoAssistantError and set neither stop
-        // flag, so /loop 3 hello said it three times and an endless loop never stopped. A looped built-in (above) needs no model.
-        if (_session.Assistant is null)
+        if (sentCustom is not null)
         {
-            _transcript.Error(NoAssistantError);
-            return false;
+            _transcript.Notice(CustomCommandText.SentNotice(sentCustom));
+            DiagnosticLog.Debug(CustomCommandCatalog.Category, CustomCommandText.RunLogLine(sentCustom, sent.Length));
         }
 
         // A custom command's loop titles a new session with its typed line, as the idle line does (2026-10-31, review P1-3): taken by the first
@@ -16539,14 +16540,8 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
+        if (!await ModelOrSayAsync(cancellationToken).ConfigureAwait(false))
         {
-            return false;
-        }
-
-        if (_session.Assistant is null)
-        {
-            _transcript.Error(NoAssistantError);
             return false;
         }
 
@@ -17785,20 +17780,15 @@ internal sealed partial class ChatScreen
             joined = true;
         }
 
-        // The Web UI's messages too (2026-10-14), after the PC's and never under a held queue: the page has no command to send.
-        while (TakeWebLine() is { } web)
+        // The Web UI's messages too (2026-10-14), after the PC's and never under a held queue: the page has no command to send. A line with a
+        // phone picture or PDF stops the take (2026-11-16, the review's #24, #23 and #126): an interjection carries no pictures, so it stays in the
+        // session's queue, counted, unsaved and in order, for the idle line, and the page's later lines wait behind it — the bots never answer a
+        // follow-up to a picture they haven't seen. (A command set aside below lets the later lines through, the 2026-09-28 rule.)
+        while (!_webUi.NextLineHasAttachments && TakeWebLine() is { } web)
         {
             if (!web.AsText && web.CommandText is { } webCommand && ParseLine(webCommand).Command != SlashCommand.None)
             {
                 // A command from the page waits for the idle line as the PC's does (later on 2026-10-14), listed on the page as waiting.
-                Pend(web);
-                continue;
-            }
-
-            if (web.Images.Count > 0)
-            {
-                // A phone picture or PDF (2026-11-16, #39): an interjection carries no pictures, so the line waits whole for the idle line, saved and
-                // built already (the idle line sends a pended line as it is, so nothing is saved twice).
                 Pend(web);
                 continue;
             }
@@ -17865,28 +17855,34 @@ internal sealed partial class ChatScreen
     ///
     /// <para><paramref name="mark"/> is what the first turn's user message carries (2026-10-31, review P1-5/P8-1, <see cref="Llm.TurnMark"/>):
     /// the typed line of a custom command, or the app's own mark (a pass message is one by itself); a heard follow-up carries none.</para>
+    ///
+    /// <para><paramref name="putBack"/> false (2026-11-16, the review's #18): a message no line was submitted for (the camera watch's nudge, from
+    /// the idle watcher) puts nothing back when it never reaches the model; the turn is marked cancelled as a pass's is. Every other caller runs
+    /// for a line just typed or sent (an app-marked <c>/help ask</c> or <c>/plan</c> message too), which goes back where it came from.</para>
     /// </summary>
-    private async Task<bool> RunMessageAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, Llm.TurnMark? mark = null)
+    private async Task<bool> RunMessageAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, Llm.TurnMark? mark = null, bool putBack = true)
     {
         bool passMessage = _passMessage is { } pass && ReferenceEquals(pass, text);
         mark = passMessage ? Llm.TurnMark.App : mark;
         _passMessage = null;
+        bool keep = passMessage || !putBack;   // nothing to put back: a pass's message, or no submitted line
         if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
         {
             // The reload cancelled or failed (2026-11-16, #44): its words said, the message back where it came from.
-            PutBackWithdrawn(text, passMessage);
+            PutBackWithdrawn(text, keep);
             return false;
         }
 
         if (_session.Assistant is not { } assistant)
         {
             _transcript.Error(NoAssistantError);
-            PutBackPageLine(text, NoAssistantError, passMessage);
+            PutBackPageLine(text, NoAssistantError, keep);
             return false;
         }
 
-        // /plan chat (2026-10-17): the first message's text becomes the requirement, labeled as the opening, before the turn is built.
-        if (_plan.Active && _plan.NoteMessage(text))
+        // /plan chat (2026-10-17): the first message's text becomes the requirement, labeled as the opening, before the turn is built; read
+        // as typed, never with a saved picture's path (2026-11-16, the review's #116).
+        if (_plan.Active && _plan.NoteMessage(PasteBlocks.WithoutSavedPaths(text)))
         {
             SavePlanState();
         }
@@ -17903,14 +17899,14 @@ internal sealed partial class ChatScreen
                 }
 
                 // A page's line back to its page's draft with its chips (2026-11-16, #39), never onto the PC's row.
-                if (PutBackPageLine(text, refused, passMessage))
+                if (PutBackPageLine(text, refused, keep))
                 {
                     return false;
                 }
 
-                // The draft back on the row, its tokens as they were, so a PDF can be taken off and the line sent again.
-                _restoreDraft = _sentDraft ?? PasteBlocks.WithoutSavedPaths(text);
-                _input.Chat.Load(_restoreDraft, prependToCurrent: true);
+                // The draft back on the row, its tokens as they were, so a PDF can be taken off and the line sent again; a Ralph pass, an app's
+                // pass or the watch's nudge puts nothing back (2026-11-16, the review's #122).
+                PutBackWithdrawn(text, keep);
                 return false;
             }
 
@@ -17921,7 +17917,7 @@ internal sealed partial class ChatScreen
         {
             // The embedded model without its vision projector (2026-09-29): llama-server would refuse the image anyway. A PDF goes as text.
             _transcript.Error(EmbeddedLlm.EmbeddedLlmText.NoVisionError);
-            PutBackPageLine(text, EmbeddedLlm.EmbeddedLlmText.NoVisionError, passMessage);
+            PutBackPageLine(text, EmbeddedLlm.EmbeddedLlmText.NoVisionError, keep);
             return false;
         }
 
@@ -18016,7 +18012,7 @@ internal sealed partial class ChatScreen
                 // (2026-10-18) or an audit's or gap review's pass (2026-10-19) puts nothing back, the message the loop's; a page's line goes back
                 // to its draft (2026-10-14), the PC's row left alone; anything else comes back for the next read, as the history recalls it,
                 // ahead of whatever was typed under the reply (2026-09-25), and the idle loop reads that draft before it drains the next.
-                PutBackWithdrawn(text, passMessage);
+                PutBackWithdrawn(text, keep);
                 return false;
             }
 
@@ -18934,19 +18930,22 @@ internal sealed partial class ChatScreen
         var usage = _session.Usage.LastReply;
         int? ordinal = _sessions.AppendTurn(id, pass?.Line ?? text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled, trace.Sources);
         StampTurn(assistant.History, ordinal);
-        SaveSessionHistory(assistant);
+        SaveSessionHistory();
         if (first && !cancelled && pass is null && SessionNamingMode.Resolve(effective) == SessionNaming.ModelWritten)
         {
             StartTitling(id, text, reply, appToken);
         }
     }
 
-    /// <summary>The history as it stands into the current session's row (after every turn and every compact); nothing without a row.</summary>
-    private void SaveSessionHistory(Assistant assistant)
+    /// <summary>
+    /// The history as it stands into the current session's row (after every turn and every compact); nothing without a row. Over the session's own history (2026-11-16, the review's #109), which
+    /// outlives a client: a plan or a mark set while the embedded model is unloaded still reaches the row.
+    /// </summary>
+    private void SaveSessionHistory()
     {
         if (_sessionId is { } id)
         {
-            var messages = assistant.History.Messages;
+            var messages = _session.History.Messages;
             _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName, _madeFiles.Saved(messages)));
         }
     }
@@ -19728,9 +19727,9 @@ internal sealed partial class ChatScreen
             }
         }
 
-        if (_session.Assistant is { } assistant)
+        if (_session.Assistant is not null)
         {
-            SaveSessionHistory(assistant);
+            SaveSessionHistory();
         }
     }
 

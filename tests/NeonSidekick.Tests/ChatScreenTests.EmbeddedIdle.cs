@@ -14,7 +14,7 @@ public partial class ChatScreenTests
 {
     private static readonly TimeSpan IdleTwenty = TimeSpan.FromMinutes(20);
 
-    private static string UnloadedE2b => EmbeddedLlmText.IdleUnloadedNotice(EmbeddedModelCatalog.Find("gemma-4-e2b")!, IdleTwenty, null);
+    private static string UnloadedE2b => EmbeddedLlmText.IdleUnloadedNotice(EmbeddedModelCatalog.Find("gemma-4-e2b")!, IdleTwenty, null, reloads: true);
 
     /// <summary>The fixture on the embedded E2B with the idle unload at 20 minutes.</summary>
     private FakeEmbeddedLlm OnTheEmbeddedE2bUnloadingAt20()
@@ -146,6 +146,136 @@ public partial class ChatScreenTests
         Assert.Equal(["gemma-4-e2b", "gemma-4-e2b"], embedded.Starts);
         Assert.Contains("● Back.", output);
         Assert.Null(_session.IdleUnloaded);
+    }
+
+    [Fact]
+    public async Task IdleUnload_EmbeddedTurnedOff_ForgetsTheModel_AndReloadsNothing()
+    {
+        // 2026-11-16, the review's #3: no reload once embedded servers are off; the message is refused as with no model.
+        var embedded = OnTheEmbeddedE2bUnloadingAt20();
+        StepsWhenIdle(
+            _ => _time.Advance(IdleTwenty),
+            input => { _settings.Update(d => d.EmbeddedLlmServer = false); PushLine(input, "hello"); },
+            input => { input.Push(Keys.Ctrl(ConsoleKey.A), Keys.Backspace); PushLine(input, "/exit"); });
+
+        string output = await RunAsync();
+
+        Assert.Contains("✗ " + ChatScreen.NoAssistantError, output);
+        Assert.Single(embedded.Starts);
+        Assert.Null(_session.IdleUnloaded);
+        Assert.Empty(_chat.Requests);
+    }
+
+    [Fact]
+    public async Task IdleUnload_TheModelRemoved_IsForgotten_NeverReloaded()
+    {
+        // 2026-11-16, the review's #76: a removed model is forgotten, not reloaded and restored on every message.
+        var embedded = OnTheEmbeddedE2bUnloadingAt20();
+        StepsWhenIdle(
+            _ => _time.Advance(IdleTwenty),
+            input => { embedded.Remove(EmbeddedModelCatalog.Find("gemma-4-e2b")!); PushLine(input, "hello"); },
+            input => { input.Push(Keys.Ctrl(ConsoleKey.A), Keys.Backspace); PushLine(input, "/exit"); });
+
+        string output = await RunAsync();
+
+        Assert.Contains("✗ " + ChatScreen.NoAssistantError, output);
+        Assert.Single(embedded.Starts);
+        Assert.Null(_session.IdleUnloaded);
+    }
+
+    [Fact]
+    public async Task IdleUnload_LearnWithNoTurnYet_RefusesWithoutAReload()
+    {
+        // 2026-11-16, the review's #11: the refusals that need no model come before the reload.
+        var embedded = OnTheEmbeddedE2bUnloadingAt20();
+        _settings.Update(d => { d.AgentSkills = true; d.LlmOfferTools = true; });
+        StepsWhenIdle(_ => _time.Advance(IdleTwenty), Line("/learn"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.LearnNoTurnError, output);
+        Assert.Single(embedded.Starts);
+        Assert.True(_session.ShownUnloaded);
+    }
+
+    [Fact]
+    public async Task IdleUnload_EscDuringAHelpAsksReload_PutsTheTypedHelpLineBack()
+    {
+        // 2026-11-16, the review's #18: an app-marked message sent for a typed line (/help ask) still puts that line back.
+        var embedded = OnTheEmbeddedE2bUnloadingAt20();
+        LoadOnThePane();
+        StepsWhenIdle(
+            _ => _time.Advance(IdleTwenty),
+            input =>
+            {
+                embedded.StartGate = async ct =>
+                {
+                    input.Push(Keys.Escape);
+                    await Task.Delay(TimeSpan.FromSeconds(10), ct);
+                };
+                PushLine(input, "/help claude");
+            },
+            input =>
+            {
+                Assert.Contains("/help claude", _console.Output[_console.Output.LastIndexOf(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Llm), StringComparison.Ordinal)..]);
+                embedded.StartGate = null;
+                input.Push(Keys.Ctrl(ConsoleKey.A), Keys.Backspace);
+                PushLine(input, "/exit");
+            });
+
+        await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        Assert.True(_session.ShownUnloaded);
+    }
+
+    [Fact]
+    public async Task IdleUnload_AMarkSetWhileUnloaded_ReachesTheRow()
+    {
+        // 2026-11-16, the review's #109: the save reads the session's own history, which outlives the client.
+        _settings.Update(d => d.TtsOutput = false);
+        OnTheEmbeddedE2bUnloadingAt20();
+        _chat.EnqueueText("Hello.");
+        StepsWhenIdle(
+            Line("hi"),
+            _ => _time.Advance(IdleTwenty),
+            input => { Assert.True(_session.ShownUnloaded); PushLine(input, "/mark blue"); },
+            Line("/exit"));
+
+        await RunAsync();
+
+        Assert.Equal("blue", NewestRowMark());
+    }
+
+    [WindowsFact]
+    public async Task KillSwitch_DuringTheReload_StaysAKill()
+    {
+        // 2026-11-16, the review's #2: the reload cancelled by the kill switch never puts the model back.
+        var embedded = OnTheEmbeddedE2bUnloadingAt20();
+        LoadOnThePane();
+        StepsWhenIdle(
+            _ => _time.Advance(IdleTwenty),
+            input =>
+            {
+                embedded.StartGate = async ct =>
+                {
+                    input.Push(Keys.CtrlAlt(ConsoleKey.X), Keys.CtrlAlt(ConsoleKey.X));
+                    await Task.Delay(TimeSpan.FromSeconds(10), ct);
+                };
+                PushLine(input, "hello");
+            },
+            input =>
+            {
+                embedded.StartGate = null;
+                input.Push(Keys.Ctrl(ConsoleKey.A), Keys.Backspace);
+                PushLine(input, "/exit");
+            });
+
+        await RunAsync();
+
+        Assert.Empty(_chat.Requests);
+        Assert.Null(_session.IdleUnloaded);
+        Assert.False(_session.ShownUnloaded);
     }
 
     [WindowsFact]

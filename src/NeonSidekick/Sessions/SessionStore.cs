@@ -126,6 +126,14 @@ public sealed class SessionStore : IDisposable
 
     /// <param name="directory">The profile directory; the file is <see cref="FileName"/> in its <see cref="FolderName"/>, made at the first open.</param>
     /// <param name="time">The clock behind every timestamp; tests pass a fake.</param>
+    private long _version;
+
+    /// <summary>
+    /// Moves with every write to the sessions or their turns (2026-11-16, the review's #15 and #78): a begun session, a turn, a cut, a saved
+    /// history, a title, a purge. The Web UI's Sessions tab keys its list and its tag on it.
+    /// </summary>
+    public long Version => Interlocked.Read(ref _version);
+
     public SessionStore(string directory, TimeProvider? time = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(directory);
@@ -168,6 +176,7 @@ public sealed class SessionStore : IDisposable
         ArgumentNullException.ThrowIfNull(model);
         lock (_gate)
         {
+            Interlocked.Increment(ref _version);
             if (Open() is not { } connection)
             {
                 return null;
@@ -211,6 +220,7 @@ public sealed class SessionStore : IDisposable
         ArgumentNullException.ThrowIfNull(skillsLoaded);
         lock (_gate)
         {
+            Interlocked.Increment(ref _version);
             if (Open() is not { } connection)
             {
                 return null;
@@ -317,6 +327,7 @@ public sealed class SessionStore : IDisposable
         ArgumentOutOfRangeException.ThrowIfNegative(keepThrough);
         lock (_gate)
         {
+            Interlocked.Increment(ref _version);
             if (Open() is not { } connection)
             {
                 return 0;
@@ -363,6 +374,7 @@ public sealed class SessionStore : IDisposable
         ArgumentNullException.ThrowIfNull(historyJson);
         lock (_gate)
         {
+            Interlocked.Increment(ref _version);
             if (Open() is not { } connection)
             {
                 return;
@@ -394,6 +406,7 @@ public sealed class SessionStore : IDisposable
         ArgumentNullException.ThrowIfNull(title);
         lock (_gate)
         {
+            Interlocked.Increment(ref _version);
             if (Open() is not { } connection)
             {
                 return false;
@@ -576,11 +589,14 @@ public sealed class SessionStore : IDisposable
     /// the whole text of the first column holding a match (the user's line, else the reply), each match between the pair, bound as parameters,
     /// never spliced: the caller cleans the text (a saved picture's label keeps its full path, which FTS5's own snippet could cut in half) and
     /// cuts its own window. Without one, the snippet is FTS5's, as <c>session_manager</c> and <c>/learn sessions</c> read it.
+    /// <paramref name="accept"/> (2026-11-16, the review's #8, #21 and #40): with marks, which marked column counts, the user's line before the
+    /// reply (null: one holding the opener). The best turns are ranked first with no highlight, then highlighted one at a time in rank order, a
+    /// session's first accepted turn its hit, so a match the caller rejects (inside a saved path) never hides the same session's real one lower.
     /// </remarks>
-    public IReadOnlyList<SessionHit> Search(string query, int max, long? exclude = null, (string Open, string Close)? marks = null)
+    public IReadOnlyList<SessionHit> Search(string query, int max, long? exclude = null, (string Open, string Close)? marks = null, Func<string, bool>? accept = null)
     {
         ArgumentNullException.ThrowIfNull(query);
-        return SearchFts(FtsQuery(query), max, exclude, marks);
+        return SearchFts(FtsQuery(query), max, exclude, marks, accept);
     }
 
     /// <summary>
@@ -594,7 +610,7 @@ public sealed class SessionStore : IDisposable
         return SearchFts(FtsQueryAny(words), max, exclude);
     }
 
-    private IReadOnlyList<SessionHit> SearchFts(string fts, int max, long? exclude, (string Open, string Close)? marks = null)
+    private IReadOnlyList<SessionHit> SearchFts(string fts, int max, long? exclude, (string Open, string Close)? marks = null, Func<string, bool>? accept = null)
     {
         if (fts.Length == 0 || max <= 0)
         {
@@ -612,23 +628,17 @@ public sealed class SessionStore : IDisposable
             {
                 var best = new Dictionary<long, (int Turn, string Snippet)>();
                 var order = new List<long>();
-                using (var command = connection.CreateCommand())
+                if (marks is { } pair)
                 {
-                    command.CommandText = marks is null
-                        ? "SELECT t.session_id, t.ordinal, snippet(turns_fts, -1, '', '', '…', $tokens) FROM turns_fts JOIN turns t ON t.id = turns_fts.rowid WHERE turns_fts MATCH $query ORDER BY bm25(turns_fts) LIMIT $scan"
-                        : "SELECT t.session_id, t.ordinal, highlight(turns_fts, 0, $open, $close), highlight(turns_fts, 1, $open, $close) FROM turns_fts JOIN turns t ON t.id = turns_fts.rowid WHERE turns_fts MATCH $query ORDER BY bm25(turns_fts) LIMIT $scan";
+                    MarkedHits(connection, fts, max, exclude, pair, accept, best, order);
+                }
+                else
+                {
+                    using var command = connection.CreateCommand();
+                    command.CommandText = "SELECT t.session_id, t.ordinal, snippet(turns_fts, -1, '', '', '…', $tokens) FROM turns_fts JOIN turns t ON t.id = turns_fts.rowid WHERE turns_fts MATCH $query ORDER BY bm25(turns_fts) LIMIT $scan";
                     command.Parameters.AddWithValue("$query", fts);
                     command.Parameters.AddWithValue("$scan", SearchScan);
-                    if (marks is null)
-                    {
-                        command.Parameters.AddWithValue("$tokens", SnippetTokens);
-                    }
-                    else if (marks is { } pair)
-                    {
-                        command.Parameters.AddWithValue("$open", pair.Open);
-                        command.Parameters.AddWithValue("$close", pair.Close);
-                    }
-
+                    command.Parameters.AddWithValue("$tokens", SnippetTokens);
                     using var reader = command.ExecuteReader();
                     while (reader.Read() && order.Count < max)
                     {
@@ -638,13 +648,7 @@ public sealed class SessionStore : IDisposable
                             continue;
                         }
 
-                        string snippet = reader.IsDBNull(2) ? "" : reader.GetString(2);
-                        if (marks is { } held && !snippet.Contains(held.Open, StringComparison.Ordinal) && reader.FieldCount > 3 && !reader.IsDBNull(3))
-                        {
-                            snippet = reader.GetString(3);   // the match is in the reply
-                        }
-
-                        best[session] = (reader.GetInt32(1), snippet);
+                        best[session] = (reader.GetInt32(1), reader.IsDBNull(2) ? "" : reader.GetString(2));
                         order.Add(session);
                     }
                 }
@@ -668,6 +672,72 @@ public sealed class SessionStore : IDisposable
             {
                 Fail("search the sessions", ex);
                 return [];
+            }
+        }
+    }
+
+    /// <summary>
+    /// The marked search's hits (the review's #8, #21 and #40): the best <see cref="SearchScan"/> turns read by rank alone (no highlight, the
+    /// reader closed), then walked in that order, each new session's turn highlighted on its own and its first column <paramref name="accept"/>
+    /// takes (the user's line, then the reply) kept; a session none of whose turns pass is left out. Stops at <paramref name="max"/>. Caller
+    /// holds the lock.
+    /// </summary>
+    private static void MarkedHits(SqliteConnection connection, string fts, int max, long? exclude, (string Open, string Close) pair,
+        Func<string, bool>? accept, Dictionary<long, (int Turn, string Snippet)> best, List<long> order)
+    {
+        var ranked = new List<(long Row, long Session, int Ordinal)>();
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT turns_fts.rowid, t.session_id, t.ordinal FROM turns_fts JOIN turns t ON t.id = turns_fts.rowid WHERE turns_fts MATCH $query ORDER BY bm25(turns_fts) LIMIT $scan";
+            command.Parameters.AddWithValue("$query", fts);
+            command.Parameters.AddWithValue("$scan", SearchScan);
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                ranked.Add((reader.GetInt64(0), reader.GetInt64(1), reader.GetInt32(2)));
+            }
+        }
+
+        accept ??= text => text.Contains(pair.Open, StringComparison.Ordinal);
+        using var highlight = connection.CreateCommand();
+        highlight.CommandText = "SELECT highlight(turns_fts, 0, $open, $close), highlight(turns_fts, 1, $open, $close) FROM turns_fts WHERE turns_fts MATCH $query AND rowid = $id";
+        highlight.Parameters.AddWithValue("$query", fts);
+        highlight.Parameters.AddWithValue("$open", pair.Open);
+        highlight.Parameters.AddWithValue("$close", pair.Close);
+        var id = highlight.Parameters.Add("$id", SqliteType.Integer);
+        foreach (var (row, session, ordinal) in ranked)
+        {
+            if (order.Count >= max)
+            {
+                break;
+            }
+
+            if (session == exclude || best.ContainsKey(session))
+            {
+                continue;
+            }
+
+            id.Value = row;
+            using var reader = highlight.ExecuteReader();
+            if (!reader.Read())
+            {
+                continue;
+            }
+
+            string? taken = null;
+            for (int column = 0; column < 2 && taken is null; column++)
+            {
+                string text = reader.IsDBNull(column) ? "" : reader.GetString(column);
+                if (accept(text))
+                {
+                    taken = text;
+                }
+            }
+
+            if (taken is not null)
+            {
+                best[session] = (ordinal, taken);
+                order.Add(session);
             }
         }
     }
@@ -1251,6 +1321,7 @@ public sealed class SessionStore : IDisposable
     /// </summary>
     private int Delete(string turnsWhere, string sessionsWhere, (string Name, object Value)? parameter, string? reflectionsAlso = null, List<long>? ids = null)
     {
+        Interlocked.Increment(ref _version);
         if (Open() is not { } connection)
         {
             return 0;

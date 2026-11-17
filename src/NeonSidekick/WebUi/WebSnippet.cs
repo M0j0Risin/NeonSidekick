@@ -6,8 +6,9 @@ namespace NeonSidekick.WebUi;
 /// A session search hit's snippet for the Sessions tab (2026-11-16, plan lucid-roaming-lantern #40), from the whole marked column text
 /// <c>SessionStore.Search</c> returns with marks. The text a user sent keeps a saved picture's or PDF's label with its full path, and a match
 /// may fall inside one, so the marks can't be kept through the cleaning: the matched words are read off the well-formed pairs, the pairs
-/// taken out, the labels cleaned (<see cref="PasteBlocks.WithoutSavedPaths"/>), and the words found again in what is left, at a word's start
-/// and ignoring case. A word that matched only inside a path is gone with it. Then a window of <see cref="Sessions.SessionStore.SnippetTokens"/>
+/// taken out, the labels cleaned (<see cref="PasteBlocks.WithoutSavedPaths"/>), and the words found again in what is left, as whole words
+/// (2026-11-16, the review's #68: never "cat" inside "category") outside a label's own words (#102: "image" never matches "[Image #1]") and
+/// ignoring case. A word that matched only inside a path is gone with it. Then a window of <see cref="Sessions.SessionStore.SnippetTokens"/>
 /// words around the first match, moved out to a label's edge rather than cutting one, with … at a cut. A stray marker shows as text. Pure.
 /// </summary>
 public static class WebSnippet
@@ -22,7 +23,8 @@ public static class WebSnippet
     {
         ArgumentNullException.ThrowIfNull(marked);
         var (plain, terms) = Unmark(marked);
-        string text = PasteBlocks.WithoutSavedPaths(plain).Replace('\r', ' ').Replace('\n', ' ');
+        // Trimmed (the review's #63): a blank at either end never reads as a cut.
+        string text = PasteBlocks.WithoutSavedPaths(plain).Replace('\r', ' ').Replace('\n', ' ').Trim();
         var matches = Find(text, terms);
         var (start, end) = Window(text, matches.Count > 0 ? matches[0].Start : 0, words);
 
@@ -103,16 +105,19 @@ public static class WebSnippet
         return (plain.ToString(), terms);
     }
 
-    /// <summary>Every place a term starts a word in <paramref name="text"/>, ignoring case, in order, overlaps merged.</summary>
+    /// <summary>Every place a term is a whole word in <paramref name="text"/> outside a label, ignoring case, in order, overlaps merged.</summary>
     private static List<(int Start, int Length)> Find(string text, IReadOnlyList<string> terms)
     {
+        var labels = Labels(text).ToList();
         var found = new List<(int Start, int Length)>();
         foreach (string term in terms)
         {
             int at = 0;
             while ((at = text.IndexOf(term, at, StringComparison.OrdinalIgnoreCase)) >= 0)
             {
-                if (at == 0 || !char.IsLetterOrDigit(text[at - 1]))
+                int end = at + term.Length;
+                bool word = (at == 0 || !char.IsLetterOrDigit(text[at - 1])) && (end == text.Length || !char.IsLetterOrDigit(text[end]));
+                if (word && !labels.Any(l => at < l.Start + l.Length && end > l.Start))
                 {
                     found.Add((at, term.Length));
                 }

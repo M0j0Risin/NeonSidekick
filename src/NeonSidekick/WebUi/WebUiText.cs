@@ -818,7 +818,7 @@ public static class WebUiText
     /// <summary>The tab's two parts.</summary>
     public const string QueueAtPc = "At the PC";
 
-    public const string QueueFromPage = "From this page";
+    public const string QueueFromPage = "From the pages";   // every page's lines, not only this one's (2026-11-16, the review's #25)
 
     /// <summary>The tab's ➤.</summary>
     public const string QueueSendNow = "➤ Send now";
@@ -891,7 +891,7 @@ public static class WebUiText
     public const string ProfileSwitched = "The PC switched profile; reopen the sheet.";
 
     /// <summary>A resume while a code audit, gap review or Ralph loop runs: a phone can't see the loop it would derail.</summary>
-    public const string ResumeNotUnderLoop = "A code audit or Ralph loop is running; stop it at the PC first.";
+    public const string ResumeNotUnderLoop = "A code audit, gap review or Ralph loop is running; stop it at the PC first.";
 
     /// <summary>A resume while another of the page's own lines (a 👥 or a resume) waits for the idle line.</summary>
     public const string ChordWaiting = "The page's last tap is still waiting at the PC.";
@@ -906,6 +906,9 @@ public static class WebUiText
     /// <summary>The Files tab with nothing made in this conversation, or nothing still there.</summary>
     public const string FilesNone = "No files made in this conversation yet.";
 
+    /// <summary>The 🗂️ sheet's note when a tab's read didn't reach the PC (2026-11-16, the review's #111: the sheet opened silently empty before).</summary>
+    public const string ManageReadFailed = "Couldn't read this from the PC.";
+
     /// <summary>Under the rows when the list let older entries go.</summary>
     public const string FilesTrimmed = "Older files aren't listed.";
 
@@ -916,11 +919,11 @@ public static class WebUiText
     public static string MadeFileOpenedLogLine(string name, WebUiOrigin origin)
     {
         ArgumentNullException.ThrowIfNull(origin);
-        return "Web UI opened the made file " + name + " for " + Where(origin) + ".";
+        return "Web UI opened the made file " + Diagnostics.LogText.Quoted(name) + " for " + Where(origin) + ".";   // a model-chosen name, quoted (#66)
     }
 
     /// <summary>A made file not served: gone, or unreadable (Debug).</summary>
-    public static string MadeFileGoneDebug(string name, string why) => "Web UI: the made file " + name + " was not served: " + why;
+    public static string MadeFileGoneDebug(string name, string why) => "Web UI: the made file " + Diagnostics.LogText.Quoted(name) + " was not served: " + why;
 
     // ── The page's 📎 (2026-11-16, plan lucid-roaming-lantern #39): pictures and PDFs sent from the phone ──
 
@@ -971,7 +974,7 @@ public static class WebUiText
     public const string AttachProfileSwitched = "The PC switched profile; send it again.";
 
     /// <summary>A send naming an upload let go after its time: said once, the line going without it.</summary>
-    public static readonly string AttachExpired = "An attachment was let go after " + (int)WebUiSession.HeldFor.TotalMinutes + " minutes; add it again.";
+    public static readonly string AttachExpired = string.Create(CultureInfo.InvariantCulture, $"An attachment was let go after {(int)WebUiSession.HeldFor.TotalMinutes} minutes; add it again.");
 
     /// <summary>A give-back past the caps: the oldest let go to make room.</summary>
     public const string AttachTrimmed = "The oldest attachment was let go to make room.";
@@ -984,12 +987,23 @@ public static class WebUiText
     /// path): a picture still went, a PDF didn't.
     /// </summary>
     public static string PhoneNotSaved(int number, bool pdf) => pdf
-        ? "[PDF #" + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + "] couldn't be sent."
+        ? PhonePdfLabel(number) + " couldn't be sent."
         : UI.PasteBlocks.ImageLabel(number) + " wasn't saved on the PC; it was sent without a file.";
 
     /// <summary>The PC's warning for a phone PDF whose save failed (the reason names the file): left off, the rest going.</summary>
-    public static string PhonePdfNotSavedWarning(int number, string why) =>
-        "[PDF #" + number.ToString(System.Globalization.CultureInfo.InvariantCulture) + "] from the phone was not saved (" + why + "); it is left off.";
+    public static string PhonePdfNotSavedWarning(int number, string why) => PhonePdfLabel(number) + " from the phone was not saved (" + why + "); it is left off.";
+
+    /// <summary>A phone PDF's bare label before it has a file (2026-11-16, the review's #43: one spelling): <c>[PDF #2]</c>.</summary>
+    public static string PhonePdfLabel(int number) => "[PDF #" + number.ToString(CultureInfo.InvariantCulture) + "]";
+
+    /// <summary>The log's line for a phone PDF left off, with the reason.</summary>
+    public static string PhonePdfLeftOffLogLine(string why) => "A phone PDF was left off: " + why;
+
+    /// <summary>The log's line for a phone attachment whose save failed.</summary>
+    public static string PhoneNotSavedLogLine(string label, string why) => label + " from the phone not saved: " + why;
+
+    /// <summary>The log's line for a phone attachment saved, with its path under the images folder.</summary>
+    public static string PhoneSavedLogLine(bool pdf, string relative) => "A phone " + (pdf ? "PDF" : "picture") + " saved as " + relative;
 
     /// <summary>An upload held (audit): its kind and size, never a name (the phone's is never sent).</summary>
     public static string AttachLogLine(string kind, string size, IPAddress? remote) => "Web UI took a " + kind + " (" + size + ") from " + Where(remote) + ".";
@@ -1094,7 +1108,7 @@ public static class WebUiText
         QueueCancelLabel, RemoveRow, RemoveRowArmed, QueueChordLine,
         SessionsNone, SessionsNoMatch, SessionsFilter, SessionsFound, SessionsArmed, SessionsCurrent, SessionsBusy, SessionsLoading, SessionsNotSaved,
         FilesNone, FilesTrimmed, FilesHint,
-        AttachButton, AttachRemove, AttachWaiting, AttachTooBig, AttachRoom, AttachStopped, AttachLeftOut, AttachPdf);
+        AttachButton, AttachRemove, AttachWaiting, AttachTooBig, AttachRoom, AttachStopped, AttachLeftOut, AttachPdf, ManageReadFailed);
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 

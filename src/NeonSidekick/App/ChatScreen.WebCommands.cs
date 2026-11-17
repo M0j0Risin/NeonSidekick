@@ -250,7 +250,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        string current = _session.Endpoint?.ModelId ?? _settings.Current.LlmModel;
+        string current = _session.ShownModelId ?? _settings.Current.LlmModel;   // the unloaded model too (2026-11-16, the review's #19)
         var (ids, cursor) = SettingsMenu.ModelChoices(models, current);
         if (ids.Count == 0)
         {
@@ -341,17 +341,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     private bool Pend(SubmittedLine line)
     {
-        if (_botChatRunning && !line.AsText && line.CommandText is { } text && ParseLine(text) is (SlashCommand.CodeAudit, var args) && AuditCommand.StartsPasses(args))
+        if (PendRefusal(line) is { } refused)
         {
-            Post(() => _transcript.Error(AuditText.BotChatError));
-            return true;
-        }
-
-        // A Ralph loop the same way (later on 2026-10-18): held under a botchat, it would start an unattended chain of passes long after it was typed.
-        if (_botChatRunning && !line.AsText && line.CommandText is { } ralphText && ParseLine(ralphText) is (SlashCommand.Plan, var planArgs)
-            && ParsePlanArgs(planArgs, planning: true) is PlanCommand.Ralph or PlanCommand.ApproveRalph)
-        {
-            Post(() => _transcript.Error(Plans.RalphText.UnderBotChatError));
+            Post(() => _transcript.Error(refused));
             return true;
         }
 
@@ -365,6 +357,35 @@ internal sealed partial class ChatScreen
 
         return true;
     }
+
+    /// <summary>
+    /// Why <see cref="Pend"/> would refuse <paramref name="line"/> now, or null (out of it on 2026-11-16, the review's #113, so the Queue tab's
+    /// Send now checks before it takes the line off the queue): under a running <c>/botchat</c>, a <c>/code-audit</c> that would start passes,
+    /// and a Ralph loop (later on 2026-10-18), each held would start an unattended chain of passes long after it was typed. Any thread.
+    /// </summary>
+    private string? PendRefusal(SubmittedLine line)
+    {
+        if (!_botChatRunning || line.AsText || line.CommandText is not { } text)
+        {
+            return null;
+        }
+
+        return ParseLine(text) switch
+        {
+            (SlashCommand.CodeAudit, var args) when AuditCommand.StartsPasses(args) => AuditText.BotChatError,
+            (SlashCommand.Plan, var planArgs) when ParsePlanArgs(planArgs, planning: true) is PlanCommand.Ralph or PlanCommand.ApproveRalph => Plans.RalphText.UnderBotChatError,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// The PC's lines sent now during a reply, waiting in the screen's queue (2026-11-16, the review's #114): the Queue tab lists them at the PC,
+    /// first, with no ✕ (they left the <c>/queue</c> pane, which can't take them back either). With <i>Queue mode</i> off the lines there are
+    /// type-ahead, not queued: none listed or counted. Any thread.
+    /// </summary>
+    private List<WebQueuePcLine> PendedPcLines() => QueueModeNow() == Queueing.Disabled
+        ? []
+        : [.. _pendingLines.Where(l => !l.FromWeb).Select(l => new WebQueuePcLine(-1, l.Label, l.Images.Count, Removable: false))];
 
     /// <summary>How many lines <see cref="Pend"/> ever held (2026-10-20, a review): with <see cref="MessageQueue.Added"/>, what tells a Ralph loop a line was typed during it.</summary>
     private long _pended;
@@ -530,5 +551,5 @@ internal sealed partial class ChatScreen
     /// </summary>
     private IReadOnlyList<WebQueueLine> HeldWebLines() =>
         [.. _pendingLines.Where(l => l.FromWeb && !(_claimedWebKeys.TryGetValue(l.WebKey, out bool removed) && removed))
-            .Select(l => new WebQueueLine(l.WebKey, l.Draft, l.Chord))];
+            .Select(l => new WebQueueLine(l.WebKey, l.Draft, l.Chord, l.WebAttachments?.Count ?? 0))];   // its pictures counted (2026-11-16, the review's #4)
 }

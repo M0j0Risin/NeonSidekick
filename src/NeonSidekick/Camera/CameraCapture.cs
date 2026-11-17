@@ -55,7 +55,7 @@ public sealed class CameraCapture
         var image = await Task.Run(() => CameraJpeg.Attachment(frame, "camera.jpg", maxSide), cancellationToken).ConfigureAwait(false);
         var files = _files();
         string stem = Under(OutputFolder(_folder()), Stem(TimeZoneInfo.ConvertTime(frame.At, _time.LocalTimeZone)));
-        var (written, error) = Images.ImageOutput.WriteNumbered(files, stem, ".jpg", image.Bytes);
+        var (written, error) = Files.MadeFiles.Unlisted(() => Images.ImageOutput.WriteNumbered(files, stem, ".jpg", image.Bytes));   // never on the Files tab (#127)
         if (error is not null)
         {
             throw new CameraException(CameraFailure.Failed, CameraText.NotSaved(error));
