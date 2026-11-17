@@ -375,15 +375,55 @@ public sealed class WebFetcher
             return false;
         }
 
+        string markup = WithoutDataScripts(html);
         foreach (var marker in new[] { "Just a moment", "cf-chl", "_cf_chl", "captcha", "Checking your browser", "Attention Required", "Enable JavaScript and cookies to continue", "challenge-platform" })
         {
-            if (html.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            if (markup.Contains(marker, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// <paramref name="html"/> without the bodies of its JSON data blocks (<c>&lt;script type="application/json"&gt;</c>, and
+    /// <c>application/ld+json</c>), which never show a page anything (2026-11-17, the user's code audit: a GitHub file page, a React app whose
+    /// readable text is short, carries its feature flags in one, <c>octocaptcha_origin_optimization</c> among them, so every engine and the
+    /// Browser window called the page a bot check). A gate's own markers are in its markup or in running scripts, which stay.
+    /// </summary>
+    internal static string WithoutDataScripts(string html)
+    {
+        System.Text.StringBuilder? kept = null;
+        int copied = 0;
+        int at = 0;
+        while ((at = html.IndexOf("<script", at, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            int tagEnd = html.IndexOf('>', at);
+            if (tagEnd < 0)
+            {
+                break;
+            }
+
+            int close = html.IndexOf("</script", tagEnd, StringComparison.OrdinalIgnoreCase);
+            if (close < 0)
+            {
+                break;
+            }
+
+            var tag = html.AsSpan(at, tagEnd - at);
+            if (tag.Contains("application/json", StringComparison.OrdinalIgnoreCase) || tag.Contains("application/ld+json", StringComparison.OrdinalIgnoreCase))
+            {
+                kept ??= new System.Text.StringBuilder(html.Length);
+                kept.Append(html, copied, tagEnd + 1 - copied);
+                copied = close;
+            }
+
+            at = close + 1;
+        }
+
+        return kept is null ? html : kept.Append(html, copied, html.Length - copied).ToString();
     }
 
     /// <summary>A single-page app's shell: scripts, a mount point, nothing readable. Pinned by tests.</summary>

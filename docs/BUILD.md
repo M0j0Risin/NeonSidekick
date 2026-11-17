@@ -93,6 +93,7 @@ Besides `--smoke`, the published exe has checks for real hardware and servers ([
 * **Hardware:** `--audio-check`, `--voice-check`, `--camera-check`, `--monitor-check`.
 * **Databases:** `--sql-check`, `--oracle-check`, `--mysql-check`, `--postgres-check`, `--sqlite-check`, `--duckdb-check`.
 * **Admin and the rest:** `--unc-check`, `--docker-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`.
+* **A server outage:** `dotnet run tools/OutageProxy.cs -- <listen port> <server port>` stands between the app (`--url`) and a local LLM server. Type `d` to drop it and `u` to bring it back, to check by hand how a gap review or audit pass survives.
 
 ## Building on a Mac
 

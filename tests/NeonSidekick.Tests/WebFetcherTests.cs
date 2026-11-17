@@ -916,6 +916,22 @@ public class WebFetcherTests
     }
 
     [Fact]
+    public void AJsonDataBlock_NeverMakesAPageABotCheck_ButAGatesOwnMarkupStillDoes()
+    {
+        // 2026-11-17, the user's code audit: a GitHub file page (a React app, its readable text short) carries its feature flags, two naming
+        // octocaptcha, in a JSON block, and every engine, the Browser window too, called it a bot check.
+        const string GitHub = "<html><head><script type=\"application/json\" id=\"client-env\">{\"featureFlags\":[\"octocaptcha_origin_optimization\","
+            + "\"swp_forms_disable_octocaptcha\"]}</script><script type=\"application/ld+json\">{\"name\":\"Just a moment\"}</script></head>"
+            + "<body><div id=\"root\">Char.cs</div><script>start()</script></body></html>";
+        Assert.False(WebFetcher.LooksLikeChallenge(GitHub, "Char.cs"));
+        Assert.True(WebFetcher.LooksLikeChallenge(GitHub.Replace("Char.cs</div>", "Char.cs</div><div class=\"g-recaptcha\"></div>", StringComparison.Ordinal), "Char.cs"));
+        Assert.True(WebFetcher.LooksLikeChallenge("<script>window._cf_chl_opt={}</script>", "x"));
+        Assert.True(WebFetcher.LooksLikeChallenge("<script type=\"application/json\">{}</script><p>captcha</p>", "x"));
+        Assert.Equal("<script type=\"application/json\"></script><p>a</p>", WebFetcher.WithoutDataScripts("<script type=\"application/json\">{\"a\":1}</script><p>a</p>"));
+        Assert.Equal("<script type=\"application/json\">{", WebFetcher.WithoutDataScripts("<script type=\"application/json\">{"));   // no close: as it is
+    }
+
+    [Fact]
     public async Task AChallengePage_UnderHttpClient_IsTheError()
     {
         _http.Map("https://example.com/", HttpStatusCode.OK, Cloudflare, "text/html");
