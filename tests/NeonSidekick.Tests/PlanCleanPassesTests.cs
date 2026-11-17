@@ -52,10 +52,10 @@ public class PlanCleanPassesTests : IDisposable
     private string FileText() => File.ReadAllText(Path.Combine(_dir, _session.Path!.Replace('/', Path.DirectorySeparatorChar)));
 
     /// <summary>A plan presented once, then a loop of <paramref name="clean"/> clean passes on its first pass.</summary>
-    private async Task<PlanGapLoop> PassOneAsync(int clean = 2, int limit = 5, PlanReviewer reviewer = PlanReviewer.Model)
+    private async Task<PlanGapLoop> PassOneAsync(int clean = 2, int limit = 5, PlanReviewer reviewer = PlanReviewer.Model, string plan = Plan)
     {
         _session.Enter("Add a guide");
-        await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan));
+        await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", plan));
         var loop = _session.StartClosing(reviewer, limit, clean);
         loop.BeginPass(PlanDocument.Body(FileText()));
         _presented.Clear();
@@ -449,18 +449,41 @@ public class PlanCleanPassesTests : IDisposable
 
     private const string HeadingPlan = "# Guide\n\n## Steps\n\n" + PlanFitTests.HeadingSteps + "\n";
 
+    /// <summary>HeadingPlan's steps as task lines: a clean pass in box forms over them loses no step (2026-11-17, PlanLoss).</summary>
+    private const string HeadingPlanAsTasks = "# Guide\n\n## Steps\n- [ ] Step 1 — Rewrite `hello_world.py`\n  Done when: it runs\n- [ ] Step 2 — Check it\n  Done when: it exits 0\n";
+
     [Theory]
-    [InlineData(HeadingPlan, "- [ ] Step 2 — Check it")]
-    [InlineData("# Guide\n\n## Steps\n\n[ ] Write it\n  Done when: it runs\n", "- [ ] Write it")]
-    public async Task Tool_ACleanPassOnBoxForms_IsSavedAsTaskLines_AndCounts(string markdown, string written)
+    [InlineData(HeadingPlan, "- [ ] Step 2 — Check it", HeadingPlanAsTasks)]
+    [InlineData("# Guide\n\n## Steps\n\n[ ] Write it\n  Done when: it runs\n", "- [ ] Write it", Plan)]
+    public async Task Tool_ACleanPassOnBoxForms_IsSavedAsTaskLines_AndCounts(string markdown, string written, string first)
     {
-        var loop = await PassOneAsync();
+        var loop = await PassOneAsync(plan: first);
 
         object? result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", markdown, Array.Empty<string>(), Checked));
 
         Assert.StartsWith("No gaps found in this pass", (string)result!, StringComparison.Ordinal);
         Assert.Contains(written, FileText(), StringComparison.Ordinal);
         Assert.True(loop.PassClean);
+        Assert.Equal(2, _session.Revision);
+    }
+
+    [Fact]
+    public async Task Tool_ACleanPassThatDropsAStep_IsRefused_AndAGapRevisionThatDoesIsSavedAndSaysSo()
+    {
+        // 2026-11-17, the gap-audit-reliability plan (PlanLoss): a clean report may not remove unfinished content; a gap revision may, named.
+        var loop = await PassOneAsync(plan: Revised);
+        var loss = PlanLoss.Compare(PlanDocument.Body(FileText()), PlanDocument.SavedBody("Guide", Plan));
+        Assert.Equal(["Test it"], loss.Steps);
+
+        object? clean = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
+        Assert.Equal(PlanText.LossCleanResult(loss), clean);
+        Assert.StartsWith("Error: this pass found no gaps but removed the unfinished step \"Test it\"", (string)clean!, StringComparison.Ordinal);
+        Assert.Equal(0, loop.Presented);
+        Assert.Equal(1, _session.Revision);
+
+        object? gap = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, new[] { "Test it was the same as Write it" }));
+        Assert.EndsWith(" " + PlanText.LossSentence(loss), (string)gap!, StringComparison.Ordinal);
+        Assert.Equal(1, loop.Presented);
         Assert.Equal(2, _session.Revision);
     }
 

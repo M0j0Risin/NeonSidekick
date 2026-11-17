@@ -13,6 +13,32 @@ public class ModelErrorTextTests
         new(message, new SocketException((int)code));
 
     [Fact]
+    public void IsTransient_IsAServerBlip_NeverAFaultOrAnOverflow()
+    {
+        // 2026-11-17, the gap-audit-reliability plan's step 2: a loop's pass is sent once more only after one of these.
+        static Exception Refused() => new HttpRequestException("refused", new SocketException((int)SocketError.ConnectionRefused));
+        Assert.True(ModelErrorText.IsTransient(Refused()));
+        Assert.True(ModelErrorText.IsTransient(new InvalidOperationException("wrapped", Refused())));
+        Assert.True(ModelErrorText.IsTransient(new OpenAIApiException(503, "server_error", "busy")));
+        Assert.True(ModelErrorText.IsTransient(new OpenAIApiException(429, "rate_limit_exceeded", "slow down")));
+        Assert.True(ModelErrorText.IsTransient(new OpenAIApiException(0, "server_error", "mid-stream")));
+        Assert.True(ModelErrorText.IsTransient(new AnthropicApiException(0, "overloaded_error", "overloaded")));
+        Assert.True(ModelErrorText.IsTransient(new AnthropicApiException(529, "overloaded_error", "overloaded")));
+        Assert.True(ModelErrorText.IsTransient(new IOException(OpenAIApiChatClient.StreamCutMessage)));
+        Assert.True(ModelErrorText.IsTransient(new IOException(AnthropicChatClient.StreamCutMessage)));
+
+        Assert.False(ModelErrorText.IsTransient(new OpenAIApiException(429, "insufficient_quota", "You exceeded your current quota")));
+        Assert.False(ModelErrorText.IsTransient(new OpenAIApiException(401, "invalid_api_key", "bad key")));
+        Assert.False(ModelErrorText.IsTransient(new HttpRequestException("no such host", new SocketException((int)SocketError.HostNotFound))));
+        Assert.False(ModelErrorText.IsTransient(new OpenAIApiException(500, ContextOverflowMatch.OpenAICode, "Your input exceeds the context window of this model.")));
+        Assert.False(ModelErrorText.IsTransient(new TaskCanceledException("The request was canceled", new TimeoutException(Assistant.NetworkTimeoutMarker))));
+        Assert.False(ModelErrorText.IsTransient(new OperationCanceledException("The operation " + Assistant.NetworkTimeoutMarker + ".")));
+        Assert.False(ModelErrorText.IsTransient(new AnthropicApiException(0, "invalid_request_error", "bad")));
+        Assert.False(ModelErrorText.IsTransient(new HttpRequestException("plain")));
+        Assert.False(ModelErrorText.IsTransient(new IOException("some other read")));
+    }
+
+    [Fact]
     public void AnUnreachableServer_NamesWhereAndWhy_AndTheWayOn()
     {
         Assert.Equal(

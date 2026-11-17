@@ -106,6 +106,31 @@ public sealed class AuditReuseTests : IDisposable
     }
 
     [Fact]
+    public void Viewed_TheMark_AndTheForget_PutTheViewsBackAsTheyWere()
+    {
+        // 2026-11-17, the gap-audit-reliability plan: an audit pass dropped for a retry forgets what its turn read.
+        _box.Write("a.txt", "1\n");
+        _box.Write("b.txt", "1\n");
+        var read = new ReadFileTool(_box.Files);
+        read.Describe("a.txt", null, null);
+        var mark = _box.Files.ViewedMark();
+
+        read.Describe("b.txt", null, null);
+        Assert.True(_box.Files.WasViewed("b.txt"));
+        _box.Files.ForgetViewedSince(mark);
+        Assert.False(_box.Files.WasViewed("b.txt"));   // added since: gone
+        Assert.True(_box.Files.WasViewed("a.txt"));    // marked: kept
+
+        // A file viewed, changed, then viewed again after the mark is unread again after the forget.
+        _box.Write("a.txt", "changed, longer\n");
+        Assert.False(_box.Files.WasViewed("a.txt"));
+        read.Describe("a.txt", null, null);
+        Assert.True(_box.Files.WasViewed("a.txt"));
+        _box.Files.ForgetViewedSince(mark);
+        Assert.False(_box.Files.WasViewed("a.txt"));
+    }
+
+    [Fact]
     public void Viewed_UnderSeenOff_MarksNothing()
     {
         _box.Write("a.txt", "1\n");

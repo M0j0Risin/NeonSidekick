@@ -310,6 +310,36 @@ public partial class NeonAdvisorToolTests
     }
 
     [Fact]
+    public async Task InAReviewPass_TheAdvisorSeesNeitherItsThreadNorRecentLines_AndKeepsNoThread()
+    {
+        // 2026-11-17, the gap-audit-reliability plan's step 1: a pass's advisor call is the Ralph reviewer's form, threadless.
+        _settings.AdvisorContext = "recent";
+        _threads.Add("dba", new AdvisorPair("earlier question", "earlier answer"), keep: 10);
+        _history.Add(new ChatMessage(ChatRole.User, "the schema is in schema.sql"));
+        var client = _host.Add("dba");
+        client.EnqueueText("in a pass");
+        client.EnqueueText("outside one");
+        bool inPass = true;
+        var tool = new NeonAdvisorTool(_host, () => _settings, () => "neon", _threads, () => (_offered, "RULES"), () => _history, null, _view, null, () => inPass);
+
+        await Ask(tool, "dba", "q in a pass", "the plan's step 3");
+
+        string sent = string.Join("\n", client.Requests[0].Select(m => m.Text));
+        Assert.DoesNotContain("earlier question", sent);
+        Assert.DoesNotContain("schema.sql", sent);
+        Assert.Equal(AdvisorText.Prompt("q in a pass", "the plan's step 3", null), client.Requests[0].Last().Text);
+        Assert.Equal([new AdvisorPair("earlier question", "earlier answer")], _threads.Of("dba"));
+
+        inPass = false;
+        await Ask(tool, "dba", "q outside");
+
+        string after = string.Join("\n", client.Requests[1].Select(m => m.Text));
+        Assert.Contains("earlier question", after);
+        Assert.Contains("schema.sql", after);
+        Assert.Equal(2, _threads.Of("dba").Count);
+    }
+
+    [Fact]
     public void TheThreads_StoreAndRestore_ThroughTheSessionDocument()
     {
         _threads.Add("dba", new AdvisorPair("q", "a"), keep: 10);

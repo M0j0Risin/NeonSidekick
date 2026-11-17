@@ -33,6 +33,9 @@ public enum GapsArgs
 
     /// <summary>Anything else (two reviewers, two numbers, three words or more): plan detail, not the command.</summary>
     NotGaps,
+
+    /// <summary><c>/plan gaps resume</c> (2026-11-17, <see cref="PlanText.ResumeWord"/> alone): a paused review goes on.</summary>
+    Resume,
 }
 
 /// <summary>Why a gap-closing loop ended (<see cref="PlanGapLoop.Next"/>).</summary>
@@ -50,7 +53,10 @@ public enum PlanGapStop
     /// <summary>Gaps were reported but the plan did not change, or the same gaps came back.</summary>
     Stalled,
 
-    /// <summary>The pass ended without a revision saved (a question in prose, a failed save, a file gone).</summary>
+    /// <summary>
+    /// The pass ended without a revision saved (a question in prose, a failed save, a file gone), after one follow-up
+    /// (2026-11-17, <see cref="PlanGapLoop.TakeFollowUp"/>) asked for the report.
+    /// </summary>
     NoRevision,
 
     /// <summary>The pass's reply did not end on its own: ESC, a failure, an interrupt.</summary>
@@ -83,9 +89,11 @@ public sealed record PlanPassRecord(int Pass, int Gaps, int Minor, bool Clean, i
 /// reviewing the plan until a pass finds nothing left): the reviewer, the pass number and its limit, the gaps each pass
 /// closed and the plan's body as the pass began. One pass is one turn: the screen (or headless) sends the pass's message,
 /// <c>present_plan</c> records what the pass closed (<see cref="Record"/>, <see cref="MarkClean"/>, <see cref="MarkConverged"/>), and
-/// after the turn <see cref="Next"/> says whether another pass follows. Pure: the callers read the file and the queue. A stop
-/// always ends the loop (<see cref="PlanSession.StopClosing"/>); a new <c>/plan gaps</c> starts a fresh one, so there is
-/// no paused state to go stale.
+/// after the turn <see cref="Next"/> says whether another pass follows. Since 2026-11-17 (the gap-audit-reliability plan) a pass may take
+/// a second turn: one retry of a server failure (<see cref="TakeRetry"/>) and one follow-up of a pass that reported nothing
+/// (<see cref="TakeFollowUp"/>). Pure: the callers read the file and the queue. A stop ends the loop (<see cref="PlanSession.StopClosing"/>),
+/// but the screen pauses a gap review for the user's message (<see cref="PlanSession.PauseClosing"/>), kept until <c>/plan gaps resume</c>
+/// or until plan mode, a new review or an approval drops it.
 /// <para>Clean passes in a row (2026-10-17, the user's report: a pass would answer "0 gaps" when the next would still find plenty, and
 /// was believed at once): the loop converges only once <see cref="CleanPasses"/> passes in a row reported no gaps. A pass after a
 /// clean one is a confirming pass (<see cref="Confirmation"/>), told to look again with a focus of its own; a pass that closed gaps
@@ -252,7 +260,67 @@ public sealed class PlanGapLoop
         _passStart = meter;
         _passAdvisor = advisorsOffered && Reviewer == PlanReviewer.Confirm && PassReviewer == PlanReviewer.Advisor;
         _passRecorded = false;
+        _retryTaken = false;
+        _followUpTaken = false;
+        AdvisorAskedThisPass = false;
     }
+
+    /// <summary>
+    /// How long a pass waits before it is sent once more after a server failure (2026-11-17, the gap-audit-reliability plan,
+    /// <see cref="TakeRetry"/>): long enough for a server restarting or shedding load. The notice says it.
+    /// </summary>
+    public static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(15);
+
+    private bool _retryTaken;
+    private bool _followUpTaken;
+
+    /// <summary>
+    /// Whether this pass may still be sent once more after a failure that may pass on its own (2026-11-17, the gap-audit-reliability
+    /// plan): once a pass, and only while it has recorded nothing (<see cref="Presented"/> 0), so no report is lost with the dropped
+    /// turn. Read without taking it (<see cref="TakeRetry"/> takes it).
+    /// </summary>
+    public bool RetryLeft => !_retryTaken && Presented == 0 && Pass > 0;
+
+    /// <summary>The pass's one retry taken (<see cref="RetryLeft"/>): true when it was there to take.</summary>
+    public bool TakeRetry()
+    {
+        if (!RetryLeft)
+        {
+            return false;
+        }
+
+        _retryTaken = true;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether this pass may still be asked once for its report (2026-11-17, the gap-audit-reliability plan: a pass that ended without
+    /// <c>present_plan</c>/<c>present_audit</c>, or whose clean report was refused, ended <see cref="PlanGapStop.NoRevision"/> at once):
+    /// once a pass, only while it has recorded nothing. Read without taking it (<see cref="TakeFollowUp"/> takes it).
+    /// </summary>
+    public bool FollowUpLeft => !_followUpTaken && Presented == 0 && Pass > 0;
+
+    /// <summary>The pass's one follow-up taken (<see cref="FollowUpLeft"/>): true when it was there to take.</summary>
+    public bool TakeFollowUp()
+    {
+        if (!FollowUpLeft)
+        {
+            return false;
+        }
+
+        _followUpTaken = true;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether an advisor was asked in this pass (2026-11-17, the gap-audit-reliability plan): a pass may span turns (a retry, a
+    /// follow-up), so each after-turn ORs its turn's call in (<see cref="NoteAdvisor"/>) and the pass's log line reads it. Not
+    /// <c>_passAdvisor</c>, which marks a confirming pass the advisor reviews.
+    /// </summary>
+    public bool AdvisorAskedThisPass { get; private set; }
+
+    /// <summary>A turn of this pass asked an advisor when <paramref name="asked"/>: <see cref="AdvisorAskedThisPass"/> keeps it.</summary>
+    public void NoteAdvisor(bool asked) => AdvisorAskedThisPass |= asked;
 
     /// <summary>A revision saved with <paramref name="gaps"/> closed (blank ones already dropped), and <paramref name="minor"/> fixes that are not gaps.</summary>
     public void Record(IReadOnlyList<string> gaps, IReadOnlyList<string>? minor = null)

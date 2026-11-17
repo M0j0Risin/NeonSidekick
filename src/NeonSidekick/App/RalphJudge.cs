@@ -481,19 +481,8 @@ internal static class RalphJudge
 
         var now = PlanSteps.Flat(PlanSteps.Parse(text, headed));
         var pairs = PlanSteps.Align(lines, now);
+        PlanSteps.PairMoved(lines, now, pairs);
         var paired = new HashSet<int>(pairs.Where(p => p >= 0));
-        for (int i = 0; i < now.Count; i++)
-        {
-            if (pairs[i] < 0)
-            {
-                int moved = Enumerable.Range(0, lines.Count).FirstOrDefault(k => !paired.Contains(k) && string.Equals(lines[k].Text, now[i].Text, StringComparison.Ordinal), -1);
-                if (moved >= 0)
-                {
-                    pairs[i] = moved;
-                    paired.Add(moved);
-                }
-            }
-        }
 
         // The pass's own line: the one its step's became, else the step found by its words.
         int own = -1;

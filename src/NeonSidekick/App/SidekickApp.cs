@@ -1092,7 +1092,10 @@ public sealed partial class SidekickApp
         var advisorThreads = new Advisors.AdvisorThreads();
         using var advisorHost = new AdvisorHost(session, () => _settings.StorageDirectory, () => EffectiveSettings);
         TurnToolInputs? lastInputs = null;
-        var neonAdvisor = ChatScreen.AdvisorTool(advisorHost, () => EffectiveSettings, () => _settings.ProfileName, advisorThreads, () => lastInputs is null ? ([], "") : ChatScreen.AdvisorTurnTools(lastInputs, markdown: false), () => session.History.Messages, null, new HeadlessNeonAdvisorView(this), session.Usage.AddAdvisors);
+        // The code audit (2026-10-18), made here (2026-11-17) for the advisor: a pass of it, or of a gap review, asks without the thread.
+        var audit = new Audits.AuditSession(files);
+        var neonAdvisor = ChatScreen.AdvisorTool(advisorHost, () => EffectiveSettings, () => _settings.ProfileName, advisorThreads, () => lastInputs is null ? ([], "") : ChatScreen.AdvisorTurnTools(lastInputs, markdown: false), () => session.History.Messages, null, new HeadlessNeonAdvisorView(this), session.Usage.AddAdvisors,
+            () => plan.Reviewing || audit.InPass);
         var neonAdvisorTools = new List<Microsoft.Extensions.AI.AIFunction> { neonAdvisor };
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
         // Plan mode (2026-09-26, made above): no pane to approve on, so a presented plan is saved and the user approves it with
@@ -1102,8 +1105,7 @@ public sealed partial class SidekickApp
         var planState = new HeadlessPlanState();
         // The Ralph loop headless (2026-10-18): what its passes are judged with.
         planState.RalphContext = new HeadlessRalphContext(session, git, neonAdvisor, interpreters, _ralphVerifier ?? new Plans.RalphVerifier(runner, interpreters.Locate), allowList);
-        // The code audit (2026-10-18): no seam, so each present_audit call prints as any tool's; its passes ride the gap review's slot.
-        var audit = new Audits.AuditSession(files);
+        // The code audit (2026-10-18, made above): no seam, so each present_audit call prints as any tool's; its passes ride the gap review's slot.
         planState.Audit = audit;
         var presentAudit = new Llm.Tools.PresentAuditTool(audit, files, _time);
 
@@ -2049,10 +2051,12 @@ public sealed partial class SidekickApp
 
                 // A pass's message is the app's (review P8-1), as the screen's pass messages are.
                 assistant.TurnMark = passTurn ? Llm.TurnMark.App : turnMark;
+                // An audit's views as its pass turn is sent (2026-11-17): a turn dropped for a retry forgets what it read.
+                var viewedMark = audit.InPass ? audit.ViewedMark() : null;
                 HeadlessTurn turn;
                 try
                 {
-                    turn = await RunHeadlessTurnAsync(session, assistant, text, turnImages, planState.Ralph is { Loop.InPass: true } || audit.InPass, cancellationToken).ConfigureAwait(false);
+                    turn = await RunHeadlessTurnAsync(session, assistant, text, turnImages, passTurn, cancellationToken).ConfigureAwait(false);
                 }
                 catch
                 {
@@ -2096,7 +2100,7 @@ public sealed partial class SidekickApp
 
                 // The gap-closing loop after the pass (2026-10-13): its notices, then the next pass queued as the next line, or the loop over.
                 var gapLines = new List<string>();
-                gapTurn = HeadlessGapAfterTurn(plan, files, turn.Trace.ToolNames, turn.Cancelled, gapLines, HeadlessPlanMeter(session));
+                gapTurn = HeadlessGapAfterTurn(plan, files, turn, gapLines, out bool passRetry, HeadlessPlanMeter(session));
                 foreach (string gapLine in gapLines)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + gapLine.Trim()).ConfigureAwait(false);
@@ -2104,7 +2108,11 @@ public sealed partial class SidekickApp
 
                 // The code audit after the pass (2026-10-18): its notices, then the next pass as the next line, or the audit over.
                 var auditLines = new List<string>();
-                gapTurn ??= HeadlessAuditAfterTurn(audit, files, turn.Trace.ToolNames, turn.Cancelled, turn.Failed, auditLines, HeadlessPlanMeter(session));
+                if (gapTurn is null)
+                {
+                    gapTurn = HeadlessAuditAfterTurn(audit, files, turn, viewedMark, auditLines, out bool auditRetry, HeadlessPlanMeter(session));
+                    passRetry |= auditRetry;
+                }
                 foreach (string auditLine in auditLines)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + auditLine.Trim()).ConfigureAwait(false);
@@ -2142,6 +2150,32 @@ public sealed partial class SidekickApp
                 {
                     await HeadlessRalphAfterTurnAsync(planState, files, turn, cancellationToken).ConfigureAwait(false);
                     QueueRalphPass();
+                }
+
+                // A gap review's or an audit's pass that failed on the server's side (2026-11-17, the gap-audit-reliability plan): after its row (a
+                // drop before it would stamp the turn before with this row), a wait, the failed turn out of the history, the same message again.
+                if (passRetry)
+                {
+                    try
+                    {
+                        await Task.Delay(HeadlessPassRetryWaitForTests, _time, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        // Ctrl+C during the wait, as during a line's read: the run's finally stops the audit.
+                        DiagnosticLog.Info(ChatScreen.AppCategory, HeadlessExitLogLine(ChatScreen.ExitByAppToken));
+                        break;
+                    }
+
+                    assistant.History.RemoveLastTurn();
+                    if (turnImages.Count > 0)
+                    {
+                        // The pictures may be the failure, as on the screen (the Ralph loop's retry rule).
+                        await HeadlessNoticeLineAsync("[notice] " + Audits.AuditText.PicturesDroppedNotice).ConfigureAwait(false);
+                    }
+
+                    gapTurn = text;
+                    gapImages = [];
                 }
             }
 
@@ -2372,6 +2406,11 @@ public sealed partial class SidekickApp
                 await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + Plans.PlanText.GapPassesRangeError(rest)).ConfigureAwait(false);
                 return null;
 
+            case ChatScreen.PlanCommand.ResumeGaps:
+                // Headless never pauses a review (2026-11-17): no line is read during its passes, so there is nothing to resume.
+                await HeadlessLineAsync(HeadlessReplyPrefix + "[error] " + (plan.Path is null ? Plans.PlanText.NothingPresentedError : Plans.PlanText.NothingPausedError)).ConfigureAwait(false);
+                return null;
+
             case ChatScreen.PlanCommand.CloseGaps:
             {
                 if (plan.Path is not { } path)
@@ -2504,6 +2543,9 @@ public sealed partial class SidekickApp
         }
     }
 
+    /// <summary>The wait before a headless pass is sent once more (2026-11-17, <see cref="Plans.PlanGapLoop.RetryDelay"/>); tests shorten it.</summary>
+    internal TimeSpan HeadlessPassRetryWaitForTests { get; set; } = Plans.PlanGapLoop.RetryDelay;
+
     /// <summary>Headless has no ESC (2026-10-13): a gap-closing loop with no limit stops at the most the setting allows.</summary>
     private static int HeadlessGapLimit(int passes) => passes <= 0 ? Settings.AppSettingsData.MaxPlanGapPasses : passes;
 
@@ -2518,15 +2560,17 @@ public sealed partial class SidekickApp
     /// Each pass names the model as the reviewer when no advisor is offered, as the first does (2026-10-14, the review: passes 2..N said
     /// the reviewer asked for, against the directive's "review it yourself").
     /// </summary>
-    private string? HeadlessGapAfterTurn(Plans.PlanSession plan, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, List<string> lines, Plans.PlanPassMeter? meter = null)
+    private string? HeadlessGapAfterTurn(Plans.PlanSession plan, WorkingDirectory files, HeadlessTurn turn, List<string> lines, out bool retry, Plans.PlanPassMeter? meter = null)
     {
-        bool advisorAsked = tools.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
+        retry = false;
+        bool asked = turn.Trace.ToolNames.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
         if (plan.TakeFinished(out string? finishedPath) is { } finished)
         {
             // A review that converged inside the turn (2026-10-17), the screen's symmetry: headless shows no pane, so nothing replaced it.
+            finished.NoteAdvisor(asked);
             string? finishedBody = ReadBody(files, finishedPath);
             finished.Next(endedOnItsOwn: true, userSpoke: false, finishedBody, meter);
-            EndHeadlessGapReview(plan, files, finished, Plans.PlanGapStop.Converged, finishedPath, finishedBody, advisorAsked, lines);
+            EndHeadlessGapReview(plan, files, finished, Plans.PlanGapStop.Converged, finishedPath, finishedBody, finished.AdvisorAskedThisPass, lines);
         }
 
         if (plan.Closing is not { Pending: false } loop)
@@ -2534,9 +2578,28 @@ public sealed partial class SidekickApp
             return null;
         }
 
+        // A failed pass is no pass that ended on its own (2026-11-17: headless judged one as such, NoRevision or another pass sent to a server
+        // that was down), but one the tool cap ended is; then the screen's order, with no message ever waiting: one retry, one follow-up.
+        bool onItsOwn = !turn.Cancelled && (!turn.Failed || turn.Failure == TurnFailure.ToolCap);
+        loop.NoteAdvisor(asked);
         string? path = plan.Path;
         string? body = ReadBody(files, path);
-        var stop = loop.Next(!cancelled, userSpoke: false, body, meter);
+        if (!turn.Cancelled && turn.Failed && turn.Failure == TurnFailure.Transient && loop.TakeRetry())
+        {
+            DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.RetryLogLine(loop.Pass, null));
+            lines.Add(Plans.PlanText.GapRetryNotice(loop.Pass, HeadlessPassRetryWaitForTests));
+            retry = true;
+            return null;
+        }
+
+        if (onItsOwn && path is not null && body is not null && loop.Presented == 0 && loop.TakeFollowUp())
+        {
+            DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.FollowUpLogLine(loop.Pass, turn.Failure == TurnFailure.ToolCap));
+            return Plans.PlanText.GapFollowUpMessage(path, loop.Pass);
+        }
+
+        var stop = loop.Next(onItsOwn, userSpoke: false, body, meter);
+        bool advisorAsked = loop.AdvisorAskedThisPass;
         var cost = loop.History.Count > 0 ? loop.History[^1] : null;
         if (loop.PassGaps.Count > 0)
         {
@@ -2839,7 +2902,7 @@ public sealed partial class SidekickApp
     /// What the session store keeps of a headless turn: the streamed reply, the trace (the model's own tool calls, their names, the skills loaded, the
     /// errors), whether Ctrl+C cut it, and since 2026-10-18 whether it failed (an error notice seen, or a thrown failure: the Ralph loop's retry rule).
     /// </summary>
-    private readonly record struct HeadlessTurn(string Reply, TurnTrace Trace, bool Cancelled, bool Failed = false);
+    private readonly record struct HeadlessTurn(string Reply, TurnTrace Trace, bool Cancelled, bool Failed = false, TurnFailure Failure = TurnFailure.None);
 
     /// <summary>
     /// One headless turn with pictures (2026-10-18, a plan's reference pictures). <paramref name="loopPass"/>: an audit or Ralph pass, whose
@@ -2853,6 +2916,8 @@ public sealed partial class SidekickApp
         var trace = new TurnTrace();
         bool cancelled = false;
         bool failed = false;
+        // The last error notice's kind (2026-11-17), as the screen keeps it: a loop's pass retries a server blip once, follows up one the tool cap ended.
+        var failure = TurnFailure.None;
 
         try
         {
@@ -2888,6 +2953,11 @@ public sealed partial class SidekickApp
                         break;
                     case TurnEvent.Notice notice:
                         failed |= notice.IsError;
+                        if (notice.IsError)
+                        {
+                            failure = notice.Failure;
+                        }
+
                         await HeadlessNoticeLineAsync((notice.IsError ? "[error] " : "[notice] ") + TurnText.Shown(notice, loopPass)).ConfigureAwait(false);
                         break;
                     case TurnEvent.Usage usage:
@@ -2949,7 +3019,7 @@ public sealed partial class SidekickApp
         await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
         ReportHeadlessLeftover(session);   // an advisor's embedded load, under a tool call, may have cleared the GPU
         await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-        return new HeadlessTurn(reply.ToString(), trace, cancelled, failed);
+        return new HeadlessTurn(reply.ToString(), trace, cancelled, failed, failure);
     }
 
     /// <summary>How a headless <c>/claude</c> ended: the thread to resume next (null for none), the reply to log (null for none), its tokens.</summary>

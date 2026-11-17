@@ -713,6 +713,31 @@ public static class PlanSteps
     }
 
     /// <summary>
+    /// The moved-line pass after <see cref="Align"/> (2026-10-19 in the Ralph loop's put-back, shared on 2026-11-17 with <see cref="PlanLoss"/>):
+    /// each unpaired line of <paramref name="after"/> paired, in <paramref name="pairs"/>, with the first unpaired line of <paramref name="before"/>
+    /// whose words are the same: a step moved elsewhere, not deleted and added.
+    /// </summary>
+    public static void PairMoved(IReadOnlyList<PlanStep> before, IReadOnlyList<PlanStep> after, int[] pairs)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(pairs);
+        var paired = new HashSet<int>(pairs.Where(p => p >= 0));
+        for (int i = 0; i < after.Count; i++)
+        {
+            if (pairs[i] < 0)
+            {
+                int moved = Enumerable.Range(0, before.Count).FirstOrDefault(k => !paired.Contains(k) && string.Equals(before[k].Text, after[i].Text, StringComparison.Ordinal), -1);
+                if (moved >= 0)
+                {
+                    pairs[i] = moved;
+                    paired.Add(moved);
+                }
+            }
+        }
+    }
+
+    /// <summary>
     /// Each of <paramref name="after"/>'s task lines paired with the one of <paramref name="before"/> it was, for telling which boxes a pass changed
     /// (2026-10-19, the second review of the Ralph loop: boxes matched by their words let a pass that reworded, added or deleted a line escape the
     /// put-back, and a reworded step could not be unticked). The longest run of lines with the same words in the same order is kept; between two

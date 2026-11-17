@@ -1064,6 +1064,16 @@ internal sealed partial class ChatScreen
     /// <summary>Set beside <see cref="_lastTurnCancelled"/>: the reply failed (a thrown turn, or a server error the assistant reported as a notice), so a <c>/loop</c> stops rather than send the same message to a server that is down (2026-09-21).</summary>
     private bool _lastTurnFailed;
 
+    /// <summary>
+    /// Set beside <see cref="_lastTurnFailed"/> (2026-11-17, the gap-audit-reliability plan): the kind of the turn's last error notice, so a
+    /// gap review's or an audit's pass sends a server blip once more (<see cref="TurnFailure.Transient"/>) and follows up a pass the tool cap
+    /// ended (<see cref="TurnFailure.ToolCap"/>). <see cref="TurnFailure.None"/> for a clean turn or one that failed here.
+    /// </summary>
+    private TurnFailure _lastTurnFailure;
+
+    /// <summary>Set beside <see cref="_lastTurnFailed"/> (2026-11-17): whether the turn asked an advisor, whatever its ending.</summary>
+    private bool _lastTurnAdvisor;
+
     /// <summary>The pair of clicks on the busy row's queued count or the scroll's hint (<see cref="HintClickLine"/>), on the watcher task alone; reset at each watcher's start.</summary>
     private readonly DoubleClick _queuedClicks;
     private readonly Action<IAnsiConsole> _renderScreen;
@@ -1586,7 +1596,9 @@ internal sealed partial class ChatScreen
         _claude = claude ?? new ClaudeProcess(environment ?? (_ => null));
         // neon_advisor (2026-10-10): the other profiles as advisors, each linked as a botchat bot is, over this chat's read-only tools.
         _advisorHost = new AdvisorHost(_session, () => _settings.StorageDirectory, _effective);
-        _neonAdvisor = AdvisorTool(_advisorHost, _effective, () => _settings.ProfileName, _advisorThreads, AdvisorOffered, () => _session.History.Messages, ConfirmNeonAdvisorAsync, new NeonAdvisorView(this), _session.Usage.AddAdvisors);
+        // A gap review's or an audit's pass asks without the thread (2026-11-17); a Ralph pass keeps it: there the advisor helps do a step.
+        _neonAdvisor = AdvisorTool(_advisorHost, _effective, () => _settings.ProfileName, _advisorThreads, AdvisorOffered, () => _session.History.Messages, ConfirmNeonAdvisorAsync, new NeonAdvisorView(this), _session.Usage.AddAdvisors,
+            () => _plan.Reviewing || _audit.InPass);
         _neonAdvisorTools = [_neonAdvisor];
         _runner = new ShellRunner(time);
         // The background processes (phase B): the board signals the idle read like the timers, and is killed off with the screen.
@@ -6057,7 +6069,7 @@ internal sealed partial class ChatScreen
                 string gapsHead = PlanText.GapsWord + " ";
                 if (sources.Planning && argText.StartsWith(gapsHead, StringComparison.OrdinalIgnoreCase))
                 {
-                    return planState.Presented ? MentionCompleter.Matches(PlanGapsReviewers, argText) : [];
+                    return planState.Presented ? MentionCompleter.Matches(planState.Paused ? [.. PlanGapsReviewers, PlanGapsResume] : PlanGapsReviewers, argText) : [];
                 }
 
                 // The subcommands while planning; before, only open — the rest of the argument is the requirement, free text. Since 2026-10-20
@@ -18147,6 +18159,22 @@ internal sealed partial class ChatScreen
 
             if (outcome == TurnOutcome.Continue)
             {
+                if (gapPass is { Retry: true } || auditPass is { Retry: true })
+                {
+                    // A pass that failed on the server's side (2026-11-17): its driver sends the same message once more. Every pass turn is
+                    // SendPassAsync's own; one that somehow wasn't is judged now, as a retry its wait never sent.
+                    if (passMessage)
+                    {
+                        _retryPass = true;
+                    }
+                    else
+                    {
+                        EndRetriedPass(spoke: false);
+                    }
+
+                    return false;
+                }
+
                 if (gapPass is { Message: { } gapMessage })
                 {
                     // No reflection between passes (2026-10-13), nor on the last (2026-10-22: passTurn).
@@ -18739,6 +18767,9 @@ internal sealed partial class ChatScreen
         bool cancelled = false;
         bool failed = false;
         bool sawError = false;
+        // The last error notice's kind (2026-11-17, the gap-audit-reliability plan): a loop's pass retries a server blip once, and follows up
+        // a pass the tool cap ended. A failure thrown here (ours) has none.
+        var failure = TurnFailure.None;
         bool stoppedEarly = false;
         // The model's first event (after the opening calls) arrived: an ESC before it withdraws
         // the message rather than cancelling a reply (TurnEndNotice).
@@ -18815,6 +18846,11 @@ internal sealed partial class ChatScreen
                 }
 
                 sawError |= events.Current is TurnEvent.Notice { IsError: true };
+                if (events.Current is TurnEvent.Notice { IsError: true } errorNotice)
+                {
+                    failure = errorNotice.Failure;
+                }
+
                 trace.Observe(events.Current);
                 DrainDiagnostics();
                 PrintAlerts();
@@ -18892,6 +18928,10 @@ internal sealed partial class ChatScreen
             // first event, so the outcome alone cannot say. Read once by RunMessageAsync.
             _lastTurnCancelled = cancelled || outcome is TurnOutcome.Interrupted or TurnOutcome.Withdrawn;
             _lastTurnFailed = failed || sawError;
+            _lastTurnFailure = failed ? TurnFailure.None : failure;
+            // Whatever the turn's ending (2026-11-17): a pass's log line says whether an advisor was asked, and _lastTrace is kept only for a
+            // turn that ended clean, so a pass cut by the tool cap read the turn before's.
+            _lastTurnAdvisor = trace.ToolNames.Contains(NeonAdvisorTool.ToolName, StringComparer.Ordinal);
             // Why it ended, for the --log file (2026-09-19): the assistant's own closing line says
             // "cancelled" and no more; the reason is the screen's to know.
             if (TurnOutcomeLogLine(outcome, cancelled, interrupt, hit is not null, cancellationToken.IsCancellationRequested) is { } reason)
@@ -19805,10 +19845,10 @@ internal sealed partial class ChatScreen
                 _transcript.ToolResult(result.Name, result.Text, time);
                 break;
             case TurnEvent.Notice notice when notice.IsError:
-                _transcript.Error(TurnText.Shown(notice, InRalphPass || _audit.InPass));
+                _transcript.Error(TurnText.Shown(notice, PassTurnNow));
                 break;
             case TurnEvent.Notice notice:
-                _transcript.Notice(TurnText.Shown(notice, InRalphPass || _audit.InPass));
+                _transcript.Notice(TurnText.Shown(notice, PassTurnNow));
                 break;
             case TurnEvent.Usage usage when !_botTurnRunning:
                 _session.Usage.Add(usage.Tokens);

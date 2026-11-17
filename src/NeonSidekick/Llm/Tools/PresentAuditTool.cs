@@ -100,7 +100,8 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
               "title": { "type": "string", "description": "One line naming the problem." },
               "detail": { "type": "string", "description": "What is wrong and why it matters." },
               "fix": { "type": "string", "description": "Optional: how to fix it." },
-              "evidence": { "type": "string", "description": "Optional: the cited code quoted verbatim, at most 8 lines." }
+              "evidence": { "type": "string", "description": "Optional: the cited code quoted verbatim, at most 8 lines." },
+              "reopen": { "type": "string", "description": "Only for a finding retracted earlier: why the retraction was wrong." }
             }, "required": ["severity", "dimension", "file", "title", "detail"] } },
             "retract": { "type": "array", "description": "Open findings withdrawn, by id, each with the reason.", "items": { "type": "object", "properties": {
               "id": { "type": "string", "description": "The finding's id, like A3." },
@@ -122,6 +123,9 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
           }
         }
         """);
+
+    /// <summary>A finding's field naming why a retraction was wrong (2026-11-17); on any other finding it is ignored.</summary>
+    public const string ReopenField = "reopen";
 
     private static readonly string[] ListArguments = [FindingsArgument, RetractArgument, ReviseArgument, MinorArgument, QuestionsArgument, CoveredArgument, CheckedArgument];
 
@@ -146,7 +150,7 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
     public override JsonElement JsonSchema => Schema;
 
     /// <summary>One new finding as checked, before redaction and caps.</summary>
-    private sealed record NewFinding(int Index, Audits.AuditSeverity Severity, string Dimension, string File, int? Line, string Title, string Detail, string Fix, string Evidence);
+    private sealed record NewFinding(int Index, Audits.AuditSeverity Severity, string Dimension, string File, int? Line, string Title, string Detail, string Fix, string Evidence, string? Reopen = null);
 
     /// <summary>One revision as checked.</summary>
     private sealed record Revision(int Index, string Id, Audits.AuditSeverity? Severity, int? Line, string? Detail, string? Fix, string? Evidence);
@@ -465,7 +469,7 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
                 }
             }
 
-            added.Add(new NewFinding(i, severity, dimension, file, line, Field(item, "title"), Field(item, "detail"), Field(item, "fix"), evidence));
+            added.Add(new NewFinding(i, severity, dimension, file, line, Field(item, "title"), Field(item, "detail"), Field(item, "fix"), evidence, Optional(item, ReopenField)));
         }
 
         var @checked = strings[CheckedArgument];
@@ -485,11 +489,15 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
             Detail = Cap(ToolRedaction.Text(f.Detail).Trim(), MaxDetailChars),
             Fix = Cap(ToolRedaction.Text(f.Fix).Trim(), MaxFixChars),
             Evidence = ToolRedaction.Text(f.Evidence),
+            Reopen = f.Reopen is { } why ? Cap(ToolRedaction.Text(why).Trim(), MaxNoteChars) : null,
         }).ToList();
 
         // 5. The duplicates, on the capped titles, after this call's retractions: an open one refused, a settled one reopened.
         var retractedIds = retractions.Select(r => r.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var reopen = new List<(NewFinding Sent, AuditFinding Settled)>();
+        // A retracted finding sent again (2026-11-17, the gap-audit-reliability plan: a pass would retract a finding and a later one report it
+        // again as new, unexplained): refused unless reopen says why the retraction was wrong, then back under its own id.
+        var restore = new List<(NewFinding Sent, AuditFinding Retracted)>();
         var fresh = new List<NewFinding>();
         foreach (var finding in shaped)
         {
@@ -514,6 +522,20 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
 
                 reopen.Add((finding, same));
             }
+            else if (report.Retracted.LastOrDefault(f => AuditPath.Comparer.Equals(f.File, finding.File) && string.Equals(f.Title, finding.Title, StringComparison.OrdinalIgnoreCase)) is { } gone)
+            {
+                if (finding.Reopen is null)
+                {
+                    return AuditText.RetractedResult(field, gone.Id, gone.RetractReason);
+                }
+
+                if (restore.Any(r => r.Retracted.Id == gone.Id))
+                {
+                    return AuditText.DuplicateResult(field, gone.Id);
+                }
+
+                restore.Add((finding, gone));
+            }
             else
             {
                 fresh.Add(finding);
@@ -524,9 +546,13 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
         int pass = loop.Pass;
         var keys = new List<string>();
         var retractedNotice = new List<(string Id, string Reason)>();
+        // The shadow rule's "serious" (2026-11-17, step 8, logged only): a finding added or reopened at medium or above, a retraction of one, or a
+        // revision that raises one to medium or above or changes its detail. Low findings, line, evidence and fix edits, a confirmation are not.
+        bool serious = false;
         foreach (var (id, reason) in retractions)
         {
             var finding = report.Findings.First(f => f.Id == id);
+            serious |= finding.Severity <= Audits.AuditSeverity.Medium;
             report.Findings.Remove(finding);
             string why = Cap(ToolRedaction.Text(reason), MaxNoteChars);
             report.Retracted.Add(finding with { Retracted = true, RetractReason = $"retracted in pass {N(pass)}: {why}" });
@@ -558,6 +584,9 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
                 said.Add("detail");
                 after = after with { Detail = Cap(ToolRedaction.Text(detail).Trim(), MaxDetailChars) };
             }
+
+            // Judged here, where before and after are both in hand: a severity raised to medium or above (the enum runs critical first), or new detail.
+            serious |= (after.Severity < before.Severity && after.Severity <= Audits.AuditSeverity.Medium) || !string.Equals(after.Detail, before.Detail, StringComparison.Ordinal);
 
             if (revision.Fix is { } fix)
             {
@@ -612,6 +641,29 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
             report.Findings[at] = again;
             reopened.Add(again);
             keys.Add("reopen " + settled.Id + " " + ContentKey(again));
+        }
+
+        // A retracted finding back under its own id (2026-11-17), the settled reopen's shape: the report as sent now stands, the reason noted.
+        foreach (var (sent, retracted) in restore)
+        {
+            report.Retracted.Remove(retracted);
+            string? evidence = sent.Evidence.Length > 0 ? sent.Evidence : sent.Line == retracted.Line ? retracted.Evidence : null;
+            var again = retracted with
+            {
+                Settled = false,
+                Retracted = false,
+                RetractReason = null,
+                Severity = sent.Severity,
+                Dimension = sent.Dimension,
+                Line = sent.Line,
+                Detail = sent.Detail,
+                Fix = sent.Fix.Length > 0 ? sent.Fix : retracted.Fix,
+                Evidence = evidence,
+                Notes = [.. retracted.Notes, $"reopened in pass {N(pass)} after its retraction: " + sent.Reopen],
+            };
+            report.Findings.Add(again);
+            reopened.Add(again);
+            keys.Add("reopen " + retracted.Id + " " + ContentKey(again));
         }
 
         var made = new List<AuditFinding>();
@@ -676,6 +728,8 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
         }
 
         _session.Changed();
+        var shadowFindings = made.Concat(reopened).Select(f => f.Severity).ToList();
+        _session.NoteShadow(pass, serious || shadowFindings.Any(s => s <= Audits.AuditSeverity.Medium), shadowFindings);
         int cleanCount = loop.CleanCount;
         if (changes)
         {

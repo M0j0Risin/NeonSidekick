@@ -364,6 +364,24 @@ public static class PlanReferences
         }
     }
 
+    /// <summary>
+    /// <paramref name="body"/> without its <c>## References</c> section (2026-11-17, <see cref="PlanLoss"/>: the app keeps the section on every save,
+    /// so a plan's length and sections are measured without it); the body as it is when it has none.
+    /// </summary>
+    public static string WithoutSection(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var lines = body.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n').ToList();
+        int start = lines.FindIndex(IsReferencesHeading);
+        if (start < 0)
+        {
+            return body;
+        }
+
+        lines.RemoveRange(start, NextSection(lines, start) - start);
+        return string.Join('\n', lines);
+    }
+
     private static bool IsReferencesHeading(string line)
     {
         string trimmed = line.Trim();

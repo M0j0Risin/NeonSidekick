@@ -84,6 +84,68 @@ public class PlanGapLoopTests : IDisposable
     // ── The loop ────────────────────────────────────────────────────────────
 
     [Fact]
+    public void Loop_ARetryAndAFollowUp_OnceAPass_NeverAfterARecord()
+    {
+        // 2026-11-17, the gap-audit-reliability plan's steps 2 and 3.
+        var loop = new PlanGapLoop(PlanReviewer.Model, 5);
+        Assert.False(loop.RetryLeft);   // pending: no pass yet
+        loop.BeginPass("a");
+        Assert.True(loop.RetryLeft && loop.FollowUpLeft);
+        Assert.True(loop.TakeRetry());
+        Assert.False(loop.TakeRetry());
+        Assert.True(loop.TakeFollowUp());
+        Assert.False(loop.FollowUpLeft);
+
+        loop.NoteAdvisor(true);
+        loop.NoteAdvisor(false);
+        Assert.True(loop.AdvisorAskedThisPass);   // ORed across the pass's turns
+
+        loop.BeginPass("b");
+        Assert.True(loop.RetryLeft && loop.FollowUpLeft);
+        Assert.False(loop.AdvisorAskedThisPass);
+        loop.Record(["one"]);
+        Assert.False(loop.RetryLeft);
+        Assert.False(loop.TakeFollowUp());
+        Assert.Equal(TimeSpan.FromSeconds(15), PlanGapLoop.RetryDelay);
+    }
+
+    [Fact]
+    public void Session_APause_KeepsTheLoop_ResumeRestoresIt_AndExitStartOrApproveDropIt()
+    {
+        _session.Enter("R");
+        var loop = _session.StartClosing(PlanReviewer.Model, 5, 2);
+        loop.BeginPass("b");
+        loop.MarkClean(["x"]);
+        _session.PauseClosing("f1");
+        Assert.Null(_session.Closing);
+        Assert.Same(loop, _session.Paused);
+
+        Assert.Null(_session.ResumeClosing("f2"));   // the plan changed
+        Assert.Same(loop, _session.Paused);
+        _session.EnterChat();
+        Assert.Null(_session.Paused);   // plan mode left and entered again
+
+        _session.Enter("R");
+        loop = _session.StartClosing(PlanReviewer.Model, 5, 2);
+        loop.BeginPass("b");
+        _session.PauseClosing("f1");
+        Assert.Same(loop, _session.ResumeClosing("f1"));
+        Assert.Same(loop, _session.Closing);
+        Assert.False(_session.Talking);
+        Assert.Null(_session.Paused);
+
+        _session.PauseClosing("f1");
+        _session.StartClosing(PlanReviewer.Model, 5);
+        Assert.Null(_session.Paused);   // a new review
+
+        _session.StopClosing();
+        _session.StartClosing(PlanReviewer.Model, 5).BeginPass("b");
+        _session.PauseClosing("f1");
+        _session.Approve(fresh: false);
+        Assert.Null(_session.Paused);
+    }
+
+    [Fact]
     public void Loop_StartsPending_AndEachPassBeginsAfresh()
     {
         var loop = new PlanGapLoop(PlanReviewer.Advisor, 5);
@@ -206,6 +268,10 @@ public class PlanGapLoopTests : IDisposable
         string none = PlanText.Directive("R", "p.md", 1, null, gap);
 
         Assert.Contains(PlanText.AdvisorsLine(Advisors), offered);
+        // A pass's advisor sees only the question and context (2026-11-17): the directive says so where the pass offers advisors.
+        Assert.Contains(PlanText.AdvisorsLine(Advisors) + " " + PlanText.PassAdvisorSentence, offered);
+        Assert.DoesNotContain(PlanText.PassAdvisorSentence, PlanText.Directive("R", "p.md", 1, Advisors, null));
+        Assert.DoesNotContain(PlanText.PassAdvisorSentence, PlanText.Directive("R", "p.md", 1, Advisors, new PlanGapState(1, 5, PlanReviewer.Model)));
         Assert.Contains("Ask at least one advisor with neon_advisor", offered);
         Assert.Contains("A gap review is running (pass 1)", offered);
         Assert.DoesNotContain("neon_advisor", none);

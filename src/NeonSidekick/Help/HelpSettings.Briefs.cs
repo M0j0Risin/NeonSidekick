@@ -170,7 +170,7 @@ public static partial class HelpSettings
         // /settings › Advisors
         SettingsField.Advisors => "Lets the model ask an advisor (another profile, on its own server and model) for advice. /advisor asks one yourself either way.",
         SettingsField.AdvisorList => "The advisors: other profiles, each with the role it advises in, such as database architect. Enter adds an advisor or changes one's role.",
-        SettingsField.AdvisorContext => "What an advisor call sends: brief, the model's question and context; recent, also the last 10 messages. /advisor always sends them.",
+        SettingsField.AdvisorContext => "What an advisor call sends: brief, the model's question and context; recent, also the last 10 messages. /advisor always sends them. A review pass sends only the question and context.",
         SettingsField.AdvisorCallsPerTurn => "The most advisor calls one reply may make, all advisors together (1–10).",
         SettingsField.AdvisorMaxToolIterations => "The tool round trips an advisor may make before it answers (0–10; 0 = no tools, text only).",
         SettingsField.AdvisorConfirm => "Each advisor call waits for your yes; a no tells the model to carry on without it.",

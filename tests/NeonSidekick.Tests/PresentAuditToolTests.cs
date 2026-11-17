@@ -62,11 +62,12 @@ public sealed class PresentAuditToolTests : IDisposable
     private void Read(string path = "src/x.cs") => new ReadFileTool(_box.Files).Describe(path, null, null);
 
     private static string FindingJson(string file = "src/x.cs", int? line = 7, string title = "SQL built from input", string severity = "high", string dimension = "security",
-        string detail = "The name is joined into the query.", string? evidence = null) =>
+        string detail = "The name is joined into the query.", string? evidence = null, string? reopen = null) =>
         "{\"severity\":\"" + severity + "\",\"dimension\":\"" + dimension + "\",\"file\":" + Q(file)
         + (line is { } l ? ",\"line\":" + l : "") + ",\"title\":" + Q(title)
         + ",\"detail\":" + Q(detail)
-        + (evidence is null ? "" : ",\"evidence\":" + Q(evidence)) + "}";
+        + (evidence is null ? "" : ",\"evidence\":" + Q(evidence))
+        + (reopen is null ? "" : ",\"reopen\":" + Q(reopen)) + "}";
 
     private string Report1(string finding) => Call("{\"findings\":[" + finding + "]}");
 
@@ -79,7 +80,7 @@ public sealed class PresentAuditToolTests : IDisposable
         string schema = _tool.JsonSchema.GetRawText();
         foreach (string text in new[] { AuditText.FindingsDescription, AuditText.SeverityDescription, AuditText.DimensionDescription, AuditText.FileDescription, AuditText.LineDescription, AuditText.TitleDescription,
                      AuditText.DetailDescription, AuditText.FixDescription, AuditText.EvidenceDescription, AuditText.RetractDescription, AuditText.ReviseDescription, AuditText.MinorDescription,
-                     AuditText.QuestionsDescription, AuditText.CoveredDescription, AuditText.CheckedDescription, AuditText.SummaryDescription })
+                     AuditText.QuestionsDescription, AuditText.CoveredDescription, AuditText.CheckedDescription, AuditText.SummaryDescription, AuditText.ReopenDescription })
         {
             Assert.Contains(text, schema);
         }
@@ -334,7 +335,7 @@ public sealed class PresentAuditToolTests : IDisposable
     }
 
     [Fact]
-    public void RetractThenReAdd_InOneCall_AndARetractedOneComesBackUnderANewId()
+    public void RetractThenReAdd_InOneCall_ComesBackUnderANewId()
     {
         Read();
         Report1(FindingJson());
@@ -344,6 +345,68 @@ public sealed class PresentAuditToolTests : IDisposable
         Assert.Equal("A2", Assert.Single(report.Findings).Id);
         Assert.Equal("retracted in pass 1: wrong line", Assert.Single(report.Retracted).RetractReason);
         Assert.Equal(3, report.NextIdNumber);
+    }
+
+    [Fact]
+    public void ARetractedFinding_SentAgainLater_IsRefusedWithoutReopen_AndRestoredWithIt()
+    {
+        // 2026-11-17, the gap-audit-reliability plan: a later call reported a retracted finding as new, unexplained.
+        Read();
+        Report1(FindingJson());
+        Call("{\"retract\":[{\"id\":\"A1\",\"reason\":\"the input is checked\"}]}");
+        Assert.Equal(AuditText.RetractedResult("findings[0]", "A1", "retracted in pass 1: the input is checked"), Report1(FindingJson()));
+        Assert.Equal("Error: findings[0] repeats A1, retracted in pass 1: the input is checked. Leave it out, or send it again with reopen saying why the retraction was wrong.",
+            AuditText.RetractedResult("findings[0]", "A1", "retracted in pass 1: the input is checked"));
+        Assert.Empty(Report().Findings);
+
+        // Two of it in one call: the second is the duplicate.
+        Assert.Equal(AuditText.DuplicateResult("findings[1]", "A1"),
+            Call("{\"findings\":[" + FindingJson(reopen: "The check is bypassed") + "," + FindingJson(line: 8, reopen: "Again") + "]}"));
+
+        Assert.StartsWith("Recorded in " + _path + ": A1 reopened.", Report1(FindingJson(severity: "critical", line: 8, reopen: "The check is bypassed by the admin path")));
+        var report = Report();
+        var finding = Assert.Single(report.Findings);
+        Assert.Equal(("A1", AuditFindingState.Open, AuditSeverity.Critical, 8), (finding.Id, finding.State, finding.Severity, finding.Line!.Value));
+        Assert.Null(finding.RetractReason);
+        Assert.Contains("reopened in pass 1 after its retraction: The check is bypassed by the admin path", finding.Notes);
+        Assert.Empty(report.Retracted);
+        Assert.Equal(2, report.NextIdNumber);
+        Assert.Contains(_loop.PassGaps, g => g.StartsWith("reopen A1 ", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheShadowRule_CountsMediumAndAbove_AndNewDetail_AsSerious()
+    {
+        // 2026-11-17, the gap-audit-reliability plan's step 8: serious is a medium-or-above finding added, reopened or retracted, a severity raised
+        // to medium or above, or new detail; a low finding, a line or fix edit, or a confirmation is not.
+        Read();
+        Report1(FindingJson(severity: "low"));
+        Assert.False(_audit.EndShadowPass(1).Serious);
+
+        Call("{\"revise\":[{\"id\":\"A1\",\"line\":8,\"fix\":\"Bind it.\"}]}");
+        Assert.False(_audit.EndShadowPass(1).Serious);
+        Call("{\"revise\":[{\"id\":\"A1\"}]}");
+        Assert.False(_audit.EndShadowPass(1).Serious);
+
+        Call("{\"revise\":[{\"id\":\"A1\",\"severity\":\"medium\"}]}");
+        Assert.True(_audit.EndShadowPass(1).Serious);
+        Call("{\"revise\":[{\"id\":\"A1\",\"detail\":\"Joined twice.\"}]}");
+        Assert.True(_audit.EndShadowPass(1).Serious);
+        Call("{\"retract\":[{\"id\":\"A1\",\"reason\":\"checked upstream\"}]}");
+        Assert.True(_audit.EndShadowPass(1).Serious);
+
+        Report1(FindingJson(title: "Another", severity: "high"));
+        var pass = _audit.EndShadowPass(1);
+        Assert.True(pass.Serious);
+        Assert.Equal([0, 1, 0, 0], pass.Severities);
+    }
+
+    [Fact]
+    public void Reopen_OnAFreshFinding_IsIgnored()
+    {
+        Read();
+        Assert.StartsWith("Recorded in " + _path + ": A1 new.", Report1(FindingJson(reopen: "Nothing was retracted")));
+        Assert.DoesNotContain(Report().Findings[0].Notes, n => n.Contains("retraction", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -450,7 +513,8 @@ public sealed class PresentAuditToolTests : IDisposable
         Assert.Equal(["a typo"], Report().Nits);
         Assert.Null(_loop.Next(endedOnItsOwn: true, userSpoke: false, Report().StallBody()));
         _loop.BeginPass(Report().StallBody());
-        Assert.StartsWith("Nothing new: the audit converged after 2 passes (2 clean passes in a row)", Call("{\"checked\":[\"the rest\"]}"));
+        // 1 of 2 files read (2026-11-17): no "converged" short of the whole scope.
+        Assert.StartsWith("Nothing new: the audit found nothing new after 2 passes (2 clean passes in a row), but only 1 of 2 files read (50%).", Call("{\"checked\":[\"the rest\"]}"));
         Assert.True(_loop.Converged);
         Assert.Equal(AuditText.AlreadyConvergedResult, Call("{\"checked\":[\"more\"]}"));
         Assert.True(_reported[^1].Converged);

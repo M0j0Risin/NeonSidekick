@@ -1,6 +1,7 @@
 using NeonSidekick.Audits;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Settings;
@@ -36,7 +37,14 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>What a turn of the audit leaves to do once it ends: the next pass's message, or the report to put on the done pane.</summary>
-    private sealed record AuditAfterTurn(string? Message, string? DonePath);
+    private sealed record AuditAfterTurn(string? Message, string? DonePath)
+    {
+        /// <summary>
+        /// The pass's turn failed on the server's side and is sent once more (2026-11-17, the gap-audit-reliability plan): no message,
+        /// <see cref="SendPassAsync"/> still holds the one it sent.
+        /// </summary>
+        public bool Retry { get; init; }
+    }
 
     /// <summary>A word's <see cref="AuditPath"/> when it names a file or folder in the working directory, else null (the root is the empty string).</summary>
     private string? ExistingAuditPath(string word)
@@ -458,7 +466,10 @@ internal sealed partial class ChatScreen
             _transcript.User(message);
             _passMessage = message;
             _nextPass = null;
+            _retryPass = false;
             var loop = _audit.Running;
+            // An audit's views as the turn is sent (2026-11-17): a turn dropped for a retry forgets what it read.
+            _passViewedMark = loop is not null ? _audit.ViewedMark() : null;
             int pass = loop?.Pass ?? 0;
             long judged = _auditJudged;
             var gap = _plan.Closing is { Pending: false } reviewing ? reviewing : null;
@@ -483,6 +494,30 @@ internal sealed partial class ChatScreen
                 EndGapReview(gap, PlanGapStop.Stopped, path, body, failed: !closing);
             }
 
+            if (!exit && _retryPass)
+            {
+                // The pass's turn failed on the server's side (2026-11-17, the gap-audit-reliability plan): the same message once more after a
+                // wait, under the turn's keys, so Esc or the page's Stop ends the review here as mid-reply; a line typed meanwhile goes first.
+                _retryPass = false;
+                bool stopped = await WaitUnderWatchAsync(ct => Task.Delay(PassRetryWait, _time, ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false)
+                    || cancellationToken.IsCancellationRequested;
+                if (stopped || PassUserSpoke())
+                {
+                    EndRetriedPass(spoke: !stopped);
+                    _nextPass = null;
+                    return false;
+                }
+
+                if (images.Count > 0)
+                {
+                    // The pictures may be the failure (a text-only server, a body too large), as the Ralph loop's retry rule has it.
+                    _transcript.Notice(AuditText.PicturesDroppedNotice);
+                    images = [];
+                }
+
+                continue;
+            }
+
             if (exit || _nextPass is not { } next)
             {
                 _nextPass = null;
@@ -492,6 +527,44 @@ internal sealed partial class ChatScreen
             _nextPass = null;
             message = next;
             images = [];
+        }
+    }
+
+    /// <summary>A pass's turn handed back a retry (2026-11-17): <see cref="SendPassAsync"/> sends its message again; cleared as each turn is sent.</summary>
+    private bool _retryPass;
+
+    /// <summary>An audit's views as its pass turn was sent (2026-11-17, <see cref="AuditSession.ViewedMark"/>); null when no audit runs.</summary>
+    private IReadOnlyDictionary<string, SeenStamp>? _passViewedMark;
+
+    /// <summary>The wait before a pass is sent once more (<see cref="PlanGapLoop.RetryDelay"/>); tests shorten it.</summary>
+    internal TimeSpan PassRetryWaitForTests { get; set; } = PlanGapLoop.RetryDelay;
+
+    private TimeSpan PassRetryWait => PassRetryWaitForTests;
+
+    /// <summary>A message came since the running review or audit began (2026-11-17): the gap review's baseline or the audit's.</summary>
+    private bool PassUserSpoke() => _audit.Running is { Pending: false } ? AuditUserSpoke() : GapUserSpoke();
+
+    /// <summary>
+    /// A retry the wait never sent (2026-11-17): the pass judged now, as the not-sent guard judges one, its turn already dropped. A line typed
+    /// during the wait (<paramref name="spoke"/>) is the message's stop: the gap review pauses, the audit stops for <c>/code-audit resume</c>.
+    /// Esc, the page's Stop or the app closing stop it. Neither rings: the user caused both.
+    /// </summary>
+    private void EndRetriedPass(bool spoke)
+    {
+        var reason = spoke ? PlanGapStop.UserSpoke : PlanGapStop.Stopped;
+        if (_audit.Running is { Pending: false } audit)
+        {
+            audit.Next(false, spoke, null, PlanMeter());
+            EndAudit(audit, reason, passFailed: false);
+            return;
+        }
+
+        if (_plan.Closing is { Pending: false } gap)
+        {
+            string? path = _plan.Path;
+            string? body = path is null ? null : ReadPlanBody(path);
+            gap.Next(false, spoke, body, PlanMeter());
+            EndOrPauseGapReview(gap, reason, path, body, failed: false);
         }
     }
 
@@ -522,17 +595,42 @@ internal sealed partial class ChatScreen
     /// <summary>How many gap passes <see cref="TakeGapPass"/> has judged (2026-10-22, as <see cref="_auditJudged"/>).</summary>
     private long _gapJudged;
 
+    /// <summary>
+    /// The running totals of lines queued on the PC, held (<see cref="Pend"/>) and sent from the page (2026-10-20, a review, the Ralph loop's
+    /// rule; one type for the audit and the gap review since 2026-11-17, the gap-audit-reliability plan): a total that moved since a baseline
+    /// is a line that came after it, whatever the queue mode. They never tell a line already waiting (<see cref="LinesWaiting"/> does).
+    /// </summary>
+    private readonly record struct LineCounts(long Typed, long Pended, long Sent);
+
+    /// <summary>The totals now.</summary>
+    private LineCounts LinesNow() => new(_queue.Added, PendedCount, _webUi.LinesAdded);
+
+    /// <summary>
+    /// Whether a line waits to be sent now (2026-11-17): queued under an automatic queue, or held in <see cref="_pendingLines"/> (the PC's
+    /// held lines and the page's). Read lock-free, as <see cref="PendedPcLines"/> reads it.
+    /// </summary>
+    private bool LinesWaiting() => (QueueDrains && _queue.Count > 0) || !_pendingLines.IsEmpty;
+
     /// <summary>The lines queued, held and sent from the page as the audit began (<see cref="MarkAuditBaseline"/>).</summary>
-    private (long Typed, long Pended, long Sent) _auditBaseline;
+    private LineCounts _auditBaseline;
 
     /// <summary>
     /// The lines so far as an audit begins or resumes (2026-10-20, a review, the Ralph loop's rule: the queue's count stopped it after pass 1 on a
     /// line waiting before it began, while under Queue mode manual a typed line, and a page's message, never stopped it).
     /// </summary>
-    private void MarkAuditBaseline() => _auditBaseline = (_queue.Added, PendedCount, _webUi.LinesAdded);
+    private void MarkAuditBaseline() => _auditBaseline = LinesNow();
 
     /// <summary>A message typed on the PC, held, or sent from the page since the audit began: it stops the audit after its pass.</summary>
-    private bool AuditUserSpoke() => _queue.Added != _auditBaseline.Typed || PendedCount != _auditBaseline.Pended || _webUi.LinesAdded != _auditBaseline.Sent;
+    private bool AuditUserSpoke() => LinesNow() != _auditBaseline;
+
+    /// <summary>The lines as the gap review's pass 1 began, or as it resumed (2026-11-17, <see cref="LineCounts"/>).</summary>
+    private LineCounts _gapBaseline;
+
+    /// <summary>
+    /// A message typed on the PC, held, or sent from the page since the gap review began or resumed (2026-11-17, the gap-audit-reliability
+    /// plan: the review read only an automatic queue's count, so a held line or the page's never paused it).
+    /// </summary>
+    private bool GapUserSpoke() => LinesNow() != _gapBaseline;
 
     /// <summary>The line's pictures, less those the model cannot see (said): a picture it cannot see would stop the pass before it began.</summary>
     private IReadOnlyList<ImageAttachment> AuditPictures(IReadOnlyList<ImageAttachment> images)
@@ -583,7 +681,37 @@ internal sealed partial class ChatScreen
             return EndAudit(loop, PlanGapStop.Stopped, lockLost: true);
         }
 
-        bool onItsOwn = outcome == TurnOutcome.Continue && !_lastTurnCancelled && !_lastTurnFailed;
+        bool cancelled = outcome != TurnOutcome.Continue || _lastTurnCancelled;
+        // A pass the tool cap ended is one that ended on its own (2026-11-17, the gap-audit-reliability plan): with nothing reported it is
+        // followed up, with a report it is judged; any other failure is a stop.
+        bool onItsOwn = !cancelled && (!_lastTurnFailed || _lastTurnFailure == TurnFailure.ToolCap);
+        // A retried or followed-up pass spans turns (2026-11-17): whether an advisor was asked is the pass's, every turn of it.
+        loop.NoteAdvisor(_lastTurnAdvisor);
+        // The after-turn order (2026-11-17): a message waiting first, then one retry of a server blip, then one follow-up of a pass that
+        // reported nothing, then the pass judged as it stands.
+        bool spoke = AuditUserSpoke();
+        bool transient = !cancelled && _lastTurnFailed && _lastTurnFailure == TurnFailure.Transient;
+        bool reportless = onItsOwn && loop.Presented == 0;
+        if (!spoke && transient && loop.TakeRetry())
+        {
+            // Before the merge: the dropped turn's reads are forgotten, so the retry is asked for those files again.
+            DiagnosticLog.Info(AppCategory, AuditText.RetryLogLine(loop.Pass, null));
+            if (_passViewedMark is { } mark)
+            {
+                _audit.ForgetViewedSince(mark);
+            }
+
+            _session.Assistant?.History.RemoveLastTurn();
+            _transcript.Notice(AuditText.RetryNotice(_audit.Name, loop.Pass, PassRetryWait), NoticeTone.Warn);
+            return new AuditAfterTurn(null, null) { Retry = true };
+        }
+
+        if (!spoke && reportless && loop.TakeFollowUp())
+        {
+            DiagnosticLog.Info(AppCategory, AuditText.FollowUpLogLine(loop.Pass, _lastTurnFailure == TurnFailure.ToolCap));
+            return new AuditAfterTurn(AuditText.FollowUpMessage(_audit.Name, loop.Pass), null);
+        }
+
         // The coverage worked out once for the merge, the notice and the end (2026-10-20, a review: three times, each a read of the sidecar and a
         // look at every scope file).
         var coverage = _audit.Coverage();
@@ -593,10 +721,17 @@ internal sealed partial class ChatScreen
         }
 
         string? body = AuditFiles.Read(_audit.Files, path)?.StallBody();
-        var stop = loop.Next(onItsOwn, AuditUserSpoke(), body, PlanMeter());
+        var stop = loop.Next(onItsOwn, spoke, body, PlanMeter());
+        // A pass that would have been retried or followed up, but for the message: the message's stop, no tone (2026-11-17).
+        if (spoke && ((transient && loop.RetryLeft) || (reportless && loop.FollowUpLeft)))
+        {
+            stop = PlanGapStop.UserSpoke;
+        }
+
         var cost = loop.History.Count > 0 ? loop.History[^1] : null;
-        bool advisorAsked = _lastTrace is { } trace && trace.ToolNames.Contains(NeonAdvisorTool.ToolName, StringComparer.Ordinal);
+        bool advisorAsked = loop.AdvisorAskedThisPass;
         DiagnosticLog.Info(AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, cost));
+        DiagnosticLog.Info(AppCategory, AuditText.ShadowLogLine(loop.Pass, _audit.EndShadowPass(loop.Pass), loop.CleanPasses, stop, loop.PassClean, loop.CleanCount));
         if (stop is not { } reason)
         {
             _transcript.Notice(loop.PassGaps.Count > 0
@@ -605,7 +740,8 @@ internal sealed partial class ChatScreen
             return new AuditAfterTurn(BeginAuditPass(loop, body), null);
         }
 
-        return EndAudit(loop, reason, coverage: coverage, passFailed: _lastTurnFailed && !_lastTurnCancelled);
+        // A message never rings the stop tone (2026-11-17: a failed pass with a message waiting rang, against the setting's own rule).
+        return EndAudit(loop, reason, coverage: coverage, passFailed: !spoke && _lastTurnFailed && !_lastTurnCancelled);
     }
 
     /// <summary>
@@ -625,7 +761,13 @@ internal sealed partial class ChatScreen
         string path = _audit.Path!;
         string name = _audit.Name;
         var files = _audit.Files;
-        foreach (string line in AuditText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses, _audit.Focus))
+        // A convergence's summary says the share read when short of the scope (2026-11-17), so its coverage is taken first.
+        if (reason == PlanGapStop.Converged && !lockLost)
+        {
+            coverage ??= _audit.Coverage();
+        }
+
+        foreach (string line in AuditText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses, _audit.Focus, coverage?.Read ?? 0, coverage?.Scope ?? 0))
         {
             _transcript.Notice(line);
         }
@@ -666,7 +808,7 @@ internal sealed partial class ChatScreen
         }
 
         _transcript.Notice(reason == PlanGapStop.Converged
-            ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope)
+            ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope, pane: _pane.Enabled || FromWebNow, coverage.Unread.Count)
             : AuditText.StopNotice(reason, name, loop.Pass), NoticeTone.Progress);
         return reason is PlanGapStop.Converged or PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed ? new AuditAfterTurn(null, path) : null;
     }

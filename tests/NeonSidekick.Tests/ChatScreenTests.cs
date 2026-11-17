@@ -334,6 +334,7 @@ public partial class ChatScreenTests : IDisposable
         screen.DownloadsFolder = DownloadsForTests;   // never the real Downloads (2026-11-13, settings transfer)
         screen.StartNotices = _startNotices;
         screen.ImportEnvironmentForTests = _importEnvironment;
+        screen.PassRetryWaitForTests = TimeSpan.Zero;   // the tests' clock is manual (2026-11-17)
         _running = screen;
         int code = await screen.RunAsync(cancellationToken);
         Assert.Equal(0, code);

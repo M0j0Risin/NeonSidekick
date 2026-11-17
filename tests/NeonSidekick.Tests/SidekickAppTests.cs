@@ -169,6 +169,7 @@ public partial class SidekickAppTests : IDisposable
     {
         var stdout = new StringWriter();
         var app = App(env, new StringReader(input), stdout, chat: chat, headlessNarrow: headlessNarrow, embeddedLlm: embeddedLlm);
+        app.HeadlessPassRetryWaitForTests = TimeSpan.Zero;   // the tests' clock is manual (2026-11-17)
         int code = await app.RunAsync((options ?? SidekickOptions.None) with { Headless = true }, CancellationToken.None);
         Assert.Equal(exitCode, code);
         Assert.Empty(_console.Output); // headless never touches the TUI console

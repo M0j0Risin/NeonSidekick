@@ -236,6 +236,30 @@ public static class PlanDocument
         }
     }
 
+    /// <summary>
+    /// The <c>##</c> headings of <paramref name="body"/> outside fenced code (2026-11-17, <see cref="PlanLoss"/>), each trimmed, a trailing colon
+    /// dropped, in order; never <c>## References</c>, the app's own.
+    /// </summary>
+    public static IReadOnlyList<string> Sections(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var sections = new List<string>();
+        foreach (var (_, raw) in Walk(body))
+        {
+            string trimmed = raw.Trim();
+            if (trimmed.StartsWith("## ", StringComparison.Ordinal))
+            {
+                string name = trimmed[3..].Trim().TrimEnd(':').Trim();
+                if (name.Length > 0 && !string.Equals(name, PlanReferences.Heading, StringComparison.OrdinalIgnoreCase))
+                {
+                    sections.Add(name);
+                }
+            }
+        }
+
+        return sections;
+    }
+
     /// <summary>The length of a list marker with its space (<c>- </c>, <c>12. </c>) at the start of <paramref name="trimmed"/>, or 0; shared with <see cref="PlanSteps"/> (2026-10-18).</summary>
     internal static int ListMarker(string trimmed)
     {

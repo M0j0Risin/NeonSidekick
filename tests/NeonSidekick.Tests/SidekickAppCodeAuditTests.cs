@@ -44,9 +44,23 @@ public partial class SidekickAppTests
         _chat.EnqueueText("Pass 2.");
         _chat.Enqueue(HeadlessAuditCall("a3", "{\"checked\":[\"the rest\"]}"));
         _chat.EnqueueText("Pass 3.");
+        var shadow = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith(AuditText.ShadowLogPrefix, StringComparison.Ordinal)) shadow.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await Headless("/code-audit src\n/code-audit open\n");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
 
-        string output = await Headless("/code-audit src\n/code-audit open\n");
-
+        // The shadow rule's line every pass (2026-11-17, step 8): pass 1 serious, passes 2 and 3 clean, the third's "would converge".
+        Assert.Equal(3, shadow.Count);
+        Assert.Contains("pass 1: 1 high (serious); shadow streak 0 of 2", shadow[0]);
+        Assert.Contains("pass 3: no findings; shadow streak 2 of 2, would converge; real: ", shadow[2]);
         Assert.Equal(7, _chat.Requests.Count);
         string path = HeadlessAuditPath;
         string name = Path.GetFileNameWithoutExtension(path);
@@ -55,7 +69,7 @@ public partial class SidekickAppTests
         Assert.Contains(PresentAuditTool.ToolName, _chat.Options[0]!.Tools!.Select(t => t.Name));
         Assert.DoesNotContain(WriteFileTool.ToolName, _chat.Options[0]!.Tools!.Select(t => t.Name));
         Assert.Contains("You: " + AuditText.PassMessage("src", path, 2, 5, PlanReviewer.Model, "all"), output);
-        Assert.Contains("[notice] " + AuditText.ConvergedNotice(name, 3, 2, 1, 1), output);
+        Assert.Contains("[notice] " + AuditText.ConvergedNotice(name, 3, 2, 1, 1, pane: false), output);
         Assert.Contains("[notice] " + AuditText.NoPaneLines(name, anyOpen: true)[0], output);
         Assert.Contains("converged · 1 high", output);   // /code-audit open's list
     }
@@ -137,6 +151,32 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_CodeAudit_ATransientFailure_IsRetried_WithItsReadsForgotten()
+    {
+        // 2026-11-17, the gap-audit-reliability plan's step 2.
+        ServerOn1234("llama");
+        HeadlessAuditFiles();
+        _settings.Update(d => d.CodeAuditPasses = 1);
+        _chat.Enqueue(FakeChatClient.Call("r1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "src/a.cs" }));   // 0
+        _chat.EnqueueText("(never seen)");                                                                                           // 1: refused
+        _chat.Enqueue(FakeChatClient.Call("r2", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "src/a.cs" }));   // 2: the retry
+        _chat.Enqueue(HeadlessAuditCall("a1", "{\"findings\":[{\"severity\":\"high\",\"dimension\":\"security\",\"file\":\"src/a.cs\",\"line\":3,\"title\":\"SQL built from input\",\"detail\":\"Joined.\"}]}"));
+        _chat.EnqueueText("Pass 1.");
+        _chat.BeforeUpdateOf = (request, update, _) => request == 1
+            ? throw new System.Net.Http.HttpRequestException("refused", new System.Net.Sockets.SocketException((int)System.Net.Sockets.SocketError.ConnectionRefused))
+            : Task.CompletedTask;
+
+        string output = await Headless("/code-audit src\n");
+
+        Assert.Equal(5, _chat.Requests.Count);
+        string path = HeadlessAuditPath;
+        Assert.Contains("[notice] " + AuditText.RetryNotice(Path.GetFileNameWithoutExtension(path), 1, TimeSpan.Zero), output);
+        Assert.Equal(AuditText.PassMessage("src", path, 1, 1, PlanReviewer.Model, "all"), HeadlessLastUser(_chat.Requests[2]));
+        Assert.Contains("- Not read by any pass yet (", _chat.Requests[2][0].Text);
+        Assert.Contains("[notice] " + AuditText.StopNotice(PlanGapStop.Limit, Path.GetFileNameWithoutExtension(path), 1), output);
+    }
+
+    [Fact]
     public async Task Headless_CodeAudit_NoLimitMeansTheMost_AndAdvisorConfirmFallsBack()
     {
         ServerOn1234("llama");
@@ -149,12 +189,14 @@ public partial class SidekickAppTests
             d.AdvisorList = [new AdvisorEntry("dba", "database architect")];
         });
         _chat.EnqueueText("Which database is this?");
+        _chat.EnqueueText("I need the database first.");   // the pass's one follow-up (2026-11-17): still no report
 
         string output = await Headless("/code-audit advisor src\n");
 
         Assert.Contains("[notice] " + AuditText.ConfirmFallbackNotice, output);
         Assert.Contains("[notice] " + AuditText.HeadlessCapNotice(AppSettingsData.MaxCodeAuditPasses, fromCommand: false), output);
         Assert.Equal(AuditText.PassMessage("src", HeadlessAuditPath, 1, AppSettingsData.MaxCodeAuditPasses, PlanReviewer.Model, "all"), HeadlessLastUser(_chat.Requests[0]));
+        Assert.Equal(AuditText.FollowUpMessage(Path.GetFileNameWithoutExtension(HeadlessAuditPath), 1), HeadlessLastUser(_chat.Requests[1]));
         Assert.Contains("[notice] " + AuditText.StopNotice(PlanGapStop.NoRevision, Path.GetFileNameWithoutExtension(HeadlessAuditPath), 1), output);
     }
 

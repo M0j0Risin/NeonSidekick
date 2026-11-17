@@ -79,7 +79,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
         await UntilAsync(() => _tonePlayback.Writes.Count > 0, CancellationToken.None);
 
-        Assert.Contains(AuditText.ConvergedNotice(Path.GetFileNameWithoutExtension(AuditPath), 3, 2, 1, 1), output);
+        Assert.Contains(AuditText.ConvergedNotice(Path.GetFileNameWithoutExtension(AuditPath), 3, 2, 1, 1, pane: true), output);
         Assert.Equal(Clip(TimerTones.Beep), Assert.Single(_tonePlayback.Writes));
     }
 
@@ -135,7 +135,7 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(AuditText.ConvergedNotice(Path.GetFileNameWithoutExtension(AuditPath), 3, 2, 1, 1), output);
+        Assert.Contains(AuditText.ConvergedNotice(Path.GetFileNameWithoutExtension(AuditPath), 3, 2, 1, 1, pane: true), output);
         Assert.Equal(TimerTones.Silent, _settings.Current.CodeAuditStopTone);
         Assert.Empty(_tonePlayback.Writes);
     }

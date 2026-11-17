@@ -40,7 +40,8 @@ public partial class SidekickAppTests
     {
         ServerOn1234("llama");
         HeadlessAuditFiles();
-        _chat.EnqueueText("Pass 1.");   // no present_audit: the audit stops after pass 1, its report kept
+        _chat.EnqueueText("Pass 1.");   // no present_audit: the audit stops after pass 1 and its follow-up, its report kept
+        _chat.EnqueueText("Still pass 1.");
 
         await Headless("/code-audit src\n");
         string path = HeadlessAuditPath;
@@ -50,7 +51,7 @@ public partial class SidekickAppTests
         string output = await Headless("/code-audit resume\n/code-audit fix\n");
 
         Assert.Equal(2, output.Split(AuditText.LockedError(path)).Length - 1);
-        Assert.Single(_chat.Requests);
+        Assert.Equal(2, _chat.Requests.Count);   // the pass and its follow-up; nothing after
         Assert.True(File.Exists(HeadlessAuditLock(path)));
     });
 

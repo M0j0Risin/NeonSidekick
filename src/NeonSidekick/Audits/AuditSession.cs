@@ -6,6 +6,13 @@ using NeonSidekick.Plans;
 namespace NeonSidekick.Audits;
 
 /// <summary>How much of a scope the passes have read (2026-10-18): the files read out of the scope's, and the ones no pass has read yet.</summary>
+/// <summary>
+/// One pass as the shadow rule sees it (2026-11-17, the gap-audit-reliability plan's step 8, for phase 3 to judge on real logs): the findings it
+/// added or reopened by severity (indexed by <see cref="AuditSeverity"/>), the shadow streak after it, whether it called <c>present_audit</c>,
+/// and whether anything it did was serious.
+/// </summary>
+public sealed record AuditShadowPass(IReadOnlyList<int> Severities, int Streak, bool Called, bool Serious);
+
 public sealed record AuditCoverage(int Read, int Scope, IReadOnlyList<string> Unread, IReadOnlyList<string> ReadFiles)
 {
     /// <summary>
@@ -36,6 +43,15 @@ public sealed class AuditSession
 
     /// <summary>The loop while an audit runs; null otherwise.</summary>
     public PlanGapLoop? Running { get; private set; }
+
+    /// <summary>
+    /// The live working directory's views (2026-11-17, <see cref="WorkingDirectory.ViewedMark"/>): the ones <c>read_file</c> marks and
+    /// <see cref="Coverage"/> reads, never <see cref="Files"/>' (a copy pinned to the audit's root, which no read marks).
+    /// </summary>
+    public IReadOnlyDictionary<string, SeenStamp> ViewedMark() => _files.ViewedMark();
+
+    /// <summary>The live views put back to <paramref name="mark"/> (2026-11-17, <see cref="WorkingDirectory.ForgetViewedSince"/>): a retried pass's dropped reads.</summary>
+    public void ForgetViewedSince(IReadOnlyDictionary<string, SeenStamp> mark) => _files.ForgetViewedSince(mark);
 
     /// <summary>
     /// The folder the audit started in, null between audits (2026-10-19, after the Ralph loop's reviews: the audit read and wrote its report through
@@ -312,6 +328,7 @@ public sealed class AuditSession
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(focus);
+        ResetShadow();
         var promoted = _pending is { } pending && AuditPath.Comparer.Equals(pending.Report, path) ? pending : null;
         if (_held is { } running && (promoted is null || !running.Same(promoted)))
         {
@@ -360,7 +377,69 @@ public sealed class AuditSession
         Scope = null;
         Focus = AuditFocus.Dimensions;
         Brief = "";
+        ResetShadow();
         Changed();
+    }
+
+    // ── The shadow rule (2026-11-17, the gap-audit-reliability plan's step 8): logged only, never acted on ──
+    // A pass with a present_audit call and nothing serious moves the shadow streak on; anything serious resets it; a pass with no call leaves it.
+    // Phase 3 compares when it would have converged with when the real streak did.
+
+    private int _shadowPass;
+    private bool _shadowCalled;
+    private bool _shadowSerious;
+    private readonly int[] _shadowSeverities = new int[4];
+
+    /// <summary>Clean passes in a row by the shadow rule: passes whose calls changed nothing serious.</summary>
+    public int ShadowStreak { get; private set; }
+
+    /// <summary>
+    /// One <c>present_audit</c> call of <paramref name="pass"/>: its <paramref name="serious"/> ORed into the pass's, the findings it added or reopened
+    /// counted by severity. A call of another pass than the one noted starts that pass afresh.
+    /// </summary>
+    public void NoteShadow(int pass, bool serious, IEnumerable<AuditSeverity> severities)
+    {
+        ArgumentNullException.ThrowIfNull(severities);
+        if (pass != _shadowPass)
+        {
+            ClearShadowPass();
+            _shadowPass = pass;
+        }
+
+        _shadowCalled = true;
+        _shadowSerious |= serious;
+        foreach (var severity in severities)
+        {
+            _shadowSeverities[(int)severity]++;
+        }
+    }
+
+    /// <summary><paramref name="pass"/> over: the shadow streak moved once (or left, with no call), and what the pass did.</summary>
+    public AuditShadowPass EndShadowPass(int pass)
+    {
+        bool called = _shadowCalled && _shadowPass == pass;
+        if (called)
+        {
+            ShadowStreak = _shadowSerious ? 0 : ShadowStreak + 1;
+        }
+
+        var ended = new AuditShadowPass(called ? [.. _shadowSeverities] : [0, 0, 0, 0], ShadowStreak, called, called && _shadowSerious);
+        ClearShadowPass();
+        return ended;
+    }
+
+    private void ClearShadowPass()
+    {
+        _shadowCalled = false;
+        _shadowSerious = false;
+        Array.Clear(_shadowSeverities);
+    }
+
+    private void ResetShadow()
+    {
+        ClearShadowPass();
+        _shadowPass = 0;
+        ShadowStreak = 0;
     }
 
     /// <summary>

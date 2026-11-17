@@ -1164,7 +1164,7 @@ Under *Advisors enabled*. Advisors are other profiles of this home, each in a ro
 |---|---|---|
 | `neon_advisor` | `advisor, question, context?` | Asks one advisor, by profile or role, on its own server and model; it may use this chat's read-only tools for up to *Advisor max tool iterations* round trips. |
 
-* Offered while an advisor is listed; in plan mode the model consults fitting advisors before presenting a plan. Each advisor keeps one thread per conversation.
+* Offered while an advisor is listed; in plan mode the model consults fitting advisors before presenting a plan. Each advisor keeps one thread per conversation; during a gap review or code audit pass it answers without it.
 * An advisor on the Claude Code server runs its own `claude` process, until the conversation ends or this chat's server or model changes.
 * An answer drawn from web pages reaches the model fenced (`⟪ ⟫`).
 
@@ -1175,7 +1175,7 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 | Tool | Arguments | What it does |
 |---|---|---|
 | `present_plan` | `title, name?, markdown, verify?, final?, gaps?, checked?, minor?` | Saves the plan as `.neon/plans/<name>.md` (revisions overwrite it), prints it and asks for your approval. `verify` and `final` are its check commands, kept in its header. |
-| `present_audit` | `findings?, retract?, revise?, minor?, questions?, covered?, checked?, summary?` | Records a code audit pass in its report (`.neon/audits/<name>.md`), which the app writes. At most 20 findings a call; with nothing new, `checked` is required. |
+| `present_audit` | `findings?, retract?, revise?, minor?, questions?, covered?, checked?, summary?` | Records a code audit pass in its report (`.neon/audits/<name>.md`), which the app writes. At most 20 findings a call; with nothing new, `checked` is required. A retracted finding comes back only with `reopen`. |
 
 * The header's `status` is `draft`, `approved`, `canceled`, `done` or `incomplete`. A revision without `verify` or `final` keeps the file's; empty clears one. Headless, the plan is saved and `/plan approve` starts it.
 * In a gap review (`/plan gaps`), `gaps` lists what a revision closed; an empty `gaps` ends the review. A pruned stub sent back as `markdown` is refused.

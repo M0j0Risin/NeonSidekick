@@ -325,7 +325,7 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 |---|---|---|
 | Advisors enabled | Offers the model `neon_advisor` while the list holds an advisor. `/advisor` works either way. | off |
 | Advisor list | The advisors, each a profile and its role. *+ Add an advisor…* picks a profile and asks its role; Enter on one changes its role or removes it. | empty |
-| Advisor context | What the model's calls send: `brief` (the question and context) or `recent` (the last 10 messages too). `/advisor` always sends the last 10. | `brief` |
+| Advisor context | What the model's calls send: `brief` (the question and context) or `recent` (the last 10 messages too). `/advisor` always sends the last 10. A gap review or code audit pass sends only the question and context. | `brief` |
 | Advisor max calls per turn | The most advisor calls one reply may make (1–10). | 2 |
 | Advisor max tool iterations | Tool round trips an advisor may make before answering (0–10; 0 is text only). | 4 |
 | Advisor confirm | Each call waits for your yes; headless refuses them. | off |
@@ -333,7 +333,7 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 | Advisor embedded mode | An advisor on another embedded model: `parent-server` answers on the running model; `multi-server` runs an extra `llama-server` for its model. | `parent-server` |
 
 * **Servers:** a blank *LLM URL* in the advisor's profile borrows this chat's server. An embedded advisor needs *Embedded servers enabled*.
-* **On the Claude Code server** each advisor runs its own `claude` process, until the conversation ends or this chat's server or model changes; the next question resumes it.
+* **On the Claude Code server** each advisor runs its own `claude` process, until the conversation ends or this chat's server or model changes; the next question resumes it, except in a gap review or code audit pass, which starts afresh.
 
 ### Automation
 

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 using NeonSidekick.Plans;
 
@@ -189,8 +190,19 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             }
         }
 
+        // The file as the pass found it, read once (2026-11-17): the unchanged check and the lost-content check (PlanLoss) both measure against it.
+        string? previous = loop is not null && _session.Path is { } previousPath ? PlanFiles.ReadWhole(_files, previousPath) : null;
+        var loss = previous is not null ? PlanLoss.Compare(PlanDocument.Body(previous), PlanDocument.SavedBody(title, markdown)) : PlanLossReport.None;
+        if (loop is not null && gaps.Count == 0 && loss.Any)
+        {
+            // A clean report that dropped unfinished steps, ticks or sections, or cut much of the plan (2026-11-17, the gap-audit-reliability plan):
+            // refused as a structural problem is, nothing saved, no pass counted.
+            DiagnosticLog.Info("App", PlanText.LossLogLine(loop.Pass, loss, refused: true));
+            return PlanText.LossCleanResult(loss);
+        }
+
         PlanPresentation? saved;
-        if (loop is not null && gaps.Count == 0 && Unchanged(title, markdown, checks) is { } same)
+        if (loop is not null && gaps.Count == 0 && Unchanged(previous, title, markdown, checks) is { } same)
         {
             // Nothing left and nothing changed: the revision on disk is the one to approve, no new one written.
             saved = same;
@@ -215,7 +227,15 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             {
                 loop.Record(gaps, minor);
                 var reading = PlanFit.Read(saved.Markdown, null, reviewed: true, _inlineLimit());
-                return PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, reading.Structural, bodyChars, tooLong);
+                string result = PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, reading.Structural, bodyChars, tooLong);
+                if (!loss.Any)
+                {
+                    return result;
+                }
+
+                // A gap revision is saved whatever it removed (2026-11-17), the loss named so a pass that never meant it puts it back.
+                DiagnosticLog.Info("App", PlanText.LossLogLine(loop.Pass, loss, refused: false));
+                return result + " " + PlanText.LossSentence(loss);
             }
 
             if (!loop.WouldConverge)
@@ -259,9 +279,9 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     /// The plan on disk as a presentation when <paramref name="markdown"/> would save the same body and <paramref name="checks"/> change neither of its
     /// commands (2026-10-19: a clean pass that changed only its <c>verify</c> was dropped with the unchanged body); else null.
     /// </summary>
-    private PlanPresentation? Unchanged(string title, string markdown, PlanChecks? checks)
+    private PlanPresentation? Unchanged(string? text, string title, string markdown, PlanChecks? checks)
     {
-        if (_session.Path is not { } path || PlanFiles.ReadWhole(_files, path) is not { } text)
+        if (_session.Path is not { } path || text is null)
         {
             return null;
         }

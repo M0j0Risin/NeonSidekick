@@ -40,6 +40,55 @@ public sealed class AuditSessionTests : IDisposable
 
     private void Start(string report) => _audit.Start(report, _scope, AuditFocus.Dimensions, "", PlanReviewer.Model, 5, 2);
 
+    [Fact]
+    public void TheShadowStreak_MovesOnceAPass_AndResetsOnStartAndStop()
+    {
+        // 2026-11-17, the gap-audit-reliability plan's step 8: logged only.
+        Start(A);
+        _audit.NoteShadow(1, serious: true, [AuditSeverity.High]);
+        var one = _audit.EndShadowPass(1);
+        Assert.Equal((0, true, true), (one.Streak, one.Called, one.Serious));
+        Assert.Equal([0, 1, 0, 0], one.Severities);
+
+        // Two calls in one pass, neither serious: the streak moves once.
+        _audit.NoteShadow(2, serious: false, [AuditSeverity.Low]);
+        _audit.NoteShadow(2, serious: false, [AuditSeverity.Low]);
+        var two = _audit.EndShadowPass(2);
+        Assert.Equal((1, false), (two.Streak, two.Serious));
+        Assert.Equal([0, 0, 0, 2], two.Severities);
+
+        // A pass with no call leaves it.
+        var three = _audit.EndShadowPass(3);
+        Assert.Equal((1, false), (three.Streak, three.Called));
+
+        _audit.NoteShadow(4, serious: false, []);
+        Assert.Equal(2, _audit.EndShadowPass(4).Streak);
+        // A serious call in a later pass resets it.
+        _audit.NoteShadow(5, serious: false, []);
+        _audit.NoteShadow(5, serious: true, []);
+        Assert.Equal(0, _audit.EndShadowPass(5).Streak);
+
+        _audit.NoteShadow(6, serious: false, []);
+        Assert.Equal(1, _audit.EndShadowPass(6).Streak);
+        Start(A);
+        Assert.Equal(0, _audit.ShadowStreak);
+        _audit.NoteShadow(1, serious: false, []);
+        Assert.Equal(1, _audit.EndShadowPass(1).Streak);
+        _audit.Stop();
+        Assert.Equal(0, _audit.ShadowStreak);
+    }
+
+    [Fact]
+    public void TheShadowLogLine_SaysThePassTheStreakAndTheRealVerdict()
+    {
+        Assert.Equal("code audit shadow: pass 3: 1 high, 2 low (serious); shadow streak 0 of 2; real: found something",
+            AuditText.ShadowLogLine(3, new AuditShadowPass([0, 1, 0, 2], 0, true, true), 2, null, false, 0));
+        Assert.Equal("code audit shadow: pass 4: no findings; shadow streak 2 of 2, would converge; real: clean 1 of 2",
+            AuditText.ShadowLogLine(4, new AuditShadowPass([0, 0, 0, 0], 2, true, false), 2, null, true, 1));
+        Assert.StartsWith("code audit shadow: pass 5: no present_audit; shadow streak 2 of 2, would converge; real: ",
+            AuditText.ShadowLogLine(5, new AuditShadowPass([0, 0, 0, 0], 2, false, false), 2, PlanGapStop.NoRevision, false, 0));
+    }
+
     private void WriteOtherLock(string report, string? host = null) =>
         _box.Write(AuditFiles.LockPathFor(report), "pid: " + OtherPid + "\nstarted: 2026-10-29T09:00:00.0000000+00:00\n" + (host is null ? "" : "host: " + host + "\n"));
 

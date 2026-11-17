@@ -1,6 +1,7 @@
 using NeonSidekick.Audits;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
+using NeonSidekick.Llm;
 using NeonSidekick.Plans;
 using NeonSidekick.Settings;
 
@@ -282,12 +283,16 @@ public sealed partial class SidekickApp
     /// judged and said into <paramref name="lines"/>, then the next pass's message, or null once the audit is over (its summary, the report's
     /// status, the stop's line and the no-pane lines).
     /// </summary>
-    private string? HeadlessAuditAfterTurn(AuditSession audit, WorkingDirectory files, IReadOnlyList<string> tools, bool cancelled, bool turnFailed, List<string> lines, PlanPassMeter? meter)
+    private string? HeadlessAuditAfterTurn(AuditSession audit, WorkingDirectory files, HeadlessTurn turn, IReadOnlyDictionary<string, SeenStamp>? viewedMark, List<string> lines, out bool retry, PlanPassMeter? meter)
     {
+        retry = false;
         if (audit.Running is not { Pending: false } loop || audit.Path is not { } path)
         {
             return null;
         }
+
+        bool cancelled = turn.Cancelled;
+        bool turnFailed = turn.Failed;
 
         // The report is the audit's own folder's, whatever the working directory is now (2026-10-19); a move ends the audit, as on the screen.
         bool moved = audit.Moved;
@@ -303,15 +308,40 @@ public sealed partial class SidekickApp
             audit.Stop();
             return null;
         }
-        // The coverage once (2026-10-20, a review), and the pass recorded on a move too, as on the screen; a failed turn is no pass that ended on its
-        // own (2026-10-20, a review: headless counted it as one, and kept sending passes to a server that was down).
+        // A failed turn is no pass that ended on its own (2026-10-20, a review: headless counted it as one, and kept sending passes to a server that
+        // was down), but one the tool cap ended is (2026-11-17); then the screen's order, with no message ever waiting: one retry, one follow-up.
+        // A move goes on to the merge and stops, so neither is taken then.
+        bool onItsOwn = !cancelled && (!turnFailed || turn.Failure == TurnFailure.ToolCap) && !moved;
+        loop.NoteAdvisor(turn.Trace.ToolNames.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal));
+        if (!moved && !cancelled && turnFailed && turn.Failure == TurnFailure.Transient && loop.TakeRetry())
+        {
+            // Before the merge: the dropped turn's reads are forgotten, so the retry is asked for those files again.
+            DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.RetryLogLine(loop.Pass, null));
+            if (viewedMark is not null)
+            {
+                audit.ForgetViewedSince(viewedMark);
+            }
+
+            lines.Add(AuditText.RetryNotice(audit.Name, loop.Pass, HeadlessPassRetryWaitForTests));
+            retry = true;
+            return null;
+        }
+
+        if (onItsOwn && loop.Presented == 0 && loop.TakeFollowUp())
+        {
+            DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.FollowUpLogLine(loop.Pass, turn.Failure == TurnFailure.ToolCap));
+            return AuditText.FollowUpMessage(audit.Name, loop.Pass);
+        }
+
+        // The coverage once (2026-10-20, a review), and the pass recorded on a move too, as on the screen.
         var coverage = audit.Coverage();
         AuditFiles.MergeCoverage(files, path, coverage.Viewed);
         string? body = AuditFiles.Read(files, path)?.StallBody();
-        var next = loop.Next(!cancelled && !turnFailed && !moved, userSpoke: false, body, meter);
+        var next = loop.Next(onItsOwn, userSpoke: false, body, meter);
         var stop = moved ? PlanGapStop.Stopped : next;
-        bool advisorAsked = tools.Contains(Llm.Tools.NeonAdvisorTool.ToolName, StringComparer.Ordinal);
+        bool advisorAsked = loop.AdvisorAskedThisPass;
         DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, loop.History.Count > 0 ? loop.History[^1] : null));
+        DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.ShadowLogLine(loop.Pass, audit.EndShadowPass(loop.Pass), loop.CleanPasses, stop, loop.PassClean, loop.CleanCount));
         if (stop is not { } reason)
         {
             lines.Add(loop.PassGaps.Count > 0
@@ -321,7 +351,7 @@ public sealed partial class SidekickApp
         }
 
         string name = audit.Name;
-        lines.AddRange(AuditText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses, audit.Focus));
+        lines.AddRange(AuditText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses, audit.Focus, coverage.Read, coverage.Scope));
         int clean = reason == PlanGapStop.Converged ? loop.CleanPasses : loop.PassClean ? loop.CleanCount : 0;
         bool anyOpen = false;
         if (AuditFiles.Read(files, path) is { } report)
@@ -342,7 +372,7 @@ public sealed partial class SidekickApp
 
         audit.Stop();
         lines.Add(moved ? AuditText.WorkdirMovedNotice(name, root)
-            : reason == PlanGapStop.Converged ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope)
+            : reason == PlanGapStop.Converged ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope, pane: false, coverage.Unread.Count)
             : AuditText.StopNotice(reason, name, loop.Pass));
         if (reason is PlanGapStop.Converged or PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed)
         {

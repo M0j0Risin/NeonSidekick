@@ -2349,6 +2349,42 @@ public sealed class WorkingDirectory
         return viewed is not null && StampOf(full) is { } now && now == viewed;
     }
 
+    /// <summary>
+    /// The files viewed so far (<see cref="MarkViewed(string)"/>), each with its stamp (2026-11-17, the gap-audit-reliability plan): taken as an
+    /// audit's pass turn is sent, so a turn dropped for a retry forgets what it read (<see cref="ForgetViewedSince"/>).
+    /// </summary>
+    public IReadOnlyDictionary<string, SeenStamp> ViewedMark()
+    {
+        lock (_seenGate)
+        {
+            return new Dictionary<string, SeenStamp>(_viewed, PathComparer);
+        }
+    }
+
+    /// <summary>
+    /// The views put back as they were at <paramref name="mark"/> (2026-11-17): a file viewed since forgotten, and one viewed again since
+    /// given its marked stamp back, since a file read before the mark and changed since was unread (<see cref="WasViewed"/>) until the
+    /// dropped turn read it anew.
+    /// </summary>
+    public void ForgetViewedSince(IReadOnlyDictionary<string, SeenStamp> mark)
+    {
+        ArgumentNullException.ThrowIfNull(mark);
+        lock (_seenGate)
+        {
+            foreach (string path in _viewed.Keys.ToList())
+            {
+                if (mark.TryGetValue(path, out var stamp))
+                {
+                    _viewed[path] = stamp;
+                }
+                else
+                {
+                    _viewed.Remove(path);
+                }
+            }
+        }
+    }
+
     /// <summary>Every file forgotten as seen and as viewed: the session is (<c>/new</c>, <c>/clear</c>, a profile switch).</summary>
     public void ForgetSeen()
     {

@@ -374,6 +374,8 @@ public class PlanTests : IDisposable
     [InlineData("Template", true, "Template")]
     [InlineData("template for the release notes", false, "Enter")]
     [InlineData("template for the release notes", true, "Detail")]
+    [InlineData("gaps resume", true, "ResumeGaps")]   // 2026-11-17
+    [InlineData("gaps resume", false, "NotPlanning")]
     public void ParsePlanArgs_SubcommandsOnlyWhole(string args, bool planning, string expected) =>
         Assert.Equal(expected, ChatScreen.ParsePlanArgs(args, planning).ToString());
 
@@ -459,6 +461,9 @@ public class PlanTests : IDisposable
         var presented = nothing with { Presented = true };
         Assert.Empty(Items("gaps ", planning: true, nothing));
         Assert.Equal(ChatScreen.PlanGapsReviewers.Select(r => r.Text), Items("gaps ", planning: true, presented).Select(i => i.Text));
+        // gaps resume only while a review is paused (2026-11-17).
+        Assert.Equal([.. ChatScreen.PlanGapsReviewers.Select(r => r.Text), "gaps resume"], Items("gaps ", planning: true, presented with { Paused = true }).Select(i => i.Text));
+        Assert.Equal(["gaps resume"], Items("gaps r", planning: true, presented with { Paused = true }).Select(i => i.Text));
         Assert.DoesNotContain(Items("g", planning: true, nothing), i => i.Text.StartsWith("gaps", StringComparison.Ordinal));
         Assert.Equal(["edit other", "edit " + PlanFiles.TemplateName], Items("edit ", planning: false, nothing).Select(i => i.Text));
         Assert.Equal(["open --chat", "open other"], Items("open ", planning: false, nothing).Select(i => i.Text));   // the switch among the plans (2026-10-27)
@@ -486,6 +491,9 @@ public class PlanTests : IDisposable
     [InlineData("model three", "NotGaps", null, null, "")]
     [InlineData("in the auth flow", "NotGaps", null, null, "")]
     [InlineData("confirm 3", "Ok", "Confirm", 3, "")]
+    [InlineData("resume", "Resume", null, null, "")]   // 2026-11-17: only alone
+    [InlineData(" RESUME ", "Resume", null, null, "")]
+    [InlineData("resume 3", "NotGaps", null, null, "")]   // with a word beside it, plan detail as today
     public void ParseGapsArgs_ReadsAReviewerAndACount(string after, string expected, string? reviewer, int? passes, string word)
     {
         var outcome = PlanText.ParseGapsArgs(after, out var named, out int? count, out string fault);
@@ -543,7 +551,7 @@ public class PlanTests : IDisposable
     public void GapsWords_ThePinnedSentences()
     {
         Assert.Equal("'101' passes: /plan gaps takes 0 to 100, 0 for no cap", PlanText.GapPassesRangeError("101"));
-        Assert.Equal("No reviewer named 'x': /plan gaps takes model, advisor, any or confirm, and a pass count (0–100)", PlanText.UnknownReviewerError("x"));
+        Assert.Equal("No reviewer named 'x': /plan gaps takes model, advisor, any or confirm, and a pass count (0–100), or resume", PlanText.UnknownReviewerError("x"));
         Assert.Equal(PlanText.Glyph + " /plan gaps 0 means no limit, but headless has no Esc: at most 100 passes.", PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses, fromCommand: true));
         Assert.Equal(PlanText.Glyph + " Plan gap max passes is 0 (no limit), but headless has no Esc: at most 100 passes.", PlanText.GapsHeadlessCapNotice(Settings.AppSettingsData.MaxPlanGapPasses));
     }

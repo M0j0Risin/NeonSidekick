@@ -142,7 +142,46 @@ public sealed class PlanSession
     public PlanGapLoop StartClosing(PlanReviewer reviewer, int limit, int cleanPasses = 1)
     {
         Talking = false;
+        Paused = null;
+        PausedFingerprint = null;
         return Closing = new PlanGapLoop(reviewer, limit, cleanPasses);
+    }
+
+    /// <summary>
+    /// A gap review paused for the user's message (2026-11-17, the gap-audit-reliability plan: a message stopped it, and a new
+    /// <c>/plan gaps</c> started over at pass 1 with its streak gone): its passes, history and streak kept for <c>/plan gaps resume</c>.
+    /// Dropped by <see cref="Exit"/>, <see cref="StartClosing"/> and <see cref="Approve(bool)"/>; in-session only, never in the session row.
+    /// </summary>
+    public PlanGapLoop? Paused { get; private set; }
+
+    /// <summary>The plan body's fingerprint as <see cref="Paused"/> paused (<see cref="PlanDocument.Fingerprint"/>): an edit since refuses the resume.</summary>
+    public string? PausedFingerprint { get; private set; }
+
+    /// <summary>The running loop paused (2026-11-17) over a body of <paramref name="fingerprint"/>; nothing runs after it.</summary>
+    public void PauseClosing(string fingerprint)
+    {
+        ArgumentNullException.ThrowIfNull(fingerprint);
+        Paused = Closing;
+        PausedFingerprint = Paused is null ? null : fingerprint;
+        Closing = null;
+    }
+
+    /// <summary>
+    /// The paused loop running again (2026-11-17), when the plan's body still has <paramref name="fingerprint"/>; talking ends, as at
+    /// <see cref="StartClosing"/>. Null, nothing changed, when nothing is paused or the plan changed since.
+    /// </summary>
+    public PlanGapLoop? ResumeClosing(string fingerprint)
+    {
+        if (Paused is not { } loop || !string.Equals(PausedFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        Talking = false;
+        Closing = loop;
+        Paused = null;
+        PausedFingerprint = null;
+        return loop;
     }
 
     /// <summary>
@@ -276,10 +315,28 @@ public sealed class PlanSession
     }
 
     /// <summary>The approval noted, to act on when the turn ends.</summary>
-    public void Approve(bool fresh) => Approved = fresh ? PlanChoice.ApproveFresh : PlanChoice.Approve;
+    public void Approve(bool fresh)
+    {
+        Approved = fresh ? PlanChoice.ApproveFresh : PlanChoice.Approve;
+        DropPaused();
+    }
 
     /// <summary>The approval <paramref name="choice"/> noted (2026-10-18: a Ralph loop's too); any other choice notes none.</summary>
-    public void Approve(PlanChoice choice) => Approved = choice is PlanChoice.Approve or PlanChoice.ApproveFresh or PlanChoice.ApproveRalph ? choice : Approved;
+    public void Approve(PlanChoice choice)
+    {
+        if (choice is PlanChoice.Approve or PlanChoice.ApproveFresh or PlanChoice.ApproveRalph)
+        {
+            Approved = choice;
+            DropPaused();
+        }
+    }
+
+    // A paused review is over once the plan is approved, a review starts afresh, or plan mode ends (2026-11-17).
+    private void DropPaused()
+    {
+        Paused = null;
+        PausedFingerprint = null;
+    }
 
     /// <summary>A noted approval dropped (the reply that gave it was stopped): the plan stays presented, for <c>/plan approve</c>.</summary>
     public void ClearApproval() => Approved = null;
@@ -297,6 +354,7 @@ public sealed class PlanSession
         Created = null;
         Approved = null;
         Closing = null;
+        DropPaused();
     }
 
     /// <summary>The session row's copy; null while plan mode is off.</summary>

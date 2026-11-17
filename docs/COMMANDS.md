@@ -342,6 +342,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/plan cancel` | Leaves plan mode; the file is kept, marked `canceled`. |
 | `/plan save [<name>]` | Keeps a reply that looks like a plan as the plan. |
 | `/plan gaps [model\|advisor\|any\|confirm] [passes]` | Reviews the plan pass after pass until passes in a row find no gaps; a count caps this run. See [Closing gaps](#closing-gaps). |
+| `/plan gaps resume` | Goes on with a gap review your message paused, at its next pass with its clean streak kept. Refused once the plan changed. |
 | `/plan chat` | Starts plan mode to talk a plan through, nothing sent; the model writes the plan when you ask. While planning, it turns talking back on. |
 | `/plan ready` | Asks for the plan now; once one is presented, opens its approval pane on the current revision without a new turn. |
 | `/plan open <name>` | Picks a plan up again; approving runs only the unticked steps. |
@@ -386,7 +387,10 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Who reviews** (with advisors offered): the model alone (`m`), a fitting advisor (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
 * **Unattended:** with *Plan gap ask user* off (or no `ask_user`), a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, not a gap.
 * **The plan's shape:** no clean end while a step lacks `Done when:`, one step is oversized, steps sit outside `## Steps` or a parent has a by-hand check. A plan too long for a Ralph pass to send whole is noted, not a gap.
-* **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on a typed message or Esc; at the count given or *Plan gap max passes*.
+  * A clean pass that drops unfinished steps, ticks or sections, or cuts much of the plan, is refused; a pass with gaps is told what it dropped.
+* **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on Esc; at the count given or *Plan gap max passes*.
+  * A server failure is tried once more; a pass that ends without `present_plan` is asked for it once.
+  * A message (PC or Web UI) pauses it after the pass: `/plan gaps resume` goes on, `/plan show` says where it stands.
   * A clean pass at the limit returns the pane unconfirmed; a limit below the clean count lowers that count for the run.
   * A stop you didn't cause, or a failed pass, rings *Plan gap stop tone*; a finished review rings as its pane opens.
 * **The record:** a stop lists every pass (gaps, minor fixes, focus, time, tokens); a review that ends on its own writes a `review:` line into the header. `/plan open` then shows `confirmed` (2+ clean passes), `reviewed` (one) or `edited since review` (ticking steps is no edit; a new revision drops the line).
@@ -445,7 +449,10 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
   * Then nits, open questions, coverage, what clean passes checked and retracted findings.
   * A finding needs its file read this session (a window is enough, a diff is not); `<name>.coverage.txt` keeps the files read, for `resume`. Edit the report as it runs: a ticked box settles a finding, reporting it again reopens it.
 * **Clean passes:** it ends after *Code audit clean passes* in a row find nothing new; a pass after a clean one reads unread files first. *Code audit pass tool calls* guides, never cuts off. The pane says how much of the scope was read.
+  * Only an audit that read the whole scope says "converged"; short of it, the end says how much it read and the way on.
+* **Retractions:** a retracted finding reported again is refused unless it says, in `reopen`, why the retraction was wrong; then it comes back under its own id.
 * **When it stops:** the clean passes, the pass limit, the same findings again, a pass with no `present_audit`, a message (PC or Web UI), Esc, `/new`, `/clear`, a profile switch or a working directory change (the report stays in its folder). Each stop says why; `/code-audit resume <name>` runs more.
+  * A server failure is tried once more; a pass that ends without `present_audit` is asked for it once.
   * A stop you didn't cause, a failed pass or a working directory change rings *Code audit stop tone*.
 * **The pane** shows the open findings and its choices, on the Web UI page too ([keys](INTERFACE.md#pane-keys)):
   * **Fix via plan:** plan mode on the open findings, the report marked `fixing`. **More passes…:** the reviewer page when advisors are offered.

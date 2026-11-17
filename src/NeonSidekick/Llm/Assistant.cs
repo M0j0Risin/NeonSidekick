@@ -2285,10 +2285,12 @@ public sealed class Assistant
                 }
 
                 // One readable line with the way on when the failure is one a user can act on (2026-10-04, the UI review); the
-                // chain stays in the log above, and a failure this loop has its own hint for keeps the chain and the hint.
+                // chain stays in the log above, and a failure this loop has its own hint for keeps the chain and the hint. A failure that may pass
+                // on its own is marked (2026-11-17, the gap-audit-reliability plan), for a loop's pass to send once more.
                 yield return new TurnEvent.Notice(
                     !hinted && !LooksLikeRequestTimeout(failure!) && (tooLongText ?? ModelErrorText.Readable(failure!)) is { } readable ? readable : "Model error: " + explained,
-                    IsError: true);
+                    IsError: true,
+                    Failure: tooLongText is null && ModelErrorText.IsTransient(failure!) ? TurnFailure.Transient : TurnFailure.None);
                 yield break;
             }
 
@@ -2504,7 +2506,7 @@ public sealed class Assistant
 
         DiagnosticLog.Warn(Category, $"Stopped after {MaxToolIterations} tool iterations without a final answer.");
         log.Ending = TurnStopped;
-        yield return new TurnEvent.Notice($"Stopped after {MaxToolIterations} tool iterations without a final answer.", IsError: true);
+        yield return new TurnEvent.Notice($"Stopped after {MaxToolIterations} tool iterations without a final answer.", IsError: true, Failure: TurnFailure.ToolCap);
     }
 
     /// <summary>

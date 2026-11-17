@@ -64,9 +64,11 @@ public abstract record TurnEvent
     /// <summary>
     /// Something the user should see that is not reply text: a timeout, a server error, an iteration cap. <paramref name="AskAgain"/>: the
     /// host adds <see cref="TurnText.AskAgain"/> unless a loop's pass runs (2026-10-30, review F96: a stopped call in an audit pass said
-    /// "ask again" over the audit's own resume line).
+    /// "ask again" over the audit's own resume line). <paramref name="Failure"/> (2026-11-17, the gap-audit-reliability plan) is what kind of
+    /// failure an error notice reports, for a gap review's or an audit's pass to retry a server blip once or follow up a pass the tool cap
+    /// ended; <see cref="TurnFailure.None"/> for every other notice.
     /// </summary>
-    public sealed record Notice(string Text, bool IsError, bool AskAgain = false) : TurnEvent;
+    public sealed record Notice(string Text, bool IsError, bool AskAgain = false, TurnFailure Failure = TurnFailure.None) : TurnEvent;
 
     /// <summary>
     /// What one model request cost, raised after its stream completed and before its tool calls
@@ -100,4 +102,21 @@ public abstract record TurnEvent
     /// (<c>LlmSession.NoteServerLimit</c>, 2026-11-10, D4) and says so once.
     /// </summary>
     public sealed record ServerLimit(int Tokens) : TurnEvent;
+}
+
+/// <summary>
+/// What kind of failure an error <see cref="TurnEvent.Notice"/> reports (2026-11-17, the gap-audit-reliability plan): the loops' passes
+/// (<c>/plan gaps</c>, <c>/code-audit</c>) retry a <see cref="Transient"/> one once and treat a <see cref="ToolCap"/> one as a pass that
+/// ended on its own. Not named NoticeKind: <c>MenuPane.NoticeKind</c> already is.
+/// </summary>
+public enum TurnFailure
+{
+    /// <summary>No failure, or one no pass retries (a budget, a runaway call, a context overflow, a request timeout).</summary>
+    None,
+
+    /// <summary>The server failed in a way that may pass (<see cref="ModelErrorText.IsTransient"/>): refused, reset, 429, 5xx, a cut stream.</summary>
+    Transient,
+
+    /// <summary>The turn hit <c>LLM max tool iterations</c> without a final answer.</summary>
+    ToolCap,
 }

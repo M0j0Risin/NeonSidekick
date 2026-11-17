@@ -78,7 +78,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(ProgressStart(AuditText.PassDoneNotice(1, 5, 1, 0, 1, 1)), output);
         Assert.Contains(ProgressStart(AuditText.CleanPassNotice(2, 5, 1, 2)), output);
-        Assert.Contains(ProgressStart(AuditText.ConvergedNotice(Path.GetFileNameWithoutExtension(AuditPath), 3, 2, 1, 1)), output);
+        Assert.Contains(ProgressStart(AuditText.ConvergedNotice(Path.GetFileNameWithoutExtension(AuditPath), 3, 2, 1, 1, pane: true)), output);
         Assert.DoesNotContain(ProgressStart("🔎 Pass 1: A1 [high]"), output);
     }
 
@@ -87,8 +87,22 @@ public partial class ChatScreenTests
     {
         AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
         ThreePasses();
+        var shadow = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith(AuditText.ShadowLogPrefix, StringComparison.Ordinal)) shadow.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
 
-        string output = await RunAsync();
+        // The shadow rule's line every pass (2026-11-17, step 8), on the screen too.
+        Assert.Equal(3, shadow.Count);
+        Assert.Contains("shadow streak 2 of 2, would converge", shadow[2]);
 
         Assert.Equal(7, _chat.Requests.Count);
         string path = AuditPath;
@@ -111,7 +125,7 @@ public partial class ChatScreenTests
         Assert.Contains(AuditText.PassDoneNotice(1, 5, 1, 0, 1, 1), output);
         Assert.Contains(AuditText.CleanPassNotice(2, 5, 1, 2), output);
         string name = Path.GetFileNameWithoutExtension(path);
-        Assert.Contains(AuditText.ConvergedNotice(name, 3, 2, 1, 1), output);
+        Assert.Contains(AuditText.ConvergedNotice(name, 3, 2, 1, 1, pane: true), output);
         Assert.Contains(AuditText.Glyph + " Code audit, 3 passes", output);
         // The findings table before the pane, the pane's title and keys, Enter on Keep.
         Assert.Contains("  A1    high     src/a.cs:3  SQL built from input", output);
@@ -250,12 +264,14 @@ public partial class ChatScreenTests
         _chat.Enqueue(FindingCall("a1"));     // 1
         _chat.EnqueueText("Pass 1.");         // 2: the limit: the pane; Esc keeps
         _chat.EnqueueText("Which database is this?");   // 3: resume's pass 1 asks in prose: no report
+        _chat.EnqueueText("I need the database first.");   // 4: its one follow-up (2026-11-17): still no report
 
         string output = await RunAsync();
 
         string name = Path.GetFileNameWithoutExtension(AuditPath);
         Assert.Contains(AuditText.StopNotice(PlanGapStop.Limit, name, 1), output);
         Assert.Contains(AuditText.ResumedNotice(name, newest: true), output);
+        Assert.Equal(AuditText.FollowUpMessage(name, 1), LastUserText(_chat.Requests[4]));
         Assert.Contains(AuditText.StopNotice(PlanGapStop.NoRevision, name, 1), output);
         Assert.Contains("ended without calling present_audit", output);
         Assert.Equal(AuditStatus.Stopped, AuditReportNow.Header.Status);

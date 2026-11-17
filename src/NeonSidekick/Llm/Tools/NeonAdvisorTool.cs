@@ -69,6 +69,7 @@ public sealed class NeonAdvisorTool : AIFunction
     private readonly Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? _confirm;
     private readonly IAdvisorView? _view;
     private readonly Action<TokenUsage, int>? _spent;
+    private readonly Func<bool>? _inPass;
     private int _calls;
 
     /// <param name="host">The advisors' profiles and links.</param>
@@ -83,7 +84,12 @@ public sealed class NeonAdvisorTool : AIFunction
     /// Told what each answer's requests used, the requests that reported and their tokens summed (2026-10-10, found comparing botchat with
     /// the advisors: neither was counted on <c>/usage</c>); a failed or cancelled answer's too, those requests having been made. Null counts nothing.
     /// </param>
-    public NeonAdvisorTool(IAdvisorHost host, Func<AppSettingsData> effective, Func<string> master, AdvisorThreads threads, Func<(IReadOnlyList<AIFunction> Tools, string Rules)> offered, Func<IReadOnlyList<ChatMessage>> history, Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? confirm = null, IAdvisorView? view = null, Action<TokenUsage, int>? spent = null)
+    /// <param name="inPass">
+    /// Whether a gap review's or a code audit's pass runs (2026-11-17, the gap-audit-reliability plan): a call then answers without the
+    /// advisor's thread and without the recent messages, as the Ralph loop's reviewer asks, so an advisor never reviews a plan or code
+    /// with its own earlier advice before it. Null is never.
+    /// </param>
+    public NeonAdvisorTool(IAdvisorHost host, Func<AppSettingsData> effective, Func<string> master, AdvisorThreads threads, Func<(IReadOnlyList<AIFunction> Tools, string Rules)> offered, Func<IReadOnlyList<ChatMessage>> history, Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? confirm = null, IAdvisorView? view = null, Action<TokenUsage, int>? spent = null, Func<bool>? inPass = null)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
@@ -94,6 +100,7 @@ public sealed class NeonAdvisorTool : AIFunction
         _confirm = confirm;
         _view = view;
         _spent = spent;
+        _inPass = inPass;
     }
 
     public override string Name => ToolName;
@@ -162,8 +169,9 @@ public sealed class NeonAdvisorTool : AIFunction
         }
 
         string context = ToolArguments.ReadString(arguments, ContextArgument);
-        var recent = AdvisorContextMode.IsRecent(effective.AdvisorContext) ? AdvisorRecent.Lines(_history()) : null;
-        return await AskAsync(advisor, question, context, recent, effective, cancellationToken).ConfigureAwait(false);
+        bool pass = _inPass?.Invoke() == true;
+        var recent = !pass && AdvisorContextMode.IsRecent(effective.AdvisorContext) ? AdvisorRecent.Lines(_history()) : null;
+        return await AskAsync(advisor, question, context, recent, effective, cancellationToken, thread: !pass).ConfigureAwait(false);
     }
 
     /// <summary>

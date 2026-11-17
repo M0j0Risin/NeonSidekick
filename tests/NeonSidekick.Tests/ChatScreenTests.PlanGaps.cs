@@ -299,15 +299,17 @@ public partial class ChatScreenTests
         _chat.Enqueue(PresentPlanCall());
         _chat.EnqueueText("Closing the gaps.");
         _chat.EnqueueText("Which test framework do you use?");      // pass 1: a question in prose, no revision
+        _chat.EnqueueText("I need to know the framework first.");   // its one follow-up (2026-11-17): still no revision
         _chat.Enqueue(PresentGapsCall("p2", PlanMarkdown));          // /plan gaps: pass 1 again, nothing left; cancelled on the pane
         _chat.EnqueueText("Canceled.");
 
         string output = await RunAsync();
 
-        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Equal(6, _chat.Requests.Count);
+        Assert.Equal(PlanText.GapFollowUpMessage(PlanPath, 1), LastUserText(_chat.Requests[3]));
         Assert.Contains(PlanText.GapStopNotice(PlanGapStop.NoRevision, 1, 0), output);
-        Assert.Equal(PlanText.GapPassMessage(PlanPath, 1, 5, PlanReviewer.Model), LastUserText(_chat.Requests[3]));
-        Assert.Equal(PlanText.CancelledResult(PlanPath), PlanResultOf(_chat.Requests[4], "p2"));
+        Assert.Equal(PlanText.GapPassMessage(PlanPath, 1, 5, PlanReviewer.Model), LastUserText(_chat.Requests[4]));
+        Assert.Equal(PlanText.CancelledResult(PlanPath), PlanResultOf(_chat.Requests[5], "p2"));
         // Canceled on the converged pane (2026-10-17): the review is still said and recorded before plan mode ends, never lost.
         Assert.Contains(PlanText.ConvergedNotice(PlanPath, 1, 0), output);
         Assert.Equal(PlanText.ReviewLine(1, 0, PlanGapStop.Converged, 1, PlanDocument.Fingerprint(PlanDocument.Body(File.ReadAllText(PlanFile)))), PlanDocument.TryParse(File.ReadAllText(PlanFile))!.Review);

@@ -81,6 +81,52 @@ public static class ModelErrorText
     }
 
     /// <summary>
+    /// Whether <paramref name="ex"/> is a server failure that may pass on its own (2026-11-17, the gap-audit-reliability plan: a gap review's
+    /// or an audit's pass is sent once more after one): the connection refused, reset, aborted, timed out or unreachable; HTTP 429 or 5xx
+    /// (the OpenAI SDK's, and the two hand-written clients' by status or, mid-stream with status 0, by their error kind); a stream cut short.
+    /// Never a context overflow (checked first, as <see cref="Readable"/> does: LM Studio sends it as a 500), the request timeout (another
+    /// wait of it could be an hour, and a one-slot server would still be busy with the request the client gave up on), a spent quota, a
+    /// name that does not resolve, or a refused key. Pure.
+    /// </summary>
+    public static bool IsTransient(Exception ex)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        if (ContextOverflowMatch.From(ex) is not null || Assistant.LooksLikeRequestTimeout(ex))
+        {
+            return false;
+        }
+
+        foreach (var current in Assistant.ExceptionChain(ex))
+        {
+            switch (current)
+            {
+                case SocketException socket:
+                    return socket.SocketErrorCode is SocketError.ConnectionRefused or SocketError.ConnectionReset or SocketError.ConnectionAborted
+                        or SocketError.TimedOut or SocketError.HostUnreachable or SocketError.NetworkUnreachable;
+                case ClientResultException { Status: > 0 } failed:
+                    return TransientStatus(failed.Status, failed.Message + " " + Assistant.ServerDetail(failed));
+                case NeonSidekick.Llm.OpenAIPlatform.OpenAIApiException openAi:
+                    return openAi.Status > 0
+                        ? TransientStatus(openAi.Status, openAi.ErrorType + " " + openAi.Message)
+                        : openAi.ErrorType is "server_error" or "rate_limit_exceeded";
+                case NeonSidekick.Llm.Anthropic.AnthropicApiException anthropic:
+                    return anthropic.Status > 0
+                        ? TransientStatus(anthropic.Status, anthropic.ErrorType)
+                        : anthropic.ErrorType is "overloaded_error" or "api_error" or "rate_limit_error";
+                case IOException io when io.Message is NeonSidekick.Llm.OpenAIPlatform.OpenAIApiChatClient.StreamCutMessage
+                    or NeonSidekick.Llm.Anthropic.AnthropicChatClient.StreamCutMessage:
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    // 429 and 5xx, but never a spent quota (the OpenAI API's insufficient_quota, as OpenAIApiChatClient.IsRetryable reads it).
+    private static bool TransientStatus(int status, string text) =>
+        (status == 429 && !text.Contains("insufficient_quota", StringComparison.Ordinal)) || status is >= 500 and < 600;
+
+    /// <summary>
     /// What to do about a request too long for the window (2026-11-10, review P3-8/P9-4): <c>/compact</c>, the tool compact mode, and the
     /// window, which a lower <c>LLM context length</c> makes the guard act within while the server's own is set on the server. Pinned.
     /// </summary>

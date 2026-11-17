@@ -115,6 +115,12 @@ public static class PlanText
     /// </summary>
     public const string GapsWord = "gaps";
 
+    /// <summary>
+    /// <c>/plan gaps resume</c> (2026-11-17, the gap-audit-reliability plan): a review paused for the user's message goes on at its next
+    /// pass, its streak kept. Only as the one word after <c>gaps</c>.
+    /// </summary>
+    public const string ResumeWord = "resume";
+
     /// <summary>The reviewer words <c>/plan gaps</c> takes, in <see cref="PlanReviewer"/>'s order.</summary>
     public static readonly IReadOnlyList<string> ReviewerWords = ["model", "advisor", "any", "confirm"];
 
@@ -138,7 +144,7 @@ public static class PlanText
 
     /// <summary>
     /// The words after <c>/plan gaps</c> (2026-10-17): none, a reviewer, a pass count, or one of each in either order is
-    /// <see cref="GapsArgs.Ok"/>; one other word <see cref="GapsArgs.Unknown"/>; a count outside 0–100 (a sign, an overflow)
+    /// <see cref="GapsArgs.Ok"/>; <see cref="ResumeWord"/> alone <see cref="GapsArgs.Resume"/> (2026-11-17); one other word <see cref="GapsArgs.Unknown"/>; a count outside 0–100 (a sign, an overflow)
     /// <see cref="GapsArgs.OutOfRange"/>; anything else <see cref="GapsArgs.NotGaps"/>, plan detail. <paramref name="word"/> is the
     /// word at fault, else empty. Pure.
     /// </summary>
@@ -152,6 +158,11 @@ public static class PlanText
         if (words.Length > 2)
         {
             return GapsArgs.NotGaps;
+        }
+
+        if (words.Length == 1 && string.Equals(words[0], ResumeWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return GapsArgs.Resume;
         }
 
         string? numberWord = null;
@@ -197,7 +208,7 @@ public static class PlanText
     }
 
     public static string UnknownReviewerError(string word) =>
-        $"No reviewer named '{word}': /plan gaps takes model, advisor, any or confirm, and a pass count ({N(Settings.AppSettingsData.MinPlanGapPasses)}–{N(Settings.AppSettingsData.MaxPlanGapPasses)})";
+        $"No reviewer named '{word}': /plan gaps takes model, advisor, any or confirm, and a pass count ({N(Settings.AppSettingsData.MinPlanGapPasses)}–{N(Settings.AppSettingsData.MaxPlanGapPasses)}), or resume";
 
     /// <summary><c>/plan gaps 25</c> (2026-10-17): a pass count out of range, nothing started. Pinned.</summary>
     public static string GapPassesRangeError(string word) =>
@@ -421,11 +432,52 @@ public static class PlanText
         PlanGapStop.Unconfirmed => $"{Glyph} Gap review stopped at its limit after {Passes(passes)}, {Gaps(closed)} closed: the last pass found no gaps, but there was no pass left to check it again.",
         PlanGapStop.Stalled => $"{Glyph} Gap review stopped after {Passes(passes)}, {Gaps(closed)} closed: the plan stopped changing or the same gaps came back.",
         PlanGapStop.NoRevision => $"{Glyph} Gap review stopped: pass {N(passes)} saved no revision. /plan gaps starts a new review; /plan approve [--ralph] starts the plan.",
-        PlanGapStop.UserSpoke => $"{Glyph} Gap review stopped after {Passes(passes)} for your message. /plan gaps starts a new review.",
         _ => $"{Glyph} Gap review stopped at pass {N(passes)}, {Gaps(closed)} closed. /plan gaps starts a new review; /plan approve [--ralph] starts the plan.",
     };
 
     public const string GapsDroppedNotice = Glyph + " The gap review was chosen but the reply was stopped: /plan gaps starts it.";
+
+    /// <summary>
+    /// A gap review paused for the user's message (2026-11-17, the gap-audit-reliability plan: it stopped, and a new review started over):
+    /// the passes so far and the way on. Pinned.
+    /// </summary>
+    public static string GapsPausedNotice(int passes) =>
+        $"{Glyph} Gap review paused after {Passes(passes)} for your message. /plan gaps resume goes on.";
+
+    /// <summary><c>/plan</c>'s line for a paused review (2026-11-17, as the Ralph loop's show lines carry its pause). Pinned.</summary>
+    public static string PausedShowLine(int passes) =>
+        $"  Gap review paused after {Passes(passes)}: /plan gaps resume goes on";
+
+    /// <summary>
+    /// A pass that failed on the server's side, sent once more after <paramref name="wait"/> (2026-11-17, the gap-audit-reliability plan:
+    /// a server blip ended the review). Pinned.
+    /// </summary>
+    public static string GapRetryNotice(int pass, TimeSpan wait) =>
+        $"{Glyph} Gap review pass {N(pass)} failed (the server); trying it once more in {Seconds(wait)}.";
+
+    /// <summary>
+    /// What a pass that ended without <c>present_plan</c> is sent once (2026-11-17, the gap-audit-reliability plan: it ended the review
+    /// at once, NoRevision). Pinned.
+    /// </summary>
+    public static string GapFollowUpMessage(string path, int pass) =>
+        $"Gap review pass {N(pass)} ended without present_plan: call it now for {path} with the plan revised and gaps, or as it stands with gaps empty and checked.";
+
+    /// <summary>The <c>--log</c> line of a pass sent once more (2026-11-17), for phase 2's bench to count.</summary>
+    public static string RetryLogLine(int pass, string? failure) =>
+        $"plan gaps: pass {N(pass)} failed on the server's side; sent once more" + (string.IsNullOrEmpty(failure) ? "" : ": " + failure);
+
+    /// <summary>The <c>--log</c> line of a pass asked once for its report (2026-11-17).</summary>
+    public static string FollowUpLogLine(int pass, bool toolCap) =>
+        $"plan gaps: pass {N(pass)} ended without present_plan" + (toolCap ? " (the tool cap)" : "") + "; asked once";
+
+    /// <summary><c>/plan gaps resume</c> with no review paused (2026-11-17). Pinned.</summary>
+    public const string NothingPausedError = "No gap review is paused: /plan gaps starts one.";
+
+    /// <summary><c>/plan gaps resume</c> after the plan changed since the pause (2026-11-17): its passes judged another plan. Pinned.</summary>
+    public const string PausedPlanChangedError = "The plan changed since the gap review paused: /plan gaps starts a new review.";
+
+    /// <summary>A wait in whole seconds, invariant: <c>15 s</c>.</summary>
+    private static string Seconds(TimeSpan wait) => N((int)Math.Round(wait.TotalSeconds)) + " s";
 
     /// <summary>
     /// A gap pass's message that never reached a turn (2026-10-22, a review: no assistant, or a picture the model cannot see, and the review stayed
@@ -608,6 +660,10 @@ public static class PlanText
             lines.Add($"  Closing gaps: pass {PassOf(loop.Pass, loop.Limit)} ({ReviewerWord(loop.Reviewer)}), {Gaps(loop.Closed)} closed so far"
                 + (loop.CleanStreak > 0 ? $", {N(loop.CleanStreak)} of {CleanPassesWord(loop.CleanPasses)}" : ""));
         }
+        else if (session.Paused is { } paused)
+        {
+            lines.Add(PausedShowLine(paused.Pass));
+        }
 
         return lines;
     }
@@ -722,7 +778,7 @@ public static class PlanText
             (references is { Count: > 0 } pictures ? ReferencesLine(pictures) + "\n" : "") +
             "- Never write the plan only in your reply: call present_plan with it.\n" +
             "- present_plan shows the plan to the user for approval; follow its result.\n" +
-            (offered && gap?.Who is not PlanReviewer.Model ? AdvisorsLine(advisors!) + "\n" : "") +
+            (offered && gap?.Who is not PlanReviewer.Model ? AdvisorsLine(advisors!) + (gap is null ? "" : " " + PassAdvisorSentence) + "\n" : "") +
             (gap is { } review ? GapReviewLines(review, offered, web) + "\n" : "") +
             state;
     }
@@ -901,6 +957,13 @@ public static class PlanText
     }
 
     /// <summary>
+    /// What a gap review's or a code audit's pass is told of its advisors (2026-11-17, the gap-audit-reliability plan): in a pass a call goes
+    /// without the advisor's thread and the recent messages, so the call must carry what it needs; it overrides, for the pass, the tool's
+    /// own "it remembers your earlier questions". After the advisors bullet, in the bullet's line. Pinned.
+    /// </summary>
+    public const string PassAdvisorSentence = "During a review pass an advisor sees only your question and context: nothing of this conversation, and none of your earlier questions to it; put in what it needs.";
+
+    /// <summary>
     /// Plan mode's advisors bullet (2026-10-10, the user's ask: consult the advisors whose role matches the subject; their call, the
     /// plan's Context says whose advice it took): the advisors by name and role, consulted before the plan is presented, only where
     /// a role fits. Pinned.
@@ -1021,13 +1084,69 @@ public static class PlanText
     /// <summary>
     /// A clean pass on a plan with a structural problem (2026-10-21 for no step a loop can read; every structural problem since 2026-10-22, the user's
     /// call after a review: the review converged with them standing, <see cref="PlanFitReading.Structural"/>'s <paramref name="problems"/>): nothing
-    /// saved, no pass counted, as <see cref="CheckedRequiredResult"/>. A pass that never presents again ends NoRevision. Pinned.
+    /// saved, no pass counted, as <see cref="CheckedRequiredResult"/>. A pass that never presents again ends NoRevision, after one follow-up (2026-11-17). Pinned.
     /// </summary>
     public static string ShapeCleanResult(IReadOnlyList<string> problems)
     {
         ArgumentNullException.ThrowIfNull(problems);
         return $"Error: this pass found no gaps, but the app measured: {string.Join("; ", problems)}. Each is a gap: fix it in the plan, list it in gaps, and call present_plan again. " +
             "A step is a - [ ] line under ## Steps with an indented Done when: line, small enough for one fresh session; a step with sub-steps leaves a By hand: check to one of them.";
+    }
+
+    /// <summary>
+    /// A clean report whose revision lost content (2026-11-17, the gap-audit-reliability plan, <see cref="PlanLoss"/>): refused as
+    /// <see cref="ShapeCleanResult"/> is, nothing saved, no pass counted. Pinned.
+    /// </summary>
+    public static string LossCleanResult(PlanLossReport loss)
+    {
+        ArgumentNullException.ThrowIfNull(loss);
+        return $"Error: this pass found no gaps but removed {LossWords(loss)}. List each in gaps if it was meant, or put it back, and call present_plan again.";
+    }
+
+    /// <summary>What a gap revision's result adds when it lost content (2026-11-17): saved, the loss named for the next pass. Pinned.</summary>
+    public static string LossSentence(PlanLossReport loss)
+    {
+        ArgumentNullException.ThrowIfNull(loss);
+        return $"This revision removed {LossWords(loss)}; if any was not meant to go, put it back in the next pass.";
+    }
+
+    /// <summary>The <c>--log</c> line of a revision that lost content (2026-11-17), the lines named, for phase 2 to count.</summary>
+    public static string LossLogLine(int pass, PlanLossReport loss, bool refused)
+    {
+        ArgumentNullException.ThrowIfNull(loss);
+        return $"plan gaps: pass {N(pass)} " + (refused ? "clean report refused" : "revision saved") + ": removed " + LossWords(loss);
+    }
+
+    /// <summary>What a loss names: the unfinished steps, the boxes unticked, the sections, the share cut; each list at most five.</summary>
+    private static string LossWords(PlanLossReport loss)
+    {
+        var parts = new List<string>();
+        if (loss.Steps.Count > 0)
+        {
+            parts.Add((loss.Steps.Count == 1 ? "the unfinished step " : "the unfinished steps ") + Listed(loss.Steps));
+        }
+
+        if (loss.Unticked.Count > 0)
+        {
+            parts.Add((loss.Unticked.Count == 1 ? "the tick of " : "the ticks of ") + Listed(loss.Unticked));
+        }
+
+        if (loss.Sections.Count > 0)
+        {
+            parts.Add((loss.Sections.Count == 1 ? "the section " : "the sections ") + Listed(loss.Sections.Select(s => "## " + s).ToList()));
+        }
+
+        if (loss.ShrinkPercent is { } cut)
+        {
+            parts.Add($"{N(cut)}% of its length");
+        }
+
+        return string.Join("; ", parts);
+
+        static string Listed(IReadOnlyList<string> items) =>
+            string.Join(", ", items.Take(5).Select(i => "\"" + Clip(i.Trim(), 60) + "\"")) + (items.Count > 5 ? $" and {N(items.Count - 5)} more" : "");
+
+        static string Clip(string text, int max) => text.Length <= max ? text : text[..(max - 1)] + "…";
     }
 
     /// <summary>An empty gaps list during a review with no checked list (2026-10-17): nothing saved, no pass counted. Pinned.</summary>

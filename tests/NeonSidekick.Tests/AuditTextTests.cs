@@ -92,6 +92,8 @@ public sealed class AuditTextTests
         Assert.DoesNotContain("spend the pass on the files no pass has read first", AuditText.Directive(State(cleanSoFar: 1, confirmation: 1, unread: 0)));
         string advisor = AuditText.Directive(State(passReviewer: PlanReviewer.Advisor), [new AdvisorEntry("rex", "security")], [Llm.Tools.WebSearchTool.ToolName]);
         Assert.Contains("You have advisors with neon_advisor: rex (security).", advisor);
+        Assert.Contains(PlanText.PassAdvisorSentence, advisor);   // 2026-11-17: a pass's advisor sees only the question and context
+        Assert.DoesNotContain(PlanText.PassAdvisorSentence, AuditText.Directive(State(), [new AdvisorEntry("rex", "security")]));
         Assert.Contains("read every line they cite yourself and report only what you verified", advisor);
         Assert.Contains("You can look things up on the web with web_search", advisor);
         Assert.Contains("- No advisors are offered: audit it yourself.", AuditText.Directive(State(passReviewer: PlanReviewer.Advisor)));
@@ -137,8 +139,28 @@ public sealed class AuditTextTests
         Assert.Equal("5 passes, 2 clean in a row, 412 of 1,204 files read (34%)", AuditText.PassesLine(5, 2, 412, 1204));
         Assert.Equal("3 passes, 0 clean in a row, 1 of 2 files read (50%); limit", AuditText.PassesLine(3, 0, 1, 2, PlanGapStop.Limit));
         Assert.Equal("5 passes, 2 clean in a row, 1 of 2 files read (50%)", AuditText.PassesLine(5, 2, 1, 2, PlanGapStop.Converged));
-        Assert.Contains("with 34% of the scope read; More passes reads on", AuditText.ConvergedNotice("x", 5, 2, 412, 1204));
+        Assert.Equal("🔎 Code audit done: x converged after 2 clean passes in a row (5 passes), with 100% of the scope read; More passes reads on.", AuditText.ConvergedNotice("x", 5, 2, 9, 9, pane: true));
+        Assert.Equal("🔎 Code audit done: x converged after 2 clean passes in a row (5 passes), with 100% of the scope read.", AuditText.ConvergedNotice("x", 5, 2, 9, 9, pane: false));
         Assert.Equal("interrupted (Esc, a failure)", AuditText.StopWord(PlanGapStop.Stopped));
+    }
+
+    [Fact]
+    public void AConvergence_ShortOfTheScope_SaysWhatItRead_AndTheWayOn()
+    {
+        // 2026-11-17, the gap-audit-reliability plan: "converged" only with the whole scope read.
+        const string Head = "🔎 Code audit done: x found nothing new after 2 clean passes in a row (5 passes), but read 34% of the scope";
+        Assert.Equal(Head + "; More passes reads on.", AuditText.ConvergedNotice("x", 5, 2, 412, 1204, pane: true, unread: 792));
+        Assert.Equal(Head + "; /code-audit resume x reads on.", AuditText.ConvergedNotice("x", 5, 2, 412, 1204, pane: false, unread: 792));
+        // Only files past the listing's cap unread: more passes can't reach them, with a pane or without.
+        Assert.Equal(Head + ". " + AuditText.ScopeCutSentence, AuditText.ConvergedNotice("x", 5, 2, 412, 1204, pane: true));
+        Assert.Equal(Head + ". " + AuditText.ScopeCutSentence, AuditText.ConvergedNotice("x", 5, 2, 412, 1204, pane: false));
+
+        Assert.StartsWith("Nothing new: the audit converged after 3 passes (2 clean passes in a row); 4 of 4 files read (100%).", AuditText.ConvergedResult(3, 2, 4, 4));
+        Assert.StartsWith("Nothing new: the audit found nothing new after 3 passes (2 clean passes in a row), but only 1 of 4 files read (25%).", AuditText.ConvergedResult(3, 2, 1, 4));
+
+        var history = new List<PlanPassRecord> { new(1, 1, 0, false, 0, false), new(2, 0, 0, true, 0, false), new(3, 0, 0, true, 0, false) };
+        Assert.EndsWith("nothing new, 1 of 4 read", AuditText.ReviewSummaryLines(history, PlanGapStop.Converged, 2, ["security"], 1, 4)[^1]);
+        Assert.EndsWith("confirmed", AuditText.ReviewSummaryLines(history, PlanGapStop.Converged, 2, ["security"], 4, 4)[^1]);
     }
 
     [Fact]
