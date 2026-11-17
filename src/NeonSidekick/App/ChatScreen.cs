@@ -13199,7 +13199,8 @@ internal sealed partial class ChatScreen
     /// conversation, as at the start, and <c>Welcome splash</c> <c>disabled</c> still skips it; the saved line goes under it all.
     /// In three steps since 2026-11-17 (the admin-themes-render review's #76, #179, #196): <see cref="ApplyTheme"/>, <see cref="RepaintTheme"/>
     /// (the latest <see cref="ThemeRepaintTurns"/> turns; nothing without the pane), <see cref="ThemeLines"/> — a run's hand-over takes the
-    /// first alone and leaves the other two for the idle line (<see cref="_themeRepaintPending"/>).
+    /// first alone and leaves the other two for the idle line (<see cref="_themeRepaintPending"/>); an automation loop's takes the first and the
+    /// last, never the repaint (<see cref="InAutomationLoop"/>).
     /// </summary>
     private void RestartInTheme()
     {
@@ -13218,6 +13219,19 @@ internal sealed partial class ChatScreen
     /// </summary>
     private bool _themeRepaintPending;
 
+    /// <summary>
+    /// An automation loop under way (2026-11-17, the user's call after the admin-themes-render review): the Ralph loop, a gap review's passes
+    /// (<c>/plan gaps</c>) or a code audit's. A theme handed over at one of their turns' ends is put in force and said, never repainted: a repaint
+    /// draws only the conversation, which never holds a loop's pass headers, verdicts or summary, and a Ralph pass starts its own, so it would
+    /// wipe them, the earlier passes with them. What is already drawn keeps its colors until <c>/clear</c> or the next <c>/theme</c>. The loop's
+    /// state, not its driver's frame: the hand-over (<see cref="EndTurnAsync"/>) runs before a pass is judged, so the last pass's still counts,
+    /// while a plan approved on the pane a review brings back runs once the review is over, as an ordinary turn.
+    /// </summary>
+    private bool InAutomationLoop => _ralph is not null || _plan.Closing is { Pending: false } || _audit.Running is not null;
+
+    /// <summary>The theme repaints drawn, for the tests that hold one to happening, or not (2026-11-17).</summary>
+    private int _themeRepaints;
+
     /// <summary>The theme the settings name put in force, so what follows draws in it; the mark's shade follows on the pane's next frame.</summary>
     private void ApplyTheme() => ThemeName.Apply(_effective(), _settings.ThemesDirectory);
 
@@ -13230,6 +13244,7 @@ internal sealed partial class ChatScreen
         }
 
         bool empty = _session.History.TurnCount == 0;
+        _themeRepaints++;
         using (_pane.Batch())
         {
             RepaintConversation(StyledReply(_effective().TranscriptMarkdown, _pane.Enabled), refillStrip: false, theme: true);
@@ -14872,8 +14887,14 @@ internal sealed partial class ChatScreen
         if (changes.HasFlag(SettingsChanges.Theme))
         {
             // After the conversation switch (2026-11-16): the repaint keeps the conversation, so a pane that flipped LLM offer tools too
-            // clears the history first, then the screen is drawn once in the new colours. During a run only the theme is put in force.
-            if (run)
+            // clears the history first, then the screen is drawn once in the new colours. During a run only the theme is put in force; during an
+            // automation loop it is said too, and never repainted (InAutomationLoop).
+            if (InAutomationLoop)
+            {
+                ApplyTheme();
+                ThemeLines();
+            }
+            else if (run)
             {
                 ApplyTheme();
                 _themeRepaintPending = true;

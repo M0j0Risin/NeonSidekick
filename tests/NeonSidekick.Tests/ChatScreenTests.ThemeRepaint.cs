@@ -1,6 +1,7 @@
 using System.Text.Json;
 using NeonSidekick.App;
 using NeonSidekick.Llm;
+using NeonSidekick.Plans;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -120,6 +121,7 @@ public partial class ChatScreenTests
         PaneOf40Rows();
         _chat.EnqueueText("one").EnqueueText("two");
         string? inForce = null;
+        int repaints = -1;
         StepsWhenIdle(
             Line("hi"),
             input =>
@@ -129,16 +131,143 @@ public partial class ChatScreenTests
                 inForce = Theme.Current.Name;
                 PushLine(input, "again");
             },
-            Line("/exit"));
+            input => { repaints = _running!.ThemeRepaintsForTests; PushLine(input, "/exit"); });
 
         string output = await RunAsync();
 
         Assert.Equal("noir", inForce);   // put in force at the hand-over either way
+        Assert.Equal(1, repaints);   // one repaint, at once or at the idle line
         int saved = output.IndexOf("  · Theme: noir", StringComparison.Ordinal);
         int reply = output.LastIndexOf("two", StringComparison.Ordinal);
         Assert.True(saved >= 0, output);
         Assert.Equal(saved, output.LastIndexOf("  · Theme: noir", StringComparison.Ordinal));   // said once
         Assert.Equal(run, saved > reply);
+    }
+
+    /// <summary>
+    /// A theme handed over during a Ralph pass (2026-11-17, the user's call: never repainted during an automation loop): put in force and said at
+    /// once, and the loop's lines all stay. Each pass line, the steps' notices and the stop's summary are drawn once, never again by a repaint, then
+    /// or at the idle line. A main-chat hand-over still repaints at once (<see cref="Theme_HandedOverAtARunsEnd_RepaintsAtTheIdleLine_ElseAtOnce"/>).
+    /// </summary>
+    [Fact]
+    public async Task Theme_HandedOverDuringARalphPass_IsSaid_AndTheLoopsLinesStay()
+    {
+        using var theme = new ThemeScope();
+        RalphPlan();
+        RalphFixture();
+        _settings.Update(d => { d.WelcomeSplashMode = "off"; d.Theme = "synthwave"; });
+        RalphPass("1");
+        RalphPass("2");
+        string? inForce = null;
+        _chat.BeforeUpdateOf = async (request, update, _) =>
+        {
+            if (request == 1 && update == 0)
+            {
+                // Pass 1's closing reply: the hand-over a pane closed under it would make at the turn's end.
+                _settings.Update(d => d.Theme = "noir");
+                await _running!.HandOverForTestsAsync(SettingsChanges.Theme, run: false);
+                inForce = Theme.Current.Name;
+            }
+        };
+
+        int repaints = -1;
+        StepsWhenIdle(Line("/plan ralph add-guide"), Yes, input => { repaints = _running!.ThemeRepaintsForTests; PushLine(input, "/exit"); });
+
+        string output = await RunAsync();
+
+        Assert.Equal("noir", inForce);
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(0, repaints);   // neither at the hand-over nor at the idle line after the loop
+        // The transcript as the screen keeps it (its last copy, written out at the exit): every line of the loop, in order, the theme's in place.
+        string kept = output[output.LastIndexOf(RalphText.TranscriptLine(1, 1, 2, "One"), StringComparison.Ordinal)..];
+        string[] order =
+        [
+            RalphText.TranscriptLine(1, 1, 2, "One"), "  · Theme: noir", RalphText.StepDoneNotice(1, 2, "One"),
+            RalphText.TranscriptLine(2, 2, 2, "Two"), RalphText.StepDoneNotice(2, 2, "Two"), RalphText.StopNotice(RalphStop.Done, PlanPath, 2, 2),
+        ];
+        int at = -1;
+        foreach (string line in order)
+        {
+            int next = kept.IndexOf(line, at + 1, StringComparison.Ordinal);
+            Assert.True(next > at, line + " missing or out of order in:\n" + kept);
+            at = next;
+        }
+    }
+
+    /// <summary>The Ralph loop's passes are turns inside an automation loop; a turn once it has stopped is not (2026-11-17).</summary>
+    [Fact]
+    public async Task Ralph_ThePasses_AreInsideTheLoop_AndALaterTurnOutside()
+    {
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("after"), Line("/exit"));
+        RalphPass("1");
+        RalphPass("2");
+        _chat.EnqueueText("An ordinary turn.");
+        var seen = new Dictionary<int, bool>();
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            seen.TryAdd(request, _running!.InAutomationLoopForTests);
+            return Task.CompletedTask;
+        };
+
+        await RunAsync();
+
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.All(Enumerable.Range(0, 4), i => Assert.True(seen[i]));
+        Assert.False(seen[4]);
+    }
+
+    /// <summary>
+    /// A gap review's passes are turns inside an automation loop; the planning turn and the plan approved on the pane the review brings back
+    /// are not, though that pane opens under the last pass's driver (2026-11-17).
+    /// </summary>
+    [Fact]
+    public async Task PlanGaps_ThePasses_AreInsideTheLoop_ThePlanningAndTheRunOutside()
+    {
+        PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
+        _chat.Enqueue(PresentPlanCall());
+        _chat.EnqueueText("Closing the gaps.");
+        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown));
+        _chat.EnqueueText("Pass 2 clean.");
+        _chat.Enqueue(PresentGapsCall("p4", RevisedPlanMarkdown));
+        _chat.EnqueueText("Approved, starting.");
+        _chat.EnqueueText("Done.");
+        var seen = new Dictionary<int, bool>();
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            seen.TryAdd(request, _running!.InAutomationLoopForTests);
+            return Task.CompletedTask;
+        };
+
+        await RunAsync();
+
+        Assert.Equal(9, _chat.Requests.Count);
+        Assert.False(seen[0]);   // the planning turn
+        Assert.All([2, 3, 4, 5, 6], i => Assert.True(seen[i]));   // the passes
+        Assert.False(seen[8]);   // the plan carried out once the review is over
+    }
+
+    /// <summary>A code audit's passes are turns inside an automation loop, its last one too, and a turn after it is not (2026-11-17).</summary>
+    [Fact]
+    public async Task CodeAudit_ThePasses_AreInsideTheLoop_ALaterTurnOutside()
+    {
+        AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("after"), Line("/exit"));
+        ThreePasses();
+        _chat.EnqueueText("An ordinary turn.");
+        var seen = new Dictionary<int, bool>();
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            seen.TryAdd(request, _running!.InAutomationLoopForTests);
+            return Task.CompletedTask;
+        };
+
+        await RunAsync();
+
+        Assert.Equal(8, _chat.Requests.Count);
+        Assert.All(Enumerable.Range(0, 7), i => Assert.True(seen[i]));
+        Assert.False(seen[7]);
     }
 
     /// <summary>A light theme with Themed background off says so after the saved line (#179); with it on, nothing more.</summary>

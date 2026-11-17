@@ -379,6 +379,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     internal Task HandOverForTestsAsync(SettingsChanges changes, bool run) => ApplySettingsChangesAsync(changes, CancellationToken.None, run);
 
+    /// <summary>Whether an automation loop is under way, for the tests that hold which turns count as a loop's (2026-11-17).</summary>
+    internal bool InAutomationLoopForTests => InAutomationLoop;
+
+    /// <summary>How many theme repaints the screen has drawn (2026-11-17).</summary>
+    internal int ThemeRepaintsForTests => _themeRepaints;
+
     /// <summary>The pictures registered for a double-click, for the tests that hold a second theme repaint to adding none (#90).</summary>
     internal int PictureCountForTests
     {

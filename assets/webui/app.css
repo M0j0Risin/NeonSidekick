@@ -296,7 +296,7 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
 .overlay-bar a { color: var(--overlay-accent-2); white-space: nowrap; }
 /* The 🗑️ (later on 2026-10-15): tap twice, the first arming it red for 3 s; the note under the bar says what happened. */
 .overlay-delete { flex: none; min-width: 44px; min-height: 36px; }
-.overlay-delete.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
+.overlay-delete.armed { background: var(--error, #c0392b); color: var(--on-error, #1a0b22); border-color: transparent; }
 .overlay-note {
   position: absolute;
   top: 52px;
@@ -473,7 +473,7 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .strip-bar .sheet-tab.on, .strip-bar .manage-tab.on { color: var(--text); background: var(--panel-2); }
 .sheet-bar .tab-glyph:not(:empty) { margin-right: 4px; }
 .strip-bar .sheet-action { min-height: 36px; white-space: nowrap; }
-.sheet-action.armed, .row-delete.armed, .manage-remove.armed, .session-row.armed, .yt-delete.armed, .yt-clear.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
+.sheet-action.armed, .row-delete.armed, .manage-remove.armed, .session-row.armed, .yt-delete.armed, .yt-clear.armed { background: var(--error, #c0392b); color: var(--on-error, #1a0b22); border-color: transparent; }
 .prompt-row .row-delete { flex: none; width: 44px; min-height: 44px; padding: 0; }
 .prompt-row .row-delete.armed { width: auto; padding: 0 10px; font-size: 13px; }
 .prompts-note { color: var(--warn); font-size: 14px; }
@@ -721,12 +721,12 @@ button:disabled { opacity: 0.45; cursor: default; }
 .shop-qty button { width: 44px; padding: 0; font-size: 20px; }
 .shop-qty-value { min-width: 2.5em; text-align: center; font-size: 20px; font-variant-numeric: tabular-nums; }
 .shop-rename { display: flex; gap: 8px; margin: 8px 0; }
-.shop-remove.armed, .shop-clear.armed, .shop-forget.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
+.shop-remove.armed, .shop-clear.armed, .shop-forget.armed { background: var(--error, #c0392b); color: var(--on-error, #1a0b22); border-color: transparent; }
 .shop-note { color: var(--dim); font-size: 14px; margin: 0 0 8px; }
 .shop-filter { width: 100%; margin: 0 0 8px; }
 .shop-place { width: 100%; text-align: left; }
 .shop-place.here { border-color: var(--accent); font-weight: 600; }
-.shop-place.armed { background: var(--error, #c0392b); color: #fff; border-color: transparent; }
+.shop-place.armed { background: var(--error, #c0392b); color: var(--on-error, #1a0b22); border-color: transparent; }
 .shop-past-list { display: flex; flex-direction: column; gap: 4px; }
 .shop-past-row { display: flex; gap: 6px; align-items: stretch; }
 .shop-past-add { flex: 1; min-width: 0; text-align: left; }
