@@ -51,6 +51,11 @@ public static class ModelErrorText
                 where ??= Where(http.Message);
             }
 
+            if (EndedEarly(current))
+            {
+                return Unreachable(where, "the connection was dropped");
+            }
+
             if (current is SocketException socket)
             {
                 return socket.SocketErrorCode switch
@@ -83,7 +88,8 @@ public static class ModelErrorText
     /// <summary>
     /// Whether <paramref name="ex"/> is a server failure that may pass on its own (2026-11-17, the gap-audit-reliability plan: a gap review's
     /// or an audit's pass is sent once more after one): the connection refused, reset, aborted, timed out or unreachable; HTTP 429 or 5xx
-    /// (the OpenAI SDK's, and the two hand-written clients' by status or, mid-stream with status 0, by their error kind); a stream cut short.
+    /// (the OpenAI SDK's, and the two hand-written clients' by status or, mid-stream with status 0, by their error kind); a stream cut short,
+    /// or a response the server ended early.
     /// Never a context overflow (checked first, as <see cref="Readable"/> does: LM Studio sends it as a 500), the request timeout (another
     /// wait of it could be an hour, and a one-slot server would still be busy with the request the client gave up on), a spent quota, a
     /// name that does not resolve, or a refused key. Pure.
@@ -98,6 +104,11 @@ public static class ModelErrorText
 
         foreach (var current in Assistant.ExceptionChain(ex))
         {
+            if (EndedEarly(current))
+            {
+                return true;
+            }
+
             switch (current)
             {
                 case SocketException socket:
@@ -121,6 +132,14 @@ public static class ModelErrorText
 
         return false;
     }
+
+    /// <summary>
+    /// The server closed the connection mid-response (2026-11-17, the hand check of the gap-audit-reliability plan: a server going away
+    /// mid-stream reached the OpenAI SDK as <c>HttpIOException: The response ended prematurely. (ResponseEnded)</c>, no socket error inside,
+    /// so a review pass that lost its server was never retried, and the line read as the raw chain).
+    /// </summary>
+    private static bool EndedEarly(Exception ex) =>
+        ex is HttpIOException { HttpRequestError: HttpRequestError.ResponseEnded } or HttpRequestException { HttpRequestError: HttpRequestError.ResponseEnded };
 
     // 429 and 5xx, but never a spent quota (the OpenAI API's insufficient_quota, as OpenAIApiChatClient.IsRetryable reads it).
     private static bool TransientStatus(int status, string text) =>

@@ -26,6 +26,11 @@ public class ModelErrorTextTests
         Assert.True(ModelErrorText.IsTransient(new AnthropicApiException(529, "overloaded_error", "overloaded")));
         Assert.True(ModelErrorText.IsTransient(new IOException(OpenAIApiChatClient.StreamCutMessage)));
         Assert.True(ModelErrorText.IsTransient(new IOException(AnthropicChatClient.StreamCutMessage)));
+        // 2026-11-17, the hand check: a server going away mid-stream, as the OpenAI SDK reports it.
+        Assert.True(ModelErrorText.IsTransient(new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely.")));
+        Assert.True(ModelErrorText.IsTransient(new InvalidOperationException("wrapped", new HttpIOException(HttpRequestError.ResponseEnded, "ended"))));
+        Assert.True(ModelErrorText.IsTransient(new HttpRequestException(HttpRequestError.ResponseEnded, "ended before the headers")));
+        Assert.False(ModelErrorText.IsTransient(new HttpIOException(HttpRequestError.InvalidResponse, "garbled")));
 
         Assert.False(ModelErrorText.IsTransient(new OpenAIApiException(429, "insufficient_quota", "You exceeded your current quota")));
         Assert.False(ModelErrorText.IsTransient(new OpenAIApiException(401, "invalid_api_key", "bad key")));
@@ -36,6 +41,14 @@ public class ModelErrorTextTests
         Assert.False(ModelErrorText.IsTransient(new AnthropicApiException(0, "invalid_request_error", "bad")));
         Assert.False(ModelErrorText.IsTransient(new HttpRequestException("plain")));
         Assert.False(ModelErrorText.IsTransient(new IOException("some other read")));
+    }
+
+    [Fact]
+    public void AResponseTheServerEndedEarly_ReadsAsADroppedConnection()
+    {
+        // 2026-11-17, the hand check: it read "Model error: HttpIOException: The response ended prematurely. (ResponseEnded)".
+        Assert.Equal(ModelErrorText.Unreachable(null, "the connection was dropped"),
+            ModelErrorText.Readable(new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely.")));
     }
 
     [Fact]

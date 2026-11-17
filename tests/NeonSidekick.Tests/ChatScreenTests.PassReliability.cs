@@ -46,6 +46,31 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task PlanGaps_ChosenAndTheTurnHasAServerBlip_StartsPassOneAnyway()
+    {
+        // 2026-11-17, the hand check: the server dropped under the presenting reply's closing words, and the review chosen on its pane was dropped.
+        _settings.Update(d =>
+        {
+            d.PlanGapCleanPasses = 1;
+            d.PlanGapStopTone = TimerTones.Bell;
+        });
+        PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/exit");
+        _chat.Enqueue(PresentPlanCall());                   // 0: presented; Close gaps…
+        _chat.EnqueueText("(never seen)");                  // 1: the closing words: the server refused
+        _chat.Enqueue(PresentGapsCall("p2", PlanMarkdown)); // 2: pass 1: nothing left; canceled on the pane
+        _chat.EnqueueText("Canceled.");                     // 3
+        _chat.BeforeUpdateOf = (request, update, _) => request == 1 ? throw Refused() : Task.CompletedTask;
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(PlanText.GapsDroppedNotice, output);
+        Assert.Equal(PlanText.GapPassMessage(PlanPath, 1, 5, PlanReviewer.Model), LastUserText(_chat.Requests[2]));
+        Assert.Contains(PlanText.ConvergedNotice(PlanPath, 1, 0), output);
+        await UntilAsync(() => _tonePlayback.Writes.Count > 0, CancellationToken.None);
+        Assert.Single(_tonePlayback.Writes);   // the convergence's
+    }
+
+    [Fact]
     public async Task PlanGaps_ASecondTransientFailure_Stops_AndRingsTheTone()
     {
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");

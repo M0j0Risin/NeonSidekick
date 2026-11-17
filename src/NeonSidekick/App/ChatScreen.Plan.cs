@@ -1422,7 +1422,10 @@ internal sealed partial class ChatScreen
 
         if (loop.Pending)
         {
-            bool endedClean = !cancelled && !_lastTurnFailed;
+            // The turn that chose it failed on the server's side after the plan was presented (2026-11-17, the hand check of the
+            // gap-audit-reliability plan: a server dropped under the reply's closing words dropped the review): pass 1 goes ahead, its own
+            // retry covering a server still down. Esc, and any other failure, drop it as before.
+            bool endedClean = !cancelled && (!_lastTurnFailed || _lastTurnFailure == TurnFailure.Transient);
             // A message waiting under the reply goes first, as it does between passes (2026-10-14, the review: the first pass went
             // ahead of it, and the loop then stopped for it after that pass); a line held, or the page's, too (2026-11-17).
             if (endedClean && path is not null && LinesWaiting())
