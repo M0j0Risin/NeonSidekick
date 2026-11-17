@@ -38,14 +38,33 @@ public static class PdfHtmlSanitizer
     {
         ArgumentNullException.ThrowIfNull(html);
         ArgumentNullException.ThrowIfNull(resolve);
+        string size = PdfPaper.Css(paper, landscape);
+        return Rebuild(html, resolve, "<style>@page { size: " + size + "; margin: 16mm; }</style>\n",
+            // The request's paper after the page's own styles (review T4).
+            "\n<style>@page { size: " + size + " !important; }</style>\n");
+    }
+
+    /// <summary>
+    /// <paramref name="html"/> rebuilt as <see cref="Rewrite"/> does, for a picture rather than paper (2026-11-16, plan sharded-hugging-puppy #9,
+    /// <c>render_picture</c>'s SVG and HTML): the same elements, attributes and fetches dropped, pictures and stylesheets inlined through
+    /// <paramref name="resolve"/>, the policy first, but no <c>@page</c>. <paramref name="head"/> (styles of the app's own) goes after the policy.
+    /// </summary>
+    public static string RewriteForPicture(string html, Func<string, byte[]?> resolve, string head = "")
+    {
+        ArgumentNullException.ThrowIfNull(html);
+        ArgumentNullException.ThrowIfNull(resolve);
+        return Rebuild(html, resolve, head, "");
+    }
+
+    private static string Rebuild(string html, Func<string, byte[]?> resolve, string before, string after)
+    {
         var output = new StringBuilder(html.Length + 1024);
         if (html.TrimStart().StartsWith("<!doctype", StringComparison.OrdinalIgnoreCase))
         {
             output.Append("<!DOCTYPE html>\n");
         }
 
-        output.Append("<meta charset=\"utf-8\">\n").Append(PdfHtml.PolicyMeta).Append('\n')
-            .Append("<style>@page { size: ").Append(PdfPaper.Css(paper, landscape)).Append("; margin: 16mm; }</style>\n");
+        output.Append("<meta charset=\"utf-8\">\n").Append(PdfHtml.PolicyMeta).Append('\n').Append(before);
 
         string? skipping = null;
         string? rawElement = null;
@@ -93,9 +112,7 @@ public static class PdfHtmlSanitizer
             }
         }
 
-        // The request's paper after the page's own styles (review T4).
-        output.Append("\n<style>@page { size: ").Append(PdfPaper.Css(paper, landscape)).Append(" !important; }</style>\n");
-        return output.ToString();
+        return output.Append(after).ToString();
     }
 
     private static void OpenTag(StringBuilder output, HtmlToken token, Func<string, byte[]?> resolve)

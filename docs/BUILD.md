@@ -81,7 +81,7 @@ dotnet test tests/NeonSidekick.Tests -c Release --filter "FullyQualifiedName~Ass
 * The tests run one at a time, by design.
 * **Before a CI run**, run the suite with `-CiLike`, then repeat the classes you changed under it (`-CiLike -Filter … -Repeat 20`): most CI-only failures were timing races a slower machine shows.
 * **Live tests** (a real LLM server, database, camera, microphone, speech model…) skip unless their resource is there. [ENVIRONMENT.md](ENVIRONMENT.md#test-suite) lists the variables that turn each on, [TESTCONTAINERS.md](TESTCONTAINERS.md) the Docker containers they use.
-* **Browser PDF tests** read and edit hand-written PDFs (an outline, a locked file, Japanese text, a form) in the machine's Edge, Chrome or Brave (or Chromium on a Mac), headless. Without one they pass unproven; the `pdf:cmap`, `pdf:edit` and `shopping:pdf-read` smoke checks prove the published exe.
+* **Browser PDF tests** read and edit hand-written PDFs (an outline, a locked file, Japanese text, a form) in the machine's Edge, Chrome or Brave (or Chromium on a Mac), headless. Without one they pass unproven; the `pdf:cmap`, `pdf:edit`, `render:png` and `shopping:pdf-read` smoke checks prove the published exe.
 * **GPU tests:** two tests load an embedded model onto the GPU, so `build.ps1` leaves them out. Run them with `dotnet test tests/NeonSidekick.Tests -c Release --filter Category=LoadsEmbeddedModel` while no other model holds the GPU.
 
 The metasearch's tests read pages saved by hand from real engines. `tools/searxng` trims those pages and regenerates the tables and expected output from them, and fetches nothing. Those scripts need Python and a SearXNG checkout, and building and testing don't. `src/NeonSidekick/SearXNG/README.md` has the commands.

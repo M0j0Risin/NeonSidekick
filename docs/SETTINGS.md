@@ -51,8 +51,8 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Copy user prompt | `/copy` puts your prompt above the reply. | on |
 | User line style | Your sent line, here and on the Web UI's Chat tab: `quiet` (plain), `slab` (on a faint fill) or `bold` (in the user color). | `bold` |
 | Reply footer | A dim line under each reply: time, tokens, speed, tool calls, model, and a tool's time from 2 s (not counting time you spent answering; PC only). | off |
-| Theme | One of sixty built-in themes, or your own from the home's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. | `synthwave` |
-| Themed background | The terminal takes the theme's background while the app runs. | on |
+| Theme | One of sixty-eight built-in themes, dark and light, or your own from the home's `themes` folder ([Custom themes](COMMANDS.md#custom-themes)). A wide window previews the highlighted one. A change keeps the conversation and redraws it as `/sessions` shows a resumed one. A light theme wants *Themed background* on, or a light terminal. | `synthwave` |
+| Themed background | The terminal takes the theme's background while the app runs, and on a light theme its text and cursor colors too. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme; off, they stay black. | on |
 | Gradient rules | The rules around the input line and pane headings shade along the theme's gradient. Solid themes and a theme's own `paneRule` stay flat. | on |
 | Welcome splash | What shows under the banner at startup until your first line: `image`, `robot` or `off` ([The welcome splash](INTERFACE.md#the-welcome-splash)). | `off` |
@@ -624,7 +624,7 @@ The file tools and the places beyond the working directory they reach.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Image tools | Offers `view_image`, `image_info`, `image_edit` and `set_splash_image` (with or without *File tools*), over pictures in the working directory and the profile's `images` folder. | off |
+| Image tools | Offers `view_image`, `image_info`, `image_edit` and `set_splash_image` (with or without *File tools*), over pictures in the working directory and the profile's `images` folder; with a browser found, `render_picture`, `render_chart` and `render_collage` too. | off |
 | Image edit quality | The JPEG (or JPEG XL, HEIF) quality `image_edit` uses when the model gives none (1–100). A Mac writes no JPEG XL. | 90 |
 | Image edit metadata | Metadata `image_edit` keeps: `none`, `basic` (author, date taken, camera…) or `all` (basic plus GPS position). | `none` |
 | Image edit mode | `beside-original` writes an edit to a new file beside the source; `overwrite-original` replaces the source without asking. For `image_edit` and the picture windows' right-click menu. | `beside-original` |
@@ -724,10 +724,10 @@ See [Network](TOOLS.md#network).
 
 | Setting | What it does | Default |
 |---|---|---|
-| Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port` and `net_tls` (and `net_certs` with *Network certificate stores*), one host a call, held to the reach, host lists and turn budget. `/net` works either way. | off |
+| Network tools | Offers `net_dns`, `net_ping`, `net_trace`, `net_port`, `net_tls` and `net_http` (and `net_certs` with *Network certificate stores*), one host a call, held to the reach, host lists and turn budget. `/net` works either way. | off |
 | Network tools reach | What a host may resolve to: `same-as-web` follows *Web browser network mode*; `internet`, `lan` or `both` for these tools alone. | `same-as-web` |
 | Network tools max hosts per turn | Distinct hosts (by address) the model's calls may reach in one turn, advisors' included (1–64). A Ralph run, `/loop` or camera watch gets this many for the whole run. | 8 |
-| Network tools max ports per turn | Distinct ports `net_port` and `net_tls` may try in one turn (1–256); one budget for a whole automation run. | 32 |
+| Network tools max ports per turn | Distinct ports `net_port`, `net_tls` and `net_http` may try in one turn (1–256); one budget for a whole automation run. | 32 |
 | Network tools allowed hosts | If set, the only hosts reached: names, `*.corp.example` wildcards or address blocks (`10.20.0.0/16`). A bad entry is refused as you type. | empty (anything the reach admits) |
 | Network tools denied hosts | Hosts never reached, in the same forms (a name by its addresses too); wins over the allowed list. | empty |
 | Network certificate stores | Also offers `net_certs`, which lists one certificate store on the app's computer (nothing exported). On a Mac `my` is your login keychain, `root` the system's trust. | off |

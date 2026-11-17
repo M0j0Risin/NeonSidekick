@@ -45,6 +45,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 | `/shortcut` | Works | A `.command` file on the Desktop, opening in iTerm2 or Terminal. |
 | Printing | Works (CUPS) | System Settings › Printers & Scanners' printers; no Office files ([below](#files--printing)). |
 | PDFs: `convert_to_pdf`, `/pdf`, `read_pdf`, `pdf_edit`, attaching | Works, browser only | Edge, Chrome, Brave or Chromium in `/Applications`, or *Web browser path*'s; no `printer` engine. |
+| Rendered pictures: `render_picture`, `render_chart`, `render_collage` | Works | The same browsers as the PDF tools. |
 | Docker tools and `/docker` | Works | Docker Desktop, OrbStack, Colima or Rancher Desktop; CPU and memory are the Linux VM's ([Docker on a Mac](TOOLS.md#docker-on-a-mac)). |
 | Event logs: the event-log tools and `/eventlog` | Works on an administrator account | The unified log, crash reports, install.log and `.logarchive` folders; no remote computers or `.evtx` ([Event logs on a Mac](TOOLS.md#event-logs-on-a-mac)). |
 | Services and scheduled tasks: their tools, `/services`, `/tasks` | Not available | A Mac has neither; `/tools`, the toolbar and help leave them out, the commands say there's nothing to read. |

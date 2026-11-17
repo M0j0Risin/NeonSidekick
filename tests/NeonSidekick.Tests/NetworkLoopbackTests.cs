@@ -281,4 +281,59 @@ public sealed class NetworkLoopbackTests
         listener.Stop();
         await Assert.ThrowsAsync<SocketException>(() => TlsProbe.RunAsync("localhost", [IPAddress.Loopback], port, "localhost", StartTls.None, CancellationToken.None));
     }
+
+    // ── HTTP (2026-11-16, plan sharded-hugging-puppy #15) ──────────────────
+
+    /// <summary>
+    /// <c>net_http</c> through its real handler (<see cref="HttpProbe.Handler"/>) against a plain HTTP/1.1 server on loopback: a redirect, then the
+    /// answer, each request on its own connection to the judged address, the body never read.
+    /// </summary>
+    [Fact]
+    public async Task Http_ThroughTheRealHandler_FollowsARedirect()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var asked = new List<string>();
+        var serve = Task.Run(async () =>
+        {
+            for (int i = 0; i < 2; i++)
+            {
+                using var client = await listener.AcceptTcpClientAsync();
+                using var stream = client.GetStream();
+                var reader = new StreamReader(stream, Encoding.ASCII);
+                string first = (await reader.ReadLineAsync())!;
+                asked.Add(first);
+                while (!string.IsNullOrEmpty(await reader.ReadLineAsync()))
+                {
+                }
+
+                string body = new('x', 100_000);
+                string reply = first.StartsWith("GET / ", StringComparison.Ordinal)
+                    ? "HTTP/1.1 302 Found\r\nLocation: /ok\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    : "HTTP/1.1 200 OK\r\nServer: loopback-test\r\nContent-Type: text/plain\r\nContent-Length: " + body.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\r\nConnection: close\r\n\r\n" + body;
+                byte[] bytes = Encoding.ASCII.GetBytes(reply);
+                try
+                {
+                    await stream.WriteAsync(bytes);
+                }
+                catch (IOException)
+                {
+                    // The client let go after the headers: the body is never read.
+                }
+            }
+        });
+
+        var settings = new Settings.AppSettingsData { NetworkTools = true, NetworkToolsReach = "both" };
+        var access = new NetworkAccess(() => settings, null, TimeProvider.System);
+        var answer = await NetworkChecks.HttpAsync(access, new NetworkBudget(), "http://127.0.0.1:" + port.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/", head: false, follow: true, browser: false, CancellationToken.None);
+        await serve.WaitAsync(TimeSpan.FromSeconds(10));
+        listener.Stop();
+
+        Assert.Equal(["GET / HTTP/1.1", "GET /ok HTTP/1.1"], asked);
+        Assert.Contains("\n  1. GET http://127.0.0.1:" + port.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/ → 302 ⟪Found⟫, HTTP/1.1, ", answer.Text);
+        Assert.Contains("\n  2. GET ⟪http://127.0.0.1:" + port.ToString(System.Globalization.CultureInfo.InvariantCulture) + "/ok⟫ → 200 ⟪OK⟫, HTTP/1.1, ", answer.Text);
+        Assert.Contains("\n  server: ⟪loopback-test⟫", answer.Text);
+        Assert.Contains("\n  content-length: ⟪100000⟫", answer.Text);
+    }
 }

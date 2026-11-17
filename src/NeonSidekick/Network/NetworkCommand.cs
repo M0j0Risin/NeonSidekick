@@ -91,6 +91,16 @@ public static class NetworkCommand
 
                 answer = await NetworkChecks.TlsAsync(access, null, rest[0], port, null, preamble, cancellationToken).ConfigureAwait(false);
                 break;
+            case "http" when rest.Length >= 1:
+                // /net http <url> [head] [browser] [nofollow] (2026-11-16, #15): the words after the URL in any order, each once.
+                var flags = rest.Skip(1).Select(w => w.ToLowerInvariant()).ToList();
+                if (flags.Any(f => f is not ("head" or "browser" or "nofollow")) || flags.Distinct(StringComparer.Ordinal).Count() != flags.Count)
+                {
+                    return Usage();
+                }
+
+                answer = await NetworkChecks.HttpAsync(access, null, rest[0], flags.Contains("head"), !flags.Contains("nofollow"), flags.Contains("browser"), cancellationToken).ConfigureAwait(false);
+                break;
             case "certs":
                 string store = "My";
                 System.Security.Cryptography.X509Certificates.StoreLocation? location = null;   // none named: the store's default (CertificateStores.DefaultLocation)
@@ -141,6 +151,7 @@ public static class NetworkCommand
             "dns" when words == 2 => DnsWire.Types.Keys,
             "tls" when words == 3 => TlsPreamble.Words.Keys,
             "trace" when words == 2 => ["names"],
+            "http" when words >= 2 => ["head", "browser", "nofollow"],
             "certs" => CertificateStores.StoreWords.Concat(CertificateStores.LocationWords),
             _ => [],
         };

@@ -5,8 +5,9 @@ namespace NeonSidekick.UI;
 /// <summary>
 /// <c>/mark</c>'s colors (2026-10-18, the user's ask and picks: a window told apart from the others at a glance, its rules around the draft
 /// line drawn in a color of its own, kept per session; <see cref="ScreenPane.RuleMark"/>): ten fixed names, no hex, in this order — red,
-/// orange, yellow, green, cyan, blue, purple, pink, white, gray — each a shade that reads on every built-in theme's background (5.0:1 to
-/// 17.6:1, held by <c>RuleMarksTests</c>). <c>grey</c> reads as gray, case aside; <see cref="Default"/> is the theme's own rule. Pure.
+/// orange, yellow, green, cyan, blue, purple, pink, white, gray — each a shade that reads on every built-in theme's background (4.5:1 at
+/// least, held by <c>RuleMarksTests</c>). A light page (2026-11-16, plan sharded-hugging-puppy #53, the daylight themes) takes a deeper shade
+/// of each, <c>white</c> the near-black of plain text there. <c>grey</c> reads as gray, case aside; <see cref="Default"/> is the theme's own rule. Pure.
 /// </summary>
 public static class RuleMarks
 {
@@ -30,7 +31,20 @@ public static class RuleMarks
         ["gray"] = new(0xA0, 0xA2, 0xA6),
     };
 
-    private static readonly IReadOnlyDictionary<string, Style> s_styles = s_colors.ToDictionary(p => p.Key, p => new Style(p.Value), StringComparer.Ordinal);
+    // The same names on a light page: each at least 4.5:1 on every daylight background.
+    private static readonly IReadOnlyDictionary<string, Color> s_lightColors = new Dictionary<string, Color>(StringComparer.Ordinal)
+    {
+        ["red"] = new(0xC4, 0x2B, 0x2B),
+        ["orange"] = new(0xA8, 0x4D, 0x06),
+        ["yellow"] = new(0x80, 0x62, 0x00),
+        ["green"] = new(0x25, 0x73, 0x2C),
+        ["cyan"] = new(0x00, 0x70, 0x7C),
+        ["blue"] = new(0x1F, 0x5F, 0xCC),
+        ["purple"] = new(0x6B, 0x3F, 0xC4),
+        ["pink"] = new(0xB0, 0x2F, 0x66),
+        ["white"] = new(0x2A, 0x2E, 0x35),
+        ["gray"] = new(0x5B, 0x62, 0x6C),
+    };
 
     /// <summary>The name <paramref name="word"/> means, trimmed and case aside (<c>grey</c> is gray), else false.</summary>
     public static bool TryParse(string? word, out string name)
@@ -45,9 +59,10 @@ public static class RuleMarks
         return name.Length > 0;
     }
 
-    /// <summary>The color of <paramref name="name"/> (one of <see cref="Names"/>).</summary>
-    public static Color ColorOf(string name) => s_colors[name];
+    /// <summary>The color of <paramref name="name"/> (one of <see cref="Names"/>) on a dark page, or a light one with <paramref name="light"/>.</summary>
+    public static Color ColorOf(string name, bool light = false) => (light ? s_lightColors : s_colors)[name];
 
-    /// <summary>The rules' style for <paramref name="name"/>; null for none or an unknown name.</summary>
-    public static Style? StyleOf(string? name) => name is not null && s_styles.TryGetValue(name, out var style) ? style : (Style?)null;
+    /// <summary>The rules' style for <paramref name="name"/> on a dark or a <paramref name="light"/> page; null for none or an unknown name.</summary>
+    public static Style? StyleOf(string? name, bool light = false) =>
+        name is not null && (light ? s_lightColors : s_colors).TryGetValue(name, out var color) ? new Style(color) : (Style?)null;
 }

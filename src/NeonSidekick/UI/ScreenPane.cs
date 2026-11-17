@@ -101,6 +101,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private static readonly ControlCode LeaveAlternate = new("\e[?1007h\e[?1049l");
     // The terminal profile's default background back (OSC 111), written before the buffer is left when PageBackground set one.
     private static readonly ControlCode PageBackgroundReset = new(PageBackgroundResetSequence);
+    // The profile's text and cursor colours back (OSC 110, 112), written before the background's when PageText set them.
+    private static readonly ControlCode PageTextReset = new(PageTextResetSequence);
 
     private readonly IAnsiConsole _inner;
     private readonly ScreenGeometry? _geometry;
@@ -389,9 +391,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     // column and width, −1 / 0 when the row had no room for it.
     private Func<ToolbarParts?> _toolbar = static () => null;
     private Func<Color?> _pageBackground = static () => null;
+    private Func<Color?> _pageText = static () => null;
 
     // The page background last written (OSC 11) while in the alternate buffer; null when the profile's own is showing.
     private Color? _pageBackgroundSent;
+    // The text and cursor colour last written (OSC 10 and 12); null when the profile's own are showing.
+    private Color? _pageTextSent;
     private int _toolbarRows;
     private string? _shownToolbar;
     private string _shownToolbarOff = "";
@@ -1160,6 +1165,25 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary><c>ESC ] 111 ESC \</c>: the terminal's default background back to the profile's. Pinned.</summary>
     public const string PageBackgroundResetSequence = "\e]111\e\\";
+
+    /// <summary>
+    /// The terminal's default text and cursor colour (2026-11-16, plan sharded-hugging-puppy #53, the daylight themes): a light page under a
+    /// profile's light-gray text and white cursor would hide both, so the screen answers the theme's ink when its page is light under
+    /// <c>Themed background</c>, else null — a dark theme keeps the profile's. Written and given back as <see cref="PageBackground"/> is (OSC 10
+    /// and 12, <see cref="PageTextSequence"/>; OSC 110 and 112 on a null, a close and a dispose). A terminal that ignores them loses nothing.
+    /// </summary>
+    public Func<Color?> PageText
+    {
+        get => _pageText;
+        set => _pageText = value ?? throw new ArgumentNullException(nameof(value));
+    }
+
+    /// <summary><c>ESC ] 10 ; rgb:… ESC \</c> then <c>ESC ] 12 ; rgb:… ESC \</c>: the default text and the cursor set to <paramref name="color"/>. Pinned.</summary>
+    public static string PageTextSequence(Color color) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"\e]10;rgb:{color.R:x2}/{color.G:x2}/{color.B:x2}\e\\\e]12;rgb:{color.R:x2}/{color.G:x2}/{color.B:x2}\e\\");
+
+    /// <summary><c>ESC ] 110 ESC \</c> then <c>ESC ] 112 ESC \</c>: the default text and the cursor back to the profile's. Pinned.</summary>
+    public const string PageTextResetSequence = "\e]110\e\\\e]112\e\\";
 
     /// <summary>The rows the toolbar took in the last draw: 1 while drawn, else 0 (the thumbnail sizing adds it to <see cref="PaneRows"/> and <see cref="InputRows"/>).</summary>
     public int ToolbarRows
@@ -5136,6 +5160,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         if (!_inAlternate)
         {
             return;
+        }
+
+        if (_pageTextSent is not null)
+        {
+            _inner.Write(PageTextReset);
+            _pageTextSent = null;
         }
 
         if (_pageBackgroundSent is not null)
@@ -9481,13 +9511,19 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
 
         Color? wanted = _pageBackground();
-        if (wanted == _pageBackgroundSent)
+        if (wanted != _pageBackgroundSent)
         {
-            return;
+            _inner.Write(wanted is { } color ? new ControlCode(PageBackgroundSequence(color)) : PageBackgroundReset);
+            _pageBackgroundSent = wanted;
         }
 
-        _inner.Write(wanted is { } color ? new ControlCode(PageBackgroundSequence(color)) : PageBackgroundReset);
-        _pageBackgroundSent = wanted;
+        // The text and cursor colour after the page's (2026-11-16, the daylight themes), the same way.
+        Color? text = _pageText();
+        if (text != _pageTextSent)
+        {
+            _inner.Write(text is { } ink ? new ControlCode(PageTextSequence(ink)) : PageTextReset);
+            _pageTextSent = text;
+        }
     }
 
     /// <summary>The matching end: the terminal's end on the outermost, then the held output let go.</summary>

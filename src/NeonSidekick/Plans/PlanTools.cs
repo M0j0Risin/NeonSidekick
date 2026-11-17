@@ -82,7 +82,7 @@ public static class PlanTools
         // the event logs (2026-10-15): every call reads Windows' logs or an .evtx file; nothing changes
         "eventlog_logs", "eventlog_search", "eventlog_summary", "eventlog_event",
         // the admin families' reads (2026-10-15, the admin-tools plan): the network checks, services, tasks, the directory
-        "net_dns", "net_ping", "net_trace", "net_port", "net_tls", "net_certs",
+        "net_dns", "net_ping", "net_trace", "net_port", "net_tls", "net_http", "net_certs",
         "service_list", "service_info", "task_list", "task_info",
         "ad_user", "ad_group", "ad_memberof", "ad_computer", "ad_find", "ad_ou", "ad_domain",
         // the monitors (2026-10-23): the topology and each monitor's input read, nothing changed
@@ -93,7 +93,7 @@ public static class PlanTools
     public static readonly IReadOnlySet<string> Mutating = new HashSet<string>(StringComparer.Ordinal)
     {
         "start_timer", "stop_timer",
-        "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip", "open", "convert_to_pdf", "convert_to_docx", "convert_to_xlsx", "pdf_edit", "image_edit", "set_splash_image",
+        "write_file", "patch_file", "create_directory", "move", "copy", "delete", "zip", "unzip", "open", "convert_to_pdf", "convert_to_docx", "convert_to_xlsx", "pdf_edit", "image_edit", "set_splash_image", "render_picture", "render_chart", "render_collage",
         "gitlib_stage", "gitlib_commit", "gitlib_revert", "gitlib_discard", "gitlib_delete",
         "run_command", "process", "execute_code",
         "download_file", "open_url",

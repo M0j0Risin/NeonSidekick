@@ -6,7 +6,7 @@ using NeonSidekick.Network;
 namespace NeonSidekick.Llm.Tools;
 
 /// <summary>
-/// What the six network tools share (2026-10-15, the admin-tools plan, <see cref="EventLogTool"/>'s shape): the <see cref="NetworkAccess"/>
+/// What the seven network tools share (2026-10-15, the admin-tools plan, <see cref="EventLogTool"/>'s shape): the <see cref="NetworkAccess"/>
 /// door, the turn's <see cref="NetworkBudget"/> (the main chat's, reset when a turn's tools are composed; a bot's own), and the arguments'
 /// readers. Every tool reads; none changes anything; all are offered headless too. A refusal is an <c>Error:</c> sentence, never a throw.
 /// </summary>
@@ -258,6 +258,68 @@ public sealed class NetTlsTool(NetworkAccess access, NetworkBudget budget) : Net
         }
 
         return Text(await NetworkChecks.TlsAsync(Access, Budget, host, port, Optional(arguments, ServerNameArgument), preamble, cancellationToken).ConfigureAwait(false));
+    }
+}
+
+/// <summary>
+/// <c>net_http(url, method?, follow?, browser?)</c> (2026-11-16, plan sharded-hugging-puppy #15, "is this site up?"): a web address's status,
+/// its redirects hop by hop with each one's time, and a few telling headers; the body is never read. Each hop's host is judged and counted as
+/// the other network tools' are.
+/// </summary>
+public sealed class NetHttpTool(NetworkAccess access, NetworkBudget budget) : NetworkTool(access, budget)
+{
+    public const string ToolName = "net_http";
+    public const string UrlArgument = "url";
+    public const string MethodArgument = "method";
+    public const string FollowArgument = "follow";
+    public const string BrowserArgument = "browser";
+
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "url": { "type": "string", "description": "The web address, e.g. \"https://example.com/status\"; a bare host name gets https://." },
+            "method": { "type": "string", "enum": ["get", "head"], "description": "get (the default) or head; neither reads the body." },
+            "follow": { "type": "boolean", "description": "Follow redirects, up to 10 requests, each host checked (default true)." },
+            "browser": { "type": "boolean", "description": "Send a browser's headers instead of the app's own name, for a site that answers bots differently (default false)." }
+          },
+          "required": ["url"]
+        }
+        """);
+
+    public override string Name => ToolName;
+
+    public override string Description => "Checks whether a web address answers: the status, each redirect with its status and time, the HTTP version, and headers such as server, cache-control and content-type; never reads the page.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    protected override async ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
+    {
+        if (Optional(arguments, UrlArgument) is not { } url)
+        {
+            return NetworkText.Missing(UrlArgument);
+        }
+
+        bool head = false;
+        if (Optional(arguments, MethodArgument) is { } method)
+        {
+            if (!method.Equals("get", StringComparison.OrdinalIgnoreCase) && !method.Equals("head", StringComparison.OrdinalIgnoreCase))
+            {
+                return NetworkText.BadMethod(method);
+            }
+
+            head = method.Equals("head", StringComparison.OrdinalIgnoreCase);
+        }
+
+        var (follow, followError) = Flag(arguments, FollowArgument, fallback: true);
+        var (browser, browserError) = Flag(arguments, BrowserArgument, fallback: false);
+        if ((followError ?? browserError) is { } error)
+        {
+            return error;
+        }
+
+        return Text(await NetworkChecks.HttpAsync(Access, Budget, url, head, follow, browser, cancellationToken).ConfigureAwait(false));
     }
 }
 

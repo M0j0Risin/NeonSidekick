@@ -278,6 +278,8 @@ internal sealed partial class ChatScreen
         bool shopping = inputs.ShoppingEnabled && shoppingTools is { Count: > 0 };
         IReadOnlyList<AIFunction> tools = shopping ? [.. standingTools, .. shoppingTools!, .. (files ? fileTools! : [])] : offered;
         // The picture tools right after the file tools (2026-10-10, their own group): Image tools is the switch, File tools or not; the picture sentence rides with them.
+        // The render tools (2026-11-16, plan sharded-hugging-puppy #9) only while a browser is found to draw with, judged each turn.
+        imageTools = imageTools?.Any(t => t is RenderTool { Available: false }) == true ? [.. imageTools.Where(t => t is not RenderTool { Available: false })] : imageTools;
         bool images = inputs.ImagesEnabled && imageTools is { Count: > 0 };
         tools = images ? [.. tools, .. imageTools!] : tools;
         // The video file tools right after the picture tools (2026-11-12, their own group): Video tools is the switch; no rule — the descriptions carry it, as YouTube's do.

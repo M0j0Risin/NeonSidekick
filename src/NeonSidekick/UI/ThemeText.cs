@@ -51,8 +51,96 @@ public static class ThemeText
     public static string ExportOverrides(string name, string path) => $"Theme {name} written to {path}; it now replaces the built-in {name}. Edit it, then /theme {name}.";
     public static string ExportExists(string path) => $"{path} already exists; give a new name: /theme export <name> <new-name>.";
     public static string ExportNameTaken(string name) => $"A theme named \"{name}\" already exists; give another new name.";
-    public static string ExportBadName(string name) => $"\"{name}\" is not a theme name: lower-case letters, digits, - and _, up to 32.";
+    public static string ExportBadName(string name) => $"\"{name}\" is not a theme name: lower-case letters, digits, - and _, up to 32, and not \"{ExportWord}\" or \"{EditWord}\".";
     public static string ExportFailed(string message) => $"Could not write the theme: {message}";
+
+    // ── /theme edit (2026-11-16, plan sharded-hugging-puppy #54) ──────────────
+
+    /// <summary><c>/theme</c>'s sub-command that opens the theme editor.</summary>
+    public const string EditWord = "edit";
+
+    /// <summary>The note beside <see cref="EditWord"/> in <c>/theme</c>'s argument list.</summary>
+    public const string EditNote = "edit a theme's colors";
+
+    /// <summary>The editor's title.</summary>
+    public static string EditTitle(string name) => $"Edit theme · {name}";
+
+    /// <summary>The editor's hint row.</summary>
+    public const string EditHint = "↑↓ = color · ←→ = lighter/darker (Shift ×5) · Enter = picker · s = save · r = reset · Esc = close";
+
+    /// <summary>The editor's buttons, with their keys.</summary>
+    public const string SaveButton = "save";
+    public const string ResetButton = "reset";
+    public const string DiscardButton = "discard";
+
+    /// <summary>What each color role colors, in <see cref="ThemeColorSlot"/> order: the editor's row notes and <c>COMMANDS.md</c>'s table say the same.</summary>
+    public static readonly IReadOnlyList<string> RoleNotes =
+    [
+        "the main accent: headings, borders, keywords",
+        "the counter-accent: your lines, table headers, the selection",
+        "the third accent: section headings, bullets, function calls",
+        "structure: the pane rule, the slab under an off toolbar item",
+        "string literals",
+        "numbers",
+        "a soft accent: $variables",
+        "body text",
+        "dim text, the status and hints bars",
+        "a step quieter than dim: the input row's ghost text",
+        "the background",
+        "code blocks, the highlighted menu row",
+        "success, enabled, connected",
+        "failure, error",
+        "a warning",
+    ];
+
+    /// <summary>The editor's band when every contrast bar is met.</summary>
+    public const string ChecksOk = "Contrast OK: every pair meets its bar.";
+
+    /// <summary>The editor's band listing the pairs under their bars (<see cref="ThemeChecks"/>); warnings, never a block on saving.</summary>
+    public static string ChecksWarning(IReadOnlyList<ContrastProblem> problems) =>
+        "⚠ " + string.Join(" · ", problems.Select(p => string.Create(CultureInfo.InvariantCulture, $"{p.Pair} {p.Ratio:0.0}:1, wants {p.Target:0.##}")));
+
+    /// <summary>A built-in named: the copy to make and edit instead.</summary>
+    public static string EditBuiltInQuestion(string name, string copy) => $"Built-in themes can't be changed. Save a copy as {copy} and edit it?";
+
+    /// <summary>A built-in named whose copy already exists: edit that one.</summary>
+    public static string EditCopyQuestion(string name, string copy) => $"Built-in themes can't be changed. Edit your copy of {name}, {copy}?";
+
+    /// <summary>Esc with changes not saved.</summary>
+    public const string EditDiscardQuestion = "Close the editor and lose the changes?";
+
+    /// <summary>The file changed on disk since the editor opened.</summary>
+    public static string EditChangedQuestion(string path) => $"{path} changed since the editor opened. Save over it?";
+
+    /// <summary>The save landed.</summary>
+    public static string EditSaved(string name, string path) => $"Theme {name} saved to {path}.";
+
+    /// <summary>The save landed on a theme not in force.</summary>
+    public static string EditSavedNotInForce(string name, string path) => $"Theme {name} saved to {path}. /theme {name} puts it in force.";
+
+    /// <summary>The save failed.</summary>
+    public static string EditFailed(string message) => $"Could not save the theme: {message}";
+
+    /// <summary>Nothing changed, nothing saved.</summary>
+    public const string EditUnchanged = "No changes to save.";
+
+    /// <summary>The editor has no pane to open in.</summary>
+    public const string EditNeedsPane = "The theme editor needs the full screen and its bottom pane, which this terminal doesn't have.";
+
+    /// <summary>The color picker's title: the role, its candidate value and the value it opened with.</summary>
+    public static string PickerTitle(string themeName, string role, string was) => $"Edit theme · {themeName} › {role} (was {was})";
+
+    /// <summary>The picker's bar labels, then the hex row's.</summary>
+    public const string PickerHue = "Hue";
+    public const string PickerSaturation = "Saturation";
+    public const string PickerLightness = "Lightness";
+    public const string PickerHex = "Hex value";
+
+    /// <summary>The picker's hint row.</summary>
+    public const string PickerHint = "↑↓ = bar · ←→ = move (Shift ×5) · Enter = use · Esc = cancel";
+
+    /// <summary>A typed value that is no color.</summary>
+    public static string PickerBadHex(string text) => $"\"{text}\" is not a color: #RRGGBB or #RGB.";
 
     // ── The pickers' preview (2026-10-02, the user's ask; ThemePreview) ──────
     // A small mock screen in the highlighted theme, the Theme Atlas's in brief: words that put every role on show.

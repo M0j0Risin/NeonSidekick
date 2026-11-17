@@ -133,7 +133,8 @@ internal sealed unsafe class WindowChrome(string owner)
         }
 
         _caption = style;
-        int dark = 1;
+        // The dark bar on a dark theme, the light one on a light theme (2026-11-16, the daylight themes; always dark until then).
+        int dark = style.LightCaption ? 0 : 1;
         uint caption = style.Caption, text = style.CaptionText, border = style.Border;
         DwmSetWindowAttribute(Window, DwmwaUseImmersiveDarkMode, &dark, sizeof(int));
         DwmSetWindowAttribute(Window, DwmwaCaptionColor, &caption, sizeof(uint));

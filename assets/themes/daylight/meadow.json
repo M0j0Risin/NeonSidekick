@@ -1,0 +1,29 @@
+{
+  "name": "meadow",
+  "description": "greens and sunflower on soft ivory",
+  "colors": {
+    "primary": "#1F6F1C",
+    "secondary": "#1E6642",
+    "tertiary": "#7A5C06",
+    "deep": "#BDC78A",
+    "highlight": "#8F510C",
+    "warm": "#9F4612",
+    "tint": "#456A1B",
+    "ink": "#1C3A1C",
+    "dim": "#59644F",
+    "dimmer": "#929B80",
+    "bg": "#FAF8E8",
+    "panelBg": "#E7E2B8",
+    "good": "#1C6E30",
+    "bad": "#B9251A",
+    "warn": "#825803"
+  },
+  "gradient": [
+    "#2B935F",
+    "#299525",
+    "#5B901F",
+    "#998008",
+    "#AF7604"
+  ],
+  "styles": {}
+}

@@ -750,7 +750,8 @@ internal sealed partial class ChatScreen
             WebUiText.Version,
             WebUiAssets.Current,
             // The theme's name (2026-10-15): a /theme at the PC re-links the page's sheet; empty while the pages keep their own look.
-            effective.WebUiProfileTheme ? Theme.Current.Name : "",
+            // Its name and a hash of its sheet since 2026-11-16 (WebTheme.Key), so an edit under the same name re-links it too.
+            effective.WebUiProfileTheme ? WebTheme.Key(Theme.Current) : "",
             // The tabs on (later on 2026-10-15): the page hides the others' links, and leaves a tab that went off.
             effective.WebUiChatControls,
             effective.WebUiHomeControls,

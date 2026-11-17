@@ -251,6 +251,70 @@ public static class NetworkRender
         return answer.ToString();
     }
 
+    // ── HTTP (2026-11-16, plan sharded-hugging-puppy #15) ───────────────────
+
+    /// <summary>
+    /// An HTTP check: a head naming the last answer (or why there was none), one line per request (method, URL, status and reason, the version
+    /// spoken, the time, and where it redirects), then the last answer's telling headers. Every server-sent value — the reason, each
+    /// <c>Location</c> and the URLs it led to, the header values — is fenced; the URL asked for is the caller's own.
+    /// </summary>
+    public static string Http(HttpReport report)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        var last = report.Hops.Count > 0 ? report.Hops[^1] : null;
+        var answered = report.Hops.LastOrDefault(h => h.Status is not null);
+        string outcome = answered is { Status: { } code } && answered == last ? code.ToString(CultureInfo.InvariantCulture)
+            : answered is { Status: { } earlier } ? earlier.ToString(CultureInfo.InvariantCulture) + ", then " + (last?.Problem ?? "no answer")
+            : last?.Problem ?? "no answer";
+        string count = report.Hops.Count == 1 ? "1 request" : report.Hops.Count.ToString(CultureInfo.InvariantCulture) + " requests";
+        var answer = new Answer("HTTP " + report.Asked.AbsoluteUri + ": " + outcome + " (" + count + ", " + Ms(report.Total) + ")");
+        for (int i = 0; i < report.Hops.Count; i++)
+        {
+            var hop = report.Hops[i];
+            string url = i == 0 ? hop.Url.AbsoluteUri : answer.Fence(hop.Url.AbsoluteUri);
+            var line = new StringBuilder("  " + (i + 1).ToString(CultureInfo.InvariantCulture) + ". " + hop.Method + " " + url + " → ");
+            if (hop.Status is { } status)
+            {
+                line.Append(status.ToString(CultureInfo.InvariantCulture));
+                if (!string.IsNullOrWhiteSpace(hop.Reason))
+                {
+                    line.Append(' ').Append(answer.Fence(hop.Reason));
+                }
+
+                line.Append(", ").Append(hop.Version).Append(", ").Append(Ms(hop.Elapsed));
+                if (hop.Location is { } location)
+                {
+                    line.Append(" → ").Append(answer.Fence(location));
+                }
+
+                if (hop.Problem is { } stopped)
+                {
+                    line.Append("; ").Append(stopped);
+                }
+            }
+            else
+            {
+                line.Append(hop.Problem ?? "no answer");
+            }
+
+            answer.Line(line.ToString());
+        }
+
+        if (report.CutAtMaxHops)
+        {
+            answer.Line("  " + NetworkText.HttpTooManyHops(HttpProbe.MaxHops));
+        }
+
+        foreach (var (name, value) in report.Headers)
+        {
+            answer.Line("  " + name + ": " + answer.Fence(value));
+        }
+
+        return answer.ToString();
+    }
+
+    private static string Ms(TimeSpan elapsed) => Math.Max(0, elapsed.TotalMilliseconds).ToString("0", CultureInfo.InvariantCulture) + " ms";
+
     // ── Certificate stores ──────────────────────────────────────────────────
 
     /// <summary>A store's certificates after the filter, soonest to end first, up to <paramref name="limit"/>.</summary>

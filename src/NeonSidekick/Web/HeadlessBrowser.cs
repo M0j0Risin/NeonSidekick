@@ -52,6 +52,9 @@ public interface IHeadlessBrowser
 
     /// <summary><paramref name="job"/>'s PDFs edited through <paramref name="executable"/> (2026-10-14): merged, cut, turned or filled in, by pdf-lib in the page (<see cref="BrowserPdfEditor"/>).</summary>
     Task<PdfEdit> EditPdfAsync(string executable, PdfEditJob job, CancellationToken cancellationToken);
+
+    /// <summary><paramref name="job"/> drawn to a picture through <paramref name="executable"/> (2026-11-16, plan sharded-hugging-puppy #9: <see cref="BrowserPictureRenderer"/>).</summary>
+    Task<PictureRender> RenderPictureAsync(string executable, RenderJob job, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -726,6 +729,210 @@ public sealed class HeadlessBrowser : IHeadlessBrowser
         {
             _oneAtATime.Release();
         }
+    }
+
+    /// <summary>
+    /// <paramref name="job"/> drawn as <see cref="BrowserPictureRenderer"/> describes (2026-11-16, plan sharded-hugging-puppy #9): the PDF reads'
+    /// network-less profile and arguments, one run at a time with the other browser work, within <see cref="BrowserPictureRenderer.Timeout"/>.
+    /// Mermaid's complaint about the text comes back as <see cref="PictureRender.MermaidError"/>, for the model to fix.
+    /// </summary>
+    public async Task<PictureRender> RenderPictureAsync(string executable, RenderJob job, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(executable);
+        ArgumentNullException.ThrowIfNull(job);
+        if ((job.Mermaid is null) == (job.Html is null))
+        {
+            return new PictureRender(false, "nothing to draw", null, 0, 0);
+        }
+
+        string? library = null;
+        if (job.Mermaid is not null && (library = BrowserPictureRenderer.LibraryText()) is null)
+        {
+            return new PictureRender(false, "this build carries no Mermaid", null, 0, 0);
+        }
+
+        await _oneAtATime.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var state = new PictureState();
+            var blank = new Uri("about:blank");
+            var run = await RunProcessAsync(executable, blank, _pdfUserData, PdfReadArguments, BrowserPictureRenderer.Timeout, (process, userData, token) => WatchRenderAsync(process, userData, library, job, state, token), cancellationToken).ConfigureAwait(false);
+            if (run.StartError is not null)
+            {
+                return new PictureRender(false, run.StartError, null, 0, 0);
+            }
+
+            DiagnosticLog.Debug(Category, $"{run.Summary}, a picture ({(job.Mermaid is null ? "page" : "Mermaid")}, {job.Format})" + (state.Bytes is null ? "" : $", {state.Bytes.Length.ToString(CultureInfo.InvariantCulture)} B, {state.Width.ToString(CultureInfo.InvariantCulture)}×{state.Height.ToString(CultureInfo.InvariantCulture)}") + (state.Failure is null ? "" : $"; {state.Failure}") + run.StderrTail);
+            if (state.MermaidError is { } complaint)
+            {
+                return new PictureRender(false, complaint, null, 0, 0) { InJob = run.InJob, MermaidError = complaint };
+            }
+
+            if (state.Bytes is { } bytes)
+            {
+                return new PictureRender(true, "", bytes, state.Width, state.Height) { InJob = run.InJob, Cut = state.Cut };
+            }
+
+            if (state.TooLarge)
+            {
+                return new PictureRender(false, "the picture is too large to hand back", null, 0, 0) { InJob = run.InJob, TooLarge = true };
+            }
+
+            string detail = state.Failure ?? (run.TimedOut ? $"stopped after {Llm.LlmTimeouts.Format(BrowserPictureRenderer.Timeout)}" : await run.FailureAsync("it drew nothing", cancellationToken).ConfigureAwait(false));
+            return new PictureRender(false, detail, null, 0, 0) { InJob = run.InJob };
+        }
+        finally
+        {
+            _oneAtATime.Release();
+        }
+    }
+
+    /// <summary>What <see cref="WatchRenderAsync"/> got to: the picture, or Mermaid's complaint, or why it failed.</summary>
+    private sealed class PictureState
+    {
+        public byte[]? Bytes;
+        public int Width;
+        public int Height;
+        public bool Cut;
+        public bool TooLarge;
+        public string? MermaidError;
+        public string? Failure;
+    }
+
+    /// <summary>The draw over DevTools, then the browser closed: <see cref="WatchEditAsync"/>'s shape and contract.</summary>
+    private static async Task<bool> WatchRenderAsync(Process process, string userData, string? library, RenderJob job, PictureState state, CancellationToken cancellationToken)
+    {
+        await using var client = new DevToolsClient();
+        try
+        {
+            var endpoint = await DevToolsClient.WaitForEndpointAsync(userData, () => process.HasExited, cancellationToken).ConfigureAwait(false);
+            await client.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+            string? session;
+            while ((session = await AttachAsync(client, cancellationToken).ConfigureAwait(false)) is null)
+            {
+                await Task.Delay(DomSettle.PollInterval, cancellationToken).ConfigureAwait(false);
+            }
+
+            await DrawAsync(client, session, library, job, state, cancellationToken).ConfigureAwait(false);
+            await client.NotifyAsync("Browser.close", cancellationToken).ConfigureAwait(false);
+        }
+        catch (DevToolsException ex) when (ex.TooLarge)
+        {
+            state.TooLarge = true;
+            return true;
+        }
+        catch (Exception ex) when (ex is DevToolsException or System.Net.WebSockets.WebSocketException or IOException or JsonException or InvalidOperationException or FormatException or KeyNotFoundException)
+        {
+            state.Failure ??= ex.Message;
+            return true;
+        }
+
+        using var grace = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        grace.CancelAfter(CloseGrace);
+        try
+        {
+            await process.WaitForExitAsync(grace.Token).ConfigureAwait(false);
+            return false;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return true;
+        }
+    }
+
+    // The steps: Mermaid's strict pass in the first page (a diagram), then the drawing in a fresh page, measured and captured.
+    private static async Task DrawAsync(DevToolsClient client, string session, string? library, RenderJob job, PictureState state, CancellationToken cancellationToken)
+    {
+        string html = job.Html ?? "";
+        if (job.Mermaid is { } source)
+        {
+            var (loaded, loadError) = await LoadIntoPageAsync(client, session, BrowserPictureRenderer.LoadExpression(library!), cancellationToken).ConfigureAwait(false);
+            if (loaded is not { } answer || !BrowserPictureRenderer.Loaded(answer))
+            {
+                state.Failure = "Mermaid did not load: " + (loadError ?? "mermaid missing");
+                return;
+            }
+
+            var (drawn, drawError) = await EvaluateAwaitAsync(client, session, BrowserPictureRenderer.MermaidExpression(source, BrowserPictureRenderer.MermaidTheme(job.Background)), cancellationToken).ConfigureAwait(false);
+            if (drawn is not { } value)
+            {
+                state.Failure = "Mermaid failed: " + drawError;
+                return;
+            }
+
+            var (svg, complaint) = BrowserPictureRenderer.MermaidAnswer(value);
+            if (svg is null)
+            {
+                state.MermaidError = complaint;
+                return;
+            }
+
+            html = Render.PicturePage.ForTrustedSvg(svg);
+        }
+
+        // A fresh page for the drawing: nothing the Mermaid pass loaded is in it, and the picture page's policy holds from its first byte.
+        var created = await client.SendAsync("Target.createTarget", w => w.WriteString("url", "about:blank"), null, cancellationToken).ConfigureAwait(false);
+        string target = created.GetProperty("targetId").GetString() ?? throw new InvalidOperationException("no page made");
+        var attached = await client.SendAsync("Target.attachToTarget", w =>
+        {
+            w.WriteString("targetId", target);
+            w.WriteBoolean("flatten", true);
+        }, null, cancellationToken).ConfigureAwait(false);
+        string page = attached.GetProperty("sessionId").GetString() ?? throw new InvalidOperationException("no page session");
+        await client.SendAsync("Page.enable", null, page, cancellationToken).ConfigureAwait(false);
+        await client.SendAsync("Emulation.setDeviceMetricsOverride", w =>
+        {
+            w.WriteNumber("width", job.Width);
+            w.WriteNumber("height", 800);
+            w.WriteNumber("deviceScaleFactor", job.Scale);
+            w.WriteBoolean("mobile", false);
+        }, page, cancellationToken).ConfigureAwait(false);
+        var (r, g, b, a) = BrowserPictureRenderer.Ground(job.Background);
+        await client.SendAsync("Emulation.setDefaultBackgroundColorOverride", w =>
+        {
+            w.WriteStartObject("color");
+            w.WriteNumber("r", r);
+            w.WriteNumber("g", g);
+            w.WriteNumber("b", b);
+            w.WriteNumber("a", a);
+            w.WriteEndObject();
+        }, page, cancellationToken).ConfigureAwait(false);
+        var tree = await client.SendAsync("Page.getFrameTree", null, page, cancellationToken).ConfigureAwait(false);
+        string frame = tree.GetProperty("frameTree").GetProperty("frame").GetProperty("id").GetString() ?? throw new InvalidOperationException("no frame");
+        await client.SendAsync("Page.setDocumentContent", w =>
+        {
+            w.WriteString("frameId", frame);
+            w.WriteString("html", html);
+        }, page, cancellationToken).ConfigureAwait(false);
+        var (measured, sizeError) = await EvaluateAwaitAsync(client, page, BrowserPictureRenderer.SizeExpression, cancellationToken).ConfigureAwait(false);
+        if (measured is not { } size || BrowserPictureRenderer.Size(size) is not { } box)
+        {
+            state.Failure = "the page couldn't be measured: " + (sizeError ?? "no size");
+            return;
+        }
+
+        var (width, height) = BrowserPictureRenderer.Clip(box.Width, box.Height, job.Width, job.Scale, out bool cut);
+        var shot = await client.SendAsync("Page.captureScreenshot", w =>
+        {
+            w.WriteString("format", job.Format == PictureFormat.Jpeg ? "jpeg" : "png");
+            if (job.Format == PictureFormat.Jpeg)
+            {
+                w.WriteNumber("quality", BrowserPictureRenderer.JpegQuality);
+            }
+
+            w.WriteStartObject("clip");
+            w.WriteNumber("x", 0);
+            w.WriteNumber("y", 0);
+            w.WriteNumber("width", width);
+            w.WriteNumber("height", height);
+            w.WriteNumber("scale", 1);
+            w.WriteEndObject();
+            w.WriteBoolean("captureBeyondViewport", true);
+        }, page, cancellationToken).ConfigureAwait(false);
+        state.Bytes = Convert.FromBase64String(shot.GetProperty("data").GetString() ?? "");
+        state.Width = (int)Math.Round(width * job.Scale);
+        state.Height = (int)Math.Round(height * job.Scale);
+        state.Cut = cut;
     }
 
     /// <summary>What <see cref="WatchEditAsync"/> got to: the new file, or a refusal the caller words, or why it failed.</summary>

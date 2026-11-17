@@ -358,7 +358,7 @@ public enum SettingsField
     /// <summary>An action row, no setting behind it (later on 2026-09-23, the user's ask): Enter walks a new connection through every choice — the file, the name, the server, the sign-in, the password (masked), the TLS pair — tests it and adds it to that <c>sql.json</c> (<c>SettingsMenu.SqlWizard.cs</c>). The SQL tab's fifth row, under <see cref="SqlSetPassword"/>. Last in the enum, as every newcomer.</summary>
     SqlAddConnection,
 
-    /// <summary>A pick among <see cref="UI.ThemeName.Names"/>: the look (<see cref="Settings.AppSettingsData.Theme"/>, 2026-09-23). The Chat tab's screen run's first row, after Copy user prompt (2026-10-01; its last row before); a change puts the theme in force at once (the pane re-colours) and raises <see cref="SettingsChanges.Theme"/>, so the screen starts over as <c>/splash</c> does when the pane closes. No reconnect. Last in the enum, as every newcomer.</summary>
+    /// <summary>A pick among <see cref="UI.ThemeName.Names"/>: the look (<see cref="Settings.AppSettingsData.Theme"/>, 2026-09-23). The Chat tab's screen run's first row, after Copy user prompt (2026-10-01; its last row before); a change puts the theme in force at once (the pane re-colours) and raises <see cref="SettingsChanges.Theme"/>, so the screen is drawn again in it when the pane closes, the conversation kept (2026-11-16; it started over as <c>/splash</c> does until then). No reconnect. Last in the enum, as every newcomer.</summary>
     Theme,
 
     /// <summary>A toggle: whether a turn offers the image tools (<see cref="Settings.AppSettingsData.ComfyTools"/>). The ComfyUI tab of <c>/tools</c>' first row (2026-09-24); no reconnect (read at each turn). Last in the enum, as every newcomer.</summary>
@@ -986,7 +986,7 @@ public enum SettingsField
     /// <summary>Typed: the folder under the profile's images folder a clipboard picture is saved in when its message is sent (<see cref="Settings.AppSettingsData.PastedImagesFolder"/>). The Files tab's last row (2026-10-09), the Image menu's since 2026-10-10; the Camera output folder's rule; no reconnect. Last in the enum, as every newcomer.</summary>
     PastedImagesFolder,
 
-    /// <summary>Whether a turn offers the picture tools, view_image, image_info and image_edit (<see cref="Settings.AppSettingsData.ImageTools"/>): their own group since 2026-10-10 (the user's ask; on File tools until then), the Image menu's first row on <c>/tools</c> › Files; a toggle, no reconnect (read at each turn). Last in the enum until <see cref="Advisors"/>.</summary>
+    /// <summary>Whether a turn offers the picture tools, view_image, image_info and image_edit, and the render tools with a browser found (2026-11-16) (<see cref="Settings.AppSettingsData.ImageTools"/>): their own group since 2026-10-10 (the user's ask; on File tools until then), the Image menu's first row on <c>/tools</c> › Files; a toggle, no reconnect (read at each turn). Last in the enum until <see cref="Advisors"/>.</summary>
     ImageTools,
 
     /// <summary>A toggle: whether a turn offers <c>neon_advisor</c> (<see cref="Settings.AppSettingsData.Advisors"/>). The Advisors tab of <c>/settings</c>' first row (2026-10-10, the user's ask); no reconnect (read at each turn).</summary>
@@ -1496,9 +1496,9 @@ public enum SettingsChanges
     Mcp = 32,
 
     /// <summary>
-    /// <see cref="SettingsField.Theme"/> was changed to another theme (2026-09-23): the screen starts
-    /// over the way <c>/theme</c> and <c>/splash</c> do — a fresh session, the banner and splash in
-    /// the new colours — since what is already drawn keeps the old ones. No reconnect.
+    /// <see cref="SettingsField.Theme"/> was changed to another theme (2026-09-23): the screen is drawn again in the new colours, since what
+    /// is already drawn keeps the old ones — the conversation kept and replayed since 2026-11-16 (the user's call), a fresh session before
+    /// that. Not a reset of a turn's tail. No reconnect.
     /// </summary>
     Theme = 64,
 
@@ -10309,7 +10309,7 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The theme picker under the settings list: one <see cref="ThemeLabel"/> row per <see cref="ThemeName.Names"/> entry, the saved one under the cursor. The pick is put in force at once, so the pane wears it; the screen starts over when the pane closes (<see cref="SettingsChanges.Theme"/>).</summary>
+    /// <summary>The theme picker under the settings list: one <see cref="ThemeLabel"/> row per <see cref="ThemeName.Names"/> entry, the saved one under the cursor. The pick is put in force at once, so the pane wears it; the screen is drawn again in it, the conversation kept, when the pane closes (<see cref="SettingsChanges.Theme"/>).</summary>
     private async Task<bool> PickThemeRowAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
         var themes = ScanThemes().Themes;
@@ -10330,10 +10330,10 @@ internal sealed partial class SettingsMenu
     /// <c>/theme</c> (2026-09-23, the user's ask): saves and puts in force <paramref name="requestedName"/>
     /// when given (one of <see cref="ThemeName.Names"/>, any case; anything else is <see cref="ThemeNameError"/>),
     /// otherwise the themes as a one-level list opened on the one in force. Quiet on a change — the
-    /// screen starts over and says so itself — and returns true only when the theme in force changed;
+    /// screen is drawn again in it and says so itself — and returns true only when the theme in force changed;
     /// the one already in force says <see cref="ThemeAlreadyNotice"/>, ESC <see cref="UnchangedNotice"/>.
     /// Without menus the guard prints. The user's themes (2026-10-01) are read afresh each time, their
-    /// files' problems said as warnings; <c>/theme export …</c> is <see cref="ExportTheme"/>.
+    /// files' problems said as warnings; <c>/theme export …</c> is <see cref="ExportTheme"/>, <c>/theme edit …</c> <see cref="EditThemeAsync"/>.
     /// </summary>
     public async Task<bool> PickThemeAsync(string requestedName, CancellationToken cancellationToken)
     {
@@ -10344,6 +10344,13 @@ internal sealed partial class SettingsMenu
         {
             ExportTheme(request[ThemeText.ExportWord.Length..]);
             return false;
+        }
+
+        if (request.Equals(ThemeText.EditWord, StringComparison.OrdinalIgnoreCase)
+            || request.StartsWith(ThemeText.EditWord + " ", StringComparison.OrdinalIgnoreCase))
+        {
+            // /theme edit (2026-11-16, plan sharded-hugging-puppy #54): true only when it saved the theme in force, so /theme repaints in it.
+            return await EditThemeAsync(request[ThemeText.EditWord.Length..], cancellationToken).ConfigureAwait(false);
         }
 
         var scan = ScanThemes();
@@ -10376,34 +10383,48 @@ internal sealed partial class SettingsMenu
     /// <c>&lt;name&gt;-custom</c>, so an export never replaces the theme it copies; a built-in's name makes the file its
     /// override (later on 2026-10-01, the user's call: <see cref="ThemeCatalog"/>'s file wins, and the export says so).
     /// Never overwrites a file and never takes a name a user theme already has, an override's included. Nothing is put in force.
+    /// <paramref name="held"/> (2026-11-16, <c>/theme edit</c>'s copy) keeps the lines instead of printing them, for a caller with the pane
+    /// open: printed then, they landed under it. Each is (whether it is an error, the text).
     /// </summary>
-    private void ExportTheme(string args)
+    private void ExportTheme(string args, List<(bool Error, string Text)>? held = null)
     {
+        void Error(string text)
+        {
+            if (held is not null)
+            {
+                held.Add((true, text));
+            }
+            else
+            {
+                Flow.Error(text);
+            }
+        }
+
         string[] words = args.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (words.Length is 0 or > 2)
         {
-            Flow.Error(ThemeText.ExportUsage);
+            Error(ThemeText.ExportUsage);
             return;
         }
 
         var scan = ScanThemes();
         if (!ThemeName.TryParse(words[0], scan.Themes, out var palette))
         {
-            Flow.Error(ThemeNameError(words[0], scan.Names));
+            Error(ThemeNameError(words[0], scan.Names));
             return;
         }
 
         string newName = words.Length == 2 ? words[1].ToLowerInvariant() : palette.Name + "-custom";
-        if (!ThemeFile.IsValidName(newName))
+        if (!ThemeFile.IsValidNewName(newName))
         {
-            Flow.Error(ThemeText.ExportBadName(newName));
+            Error(ThemeText.ExportBadName(newName));
             return;
         }
 
         bool named = ThemeName.TryParse(newName, scan.Themes, out var taken);
         if (named && !taken.IsBuiltIn)
         {
-            Flow.Error(ThemeText.ExportNameTaken(newName));
+            Error(ThemeText.ExportNameTaken(newName));
             return;
         }
 
@@ -10417,18 +10438,24 @@ internal sealed partial class SettingsMenu
         }
         catch (IOException) when (File.Exists(path))
         {
-            Flow.Error(ThemeText.ExportExists(path));
+            Error(ThemeText.ExportExists(path));
             return;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            Flow.Error(ThemeText.ExportFailed(ex.Message));
+            Error(ThemeText.ExportFailed(ex.Message));
             return;
         }
 
-        Sink.Notice(named
-            ? ThemeText.ExportOverrides(newName, path)
-            : ThemeText.ExportDone(newName, path));
+        string done = named ? ThemeText.ExportOverrides(newName, path) : ThemeText.ExportDone(newName, path);
+        if (held is not null)
+        {
+            held.Add((false, done));
+        }
+        else
+        {
+            Sink.Notice(done);
+        }
     }
 
     /// <summary>The themes as of now, the built-ins and the user's, each file's problem said as a warning.</summary>
@@ -10459,7 +10486,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// Both theme pickers' column beside the list (2026-10-02, the user's ask): the highlighted theme's
-    /// <see cref="ThemePreview"/>, in its own styles while the pane stays in the one in force, so the screen starts over only
+    /// <see cref="ThemePreview"/>, in its own styles while the pane stays in the one in force, so the screen is drawn again only
     /// on the pick, as before. On the terminal's own background while <c>Themed background</c> is off (2026-10-03), read per draw.
     /// </summary>
     private Func<int, int, int, IReadOnlyList<Spectre.Console.Rendering.IRenderable>> ThemeSide(IReadOnlyList<ThemePalette> themes) =>

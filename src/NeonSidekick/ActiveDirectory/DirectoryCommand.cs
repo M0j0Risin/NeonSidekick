@@ -10,7 +10,7 @@ namespace NeonSidekick.ActiveDirectory;
 /// (2026-10-15, the AD gaps plan) a group's <c>members:</c>, a find's <c>type:</c>, <c>ou:</c> and <c>field:</c>, and <c>to:</c>.
 /// </summary>
 public sealed record DirectoryCommandArgs(string Verb, string Argument, string? Domain, bool Nested, int Days, string? Members = null, string? Type = null, string? Ou = null,
-    string? Field = null, string? To = null);
+    string? Field = null, string? To = null, string? Compare = null);
 
 /// <summary>
 /// What a <c>/ad</c> line came to: the answer (the card's; null on a refusal before any read), its lines without the pane (the card unbounded, or
@@ -32,7 +32,7 @@ public static class DirectoryCommand
     public static readonly IReadOnlyList<string> Verbs = ["user", "group", "memberof", "computer", "find", "ou", "domain"];
 
     /// <summary>The key words lifted from anywhere on the line (only these: a name with another colon stays a name). Pinned.</summary>
-    public static readonly IReadOnlyList<string> Keys = ["domain", "type", "ou", "field", "members", "to"];
+    public static readonly IReadOnlyList<string> Keys = ["domain", "type", "ou", "field", "members", "to", "compare"];
 
     /// <summary>
     /// The <c>type:</c> values a verb takes, null for a verb that takes none (2026-11-12, the code review's 36: one list per verb for the parse,
@@ -53,6 +53,7 @@ public static class DirectoryCommand
         "type" => TypesFor(verb) is not null,
         "field" or "ou" => verb == "find",
         "to" => verb is "group" or "memberof" or "find" or "ou",
+        "compare" => verb == "memberof",   // 2026-11-16, #16: another account's groups beside this one's
         _ => false,
     };
 
@@ -178,7 +179,7 @@ public static class DirectoryCommand
                 return (null, Bare(DirectoryText.BadChoice("type", kind, types)));
             }
 
-            return (new DirectoryCommandArgs(verb, string.Join(' ', rest), domain, nested, 0, Type: kind, To: to), null);
+            return (new DirectoryCommandArgs(verb, string.Join(' ', rest), domain, nested, 0, Type: kind, To: to, Compare: Key("compare")), null);
         }
 
         string? members = Key("members")?.ToLowerInvariant();
@@ -196,7 +197,7 @@ public static class DirectoryCommand
     /// <summary>The usage line: the kinds from <see cref="DirectoryQueries.FindKinds"/>, so it can never name one the tool lacks. Pinned.</summary>
     public static string Usage =>
         "Usage: /ad <name> · user <name> · group <name> [nested] [members:users|computers|groups] · memberof <name> [nested] [type:"
-        + string.Join('|', DirectoryQueries.MemberOfTypes) + "] · computer <name> · ou [<path>] · find "
+        + string.Join('|', DirectoryQueries.MemberOfTypes) + "] [compare:<name>] · computer <name> · ou [<path>] · find "
         + string.Join('|', DirectoryQueries.FindKinds) + " [days] [words] [type:<type>] [field:<field>] [ou:<path>] · domain · domain:<name> and to:<file-or-folder> (a .csv file or a folder) may stand anywhere";
 
     private static string Bare(string error) => error.Replace("Error: ", "", StringComparison.Ordinal);
@@ -208,7 +209,7 @@ public static class DirectoryCommand
         return line.Verb switch
         {
             "group" => "group " + line.Argument + (line.Nested ? " nested" : "") + (line.Members is { } m ? " " + m : ""),
-            "memberof" => MemberOfQuestion(line.Argument, line.Nested, line.Type),
+            "memberof" => MemberOfQuestion(line.Argument, line.Nested, line.Type, line.Compare),
             "ou" => "ou " + (line.Argument.Length > 0 ? line.Argument : "tree"),
             _ when line.Verb.StartsWith("find:", StringComparison.Ordinal) => "find " + line.Verb[5..] + (line.Type is { } t ? " " + t : "") + (line.Argument.Length > 0 ? " " + line.Argument : ""),
             _ => line.Verb + " " + line.Argument,
@@ -258,6 +259,8 @@ public static class DirectoryCommand
             "user" => DirectoryQueries.UserAnswer(session, source, line.Argument, now, zone, deadline: deadline),
             "group" => DirectoryQueries.GroupAnswer(session, source, line.Argument, line.Nested, line.Members ?? "all", DirectoryLimits.MaxEntries, zone, deadline),
             // Explicit (the plan's pass 2): the default arm reads any other verb as find:<kind>.
+            "memberof" when line.Compare is { } other => DirectoryQueries.MemberOfCompare(session, source, line.Argument, other, line.Type, line.Nested, DirectoryLimits.MaxEntries, zone, deadline,
+                canSave: target is null && files?.Invoke() is not null),
             "memberof" => DirectoryQueries.MemberOfAnswer(session, source, line.Argument, line.Type, line.Nested, DirectoryLimits.MaxEntries, zone, deadline,
                 canSave: target is null && files?.Invoke() is not null),
             "computer" => DirectoryQueries.ComputerAnswer(session, source, line.Argument, zone, deadline: deadline),
@@ -265,7 +268,9 @@ public static class DirectoryCommand
             "ou" => DirectoryQueries.OuAnswer(session, source, line.Argument.Length > 0 ? line.Argument : null, DirectoryLimits.MaxEntries, deadline, cap: cap, zone: zone),
             "name" => DirectoryQueries.FindAnswer(session, source, new FindOptions("name", 0, line.Argument, DirectoryLimits.MaxEntries, Cap: cap), now, zone, deadline),
             _ => DirectoryQueries.FindAnswer(session, source, new FindOptions(line.Verb[5..], line.Days, line.Argument.Length > 0 ? line.Argument : null, DirectoryLimits.MaxEntries, line.Type, line.Ou, line.Field, cap), now, zone, deadline),
-        }, Describe(line), cancellationToken, line.Verb == "memberof" ? a => DescribeMemberOf(line.Argument, line.Nested, a.AccountType) : null).ConfigureAwait(false);
+        }, Describe(line), cancellationToken, line.Verb != "memberof" ? null
+            : line.Compare is { } compared ? a => DescribeCompare(line.Argument, compared, line.Nested, a.AccountType)
+            : a => DescribeMemberOf(line.Argument, line.Nested, a.AccountType)).ConfigureAwait(false);
         if (target is not null && result.Answer is { Failed: false } answer)
         {
             answer.Saved = DirectoryCsv.Save(target, answer, answer.Partial);
@@ -350,6 +355,19 @@ public static class DirectoryCommand
     }
 
     /// <summary>
+    /// Two accounts' groups compared by their DNs (2026-11-16, #16): the compare card's <c>n</c>, which flips nested and keeps both accounts.
+    /// </summary>
+    public static Task<DirectoryCommandResult> CompareAsync(DirectoryAccess access, string? domain, DirectoryRowTarget account, DirectoryRowTarget other, bool nested, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(access);
+        ArgumentNullException.ThrowIfNull(account);
+        ArgumentNullException.ThrowIfNull(other);
+        return RunCardAsync(access, domain, (session, source, deadline) =>
+            DirectoryQueries.MemberOfCompare(session, source, account.Name, other.Name, null, nested, DirectoryLimits.MaxEntries, access.Time.LocalTimeZone, deadline, dn: account.Dn, otherDn: other.Dn),
+            DescribeCompare(account.Name, other.Name, nested), cancellationToken, a => DescribeCompare(account.Name, other.Name, nested, a.AccountType));
+    }
+
+    /// <summary>
     /// The words a line's last word may become (2026-10-15, the AD gaps plan: <c>key:value</c> words may stand anywhere, so the verb is the first
     /// word that is none): the verbs and the domains first; a find's kinds; a group's <c>nested</c> and <c>members:</c>; a key's values.
     /// </summary>
@@ -386,7 +404,7 @@ public static class DirectoryCommand
                 "find" when before.Count == 1 => DirectoryQueries.FindKinds,
                 "find" => ["type:", "field:", "ou:", "to:"],
                 "group" => ["nested", "members:", "to:"],
-                "memberof" => ["nested", "type:", "to:"],
+                "memberof" => ["nested", "type:", "compare:", "to:"],
                 "ou" => ["to:"],
                 _ => [],
             };
@@ -409,6 +427,7 @@ public static class DirectoryCommand
         {
             "user" => "the user " + line.Argument,
             "group" => DescribeGroup(line.Argument, line.Nested, line.Members ?? "all"),
+            "memberof" when line.Compare is { } other => DescribeCompare(line.Argument, other, line.Nested, line.Type),
             "memberof" => DescribeMemberOf(line.Argument, line.Nested, line.Type),
             "computer" => "the computer " + line.Argument,
             "domain" => "the domain",
@@ -440,9 +459,19 @@ public static class DirectoryCommand
     public static string DescribeMemberOf(string name, bool nested, string? type = null) =>
         "the groups " + (type is null ? "" : "the " + DirectoryText.KindWord(type) + " ") + name + " belongs to" + (nested ? " at any depth" : "");
 
-    /// <summary>The question an account's groups' CSV is named from: nested and the type kept, so the direct and the nested saves differ. Pinned.</summary>
-    public static string MemberOfQuestion(string name, bool nested, string? type) =>
-        "memberof " + name + (nested ? " nested" : "") + (type is { } t ? " " + t : "");
+    /// <summary>
+    /// Two accounts' groups compared (2026-11-16, #16): the card's title and the ask draft, "the groups alice and bob belong to, side by side".
+    /// Pinned.
+    /// </summary>
+    public static string DescribeCompare(string name, string other, bool nested, string? type = null) =>
+        "the groups " + (type is null ? "" : "the " + DirectoryText.KindWord(type) + "s ") + name + " and " + other + " belong to" + (nested ? " at any depth" : "") + ", side by side";
+
+    /// <summary>
+    /// The question an account's groups' CSV is named from: nested, the type and a compare's other account kept, so the direct, the nested and the
+    /// compared saves differ. Pinned.
+    /// </summary>
+    public static string MemberOfQuestion(string name, bool nested, string? type, string? compare = null) =>
+        "memberof " + name + (compare is { } c ? " compare " + c : "") + (nested ? " nested" : "") + (type is { } t ? " " + t : "");
 
     /// <summary>A group card's title: what its two switches show ("the users in Staff at any depth"). Pinned.</summary>
     public static string DescribeGroup(string name, bool nested, string members) => members switch

@@ -1,0 +1,29 @@
+{
+  "name": "daybreak",
+  "description": "synthwave by day: magenta, violet and cyan on pale lavender",
+  "colors": {
+    "primary": "#B00E7F",
+    "secondary": "#6F2CCE",
+    "tertiary": "#06667A",
+    "deep": "#CCB4E3",
+    "highlight": "#B61450",
+    "warm": "#9F4008",
+    "tint": "#0C695D",
+    "ink": "#3A2460",
+    "dim": "#66567C",
+    "dimmer": "#9C8FAD",
+    "bg": "#F6F1FB",
+    "panelBg": "#E4D7F1",
+    "good": "#0F6B3D",
+    "bad": "#B9152B",
+    "warn": "#8E4D04"
+  },
+  "gradient": [
+    "#0D8BA4",
+    "#9863E3",
+    "#DB1FDB",
+    "#EC13AB",
+    "#EE2C73"
+  ],
+  "styles": {}
+}

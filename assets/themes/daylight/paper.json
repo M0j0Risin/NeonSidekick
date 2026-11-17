@@ -1,0 +1,29 @@
+{
+  "name": "paper",
+  "description": "ink on cream, teal and brick accents",
+  "colors": {
+    "primary": "#0F686C",
+    "secondary": "#9C3521",
+    "tertiary": "#3459B2",
+    "deep": "#CEBC99",
+    "highlight": "#7D570A",
+    "warm": "#A33D12",
+    "tint": "#1B6A50",
+    "ink": "#3E2E1E",
+    "dim": "#685C4D",
+    "dimmer": "#9F9480",
+    "bg": "#F9F3E4",
+    "panelBg": "#E8DCBC",
+    "good": "#1B6C2F",
+    "bad": "#B91A1A",
+    "warn": "#895007"
+  },
+  "gradient": [
+    "#1A8D91",
+    "#3487B1",
+    "#B2702D",
+    "#DA532B",
+    "#D85347"
+  ],
+  "styles": {}
+}

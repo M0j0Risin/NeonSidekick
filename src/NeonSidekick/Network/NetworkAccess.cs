@@ -52,9 +52,19 @@ public sealed class NetworkAccess
     /// <param name="connect">The TCP connect <c>net_port</c> uses (<see cref="NetworkProbes.ConnectAsync"/> when null).</param>
     /// <param name="systemQuery">A lookup asked of the system (<see cref="DnsClient.SystemQueryAsync"/> when null; a server list until 2026-11-03).</param>
     /// <param name="time">The clock: certificates' days left, the zone an answer shows.</param>
+    /// <param name="http">
+    /// <c>net_http</c>'s handler for one judged hop (2026-11-16, #15): <see cref="HttpProbe.Handler"/> when null, a stub in the tests.
+    /// </param>
+    /// <param name="identity">
+    /// The browser <c>net_http</c>'s <c>browser: true</c> speaks as (2026-11-16, #15: <c>web_fetch</c>'s, found from <i>Web browser path</i>);
+    /// <see cref="Web.BrowserIdentity.Fallback"/> when null.
+    /// </param>
     public NetworkAccess(Func<AppSettingsData> effective, IPinger? pinger, TimeProvider time, Func<string, CancellationToken, Task<IPAddress[]>>? resolve = null,
-        Func<IPAddress, int, CancellationToken, Task<PortState>>? connect = null, Func<string, ushort, CancellationToken, Task<DnsOutcome>>? systemQuery = null)
+        Func<IPAddress, int, CancellationToken, Task<PortState>>? connect = null, Func<string, ushort, CancellationToken, Task<DnsOutcome>>? systemQuery = null,
+        Func<NetworkTarget, HttpMessageHandler>? http = null, Func<Web.BrowserIdentity>? identity = null)
     {
+        _http = http ?? HttpProbe.Handler;
+        _identity = identity;
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         Pinger = pinger;
         Time = time ?? throw new ArgumentNullException(nameof(time));
@@ -64,6 +74,15 @@ public sealed class NetworkAccess
     }
 
     public IPinger? Pinger { get; }
+
+    private readonly Func<NetworkTarget, HttpMessageHandler> _http;
+    private readonly Func<Web.BrowserIdentity>? _identity;
+
+    /// <summary>A handler whose connections go only to <paramref name="target"/>'s judged addresses (one per <c>net_http</c> hop).</summary>
+    public HttpMessageHandler HttpHandler(NetworkTarget target) => _http(target);
+
+    /// <summary>The browser <c>net_http</c>'s <c>browser: true</c> speaks as, read at each call.</summary>
+    public Web.BrowserIdentity BrowserIdentity => _identity?.Invoke() ?? Web.BrowserIdentity.Fallback;
 
     public TimeProvider Time { get; }
 

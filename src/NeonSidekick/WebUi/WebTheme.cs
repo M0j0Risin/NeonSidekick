@@ -29,6 +29,35 @@ public static class WebTheme
     /// <summary>The page's own accent (<c>app.css</c>'s <c>--accent</c>).</summary>
     public const string PageAccent = "#ff4fd8";
 
+    private sealed record KeyCache(ThemePalette Palette, string Key);
+
+    private static KeyCache? s_key;
+
+    /// <summary>
+    /// The pulse's theme value (2026-11-16, plan sharded-hugging-puppy): the name, <c>~</c>, and a short hash of the sheet <see cref="Css"/> writes,
+    /// so a theme edited under the same name (<c>/theme edit</c>) re-links the page's sheet too. The pages only compare it and put it in
+    /// <c>?v=</c>. Worked out once per palette (the pulse runs often; <see cref="Theme.Use"/> swaps the palette whole).
+    /// </summary>
+    public static string Key(ThemePalette palette)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        if (s_key is { } cached && ReferenceEquals(cached.Palette, palette))
+        {
+            return cached.Key;
+        }
+
+        // FNV-1a over the sheet's text: stable across runs, unlike string.GetHashCode.
+        uint hash = 2166136261;
+        foreach (char c in Css(palette, on: true))
+        {
+            hash = (hash ^ c) * 16777619;
+        }
+
+        string key = palette.Name + "~" + hash.ToString("x8", CultureInfo.InvariantCulture);
+        s_key = new KeyCache(palette, key);
+        return key;
+    }
+
     /// <summary><c>/theme.css</c> for <paramref name="palette"/>; empty while <paramref name="on"/> is off.</summary>
     public static string Css(ThemePalette palette, bool on)
     {
@@ -68,8 +97,55 @@ public static class WebTheme
             Token("--dim", palette.Dim);
         }
 
+        if (readable && ColorContrast.IsLight(palette.Bg))
+        {
+            // A light page (2026-11-16, plan sharded-hugging-puppy #53, the daylight themes): app.css's colors fixed for a dark one given the
+            // theme's — the scheme, the gradient's far end, the diff slabs and the code block's ground as the terminal draws them, the text on
+            // the accent and on the error, and the code colors through the export's map. A dark theme keeps app.css's own.
+            css.Append("  color-scheme: light;\n");
+            Token("--bg-mix", Color.Black);
+            Token("--diff-add", Theme.Mix(palette.Bg, palette.Good, Theme.DiffSlabShare));
+            Token("--diff-del", Theme.Mix(palette.Bg, palette.Bad, Theme.DiffSlabShare));
+            var block = styles(ThemeStyleSlot.MarkdownCodeBlock);
+            Token("--code-bg", block.Background == Color.Default ? palette.PanelBg : block.Background);
+            Token("--on-accent", OnColor(palette.Primary, palette));
+            Token("--on-error", OnColor(palette.Bad, palette));
+            foreach (var (kind, slot) in CodeSlots)
+            {
+                if (Pdf.PdfHtml.CodeClass(kind) is { } name && styles(slot).Foreground != Color.Default)
+                {
+                    Token("--" + name, styles(slot).Foreground);
+                }
+            }
+        }
+
         return css.Append("}\n").ToString();
     }
+
+    /// <summary>
+    /// The code token kinds and the style each wears, as the terminal colors them: the session export's classes and the light page's
+    /// <c>--tk-*</c> tokens read one map (2026-11-16; the export's own until then).
+    /// </summary>
+    internal static readonly IReadOnlyList<(UI.Markdown.CodeTokenKind Kind, ThemeStyleSlot Slot)> CodeSlots =
+    [
+        (UI.Markdown.CodeTokenKind.Keyword, ThemeStyleSlot.CodeKeyword),
+        (UI.Markdown.CodeTokenKind.Type, ThemeStyleSlot.CodeType),
+        (UI.Markdown.CodeTokenKind.String, ThemeStyleSlot.CodeString),
+        (UI.Markdown.CodeTokenKind.Number, ThemeStyleSlot.CodeNumber),
+        (UI.Markdown.CodeTokenKind.Comment, ThemeStyleSlot.CodeComment),
+        (UI.Markdown.CodeTokenKind.Punctuation, ThemeStyleSlot.CodePunctuation),
+        (UI.Markdown.CodeTokenKind.Function, ThemeStyleSlot.CodeFunction),
+        (UI.Markdown.CodeTokenKind.Variable, ThemeStyleSlot.CodeVariable),
+        (UI.Markdown.CodeTokenKind.Attribute, ThemeStyleSlot.CodeAttribute),
+        (UI.Markdown.CodeTokenKind.Tag, ThemeStyleSlot.CodeTag),
+        (UI.Markdown.CodeTokenKind.Heading, ThemeStyleSlot.CodeHeading),
+        (UI.Markdown.CodeTokenKind.Inserted, ThemeStyleSlot.CodeInserted),
+        (UI.Markdown.CodeTokenKind.Deleted, ThemeStyleSlot.CodeDeleted),
+    ];
+
+    /// <summary>The page's ground or its ink, whichever reads better on <paramref name="fill"/>: the text on a button or badge of that color.</summary>
+    internal static Color OnColor(Color fill, ThemePalette palette) =>
+        ColorContrast.Contrast(palette.Bg, fill) >= ColorContrast.Contrast(palette.Ink, fill) ? palette.Bg : palette.Ink;
 
     /// <summary>
     /// A theme style as the page's tokens (2026-10-21): <paramref name="name"/> its foreground, then <c>-weight</c>, <c>-font-style</c> and

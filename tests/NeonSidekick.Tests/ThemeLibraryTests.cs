@@ -96,6 +96,24 @@ public sealed class ThemeLibraryTests
     }
 
     /// <summary>
+    /// Every built-in meets the contrast review's bars (2026-11-16, plan sharded-hugging-puppy #53: held by the commit message alone since
+    /// 2026-10-16, now by <see cref="ThemeChecks"/>), the eight light daylight themes as the sixty dark ones; and a palette that misses one is named.
+    /// </summary>
+    [Fact]
+    public void EveryBuiltIn_MeetsTheContrastBars()
+    {
+        var failing = ThemeLibrary.All.SelectMany(t => ThemeChecks.Problems(t).Select(p => $"{t.Name}: {p.Pair} {p.Ratio:0.00} < {p.Target}")).ToList();
+        Assert.Empty(failing);
+
+        var dull = ThemeLibrary.Default with { Dimmer = ThemeLibrary.Default.Bg, Primary = ThemeLibrary.Default.Bg };
+        var problems = ThemeChecks.Problems(dull);
+        Assert.Contains(problems, p => p.Pair == "dimmer on bg" && p.Ratio == 1 && p.Target == ThemeChecks.DimmerTarget);
+        Assert.Contains(problems, p => p.Pair == "bg on primary");
+        Assert.Contains(problems, p => p.Pair == "primary on panelBg");
+        Assert.Equal(8, ThemeLibrary.All.Count(t => ThemeLibrary.CategoryOf(t.Name) == "daylight"));
+    }
+
+    /// <summary>
     /// <c>Theme Atlas.html</c> shows the built-ins as they are (2026-10-05): its THEMES line names the same themes, each in its category with
     /// its colours and gradient. A theme added, changed or removed under <c>assets/themes</c> fails this until <c>tools/ThemeAtlas.cs</c> runs.
     /// </summary>

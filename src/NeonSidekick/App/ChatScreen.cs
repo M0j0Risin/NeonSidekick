@@ -1453,7 +1453,7 @@ internal sealed partial class ChatScreen
         // The PDF editor (2026-10-14, the PDF plan's phase 4b): pdf_edit and /pdf's edits, pdf-lib in the same browser.
         _pdfEditing = new PdfEditing(_web.Browser, _files, () => _web.Browser.Locate(_effective().WebBrowserPath), _time);
         _fileTools = FileTools(_files, () => WorkingDirectory.IsDefault(_effective().WorkingDirectory), _openFile, _effective, _unc, _pdf, _images, OpenPictureForModel, _pdfReading, _pdfEditing, _time, _docx);   // one converter for the tool and /docx (review P1-18)
-        _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory);
+        _imageTools = ImageTools(_files, _effective, _images, () => _settings.ProfileSplashDirectory, new Render.PictureRendering(_web.Browser, () => _effective().WebBrowserPath));
         _timers = new TimerBoard(time, SignalAlert);
         // The timer tone (2026-10-18, the user's ask): a device of its own from the app's playback factory; none in tests by default.
         _tones = new TimerTonePlayer(tonePlayback, time);
@@ -1609,6 +1609,8 @@ internal sealed partial class ChatScreen
             HintLayout = HintSlots,
             // The theme's bg as the terminal's page (2026-10-03, the user's ask), per frame so /theme and the switch show at once.
             PageBackground = () => _effective().ThemedBackground ? Theme.Bg : null,
+            // The ink as the text and cursor colour on a light page (2026-11-16, the daylight themes); a dark one keeps the profile's.
+            PageText = () => _effective().ThemedBackground && ColorContrast.IsLight(Theme.Bg) ? Theme.Ink : null,
             // The strip at the row's start in every state (the spinner and a menu's hint included):
             // the brain while a reflection runs, the tag while the model writes a session title,
             // then the speech switches as of the last connect, the wake word and the interrupt
@@ -5645,17 +5647,22 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Theme:
             {
-                // The built-ins and the user's themes (2026-10-01), then export; after "export " the names again, for its first word only.
+                // The built-ins and the user's themes (2026-10-01), then export and edit (2026-11-16); after "export " or "edit " the names
+                // again, built-ins too (an edit offers a built-in's copy), for the first word only.
                 var themes = sources.Themes?.Invoke() ?? ThemeName.Names.Select(name => new CompletionItem(name, ThemeName.Describe(name))).ToList();
-                string exportHead = ThemeText.ExportWord + " ";
-                if (argText.StartsWith(exportHead, StringComparison.OrdinalIgnoreCase))
+                foreach (string word in (ReadOnlySpan<string>)[ThemeText.ExportWord, ThemeText.EditWord])
                 {
-                    return argText[exportHead.Length..].Contains(' ', StringComparison.Ordinal)
-                        ? []
-                        : MentionCompleter.Matches(themes.Select(t => new CompletionItem(exportHead + t.Text, t.Note)).ToList(), argText);
+                    string head = word + " ";
+                    if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return argText[head.Length..].Contains(' ', StringComparison.Ordinal)
+                            ? []
+                            : MentionCompleter.Matches(themes.Select(t => new CompletionItem(head + t.Text, t.Note)).ToList(), argText);
+                    }
                 }
 
-                return MentionCompleter.Matches([.. themes, new CompletionItem(ThemeText.ExportWord, ThemeText.ExportNote)], argText);
+                return MentionCompleter.Matches(
+                    [.. themes, new CompletionItem(ThemeText.ExportWord, ThemeText.ExportNote), new CompletionItem(ThemeText.EditWord, ThemeText.EditNote)], argText);
             }
 
             case SlashCommand.Perf:
@@ -7150,7 +7157,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     /// <param name="images">The profile's images folder (2026-10-09): the tools read (and <c>image_edit</c> writes) a full path there; null = the working directory alone.</param>
     /// <param name="splashDirectory">The loaded profile's splash folder, read at each call (2026-10-12); null leaves <c>set_splash_image</c> out.</param>
-    public static IReadOnlyList<AIFunction> ImageTools(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null, Func<string>? splashDirectory = null)
+    /// <param name="rendering">The pictures drawn in the headless browser (2026-11-16, plan sharded-hugging-puppy #9): <c>render_picture</c>,
+    /// <c>render_chart</c> and <c>render_collage</c> after <c>image_edit</c>, offered on a turn while a browser is found; null leaves them out.</param>
+    public static IReadOnlyList<AIFunction> ImageTools(WorkingDirectory files, Func<AppSettingsData> effective, WorkingDirectory? images = null, Func<string>? splashDirectory = null, Render.PictureRendering? rendering = null)
     {
         if (!ImageCodecs.Available)
         {
@@ -7158,6 +7167,11 @@ internal sealed partial class ChatScreen
         }
 
         var tools = new List<AIFunction> { new ViewImageTool(files, effective, images), new ImageInfoTool(files, effective, images), new ImageEditTool(files, effective, images) };
+        if (rendering is not null)
+        {
+            tools.AddRange([new RenderPictureTool(files, rendering, images), new RenderChartTool(files, rendering, images), new RenderCollageTool(files, rendering, images)]);
+        }
+
         if (splashDirectory is not null)
         {
             tools.Add(new SetSplashImageTool(files, splashDirectory, images, () => SplashMode.TryParse(effective().WelcomeSplashMode, out var style) && style == SplashStyle.Robot));
@@ -7888,6 +7902,9 @@ internal sealed partial class ChatScreen
         OpenTool.ToolName,
         ImageInfoTool.ToolName,
         ImageEditTool.ToolName,
+        RenderPictureTool.ToolName,
+        RenderChartTool.ToolName,
+        RenderCollageTool.ToolName,
         LoadSkillTool.ToolName,
         SkillEditorTool.ToolName,
         PresentPlanTool.ToolName,
@@ -13146,19 +13163,28 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// A theme change (2026-09-23, the user's call: <c>/theme</c> and the Settings pane's <c>Theme</c>
-    /// row): what is already drawn keeps the colours it was drawn in (the scrollback stores styled
-    /// segments), so the screen starts over in the new ones — /clear's wipe and forgetting, the splash
-    /// as <c>Welcome splash</c> says, and the saved line under it. Until 2026-10-02 the splash came
-    /// whatever the setting said, as <c>/splash</c>'s does; now (the user's call) <c>disabled</c> makes
-    /// a theme change a plain <c>/clear</c>, the startup's rule.
-    /// The session was stored turn by turn, so <c>/sessions</c> brings it back, replayed in the new theme.
+    /// A theme change (<c>/theme</c>, the Settings pane's <c>Theme</c> row, a <c>/theme edit</c> save): what is already drawn keeps the colours
+    /// it was drawn in (the scrollback stores styled segments), so the screen is drawn again in the new ones. Since 2026-11-16 (plan
+    /// sharded-hugging-puppy, the user's call: "Repaint, keep chat") nothing is forgotten — the conversation is redrawn as <c>/rewind</c> redraws
+    /// what it keeps (<see cref="RepaintConversation"/>: each turn as a resume draws it), and the history, the session row, usage, the plan, the
+    /// queue and the picture strip stay. From 2026-09-23 until then it started over like <c>/clear</c>. The splash comes only on an empty
+    /// conversation, as at the start, and <c>Welcome splash</c> <c>disabled</c> still skips it; the saved line goes under it all.
     /// </summary>
     private void RestartInTheme()
     {
         ThemeName.Apply(_effective(), _settings.ThemesDirectory);
-        ClearAndRefresh();
-        ShowSplash();
+        SetMark(_markName);   // the mark's shade follows the page, light or dark (2026-11-16, #53)
+        bool empty = _session.History.TurnCount == 0;
+        using (_pane.Batch())
+        {
+            RepaintConversation(StyledReply(_effective().TranscriptMarkdown, _pane.Enabled), refillStrip: false);
+        }
+
+        if (empty)
+        {
+            ShowSplash();
+        }
+
         _transcript.Notice(SettingsMenu.SavedNotice(SettingsField.Theme, _settings.Current, _settings.ProfileDirectory));
     }
 
@@ -14787,13 +14813,6 @@ internal sealed partial class ChatScreen
             await ConnectMcpAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (changes.HasFlag(SettingsChanges.Theme))
-        {
-            // The fresh start forgets the conversation too, so the tools switch below has nothing left to clear.
-            RestartInTheme();
-            return;
-        }
-
         if (changes.HasFlag(SettingsChanges.Conversation))
         {
             // The history's shape follows the LLM offer tools switch (see SettingsChanges.Conversation):
@@ -14809,6 +14828,13 @@ internal sealed partial class ChatScreen
             ForgetSession();
             LeavePlanOnReset();
             _transcript.Notice(ToolsChangedNotice(_effective().LlmOfferTools));
+        }
+
+        if (changes.HasFlag(SettingsChanges.Theme))
+        {
+            // After the conversation switch (2026-11-16): the repaint keeps the conversation, so a pane that flipped LLM offer tools too
+            // clears the history first, then the screen is drawn once in the new colours.
+            RestartInTheme();
         }
     }
 

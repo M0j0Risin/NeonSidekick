@@ -46,7 +46,7 @@ html, body { margin: 0; height: 100%; }
    Windows draws both alike. body.yt-windowed's shorthand resets it. */
 body {
   background: var(--bg);
-  background-image: linear-gradient(var(--bg), color-mix(in srgb, var(--bg) 99.6%, #fff));
+  background-image: linear-gradient(var(--bg), color-mix(in srgb, var(--bg) 99.6%, var(--bg-mix, #fff)));
   color: var(--text);
   font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   display: flex;
@@ -128,7 +128,7 @@ header.top nav a.asking::after {
   padding: 0 6px;
   border-radius: 999px;
   background: var(--accent);
-  color: #1a0b22;
+  color: var(--on-accent, #1a0b22);
   font-size: 12px;
   font-weight: 700;
 }
@@ -309,7 +309,7 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
 
 .body a { color: var(--accent-2); }
 .body pre, .ask pre {
-  background: #0c0716;
+  background: var(--code-bg, #0c0716);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
@@ -322,16 +322,20 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
 .body th, .body td { border: 1px solid var(--line); padding: 4px 8px; }
 .body blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--dim); }
 
-.tk-keyword { color: #ff79c6; }
-.tk-type, .tk-variable { color: #ffb86c; }
-.tk-string { color: #b7f171; }
-.tk-number, .tk-attribute, .tk-heading { color: #4fe3ff; }
-.tk-comment { color: #8e7fae; font-style: italic; }
-.tk-punctuation { color: #d6cbe9; }
-.tk-function { color: #bd93f9; }
-.tk-tag { color: #5eea9a; }
-.tk-inserted { color: #5eea9a; background: #10301f; }
-.tk-deleted { color: #ff6b6b; background: #3a1018; }
+/* A light theme's /theme.css sends each as --tk-<kind> (2026-11-16, the daylight themes); a dark one keeps these. */
+.tk-keyword { color: var(--tk-keyword, #ff79c6); }
+.tk-type { color: var(--tk-type, #ffb86c); }
+.tk-variable { color: var(--tk-variable, #ffb86c); }
+.tk-string { color: var(--tk-string, #b7f171); }
+.tk-number { color: var(--tk-number, #4fe3ff); }
+.tk-attribute { color: var(--tk-attribute, #4fe3ff); }
+.tk-heading { color: var(--tk-heading, #4fe3ff); }
+.tk-comment { color: var(--tk-comment, #8e7fae); font-style: italic; }
+.tk-punctuation { color: var(--tk-punctuation, #d6cbe9); }
+.tk-function { color: var(--tk-function, #bd93f9); }
+.tk-tag { color: var(--tk-tag, #5eea9a); }
+.tk-inserted { color: var(--tk-inserted, #5eea9a); background: var(--diff-add); }
+.tk-deleted { color: var(--tk-deleted, #ff6b6b); background: var(--diff-del); }
 
 /* ── The bottom: banners, asks, the composer ─────────────────────── */
 footer.bottom {
@@ -621,8 +625,8 @@ button {
   min-height: 44px;
   cursor: pointer;
 }
-button.primary { background: var(--accent); border-color: var(--accent); color: #1a0b22; font-weight: 700; }
-button.stop { background: var(--error); border-color: var(--error); color: #1a0b22; font-weight: 700; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #1a0b22); font-weight: 700; }
+button.stop { background: var(--error); border-color: var(--error); color: var(--on-error, #1a0b22); font-weight: 700; }
 button:disabled { opacity: 0.45; cursor: default; }
 
 #asks { display: flex; flex-direction: column; gap: 10px; max-height: 60vh; overflow-y: auto; }

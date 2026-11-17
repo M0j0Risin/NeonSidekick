@@ -501,6 +501,44 @@ public class MenuPaneTests : IDisposable
     }
 
     /// <summary>
+    /// A <see cref="MenuPage.Nudges"/> page (2026-11-16, plan sharded-hugging-puppy #54, <c>/theme edit</c>): ←/→ return the cursor's row with
+    /// a nudge of −1/+1, Shift ±5, queued presses summed into one pick; off by default; on a tabbed page the arrows still step tabs; and a page
+    /// that both nudges and pins sides is refused.
+    /// </summary>
+    [Fact]
+    public async Task ANudgesPage_ArrowsStepTheRow_ShiftByFive_HeldPressesSummed()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var shiftRight = new ConsoleKeyInfo('\0', ConsoleKey.RightArrow, shift: true, alt: false, control: false);
+        var shiftLeft = new ConsoleKeyInfo('\0', ConsoleKey.LeftArrow, shift: true, alt: false, control: false);
+        var page = Page("one", "two", "three") with { Nudges = true };
+        Assert.False(Page("one").Nudges);
+
+        Push(Keys.Down, Keys.Left);
+        Assert.Equal(new MenuPick(0, 1, Nudge: -1), await menu.PickAsync(page, 0, CancellationToken.None));
+
+        Push(Keys.Right, Keys.Right, shiftRight);   // all queued before the pick: one pick, 1 + 1 + 5
+        Assert.Equal(new MenuPick(0, 2, Nudge: 7), await menu.PickAsync(page, 2, CancellationToken.None));
+
+        Push(shiftLeft);
+        Assert.Equal(new MenuPick(0, 0, Nudge: -5), await menu.PickAsync(page, 0, CancellationToken.None));
+
+        Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(page, 1, CancellationToken.None));
+
+        Assert.Null(MenuPane.NudgeOf(new ConsoleKeyInfo('\0', ConsoleKey.RightArrow, shift: false, alt: true, control: false)));
+        Assert.Null(MenuPane.NudgeOf(Keys.Down));
+        await Assert.ThrowsAsync<ArgumentException>(() => menu.PickAsync(page with { Sides = true }, 0, CancellationToken.None));
+
+        var tabbed = MenuPage.Tabbed("Bar", [new MenuTab("On", ["a", "b"]), new MenuTab("Other", ["c"])], 0, "h") with { Nudges = true };
+        Push(Keys.Right, Keys.Enter);
+        Assert.Equal(new MenuPick(1, 0), await menu.PickAsync(tabbed, 0, CancellationToken.None));
+        menu.Close();
+    }
+
+    /// <summary>
     /// A <see cref="MenuPage.Removes"/> page (2026-10-16, the user's ask: Delete on every list that removes a row): Delete returns a
     /// <see cref="MenuPick.Remove"/> for the cursor's row, while Shift+↓ stays the arrow it was (no move); a page without it ignores Delete.
     /// </summary>

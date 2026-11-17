@@ -188,4 +188,29 @@ public sealed class FakeHeadlessBrowser : IHeadlessBrowser
 
         return Task.FromResult(EditOutcome ?? new PdfEdit(true, "", EditBytes, EditResultPages) { Pages = pages });
     }
+
+    /// <summary>
+    /// Each draw asked for (2026-11-16, plan sharded-hugging-puppy #9), and what it answers: <see cref="RenderOutcome"/> when set, else
+    /// <see cref="RenderBytes"/> (a real 4×3 PNG, so the tools can fit it for the model) at <see cref="RenderWidth"/>×<see cref="RenderHeight"/>.
+    /// </summary>
+    public List<RenderJob> RenderJobs { get; } = new();
+
+    public PictureRender? RenderOutcome { get; set; }
+
+    public byte[] RenderBytes { get; set; } = RenderPng;
+
+    public int RenderWidth { get; set; } = 4;
+
+    public int RenderHeight { get; set; } = 3;
+
+    /// <summary>A 4×3 opaque PNG.</summary>
+    public static readonly byte[] RenderPng = Convert.FromBase64String(
+        "iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGM4YRMFRww4OQBFShBp3JawGAAAAABJRU5ErkJggg==");
+
+    public Task<PictureRender> RenderPictureAsync(string executable, RenderJob job, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RenderJobs.Add(job);
+        return Task.FromResult(RenderOutcome ?? new PictureRender(true, "", RenderBytes, RenderWidth, RenderHeight));
+    }
 }

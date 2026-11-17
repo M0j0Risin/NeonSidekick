@@ -366,6 +366,7 @@ public static partial class BotChat
     private static readonly IReadOnlySet<string> PicturesUnseen = new HashSet<string>(StringComparer.Ordinal)
     {
         GenerateImageTool.ToolName, ViewImageTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, ImageEditTool.ToolName,
+        RenderPictureTool.ToolName, RenderChartTool.ToolName, RenderCollageTool.ToolName,   // the drawn pictures (2026-11-16, #9)
     };
 
     /// <summary>

@@ -2999,6 +2999,52 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal(2, Count(Output, ScreenPane.PageBackgroundResetSequence));
     }
 
+    /// <summary>
+    /// The text and cursor colour (2026-11-16, the daylight themes): set after the page's (OSC 10 and 12) while the screen answers one, given
+    /// back (OSC 110 and 112) when it turns null — a switch to a dark theme — and before the background's as the buffer is left.
+    /// </summary>
+    [Fact]
+    public void PageText_IsSetAfterTheBackground_GivenBackOnNull_AndBeforeTheBackgroundOnClose()
+    {
+        _console.EmitAnsiSequences();
+        Color? text = new Color(0x20, 0x10, 0x30);
+        using var pane = Pane();
+        pane.PageBackground = () => new Color(0xF8, 0xF4, 0xFF);
+        pane.PageText = () => text;
+        pane.Open();
+        Assert.Equal("\e[?1049h\e[?1007l\e]11;rgb:f8/f4/ff\e\\\e]10;rgb:20/10/30\e\\\e]12;rgb:20/10/30\e\\", Output);
+        Assert.Equal("\e]10;rgb:20/10/30\e\\\e]12;rgb:20/10/30\e\\", ScreenPane.PageTextSequence(new Color(0x20, 0x10, 0x30)));
+        Assert.Equal("\e]110\e\\\e]112\e\\", ScreenPane.PageTextResetSequence);
+
+        pane.Show();
+        Assert.Equal(1, Count(Output, "\e]10;"));   // the same answer writes nothing
+
+        text = null;
+        pane.WriteLine("x");
+        Assert.Equal(1, Count(Output, ScreenPane.PageTextResetSequence));
+
+        text = new Color(1, 2, 3);
+        pane.WriteLine("x");
+        pane.Close();
+        Assert.EndsWith(ScreenPane.PageTextResetSequence + ScreenPane.PageBackgroundResetSequence + "\e[?1007h\e[?1049l", Output);
+    }
+
+    /// <summary>A dark theme's screen answers no text colour, so only the page's is written (2026-11-16).</summary>
+    [Fact]
+    public void PageText_Null_WritesOnlyTheBackground()
+    {
+        _console.EmitAnsiSequences();
+        using var pane = Pane();
+        pane.PageBackground = () => new Color(1, 2, 3);
+        pane.Open();
+        pane.Show();
+        pane.Close();
+        Assert.Contains("\e]11;", Output);
+        Assert.DoesNotContain("\e]10;", Output);
+        Assert.DoesNotContain("\e]12;", Output);
+        Assert.DoesNotContain("\e]110", Output);
+    }
+
     [Fact]
     public void PageBackground_Null_WritesNoCode()
     {

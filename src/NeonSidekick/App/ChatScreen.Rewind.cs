@@ -195,43 +195,14 @@ internal sealed partial class ChatScreen
         bool styled = StyledReply(_effective().TranscriptMarkdown, _pane.Enabled);
         using (_pane.Batch())
         {
-            // The Web UI's copy starts afresh (2026-10-14); the kept turns' replay below fills it again.
-            _webUi.Feed.Clear();
-            RedrawScreen();
-            DropQueue();
-            _pictureStrip.Clear();
-            ForgetReading();
-            _log.Clear();
-            _lastReply = "";
-            // The kept turns' pictures back in the strip and, with thumbnails on, the transcript (2026-10-10, the user's ask).
-            var pictures = RestoredPictures.Turns(_session.History.Messages);
-            var box = ReplayPictures(pictures);
-            if (_sessionId is { } id && _sessions.Load(id) is { } record)
+            RepaintConversation(styled, refillStrip: true, afterRedraw: () =>
             {
-                var byRow = RestoredPictures.ByRow(pictures);
-                foreach (var stored in record.Turns)
-                {
-                    ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled, byRow.GetValueOrDefault(stored.Ordinal), box, stored.SourceList);
-                }
-            }
-            else
-            {
-                var replays = ConversationRewind.Replay(_session.History.Messages);
-                for (int i = 0; i < replays.Count; i++)
-                {
-                    var replay = replays[i];
-                    if (replay.Summary)
-                    {
-                        _transcript.Notice(RewindText.CompactedNotice);
-                    }
-                    else
-                    {
-                        // Both lists hold one entry per turn start, in order.
-                        ReplayTurn(replay.UserText, replay.ReplyText, replay.ToolCalls, styled, i < pictures.Count ? pictures[i] : null, box);
-                    }
-                }
-            }
-
+                DropQueue();
+                _pictureStrip.Clear();
+                ForgetReading();
+                _log.Clear();
+                _lastReply = "";
+            });
             _transcript.Notice(RewindText.RewoundNotice(cut.Turns, turn.Text));
             if (report is not null)
             {
@@ -308,6 +279,49 @@ internal sealed partial class ChatScreen
     /// user's ask) the turn's <paramref name="pictures"/> are drawn where a live turn drew them: <c>/imagine</c>'s before the
     /// user's row, the user's own under it, the tools' after the tool line.
     /// </summary>
+    /// <summary>
+    /// The conversation drawn again from what is kept (2026-11-16, plan sharded-hugging-puppy, lifted out of <see cref="RewindTo"/> for the theme
+    /// repaint): the Web UI's copy emptied (the replay fills it again), the screen redrawn (<see cref="RedrawScreen"/>), then
+    /// <paramref name="afterRedraw"/> (a rewind's own forgetting), then each turn as a resume draws it — the stored session's turns when there is
+    /// a row, else the history's — with its pictures. <paramref name="refillStrip"/> puts the turns' pictures back in the picture strip: a rewind
+    /// empties it first; a theme change keeps it, so it passes false, or every picture would be listed twice.
+    /// </summary>
+    private void RepaintConversation(bool styled, bool refillStrip, Action? afterRedraw = null)
+    {
+        // The Web UI's copy starts afresh (2026-10-14); the kept turns' replay below fills it again.
+        _webUi.Feed.Clear();
+        RedrawScreen();
+        afterRedraw?.Invoke();
+        // The kept turns' pictures back in the strip and, with thumbnails on, the transcript (2026-10-10, the user's ask).
+        var pictures = RestoredPictures.Turns(_session.History.Messages);
+        var box = ReplayPictures(pictures, refillStrip);
+        if (_sessionId is { } id && _sessions.Load(id) is { } record)
+        {
+            var byRow = RestoredPictures.ByRow(pictures);
+            foreach (var stored in record.Turns)
+            {
+                ReplayTurn(stored.UserText, stored.ReplyText, stored.ToolCalls, styled, byRow.GetValueOrDefault(stored.Ordinal), box, stored.SourceList);
+            }
+        }
+        else
+        {
+            var replays = ConversationRewind.Replay(_session.History.Messages);
+            for (int i = 0; i < replays.Count; i++)
+            {
+                var replay = replays[i];
+                if (replay.Summary)
+                {
+                    _transcript.Notice(RewindText.CompactedNotice);
+                }
+                else
+                {
+                    // Both lists hold one entry per turn start, in order.
+                    ReplayTurn(replay.UserText, replay.ReplyText, replay.ToolCalls, styled, i < pictures.Count ? pictures[i] : null, box);
+                }
+            }
+        }
+    }
+
     private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null, IReadOnlyList<Web.WebSource>? sources = null)
     {
         // Every turn's pictures: drawn with a box, offered to the Web UI's page alone without (later on 2026-10-14).
@@ -372,10 +386,10 @@ internal sealed partial class ChatScreen
     /// strip first, as a live turn puts them (a thumbnail box then leaves the strip's rows), and the box the turns' pictures are
     /// drawn at — null with <c>Show image thumbnails</c> off, when the transcript gets none.
     /// </summary>
-    private UI.ThumbnailBox? ReplayPictures(IReadOnlyList<TurnPictures> turns)
+    private UI.ThumbnailBox? ReplayPictures(IReadOnlyList<TurnPictures> turns, bool refillStrip = true)
     {
         var strip = turns.SelectMany(t => t.Strip).ToList();
-        if (strip.Count > 0)
+        if (refillStrip && strip.Count > 0)
         {
             AddToPictureStrip(RestoredImages(strip));
         }

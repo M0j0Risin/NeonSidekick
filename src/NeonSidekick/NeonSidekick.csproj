@@ -319,6 +319,10 @@
          published (assets\pdflib\README.md has the version, the integrity and what it bundles). Web/BrowserPdfEditor evaluates it in
          the headless browser's blank page; nothing is written to disk. -->
     <EmbeddedResource Include="..\..\assets\pdflib\pdf-lib.min.js" LogicalName="pdflib/pdf-lib.min.js" Visible="false" />
+    <!-- Mermaid (2026-11-16, plan sharded-hugging-puppy #9: render_picture's diagrams): mermaid 12.2.0's IIFE build, MIT, as published
+         (assets\mermaid\README.md has the version, the integrity and what it bundles). Web/HeadlessBrowser evaluates it in the headless
+         browser's blank page, network cut off; nothing is written to disk. -->
+    <EmbeddedResource Include="..\..\assets\mermaid\mermaid.min.js" LogicalName="mermaid/mermaid.min.js" Visible="false" />
   </ItemGroup>
 
   <!--

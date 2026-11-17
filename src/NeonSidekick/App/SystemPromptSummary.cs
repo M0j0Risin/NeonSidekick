@@ -962,6 +962,7 @@ public static class SystemPromptSummary
         if (images is { Count: > 0 })
         {
             // The picture tools (2026-10-10, the user's ask: view_image, image_info and image_edit off the Files group): offered while Image tools is on; none without codecs.
+            // The render tools (2026-11-16, #9) are in the group too, the turn's list leaving them out while no browser is found.
             string imagesNote = !imagesEnabled ? NotOffered(ImagesOffSuffix) : standing;
             groups.Add(Group(ToolsText.ImageMenuTitle, images, imagesNote, imagesEnabled && toolsEnabled, SettingsField.ImageTools, disabled));
         }

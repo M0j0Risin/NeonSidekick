@@ -381,22 +381,7 @@ public static partial class SessionExport
         """;
 
     /// <summary>Each code token's theme slot, for its <c>tk-*</c> class (<see cref="PdfHtml.CodeClass"/>).</summary>
-    private static readonly (CodeTokenKind Kind, ThemeStyleSlot Slot)[] CodeSlots =
-    [
-        (CodeTokenKind.Keyword, ThemeStyleSlot.CodeKeyword),
-        (CodeTokenKind.Type, ThemeStyleSlot.CodeType),
-        (CodeTokenKind.String, ThemeStyleSlot.CodeString),
-        (CodeTokenKind.Number, ThemeStyleSlot.CodeNumber),
-        (CodeTokenKind.Comment, ThemeStyleSlot.CodeComment),
-        (CodeTokenKind.Punctuation, ThemeStyleSlot.CodePunctuation),
-        (CodeTokenKind.Function, ThemeStyleSlot.CodeFunction),
-        (CodeTokenKind.Variable, ThemeStyleSlot.CodeVariable),
-        (CodeTokenKind.Attribute, ThemeStyleSlot.CodeAttribute),
-        (CodeTokenKind.Tag, ThemeStyleSlot.CodeTag),
-        (CodeTokenKind.Heading, ThemeStyleSlot.CodeHeading),
-        (CodeTokenKind.Inserted, ThemeStyleSlot.CodeInserted),
-        (CodeTokenKind.Deleted, ThemeStyleSlot.CodeDeleted),
-    ];
+    private static IReadOnlyList<(CodeTokenKind Kind, ThemeStyleSlot Slot)> CodeSlots => WebTheme.CodeSlots;
 
     /// <summary>
     /// The theme as the page's tokens: the grounds, the inks, the accent, the user's style whole, and the code colors; light or dark by the ground. A
@@ -411,7 +396,7 @@ public static partial class SessionExport
         }
 
         var styles = Theme.StylesBuilt(palette);
-        bool light = ColorContrast.Contrast(palette.Bg, Color.Black) > ColorContrast.Contrast(palette.Bg, Color.White);
+        bool light = ColorContrast.IsLight(palette.Bg);
         var css = new StringBuilder("/* ").Append(WebTheme.CommentSafe(palette.Name)).Append(" */\n:root {\n  color-scheme: ").Append(light ? "light" : "dark").Append(";\n");
         void Token(string name, Color color) => css.Append("  ").Append(name).Append(": ").Append(WebTheme.Hex(color)).Append(";\n");
         Token("--bg", palette.Bg);

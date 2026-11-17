@@ -447,6 +447,48 @@ public static class TableSource
             text = reader.ReadToEnd();
         }
 
+        return JsonTable(text, display, sheet, cancellationToken);
+    }
+
+    /// <summary>
+    /// A table given as text (2026-11-16, plan sharded-hugging-puppy #9: <c>render_chart</c>'s <c>data</c>) into <paramref name="sheet"/>, read as
+    /// a file of it would be: a JSON array (of objects, or of arrays with the header first) when it starts with <c>[</c>, else CSV with its
+    /// delimiter probed, or TSV when the first line holds a tab and no comma or semicolon. Null when done, else the refusal.
+    /// </summary>
+    public static string? TextTable(string text, string display, ISheetRows sheet, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(sheet);
+        string trimmed = text.Trim();
+        if (trimmed.StartsWith('['))
+        {
+            return JsonTable(trimmed, display, sheet, cancellationToken);
+        }
+
+        string first = trimmed.Split('\n', 2)[0].TrimEnd('\r');
+        bool tsv = first.Contains('\t', StringComparison.Ordinal) && !first.Contains(',', StringComparison.Ordinal) && !first.Contains(';', StringComparison.Ordinal);
+        char delimiter = tsv ? '\t' : Delimiter(first);
+        IEnumerable<List<string>> Records()
+        {
+            using var reader = new StringReader(trimmed);
+            foreach (var record in tsv ? Lines(reader) : Delimited(reader, delimiter))
+            {
+                yield return record;
+            }
+        }
+
+        try
+        {
+            return Rows(Records, display, sheet, cancellationToken);
+        }
+        catch (UnclosedQuoteException ex)
+        {
+            return OfficeText.UnclosedQuote(display, ex.Row);
+        }
+    }
+
+    private static string? JsonTable(string text, string display, ISheetRows sheet, CancellationToken cancellationToken)
+    {
         JsonDocument document;
         try
         {

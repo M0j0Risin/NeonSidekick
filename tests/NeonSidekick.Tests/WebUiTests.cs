@@ -811,6 +811,44 @@ public sealed partial class WebUiTests : IDisposable
     }
 
     /// <summary>
+    /// A light theme's sheet (2026-11-16, plan sharded-hugging-puppy #53) gives app.css's dark-only colors the theme's: the scheme, the gradient's
+    /// far end, the diff slabs, the code block's ground, the text on the accent and on the error, and the code colors. A dark theme's gives none
+    /// of them, so app.css's own stand.
+    /// </summary>
+    [Fact]
+    public void ALightThemesSheet_SetsTheLightColors_ADarkOnesLeavesAppCss()
+    {
+        static UI.ThemePalette Named(string name) => UI.ThemeLibrary.All.Single(p => p.Name == name);
+        string[] tokens = ["  color-scheme: light;\n", "  --bg-mix: ", "  --diff-add: ", "  --diff-del: ", "  --code-bg: ", "  --on-accent: ", "  --on-error: ", "  --tk-keyword: ", "  --tk-string: ", "  --tk-comment: "];
+
+        foreach (var light in UI.ThemeLibrary.All.Where(p => p.SourcePath is null && UI.ColorContrast.IsLight(p.Bg)))
+        {
+            string css = WebTheme.Css(light, on: true);
+            Assert.All(tokens, token => Assert.Contains(token, css, StringComparison.Ordinal));
+        }
+
+        string dark = WebTheme.Css(Named("synthwave"), on: true);
+        Assert.All(tokens, token => Assert.DoesNotContain(token, dark, StringComparison.Ordinal));
+        Assert.Equal(8, UI.ThemeLibrary.All.Count(p => UI.ColorContrast.IsLight(p.Bg)));
+    }
+
+    /// <summary>The pulse's theme key (2026-11-16): the name and a hash of the sheet, the same for the same palette, new when a color changes.</summary>
+    [Fact]
+    public void TheThemeKey_IsTheNameAndTheSheetsHash_NewWhenAColorChanges()
+    {
+        var blossom = UI.ThemeLibrary.All.Single(p => p.Name == "blossom");
+        string key = WebTheme.Key(blossom);
+        Assert.Matches("^blossom~[0-9a-f]{8}$", key);
+        Assert.Equal(key, WebTheme.Key(blossom));
+
+        var colors = blossom.Colors().ToArray();
+        colors[0] = new Spectre.Console.Color(0x11, 0x22, 0x33);
+        string edited = WebTheme.Key(App.SettingsMenu.WithColors(blossom, colors));
+        Assert.StartsWith("blossom~", edited, StringComparison.Ordinal);
+        Assert.NotEqual(key, edited);
+    }
+
+    /// <summary>
     /// The page's user lines and review lines wear the terminal's styles (2026-10-21): <c>--user</c> is the theme's <c>user</c> style whole
     /// (orbit's tint, miami's without bold), <c>--accent-3</c> its <c>accentTertiary</c>; a style with no background writes none.
     /// </summary>

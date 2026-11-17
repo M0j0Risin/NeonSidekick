@@ -33,6 +33,8 @@ What Neon Sidekick is built on. Back to the [README](../README.md).
   * With its packed CMaps (Adobe's cmap-resources, BSD-3-Clause) for Chinese, Japanese and Korean text
 * `pdf-lib` (MIT; `@cantoo/pdf-lib` 2.11.1, the maintained fork, embedded: edits PDFs in the headless browser for `pdf_edit` and `/pdf`'s edits)
   * Its build bundles culori, fflate, html-entities and node-html-better-parser (MIT), tslib (0BSD), and a stream decoder ported from pdf.js (Apache-2.0); `assets/pdflib/README.md` lists them
+* `mermaid` (MIT; 12.2.0, embedded: draws `render_picture`'s diagrams in the headless browser)
+  * Its build bundles d3, dagre, cytoscape, katex and others (MIT, ISC or BSD), elkjs (EPL-2.0) and dompurify (Apache-2.0 or MPL-2.0); `assets/mermaid/README.md` lists them
 * Unicode's `emoji-test.txt` and CLDR's English annotations (the avatar picker's emoji, names and keywords), and CLDR's `windowsZones.xml` (the clock tools' time zones), under the [Unicode License v3](https://www.unicode.org/license.txt)
 
 ## System libraries

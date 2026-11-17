@@ -619,9 +619,8 @@ public sealed class AppSettingsData
     /// The look (2026-09-23, the user's ask): a theme's name — a built-in (<see cref="UI.ThemeName.Names"/>, every
     /// <c>assets/themes</c> file since 2026-10-05) or one of the home's <c>themes</c> folder; anything else reads as
     /// <see cref="UI.ThemeName.Default"/> (<c>synthwave</c> since 2026-11-07, the user's call; <c>collider</c> from 2026-10-05, <c>synthwave</c> before that).
-    /// Put in force at startup; a change on the row or with <c>/theme</c> starts over the way
-    /// <c>/splash</c> does (the user's call: a fresh session and the splash in the new colours,
-    /// <c>/sessions</c> brings the old one back). No variable.
+    /// Put in force at startup; a change on the row or with <c>/theme</c> draws the screen again in it, the conversation kept
+    /// (2026-11-16, the user's call; until then it started over the way <c>/splash</c> does). No variable.
     /// </summary>
     public string Theme { get; set; } = UI.ThemeName.Default;
 

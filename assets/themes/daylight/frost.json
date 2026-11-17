@@ -1,0 +1,29 @@
+{
+  "name": "frost",
+  "description": "steel blues and ice on cool gray-white",
+  "colors": {
+    "primary": "#1D60A4",
+    "secondary": "#2C54B0",
+    "tertiary": "#0D6877",
+    "deep": "#AEC1D8",
+    "highlight": "#146589",
+    "warm": "#904E0C",
+    "tint": "#1A6A64",
+    "ink": "#203253",
+    "dim": "#546070",
+    "dimmer": "#8C97A5",
+    "bg": "#F3F5F8",
+    "panelBg": "#D8DFE7",
+    "good": "#1B6C44",
+    "bad": "#BA1B2B",
+    "warn": "#835507"
+  },
+  "gradient": [
+    "#1C8C9E",
+    "#2089B7",
+    "#3383D4",
+    "#587DD5",
+    "#7078D5"
+  ],
+  "styles": {}
+}

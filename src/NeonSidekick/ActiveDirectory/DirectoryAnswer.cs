@@ -104,7 +104,13 @@ public sealed class DirectoryAnswer
     /// <summary>What the card shows (a user, a group, an OU…), by DN: the back-trail's entry and a group card's buttons read it again by it.</summary>
     public DirectoryRowTarget? Self { get; set; }
 
-    /// <summary>What kind of card: <c>user</c>, <c>group</c>, <c>computer</c>, <c>ou</c>, <c>domain</c>, <c>find</c>, <c>memberof</c>.</summary>
+    /// <summary>
+    /// A compare's second account (2026-11-16, plan sharded-hugging-puppy #16), by DN beside <see cref="Self"/>: the card's <c>n</c> re-runs the
+    /// compare by both. Null on every other card.
+    /// </summary>
+    public DirectoryRowTarget? Other { get; set; }
+
+    /// <summary>What kind of card: <c>user</c>, <c>group</c>, <c>computer</c>, <c>ou</c>, <c>domain</c>, <c>find</c>, <c>memberof</c>, <c>memberof-compare</c>.</summary>
     public string Kind { get; set; } = "find";
 
     /// <summary>

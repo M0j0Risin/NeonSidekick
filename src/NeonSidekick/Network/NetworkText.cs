@@ -217,6 +217,44 @@ public static class NetworkText
 
     public static string TimedOut(string what) => $"Error: {what} took too long and was stopped.";
 
+    // ── net_http (2026-11-16, plan sharded-hugging-puppy #15) ───────────────
+
+    /// <summary>A URL that won't parse, or whose host is written in a form the parser rewrites (<c>0x7f.1</c>). Pinned.</summary>
+    public static string BadUrl(string url) => $"Error: '{Short(url)}' is not a web address with one host name or address.";
+
+    /// <summary>A scheme other than http or https. Pinned.</summary>
+    public static string NotHttp(string url) => $"Error: '{Short(url)}' is not an http or https address.";
+
+    /// <summary>A URL carrying a user name or password: none is ever sent. Pinned.</summary>
+    public const string UrlUserInfo = "Error: the address carries a user name or password; net_http sends no credentials, so leave them out.";
+
+    /// <summary><c>method</c> other than get or head. Pinned.</summary>
+    public static string BadMethod(string method) => $"Error: method '{Short(method)}' is not get or head.";
+
+    /// <summary>A hop whose server sent nothing in time (a hop line's words, not an error: the site is the question).</summary>
+    public static string HttpTimedOut(TimeSpan limit) => "no answer within " + limit.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s";
+
+    /// <summary>
+    /// A hop whose server answered over TLS with a certificate this machine doesn't trust: an answer (the server is there), never a refusal;
+    /// <c>net_tls</c> shows the certificate.
+    /// </summary>
+    public static string HttpUntrusted(string detail) => "the server answered over TLS, but its certificate isn't trusted: " + Short(detail) + "; net_tls shows it";
+
+    /// <summary>A hop whose TLS handshake failed for another reason.</summary>
+    public static string HttpTlsFailed(string detail) => "the TLS handshake failed: " + Short(detail);
+
+    /// <summary>A hop that got no answer: the connection's own words.</summary>
+    public static string HttpFailed(string detail) => "no answer: " + Short(detail);
+
+    /// <summary>A redirect not followed because the check's whole time ran out.</summary>
+    public static string HttpOutOfTime(TimeSpan total) => "stopped: the check's " + total.TotalSeconds.ToString("0", CultureInfo.InvariantCulture) + " s ran out";
+
+    /// <summary>A redirect not followed past the hop cap.</summary>
+    public static string HttpTooManyHops(int max) => "stopped after " + max.ToString(CultureInfo.InvariantCulture) + " requests; the redirects go on";
+
+    /// <summary>A redirect not followed: <c>follow</c> was off.</summary>
+    public const string HttpNotFollowed = "redirect not followed (follow is off)";
+
     // ── Certificate stores ──────────────────────────────────────────────────
 
     /// <summary>A store a Mac does not keep. Pinned.</summary>
@@ -236,7 +274,7 @@ public static class NetworkText
     // ── /net ────────────────────────────────────────────────────────────────
 
     /// <summary><c>/net</c>'s verbs, in the order completion offers them.</summary>
-    public static readonly IReadOnlyList<string> Verbs = ["ping", "trace", "port", "dns", "tls", "certs"];
+    public static readonly IReadOnlyList<string> Verbs = ["ping", "trace", "port", "dns", "tls", "http", "certs"];
 
     /// <summary>The completion note beside a verb. Pinned.</summary>
     public static string VerbNote(string verb) => verb switch
@@ -246,12 +284,13 @@ public static class NetworkText
         "port" => "whether TCP ports are open",
         "dns" => "look a name up",
         "tls" => "a TLS handshake and its certificate",
+        "http" => "whether a site answers, and its redirects",
         "certs" => "a certificate store",
         _ => "",
     };
 
     /// <summary><c>/net</c> with no verb or one it does not know. Pinned.</summary>
-    public const string Usage = "Usage: /net ping <host> [count] · trace <host> [names] · port <host> <ports> · dns <name> [type] [server] · tls <host> [<port> [starttls]] · certs [store] [user|machine] [filter]";
+    public const string Usage = "Usage: /net ping <host> [count] · trace <host> [names] · port <host> <ports> · dns <name> [type] [server] · tls <host> [<port> [starttls]] · http <url> [head] [browser] [nofollow] · certs [store] [user|machine] [filter]";
 
     // ── --network-check ─────────────────────────────────────────────────────
 

@@ -1,0 +1,29 @@
+{
+  "name": "lilac",
+  "description": "purples and plum on pale lilac",
+  "colors": {
+    "primary": "#8D2FBB",
+    "secondary": "#922B8F",
+    "tertiary": "#5D45D1",
+    "deep": "#D4B3DF",
+    "highlight": "#AD1F79",
+    "warm": "#A04112",
+    "tint": "#1A6967",
+    "ink": "#442455",
+    "dim": "#6B5774",
+    "dimmer": "#A090A8",
+    "bg": "#F8F2FB",
+    "panelBg": "#E8D8EE",
+    "good": "#1B6B40",
+    "bad": "#B91A30",
+    "warn": "#825507"
+  },
+  "gradient": [
+    "#8270DB",
+    "#9E64D8",
+    "#B557D5",
+    "#D041CB",
+    "#D845A2"
+  ],
+  "styles": {}
+}

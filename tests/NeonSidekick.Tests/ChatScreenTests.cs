@@ -6590,6 +6590,40 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(ScreenPane.PageBackgroundResetSequence, output);
     }
 
+    /// <summary>
+    /// A light theme's page takes the ink as the terminal's text and cursor colour (2026-11-16, the daylight themes): written after the page's,
+    /// given back when <c>/theme</c> goes to a dark one, and never under <c>Themed background</c> off.
+    /// </summary>
+    [Fact]
+    public async Task WithGeometry_ALightTheme_SetsTheTextAndCursor_ADarkOneGivesThemBack()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "paper"; d.WelcomeSplashMode = "off"; });
+        ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);
+        _console.EmitAnsiSequences();
+        _console.Profile.Height = 20;
+        _geometry = new ScreenGeometry(() => null);
+        var paper = ThemeLibrary.Get("paper");
+        PushLine("/theme synthwave");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.True(ColorContrast.IsLight(paper.Bg));
+        Assert.Contains(ScreenPane.PageBackgroundSequence(paper.Bg) + ScreenPane.PageTextSequence(paper.Ink), output);
+        int back = output.IndexOf(ScreenPane.PageTextResetSequence, StringComparison.Ordinal);
+        Assert.True(back > output.IndexOf(ScreenPane.PageTextSequence(paper.Ink), StringComparison.Ordinal));
+        Assert.Equal(1, Count(output, ScreenPane.PageTextResetSequence));   // once, at the switch: the dark page sets none to give back at the end
+
+        _settings.Update(d => { d.Theme = "paper"; d.ThemedBackground = false; });
+        ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);
+        PushLine("/exit");
+        int mark = output.Length;
+        output = (await RunAsync())[mark..];   // the console's output runs on: only the second run's
+        Assert.DoesNotContain("\e]10;", output);
+        Assert.DoesNotContain("\e]12;", output);
+    }
+
     [Fact]
     public async Task WithoutThePane_TranscriptMarkdown_IsPlainText()
     {
@@ -6750,7 +6784,7 @@ public partial class ChatScreenTests : IDisposable
     public void QuietTools_AreTheMemoryClockTimerAndFileTools()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
-        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, WebSaveLinkTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.WithImages, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, PresentAuditTool.ToolName, FinishStepTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools; finish_step 2026-10-18 (its 🔁 line says the report)
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, WebSaveLinkTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.WithImages, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, RenderPictureTool.ToolName, RenderChartTool.ToolName, RenderCollageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, PresentAuditTool.ToolName, FinishStepTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools; finish_step 2026-10-18 (its 🔁 line says the report)
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Order(), ChatScreen.QuietTools.Order());
     }
@@ -6760,7 +6794,7 @@ public partial class ChatScreenTests : IDisposable
     public void QuietTools_AreTheMemoryClockTimerAndFileTools_Unix()
     {
         Assert.Equal(ShellToolNames.All.Order(), ChatScreen.ShellToolNames.Order());
-        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, WebSaveLinkTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.WithImages, ViewImageTool.ToolName, ImageInfoTool.ToolName, ImageEditTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, PresentAuditTool.ToolName, FinishStepTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
+        string[] expected = [SaveMemoryTool.ToolName, RecallMemoryTool.ToolName, AskUserTool.ToolName, WebSearchTool.ToolName, WebFetchTool.ToolName, OpenUrlTool.ToolName, WebSaveLinkTool.ToolName, DownloadFileTool.ToolName, SessionManagerTool.ToolName, GetCurrentTimeTool.ToolName, ShiftDateTool.ToolName, DateDifferenceTool.ToolName, StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName, .. FileToolNames.WithImages, ViewImageTool.ToolName, ImageInfoTool.ToolName, ImageEditTool.ToolName, GenerateImageTool.ToolName, SetSplashImageTool.ToolName, RenderPictureTool.ToolName, RenderChartTool.ToolName, RenderCollageTool.ToolName, LoadSkillTool.ToolName, SkillEditorTool.ToolName, PresentPlanTool.ToolName, PresentAuditTool.ToolName, FinishStepTool.ToolName, .. GitToolNames.All, .. ShellToolNames.All, .. UncToolNames.All];   // the image tools since 2026-09-24; present_plan 2026-09-26 (the plan is printed as it runs); the UNC tools 2026-09-30, one line as the file tools
         Assert.Equal(GitToolNames.All.Order(), ChatScreen.GitToolNames.Order());
         Assert.Equal(expected.Distinct().Order(), ChatScreen.QuietTools.Order());   // FileToolNames.All holds the picture tools where there are codecs (a Mac since 2026-10-07)
     }
@@ -11296,7 +11330,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 190;   // /midi's five forms and /profile push|pull midi's 2026-11-12 (the MIDI plan); /ad memberof's form 2026-11-12 (the memberof plan); /docker logs --pane's form 2026-10-23 (the Docker log window); /monitor pc's form later on 2026-10-23; /monitor's eight forms 2026-10-23; /plan edit's two forms and /plan template's 2026-10-20; the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 192;   // /theme edit's form 2026-11-16 (#54); /net http's form 2026-11-16 (plan sharded-hugging-puppy #15); /midi's five forms and /profile push|pull midi's 2026-11-12 (the MIDI plan); /ad memberof's form 2026-11-12 (the memberof plan); /docker logs --pane's form 2026-10-23 (the Docker log window); /monitor pc's form later on 2026-10-23; /monitor's eight forms 2026-10-23; /plan edit's two forms and /plan template's 2026-10-20; the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -15599,6 +15633,61 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains(SessionsMenu.CurrentNotice, output);
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal("later", _chat.Requests[2][^1].Text);   // the hold released by the reply's normal end
+    }
+
+    /// <summary>
+    /// A theme picked on a Settings pane the reply ended under (2026-11-16, plan sharded-hugging-puppy): the repaint keeps the conversation, so a
+    /// theme change is no reset — the turn's tail still runs, the held line drains, and the history holds every turn.
+    /// </summary>
+    [Fact]
+    public async Task MidTurn_AThemePickedOnAPaneTheReplyEndedUnder_KeepsTheTurnsTail()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => { d.WelcomeSplashMode = "off"; d.Theme = "synthwave"; });
+        CancelledWithAQueuedLineFixture("hold");
+        _chat.EnqueueText("Again ", "and ", "more.");
+        _chat.EnqueueText("Later.");
+        var held = _chat.BeforeUpdate!;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            await held(i, ct);
+            if (_chat.Requests.Count == 2 && i == 1)
+            {
+                PushLine("/settings");   // the pane over the reply
+                await UntilAsync(() => Output.Contains(SettingsMenu.NotWhileReplyRunsNotice, StringComparison.Ordinal) || Output.Contains("▸ Profile", StringComparison.Ordinal), ct);
+            }
+        };
+        LinesWhenIdle("hi", "again", "/exit");
+        var input = Scripted();
+        var idle = input.OnWait;
+        bool pushed = false;
+        input.OnWait = () =>
+        {
+            if (!pushed && Output.Contains(SettingsMenu.ReplyEndedNotice, StringComparison.Ordinal))
+            {
+                pushed = true;
+                var keys = new List<ConsoleKeyInfo>();
+                for (int k = 0; k < SettingsMenu.TabFields[0].ToList().IndexOf(SettingsField.Theme); k++)
+                {
+                    keys.Add(Keys.Down);
+                }
+
+                keys.AddRange([Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape]);   // the Theme row's picker, the next theme, then closed
+                input.Push([.. keys]);
+                return;
+            }
+
+            idle?.Invoke();
+        };
+        string picked = ThemeName.Names[Array.IndexOf(ThemeName.Names, "synthwave") + 1];
+
+        string output = await RunAsync();
+
+        Assert.Equal(picked, _settings.Current.Theme);
+        Assert.Contains("  · Theme: " + picked, output);
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal("later", _chat.Requests[2][^1].Text);   // the hold released by the reply's normal end
+        Assert.Equal(3, _chat.Requests[2].Count(ConversationHistory.IsTurnStart));
     }
 
     [Fact]
@@ -20584,38 +20673,52 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, _session.History.TurnCount);  // the reply kept
     }
 
-    // ── /theme (2026-09-23, the user's ask; the splash as Welcome splash says since 2026-10-02) ──
+    // ── /theme (2026-09-23, the user's ask; the splash as Welcome splash says since 2026-10-02; a repaint that keeps the chat since 2026-11-16) ──
 
+    /// <summary>
+    /// A theme change repaints and keeps the conversation (2026-11-16, plan sharded-hugging-puppy, the user's call: "Repaint, keep chat"): the
+    /// screen drawn again in the new colours with the turns replayed as a resume draws them, the history kept for the next request, and the same
+    /// session row. With the splash off, no picture.
+    /// </summary>
     [Fact]
-    public async Task Theme_Named_SplashDisabled_SavesIt_PutsItInForce_AndStartsOverLikeClear()
+    public async Task Theme_Named_SplashDisabled_SavesIt_PutsItInForce_AndRepaintsKeepingTheConversation()
     {
         using var theme = new ThemeScope();
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "off"; });
         PaneOf40Rows();
         SplashOf(2380, 100);
+        _chat.EnqueueText("Hello there.");
         LinesWhenIdle("hi", "/theme CyberPunk", "again", "/exit");
 
         string output = await RunAsync();
 
         Assert.Equal("cyberpunk", _settings.Current.Theme);
         Assert.Same(ShippedThemes.Cyberpunk, Theme.Current);
-        // /clear's shape (2026-10-02, the user's call): the wipe and the saved line, no picture with the setting off.
         Assert.Empty(_splashLoads);
         Assert.DoesNotContain("▀", output);
-        // No startup picture, so "hi" wiped nothing; /theme wiped the screen, and "again" over no splash did not.
+        // No startup picture, so "hi" wiped nothing; /theme drew the screen again, and "again" over no splash did not.
         Assert.Equal(1, Refreshes(output));
         int[] screens = Enumerable.Range(0, 2).Select(i => NthScreen(output, i)).ToArray();
         Assert.Contains("› hi", output[screens[0]..screens[1]]);
-        Assert.Contains("  · Theme: cyberpunk", output[screens[1]..]);
-        Assert.DoesNotContain("› /theme", output[screens[1]..]);
-        Assert.Contains("› again", output[screens[1]..]);
-        // The conversation forgotten: the second request holds one user message.
+        // The repaint: the turn drawn again in the new screen, the saved line under it.
+        string repainted = output[screens[1]..];
+        Assert.Contains("› hi", repainted);
+        Assert.Contains("Hello there.", repainted);
+        Assert.True(repainted.IndexOf("› hi", StringComparison.Ordinal) < repainted.IndexOf("  · Theme: cyberpunk", StringComparison.Ordinal));
+        Assert.DoesNotContain("› /theme", repainted);
+        Assert.Contains("› again", repainted);
+        // The conversation kept: the second request still holds "hi".
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal("again", UserText(_chat.Requests[1]));
+        Assert.Equal("again", _chat.Requests[1][^1].Text);
+        Assert.Equal(2, _chat.Requests[1].Count(ConversationHistory.IsTurnStart));
+        using var store = OpenSessions();
+        var row = Assert.Single(store.List(10));   // one session row, the same one, holding both turns
+        Assert.Equal(2, store.Load(row.Id)!.Turns.Count);
     }
 
+    /// <summary>With the splash on, a theme change over a conversation shows no picture (2026-11-16): the startup's rule, a splash only on an empty one.</summary>
     [WindowsFact]
-    public async Task Theme_Named_SplashOn_StartsOverWithThePicture()
+    public async Task Theme_Named_SplashOn_OverAConversation_ShowsNoPicture()
     {
         using var theme = new ThemeScope();
         _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "image"; });
@@ -20627,18 +20730,79 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Same(ShippedThemes.Cyberpunk, Theme.Current);
-        // The startup picture, then the theme's: the setting is on, so the fresh screen shows it as the startup does.
+        Assert.Equal([SplashName(0)], _splashLoads);   // the startup's alone
+        // "hi" wiped the startup splash, /theme drew the screen again; "again" had no picture to wipe.
+        Assert.Equal(2, Refreshes(output));
+        int[] screens = Enumerable.Range(0, 3).Select(i => NthScreen(output, i)).ToArray();
+        Assert.DoesNotContain("▀", output[screens[2]..]);
+        Assert.Contains("› hi", output[screens[2]..]);
+        Assert.Contains("  · Theme: cyberpunk", output[screens[2]..]);
+        Assert.Contains("› again", output[screens[2]..]);
+        Assert.Equal(2, _chat.Requests[1].Count(ConversationHistory.IsTurnStart));
+    }
+
+    /// <summary>On an empty conversation the picture comes, as at the start (2026-11-16).</summary>
+    [WindowsFact]
+    public async Task Theme_Named_SplashOn_OnAnEmptyConversation_ShowsThePicture()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "image"; });
+        PaneOf40Rows();
+        _random = new Random(7);
+        SplashOf(2380, 100);
+        LinesWhenIdle("/theme CyberPunk", "again", "/exit");
+
+        string output = await RunAsync();
+
         Assert.Equal([SplashName(0), SplashName(0)], _splashLoads);
-        // "hi" wiped the startup splash, /theme wiped the screen, "again" wiped the theme's picture.
-        Assert.Equal(3, Refreshes(output));
-        int[] screens = Enumerable.Range(0, 4).Select(i => NthScreen(output, i)).ToArray();
-        Assert.Contains("› hi", output[screens[1]..screens[2]]);
-        Assert.Contains("▀", output[screens[2]..screens[3]]);
-        Assert.Contains("  · Theme: cyberpunk", output[screens[2]..screens[3]]);
-        Assert.DoesNotContain("› /theme", output[screens[2]..]);
-        Assert.DoesNotContain("▀", output[screens[3]..]);
-        Assert.Contains("› again", output[screens[3]..]);
-        Assert.Equal("again", UserText(_chat.Requests[1]));
+        int[] screens = Enumerable.Range(0, 2).Select(i => NthScreen(output, i)).ToArray();
+        Assert.Contains("▀", output[screens[1]..]);
+        Assert.Contains("  · Theme: cyberpunk", output[screens[1]..]);
+    }
+
+    /// <summary>
+    /// A theme change and <i>LLM offer tools</i> taken together (2026-11-16; a <c>/profile reload</c> of a hand edit): the tools switch forgets
+    /// the conversation first, then the screen is drawn once in the new colours, with nothing left to replay.
+    /// </summary>
+    [Fact]
+    public async Task Theme_WithTheToolsSwitch_ClearsFirst_ThenOneRepaint()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => { d.TtsOutput = false; d.WelcomeSplashMode = "off"; d.Theme = "synthwave"; });
+        PaneOf40Rows();
+        _chat.EnqueueText("one").EnqueueText("two");
+        LinesWhenIdle("hi", "/profile reload", "again", "/exit");
+        var edited = AppSettings.Copy(_settings.Current);
+        edited.Theme = "noir";
+        edited.LlmOfferTools = !edited.LlmOfferTools;
+        await _settings.FlushAsync();
+        File.WriteAllText(_settings.FilePath, JsonSerializer.Serialize(edited, SettingsJsonContext.Default.AppSettingsData));
+
+        string output = await RunAsync();
+
+        Assert.Same(ShippedThemes.Noir, Theme.Current);
+        Assert.Equal(1, Refreshes(output));   // one repaint
+        string repainted = output[NthScreen(output, 1)..];
+        Assert.DoesNotContain("› hi", repainted);   // forgotten before the repaint, so not replayed
+        Assert.Contains("  · Theme: noir", repainted);
+        Assert.Equal(1, _chat.Requests[1].Count(ConversationHistory.IsTurnStart));
+    }
+
+    /// <summary>A theme change leaves the picture strip as it was (2026-11-16): the repaint doesn't put the turns' pictures in a second time.</summary>
+    [WindowsFact]
+    public async Task Theme_KeepsThePictureStrip_AsItWas()
+    {
+        using var theme = new ThemeScope();
+        _settings.Update(d => { d.TtsOutput = false; d.ShowImageThumbnails = false; d.WelcomeSplashMode = "off"; });
+        PaneOf40Rows();
+        long id = SeedPictureSession();
+        StepsWhenIdle(Line("/sessions " + id), Line("/theme noir"), Key(Keys.Right), Key(Keys.Right), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Same(ShippedThemes.Noir, Theme.Current);
+        Assert.Contains(NeonSidekick.Comfy.ComfyText.StripSelectedHint(2, 2), output[output.LastIndexOf("  · Theme: noir", StringComparison.Ordinal)..]);
+        Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.StripSelectedHint(1, 4), output);
     }
 
     [Fact]
@@ -20746,11 +20910,16 @@ public partial class ChatScreenTests : IDisposable
     {
         var sources = Sources() with { Themes = () => [new("synthwave", "default theme"), new("dracula", "vampire purple")] };
 
-        Assert.Equal(["synthwave", "dracula", ThemeText.ExportWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
+        Assert.Equal(["synthwave", "dracula", ThemeText.ExportWord, ThemeText.EditWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
         Assert.Equal([new CompletionItem("dracula", "vampire purple")], ChatScreen.ArgumentItems("/theme", "dr", sources));
         Assert.Equal(["export synthwave", "export dracula"], Texts(ChatScreen.ArgumentItems("/theme", "export ", sources)));
         Assert.Equal(["export dracula"], Texts(ChatScreen.ArgumentItems("/theme", "EXPORT d", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/theme", "export dracula x", sources));   // the new name is free text
+
+        // /theme edit (2026-11-16): the word, then every name after it, built-ins too (a built-in offers its copy), first word only.
+        Assert.Equal([new CompletionItem(ThemeText.EditWord, ThemeText.EditNote)], ChatScreen.ArgumentItems("/theme", "ed", sources));
+        Assert.Equal(["edit synthwave"], Texts(ChatScreen.ArgumentItems("/theme", "edit syn", sources)));
+        Assert.Empty(ChatScreen.ArgumentItems("/theme", "edit dracula x", sources));
     }
 
     [Fact]
@@ -20873,7 +21042,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task Theme_TheSettingsRow_StartsOverWhenThePaneCloses()
+    public async Task Theme_TheSettingsRow_RepaintsWhenThePaneCloses_KeepingTheConversation()
     {
         using var theme = new ThemeScope();
         _settings.Update(d => { d.TtsOutput = false; d.Theme = "synthwave"; });
@@ -20898,7 +21067,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Same(ThemeLibrary.Get(picked), Theme.Current);
         Assert.Contains("  · Theme: " + picked, output);
         Assert.Equal(2, _chat.Requests.Count);
-        Assert.Equal("again", UserText(_chat.Requests[1]));   // the fresh start forgot "hi"
+        Assert.Equal("again", _chat.Requests[1][^1].Text);
+        Assert.Equal(2, _chat.Requests[1].Count(ConversationHistory.IsTurnStart));   // "hi" kept (2026-11-16; the fresh start forgot it before)
     }
 
     [Fact]
@@ -25716,8 +25886,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ReasoningLevel.Levels, Texts(ChatScreen.ArgumentItems("/reasoning", "", sources)));
         Assert.Equal([new CompletionItem("high", ReasoningLevel.Describe("high"))], ChatScreen.ArgumentItems("/reasoning", "h", sources));
 
-        // /theme (2026-09-23): the names with their notes, in menu order (A to Z since 2026-10-03), then export (2026-10-01).
-        Assert.Equal([.. ThemeName.Names, ThemeText.ExportWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
+        // /theme (2026-09-23): the names with their notes, in menu order (A to Z since 2026-10-03), then export (2026-10-01) and edit (2026-11-16).
+        Assert.Equal([.. ThemeName.Names, ThemeText.ExportWord, ThemeText.EditWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
         Assert.Equal(["nebula", "netrunner", "nixie", "noir", "nostromo"], Texts(ChatScreen.ArgumentItems("/theme", "n", sources)));   // A to Z since 2026-10-03
         Assert.Equal([new CompletionItem("netrunner", "green phosphor")], ChatScreen.ArgumentItems("/theme", "net", sources));
         Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perfbar", "", sources)));

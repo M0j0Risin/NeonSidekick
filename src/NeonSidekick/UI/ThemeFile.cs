@@ -69,7 +69,8 @@ public static class ThemeFile
     /// <summary>
     /// Whether <paramref name="name"/> can be a theme's: a word <c>/theme</c> takes and the setting stores — lower-case
     /// letters, digits, <c>-</c> and <c>_</c>, a letter or digit first, up to <see cref="MaxNameLength"/> — and not
-    /// <see cref="ThemeText.ExportWord"/>, <c>/theme</c>'s own sub-command.
+    /// <see cref="ThemeText.ExportWord"/>, <c>/theme</c>'s own sub-command. <see cref="ThemeText.EditWord"/> (2026-11-16) is refused only as a
+    /// new name (<see cref="IsValidNewName"/>): an <c>edit.json</c> made before it still loads and is picked from the list.
     /// </summary>
     public static bool IsValidName(string? name)
     {
@@ -183,6 +184,9 @@ public static class ThemeFile
         color = new Color((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb);
         return true;
     }
+
+    /// <summary>Whether a theme may be made under <paramref name="name"/> (<c>/theme export</c>'s new name): <see cref="IsValidName"/>, and not <see cref="ThemeText.EditWord"/>.</summary>
+    public static bool IsValidNewName(string? name) => IsValidName(name) && name != ThemeText.EditWord;
 
     private static bool IsLowerAlnum(char c) => c is (>= 'a' and <= 'z') or (>= '0' and <= '9');
 

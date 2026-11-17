@@ -22,7 +22,7 @@ namespace NeonSidekick.UI;
 /// <param name="Tint">A soft accent: <c>$variables</c>, the lower sun.</param>
 /// <param name="Ink">Body text.</param>
 /// <param name="Dim">Secondary, dim text.</param>
-/// <param name="Dimmer">A step darker than <paramref name="Dim"/>: the input row's ghost text.</param>
+/// <param name="Dimmer">A step quieter than <paramref name="Dim"/> (darker on a dark theme, lighter on a light one): the input row's ghost text.</param>
 /// <param name="Bg">The page background (the selection's text, disabled menu rows, a picture's transparent pixels).</param>
 /// <param name="PanelBg">The lifted fill: code blocks, the highlighted menu row.</param>
 /// <param name="Good">Success, enabled, connected.</param>

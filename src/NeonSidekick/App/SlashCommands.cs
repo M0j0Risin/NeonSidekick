@@ -29,7 +29,7 @@ public enum SlashCommand
     /// through the file tools, the conversation kept. <c>/undo purge [all]</c> deletes this folder's (every folder's) file checkpoints.
     /// </summary>
     Undo,
-    /// <summary><c>/theme</c>: pick the colour theme from a list, or <c>/theme &lt;name&gt;</c> (2026-09-23, the user's ask); a change starts over the way <c>/splash</c> does — the conversation forgotten, the screen wiped, the splash shown in the new colours. Refused while a reply runs.</summary>
+    /// <summary><c>/theme</c>: pick the colour theme from a list, or <c>/theme &lt;name&gt;</c> (2026-09-23, the user's ask); a change draws the screen again in the new colours, the conversation kept and redrawn as a resume draws it (2026-11-16; until then it started over the way <c>/splash</c> does). Waits for a reply to end.</summary>
     Theme,
 
     /// <summary>
@@ -516,7 +516,7 @@ public static class SlashCommands
             new("/draft", "write the next message in your editor"),
             new("/echo", "print a line as a reply"),
             new(EventLog.EventLogCommand.Word, OperatingSystem.IsMacOS() ? "read this Mac's logs" : "read Windows' event logs"),   // a Mac's own since 2026-10-18
-            new(Network.NetworkCommand.Word, "check hosts, ports, DNS and certificates"),
+            new(Network.NetworkCommand.Word, "check hosts, sites, ports, DNS and certs"),
             new("/services", OperatingSystem.IsMacOS() ? "none on a Mac (Windows services)" : "list, start and stop Windows services"),   // the Mac's words since 2026-10-22; lower-case first, 40 cells at most, later that day
             new("/tasks", OperatingSystem.IsMacOS() ? "none on a Mac (Windows' scheduled tasks)" : "list and run scheduled tasks"),
             new("/ad", "look up Active Directory accounts"),
@@ -566,7 +566,7 @@ public static class SlashCommands
             new("/sys", "edit the persona, rules or voice"),   // "show or edit the system prompt" until 2026-11-07, when /usage took the showing
             new("/terminal", "open a terminal in a folder"),
             new("/test", "benchmark the connected model"),
-            new("/theme", "switch or export the color theme"),
+            new("/theme", "switch, edit or export the color theme"),
             new(UI.MarkText.Word, UI.MarkText.HelpSummary),
             new("/timer", "set, list and stop timers, stopwatches"),
             new("/toolbar", ToolbarItems.HelpSummary),

@@ -1,0 +1,29 @@
+{
+  "name": "seafoam",
+  "description": "sea greens and coral on misty white",
+  "colors": {
+    "primary": "#0C6D57",
+    "secondary": "#156276",
+    "tertiary": "#B62A14",
+    "deep": "#8BCDC0",
+    "highlight": "#16649C",
+    "warm": "#A5400D",
+    "tint": "#1C6E37",
+    "ink": "#17373E",
+    "dim": "#4C6464",
+    "dimmer": "#809D9B",
+    "bg": "#F2F8F7",
+    "panelBg": "#D1E4DF",
+    "good": "#186F23",
+    "bad": "#BE152C",
+    "warn": "#855607"
+  },
+  "gradient": [
+    "#1A9457",
+    "#109274",
+    "#168F99",
+    "#E84931",
+    "#E25112"
+  ],
+  "styles": {}
+}

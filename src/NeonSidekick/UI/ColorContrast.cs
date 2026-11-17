@@ -15,6 +15,13 @@ public static class ColorContrast
         return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
     }
 
+    /// <summary>
+    /// Whether <paramref name="background"/> is a light page (2026-11-16, plan sharded-hugging-puppy #53, the daylight themes): black text has
+    /// more contrast on it than white. The one test every light-or-dark choice reads — the session export, the Web UI's sheet, the robot, the
+    /// terminal's text and cursor colors, the windows' title bars and the rendered diagrams' theme — so they always agree.
+    /// </summary>
+    public static bool IsLight(Color background) => Contrast(background, Color.Black) > Contrast(background, Color.White);
+
     /// <summary>WCAG's relative luminance of a color, 0 (black) to 1 (white).</summary>
     public static double Luminance(Color c)
     {

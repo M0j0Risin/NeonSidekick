@@ -319,9 +319,8 @@ internal abstract class AppKitWindow
         }
 
         _chrome = style;
-        uint bg = style.Background;
-        double luminance = (0.2126 * (bg & 0xFF)) + (0.7152 * ((bg >> 8) & 0xFF)) + (0.0722 * ((bg >> 16) & 0xFF));
-        nint appearance = Send(Class("NSAppearance"), Sel("appearanceNamed:"), NSString(luminance < 128 ? "NSAppearanceNameDarkAqua" : "NSAppearanceNameAqua"));
+        // The shared light test since 2026-11-16 (the daylight themes), so the Mac's bar and Windows' agree: a luminance under 128 until then.
+        nint appearance = Send(Class("NSAppearance"), Sel("appearanceNamed:"), NSString(style.LightCaption ? "NSAppearanceNameAqua" : "NSAppearanceNameDarkAqua"));
         SendVoid(Window, Sel("setAppearance:"), appearance);
         SendVoid(Window, Sel("setBackgroundColor:"), NSColor(style.Caption));
     }

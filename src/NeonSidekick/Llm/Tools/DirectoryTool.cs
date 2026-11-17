@@ -210,15 +210,17 @@ public sealed class AdGroupTool(DirectoryAccess access, bool forceRedacted = fal
 }
 
 /// <summary>
-/// <c>ad_memberof(name, nested?, type?, limit?, to?, domain?)</c> (2026-11-12, the memberof plan, the user's report: "I'm unable to get a complete
+/// <c>ad_memberof(name, nested?, type?, compare?, limit?, to?, domain?)</c> (2026-11-12, the memberof plan, the user's report: "I'm unable to get a complete
 /// list of groups for a user … they have many nested groups"): every group an account is in, direct or at any depth through the groups above it,
-/// security and distribution alike, each with the group it comes through.
+/// security and distribution alike, each with the group it comes through. <c>compare</c> (2026-11-16, plan sharded-hugging-puppy #16, "give Bob
+/// what Alice has"): another account's groups beside them, as three lists — only <c>name</c>, only <c>compare</c>, both.
 /// </summary>
 public sealed class AdMemberOfTool(DirectoryAccess access, bool forceRedacted = false, Func<Files.SaveRoot>? saveRoot = null) : DirectoryTool(access, forceRedacted, saveRoot)
 {
     public const string ToolName = "ad_memberof";
     public const string NestedArgument = "nested";
     public const string TypeArgument = "type";
+    public const string CompareArgument = "compare";
 
     private static readonly JsonElement Schema = ToolSchema.Parse(
         """
@@ -226,10 +228,11 @@ public sealed class AdMemberOfTool(DirectoryAccess access, bool forceRedacted = 
           "type": "object",
           "properties": {
             "name": { "type": "string", "description": "The account: a user's account name, UPN, display name or mail; a group's or computer's name." },
+            "compare": { "type": "string", "description": "Another account to compare with: the groups only name is in, only this one is in, and both, each with how it is in." },
             "nested": { "type": "boolean", "description": "Every group at any depth, through the groups it is in, each with the group it comes through (default false: its direct groups and its primary group)." },
-            "type": { "type": "string", "enum": ["user", "group", "computer", "service"], "description": "Which kind of account the name is (service is a managed service account); leave out to try users, then groups, then computers and service accounts by their exact names." },
-            "limit": { "type": "integer", "description": "The most groups to list, 1 to 1000 (default 200); the total is always counted." },
-            "to": { "type": "string", "description": "Save every group (up to 10,000) as a CSV: a .csv path in the working directory, or a folder there. Needs File tools; never over an existing file." },
+            "type": { "type": "string", "enum": ["user", "group", "computer", "service"], "description": "Which kind of account the name is, and compare's too (service is a managed service account); leave out to try users, then groups, then computers and service accounts by their exact names." },
+            "limit": { "type": "integer", "description": "The most groups to list, 1 to 1000 (default 200), for each list with compare; the total is always counted." },
+            "to": { "type": "string", "description": "Save every group (up to 10,000) as a CSV: a .csv path in the working directory, or a folder there; with compare, the three lists in one CSV with a section column. Needs File tools; never over an existing file." },
             "domain": { "type": "string", "description": "Which domain, by its ticked name or its DNS name; leave out for this PC's (or the only one)." }
           },
           "required": ["name"]
@@ -260,8 +263,10 @@ public sealed class AdMemberOfTool(DirectoryAccess access, bool forceRedacted = 
         }
 
         // The whole set is read whatever the cap handed in (as ad_group's): the total is right, and limit bounds what is listed.
-        return await AskListAsync(arguments, DirectoryCommand.MemberOfQuestion(name, nested, type), (session, source, deadline, _, canSave) =>
-            DirectoryQueries.MemberOfAnswer(session, source, name, type, nested, limit, Zone, deadline, canSave), cancellationToken).ConfigureAwait(false);
+        string? compare = Optional(arguments, CompareArgument);
+        return await AskListAsync(arguments, DirectoryCommand.MemberOfQuestion(name, nested, type, compare), (session, source, deadline, _, canSave) => compare is { } other
+            ? DirectoryQueries.MemberOfCompare(session, source, name, other, type, nested, limit, Zone, deadline, canSave)
+            : DirectoryQueries.MemberOfAnswer(session, source, name, type, nested, limit, Zone, deadline, canSave), cancellationToken).ConfigureAwait(false);
     }
 }
 

@@ -294,6 +294,14 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public bool Sides { get; init; }
 
     /// <summary>
+    /// ←/→ step a value of the cursor's row (2026-11-16, plan sharded-hugging-puppy #54, <c>/theme edit</c>'s lightness and its color
+    /// picker's bars): on a page without tabs they return a <see cref="MenuPick"/> with <see cref="MenuPick.Nudge"/> −1 or +1, Shift
+    /// making it −5 or +5, a held arrow's queued presses summed into one pick, so a long hold redraws once. Never with <see cref="Sides"/>,
+    /// which takes Shift+←/→ itself (<see cref="MenuPane.PickAsync"/> refuses the pair). False: the keys are what they were.
+    /// </summary>
+    public bool Nudges { get; init; }
+
+    /// <summary>
     /// A page over <paramref name="tabs"/> showing <paramref name="tab"/>: the strip labelled
     /// <paramref name="title"/>, that tab's rows, its caption, and its hint when it has one else
     /// <paramref name="hint"/> (kept as <see cref="BaseHint"/> for the tabs without); a tab with sub-tabs gives its shown one's
@@ -392,7 +400,7 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
 /// again and shows it with the same tab, sub-tab and cursor. <see cref="Side"/> (2026-10-13, <see cref="MenuPage.Sides"/>): −1 to pin the
 /// cursor's row left, +1 right, 0 for anything else.
 /// </summary>
-public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1, int Move = 0, bool Remove = false, bool Refresh = false, int Side = 0);
+public readonly record struct MenuPick(int Tab, int Row, bool Toggle = false, int Button = -1, string? Filter = null, int Sub = -1, int Move = 0, bool Remove = false, bool Refresh = false, int Side = 0, int Nudge = 0);
 
 /// <summary>
 /// A menu in the bottom pane: the <see cref="InfoPane"/> shape for a list — a title, a status line
@@ -832,6 +840,11 @@ public sealed class MenuPane : INoticeSink
     public async Task<MenuPick?> PickAsync(MenuPage page, int cursor, CancellationToken cancellationToken, Action<int>? highlighted = null, CancellationToken stale = default)
     {
         ArgumentNullException.ThrowIfNull(page);
+        if (page.Nudges && page.Sides)
+        {
+            throw new ArgumentException("A page that nudges leaves Shift+Left/Right to the nudge; it cannot pin sides too.", nameof(page));
+        }
+
         Require();
         if (_pane.Dismissed)
         {
@@ -1122,6 +1135,17 @@ public sealed class MenuPane : INoticeSink
                         : new MenuPick(page.Tab, _cursor, Sub: page.Sub, Move: move);
                 }
 
+                if (page.Nudges && page.Tabs is null && count > 0 && NudgeOf(k) is { } nudge)
+                {
+                    // A value stepped (2026-11-16, /theme edit): a held arrow's queued presses summed, so the host redraws once.
+                    while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && NudgeOf(q) is not null) is InputEvent.Key { Info: var more })
+                    {
+                        nudge += NudgeOf(more)!.Value;
+                    }
+
+                    return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Nudge: nudge);
+                }
+
                 if (page.Sides && count > 0 && SideOf(k) is { } side)
                 {
                     // Pinned left or right (2026-10-13; a tab's too since later that day, ahead of the tab step): the host moves the row
@@ -1327,6 +1351,39 @@ public sealed class MenuPane : INoticeSink
             ConsoleKey.Delete when key.Modifiers == 0 => 0,
             _ => null,
         };
+    }
+
+    /// <summary>
+    /// What a key does on a <see cref="MenuPage.Nudges"/> page (2026-11-16): ← −1, → +1, Shift making them −5 and +5; Ctrl and Alt not held;
+    /// null for any other key. Pure.
+    /// </summary>
+    public static int? NudgeOf(ConsoleKeyInfo key)
+    {
+        if ((key.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt)) != 0)
+        {
+            return null;
+        }
+
+        int size = (key.Modifiers & ConsoleModifiers.Shift) != 0 ? 5 : 1;
+        return key.Key switch
+        {
+            ConsoleKey.LeftArrow => -size,
+            ConsoleKey.RightArrow => size,
+            _ => null,
+        };
+    }
+
+    /// <summary>
+    /// The cells a row of the list has (2026-11-16, <c>/theme edit</c>'s color bars): the window's, less a <see cref="MenuPage.Side"/>
+    /// column's and its gap when the window holds one, and the last column, never written.
+    /// </summary>
+    public int ListWidth
+    {
+        get
+        {
+            int side = SideWidth(Width);
+            return side > 0 ? Width - 1 - side - SideGap : Width - 1;
+        }
     }
 
     /// <summary>

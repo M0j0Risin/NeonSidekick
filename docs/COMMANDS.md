@@ -288,6 +288,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/net port <host> <port>...` | Whether TCP ports (16 at most) are open, refused or silent on each of the host's addresses. |
 | `/net dns <name> [<type>] [<server>]` | Looks a name up: A (the default) and AAAA through the system's resolver; CNAME, MX, TXT, NS, SOA, PTR, SRV and CAA through the app's own client, or the server named. |
 | `/net tls <host> [<port> [smtp\|imap\|pop3\|ldap\|rdp\|none]]` | A TLS handshake (443 by default): protocol, cipher, the certificate's names, issuer, days left and chain problems; ports 25, 587, 143, 110, 389 and 3389 speak their preamble first. |
+| `/net http <url> [head] [browser] [nofollow]` | Whether a web address answers: status, redirects with their times, the HTTP version and a few headers; never the page. `browser` sends a browser's headers. |
 | `/net certs [<store>] [user\|machine] [<words>]` | One of the certificate stores on the app's computer (`my` by default), soonest to end first; nothing exported. On a Mac, `root` reads the system's trust unless `user` is named. |
 | `/eventlog` | The event logs of the app's computer (or the only ticked one's) in a pane, a tab per log, newest first, in full text; an event opens with **copy** and **ask** (a draft about it). See [Event logs](TOOLS.md#event-logs). |
 | `/eventlog <log>\|<evtx-file> [<term>…] [<words>]` | A log (`app`, `sys`, `sec`, `setup`, `ps`) or an `.evtx` in the working directory, narrowed by `computer:`, `level:`, `id:`, `provider:`, `field:<Name>=<value>`, `since:`, `until:`, `audit:` and words. On a Mac: `system`, `crashes`, `install` or a `.logarchive`, with `level:`, `process:`, `subsystem:`, `category:`, `pid:`, `exclude:`, `since:`, `until:` ([on a Mac](TOOLS.md#event-logs-on-a-mac)). |
@@ -296,7 +297,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/ad <name> [domain:<name>]` | Looks a name up in Active Directory (account, display name, cn, mail, UPN or description) and opens the matches as a card with **copy** and **ask**. Read-only. See [Active Directory](TOOLS.md#active-directory). |
 | `/ad user <name>` | A user's card: enabled, locked and when (**Search 4740** when the PDC emulator is a ticked event-log computer), bad passwords, password expiry, last sign-in, groups, manager, direct reports, title, department and OU. |
 | `/ad group <name> [nested] [members:users\|computers\|groups] [to:<file-or-folder>]` | A group's card and members, direct or nested (each with the group it comes through). |
-| `/ad memberof <name> [nested] [type:user\|group\|computer\|service] [to:<file-or-folder>]` | The groups an account belongs to, direct or nested (each with the group it comes through); on the card **n** switches. |
+| `/ad memberof <name> [nested] [type:user\|group\|computer\|service] [compare:<name>] [to:<file-or-folder>]` | The groups an account belongs to, direct or nested (each with the group it comes through); on the card **n** switches. `compare:` lists the groups only one of two accounts is in, and those both are (quote a name with spaces: `compare:"Bob Smith"`). |
 | `/ad computer <name>` | A computer's card, or a managed service account's. |
 | `/ad ou [<path>] [to:<file-or-folder>]` | The OU tree, or one OU (`Neon/Engineering`, a DN or a name): its owner, linked GPOs and objects. |
 | `/ad find <kind> [<days>] [<words>] [type:<type>] [field:<field>] [ou:<path>] [to:<file-or-folder>]` | The kinds of `ad_find`: `locked`, `password_expiring`, `disabled`, `stale_users`, `stale_computers`, `name`, `field`, `os`, `password_never_expires`, `account_expiring`, `created`, `privileged`, `empty_groups`. |
@@ -309,6 +310,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 |---|---|
 | `/theme [<name>]` | Switches the color theme (*Theme*); alone, a picker with a live preview. |
 | `/theme export <name> [<new-name>]` | Writes a theme to a file to edit. See [Custom themes](#custom-themes). |
+| `/theme edit [<name>]` | Edits a theme's colors in a pane with a live preview; alone, the theme in force. See [Custom themes](#custom-themes). |
 | `/mark`, `/mark <color>`, `/mark default` | Colors the rules around the input line for this conversation (red, orange, yellow, green, cyan, blue, purple, pink, white or gray), kept with the session; `default` takes it off, and alone it lists the choices. |
 | `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear. |
 | `/toolbar [on\|off]`, `/toolbar edit` | Hides or shows the [toolbar](INTERFACE.md#the-toolbar), or opens its checklist (*Tool bar*). |
@@ -618,13 +620,14 @@ A monitor, every monitor or one window, nothing to install (macOS 14 or later on
 
 ### Custom themes
 
-The sixty built-in themes are JSON files in [`assets/themes`](../assets/themes), one folder per category; the default is `synthwave`. [`Theme Atlas.html`](../assets/themes/Theme%20Atlas.html) previews them all.
+The sixty-eight built-in themes are JSON files in [`assets/themes`](../assets/themes), one folder per category; the default is `synthwave`. [`Theme Atlas.html`](../assets/themes/Theme%20Atlas.html) previews them all.
 
 | Folder | Themes |
 |--------|--------|
 | `art` | bauhaus, deco, inkwash, kaleidoscope, lapis, stainedglass, ukiyoe, vaporwave |
 | `cinema` | akira, arrakis, ghostshell, grid, hal, noir, replicant, starbase, twinsuns |
 | `cosmos` | aurora, blackhole, bloodmoon, nebula, orbit, solaris, supernova |
+| `daylight` | blossom, daybreak, frost, lilac, meadow, paper, sandstone, seafoam (the light ones) |
 | `elements` | abyssal, magma, opal, oxide, prism, radium, temper |
 | `machines` | circuit, collider, commodore, glitch, heartbeat, infrared, mainframe, netrunner, nixie, nostromo, vhs, vinyl |
 | `nights` | cyberpunk, kowloon, lighthouse, miami, sakura, synthwave, witchhour |
@@ -633,6 +636,8 @@ The sixty built-in themes are JSON files in [`assets/themes`](../assets/themes),
 Your own are JSON files in the home's `themes` folder (and subfolders one level deep), shared by every profile and read again whenever a theme list opens; one named like a built-in replaces it.
 
 Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.json` (`<name>-custom` by default) with every color filled in, never over a file.
+
+`/theme edit [<name>]` changes the colors in the app: each role with its swatch, the theme previewed beside the list and pairs that read poorly listed under it. Enter opens a hue, saturation and lightness picker, or type a hex value. A built-in offers its `<name>-custom` copy; a save rewrites only `colors`.
 
 ```jsonc
 {
@@ -653,7 +658,7 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 ```
 
 * **Colors:** all fifteen, as `#RRGGBB` or `#RGB`; a file missing one is skipped. Comments and trailing commas are allowed.
-* **Names:** 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export`.
+* **Names:** 1 to 32 lower-case letters, digits, `-` or `_`, starting with a letter or digit, and not `export` or `edit`.
 * **Gradient** (optional, 2 to 16 stops; else made from the colors) colors the banner and its rule, and, quieted, the input line's and pane headings' rules under *Gradient rules*.
 * **Problems** show as warnings when a theme list opens: a broken file is skipped, a misspelled key or a bad style ignored.
 
@@ -664,13 +669,13 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 | `primary` | The main accent: headings, borders, keywords. |
 | `secondary` | The counter-accent: your lines, the spinner, table headers, inline code, the selection. |
 | `tertiary` | The third accent: section headings, bullets, the quote bar, function calls. |
-| `deep` | Structure: the pane rule, table borders, the dark background under a switched-off toolbar item. |
+| `deep` | Structure: the pane rule, table borders, the slab under a switched-off toolbar item. |
 | `highlight` | String literals. |
 | `warm` | Numbers. |
 | `tint` | A soft accent: `$variables`. |
 | `ink` | Body text. |
 | `dim` | Dim text, the status bar and the hints bar. |
-| `dimmer` | A step darker: the input row's ghost text. |
+| `dimmer` | A step quieter than `dim` (darker on a dark theme, lighter on a light one): the input row's ghost text. |
 | `bg` | The background (unless *Themed background* is off), the picture viewer. |
 | `panelBg` | Code blocks, the highlighted menu row. |
 | `good` | Success, enabled, connected. |

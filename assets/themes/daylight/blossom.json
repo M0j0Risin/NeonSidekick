@@ -1,0 +1,29 @@
+{
+  "name": "blossom",
+  "description": "cherry pinks and leaf green on blush white",
+  "colors": {
+    "primary": "#BA1546",
+    "secondary": "#9B2D73",
+    "tertiary": "#1E6E1C",
+    "deep": "#E2B3BF",
+    "highlight": "#B52914",
+    "warm": "#9C460D",
+    "tint": "#42691A",
+    "ink": "#4E2633",
+    "dim": "#76575F",
+    "dimmer": "#AB8F96",
+    "bg": "#FDF3F5",
+    "panelBg": "#F4D8DC",
+    "good": "#176D34",
+    "bad": "#BF0F1E",
+    "warn": "#875407"
+  },
+  "gradient": [
+    "#DE4491",
+    "#E93C70",
+    "#EA404F",
+    "#4C902A",
+    "#25942E"
+  ],
+  "styles": {}
+}

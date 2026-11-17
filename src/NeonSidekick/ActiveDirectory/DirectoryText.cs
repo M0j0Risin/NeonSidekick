@@ -423,6 +423,49 @@ public static class DirectoryText
         return "Groups of " + kind + " " + account + " in " + where + ": " + N(total) + (cut ? "+" : "") + " group" + (total == 1 ? "" : "s") + ", " + (nested ? "nested" : "direct") + paren;
     }
 
+    // ── comparing two accounts' groups (2026-11-16, plan sharded-hugging-puppy #16) ──
+
+    /// <summary>
+    /// A compare's head: both accounts as their own cards write them, direct or nested, and the three lists' counts (a "+" when either read was
+    /// cut, so a count may be short).
+    /// </summary>
+    public static string MemberOfCompareHead(string kindA, string accountA, string kindB, string accountB, string where, bool nested, int onlyA, int onlyB, int both, bool cut)
+    {
+        static string N(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
+        string plus = cut ? "+" : "";
+        return "Groups of " + kindA + " " + accountA + " and " + kindB + " " + accountB + " in " + where + ", " + (nested ? "nested" : "direct") + ": "
+            + N(onlyA) + plus + " only " + accountA + ", " + N(onlyB) + plus + " only " + accountB + ", " + N(both) + plus + " both";
+    }
+
+    /// <summary>Each of a compare's lists cut to the limit: <see cref="FirstGroupsListed"/>'s ways, per list.</summary>
+    public static string FirstGroupsListedEach(int limit, bool canRaise, bool canSave) =>
+        FirstGroupsListed(limit, canRaise, canSave).Replace("the first ", "each list's first ", StringComparison.Ordinal);
+
+    /// <summary>A note about one side of a compare: its account as the head writes it, then the note.</summary>
+    public static string SideNote(string account, string note) => account + ": " + note;
+
+    /// <summary>The list of groups only one account is in: its title with its count (the card's heading, and the model's with a colon).</summary>
+    public static string OnlyTitle(string account, int count) => "only " + account + " (" + count.ToString(CultureInfo.InvariantCulture) + ")";
+
+    /// <summary>The groups both accounts are in: the title with its count.</summary>
+    public static string BothTitle(int count) => BothSection + " (" + count.ToString(CultureInfo.InvariantCulture) + ")";
+
+    /// <summary>The CSV's <c>section</c> for the groups only one account is in: the account's name on one line, unfenced (a spreadsheet's cell).</summary>
+    public static string OnlySection(string accountName) => "only " + SectionName(accountName);
+
+    /// <summary>The CSV's <c>section</c> for the groups both are in.</summary>
+    public const string BothSection = "both";
+
+    /// <summary>The both list's column for how one account is in each group: <c>via alice</c> (the card's header and the CSV's).</summary>
+    public static string ViaColumn(string accountName) => ColVia + " " + SectionName(accountName);
+
+    /// <summary>A name as a header or a section: one line, cut to 40, every disguising character escaped (a header is not cleaned when drawn).</summary>
+    private static string SectionName(string name) => DirectoryRender.Clean(Llm.Tools.UntrustedText.Cut(Llm.Tools.UntrustedText.OneLine(name), 40));
+
+    /// <summary>Two names that found one account: nothing to compare. Pinned.</summary>
+    public static string CompareSameAccount(string name, string other) =>
+        $"Error: '{name}' and '{other}' are the same account; name two different accounts to compare.";
+
     /// <summary>A group card's "member of" label, a "+" when its walk was cut (the code review's 21). Pinned.</summary>
     public static string MemberOfLabel(int count, bool cut, bool nested) =>
         "member of (" + count.ToString(CultureInfo.InvariantCulture) + (cut ? "+" : "") + (nested ? ", nested" : "") + ")";

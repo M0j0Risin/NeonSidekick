@@ -1183,7 +1183,8 @@ internal sealed partial class ChatScreen
         var embedded = _handoverEmbedded;
         long? session = _handoverSession;
         (_handoverChanges, _handoverEmbedded, _handoverSession) = (SettingsChanges.None, null, null);
-        bool reset = changes.HasFlag(SettingsChanges.Profile) || changes.HasFlag(SettingsChanges.Conversation) || changes.HasFlag(SettingsChanges.Theme);
+        // A theme change is no reset since 2026-11-16 (the repaint keeps the conversation, so the turn's tail still belongs to it).
+        bool reset = changes.HasFlag(SettingsChanges.Profile) || changes.HasFlag(SettingsChanges.Conversation);
         if (changes != SettingsChanges.None || embedded is not null)
         {
             await ApplyMenuChangesAsync(changes, embedded, cancellationToken).ConfigureAwait(false);

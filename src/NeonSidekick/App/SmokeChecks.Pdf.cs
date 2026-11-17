@@ -175,6 +175,49 @@ public static partial class SmokeChecks
         }
     }
 
+    /// <summary>
+    /// <c>render:png</c> (2026-11-16, plan sharded-hugging-puppy #9): Mermaid out of the binary's resources, and where Edge, Chrome or Brave is
+    /// installed one flowchart drawn in the PDF reads' network-less browser, the PNG checked by its signature and size — none of which
+    /// <c>dotnet test</c> proves on the published exe (a trimmed or missing resource, the 5 MB evaluate, the screenshot's one large message).
+    /// Without a browser it checks the resource alone and says so. The folders go.
+    /// </summary>
+    public static SmokeCheck ProbeRenderPng()
+    {
+        const string name = "render:png";
+        if (BrowserPictureRenderer.LibraryText() is not { Length: > 1_000_000 })
+        {
+            return new SmokeCheck(name, false, "this build carries no Mermaid");
+        }
+
+        string folder = ProbeProfileFolder();
+        var browser = new HeadlessBrowser(folder);
+        if (browser.Locate("") is not { } executable)
+        {
+            return new SmokeCheck(name, true, "skipped: no Edge, Chrome or Brave (Mermaid is embedded)");
+        }
+
+        try
+        {
+            var drawn = browser.RenderPictureAsync(executable, new RenderJob("graph LR\n  A[Smoke] --> B[Check]", null, PictureFormat.Png, 800, 1, "#FFFFFF"), CancellationToken.None).GetAwaiter().GetResult();
+            byte[] signature = [0x89, 0x50, 0x4E, 0x47];
+            string wrong =
+                !drawn.Ok ? "the draw failed: " + (drawn.MermaidError ?? drawn.Detail)
+                : drawn.Bytes is not { Length: > 500 } bytes || !bytes.AsSpan(0, 4).SequenceEqual(signature) ? "the picture is no PNG"
+                : drawn.Width < 50 || drawn.Height < 20 ? $"the picture is {drawn.Width}x{drawn.Height}"
+                : BrowserLeftovers(drawn.InJob, HeadlessBrowser.PdfFolderFor(folder)) ?? "";
+            return new SmokeCheck(name, wrong.Length == 0, wrong.Length > 0 ? wrong : $"{PdfText.BrowserName(executable)} drew a Mermaid flowchart ({drawn.Width}x{drawn.Height}, {drawn.Bytes!.Length} B){LeftNothing}");
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            Files.WorkingDirectory.DeleteDirectoryQuietly(folder);
+            Files.WorkingDirectory.DeleteDirectoryQuietly(HeadlessBrowser.PdfFolderFor(folder));
+        }
+    }
+
     /// <summary>What a passing browser probe adds on Windows, where the job and the held folder are checked.</summary>
     private static string LeftNothing => OperatingSystem.IsWindows() ? "; in the app's job, nothing left holding its profile folder" : "";
 

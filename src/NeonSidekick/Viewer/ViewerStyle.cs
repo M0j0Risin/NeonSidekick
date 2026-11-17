@@ -38,4 +38,13 @@ public readonly record struct ViewerStyle(uint Caption, uint CaptionText, uint B
 
     /// <summary>A colour as a COLORREF: red in the low byte.</summary>
     public static uint ColorRef(Color color) => color.R | ((uint)color.G << 8) | ((uint)color.B << 16);
+
+    /// <summary>A COLORREF as a colour.</summary>
+    public static Color FromColorRef(uint colorRef) => new((byte)(colorRef & 0xFF), (byte)((colorRef >> 8) & 0xFF), (byte)((colorRef >> 16) & 0xFF));
+
+    /// <summary>
+    /// Whether the bar is light (2026-11-16, plan sharded-hugging-puppy #53, the daylight themes): <see cref="ColorContrast.IsLight"/> of
+    /// <see cref="Caption"/>, so Windows' bar and the Mac's appearance take the light look on a light theme, and both agree with the export.
+    /// </summary>
+    public bool LightCaption => ColorContrast.IsLight(FromColorRef(Caption));
 }

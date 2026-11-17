@@ -69,7 +69,8 @@ public static class DirectoryCsv
 
                 if (sections)
                 {
-                    cells.Add(t == 0 ? "" : table.Section ?? table.Title ?? "");
+                    // The first table unnamed unless its Section was set (2026-11-16, #16: a compare's "only alice" leads, and is named).
+                    cells.Add(t == 0 && table.Section is null ? "" : table.Section ?? table.Title ?? "");
                 }
 
                 cells.Add(row.Dn ?? "");

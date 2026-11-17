@@ -184,6 +184,7 @@ public sealed class WebCommandsTests
     [InlineData("/screen purge", WebCommandKind.Refused)]
     [InlineData("/settings", WebCommandKind.Refused)]
     [InlineData("/theme", WebCommandKind.Refused)]
+    [InlineData("/theme edit mine", WebCommandKind.Refused)]   // 2026-11-16: the editor is a pane at the PC
     [InlineData("/view a.png", WebCommandKind.Refused)]
     [InlineData("/exit", WebCommandKind.Refused)]
     [InlineData("/webui", WebCommandKind.Refused)]

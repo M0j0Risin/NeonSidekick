@@ -425,7 +425,7 @@ public class BotChatTests
     [Fact]
     public void UnseenToolPictures_VisionOff_AreThePictureTools_VisionOn_None()
     {
-        Assert.Equal(["camera_capture", "generate_image", "image_edit", "screen_capture", "view_image"], BotChat.UnseenToolPictures(vision: false).Order(StringComparer.Ordinal));
+        Assert.Equal(["camera_capture", "generate_image", "image_edit", "render_chart", "render_collage", "render_picture", "screen_capture", "view_image"], BotChat.UnseenToolPictures(vision: false).Order(StringComparer.Ordinal));
         Assert.Empty(BotChat.UnseenToolPictures(vision: true));
     }
 

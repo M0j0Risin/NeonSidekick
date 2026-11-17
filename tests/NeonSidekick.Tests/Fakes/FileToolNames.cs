@@ -52,4 +52,7 @@ public static class FileToolNames
 public static class ImageToolNames
 {
     public static readonly string[] All = Files.ImageCodecs.Available ? [ViewImageTool.ToolName, ImageInfoTool.ToolName, ImageEditTool.ToolName] : [];
+
+    /// <summary>The render tools after them (2026-11-16, plan sharded-hugging-puppy #9), built when <c>ImageTools</c> is given a renderer.</summary>
+    public static readonly string[] Rendered = Files.ImageCodecs.Available ? [RenderPictureTool.ToolName, RenderChartTool.ToolName, RenderCollageTool.ToolName] : [];
 }

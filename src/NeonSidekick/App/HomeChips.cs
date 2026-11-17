@@ -500,30 +500,31 @@ public static class HomeChips
     /// </summary>
     public static Style Alert(Color color) => new(color, decoration: Decoration.Bold);
 
-    /// <summary>The luminance below which a lit chip's colour is lifted (<see cref="Readable"/>): a deep blue scene vanished on the page.</summary>
-    public const double ReadableFloor = 0.35;
+    /// <summary>
+    /// The contrast against the page under which a lit chip's colour is moved toward the ink (<see cref="Readable"/>): a deep blue scene
+    /// vanished on a dark page, a pale yellow one would on a light page. A luminance floor of 0.35 until 2026-11-16 (the daylight themes),
+    /// which only lifted.
+    /// </summary>
+    public const double ReadableContrast = 3;
 
     /// <summary>
-    /// <paramref name="color"/>, or, when its <see cref="Luminance"/> is under <see cref="ReadableFloor"/>, the first tenth of
-    /// the way toward <see cref="Theme.Ink"/> that reads (the ink itself at worst): the light's hue kept, its words legible on
-    /// a dark page. Pure for one theme.
+    /// <paramref name="color"/>, or, when it contrasts with <see cref="Theme.Bg"/> under <see cref="ReadableContrast"/>, the first tenth of
+    /// the way toward <see cref="Theme.Ink"/> that reads (the ink itself at worst): the light's hue kept, its words legible on a dark page
+    /// and a light one alike. Pure for one theme.
     /// </summary>
     public static Color Readable(Color color)
     {
         for (int tenths = 0; tenths < 10; tenths++)
         {
-            var lifted = Theme.Mix(color, Theme.Ink, tenths / 10.0);
-            if (Luminance(lifted) >= ReadableFloor)
+            var moved = Theme.Mix(color, Theme.Ink, tenths / 10.0);
+            if (ColorContrast.Contrast(moved, Theme.Bg) >= ReadableContrast)
             {
-                return lifted;
+                return moved;
             }
         }
 
         return Theme.Ink;
     }
-
-    /// <summary>Relative luminance, 0 to 1 (Rec. 709 weights on the raw channels). Pure.</summary>
-    public static double Luminance(Color color) => (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255;
 
     /// <summary>A hue (0–360) and saturation (0–100) at full value as a colour. Pure.</summary>
     public static Color FromHs(double hue, double saturation)

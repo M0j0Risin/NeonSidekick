@@ -37,7 +37,7 @@ public static partial class HelpSettings
         SettingsField.CopyUserPrompt => "/copy includes your prompt above the reply. Off, it copies the reply alone.",
         SettingsField.UserLineStyle => "The look of your sent lines in the transcript and the Web UI: quiet (only the › in your color), slab (the line on a faint fill) or bold (all of it bold).",
         SettingsField.ReplyFooter => "Adds a dim line under each reply with its time, tokens, speed, tool calls and model.",
-        SettingsField.Theme => "The app's color theme: one of the sixty built-in themes, or your own from the home folder's themes folder.",
+        SettingsField.Theme => "The app's color theme: one of the sixty-eight built-in themes, dark and light, or your own from the home folder's themes folder.",
         SettingsField.ThemedBackground => "Paints the terminal's background in the theme's color while the app runs, and puts yours back when it exits. Off keeps your terminal's own background.",
         SettingsField.ThemedExternalWindows => "The app's own windows (the picture viewer, the log windows, the video and Browser windows…) take the theme's colors and a matching title bar. Off, they stay black.",
         SettingsField.GradientRules => "Shades the rules around the input line and pane headings along the theme's gradient. Off keeps them flat.",
@@ -283,7 +283,7 @@ public static partial class HelpSettings
         SettingsField.FileSearchMaxResults => "The most rows one search_files or unc_search call returns, whatever it asks for (1–5000).",
 
         // /tools › Files › Image
-        SettingsField.ImageTools => "Gives the model the picture tools: view, inspect and edit pictures, and add them to the splash. They reach the working directory and the profile's images folder.",
+        SettingsField.ImageTools => "Gives the model the picture tools: view, inspect, edit and draw pictures, and add them to the splash. They reach the working directory and the profile's images folder.",
         SettingsField.ImageEditQuality => "The JPEG quality image_edit writes at when the model names none (1–100).",
         SettingsField.ImageEditMetadata => "The metadata image_edit keeps: none, basic (author, date, camera…) or all, which also keeps the GPS position.",
         SettingsField.ImageEditMode => "Where an edited picture goes: beside-original writes a new file; overwrite-original replaces the source. No confirmation either way.",

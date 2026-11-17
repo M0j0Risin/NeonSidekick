@@ -417,9 +417,9 @@ public sealed partial class ActiveDirectoryTests
         Assert.Equal(DirectoryQueries.MemberOfTypes, types);
         Assert.Contains("memberof <name> [nested] [type:" + string.Join('|', DirectoryQueries.MemberOfTypes) + "]", DirectoryCommand.Usage);
         Assert.Contains(HelpCommands.AsWritten.Single(c => c.Command == "/ad").Forms,
-            f => f.Syntax == "/ad memberof <name> [nested] [type:" + string.Join('|', DirectoryQueries.MemberOfTypes) + "] [to:<file-or-folder>]");
+            f => f.Syntax == "/ad memberof <name> [nested] [type:" + string.Join('|', DirectoryQueries.MemberOfTypes) + "] [compare:<name>] [to:<file-or-folder>]");
         Assert.Contains(AdMemberOfTool.ToolName, Assistant.DirectoryRule);
-        Assert.Contains("members: users; every group an account belongs to, direct or at any depth, is ad_memberof (with nested); groups are found with ad_find", Assistant.DirectoryRule);
+        Assert.Contains("members: users; every group an account belongs to, direct or at any depth, is ad_memberof (with nested), and with compare it lists the groups only one of two accounts is in and those both are; groups are found with ad_find", Assistant.DirectoryRule);
         Assert.Contains(AdMemberOfTool.ToolName, HelpSettings.Describe(NeonSidekick.App.SettingsField.DirectoryTools));
         Assert.Contains(AdMemberOfTool.ToolName, NeonSidekick.App.ChatScreen.DirectoryToolNames);
         Assert.Contains(AdMemberOfTool.ToolName, NeonSidekick.Plans.PlanTools.ReadOnly);

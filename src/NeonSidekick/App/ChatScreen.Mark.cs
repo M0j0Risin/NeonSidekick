@@ -50,11 +50,11 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The mark in force and on the rules (the next tick redraws them).</summary>
+    /// <summary>The mark in force and on the rules (the next tick redraws them), in the shade for the theme's page; a theme change sets it again.</summary>
     private void SetMark(string? name)
     {
         _markName = name;
-        _pane.RuleMark = RuleMarks.StyleOf(name);
+        _pane.RuleMark = RuleMarks.StyleOf(name, ColorContrast.IsLight(Theme.Bg));
     }
 
     /// <summary>A restored row's mark (2026-10-18): a name it no longer knows is dropped with a Debug line; none takes the mark off.</summary>

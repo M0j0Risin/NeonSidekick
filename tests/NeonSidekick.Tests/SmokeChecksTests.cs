@@ -48,6 +48,17 @@ public class SmokeChecksTests
         Assert.True(check.Detail.StartsWith("skipped", StringComparison.Ordinal) || check.Detail.Contains("took page 1 of 2 out with pdf-lib, turned it 90° and read it back", StringComparison.Ordinal), check.Detail);
     }
 
+    /// <summary><c>render:png</c> (2026-11-16, #9): Mermaid embedded, a flowchart drawn to a PNG; skipped, passing, with no browser.</summary>
+    [WindowsFact]
+    public void ProbeRenderPng_DrawsAFlowchart()
+    {
+        var check = SmokeChecks.ProbeRenderPng();
+
+        Assert.Equal("render:png", check.Name);
+        Assert.True(check.Passed, check.Detail);
+        Assert.True(check.Detail.StartsWith("skipped", StringComparison.Ordinal) || check.Detail.Contains("drew a Mermaid flowchart", StringComparison.Ordinal), check.Detail);
+    }
+
     [Fact]
     public void ProbeWhisperVad_Passes_WithoutAModel()
     {

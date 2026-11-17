@@ -239,6 +239,22 @@ public sealed class MadeFilesTests : IDisposable
     }
 
     /// <summary>A capture's write is never listed (the review's #127); the write itself still lands.</summary>
+    /// <summary>A drawn chart (2026-11-16, plan sharded-hugging-puppy #9) is listed like any write: the tool saves through <c>WriteBytes</c>.</summary>
+    [Fact]
+    public async Task ARenderedChart_IsListed()
+    {
+        var browser = new Fakes.FakeHeadlessBrowser();
+        var tool = new Llm.Tools.RenderChartTool(_files, new Render.PictureRendering(browser, () => ""));
+        var turn = Turn("chart it");
+        using (MadeFiles.Enter(_made, turn))
+        {
+            var arguments = new Microsoft.Extensions.AI.AIFunctionArguments { ["kind"] = "bar", ["data"] = "a,b\nx,1", ["x"] = "a", ["y"] = "b" };
+            await tool.InvokeAsync(arguments);
+        }
+
+        Assert.Equal(["chart.png"], Names());
+    }
+
     [Fact]
     public void AnUnlistedWrite_LandsButIsNotListed()
     {

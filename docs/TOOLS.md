@@ -231,6 +231,9 @@ Under *Image tools* (`/tools image`, or the toolbar's 🖼️), apart from *File
 | `image_info` | `path?, paths?` | Format, size, frames, transparency, orientation and metadata (EXIF, GPS, XMP…) of up to 20 files, and what `image_edit` can write. |
 | `image_edit` | `path, to?, overwrite?, format?, quality?, max_kb?, width?, height?, scale?, fit?, anchor?, interpolation?, crop_x?, crop_y?, crop_width?, crop_height?, rotate?, flip?, filter?, brightness?, contrast?, saturation?, hue?, tint?, tint_amount?, blur?, sharpen?, pad?, background?, metadata?, dpi?, chroma?, colors?, dither?, interlace?, view?` | Resizes, crops, rotates, recolors or converts a picture into a new file ([Editing pictures](#editing-pictures)). |
 | `set_splash_image` | `path, name?` | Copies a picture into the profile's `images\splash` for the welcome splash; the first replaces the bundled set. |
+| `render_picture` | `mermaid? \| svg? \| html?, to?, overwrite?, width?, scale?, background?` | Draws a Mermaid diagram, or the model's own SVG or HTML, to a PNG ([Rendered pictures](#rendered-pictures)). |
+| `render_chart` | `kind, data? \| from?, x, y, horizontal?, stacked?, title?, x_label?, y_label?, style?, to?, overwrite?, width?, scale?` | Draws a bar, line or pie chart of a table: CSV or JSON text, or a `.csv`, `.tsv` or `.json` file. |
+| `render_collage` | `paths? \| folder?, pattern?, columns?, captions?, title?, style?, to?, overwrite?, width?, scale?` | Lays up to 48 pictures out in a grid with captions and a title, saved as a JPEG (or a PNG). |
 
 #### Editing pictures
 
@@ -241,6 +244,15 @@ Under *Image tools* (`/tools image`, or the toolbar's 🖼️), apart from *File
 * **`max_kb`** (1 KB = 1,000 bytes) lowers quality, then size, until it fits. **Metadata** is dropped unless kept (*Image edit metadata*, `metadata`); `metadata: none` alone strips EXIF, GPS, XMP and a JPEG's thumbnail without re-encoding, keeping the orientation.
 * **Output:** `photo-edited.png` beside the source (or in *Image edit output folder*) under a free name, or `to`, which replaces a file only with `overwrite`. Under *Image edit mode* the source itself, the old one to the Recycle bin when that setting is on.
 * **Limits:** 200 MB and 100 megapixels in; 32,768 pixels a side and 100 megapixels out.
+
+#### Rendered pictures
+
+The render tools draw in a headless Edge, Chrome or Brave (or the one *Web browser path* names), and are offered only while one is found. The picture comes back to the model, so it can look and fix what it drew.
+
+* **Safe by design:** the model's SVG and HTML run no script and fetch nothing; the browser has no network. Mermaid, shipped inside the app, runs in its strict mode, so web icons (`fa:`) don't draw.
+* **Pictures in a page** come only from the working directory or the profile's `images` folder (`<img src="photo.jpg">`).
+* **Output:** `diagram.png`, `picture.png`, `chart.png` or `collage.jpg` at the working directory's top under a free name, or `to`, which replaces a file only with `overwrite`. `/undo` takes it back.
+* **Limits:** at most 4,096 pixels a side (a taller page is cut, and the answer says so); a chart takes 1,000 rows and 12 series, a pie 12 slices (the rest as Other).
 
 ### Video
 
@@ -523,6 +535,7 @@ Under *Network tools*. Small checks on one host at a time: is it up, what does i
 | `net_trace` | `host, max_hops?, names?` | The route, hop by hop (30 at most, about 45 seconds); `names` looks each hop's name up. |
 | `net_port` | `host, ports` | Whether TCP ports (16 at most) are open, refused or silent, on every address the host has. |
 | `net_tls` | `host, port?, server_name?, starttls?` | A TLS handshake (port 443 by default): protocol, cipher, the certificate's names, issuer and days left, and what's wrong with its chain. Mail, LDAP and RDP ports speak their preamble first. |
+| `net_http` | `url, method?, follow?, browser?` | Whether a web address answers: the status, each redirect with its status and time (up to 10 requests, each host held to the reach and the lists), the HTTP version and a few headers. It never reads the page, sends no cookies or credentials, and an untrusted certificate is reported, not refused. |
 | `net_certs` | `store?, location?, filter?, expiring_within_days?, limit?` | One of the certificate stores on the app's computer, soonest to end first; nothing exported. Only with *Network certificate stores* on. |
 
 * **One host per call:** a name or an address. A range, block, list, URL, `host:port` or short-form address (`10.1`) is refused.
@@ -670,7 +683,7 @@ Under *Directory tools*. **Read-only:** the app's directory client holds no call
 |---|---|---|
 | `ad_user` | `name, domain?` | A user's card: enabled, locked and when (and from which machine: lockout event 4740), bad passwords, password and account expiry, last sign-in, title, department, manager, reports, OU, flags, groups. |
 | `ad_group` | `name, nested?, members?, limit?, to?, domain?` | A group's card (type, owner, mail, created, its own groups) and its members, direct or `nested`; `members` is `all`, `users`, `computers` or `groups`. |
-| `ad_memberof` | `name, nested?, type?, limit?, to?, domain?` | Every group an account (user, group, computer or service account) is in: direct, or `nested` at any depth, security and distribution alike, each with its type and the group it comes through. |
+| `ad_memberof` | `name, nested?, type?, compare?, limit?, to?, domain?` | Every group an account (user, group, computer or service account) is in: direct, or `nested` at any depth, security and distribution alike, each with its type and the group it comes through. `compare` names a second account and splits the groups into only one, only the other, and both. |
 | `ad_computer` | `name, domain?` | A computer's or managed service account's card: OS, enabled, domain controller or not, last sign-in, machine password, OU, owner, groups. |
 | `ad_find` | `kind, days?, words?, type?, field?, ou?, limit?, scan_from?, to?, domain?` | A structured search; the kinds are below. |
 | `ad_ou` | `ou?, limit?, to?, domain?` | The OU tree with descriptions, or one OU: owner, linked GPOs, and the objects directly in it, counted by kind. |

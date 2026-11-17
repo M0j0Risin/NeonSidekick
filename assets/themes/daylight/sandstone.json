@@ -1,0 +1,29 @@
+{
+  "name": "sandstone",
+  "description": "terracotta and ochre on warm sand",
+  "colors": {
+    "primary": "#9C3A1C",
+    "secondary": "#79481E",
+    "tertiary": "#345C8A",
+    "deep": "#D1B395",
+    "highlight": "#78530A",
+    "warm": "#954111",
+    "tint": "#4D6120",
+    "ink": "#3E271B",
+    "dim": "#685748",
+    "dimmer": "#A08D7B",
+    "bg": "#F5EBDD",
+    "panelBg": "#E5D4BC",
+    "good": "#336522",
+    "bad": "#AF1F24",
+    "warn": "#795206"
+  },
+  "gradient": [
+    "#A17212",
+    "#B5671A",
+    "#C85A23",
+    "#D84A26",
+    "#D64B3F"
+  ],
+  "styles": {}
+}

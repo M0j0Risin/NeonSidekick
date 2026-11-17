@@ -15,7 +15,7 @@ namespace NeonSidekick.UI;
 /// palette's style set, swapped whole by <see cref="Use"/> — one reference assignment, so a
 /// line rendered on another thread mid-swap is at worst one line in two themes. A swap does not
 /// re-colour what is already drawn (the scrollback keeps styled segments), which is why a theme
-/// change starts over the way <c>/clear</c> does, with the welcome splash when it is on.
+/// change draws the screen again, the conversation replayed in the new colours (2026-11-16; it started over like <c>/clear</c> until then).
 /// </para>
 /// </summary>
 public static class Theme
@@ -314,7 +314,7 @@ public static class Theme
     /// 2026-10-16 (the contrast review: code over the slab now reads at 3:1 in every built-in, and the faintest removed slab, cyberpunk's,
     /// is still 1.19:1 on the page, about the panel's lift; 0.20 would take it to 1.16).
     /// </summary>
-    private const double DiffSlabShare = 0.22;
+    internal const double DiffSlabShare = 0.22;   // internal for ThemeChecks (2026-11-16)
 
     /// <summary>The style of a <see cref="CodeTokenKind"/>; plain text is <see cref="MarkdownCodeBlock"/>.</summary>
     public static Style CodeStyle(CodeTokenKind kind) => kind switch

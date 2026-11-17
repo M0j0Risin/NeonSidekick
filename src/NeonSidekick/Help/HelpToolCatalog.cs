@@ -107,6 +107,9 @@ internal static class HelpToolCatalog
         T(ImageInfoTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Reads facts about pictures without loading them: format, size, frames, orientation and the metadata they carry."),
         T(ImageEditTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Edits a picture and writes a new file: resize, crop, rotate, flip, color, blur, sharpen, a border, another format."),
         T(SetSplashImageTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Adds a picture to the profile's splash pictures, shown at start and by `/splash`."),
+        T(RenderPictureTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Draws a Mermaid diagram, or the model's own SVG or HTML, to a PNG in the working directory.", setup: BrowserSetup),
+        T(RenderChartTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Draws a bar, line or pie chart of a table, given as text or a CSV, TSV or JSON file, to a PNG.", setup: BrowserSetup),
+        T(RenderCollageTool.ToolName, ToolsText.ImageMenuTitle, SettingsField.ImageTools, "Lays pictures out in a grid with captions and a title, saved as one JPEG or PNG.", setup: BrowserSetup),
         // Video (2026-11-12): no setup line; a file with no player opens in its default app.
         T(PlayVideoTool.ToolName, ToolsText.VideoMenuTitle, SettingsField.VideoTools, "Plays a video file from the working directory where *Video files play in* says.", headless: false),
         T(VideoControlTool.ToolName, ToolsText.VideoMenuTitle, SettingsField.VideoTools, "Controls the video file playing: play, pause, seek, volume, mute, its status, or close the player.", headless: false),
@@ -223,6 +226,7 @@ internal static class HelpToolCatalog
         T(NetTraceTool.ToolName, ToolsText.NetworkMenuTitle, SettingsField.NetworkTools, "Traces the route to one host: each router on the way and its round-trip time.", setup: NetworkSetup + "; needs a way to trace a route here"),
         T(NetPortTool.ToolName, ToolsText.NetworkMenuTitle, SettingsField.NetworkTools, "Checks whether TCP ports on one host are open, refused or silent.", setup: NetworkSetup),
         T(NetTlsTool.ToolName, ToolsText.NetworkMenuTitle, SettingsField.NetworkTools, "Connects to a TLS service and reports its protocol, cipher and certificate.", setup: NetworkSetup),
+        T(NetHttpTool.ToolName, ToolsText.NetworkMenuTitle, SettingsField.NetworkTools, "Checks whether a web address answers: its status, each redirect with its time, the HTTP version and a few headers; never reads the page.", setup: NetworkSetup),
         T(NetCertsTool.ToolName, ToolsText.NetworkMenuTitle, SettingsField.NetworkTools, "Lists the certificates in one of this machine's certificate stores; nothing is exported.", needs: [SettingsField.NetworkCertificateStores]),
         // Services (Windows only)
         T(ServiceListTool.ToolName, ToolsText.ServicesMenuTitle, SettingsField.ServiceTools, "Lists the Windows services on a computer with their states.", setup: ServiceSetup),
@@ -236,7 +240,7 @@ internal static class HelpToolCatalog
         // Directory
         T(AdUserTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Reads an Active Directory user: enabled, locked, password expiry, last sign-in, groups, manager and OU.", setup: DirectorySetup),
         T(AdGroupTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Lists an Active Directory group's members, direct or nested, and the groups it is in.", setup: DirectorySetup + "; a list's `to` writes a CSV only with *File tools* on and not in plan mode"),
-        T(AdMemberOfTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Lists every group an Active Directory account is in, direct or nested at any depth, with the group each comes through.", setup: DirectorySetup + "; a list's `to` writes a CSV only with *File tools* on and not in plan mode"),
+        T(AdMemberOfTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Lists every group an Active Directory account is in, direct or nested at any depth, with the group each comes through; with `compare`, the groups only it, only another account, or both are in.", setup: DirectorySetup + "; a list's `to` writes a CSV only with *File tools* on and not in plan mode"),
         T(AdComputerTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Reads an Active Directory computer or service account: its system, state, last sign-in, OU and groups.", setup: DirectorySetup),
         T(AdFindTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Finds Active Directory objects by name, by a field, or by a state such as locked, disabled or stale.", setup: DirectorySetup + "; a list's `to` writes a CSV only with *File tools* on and not in plan mode"),
         T(AdOuTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Lists Active Directory's OUs as a tree, or one OU's owner, linked GPOs and the objects in it.", setup: DirectorySetup),

@@ -6,7 +6,11 @@ using System.Text.Json;
 namespace NeonSidekick.Web;
 
 /// <summary>A DevTools protocol failure: a command the browser answered with an error, a closed connection, a port never opened.</summary>
-public sealed class DevToolsException(string message) : Exception(message);
+public sealed class DevToolsException(string message, bool tooLarge = false) : Exception(message)
+{
+    /// <summary>Whether the answer ran past <see cref="DevToolsClient.MaxMessageBytes"/> (2026-11-16, a picture too large to hand back).</summary>
+    public bool TooLarge { get; } = tooLarge;
+}
 
 /// <summary>
 /// The smallest Chrome DevTools Protocol client the headless browser needs (2026-10-11, the user's ask: wait for a page in real
@@ -166,7 +170,7 @@ public sealed class DevToolsClient : IAsyncDisposable
                 message.Write(chunk, 0, received.Count);
                 if (message.Length > MaxMessageBytes)
                 {
-                    throw new DevToolsException($"a DevTools message over {MaxMessageBytes / (1024 * 1024)} MB");
+                    throw new DevToolsException($"a DevTools message over {MaxMessageBytes / (1024 * 1024)} MB", tooLarge: true);
                 }
 
                 if (received.EndOfMessage)

@@ -94,7 +94,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void InitAdmin(IPinger? pinger, Func<string, CancellationToken, Task<System.Net.IPAddress[]>>? resolve, IServiceSystem? serviceSystem, ITaskSystem? taskSystem, IDirectorySystem? directorySystem, Func<string?>? joinedDomain)
     {
-        _network = new NetworkAccess(_effective, pinger, _time, resolve);
+        // net_http's browser: true speaks as web_fetch's browser does (2026-11-16, #15).
+        _network = new NetworkAccess(_effective, pinger, _time, resolve, identity: () => _web.Browser.Identify(_effective().WebBrowserPath));
         _networkTools = NetworkTools(_network, _networkBudget);
         _services = new ServiceAccess(serviceSystem, () => ServiceConfigFile.Family.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => _effective().ServiceComputersOffered, _time);
         _serviceTools = ServiceTools(_services, _effective, ConfirmAdminAsync);
@@ -107,7 +108,7 @@ internal sealed partial class ChatScreen
 
     // ── The tools ───────────────────────────────────────────────────────────
 
-    /// <summary>The six network tools over <paramref name="access"/>, counting against <paramref name="budget"/>. Shared with headless.</summary>
+    /// <summary>The seven network tools over <paramref name="access"/>, counting against <paramref name="budget"/>. Shared with headless.</summary>
     public static IReadOnlyList<AIFunction> NetworkTools(NetworkAccess access, NetworkBudget budget) =>
     [
         new NetDnsTool(access, budget),
@@ -115,6 +116,7 @@ internal sealed partial class ChatScreen
         new NetTraceTool(access, budget),
         new NetPortTool(access, budget),
         new NetTlsTool(access, budget),
+        new NetHttpTool(access, budget),
         new NetCertsTool(access, budget),
     ];
 
@@ -188,7 +190,7 @@ internal sealed partial class ChatScreen
 
     public static readonly IReadOnlySet<string> NetworkToolNames = new HashSet<string>(StringComparer.Ordinal)
     {
-        NetDnsTool.ToolName, NetPingTool.ToolName, NetTraceTool.ToolName, NetPortTool.ToolName, NetTlsTool.ToolName, NetCertsTool.ToolName,
+        NetDnsTool.ToolName, NetPingTool.ToolName, NetTraceTool.ToolName, NetPortTool.ToolName, NetTlsTool.ToolName, NetHttpTool.ToolName, NetCertsTool.ToolName,
     };
 
     public static readonly IReadOnlySet<string> ServiceToolNames = new HashSet<string>(StringComparer.Ordinal)
@@ -728,7 +730,8 @@ internal sealed partial class ChatScreen
                 actions.Add(new InfoAction(card.Members == "users" ? DirectoryText.AllMembersButton : DirectoryText.UsersOnlyButton, 'u', DirectoryText.MembersWord));
             }
 
-            if (answer is { Kind: "memberof", Failed: false, Self: not null })
+            // A compare's card too (2026-11-16, #16): n re-runs the compare by both accounts, nested flipped.
+            if (answer is { Kind: "memberof" or DirectoryQueries.MemberOfCompareKind, Failed: false, Self: not null })
             {
                 actions.Add(new InfoAction(card.Nested ? DirectoryText.DirectButton : DirectoryText.NestedButton, 'n', DirectoryText.NestingWord));
             }
@@ -797,7 +800,7 @@ internal sealed partial class ChatScreen
 
                     Push(groups, groups.Title ?? DirectoryCommand.DescribeMemberOf(answer.Self!.Name, true), true);
                     continue;
-                case 'n' when answer.Kind == "memberof":
+                case 'n' when answer.Kind is "memberof" or DirectoryQueries.MemberOfCompareKind:
                     if (card.Other is { } kept)
                     {
                         stack[^1] = kept with { Other = card with { Other = null } };
@@ -805,7 +808,9 @@ internal sealed partial class ChatScreen
                     }
 
                     bool deeper = !card.Nested;
-                    var regrouped = await Read(() => DirectoryCommand.MemberOfAsync(_directory, card.Result.Domain, answer.Self!, deeper, cancellationToken)).ConfigureAwait(false);
+                    var regrouped = await Read(() => answer.Other is { } second
+                        ? DirectoryCommand.CompareAsync(_directory, card.Result.Domain, answer.Self!, second, deeper, cancellationToken)
+                        : DirectoryCommand.MemberOfAsync(_directory, card.Result.Domain, answer.Self!, deeper, cancellationToken)).ConfigureAwait(false);
                     if (regrouped.Answer is null || regrouped.Failed)
                     {
                         sink.Notice(string.Join(' ', regrouped.Lines));

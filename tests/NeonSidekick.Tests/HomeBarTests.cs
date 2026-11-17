@@ -1,6 +1,7 @@
 using System.Text.Json;
 using NeonSidekick.App;
 using NeonSidekick.HomeAssistant;
+using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 using Spectre.Console;
 
@@ -356,15 +357,25 @@ public sealed class HomeBarTests
         Assert.Equal(new Style(Theme.Warn, decoration: Decoration.Bold), garage.Style);
     }
 
-    /// <summary>A lit chip's colour too dark for the page is lifted toward the ink; a bright one is kept (2026-10-12).</summary>
+    /// <summary>
+    /// A lit chip's colour that doesn't read on the page is moved toward the ink; one that reads is kept (2026-10-12): a dark one lifted on a
+    /// dark page, and a pale one deepened on a light page (2026-11-16, the daylight themes).
+    /// </summary>
     [Fact]
-    public void Readable_LiftsADarkColour_AndKeepsABrightOne()
+    public void Readable_MovesAColourThePageHides_AndKeepsOneThatReads()
     {
         var navy = HomeChips.Readable(new Color(0, 0, 60));
-        Assert.True(HomeChips.Luminance(navy) >= HomeChips.ReadableFloor);
+        Assert.True(ColorContrast.Contrast(navy, Theme.Bg) >= HomeChips.ReadableContrast);
         Assert.True(navy.B > navy.R);   // still bluish
         Assert.Equal(new Color(255, 200, 0), HomeChips.Readable(new Color(255, 200, 0)));
         Assert.Equal(Theme.Ink, HomeChips.Readable(Theme.Ink));
+
+        using var scope = new ThemeScope();
+        Theme.Use(ThemeLibrary.Get("paper"));
+        var pale = HomeChips.Readable(new Color(255, 230, 120));
+        Assert.True(ColorContrast.Contrast(pale, Theme.Bg) >= HomeChips.ReadableContrast);
+        Assert.True(pale.R > pale.B);   // still yellowish
+        Assert.Equal(new Color(0, 0, 60), HomeChips.Readable(new Color(0, 0, 60)));   // reads on a light page as it is
     }
 
     // ─── the row ────────────────────────────────────────────────────────────────

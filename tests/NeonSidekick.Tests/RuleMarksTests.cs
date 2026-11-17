@@ -40,12 +40,14 @@ public sealed class RuleMarksTests
     [Fact]
     public void EveryColor_IsDistinct_AndHasAStyle()
     {
-        Assert.Equal(RuleMarks.Names.Count, RuleMarks.Names.Select(RuleMarks.ColorOf).Distinct().Count());
+        Assert.Equal(RuleMarks.Names.Count, RuleMarks.Names.Select(n => RuleMarks.ColorOf(n)).Distinct().Count());
         foreach (string name in RuleMarks.Names)
         {
             Assert.Equal(RuleMarks.ColorOf(name), RuleMarks.StyleOf(name)!.Value.Foreground);
         }
 
+        Assert.Equal(RuleMarks.Names.Count, RuleMarks.Names.Select(n => RuleMarks.ColorOf(n, light: true)).Distinct().Count());
+        Assert.Equal(RuleMarks.ColorOf("red", light: true), RuleMarks.StyleOf("red", light: true)!.Value.Foreground);
         Assert.Null(RuleMarks.StyleOf(null));
         Assert.Null(RuleMarks.StyleOf("magenta"));
     }
@@ -57,7 +59,7 @@ public sealed class RuleMarksTests
         {
             foreach (string name in RuleMarks.Names)
             {
-                double ratio = ThemeTests.Contrast(RuleMarks.ColorOf(name), theme.Bg);
+                double ratio = ThemeTests.Contrast(RuleMarks.ColorOf(name, ColorContrast.IsLight(theme.Bg)), theme.Bg);
                 Assert.True(ratio >= 4.5, $"{name} on {theme.Name}: {ratio:0.00}:1");
             }
         }
