@@ -562,7 +562,7 @@ public sealed class PresentAuditToolTests : IDisposable
         Report1(FindingJson(severity: "medium"));
         Assert.Equal((1, false), (_loop.PassGaps.Count, _loop.PassClean));
         Report1(FindingJson(file: "src/y.cs", line: 3, title: "Small", severity: "low"));
-        Assert.Equal(1, _loop.PassGaps.Count);
+        Assert.Single(_loop.PassGaps);
         Assert.True(_loop.PassClean);
         // In a pass whose first call was serious, a light one after it counts the pass once.
         Assert.Equal(1, _loop.CleanCount);

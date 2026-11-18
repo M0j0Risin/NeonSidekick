@@ -118,6 +118,15 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             return PlanText.AlreadyApprovedResult;
         }
 
+        // One revision a gap pass (2026-11-17, the severity bench: csv-import-1's pass 2 saved revisions 3 to 6 and then a clean one past "call no
+        // more tools", 546k tokens, and the clean one counted the pass clean though it checked only its own fixes): once a pass saved, a later call
+        // in it is refused before anything is read or saved, so a call that would also be refused for its arguments isn't sent back to retry first.
+        // The next pass reviews the revision on disk. A refused call leaves Presented 0, so retries and follow-ups stand.
+        if (_session.Closing is { Pending: false, Converged: false, Presented: > 0 })
+        {
+            return PlanText.PassAlreadySavedResult(_session.Path ?? "", _session.Revision);
+        }
+
         string title = ToolArguments.ReadString(arguments, TitleArgument).Trim();
         string markdown = ToolArguments.ReadString(arguments, MarkdownArgument);
         if (string.IsNullOrWhiteSpace(markdown))

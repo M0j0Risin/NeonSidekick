@@ -256,7 +256,7 @@ public class PlanCleanPassesTests : IDisposable
         Assert.StartsWith("- A gap review is running (pass 1 of 5): present_plan's gaps lists what each revision closed; only a pass with no gaps returns the plan to the user.\n", one);
         Assert.StartsWith("- A gap review is running (pass 1 of 5): present_plan's gaps lists what each revision closed; only 2 passes in a row with no gaps return the plan to the user.\n", two);
         Assert.DoesNotContain("checks again", two);
-        Assert.Contains("- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed, each starting with [high] (the plan would fail or build the wrong thing), [medium] (someone would have to guess a choice that matters, or stop to ask) or [low] (a short stop or a little rework, quickly sorted out: a step missing its Done when:, say); put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked.", one);
+        Assert.Contains("- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed, each starting with [high] (the plan would fail or build the wrong thing), [medium] (someone would have to guess a choice that matters, or stop to ask) or [low] (a short stop or a little rework, quickly sorted out: a step missing its Done when:, say); put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked. Call present_plan once a pass, with every gap the pass closed: a second call is refused, and the next pass reviews what you saved.", one);
     }
 
     [Fact]
@@ -405,9 +405,78 @@ public class PlanCleanPassesTests : IDisposable
         await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
         object? again = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, Array.Empty<string>(), Checked));
 
-        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 1, 1, 2, bodyChars: BodyChars(Plan)), again);
+        // Since 2026-11-17 (one revision a pass) the second report is refused outright: the baseline's version-flag-1 sent four in one pass.
+        Assert.Equal(PlanText.PassAlreadySavedResult(_session.Path!, 1), again);
+        Assert.Equal(1, loop.Presented);
         Assert.False(loop.Converged);
         Assert.Empty(_presented);
+    }
+
+    [Fact]
+    public async Task Tool_ASecondGapCallInOnePass_IsRefused_TheFirstRevisionAndItsGapsStand()
+    {
+        // 2026-11-17, one revision a pass: the severity bench's csv-import-1 saved four gap revisions in one pass past "call no more tools".
+        var loop = await PassOneAsync();
+
+        object? first = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "[high] No test step" }));
+        object? second = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised + "- [ ] Ship it\n  Done when: it ships\n", new[] { "[low] No ship step" }));
+
+        Assert.StartsWith("Revision 2 of .neon/plans/guide.md is saved with 1 gap closed.", Assert.IsType<string>(first));
+        Assert.Equal(PlanText.PassAlreadySavedResult(".neon/plans/guide.md", 2), second);
+        Assert.Equal(["[high] No test step"], loop.PassGaps);
+        Assert.Equal(1, loop.Presented);
+        Assert.Equal(2, _session.Revision);
+        Assert.DoesNotContain("Ship it", FileText());
+        Assert.Equal("Error: this pass already saved revision 2 of .neon/plans/guide.md; nothing was saved or counted. Reply with one short line and call no more tools; "
+            + "the next review pass reviews that revision and closes what is left.", second);
+    }
+
+    [Fact]
+    public async Task Tool_ACleanCallAfterAGapCall_IsRefused_SoThePassNeverStartsAStreak()
+    {
+        // The csv-import-1 shape: gaps, then a clean report in the same pass, which the loop would have counted clean 1 of 2.
+        var loop = await PassOneAsync();
+
+        await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "[medium] No test step" }));
+        object? clean = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, Array.Empty<string>(), Checked));
+
+        Assert.Equal(PlanText.PassAlreadySavedResult(".neon/plans/guide.md", 2), clean);
+        Assert.False(loop.PassClean);
+        NextPass(loop);
+        Assert.Equal(0, loop.CleanStreak);
+    }
+
+    [Fact]
+    public async Task Tool_ARefusedFirstCall_ThenAGoodOne_Saves_AndTheNextPassTakesACallAgain()
+    {
+        var loop = await PassOneAsync();
+
+        // Refused before anything is saved: no title. A second-save refusal would be wrong here; the retry is the pass's one revision.
+        object? refused = await _tool.InvokeAsync(PlanGapLoopTests.Args("", Revised, new[] { "[low] No test step" }));
+        object? good = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "[low] No test step" }));
+
+        Assert.Equal(PlanText.TitleRequired, refused);
+        Assert.StartsWith("Revision 2 of", Assert.IsType<string>(good));
+        Assert.Equal(1, loop.Presented);
+        NextPass(loop);
+        Assert.Equal(0, loop.Presented);
+
+        object? next = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, Array.Empty<string>(), Checked));
+
+        Assert.StartsWith("No gaps found in this pass of .neon/plans/guide.md (revision 2)", Assert.IsType<string>(next));
+        Assert.Equal(1, loop.Presented);
+    }
+
+    [Fact]
+    public async Task Tool_ASecondCallMissingItsTitle_IsRefusedAsASecondSave_NotForItsTitle()
+    {
+        // The check comes before the arguments are read, so the model isn't sent back to fix a call that would be refused anyway.
+        await PassOneAsync();
+        await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "[low] No test step" }));
+
+        object? second = await _tool.InvokeAsync(PlanGapLoopTests.Args("", "", new[] { "x" }));
+
+        Assert.Equal(PlanText.PassAlreadySavedResult(".neon/plans/guide.md", 2), second);
     }
 
     [Fact]

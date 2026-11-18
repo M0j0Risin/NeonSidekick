@@ -503,6 +503,9 @@ static partial class Patterns
     public static readonly Regex PlanPass = Template.Build(PlanText.PassLogLine(Template.N1, Template.N2, [], false), cutBefore: Template.N2);
     public static readonly Regex PlanClean = Template.Build(PlanText.CleanPassLogLine(Template.N1, Template.N2, Template.N3, []), cutBefore: Template.N2);
     public static readonly Regex PlanRetry = Template.Build(PlanText.RetryLogLine(Template.N1, null));
+
+    /// <summary>A second <c>present_plan</c> in a gap pass, refused (2026-11-17, one revision a pass): read from the call's result in stdout.</summary>
+    public static readonly Regex SecondSave = Template.Build(PlanText.PassAlreadySavedResult(Template.S1, Template.N1));
     public static readonly Regex[] PlanFollowUp = [Template.Build(PlanText.FollowUpLogLine(Template.N1, false)), Template.Build(PlanText.FollowUpLogLine(Template.N1, true))];
     public static readonly Regex AuditPass = Template.Build(AuditText.PassLogLine(Template.N1, Template.N2, 0, false, false, null), cutBefore: Template.N2);
 
@@ -880,6 +883,9 @@ sealed class RunScore
     /// <summary>The planted gaps first caught after the plan shadow would have converged (2026-11-17, phase 3).</summary>
     public List<string> GapsAfterShadow { get; } = [];
 
+    /// <summary>The <c>present_plan</c> calls refused as a pass's second save (2026-11-17, one revision a pass).</summary>
+    public int SecondSavesRefused { get; set; }
+
     /// <summary>The pass of <paramref name="call"/>, null when unknown.</summary>
     public int? PassOf(int? call) => call is int c && CallPasses.TryGetValue(c, out int pass) ? pass : null;
 
@@ -1030,8 +1036,11 @@ static class Scorer
             score.Flags.Add("the plan file is gone");
         }
 
-        var gapLines = score.Calls.SelectMany(c => c.List(PresentPlanTool.GapsArgument).Select(t => (c.Ordinal, Text: t))).ToList();
-        var minorLines = score.Calls.SelectMany(c => c.List(PresentPlanTool.MinorArgument).Select(t => (c.Ordinal, Text: t))).ToList();
+        score.SecondSavesRefused = score.Calls.Count(c => c.Refused && Patterns.SecondSave.IsMatch(c.Result!));
+
+        // Accepted calls only (2026-11-17, one revision a pass): a refused call's gaps were never recorded, so they aren't caught or reported.
+        var gapLines = score.Calls.Where(c => c.Accepted).SelectMany(c => c.List(PresentPlanTool.GapsArgument).Select(t => (c.Ordinal, Text: t))).ToList();
+        var minorLines = score.Calls.Where(c => c.Accepted).SelectMany(c => c.List(PresentPlanTool.MinorArgument).Select(t => (c.Ordinal, Text: t))).ToList();
         score.Planted.AddRange(Outcomes(plan, gapLines, minorLines, finalBody));
         foreach (var line in gapLines.Where(l => !plan.Gaps.Any(g => g.Match.In(l.Text))))
         {
@@ -1848,6 +1857,7 @@ static class Report
         {
             Row(md, "planted gaps caught", runs.Select(r => (double)r.Planted.Count(g => g.Status == "caught")));
             Row(md, material.Plan(item)?.Control == true ? "gaps reported (all false)" : "other gaps reported", runs.Select(r => (double)r.OtherGaps.Count));
+            Row(md, "second saves refused", runs.Select(r => (double)r.SecondSavesRefused));
         }
 
         md.AppendLine();
@@ -2021,6 +2031,7 @@ static class Report
         ["auditLowChanges"] = r.Log.AuditLight,
         ["planShadowWouldConvergeAt"] = r.Log.PlanShadowWouldConvergeAt,
         ["gapsAfterShadow"] = new JsonArray([.. r.GapsAfterShadow.Select(g => (JsonNode?)g)]),
+        ["secondSavesRefused"] = r.SecondSavesRefused,
         ["gapLabels"] = new JsonObject(r.Planted.Where(g => g.Status == "caught").Select(g => KeyValuePair.Create(g.Gap.Id, (JsonNode?)RunScore.LabelOf(g)))),
     };
 
@@ -2443,11 +2454,13 @@ static class SelfTest
                 "  \"gaps\": [\"Nothing says what a return does to a reserved book\", \"bulk_insert doesn't exist\", \"An unrelated gap\"],",
                 "  \"minor\": [\"Named the migration step\", \"Closed the open question: the rate is 0.25 a day\"]}",
                 "[tool] present_plan -> Plan saved as revision 2.",
-                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"The rate is an open question\"], \"markdown\": \"x\"}",
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"A gap only a refused call sent\"], \"markdown\": \"x\"}",
                 "[tool] present_plan -> " + PlanText.CheckedRequiredResult,
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"never reported, but refused\"], \"markdown\": \"x\"}",
+                "[tool] present_plan -> " + PlanText.PassAlreadySavedResult(".neon/plans/selftest.md", 2),
                 "[tool] present_plan {\"title\": \"T\", \"gaps\": [",
                 "[tool] present_plan -> Error: the arguments were not valid JSON.",
-                "[tool] present_plan {\"title\": \"T\", \"gaps\": [], \"checked\": [\"steps\"], \"markdown\": \"x\"}",
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"The rate is an open question\"], \"checked\": [\"steps\"], \"markdown\": \"x\"}",
                 "[tool] present_plan -> Plan saved as revision 3.",
                 "[notice] " + PlanText.ConvergedNotice(".neon/plans/selftest.md", 2, 3, 1));
             string log = "x " + PlanText.PassLogLine(1, 2, ["a"], false) + "\nx " + PlanText.CleanPassLogLine(2, 1, 1, ["steps"]);
@@ -2458,8 +2471,9 @@ static class SelfTest
             score.StopReason = stop?.Reason;
             Scorer.ScorePlan(score, plan, stdout);
 
-            Expect(score.Calls.Count == 4, $"present_plan calls read: {score.Calls.Count}");
-            Expect(score.Calls.Count(c => c.Refused) == 2 && score.Calls.Count(c => c.Accepted) == 2, "two refused calls, two saved");
+            Expect(score.Calls.Count == 5, $"present_plan calls read: {score.Calls.Count}");
+            Expect(score.Calls.Count(c => c.Refused) == 3 && score.Calls.Count(c => c.Accepted) == 2, "three refused calls, two saved");
+            Expect(score.SecondSavesRefused == 1, $"second saves refused: {score.SecondSavesRefused} (a CheckedRequired refusal isn't one)");
             Expect(score.Calls.Count(c => !c.Parsed) == 1 && score.Flags.Any(f => f.Contains("unparsed", StringComparison.Ordinal)), "the broken call is kept as unparsed");
             Expect(!score.Flags.Any(f => f.StartsWith("parse mismatch", StringComparison.Ordinal)), "no parse mismatch: " + string.Join("; ", score.Flags));
             string Status(string id) => score.Planted.First(g => g.Gap.Id == id).Status;
@@ -2467,9 +2481,9 @@ static class SelfTest
             Expect(Status("G2") == "minor only", "G2 only in minor: " + Status("G2"));
             Expect(Status("G3") == "fixed silently", "G3 fixed silently: " + Status("G3"));
             Expect(Status("G4") == "caught" && score.Planted.First(g => g.Gap.Id == "G4").FixedInBody, "G4 caught and gone from the body");
-            Expect(Status("G5") == "missed", "G5 missed: " + Status("G5"));
+            Expect(Status("G5") == "missed", "G5 missed, its words only in a refused call: " + Status("G5"));
             Expect(score.Converged && score.ConvergedWithHighOpen, "converged with a high gap open (G5)");
-            Expect(score.OtherGaps.Count == 2, $"other gaps: {score.OtherGaps.Count}");
+            Expect(score.OtherGaps.Count == 2 && !score.OtherGaps.Any(g => g.Text.Contains("refused", StringComparison.Ordinal)), $"other gaps, a refused call's left out: {score.OtherGaps.Count}");
             Expect(score.DecisionFolded == true && score.Reargued.Count == 1, $"decision folded {score.DecisionFolded}, re-argued {score.Reargued.Count}");
             Expect(score.LostContent && score.Loss!.Steps.Count > 0, "a lost step is listed");
 

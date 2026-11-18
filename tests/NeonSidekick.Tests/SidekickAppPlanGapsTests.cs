@@ -169,6 +169,39 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_PlanGaps_TwoPresentsInOneResponse_TheSecondIsRefused()
+    {
+        // 2026-11-17, one revision a pass: a model that batches its calls sends both in one response; the first saves, the second is refused,
+        // and the shadow notes the first call's gaps alone.
+        ServerOn1234("llama");
+        _chat.Enqueue(HeadlessPresentPlan());
+        _chat.EnqueueText("Saved.");
+        _chat.Enqueue(HeadlessPresentGaps("p2", "[high] Test it"), HeadlessPresentGapsOver("p2b", HeadlessGapBody(["Test it", "Ship it"]), "[low] Ship it"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.Enqueue(HeadlessPresentGaps("p3"));
+        _chat.EnqueueText("None found.");
+        _chat.Enqueue(HeadlessPresentGaps("p4"));
+        _chat.EnqueueText("Nothing left.");
+        var shadow = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith(PlanText.ShadowLogPrefix, StringComparison.Ordinal)) shadow.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await Headless("/plan Add a guide\n/plan gaps\n");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Contains("[tool] present_plan -> " + PlanText.PassAlreadySavedResult(HeadlessPlanPath, 2), output);
+        Assert.DoesNotContain("· [low] Ship it", output);
+        Assert.DoesNotContain("Ship it", File.ReadAllText(HeadlessPlanFile));
+        Assert.StartsWith("plan gaps shadow: pass 1: 1 high (serious);", shadow[0]);
+    }
+
+    [Fact]
     public async Task Headless_PlanGaps_TheShadowLine_OnceAPass_TheConvergedPassToo()
     {
         // 2026-11-17, phase 3: tagged gaps counted by their tags, logged once a pass, the pass that converged inside its turn included.

@@ -971,7 +971,8 @@ public static class PlanText
                 ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. " + decision + "\n"
                 : "- Research what you need with the read-only tools. " + decision + "\n") +
             "- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed, each starting with [high] (the plan would fail or build the wrong thing), [medium] (someone would have to guess a choice that matters, or stop to ask) or [low] (a short stop or a little rework, quickly sorted out: a step missing its Done when:, say); put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. " +
-            "If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked." +
+            "If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked. " +
+            "Call present_plan once a pass, with every gap the pass closed: a second call is refused, and the next pass reviews what you saved." +
             (reviewer.Length > 0 ? "\n" + reviewer : "");
     }
 
@@ -1182,6 +1183,13 @@ public static class PlanText
 
         static string Clip(string text, int max) => text.Length <= max ? text : text[..(max - 1)] + "…";
     }
+
+    /// <summary>
+    /// A second <c>present_plan</c> in a gap pass that already saved (2026-11-17, one revision a pass): nothing saved or counted, the revision the
+    /// pass saved named. Pinned.
+    /// </summary>
+    public static string PassAlreadySavedResult(string path, int revision) =>
+        $"Error: this pass already saved revision {N(revision)} of {path}; nothing was saved or counted. Reply with one short line and call no more tools; the next review pass reviews that revision and closes what is left.";
 
     /// <summary>An empty gaps list during a review with no checked list (2026-10-17): nothing saved, no pass counted. Pinned.</summary>
     public const string CheckedRequiredResult = "Error: with gaps empty, checked is required: one short line for each part of the plan you checked this pass. Call present_plan again with it.";

@@ -63,6 +63,32 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task PlanGaps_ASecondPresentInOnePass_IsRefused_ThePassKeepsItsFirstRevision()
+    {
+        // 2026-11-17, one revision a pass (the csv-import-1 shape): pass 1 presents, then presents again in the same turn; the second is refused,
+        // the pass's notice names only the first call's gaps, and pass 2 reviews revision 2.
+        PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
+        _chat.Enqueue(PresentPlanCall());                                                                         // 0
+        _chat.EnqueueText("Closing the gaps.");                                                                   // 1
+        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "[high] Add a test step"));                     // 2: pass 1
+        _chat.Enqueue(PresentGapsCall("p2b", RevisedPlanMarkdown + "- [ ] Ship it\n  Done when: shipped\n", "[low] Add a ship step")); // 3: again
+        _chat.EnqueueText("Pass 1 done.");                                                                        // 4
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown));                                                // 5: pass 2 clean
+        _chat.EnqueueText("Pass 2 clean.");                                                                       // 6
+        _chat.Enqueue(PresentGapsCall("p4", RevisedPlanMarkdown));                                                // 7: pass 3 confirms
+        _chat.EnqueueText("Approved, starting.");                                                                 // 8
+        _chat.EnqueueText("Done.");                                                                               // 9
+
+        string output = await RunAsync();
+
+        Assert.Equal(PlanText.PassAlreadySavedResult(PlanPath, 2), PlanResultOf(_chat.Requests[4], "p2b"));
+        Assert.Contains("[high] Add a test step", output);
+        Assert.DoesNotContain("· [low] Add a ship step", output);
+        Assert.Equal(PlanText.GapPassMessage(PlanPath, 2, 5, PlanReviewer.Model), LastUserText(_chat.Requests[5]));
+        Assert.Equal(PlanText.CleanPassResult(PlanPath, 2, 1, 2, bodyChars: PlanGapLoopTests.BodyChars(RevisedPlanMarkdown)), PlanResultOf(_chat.Requests[6], "p3"));
+    }
+
+    [Fact]
     public async Task PlanGaps_PassesUntilNoneAreLeft_ThenThePaneAgain_AndApproveRunsIt()
     {
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
