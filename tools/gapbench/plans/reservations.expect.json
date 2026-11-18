@@ -1,0 +1,25 @@
+{
+  "gaps": [
+    {
+      "id": "R1",
+      "severity": "high",
+      "what": "Nothing says what a return does to a reserved book: it should be held for the member who reserved it, and lend should refuse anyone else.",
+      "match": [["give_back", "return"], ["reserv"]],
+      "fixed": [["give_back", "return"], ["reserv"]]
+    },
+    {
+      "id": "R2",
+      "severity": "high",
+      "what": "CREATE TABLE IF NOT EXISTS never adds the new column to an existing shelf.db: it needs a migration.",
+      "match": [["migrat", "alter table", "existing database", "existing shelf.db", "existing db", "existing data", "if not exists", "already exists"]],
+      "fixed": [["migrat", "alter table", "add column"]]
+    },
+    {
+      "id": "R3",
+      "severity": "medium",
+      "what": "No step adds tests for reserving: every check only runs the old tests.",
+      "match": [["no test", "new test", "tests for", "test for", "unit test", "test case", "add test", "adds test", "test coverage", "without test", "untested", "tests/test_"]],
+      "fixed": [["test_", "tests/test", "unit test", "test case", "testcase"], ["reserv"]]
+    }
+  ]
+}

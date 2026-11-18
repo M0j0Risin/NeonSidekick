@@ -1,0 +1,168 @@
+{
+  "bugs": [
+    {
+      "id": "B1",
+      "file": "shelf/store.py",
+      "line": 98,
+      "contains": "LIKE '%{title}%'",
+      "severity": "high",
+      "dimension": "security",
+      "what": "find_books builds its SQL with an f-string from the title: SQL injection.",
+      "nit": [
+        [
+          "find_books",
+          "title"
+        ],
+        [
+          "sql",
+          "inject",
+          "f-string",
+          "interpolat"
+        ]
+      ]
+    },
+    {
+      "id": "B2",
+      "file": "shelf/loans.py",
+      "line": 60,
+      "contains": "today >= date.fromisoformat",
+      "severity": "medium",
+      "dimension": "correctness",
+      "what": "is_overdue uses >=, so a loan due today already counts as overdue.",
+      "nit": [
+        [
+          "is_overdue",
+          "overdue"
+        ],
+        [
+          ">=",
+          "due date",
+          "due today",
+          "same day",
+          "off-by-one",
+          "off by one"
+        ]
+      ]
+    },
+    {
+      "id": "B3",
+      "file": "shelf/export.py",
+      "line": 12,
+      "contains": "os.path.join(EXPORT_DIR, name + \".csv\")",
+      "severity": "high",
+      "dimension": "security",
+      "what": "The export name is joined unchecked, so ../ or an absolute path writes outside EXPORT_DIR.",
+      "nit": [
+        [
+          "export"
+        ],
+        [
+          "traversal",
+          "../",
+          "outside",
+          "absolute path",
+          "sanitiz",
+          "unchecked"
+        ]
+      ]
+    },
+    {
+      "id": "B4",
+      "file": "shelf/loans.py",
+      "line": 51,
+      "contains": "if renewals > MAX_RENEWALS:",
+      "severity": "medium",
+      "dimension": "correctness",
+      "what": "renew counts the renewal but never saves it, so MAX_RENEWALS is never reached.",
+      "nit": [
+        [
+          "renew"
+        ],
+        [
+          "renewals",
+          "MAX_RENEWALS",
+          "count"
+        ]
+      ]
+    },
+    {
+      "id": "B5",
+      "file": "shelf/cli.py",
+      "line": 36,
+      "contains": "loan = store.open_loan(book[\"id\"])",
+      "severity": "low",
+      "dimension": "performance",
+      "what": "cmd_list runs one loan query per book inside the loop (N+1).",
+      "nit": [
+        [
+          "cmd_list",
+          "list"
+        ],
+        [
+          "n+1",
+          "per book",
+          "query per",
+          "each book",
+          "one query"
+        ]
+      ]
+    },
+    {
+      "id": "B6",
+      "file": "shelf/loans.py",
+      "line": 39,
+      "contains": "except:",
+      "severity": "medium",
+      "dimension": "correctness",
+      "what": "give_back swallows every error with a bare except and still says the book was returned.",
+      "nit": [
+        [
+          "give_back",
+          "bare except",
+          "except:"
+        ],
+        [
+          "swallow",
+          "bare",
+          "silently",
+          "ignore"
+        ]
+      ]
+    },
+    {
+      "id": "B7",
+      "file": "tests/test_loans.py",
+      "line": 47,
+      "contains": "def test_find_books_by_title",
+      "severity": "low",
+      "dimension": "tests",
+      "what": "test_find_books_by_title calls find_books and asserts nothing.",
+      "nit": [
+        [
+          "test_find_books"
+        ],
+        [
+          "assert",
+          "no check",
+          "checks nothing"
+        ]
+      ]
+    }
+  ],
+  "decoys": [
+    {
+      "id": "D1",
+      "file": "shelf/store.py",
+      "line": 81,
+      "contains": "WHERE id IN ({placeholders})",
+      "what": "An f-string, but it only joins ? placeholders; the ids are bound as parameters."
+    },
+    {
+      "id": "D2",
+      "file": "shelf/store.py",
+      "line": 62,
+      "contains": "except sqlite3.IntegrityError as e:",
+      "what": "The IntegrityError is re-raised as DuplicateBook with its cause kept, not swallowed."
+    }
+  ]
+}

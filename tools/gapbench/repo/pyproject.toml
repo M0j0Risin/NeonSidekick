@@ -1,0 +1,15 @@
+[project]
+name = "shelf"
+dynamic = ["version"]
+description = "A small lending library for one shelf of books"
+requires-python = ">=3.10"
+
+[project.scripts]
+shelf = "shelf.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = { attr = "shelf.__version__" }

@@ -1,0 +1,27 @@
+{
+  "gaps": [
+    {
+      "id": "C1",
+      "severity": "medium",
+      "what": "Nothing says what happens to an ISBN already on the shelf, or one repeated in the file (DuplicateBook).",
+      "match": [["duplicate", "already on the shelf", "same isbn", "repeated isbn", "isbn already", "existing isbn", "isbn that already", "isbns already"]],
+      "fixed": [["duplicate", "already on the shelf", "same isbn", "existing isbn"]]
+    },
+    {
+      "id": "C2",
+      "severity": "high",
+      "what": "Store.bulk_insert doesn't exist: the plan calls a method nobody writes.",
+      "match": [["bulk_insert"]],
+      "fixed": [["add", "write", "implement", "new", "create"], ["bulk_insert"]],
+      "gone": ["bulk_insert"]
+    },
+    {
+      "id": "C3",
+      "severity": "medium",
+      "what": "All-or-nothing versus a partial import is undecided: what is left on the shelf when a row fails midway.",
+      "match": [["all-or-nothing", "all or nothing", "partial", "atomic", "roll back", "rollback", "rolled back", "single transaction", "one transaction", "half-imported", "halfway", "midway", "part of the file"]],
+      "fixed": [["all-or-nothing", "all or nothing", "partial", "atomic", "roll back", "rollback", "rolled back", "single transaction", "one transaction", "nothing is added", "nothing is put"]]
+    }
+  ],
+  "absent": ["bulk_insert"]
+}
