@@ -591,7 +591,11 @@ public class PlanCleanPassesTests : IDisposable
         var loop = await PassOneAsync();
 
         const string Unchecked = "# Guide\n\n## Steps\n\n- [ ] Rewrite it\n- [ ] Check it\n";
-        object? gap = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Unchecked, new[] { "Split the steps" }));
+        object? refused = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Unchecked, new[] { "Split the steps" }));   // 2026-11-18: sent back once a pass
+
+        Assert.Equal(PlanText.ShapeGapResult([RalphText.FitNoDoneWhen(2)]), refused);
+        Assert.Equal(1, _session.Revision);
+        object? gap = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Unchecked, new[] { "Split the steps" }));   // the next call is taken as it is
 
         Assert.Equal(2, _session.Revision);
         Assert.EndsWith("The app measured: " + RalphText.FitNoDoneWhen(2) + ". Each is a gap; close it in the next pass: no pass is clean while one stands.", (string)gap!);
@@ -951,5 +955,117 @@ public class PlanCleanPassesTests : IDisposable
         Assert.Contains("I ❤️  it when", console.Output);
         Assert.Equal(PlanText.ComesTogetherNotice, Assert.Single(feed.Snapshot(text => text)).Text);
         Assert.Contains(PlanText.ComesTogetherNotice, TranscriptRenderer.NoticeMarkup(PlanText.ComesTogetherNotice));   // off again: Windows unchanged
+    }
+
+    // ── Known problems up front (2026-11-18, phase 3 item 2) ────────────────
+
+    private const string NoCheck = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n";
+
+    [Fact]
+    public async Task Tool_AGapRevisionWithAMeasuredProblem_IsSentBackOnce_ThenTakenAsItIs()
+    {
+        var loop = await PassOneAsync();
+
+        object? refused = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", NoCheck, new[] { "Add a test step" }));
+
+        Assert.Equal(PlanText.ShapeGapResult([RalphText.FitNoDoneWhen(1)]), refused);
+        Assert.Equal(1, _session.Revision);
+        Assert.Contains("revision: 1", FileText());
+        Assert.Empty(loop.PassGaps);
+        Assert.Equal(0, loop.Presented);
+        Assert.False(loop.ShapeRefusalLeft);
+        Assert.Empty(_presented);
+
+        object? saved = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", NoCheck, new[] { "Add a test step" }));
+
+        Assert.Equal(2, _session.Revision);
+        Assert.EndsWith(PlanText.MeasuredSentence([RalphText.FitNoDoneWhen(1)]), (string)saved!);
+        Assert.Equal(1, loop.Presented);
+    }
+
+    [Fact]
+    public async Task Tool_AFixedCallAfterTheRefusal_SavesWithNothingMeasured()
+    {
+        var loop = await PassOneAsync();
+        await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", NoCheck, new[] { "Add a test step" }));
+
+        object? saved = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "Add a test step" }));
+
+        Assert.Equal(PlanText.GapPassResult(_session.Path!, 2, 1, bodyChars: BodyChars(Revised)), saved);
+        Assert.DoesNotContain("The app measured", (string)saved!);
+        Assert.Equal(["Add a test step"], loop.PassGaps);
+    }
+
+    [Fact]
+    public async Task Tool_AWellShapedGapRevision_NeverSpendsTheRefusal_AndTheNextPassGetsItsOwn()
+    {
+        var loop = await PassOneAsync();
+        await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "Add a test step" }));
+        Assert.True(loop.ShapeRefusalLeft);   // taken last: a call without a problem leaves it
+        NextPass(loop);
+
+        object? refused = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised + "- [ ] Ship it\n", new[] { "Add a ship step" }));
+
+        Assert.Equal(PlanText.ShapeGapResult([RalphText.FitNoDoneWhen(1)]), refused);
+        Assert.Equal(2, _session.Revision);
+    }
+
+    [Fact]
+    public async Task Tool_ACleanReportWithAMeasuredProblem_IsStillRefusedEveryTime()
+    {
+        var loop = await PassOneAsync();
+
+        object? first = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", NoCheck, Array.Empty<string>(), Checked));
+        object? second = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", NoCheck, Array.Empty<string>(), Checked));
+
+        Assert.Equal(PlanText.ShapeCleanResult([RalphText.FitNoDoneWhen(1)]), first);
+        Assert.Equal(first, second);
+        Assert.Equal(1, _session.Revision);
+        Assert.True(loop.ShapeRefusalLeft);   // the clean refusal is not the gap one
+    }
+
+    [Fact]
+    public async Task Tool_ACleanReportThatAddsAStep_IsLogged_AndCountsAsClean()
+    {
+        var loop = await PassOneAsync();
+        var lines = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { lock (lines) { lines.Add(e.Message); } };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        object? result;
+        try
+        {
+            result = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, Array.Empty<string>(), Checked, new[] { "Added a test step" }));
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 2, 1, 2, 1, bodyChars: BodyChars(Revised)), result);
+        Assert.True(loop.PassClean);
+        var report = new PlanStepChangeReport(["Test it"], [], [], []);
+        string line;
+        lock (lines) { line = Assert.Single(lines, l => l.StartsWith(PlanText.StepChangesLogPrefix, StringComparison.Ordinal)); }
+        Assert.Equal(PlanText.StepChangesLogLine(1, report, false, false), line);
+        Assert.Equal("plan gaps steps: pass 1's clean report changed 1 added, 0 removed, 0 moved, 0 Done when lines", line);
+    }
+
+    [Fact]
+    public async Task Tool_ACleanReportThatChangesNoStep_LogsNothing()
+    {
+        await PassOneAsync();
+        var lines = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { lock (lines) { lines.Add(e.Message); } };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan.Replace("Write it", "Write the guide", StringComparison.Ordinal), Array.Empty<string>(), Checked, new[] { "Reworded" }));
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        lock (lines) { Assert.DoesNotContain(lines, l => l.StartsWith(PlanText.StepChangesLogPrefix, StringComparison.Ordinal)); }
     }
 }

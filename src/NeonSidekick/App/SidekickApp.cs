@@ -2444,9 +2444,12 @@ public sealed partial class SidekickApp
                 }
 
                 bool offered = HeadlessAdvisorsOffered();
-                loop.BeginPass(Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null, meter(), offered);
+                string? firstBody = Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null;
+                loop.BeginPass(firstBody, meter(), offered);
                 state.Draft = null;
-                return Plans.PlanText.GapPassMessage(path, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak);
+                // The plan on disk measured (2026-11-18, known problems up front), as the screen's BeginGapPass does.
+                return Plans.PlanText.GapPassMessage(path, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak,
+                    firstBody is null ? null : Plans.PlanFit.Structural(firstBody));
             }
 
             case ChatScreen.PlanCommand.Show:
@@ -2622,7 +2625,8 @@ public sealed partial class SidekickApp
         {
             bool offered = HeadlessAdvisorsOffered();
             loop.BeginPass(body, meter, offered);
-            return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak);
+            return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak,
+                body is null ? null : Plans.PlanFit.Structural(body));
         }
 
         plan.StopClosing();

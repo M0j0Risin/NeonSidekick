@@ -166,7 +166,7 @@ public partial class ChatScreenTests
         _chat.Enqueue(FakeChatClient.Call("r1", SkillEditorTool.ToolName, CreateSkillArgs("clock-check")));   // 2: the reflection, held until pass 1 pauses it
         _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));                         // 3: pass 1 of 2
         _chat.EnqueueText("Pass 1 done.");                                                                     // 4: the paused one back in the slot, held
-        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n", "Add a ship step"));    // 5: pass 2 of 2, the limit
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n  Done when: shipped\n", "Add a ship step"));    // 5: pass 2 of 2, the limit
         _chat.EnqueueText("Pass 2 done.");                                                                     // 6: the review over
         _chat.Enqueue(FakeChatClient.Call("r2", SkillEditorTool.ToolName, CreateSkillArgs("clock-check")));   // 7: the reflection, run again
         _chat.BeforeUpdateOf = async (r, i, token) =>
@@ -366,7 +366,7 @@ public partial class ChatScreenTests
         _chat.EnqueueText("Noted.");                                                                           // 1
         _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));                         // 2: pass 1 of 2
         _chat.EnqueueText("Pass 1 done.");                                                                     // 3
-        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n", "Add a ship step"));    // 4: pass 2 of 2, the limit
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n  Done when: shipped\n", "Add a ship step"));    // 4: pass 2 of 2, the limit
         _chat.EnqueueText("Pass 2 done.");                                                                     // 5
 
         string output = await RunAsync();
@@ -417,5 +417,24 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(PlanText.ReviewerTitle, output);
         Assert.Contains("Review it yourself; do not consult advisors on this pass.", _chat.Requests[2][0].Text);
         Assert.DoesNotContain("You have advisors with", _chat.Requests[2][0].Text);
+    }
+
+    [Fact]
+    public async Task PlanGaps_PassOnesUserLine_NamesWhatTheAppMeasuredOnDisk()
+    {
+        // 2026-11-18 (phase 3 item 2, known problems up front): the presented plan's step has no Done when line.
+        PlanGapsFixture([[Keys.Escape]], Line("/plan Add a guide"), Line("/plan gaps 1"), Key(Keys.Escape), Line("/exit"));
+        _chat.Enqueue(PresentPlanCall(markdown: "# Guide\n\n## Steps\n- [ ] Write it\n"));                     // 0: presented; Esc keeps refining
+        _chat.EnqueueText("Noted.");                                                                           // 1
+        _chat.Enqueue(PresentGapsCall("p2", PlanMarkdown, "Give Write it its check"));                       // 2: pass 1 of 1, fixed
+        _chat.EnqueueText("Pass 1 done.");                                                                     // 3
+
+        string output = await RunAsync();
+
+        Assert.Equal(4, _chat.Requests.Count);
+        string message = PlanText.GapPassMessage(PlanPath, 1, 1, PlanReviewer.Model, measured: [RalphText.FitNoDoneWhen(1)]);
+        Assert.Equal(message, LastUserText(_chat.Requests[2]));
+        Assert.Contains(PlanText.MeasuredOnDiskSentence([RalphText.FitNoDoneWhen(1)]), LastUserText(_chat.Requests[2]));
+        Assert.Contains(PlanText.GapStopNotice(PlanGapStop.Limit, 1, 1), output);
     }
 }

@@ -11,12 +11,15 @@ public partial class SidekickAppTests
 {
     private string HeadlessPlanFile => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, ".neon", "plans", "add-guide.md");
 
-    private static ChatResponseUpdate HeadlessPresentPlan() =>
+    // A step with its check (2026-10-22: a clean gap pass on one without is refused).
+    private const string HeadlessPlanMarkdown = "# Guide\n\n- [ ] Write it\n  Done when: guide.md exists\n";
+
+    private static ChatResponseUpdate HeadlessPresentPlan(string markdown = HeadlessPlanMarkdown) =>
         FakeChatClient.Call("p1", PresentPlanTool.ToolName, new Dictionary<string, object?>
         {
             [PresentPlanTool.TitleArgument] = "Guide",
             [PresentPlanTool.NameArgument] = "add-guide",
-            [PresentPlanTool.MarkdownArgument] = "# Guide\n\n- [ ] Write it\n  Done when: guide.md exists\n",   // a step with its check (2026-10-22: a clean gap pass on one without is refused)
+            [PresentPlanTool.MarkdownArgument] = markdown,
         });
 
     private static List<string> Offered(ChatOptions? options) => options?.Tools?.Cast<AIFunction>().Select(t => t.Name).ToList() ?? [];

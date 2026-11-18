@@ -107,7 +107,8 @@ public sealed class PlanGapLoop
     private List<string> _passMinor = [];
     private List<string> _passLight = [];
     private readonly List<PlanPassRecord> _history = [];
-    private string? _baseline;
+    // Every pass's start body (2026-11-18, phase 3 item 2, the cycle check): a gap pass that leaves the plan as any earlier pass found it stalls.
+    private readonly HashSet<string> _baselines = new(StringComparer.Ordinal);
     private PlanPassMeter? _passStart;
     private bool _passAdvisor;
     private bool _passRecorded = true;
@@ -291,7 +292,11 @@ public sealed class PlanGapLoop
         PassChecked = [];
         PassClean = false;
         Presented = 0;
-        _baseline = body;
+        if (body is not null)
+        {
+            _baselines.Add(body);
+        }
+
         Pass++;
         Confirmation = CleanStreak > 0 ? ++Confirmations : 0;
         _passStart = meter;
@@ -299,6 +304,7 @@ public sealed class PlanGapLoop
         _passRecorded = false;
         _retryTaken = false;
         _followUpTaken = false;
+        _shapeRefused = false;
         AdvisorAskedThisPass = false;
     }
 
@@ -346,6 +352,27 @@ public sealed class PlanGapLoop
         }
 
         _followUpTaken = true;
+        return true;
+    }
+
+    private bool _shapeRefused;
+
+    /// <summary>
+    /// Whether this pass may still send a gap revision back for a structural problem (2026-11-18, phase 3 item 2, known problems up front,
+    /// <see cref="PlanText.ShapeGapResult"/>): once a pass, so a model that can't fix it never loops; its next call is saved as today. A retry or a
+    /// follow-up is the same pass, so one taken stays taken. Read without taking it (<see cref="TakeShapeRefusal"/> takes it).
+    /// </summary>
+    public bool ShapeRefusalLeft => !_shapeRefused && Pass > 0;
+
+    /// <summary>The pass's one structural refusal taken (<see cref="ShapeRefusalLeft"/>): true when it was there to take.</summary>
+    public bool TakeShapeRefusal()
+    {
+        if (!ShapeRefusalLeft)
+        {
+            return false;
+        }
+
+        _shapeRefused = true;
         return true;
     }
 
@@ -435,8 +462,9 @@ public sealed class PlanGapLoop
             return PlanGapStop.NoRevision;
         }
 
-        // A confirming pass leaves the plan unchanged by design, so an unchanged body stalls only a pass that reported gaps.
-        if (!PassClean && (string.Equals(body, _baseline, StringComparison.Ordinal) || (LastGaps.Count > 0 && SameGaps(_passGaps, LastGaps))))
+        // A confirming pass leaves the plan unchanged by design, so an unchanged body stalls only a pass that reported gaps. Since 2026-11-18 (the
+        // cycle check) a gap pass that leaves the plan as any earlier pass found it stalls too: its gaps undid an earlier pass's.
+        if (!PassClean && (_baselines.Contains(body) || (LastGaps.Count > 0 && SameGaps(_passGaps, LastGaps))))
         {
             return PlanGapStop.Stalled;
         }

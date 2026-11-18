@@ -206,6 +206,78 @@ public class PlanGapLoopTests : IDisposable
     }
 
     [Fact]
+    public void Next_AGapPassBackToAnEarlierPassesBody_IsAStall()
+    {
+        // 2026-11-18 (phase 3 item 2, the cycle check): pass 3 undid pass 2's revision, back to the plan pass 1 found.
+        var loop = new PlanGapLoop(PlanReviewer.Model, 5);
+        loop.BeginPass("one");
+        loop.Record(["Name the file"]);
+        Assert.Null(loop.Next(true, false, "two"));
+        loop.BeginPass("two");
+        loop.Record(["Add a test"]);
+        Assert.Null(loop.Next(true, false, "three"));
+        loop.BeginPass("three");
+        loop.Record(["Drop the test"]);
+
+        Assert.Equal(PlanGapStop.Stalled, loop.Next(true, false, "one"));
+    }
+
+    [Fact]
+    public void Next_ACleanPassOnAnEarlierBody_IsNoStall()
+    {
+        var loop = new PlanGapLoop(PlanReviewer.Model, 5, cleanPasses: 3);
+        loop.BeginPass("one");
+        loop.Record(["Name the file"]);
+        Assert.Null(loop.Next(true, false, "two"));
+        loop.BeginPass("two");
+        loop.MarkClean();
+
+        Assert.Null(loop.Next(true, false, "one"));
+    }
+
+    [Fact]
+    public void ShapeRefusal_OnceAPass_AndBackInTheNext()
+    {
+        var loop = new PlanGapLoop(PlanReviewer.Model, 5);
+        Assert.False(loop.ShapeRefusalLeft);   // no pass yet
+        loop.BeginPass("one");
+        Assert.True(loop.TakeShapeRefusal());
+        Assert.False(loop.ShapeRefusalLeft);
+        Assert.False(loop.TakeShapeRefusal());
+        loop.Record(["Add a test"]);
+        Assert.Null(loop.Next(true, false, "two"));
+        loop.BeginPass("two");
+
+        Assert.True(loop.ShapeRefusalLeft);
+    }
+
+    [Fact]
+    public void GapPassMessage_NamesWhatTheAppMeasured_OnlyWhenThereIsSomething()
+    {
+        string plain = PlanText.GapPassMessage("p.md", 1, 5, PlanReviewer.Model);
+
+        Assert.Equal(plain, PlanText.GapPassMessage("p.md", 1, 5, PlanReviewer.Model, measured: []));
+        Assert.Equal(plain, PlanText.GapPassMessage("p.md", 1, 5, PlanReviewer.Model, measured: null));
+        Assert.Equal(plain + " The app measured the plan on disk: 2 steps have no indented Done when line. Each is a gap to close in this pass.",
+            PlanText.GapPassMessage("p.md", 1, 5, PlanReviewer.Model, measured: [RalphText.FitNoDoneWhen(2)]));
+        Assert.EndsWith(" " + PlanText.MeasuredOnDiskSentence([RalphText.FitNoDoneWhen(2)]),
+            PlanText.GapPassMessage("p.md", 2, 5, PlanReviewer.Model, cleanSoFar: 1, measured: [RalphText.FitNoDoneWhen(2)]));
+    }
+
+    [Fact]
+    public void GapStopNotice_Stalled_NamesAReturnToAnEarlierVersion()
+    {
+        Assert.Contains("the plan stopped changing, went back to an earlier pass's version, or the same gaps came back.", PlanText.GapStopNotice(PlanGapStop.Stalled, 3, 5));
+    }
+
+    [Fact]
+    public void Structural_IsTheShapeProblemsAlone()
+    {
+        Assert.Equal([RalphText.FitNoDoneWhen(1)], PlanFit.Structural("# T\n\n## Steps\n- [ ] Write it\n  Done when: it exists\n- [ ] Test it\n"));
+        Assert.Empty(PlanFit.Structural("# T\n\n## Steps\n- [ ] Write it\n  Done when: it exists\n"));
+    }
+
+    [Fact]
     public void Next_NoLimit_NeverStopsOnTheCount()
     {
         var loop = new PlanGapLoop(PlanReviewer.Model, 0);
@@ -365,6 +437,8 @@ public class PlanGapLoopTests : IDisposable
         await PassOneAsync();
         string big = "# Guide\n\n## Context\n\n" + new string('c', PlanFit.OneStepChars) + "\n\n## Steps\n- [ ] Write the whole guide\n";
 
+        object? refused = await _tool.InvokeAsync(Args("Guide", big, new[] { "Add context" }));   // 2026-11-18: sent back once a pass, then taken
+        Assert.StartsWith("Error: nothing was saved: the app measured: 1 step: one pass does the whole plan; 1 step has no indented Done when line.", Assert.IsType<string>(refused));
         object? result = await _tool.InvokeAsync(Args("Guide", big, new[] { "Add context" }));
 
         string text = Assert.IsType<string>(result);

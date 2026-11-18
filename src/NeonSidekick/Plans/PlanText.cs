@@ -340,10 +340,23 @@ public static class PlanText
     /// <summary>
     /// The message each pass sends: one line, since the rules ride in the directive (<see cref="GapReviewLines"/>). Pinned. A pass after a clean
     /// one (2026-10-17, <paramref name="cleanSoFar"/> above 0) asks for another look, not a "confirm", so the model isn't steered toward agreeing.
+    /// Since 2026-11-18 (phase 3 item 2, known problems up front) the structural problems of the plan on disk follow (<paramref name="measured"/>,
+    /// <see cref="PlanFit.Structural"/>; null or empty: as before), so a pass closes them in its one revision instead of hearing of them after it.
     /// </summary>
-    public static string GapPassMessage(string path, int pass, int limit, PlanReviewer reviewer, int cleanSoFar = 0) => cleanSoFar > 0
+    public static string GapPassMessage(string path, int pass, int limit, PlanReviewer reviewer, int cleanSoFar = 0, IReadOnlyList<string>? measured = null) => (cleanSoFar > 0
         ? $"Gap review pass {PassOf(pass, limit)} for the plan in {path} (reviewer: {ReviewerWord(reviewer)}): the last pass found no gaps; review it again, close any you find, then call present_plan."
-        : $"Gap review pass {PassOf(pass, limit)} for the plan in {path} (reviewer: {ReviewerWord(reviewer)}): find and close its gaps, then call present_plan.";
+        : $"Gap review pass {PassOf(pass, limit)} for the plan in {path} (reviewer: {ReviewerWord(reviewer)}): find and close its gaps, then call present_plan.")
+        + (measured is { Count: > 0 } m ? " " + MeasuredOnDiskSentence(m) : "");
+
+    /// <summary>
+    /// What a pass's message says of the plan on disk when the app measured a structural problem in it (2026-11-18, known problems up front): each is a
+    /// gap for this pass, since no pass is clean while one stands (<see cref="ShapeCleanResult"/>). Pinned.
+    /// </summary>
+    public static string MeasuredOnDiskSentence(IReadOnlyList<string> measured)
+    {
+        ArgumentNullException.ThrowIfNull(measured);
+        return "The app measured the plan on disk: " + string.Join("; ", measured) + ". Each is a gap to close in this pass.";
+    }
 
     /// <summary>
     /// A pass that saved a revision with gaps closed: the count (and since 2026-10-17 its minor fixes), then each gap and each minor fix
@@ -430,7 +443,7 @@ public static class PlanText
     {
         PlanGapStop.Limit => $"{Glyph} Gap review stopped at its limit after {Passes(passes)}, {Gaps(closed)} closed; the last pass still found some.",
         PlanGapStop.Unconfirmed => $"{Glyph} Gap review stopped at its limit after {Passes(passes)}, {Gaps(closed)} closed: the last pass found no gaps, but there was no pass left to check it again.",
-        PlanGapStop.Stalled => $"{Glyph} Gap review stopped after {Passes(passes)}, {Gaps(closed)} closed: the plan stopped changing or the same gaps came back.",
+        PlanGapStop.Stalled => $"{Glyph} Gap review stopped after {Passes(passes)}, {Gaps(closed)} closed: the plan stopped changing, went back to an earlier pass's version, or the same gaps came back.",
         PlanGapStop.NoRevision => $"{Glyph} Gap review stopped: pass {N(passes)} saved no revision. /plan gaps starts a new review; /plan approve [--ralph] starts the plan.",
         _ => $"{Glyph} Gap review stopped at pass {N(passes)}, {Gaps(closed)} closed. /plan gaps starts a new review; /plan approve [--ralph] starts the plan.",
     };
@@ -1125,8 +1138,25 @@ public static class PlanText
     {
         ArgumentNullException.ThrowIfNull(problems);
         return $"Error: this pass found no gaps, but the app measured: {string.Join("; ", problems)}. Each is a gap: fix it in the plan, list it in gaps, and call present_plan again. " +
-            "A step is a - [ ] line under ## Steps with an indented Done when: line, small enough for one fresh session; a step with sub-steps leaves a By hand: check to one of them.";
+            StepShapeSentence;
     }
+
+    /// <summary>
+    /// A gap revision with a structural problem, sent back before it is saved (2026-11-18, phase 3 item 2, known problems up front; the
+    /// one-revision bench: in 6 of 12 runs a gap revision was saved with steps lacking their Done when line, and each cost the next pass): nothing
+    /// saved or counted, once a pass (<see cref="PlanGapLoop.TakeShapeRefusal"/>), so the pass fixes it in its one revision. The pass's next call is
+    /// taken as it is. "The same gaps" keeps a fixed revision from being reported clean with the gaps it closed dropped. Pinned.
+    /// </summary>
+    public static string ShapeGapResult(IReadOnlyList<string> problems)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        return $"Error: nothing was saved: the app measured: {string.Join("; ", problems)}. Fix each in the plan and call present_plan again in this pass with the same gaps and these added; the app takes the next call as it is. " +
+            StepShapeSentence;
+    }
+
+    /// <summary>What a step is, said after a structural refusal (<see cref="ShapeCleanResult"/>, <see cref="ShapeGapResult"/>).</summary>
+    private const string StepShapeSentence =
+        "A step is a - [ ] line under ## Steps with an indented Done when: line, small enough for one fresh session; a step with sub-steps leaves a By hand: check to one of them.";
 
     /// <summary>
     /// A clean report whose revision lost content (2026-11-17, the gap-audit-reliability plan, <see cref="PlanLoss"/>): refused as
@@ -1151,6 +1181,21 @@ public static class PlanText
         ArgumentNullException.ThrowIfNull(loss);
         return $"plan gaps: pass {N(pass)} " + (refused ? "clean report refused" : "revision saved") + ": removed " + LossWords(loss);
     }
+
+    /// <summary>
+    /// The <c>--log</c> line of a clean report whose revision changed steps (2026-11-18, phase 3 item 2: the mechanical minor check, measured
+    /// before it is trusted): the steps added, removed and moved, the Done when lines changed, and whether <c>verify</c> or <c>final</c> changed.
+    /// Logged only; GapBench reads the same from stdout. Pinned.
+    /// </summary>
+    public static string StepChangesLogLine(int pass, PlanStepChangeReport report, bool verifyChanged, bool finalChanged)
+    {
+        ArgumentNullException.ThrowIfNull(report);
+        return $"{StepChangesLogPrefix} pass {N(pass)}'s clean report changed {N(report.Added.Count)} added, {N(report.Removed.Count)} removed, {N(report.Moved.Count)} moved, "
+            + $"{N(report.DoneWhenChanged.Count)} Done when lines" + (verifyChanged ? ", verify" : "") + (finalChanged ? ", final" : "");
+    }
+
+    /// <summary>The start of <see cref="StepChangesLogLine"/>: its own, as <see cref="ShadowLogPrefix"/> is, so no pass line's pattern reads it.</summary>
+    public const string StepChangesLogPrefix = "plan gaps steps:";
 
     /// <summary>What a loss names: the unfinished steps, the boxes unticked, the sections, the share cut; each list at most five.</summary>
     private static string LossWords(PlanLossReport loss)

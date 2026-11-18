@@ -74,6 +74,12 @@ public static class PlanFit
         return new PlanFitReading(steps, structural, TooLong(body.Length, inlineLimit), noCheck, leaves.Count(s => !s.Ticked && s.ByHand));
     }
 
+    /// <summary>
+    /// The structural problems of <paramref name="body"/> alone (2026-11-18, phase 3 item 2): what a gap pass must close, measured before a gap revision
+    /// is saved and for each pass's message. They never depend on the inline limit, so none is passed.
+    /// </summary>
+    public static IReadOnlyList<string> Structural(string body) => Read(body, null, reviewed: true, int.MaxValue).Structural;
+
     /// <summary>Every problem of <paramref name="body"/> for a loop, in order (<see cref="Read"/>).</summary>
     public static IReadOnlyList<string> Problems(string body, PlanChecks? checks, bool reviewed, int inlineLimit) => Read(body, checks, reviewed, inlineLimit).Problems;
 

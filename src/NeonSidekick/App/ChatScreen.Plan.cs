@@ -1341,7 +1341,9 @@ internal sealed partial class ChatScreen
         }
 
         var reviewer = offered ? loop.PassReviewer : PlanReviewer.Model;
-        return new GapAfterTurn(PlanText.GapPassMessage(path, loop.Pass, loop.Limit, reviewer, loop.CleanStreak), null);
+        // The plan on disk measured (2026-11-18, known problems up front): the pass is told its structural problems before it revises.
+        var measured = body is null ? null : PlanFit.Structural(body);
+        return new GapAfterTurn(PlanText.GapPassMessage(path, loop.Pass, loop.Limit, reviewer, loop.CleanStreak, measured), null);
     }
 
     /// <summary>

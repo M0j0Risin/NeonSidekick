@@ -317,4 +317,52 @@ public partial class SidekickAppTests
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, AppSettingsData.MaxPlanGapPasses, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[4]));
         Assert.Contains("[error] " + PlanText.GapPassesRangeError("101"), output);
     }
+
+    /// <summary>The result <c>present_plan</c> gave the call <paramref name="callId"/>, as the next request carries it.</summary>
+    private static string? HeadlessResultOf(IReadOnlyList<ChatMessage> request, string callId) =>
+        request.SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == callId).Result?.ToString();
+
+    [Fact]
+    public async Task Headless_PlanGaps_PassOneHearsTheMeasuredProblem_AndAGapCallWithItIsSentBackOnce()
+    {
+        // 2026-11-18 (phase 3 item 2, known problems up front): revision 1 has a step without its Done when line.
+        ServerOn1234("llama");
+        _chat.Enqueue(HeadlessPresentPlan("# Guide\n\n- [ ] Write it\n"));
+        _chat.EnqueueText("Saved.");
+        _chat.Enqueue(HeadlessPresentGapsOver("p2", "# Guide\n\n- [ ] Write it\n- [ ] Test it\n  Done when: the test passes\n", "Test it"));   // 2: refused
+        _chat.Enqueue(HeadlessPresentGapsOver("p3", HeadlessGapBody(["Test it"]), "Test it", "Give Write it its check"));                   // 3: fixed, saved
+        _chat.EnqueueText("Pass 1 done.");
+
+        string output = await Headless("/plan Add a guide\n/plan gaps 1\n");
+
+        Assert.Equal(5, _chat.Requests.Count);
+        Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, 1, PlanReviewer.Model, measured: [RalphText.FitNoDoneWhen(1)]), HeadlessLastUser(_chat.Requests[2]));
+        Assert.Equal(PlanText.ShapeGapResult([RalphText.FitNoDoneWhen(1)]), HeadlessResultOf(_chat.Requests[3], "p2"));
+        Assert.StartsWith("Revision 2 of " + HeadlessPlanPath + " is saved with 2 gaps closed.", HeadlessResultOf(_chat.Requests[4], "p3"));
+        Assert.DoesNotContain("The app measured", HeadlessResultOf(_chat.Requests[4], "p3"));
+        Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Limit, 1, 2), output);
+    }
+
+    [Fact]
+    public async Task Headless_PlanGaps_AProblemLeftByASecondTry_IsNamedInTheNextPassesMessage()
+    {
+        // 2026-11-18: the refusal is once a pass, so a second call that still has the problem saves; pass 2's message names it.
+        ServerOn1234("llama");
+        string noCheck = HeadlessGapBody(["Test it"]) + "- [ ] Ship it\n";
+        _chat.Enqueue(HeadlessPresentPlan());
+        _chat.EnqueueText("Saved.");
+        _chat.Enqueue(HeadlessPresentGapsOver("p2", noCheck, "Test it", "Ship it"));   // 2: refused
+        _chat.Enqueue(HeadlessPresentGapsOver("p3", noCheck, "Test it", "Ship it"));   // 3: taken as it is
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.Enqueue(HeadlessPresentGapsOver("p4", HeadlessGapBody(["Test it", "Ship it"]), "Give Ship it its check"));   // 5: pass 2 fixes it
+        _chat.EnqueueText("Pass 2 done.");
+
+        string output = await Headless("/plan Add a guide\n/plan gaps 2\n");
+
+        Assert.Equal(7, _chat.Requests.Count);
+        Assert.StartsWith("Error: nothing was saved", HeadlessResultOf(_chat.Requests[3], "p2"));
+        Assert.EndsWith(PlanText.MeasuredSentence([RalphText.FitNoDoneWhen(1)]), HeadlessResultOf(_chat.Requests[4], "p3"));
+        Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 2, 2, PlanReviewer.Model, measured: [RalphText.FitNoDoneWhen(1)]), HeadlessLastUser(_chat.Requests[5]));
+        Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Limit, 2, 3), output);
+    }
 }

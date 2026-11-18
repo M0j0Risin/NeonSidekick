@@ -20,12 +20,12 @@ public partial class ChatScreenTests
 
     private string PlanFile => Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName, ".neon", "plans", "add-guide.md");
 
-    private static ChatResponseUpdate PresentPlanCall(string id = "p1") =>
+    private static ChatResponseUpdate PresentPlanCall(string id = "p1", string markdown = PlanMarkdown) =>
         FakeChatClient.Call(id, PresentPlanTool.ToolName, new Dictionary<string, object?>
         {
             [PresentPlanTool.TitleArgument] = "Guide",
             [PresentPlanTool.NameArgument] = "add-guide",
-            [PresentPlanTool.MarkdownArgument] = PlanMarkdown,
+            [PresentPlanTool.MarkdownArgument] = markdown,
         });
 
     private static List<string> OfferedNames(ChatOptions? options) => options?.Tools?.Cast<AIFunction>().Select(t => t.Name).ToList() ?? [];

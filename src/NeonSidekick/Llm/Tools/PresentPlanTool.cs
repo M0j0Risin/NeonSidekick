@@ -197,6 +197,15 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             {
                 return PlanText.ShapeCleanResult(structural);
             }
+
+            // A gap revision with a structural problem (2026-11-18, phase 3 item 2, known problems up front; the one-revision bench: 6 of 12 runs
+            // saved one, and each cost the next pass): sent back once a pass before anything is saved, so the pass fixes it in its one revision.
+            // Nothing is counted, so Presented stays 0 and the next call is no second save. The refusal is taken last, so a call without a problem
+            // never spends it; once spent, the pass's next call is saved as before and its result names what is left.
+            if (gaps.Count > 0 && PlanFit.Structural(PlanDocument.SavedBody(title, markdown)) is { Count: > 0 } shape && loop.TakeShapeRefusal())
+            {
+                return PlanText.ShapeGapResult(shape);
+            }
         }
 
         // The file as the pass found it, read once (2026-11-17): the unchanged check and the lost-content check (PlanLoss) both measure against it.
@@ -248,6 +257,7 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
                 return result + " " + PlanText.LossSentence(loss);
             }
 
+            LogStepChanges(loop.Pass, previous, saved.Markdown, checks);
             if (!loop.WouldConverge)
             {
                 // Clean, but the streak is short (2026-10-17): no pane; the next pass starts by itself. No structural problem stands (refused above).
@@ -284,6 +294,28 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
                 return PlanText.SavedResult(path);
             default:
                 return PlanText.RefineResult(path, verdict.Feedback);
+        }
+    }
+
+    /// <summary>
+    /// A clean report's step changes logged (2026-11-18, phase 3 item 2, the mechanical minor check measured before it is trusted,
+    /// <see cref="PlanStepChanges"/>): the file as the pass found it (<paramref name="previous"/>) against the body saved, and <c>verify</c>/<c>final</c>
+    /// against its header as <see cref="Unchanged"/> reads them. Nothing logged when nothing changed or the file wasn't read; nothing else changes.
+    /// </summary>
+    private static void LogStepChanges(int pass, string? previous, string savedBody, PlanChecks? checks)
+    {
+        if (previous is null)
+        {
+            return;
+        }
+
+        var report = PlanStepChanges.Compare(PlanDocument.Body(previous), savedBody);
+        var header = PlanDocument.TryParse(previous);
+        bool verify = checks is not null && Changes(checks.Verify, header?.Verify);
+        bool final = checks is not null && Changes(checks.Final, header?.Final);
+        if (report.Any || verify || final)
+        {
+            DiagnosticLog.Info("App", PlanText.StepChangesLogLine(pass, report, verify, final));
         }
     }
 

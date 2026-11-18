@@ -506,6 +506,10 @@ static partial class Patterns
 
     /// <summary>A second <c>present_plan</c> in a gap pass, refused (2026-11-17, one revision a pass): read from the call's result in stdout.</summary>
     public static readonly Regex SecondSave = Template.Build(PlanText.PassAlreadySavedResult(Template.S1, Template.N1));
+
+    // 2026-11-18 (phase 3 item 2): a gap revision sent back for a structural problem, and a saved one whose result still names one.
+    public static readonly Regex ShapeGap = Template.Build(PlanText.ShapeGapResult([Template.S1]));
+    public static readonly Regex MeasuredLeft = Template.Build(PlanText.MeasuredSentence([Template.S1]));
     public static readonly Regex[] PlanFollowUp = [Template.Build(PlanText.FollowUpLogLine(Template.N1, false)), Template.Build(PlanText.FollowUpLogLine(Template.N1, true))];
     public static readonly Regex AuditPass = Template.Build(AuditText.PassLogLine(Template.N1, Template.N2, 0, false, false, null), cutBefore: Template.N2);
 
@@ -662,6 +666,27 @@ sealed class ToolCallRecord
             JsonValueKind.String when value.GetString() is { Length: > 0 } s => [s],
             _ => [],
         };
+    }
+
+    /// <summary>
+    /// One argument as the app reads it (2026-11-18): null when it was left out, else as <c>ToolArguments.ReadString</c> reads it (JSON null
+    /// gives "", a string its value, anything else its raw text), trimmed as <c>present_plan</c> trims its checks and title unless
+    /// <paramref name="trim"/> is false. <see cref="List"/> can't tell a check left out (kept) from an empty one (none).
+    /// </summary>
+    public string? Text(string name, bool trim = true)
+    {
+        if (Arguments is not { ValueKind: JsonValueKind.Object } args || !args.TryGetProperty(name, out var value))
+        {
+            return null;
+        }
+
+        string text = value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? "",
+            JsonValueKind.Null => "",
+            _ => value.GetRawText(),
+        };
+        return trim ? text.Trim() : text;
     }
 }
 
@@ -886,6 +911,21 @@ sealed class RunScore
     /// <summary>The <c>present_plan</c> calls refused as a pass's second save (2026-11-17, one revision a pass).</summary>
     public int SecondSavesRefused { get; set; }
 
+    /// <summary>The gap revisions sent back for a structural problem (2026-11-18, known problems up front, <c>PlanText.ShapeGapResult</c>).</summary>
+    public int ShapeRefusals { get; set; }
+
+    /// <summary>The gap revisions saved with a structural problem still standing (2026-11-18): their result ends in <c>PlanText.MeasuredSentence</c>.</summary>
+    public int MeasuredLeft { get; set; }
+
+    /// <summary>The accepted clean reports (2026-11-18, the minor check measured): the headline's M.</summary>
+    public int CleanReports { get; set; }
+
+    /// <summary>The clean reports whose revision changed steps or a check (2026-11-18): the headline's N.</summary>
+    public int CleanStepChanges => StepChanges.Count;
+
+    /// <summary>Each clean report that changed steps or a check (2026-11-18, <see cref="PlanStepChanges"/>), by its call ordinal.</summary>
+    public List<(int Call, int Added, int Removed, int Moved, int DoneWhen, bool Checks)> StepChanges { get; } = [];
+
     /// <summary>The pass of <paramref name="call"/>, null when unknown.</summary>
     public int? PassOf(int? call) => call is int c && CallPasses.TryGetValue(c, out int pass) ? pass : null;
 
@@ -1037,6 +1077,9 @@ static class Scorer
         }
 
         score.SecondSavesRefused = score.Calls.Count(c => c.Refused && Patterns.SecondSave.IsMatch(c.Result!));
+        score.ShapeRefusals = score.Calls.Count(c => c.Refused && Patterns.ShapeGap.IsMatch(c.Result!));
+        score.MeasuredLeft = score.Calls.Count(c => c.Accepted && c.List(PresentPlanTool.GapsArgument).Count > 0 && Patterns.MeasuredLeft.IsMatch(c.Result!));
+        ScoreStepChanges(score, startBody, PlanDocument.TryParse(ReadText(Path.Combine(score.Folder, "start.md"))));
 
         // Accepted calls only (2026-11-17, one revision a pass): a refused call's gaps were never recorded, so they aren't caught or reported.
         var gapLines = score.Calls.Where(c => c.Accepted).SelectMany(c => c.List(PresentPlanTool.GapsArgument).Select(t => (c.Ordinal, Text: t))).ToList();
@@ -1077,6 +1120,40 @@ static class Scorer
             score.Flags.Add($"stop mismatch: the notice says {score.Stop}, the last plan shadow line doesn't end in \"{PlanText.StopWord(reason)}\"");
         }
     }
+
+    /// <summary>
+    /// The minor check measured (2026-11-18, phase 3 item 2): each accepted clean report's body against the body in force before it (the last
+    /// accepted call's, else the start plan's), steps paired as the app pairs them (<see cref="PlanStepChanges"/>), and its <c>verify</c>/<c>final</c>
+    /// against the last in force, with <c>present_plan</c>'s rules: one left out keeps the file's, an empty one means none.
+    /// </summary>
+    private static void ScoreStepChanges(RunScore score, string startBody, PlanHeader? start)
+    {
+        string body = startBody;
+        string? verify = start?.Verify, final = start?.Final;
+        foreach (var c in score.Calls.Where(c => c.Accepted && c.Parsed))
+        {
+            string saved = PlanDocument.SavedBody(c.Text(PresentPlanTool.TitleArgument) ?? "", c.Text(PresentPlanTool.MarkdownArgument, trim: false) ?? "");
+            string? sentVerify = c.Text(PresentPlanTool.VerifyArgument), sentFinal = c.Text(PresentPlanTool.FinalArgument);
+            if (c.List(PresentPlanTool.GapsArgument).Count == 0)
+            {
+                score.CleanReports++;
+                var report = PlanStepChanges.Compare(body, saved);
+                bool checks = CheckChanges(sentVerify, verify) || CheckChanges(sentFinal, final);
+                if (report.Any || checks)
+                {
+                    score.StepChanges.Add((c.Ordinal, report.Added.Count, report.Removed.Count, report.Moved.Count, report.DoneWhenChanged.Count, checks));
+                }
+            }
+
+            body = saved;
+            verify = sentVerify is null ? verify : sentVerify.Length == 0 ? null : sentVerify;
+            final = sentFinal is null ? final : sentFinal.Length == 0 ? null : sentFinal;
+        }
+    }
+
+    /// <summary>Whether a check sent (null: left out) differs from the one in force (null: none): <c>PresentPlanTool.Changes</c>'s rule.</summary>
+    private static bool CheckChanges(string? sent, string? held) =>
+        sent is not null && !string.Equals(sent.Length == 0 ? null : sent, held, StringComparison.Ordinal);
 
     /// <summary>
     /// Each present_plan call's pass (2026-11-17): a pass's notice ("Gap review pass N of M: …") comes after its calls, so a call belongs to the
@@ -1763,6 +1840,13 @@ static class Report
             ["controlGaps"] = plans.Where(r => material.Plan(r.Item)?.Control == true).Sum(r => r.OtherGaps.Count),
             ["planRuns"] = plans.Count,
             ["runsLostContent"] = plans.Count(r => r.LostContent),
+            ["cleanReports"] = plans.Sum(r => r.CleanReports),
+            ["cleanStepChanges"] = plans.Sum(r => r.CleanStepChanges),
+            ["cleanStepsAdded"] = plans.Sum(r => r.StepChanges.Sum(s => s.Added)),
+            ["cleanStepsRemoved"] = plans.Sum(r => r.StepChanges.Sum(s => s.Removed)),
+            ["cleanStepsMoved"] = plans.Sum(r => r.StepChanges.Sum(s => s.Moved)),
+            ["cleanDoneWhen"] = plans.Sum(r => r.StepChanges.Sum(s => s.DoneWhen)),
+            ["cleanChecks"] = plans.Sum(r => r.StepChanges.Count(s => s.Checks)),
             ["convergedWithHighOpen"] = runs.Count(r => r.ConvergedWithHighOpen),
             ["auditRuns"] = audits.Count,
             ["shadowStoppedEarly"] = audits.Count(r => r.ShadowStoppedEarly),
@@ -1804,6 +1888,8 @@ static class Report
         if (plans)
         {
             md.AppendLine($"- Runs that lost content: **{I("runsLostContent")} of {I("planRuns")}**");
+            md.AppendLine($"- Clean reports that changed steps: **{I("cleanStepChanges")} of {I("cleanReports")}** ({I("cleanStepsAdded")} added, {I("cleanStepsRemoved")} removed, "
+                + $"{I("cleanStepsMoved")} moved, {I("cleanDoneWhen")} Done when lines, {I("cleanChecks")} verify or final)");
         }
 
         md.AppendLine($"- Runs that converged with a high gap open or a high bug missed: **{I("convergedWithHighOpen")}**");
@@ -1858,6 +1944,9 @@ static class Report
             Row(md, "planted gaps caught", runs.Select(r => (double)r.Planted.Count(g => g.Status == "caught")));
             Row(md, material.Plan(item)?.Control == true ? "gaps reported (all false)" : "other gaps reported", runs.Select(r => (double)r.OtherGaps.Count));
             Row(md, "second saves refused", runs.Select(r => (double)r.SecondSavesRefused));
+            Row(md, "shape refusals", runs.Select(r => (double)r.ShapeRefusals));
+            Row(md, "saved with a measured problem", runs.Select(r => (double)r.MeasuredLeft));
+            Row(md, "clean reports that changed steps", runs.Select(r => (double)r.CleanStepChanges));
         }
 
         md.AppendLine();
@@ -1925,6 +2014,12 @@ static class Report
         {
             md.AppendLine($"- Plan shadow rule would converge at pass {r.Log.PlanShadowWouldConvergeAt?.ToString(CultureInfo.InvariantCulture) ?? "—"}"
                 + (r.GapsAfterShadow.Count > 0 ? $"; planted gaps caught after it: **{string.Join(", ", r.GapsAfterShadow)}**" : ""));
+        }
+
+        foreach (var s in r.StepChanges)
+        {
+            md.AppendLine($"- Clean report in call {s.Call}{(r.PassOf(s.Call) is { } sp ? $", pass {sp}" : "")} changed steps: {s.Added} added, {s.Removed} removed, {s.Moved} moved, "
+                + $"{s.DoneWhen} Done when lines" + (s.Checks ? ", verify or final" : ""));
         }
 
         if (r.DecisionFolded is { } folded)
@@ -2032,6 +2127,13 @@ static class Report
         ["planShadowWouldConvergeAt"] = r.Log.PlanShadowWouldConvergeAt,
         ["gapsAfterShadow"] = new JsonArray([.. r.GapsAfterShadow.Select(g => (JsonNode?)g)]),
         ["secondSavesRefused"] = r.SecondSavesRefused,
+        ["shapeRefusals"] = r.ShapeRefusals,
+        ["measuredLeft"] = r.MeasuredLeft,
+        ["cleanReports"] = r.CleanReports,
+        ["cleanStepChanges"] = new JsonArray([.. r.StepChanges.Select(s => (JsonNode?)new JsonObject
+        {
+            ["call"] = s.Call, ["added"] = s.Added, ["removed"] = s.Removed, ["moved"] = s.Moved, ["doneWhen"] = s.DoneWhen, ["checks"] = s.Checks,
+        })]),
         ["gapLabels"] = new JsonObject(r.Planted.Where(g => g.Status == "caught").Select(g => KeyValuePair.Create(g.Gap.Id, (JsonNode?)RunScore.LabelOf(g)))),
     };
 
@@ -2274,6 +2376,7 @@ static class SelfTest
         LogLines();
         Severity();
         PlanRun();
+        StepChangesRun();
         AuditRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
@@ -2453,7 +2556,9 @@ static class SelfTest
                 "  \"markdown\": \"# T\\n...\",",
                 "  \"gaps\": [\"Nothing says what a return does to a reserved book\", \"bulk_insert doesn't exist\", \"An unrelated gap\"],",
                 "  \"minor\": [\"Named the migration step\", \"Closed the open question: the rate is 0.25 a day\"]}",
-                "[tool] present_plan -> Plan saved as revision 2.",
+                "[tool] present_plan -> Plan saved as revision 2. " + PlanText.MeasuredSentence(["1 step has no indented Done when line"]),
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"A gap only a shape-refused call sent\"], \"markdown\": \"x\"}",
+                "[tool] present_plan -> " + PlanText.ShapeGapResult(["1 step has no indented Done when line"]),
                 "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"A gap only a refused call sent\"], \"markdown\": \"x\"}",
                 "[tool] present_plan -> " + PlanText.CheckedRequiredResult,
                 "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"never reported, but refused\"], \"markdown\": \"x\"}",
@@ -2471,9 +2576,12 @@ static class SelfTest
             score.StopReason = stop?.Reason;
             Scorer.ScorePlan(score, plan, stdout);
 
-            Expect(score.Calls.Count == 5, $"present_plan calls read: {score.Calls.Count}");
-            Expect(score.Calls.Count(c => c.Refused) == 3 && score.Calls.Count(c => c.Accepted) == 2, "three refused calls, two saved");
-            Expect(score.SecondSavesRefused == 1, $"second saves refused: {score.SecondSavesRefused} (a CheckedRequired refusal isn't one)");
+            Expect(score.Calls.Count == 6, $"present_plan calls read: {score.Calls.Count}");
+            Expect(score.Calls.Count(c => c.Refused) == 4 && score.Calls.Count(c => c.Accepted) == 2, "four refused calls, two saved");
+            Expect(score.SecondSavesRefused == 1, $"second saves refused: {score.SecondSavesRefused} (a CheckedRequired or shape refusal isn't one)");
+            Expect(score.ShapeRefusals == 1, $"shape refusals: {score.ShapeRefusals}");
+            Expect(score.MeasuredLeft == 1, $"saved with a measured problem: {score.MeasuredLeft}");
+            Expect(score.CleanReports == 0 && score.CleanStepChanges == 0, $"no clean report among gap calls: {score.CleanReports}");
             Expect(score.Calls.Count(c => !c.Parsed) == 1 && score.Flags.Any(f => f.Contains("unparsed", StringComparison.Ordinal)), "the broken call is kept as unparsed");
             Expect(!score.Flags.Any(f => f.StartsWith("parse mismatch", StringComparison.Ordinal)), "no parse mismatch: " + string.Join("; ", score.Flags));
             string Status(string id) => score.Planted.First(g => g.Gap.Id == id).Status;
@@ -2491,6 +2599,53 @@ static class SelfTest
             var mismatch = new RunScore { Item = "selftest", Run = 1, Folder = folder, Facts = new JsonObject(), Log = LogFacts.Read(File.ReadAllText(Path.Combine(folder, "run.log"))) };
             Scorer.ScorePlan(mismatch, plan, stdout);
             Expect(mismatch.Flags.Any(f => f.StartsWith("parse mismatch", StringComparison.Ordinal)), "three logged passes against two saved calls is a parse mismatch");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The minor check measured (2026-11-18, phase 3 item 2): clean reports over a real step list, scored with no flag raised. An added step counts,
+    /// a reword doesn't, a <c>"verify": null</c> with none in force doesn't (before the next call puts one in force), and a new <c>verify</c> does.
+    /// </summary>
+    private static void StepChangesRun()
+    {
+        string folder = Scratch();
+        try
+        {
+            var plan = new PlanItem("selftest", "", "", [], false, null, null, null, []);
+            const string Start = "# T\n\n## Steps\n\n- [ ] Write it.\n  Done when: written.\n";
+            const string Added = Start + "- [ ] Test it.\n  Done when: tested.\n";
+            const string Reworded = Start + "- [ ] Test it well.\n  Done when: tested.\n";
+            File.WriteAllText(Path.Combine(folder, "start.md"), "---\nstatus: draft\nrevision: 1\n---\n" + Start);
+            Directory.CreateDirectory(Path.Combine(folder, "work", ".neon", "plans"));
+            File.WriteAllText(Path.Combine(folder, "work", ".neon", "plans", "selftest.md"), "---\nstatus: draft\nrevision: 5\nverify: dotnet test\n---\n" + Reworded);
+            string Call(string markdown, string? verify = null, bool nullVerify = false)
+            {
+                var args = new JsonObject { ["title"] = "T", ["markdown"] = markdown, ["gaps"] = new JsonArray(), ["checked"] = new JsonArray("the steps") };
+                if (verify is not null || nullVerify)
+                {
+                    args["verify"] = verify;
+                }
+
+                return "[tool] present_plan " + args.ToJsonString() + "\n[tool] present_plan -> No gaps found in this pass.";
+            }
+
+            string stdout = string.Join('\n', Call(Added), Call(Reworded), Call(Reworded, nullVerify: true), Call(Reworded, "dotnet test"));
+            string log = string.Join('\n', Enumerable.Range(1, 4).Select(n => "x " + PlanText.CleanPassLogLine(n, n, 9, ["steps"])));
+            File.WriteAllText(Path.Combine(folder, "run.log"), log);
+            var score = new RunScore { Item = "selftest", Run = 1, Folder = folder, Facts = new JsonObject(), Log = LogFacts.Read(log) };
+            Scorer.ScorePlan(score, plan, stdout);
+
+            Expect(score.Flags.Count == 0, "the step-change run raises no flag: " + string.Join("; ", score.Flags));
+            Expect(score.Calls.Count == 4 && score.Calls.All(c => c.Accepted), $"four clean calls read: {score.Calls.Count}");
+            Expect(score.Calls[2].Text("verify") == "" && score.Calls[0].Text("verify") is null, "a JSON null verify reads as empty, one left out as null");
+            Expect(score.CleanReports == 4, $"clean reports: {score.CleanReports}");
+            Expect(score.CleanStepChanges == 2, $"clean reports that changed steps: {score.CleanStepChanges} ({string.Join(", ", score.StepChanges.Select(s => s.Call))})");
+            Expect(score.StepChanges.Count > 0 && score.StepChanges[0] == (1, 1, 0, 0, 0, false), $"an added step counts as added: {(score.StepChanges.Count > 0 ? score.StepChanges[0] : default)}");
+            Expect(score.StepChanges.Count > 1 && score.StepChanges[1] == (4, 0, 0, 0, 0, true), $"a new verify counts as a check change: {(score.StepChanges.Count > 1 ? score.StepChanges[1] : default)}");
         }
         finally
         {
