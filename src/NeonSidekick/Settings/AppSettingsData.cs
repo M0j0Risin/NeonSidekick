@@ -975,6 +975,15 @@ public sealed class AppSettingsData
     public const int DefaultCodeAuditCleanPasses = 2;
 
     /// <summary>
+    /// Whether a code audit pass whose changes are all low keeps the clean streak (2026-11-17, phase 3 of the gap and audit improvements: the
+    /// shadow rule logged since phase 1 adopted, off by default until the bench says otherwise). On, a <c>present_audit</c> call that adds or
+    /// reopens only low findings, edits a line, fix or evidence, or confirms one counts as clean; a medium-or-above finding, a retraction of one, a
+    /// severity raised to medium or above, or new detail still restarts the streak. The model is never told the rule. Read when an audit starts
+    /// or resumes. No variable.
+    /// </summary>
+    public bool CodeAuditLowKeepsStreak { get; set; }
+
+    /// <summary>
     /// Whether a code audit's pass may wait on the user (2026-10-18, the user's pick: on, as plan gaps' is): off, a pass is offered none of
     /// <c>ask_user</c>, <c>camera_capture</c> and <c>screen_capture</c>, and a question only the user can answer goes into the report's Open
     /// questions. Read every turn. No variable.

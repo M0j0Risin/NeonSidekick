@@ -8,7 +8,8 @@ namespace NeonSidekick.Audits;
 /// What a code audit's directive says of the pass under way (2026-10-18, <see cref="AuditText.Directive"/>): the report, the scope and its
 /// label, the files no pass has read, the pass's focus and brief, the open findings (id and title) and the settled count, where the loop
 /// stands (the pass and its limit, the reviewer chosen and this pass's, the clean streak and the count it ends on, the confirmation), whether
-/// it may ask the user, and its tool budget against the hard cap.
+/// it may ask the user, and its tool budget against the hard cap. <paramref name="LastLight"/> (2026-11-17, <see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/>):
+/// the low changes the last pass recorded, so a confirming pass after one is never told the last pass found nothing new.
 /// </summary>
 public sealed record AuditDirectiveState(
     string ReportPath,
@@ -33,7 +34,8 @@ public sealed record AuditDirectiveState(
     int MaxToolIterations,
     bool DeletedFiles = false,
     bool GitScope = false,
-    bool Cut = false);
+    bool Cut = false,
+    int LastLight = 0);
 
 /// <summary>
 /// A code audit's words (2026-10-18, <c>/code-audit</c>, the user's idea: <c>/plan gaps</c>' engine for code): the command's words and
@@ -264,10 +266,11 @@ public static class AuditText
 
     /// <summary>
     /// The message each pass sends (2026-10-18), in <see cref="PlanText.GapPassMessage"/>'s two forms: a finding pass, and a pass after a clean
-    /// one (<paramref name="cleanSoFar"/> above 0) pointed at the files no pass has read. Pinned.
+    /// one (<paramref name="cleanSoFar"/> above 0) pointed at the files no pass has read. <paramref name="lastLight"/> (2026-11-17): the last pass's
+    /// low changes (<see cref="PlanGapLoop.LastLight"/>), so a pass after one is never told it found nothing new. Pinned.
     /// </summary>
-    public static string PassMessage(string label, string path, int pass, int limit, PlanReviewer reviewer, string focus, int cleanSoFar = 0) => cleanSoFar > 0
-        ? $"Code audit pass {PlanText.PassOf(pass, limit)} of {label} (reviewer: {PlanText.ReviewerWord(reviewer)}; focus: {focus}): the last pass found nothing new; look again, starting with the files no pass has read, then call present_audit."
+    public static string PassMessage(string label, string path, int pass, int limit, PlanReviewer reviewer, string focus, int cleanSoFar = 0, int lastLight = 0) => cleanSoFar > 0
+        ? $"Code audit pass {PlanText.PassOf(pass, limit)} of {label} (reviewer: {PlanText.ReviewerWord(reviewer)}; focus: {focus}): the last pass found {LastFound(lastLight)}; look again, starting with the files no pass has read, then call present_audit."
         : $"Code audit pass {PlanText.PassOf(pass, limit)} of {label} (reviewer: {PlanText.ReviewerWord(reviewer)}; focus: {focus}): find what is wrong, verify it in the code, then call present_audit. The report is {path}.";
 
     /// <summary>The strip's compact pass: <c>2/5</c>, or <c>2</c> with no limit. Pinned.</summary>
@@ -314,7 +317,7 @@ public static class AuditText
         sb.Append("- Focus this pass: ").Append(s.Focus.Label).Append(".\n");
         if (confirming)
         {
-            sb.Append("- The last pass found nothing new; this pass checks again (clean pass ").Append(N(s.CleanSoFar + 1)).Append(" of ").Append(N(s.CleanPasses))
+            sb.Append("- The last pass found ").Append(LastFound(s.LastLight)).Append("; this pass checks again (clean pass ").Append(N(s.CleanSoFar + 1)).Append(" of ").Append(N(s.CleanPasses))
               .Append("). Read the code as if for the first time and look hardest at ").Append(s.Focus.Label).Append(s.Unread.Count > 0 ? "; spend the pass on the files no pass has read first, within that focus.\n" : ".\n");
         }
 
@@ -614,11 +617,26 @@ public static class AuditText
 
     /// <summary>
     /// A clean call that ends the audit (2026-10-18). "Converged" only with the whole scope read (2026-11-17, the gap-audit-reliability plan:
-    /// a quick convergence over a big tree read as a full audit); short of it, what it found and what it read. Pinned.
+    /// a quick convergence over a big tree read as a full audit); short of it, what it found and what it read. Since 2026-11-17
+    /// (<see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/>) <paramref name="recorded"/> is what a call of low changes only recorded,
+    /// said first, and <paramref name="light"/> a streak that held low changes: never "nothing new" then. Pinned.
     /// </summary>
-    public static string ConvergedResult(int passes, int clean, int read, int scope) => read < scope
-        ? $"Nothing new: the audit found nothing new after {Passes(passes)} ({CleanRun(clean)}), but only {AuditReport.CoverageLine(read, scope)[..^1]}. Reply with one short line and call no more tools."
-        : $"Nothing new: the audit converged after {Passes(passes)} ({CleanRun(clean)}); {AuditReport.CoverageLine(read, scope)[..^1]}. Reply with one short line and call no more tools.";
+    public static string ConvergedResult(int passes, int clean, int read, int scope, string? recorded = null, bool light = false)
+    {
+        string head = (recorded is { Length: > 0 } ? recorded + " " : "") + (light ? "Nothing new but low changes" : "Nothing new");
+        return read < scope
+            ? $"{head}: the audit found {NothingNew(light)} after {Passes(passes)} ({CleanRun(clean)}), but only {AuditReport.CoverageLine(read, scope)[..^1]}. Reply with one short line and call no more tools."
+            : $"{head}: the audit converged after {Passes(passes)} ({CleanRun(clean)}); {AuditReport.CoverageLine(read, scope)[..^1]}. Reply with one short line and call no more tools.";
+    }
+
+    /// <summary>
+    /// What a call of low changes only recorded (2026-11-17), <see cref="RecordedResult"/>'s first sentence, for <see cref="ConvergedResult"/>.
+    /// </summary>
+    public static string RecordedPart(string path, IReadOnlyList<string> added, IReadOnlyList<string> reopened, IReadOnlyList<string> retracted, IReadOnlyList<string> revised)
+    {
+        string full = RecordedResult(path, added, reopened, retracted, revised, 0, 0, 0);
+        return full[..(full.IndexOf(". ", StringComparison.Ordinal) + 1)];
+    }
 
     // ── Notices and log lines ────────────────────────────────────────────────
 
@@ -639,16 +657,17 @@ public static class AuditText
 
     public static string QuestionNotice(int pass, string question) => $"{Glyph} Pass {N(pass)}: open question — {Clip(Flat(question), 160)}";
 
-    public static string CleanNotice(int pass, int clean, int needed, IReadOnlyList<string> @checked) =>
-        $"{Glyph} Pass {N(pass)}: nothing new ({N(clean)} of {CleanPasses(needed)})" + (@checked.Count > 0 ? " — checked: " + Clip(string.Join("; ", @checked.Select(Flat)), 200) : "");
+    /// <summary>A clean call's line (2026-10-18); since 2026-11-17 a call of <paramref name="light"/> low changes only says so, never "nothing new". Pinned.</summary>
+    public static string CleanNotice(int pass, int clean, int needed, IReadOnlyList<string> @checked, int light = 0) =>
+        $"{Glyph} Pass {N(pass)}: {CleanWord(light)} ({N(clean)} of {CleanPasses(needed)})" + (@checked.Count > 0 ? " — checked: " + Clip(string.Join("; ", @checked.Select(Flat)), 200) : "");
 
     /// <summary>The line after a pass that found something, before the next: counts and the share read.</summary>
     public static string PassDoneNotice(int pass, int limit, int changes, int minor, int read, int scope) =>
         $"{Glyph} Code audit pass {PlanText.PassOf(pass, limit)}: {Changes(changes)}" + (minor > 0 ? $", {Nits(minor)}" : "") + $"; {Percent(read, scope)} of the scope read.";
 
-    /// <summary>A clean pass short of the streak, another to follow.</summary>
-    public static string CleanPassNotice(int pass, int limit, int clean, int needed) =>
-        $"{Glyph} Code audit pass {PlanText.PassOf(pass, limit)}: nothing new ({N(clean)} of {CleanPasses(needed)}); checking again.";
+    /// <summary>A clean pass short of the streak, another to follow; one of <paramref name="light"/> low changes only says so (2026-11-17).</summary>
+    public static string CleanPassNotice(int pass, int limit, int clean, int needed, int light = 0) =>
+        $"{Glyph} Code audit pass {PlanText.PassOf(pass, limit)}: {CleanWord(light)} ({N(clean)} of {CleanPasses(needed)}); checking again.";
 
     public static string CleanLoweredNotice(int limit, int asked) =>
         $"{Glyph} The pass limit ({N(limit)}) is below Code audit clean passes ({N(asked)}): this audit finishes on {CleanRun(limit)}.";
@@ -658,14 +677,15 @@ public static class AuditText
     /// (the gap-audit-reliability plan) "converged" only with the whole scope read, and the way on from the coverage: files past the listing's cap
     /// unread alone (<paramref name="unread"/> 0, the read short of the scope) name a narrower path, since more passes can't reach them; listed
     /// files unread, More passes with a <paramref name="pane"/> to ask on, else <c>/code-audit resume</c>; the whole scope, More passes or
-    /// nothing. Pinned.
+    /// nothing. <paramref name="light"/> (2026-11-17): the streak held low changes, said, never "nothing new". Pinned.
     /// </summary>
-    public static string ConvergedNotice(string name, int passes, int clean, int read, int scope, bool pane, int unread = 0)
+    public static string ConvergedNotice(string name, int passes, int clean, int read, int scope, bool pane, int unread = 0, bool light = false)
     {
         bool partial = read < scope;
+        string kept = light ? "; low changes kept the streak" : "";
         string head = partial
-            ? $"{Glyph} Code audit done: {name} found nothing new after {CleanRun(clean)} ({Passes(passes)}), but read {Percent(read, scope)} of the scope"
-            : $"{Glyph} Code audit done: {name} converged after {CleanRun(clean)} ({Passes(passes)}), with {Percent(read, scope)} of the scope read";
+            ? $"{Glyph} Code audit done: {name} found {NothingNew(light)} after {CleanRun(clean)} ({Passes(passes)}), but read {Percent(read, scope)} of the scope"
+            : $"{Glyph} Code audit done: {name} converged after {CleanRun(clean)} ({Passes(passes)}{kept}), with {Percent(read, scope)} of the scope read";
         if (partial && unread <= 0)
         {
             return head + ". " + ScopeCutSentence;
@@ -678,12 +698,12 @@ public static class AuditText
 
     /// <summary>
     /// Why the audit stopped (2026-10-18) and the way on, <c>/code-audit resume &lt;name&gt;</c>, as plan gaps' stop notices name <c>/plan gaps</c>;
-    /// a pass that ended without a report says so. Pinned.
+    /// a pass that ended without a report says so. <paramref name="lastLight"/> (2026-11-17): the last pass recorded low changes only. Pinned.
     /// </summary>
-    public static string StopNotice(PlanGapStop reason, string name, int passes) => reason switch
+    public static string StopNotice(PlanGapStop reason, string name, int passes, bool lastLight = false) => reason switch
     {
         PlanGapStop.Limit => $"{Glyph} Code audit stopped at its limit after {Passes(passes)}; the last pass still found something. /code-audit resume {name} runs more passes.",
-        PlanGapStop.Unconfirmed => $"{Glyph} Code audit stopped at its limit after {Passes(passes)}: the last pass found nothing new, but no pass was left to check it again. /code-audit resume {name} runs more passes.",
+        PlanGapStop.Unconfirmed => $"{Glyph} Code audit stopped at its limit after {Passes(passes)}: the last pass found {NothingNew(lastLight)}, but no pass was left to check it again. /code-audit resume {name} runs more passes.",
         PlanGapStop.Stalled => $"{Glyph} Code audit stopped after {Passes(passes)}: the same findings came back. /code-audit resume {name} runs more passes.",
         PlanGapStop.NoRevision => $"{Glyph} Code audit stopped: pass {N(passes)} ended without calling present_audit, so no report came. /code-audit resume {name} runs more passes.",
         PlanGapStop.UserSpoke => $"{Glyph} Code audit stopped after {Passes(passes)} for your message. /code-audit resume {name} runs more passes.",
@@ -732,21 +752,23 @@ public static class AuditText
     {
         ArgumentNullException.ThrowIfNull(history);
         ArgumentNullException.ThrowIfNull(dimensions);
-        // The gap review's shape, shared (PlanText.SummaryLines, 2026-10-20, a review), with the audit's nouns.
+        // The gap review's shape, shared (PlanText.SummaryLines, 2026-10-20, a review), with the audit's nouns. A clean pass of low changes only
+        // says them (2026-11-17, PlanPassRecord.Light), and so does the ending when the last pass had some.
+        bool lastLight = history.Count > 0 && history[^1].Light > 0;
         return PlanText.SummaryLines(history, $"{Glyph} Code audit", p =>
         {
-            string outcome = p.Gaps > 0 ? Changes(p.Gaps) : p.Clean ? "nothing new" : "no report";
+            string outcome = p.Gaps > 0 ? Changes(p.Gaps) : p.Clean ? CleanWord(p.Light) : "no report";
             string focus = p.Focus >= 0 ? AuditFocus.PassFocus(dimensions, p.Focus + 1).Label : "";
             string marks = string.Join(", ", new[] { focus.Length > 0 ? focus : null, p.Advisor ? "advisor" : null }.OfType<string>());
             return outcome + (p.Minor > 0 ? ", " + Nits(p.Minor) : "") + (marks.Length > 0 ? $" ({marks})" : "");
-        }, EndingWord(reason, cleanPasses, read, scope));
+        }, EndingWord(reason, cleanPasses, read, scope, lastLight));
     }
 
     /// <summary>How the summary's last pass ended; a convergence short of the whole scope says what it read (2026-11-17).</summary>
-    private static string EndingWord(PlanGapStop reason, int cleanPasses, int read, int scope) => reason switch
+    private static string EndingWord(PlanGapStop reason, int cleanPasses, int read, int scope, bool lastLight) => reason switch
     {
-        PlanGapStop.Converged when read < scope => $"nothing new, {N(read)} of {N(scope)} read",
-        PlanGapStop.Converged => cleanPasses >= 2 ? "confirmed" : "nothing new",
+        PlanGapStop.Converged when read < scope => $"{NothingNew(lastLight)}, {N(read)} of {N(scope)} read",
+        PlanGapStop.Converged => cleanPasses >= 2 ? "confirmed" : NothingNew(lastLight),
         PlanGapStop.Unconfirmed => "cut short",
         PlanGapStop.Stopped => "stopped",
         PlanGapStop.Limit => "limit",
@@ -769,9 +791,12 @@ public static class AuditText
     public const string AnyReviewerNote = "the model, asking advisors where a role fits";
     public const string ConfirmReviewerNote = "the model audits; an advisor checks once it finds nothing new";
 
-    /// <summary>The --log line of a call: the titles only, never a detail (2026-10-18). Pinned.</summary>
-    public static string CallLogLine(int pass, IReadOnlyList<string> added, IReadOnlyList<string> reopened, IReadOnlyList<string> retracted, IReadOnlyList<string> revised, int minor, bool clean) =>
-        $"code audit: pass {N(pass)}" + (clean ? " clean" : "")
+    /// <summary>
+    /// The --log line of a call: the titles only, never a detail (2026-10-18). <paramref name="light"/> (2026-11-17): a clean call whose changes
+    /// were low only. Pinned.
+    /// </summary>
+    public static string CallLogLine(int pass, IReadOnlyList<string> added, IReadOnlyList<string> reopened, IReadOnlyList<string> retracted, IReadOnlyList<string> revised, int minor, bool clean, bool light = false) =>
+        $"code audit: pass {N(pass)}" + (!clean ? "" : light ? " clean (low changes only)" : " clean")
         + (added.Count > 0 ? "; new: " + string.Join(" | ", added.Select(Flat)) : "")
         + (reopened.Count > 0 ? "; reopened: " + string.Join(", ", reopened) : "")
         + (retracted.Count > 0 ? "; retracted: " + string.Join(", ", retracted) : "")
@@ -796,9 +821,9 @@ public static class AuditText
     /// <summary>The shadow line's prefix, for a log search.</summary>
     public const string ShadowLogPrefix = "code audit shadow:";
 
-    /// <summary>The --log line of a pass's end: its changes, whether an advisor was asked, its cost.</summary>
-    public static string PassLogLine(int pass, int changes, int minor, bool clean, bool advisorAsked, PlanPassRecord? cost) =>
-        $"code audit: pass {N(pass)} ended, " + (clean ? "nothing new" : Changes(changes)) + (minor > 0 ? ", " + Nits(minor) : "")
+    /// <summary>The --log line of a pass's end: its changes (a clean pass's <paramref name="light"/> low ones, 2026-11-17), whether an advisor was asked, its cost.</summary>
+    public static string PassLogLine(int pass, int changes, int minor, bool clean, bool advisorAsked, PlanPassRecord? cost, int light = 0) =>
+        $"code audit: pass {N(pass)} ended, " + (clean ? CleanWord(light) : Changes(changes)) + (minor > 0 ? ", " + Nits(minor) : "")
         + (advisorAsked ? ", an advisor asked" : "")
         + (cost is { Elapsed: { } elapsed } ? ", " + NeonSidekick.UI.ThinkingFoldText.Duration(elapsed) + TokensPart(cost.Tokens ?? 0, cost.AdvisorTokens ?? 0) : "");
 
@@ -814,17 +839,8 @@ public static class AuditText
         return stopped is { } reason and not PlanGapStop.Converged ? line + "; " + StopWord(reason) : line;
     }
 
-    /// <summary>A stop's reason in the header: limit, stalled, unconfirmed, no report, interrupted (Esc, a failure), you spoke.</summary>
-    public static string StopWord(PlanGapStop reason) => reason switch
-    {
-        PlanGapStop.Limit => "limit",
-        PlanGapStop.Stalled => "stalled",
-        PlanGapStop.Unconfirmed => "unconfirmed",
-        PlanGapStop.NoRevision => "no report",
-        PlanGapStop.UserSpoke => "you spoke",
-        PlanGapStop.Converged => "converged",
-        _ => "interrupted (Esc, a failure)",
-    };
+    /// <summary>A stop's reason in the header: limit, stalled, unconfirmed, no report, interrupted (Esc, a failure), you spoke. The words live in <see cref="PlanText.StopWord"/> (2026-11-17), shared with the plan shadow.</summary>
+    public static string StopWord(PlanGapStop reason) => PlanText.StopWord(reason);
 
     /// <summary>The open findings by severity: <c>3 high, 5 medium</c>, or <c>no open findings</c>.</summary>
     public static string SeverityCounts(IReadOnlyList<(AuditSeverity Severity, int Count)> counts)
@@ -927,6 +943,15 @@ public static class AuditText
     private static string Changes(int changes) => changes == 1 ? "1 change to the findings" : $"{N(changes)} changes to the findings";
     private static string CleanPasses(int count) => count == 1 ? "1 clean pass" : $"{N(count)} clean passes";
     private static string CleanRun(int count) => count == 1 ? "1 clean pass" : $"{N(count)} clean passes in a row";
+
+    /// <summary>A clean pass or call as said (2026-11-17): "nothing new", or its low changes when it had some, never both.</summary>
+    private static string CleanWord(int light) => light <= 0 ? "nothing new" : light == 1 ? "1 low change only" : $"{N(light)} low changes only";
+
+    /// <summary>A streak or pass that ended clean (2026-11-17): "nothing new", with "but low changes" when low changes kept it.</summary>
+    private static string NothingNew(bool light) => light ? "nothing new but low changes" : "nothing new";
+
+    /// <summary>What the last pass found, as a confirming pass is told (2026-11-17).</summary>
+    private static string LastFound(int lastLight) => lastLight > 0 ? "only low changes" : "nothing new";
 
     private static string TokensPart(long tokens, long advisor, string lead = ", ") =>
         tokens <= 0 && advisor <= 0 ? "" : lead + NeonSidekick.App.UsageText.Compact(tokens) + (advisor > 0 ? " (" + NeonSidekick.App.UsageText.CompactNumber(advisor) + " advisor)" : "");

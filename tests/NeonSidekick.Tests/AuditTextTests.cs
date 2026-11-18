@@ -212,4 +212,48 @@ public sealed class AuditTextTests
         Assert.Contains("another NeonSidekick could write this report too", AuditText.UnlockedNotice(".neon/audits/a.md"), StringComparison.Ordinal);
         Assert.StartsWith(AuditText.Glyph + " The code audit stopped: another NeonSidekick took over a.", AuditText.LockLostNotice("a"), StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void ALowOnlyPass_IsNeverSaidAsNothingNew()
+    {
+        // 2026-11-17, phase 3 (Code audit low keeps streak): a pass whose changes were low only keeps the streak, and every line says them.
+        Assert.Equal("🔎 Pass 2: 1 low change only (1 of 2 clean passes)", AuditText.CleanNotice(2, 1, 2, [], light: 1));
+        Assert.Equal("🔎 Pass 2: nothing new (1 of 2 clean passes)", AuditText.CleanNotice(2, 1, 2, []));
+        Assert.Equal("🔎 Code audit pass 2 of 5: 2 low changes only (1 of 2 clean passes); checking again.", AuditText.CleanPassNotice(2, 5, 1, 2, light: 2));
+        Assert.Equal("code audit: pass 2 ended, 1 low change only", AuditText.PassLogLine(2, 0, 0, clean: true, advisorAsked: false, null, light: 1));
+        Assert.Equal("code audit: pass 2 ended, nothing new", AuditText.PassLogLine(2, 0, 0, clean: true, advisorAsked: false, null));
+        Assert.Equal("code audit: pass 2 clean (low changes only); new: A3 Small", AuditText.CallLogLine(2, ["A3 Small"], [], [], [], 0, clean: true, light: true));
+        Assert.Equal("Recorded in r.md: A3 new; A1 revised.", AuditText.RecordedPart("r.md", ["A3"], [], [], ["A1"]));
+        Assert.Equal("Recorded in r.md: A3 new. Nothing new but low changes: the audit converged after 3 passes (2 clean passes in a row); 4 of 4 files read (100%). Reply with one short line and call no more tools.",
+            AuditText.ConvergedResult(3, 2, 4, 4, "Recorded in r.md: A3 new.", light: true));
+        Assert.StartsWith("🔎 Code audit done: a converged after 2 clean passes in a row (3 passes; low changes kept the streak), with 100% of the scope read", AuditText.ConvergedNotice("a", 3, 2, 4, 4, pane: false, light: true));
+        Assert.StartsWith("🔎 Code audit done: a found nothing new but low changes after 2 clean passes in a row (3 passes), but read 50% of the scope", AuditText.ConvergedNotice("a", 3, 2, 2, 4, pane: false, unread: 2, light: true));
+        Assert.Contains("the last pass found nothing new but low changes, but no pass was left", AuditText.StopNotice(PlanGapStop.Unconfirmed, "a", 5, lastLight: true));
+        Assert.Contains("the last pass found nothing new, but no pass was left", AuditText.StopNotice(PlanGapStop.Unconfirmed, "a", 5));
+
+        // The confirming pass is told the last pass found only low changes, in its message and its directive.
+        Assert.Contains("): the last pass found only low changes; look again,", AuditText.PassMessage("src", "r.md", 3, 5, PlanReviewer.Model, "security", cleanSoFar: 1, lastLight: 1));
+        Assert.Contains("- The last pass found only low changes; this pass checks again (clean pass 2 of 2).", AuditText.Directive(State(cleanSoFar: 1, confirmation: 1) with { LastLight = 1 }));
+        Assert.Contains("- The last pass found nothing new; this pass checks again (clean pass 2 of 2).", AuditText.Directive(State(cleanSoFar: 1, confirmation: 1)));
+        // The rules line keeps "nothing new": the model is never told of the rule.
+        Assert.Contains("Only 2 passes in a row with nothing new end it.", AuditText.Directive(State() with { LastLight = 1 }));
+
+        // The summary's per-pass outcome and its ending.
+        var history = new[] { new PlanPassRecord(1, 2, 0, false, -1), new PlanPassRecord(2, 0, 0, true, -1, Light: 1) };
+        var lines = AuditText.ReviewSummaryLines(history, PlanGapStop.Converged, 1, AuditFocus.Dimensions, 4, 4);
+        Assert.Contains(lines, l => l.Contains("1 low change only", StringComparison.Ordinal) && l.Contains("nothing new but low changes", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Contains("nothing new —", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheStopWords_LiveInPlanText_AndTheAuditReadsThem()
+    {
+        foreach (var reason in Enum.GetValues<PlanGapStop>())
+        {
+            Assert.Equal(PlanText.StopWord(reason), AuditText.StopWord(reason));
+        }
+
+        Assert.Equal("converged", PlanText.StopWord(PlanGapStop.Converged));
+        Assert.Equal("you spoke", PlanText.StopWord(PlanGapStop.UserSpoke));
+    }
 }

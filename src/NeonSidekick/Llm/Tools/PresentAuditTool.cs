@@ -12,7 +12,8 @@ namespace NeonSidekick.Llm.Tools;
 /// <summary>
 /// What one <c>present_audit</c> call changed (2026-10-18), for the screen's notices: the pass, the findings added, reopened and revised,
 /// the retractions with their reasons, the nits and questions, and for a call with nothing new the streak, its target, what it checked and
-/// whether it ended the audit.
+/// whether it ended the audit. <paramref name="Light"/> (2026-11-17, <see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/>): a clean call's
+/// changes that were low only, so its line says them.
 /// </summary>
 public sealed record AuditCallReport(
     int Pass,
@@ -26,7 +27,8 @@ public sealed record AuditCallReport(
     int CleanCount,
     int CleanNeeded,
     IReadOnlyList<string> Checked,
-    bool Converged);
+    bool Converged,
+    int Light = 0);
 
 /// <summary>
 /// A code audit's report tool (2026-10-18, <c>/code-audit</c>): <c>present_audit(findings?, retract?, revise?, minor?, questions?, covered?,
@@ -696,7 +698,14 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
             }
         }
 
-        if (!changes)
+        // The shadow rule's verdict on the call (2026-11-17, step 8 of the gap-audit-reliability plan, logged): a medium-or-above finding added or
+        // reopened, or the serious changes above. With Code audit low keeps streak on (phase 3), a call that changed things, none serious, is light:
+        // it counts as clean, its changes kept as the pass's light ones, never the stall check's gaps.
+        var shadowFindings = made.Concat(reopened).Select(f => f.Severity).ToList();
+        bool seriousCall = serious || shadowFindings.Any(s => s <= Audits.AuditSeverity.Medium);
+        bool light = changes && !seriousCall && _session.LowKeepsStreak;
+        bool clean = !changes || light;
+        if (clean)
         {
             report.Checked.AddRange(checkedLines.Select(c => $"pass {N(pass)}: {c}"));
         }
@@ -710,8 +719,8 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
         var coverage = _session.Coverage();
         report.CoverageRead = coverage.Read;
         report.CoverageScope = coverage.Scope;
-        bool converging = !changes && loop.WouldConverge;
-        int cleanNow = changes ? 0 : loop.CleanCount;
+        bool converging = clean && loop.WouldConverge;
+        int cleanNow = clean ? loop.CleanCount : 0;
         report.Header = report.Header with { Passes = AuditText.PassesLine(pass, cleanNow, coverage.Read, coverage.Scope) };
 
         // 7. The size, 8. the save: a refusal or a failure records nothing.
@@ -728,33 +737,38 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
         }
 
         _session.Changed();
-        var shadowFindings = made.Concat(reopened).Select(f => f.Severity).ToList();
-        _session.NoteShadow(pass, serious || shadowFindings.Any(s => s <= Audits.AuditSeverity.Medium), shadowFindings);
+        _session.NoteShadow(pass, seriousCall, shadowFindings);
         int cleanCount = loop.CleanCount;
-        if (changes)
+        IReadOnlyList<string>? lightKeys = light ? keys : null;
+        if (!clean)
         {
             loop.Record(keys, minor);
         }
         else if (converging)
         {
-            loop.MarkConverged(checkedLines, minor);
+            loop.MarkConverged(checkedLines, minor, lightKeys);
         }
         else
         {
-            loop.MarkClean(checkedLines, minor);
+            loop.MarkClean(checkedLines, minor, lightKeys);
         }
 
-        DiagnosticLog.Info("App", AuditText.CallLogLine(pass, made.Select(f => f.Id + " " + f.Title).ToList(), reopened.Select(f => f.Id).ToList(),
-            retractedNotice.Select(r => r.Id).ToList(), revised.Select(f => f.Id).ToList(), minor.Count, !changes));
-        _reported?.Invoke(new AuditCallReport(pass, made, reopened, retractedNotice, revised, minor.Count, questions, !changes, cleanCount, loop.CleanPasses, checkedLines, converging));
-        if (changes)
+        var addedIds = made.Select(f => f.Id).ToList();
+        var reopenedIds = reopened.Select(f => f.Id).ToList();
+        var retractedList = retractedNotice.Select(r => r.Id).ToList();
+        var revisedIds = revised.Select(f => f.Id).ToList();
+        DiagnosticLog.Info("App", AuditText.CallLogLine(pass, made.Select(f => f.Id + " " + f.Title).ToList(), reopenedIds, retractedList, revisedIds, minor.Count, clean, light));
+        _reported?.Invoke(new AuditCallReport(pass, made, reopened, retractedNotice, revised, minor.Count, questions, clean, cleanCount, loop.CleanPasses, checkedLines, converging,
+            light ? keys.Count : 0));
+        // The model is never told of the rule (2026-11-17, phase 3: told, it might label findings low to finish sooner): a light call that doesn't
+        // end the audit reads as any recorded call; one that ends it names what it recorded before the convergence.
+        if (changes && !converging)
         {
-            return AuditText.RecordedResult(path, made.Select(f => f.Id).ToList(), reopened.Select(f => f.Id).ToList(), retractedNotice.Select(r => r.Id).ToList(),
-                revised.Select(f => f.Id).ToList(), report.OpenCount, coverage.Read, coverage.Scope);
+            return AuditText.RecordedResult(path, addedIds, reopenedIds, retractedList, revisedIds, report.OpenCount, coverage.Read, coverage.Scope);
         }
 
         return converging
-            ? AuditText.ConvergedResult(pass, cleanCount, coverage.Read, coverage.Scope)
+            ? AuditText.ConvergedResult(pass, cleanCount, coverage.Read, coverage.Scope, light ? AuditText.RecordedPart(path, addedIds, reopenedIds, retractedList, revisedIds) : null, loop.StreakLight)
             : AuditText.CleanResult(cleanCount, loop.CleanPasses, coverage.Read, coverage.Scope);
     }
 

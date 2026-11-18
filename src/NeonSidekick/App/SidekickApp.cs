@@ -2570,6 +2570,7 @@ public sealed partial class SidekickApp
             finished.NoteAdvisor(asked);
             string? finishedBody = ReadBody(files, finishedPath);
             finished.Next(endedOnItsOwn: true, userSpoke: false, finishedBody, meter);
+            LogHeadlessGapShadow(finished, Plans.PlanGapStop.Converged);
             EndHeadlessGapReview(plan, files, finished, Plans.PlanGapStop.Converged, finishedPath, finishedBody, finished.AdvisorAskedThisPass, lines);
         }
 
@@ -2599,6 +2600,7 @@ public sealed partial class SidekickApp
         }
 
         var stop = loop.Next(onItsOwn, userSpoke: false, body, meter);
+        LogHeadlessGapShadow(loop, stop);
         bool advisorAsked = loop.AdvisorAskedThisPass;
         var cost = loop.History.Count > 0 ? loop.History[^1] : null;
         if (loop.PassGaps.Count > 0)
@@ -2630,6 +2632,10 @@ public sealed partial class SidekickApp
         static string? ReadBody(WorkingDirectory files, string? path) =>
             path is not null && Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null;
     }
+
+    /// <summary>The plan shadow's line for the pass just judged (2026-11-17, phase 3, logged only), the screen's <c>LogGapShadow</c>.</summary>
+    private static void LogHeadlessGapShadow(Plans.PlanGapLoop loop, Plans.PlanGapStop? stop) =>
+        DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.ShadowLogLine(loop.Pass, loop.Shadow.End(loop.Pass), loop.CleanPasses, stop, loop.PassClean, loop.CleanCount));
 
     /// <summary>
     /// A headless review over (2026-10-17), the screen's <c>EndGapReview</c>: the summary of its passes, the <c>review:</c> line for a review that

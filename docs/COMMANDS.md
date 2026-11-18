@@ -448,7 +448,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **What it holds:** `.neon/audits/<name>.md`, written by the app: findings by severity with stable ids (`A3`, never reused), each with its file and line, fix and quoted evidence checked against the file.
   * Then nits, open questions, coverage, what clean passes checked and retracted findings.
   * A finding needs its file read this session (a window is enough, a diff is not); `<name>.coverage.txt` keeps the files read, for `resume`. Edit the report as it runs: a ticked box settles a finding, reporting it again reopens it.
-* **Clean passes:** it ends after *Code audit clean passes* in a row find nothing new; a pass after a clean one reads unread files first. *Code audit pass tool calls* guides, never cuts off. The pane says how much of the scope was read.
+* **Clean passes:** it ends after *Code audit clean passes* in a row find nothing new (or, with [*Code audit low keeps streak*](SETTINGS.md#automation) on, only low changes); a pass after a clean one reads unread files first. *Code audit pass tool calls* guides, never cuts off. The pane says how much of the scope was read.
   * Only an audit that read the whole scope says "converged"; short of it, the end says how much it read and the way on.
 * **Retractions:** a retracted finding reported again is refused unless it says, in `reopen`, why the retraction was wrong; then it comes back under its own id.
 * **When it stops:** the clean passes, the pass limit, the same findings again, a pass with no `present_audit`, a message (PC or Web UI), Esc, `/new`, `/clear`, a profile switch or a working directory change (the report stays in its folder). Each stop says why; `/code-audit resume <name>` runs more.

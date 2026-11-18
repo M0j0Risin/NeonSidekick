@@ -5,7 +5,7 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
-/// <summary>The code audit's six rows (2026-10-18; seven since 2026-10-21, the stop tone): the Code audit section of Servers › Common after Plan mode, their values and editors.</summary>
+/// <summary>The code audit's six rows (2026-10-18; seven since 2026-10-21, the stop tone; eight since 2026-11-17, low keeps streak): the Code audit section of Servers › Common after Plan mode, their values and editors.</summary>
 public partial class SettingsMenuTests
 {
     [Fact]
@@ -16,11 +16,22 @@ public partial class SettingsMenuTests
         var section = SettingsMenu.TabSections[SettingsTab.Automation].Single(s => s.Title == "Code audit");
         Assert.Equal(SettingsField.CodeAuditPasses, section.First);
         Assert.Equal(
-            ["Code audit max passes", "Code audit clean passes", "Code audit ask user", "Code audit focus", "Code audit web research", "Code audit pass tool calls", "Code audit stop tone"],
-            new[] { SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone }.Select(SettingsMenu.FieldName));
+            ["Code audit max passes", "Code audit clean passes", "Code audit low keeps streak", "Code audit ask user", "Code audit focus", "Code audit web research", "Code audit pass tool calls", "Code audit stop tone"],
+            new[] { SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditLowKeepsStreak, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone }.Select(SettingsMenu.FieldName));
         Assert.True(SettingsMenu.IsToggle(SettingsField.CodeAuditAskUser));
         Assert.True(SettingsMenu.IsToggle(SettingsField.CodeAuditWebResearch));
+        Assert.True(SettingsMenu.IsToggle(SettingsField.CodeAuditLowKeepsStreak));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.CodeAuditPasses));
+    }
+
+    [Fact]
+    public void TheLowKeepsStreakRow_IsAToggle_OffByDefault()
+    {
+        // 2026-11-17, phase 3 of the gap and audit improvements: the shadow rule adopted behind a toggle, off by default.
+        Assert.False(new AppSettingsData().CodeAuditLowKeepsStreak);
+        Assert.True(SettingsMenu.IsToggle(SettingsField.CodeAuditLowKeepsStreak));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.CodeAuditLowKeepsStreak, new AppSettingsData(), _settings.ProfileDirectory));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.CodeAuditLowKeepsStreak, new AppSettingsData { CodeAuditLowKeepsStreak = true }, _settings.ProfileDirectory));
     }
 
     [Fact]

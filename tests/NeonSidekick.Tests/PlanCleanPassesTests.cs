@@ -256,7 +256,7 @@ public class PlanCleanPassesTests : IDisposable
         Assert.StartsWith("- A gap review is running (pass 1 of 5): present_plan's gaps lists what each revision closed; only a pass with no gaps returns the plan to the user.\n", one);
         Assert.StartsWith("- A gap review is running (pass 1 of 5): present_plan's gaps lists what each revision closed; only 2 passes in a row with no gaps return the plan to the user.\n", two);
         Assert.DoesNotContain("checks again", two);
-        Assert.Contains("- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed; put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked.", one);
+        Assert.Contains("- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed, each starting with [high] (the plan would fail or build the wrong thing), [medium] (someone would have to guess a choice that matters, or stop to ask) or [low] (a short stop or a little rework, quickly sorted out: a step missing its Done when:, say); put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked.", one);
     }
 
     [Fact]

@@ -1104,6 +1104,7 @@ public sealed class AppSettings : IDisposable
         RalphLoopStopTone = source.RalphLoopStopTone,
         CodeAuditPasses = source.CodeAuditPasses,
         CodeAuditCleanPasses = source.CodeAuditCleanPasses,
+        CodeAuditLowKeepsStreak = source.CodeAuditLowKeepsStreak,
         CodeAuditAskUser = source.CodeAuditAskUser,
         CodeAuditFocus = source.CodeAuditFocus is null ? null : [.. source.CodeAuditFocus],
         CodeAuditWebResearch = source.CodeAuditWebResearch,

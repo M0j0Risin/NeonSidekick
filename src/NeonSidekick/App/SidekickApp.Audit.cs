@@ -229,7 +229,7 @@ public sealed partial class SidekickApp
 
             // confirm's clean count kept when the fallback above made the model the reviewer, as the gap review's.
             int clean = named == PlanReviewer.Confirm ? Math.Max(2, EffectiveSettings.CodeAuditCleanPasses) : EffectiveSettings.CodeAuditCleanPasses;
-            return audit.Start(chosen, scope, focus, brief, reviewer, HeadlessGapLimit(limit), clean);
+            return audit.Start(chosen, scope, focus, brief, reviewer, HeadlessGapLimit(limit), clean, EffectiveSettings.CodeAuditLowKeepsStreak);
         }, out string? lockError, out string? unlocked, another: resuming ? null : () => AuditFiles.Choose(files, scope.NameLabel, now));
         if (loop is null)
         {
@@ -275,7 +275,7 @@ public sealed partial class SidekickApp
         bool offered = HeadlessAdvisorsOffered();
         loop.BeginPass(body, meter, offered);
         string focus = AuditFocus.PassFocus(audit.Focus, loop.Confirmation).Short;
-        return AuditText.PassMessage(audit.Scope!.Label, audit.Path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : PlanReviewer.Model, focus, loop.CleanStreak);
+        return AuditText.PassMessage(audit.Scope!.Label, audit.Path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : PlanReviewer.Model, focus, loop.CleanStreak, loop.LastLight);
     }
 
     /// <summary>
@@ -340,13 +340,13 @@ public sealed partial class SidekickApp
         var next = loop.Next(onItsOwn, userSpoke: false, body, meter);
         var stop = moved ? PlanGapStop.Stopped : next;
         bool advisorAsked = loop.AdvisorAskedThisPass;
-        DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, loop.History.Count > 0 ? loop.History[^1] : null));
+        DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, loop.History.Count > 0 ? loop.History[^1] : null, loop.PassLight.Count));
         DiagnosticLog.Info(ChatScreen.AppCategory, AuditText.ShadowLogLine(loop.Pass, audit.EndShadowPass(loop.Pass), loop.CleanPasses, stop, loop.PassClean, loop.CleanCount));
         if (stop is not { } reason)
         {
             lines.Add(loop.PassGaps.Count > 0
                 ? AuditText.PassDoneNotice(loop.Pass, loop.Limit, loop.PassGaps.Count, loop.PassMinor.Count, coverage.Read, coverage.Scope)
-                : AuditText.CleanPassNotice(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses));
+                : AuditText.CleanPassNotice(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassLight.Count));
             return HeadlessBeginAuditPass(audit, loop, meter, body);
         }
 
@@ -372,8 +372,8 @@ public sealed partial class SidekickApp
 
         audit.Stop();
         lines.Add(moved ? AuditText.WorkdirMovedNotice(name, root)
-            : reason == PlanGapStop.Converged ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope, pane: false, coverage.Unread.Count)
-            : AuditText.StopNotice(reason, name, loop.Pass));
+            : reason == PlanGapStop.Converged ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope, pane: false, coverage.Unread.Count, loop.StreakLight)
+            : AuditText.StopNotice(reason, name, loop.Pass, loop.PassLight.Count > 0));
         if (reason is PlanGapStop.Converged or PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed)
         {
             lines.AddRange(AuditText.NoPaneLines(name, anyOpen));

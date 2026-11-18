@@ -112,6 +112,12 @@ public sealed class AuditSession
 
     public string Brief { get; private set; } = "";
 
+    /// <summary>
+    /// A call whose changes are low only keeps the clean streak (2026-11-17, <see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/>, the
+    /// shadow rule adopted): read when the audit starts or resumes, as <c>Code audit clean passes</c> is.
+    /// </summary>
+    public bool LowKeepsStreak { get; private set; }
+
     /// <summary>A pass under way: a loop past its first pass's start and not yet converged.</summary>
     public bool Reviewing => Running is { Pending: false, Converged: false };
 
@@ -322,13 +328,14 @@ public sealed class AuditSession
     /// A fresh loop over the report at <paramref name="path"/>: <paramref name="reviewer"/>, at most <paramref name="limit"/> passes (0 for no
     /// limit), ending on <paramref name="cleanPasses"/> clean passes in a row, the confirming passes rotating through the focus. One already
     /// running is replaced: a pending hold on this report becomes the running one, and the replaced audit's lock goes when it names another.
+    /// <paramref name="lowKeepsStreak"/> (2026-11-17): <see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/> as the start or resume
+    /// read it, kept for <c>present_audit</c> (<see cref="LowKeepsStreak"/>).
     /// </summary>
-    public PlanGapLoop Start(string path, AuditScope scope, IReadOnlyList<string> focus, string brief, PlanReviewer reviewer, int limit, int cleanPasses)
+    public PlanGapLoop Start(string path, AuditScope scope, IReadOnlyList<string> focus, string brief, PlanReviewer reviewer, int limit, int cleanPasses, bool lowKeepsStreak = false)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(scope);
         ArgumentNullException.ThrowIfNull(focus);
-        ResetShadow();
         var promoted = _pending is { } pending && AuditPath.Comparer.Equals(pending.Report, path) ? pending : null;
         if (_held is { } running && (promoted is null || !running.Same(promoted)))
         {
@@ -348,6 +355,7 @@ public sealed class AuditSession
         Scope = scope;
         Focus = AuditFocus.Normalize(focus);
         Brief = brief ?? "";
+        LowKeepsStreak = lowKeepsStreak;
         Changed();
         return Running = new PlanGapLoop(reviewer, limit, cleanPasses, AuditFocus.FocusCount(Focus));
     }
@@ -377,69 +385,33 @@ public sealed class AuditSession
         Scope = null;
         Focus = AuditFocus.Dimensions;
         Brief = "";
-        ResetShadow();
+        LowKeepsStreak = false;
         Changed();
     }
 
     // ── The shadow rule (2026-11-17, the gap-audit-reliability plan's step 8): logged only, never acted on ──
     // A pass with a present_audit call and nothing serious moves the shadow streak on; anything serious resets it; a pass with no call leaves it.
-    // Phase 3 compares when it would have converged with when the real streak did.
+    // Phase 3 compares when it would have converged with when the real streak did. Since phase 3 the streak lives on the running loop
+    // (PlanGapLoop.Shadow, shared with the plan gap review), so a start's new loop and a stop's null one reset it.
 
-    private int _shadowPass;
-    private bool _shadowCalled;
-    private bool _shadowSerious;
-    private readonly int[] _shadowSeverities = new int[4];
-
-    /// <summary>Clean passes in a row by the shadow rule: passes whose calls changed nothing serious.</summary>
-    public int ShadowStreak { get; private set; }
+    /// <summary>Clean passes in a row by the shadow rule: passes whose calls changed nothing serious; 0 with no audit running.</summary>
+    public int ShadowStreak => Running?.Shadow.Streak ?? 0;
 
     /// <summary>
     /// One <c>present_audit</c> call of <paramref name="pass"/>: its <paramref name="serious"/> ORed into the pass's, the findings it added or reopened
-    /// counted by severity. A call of another pass than the one noted starts that pass afresh.
+    /// counted by severity. A call of another pass than the one noted starts that pass afresh. Nothing with no audit running.
     /// </summary>
     public void NoteShadow(int pass, bool serious, IEnumerable<AuditSeverity> severities)
     {
         ArgumentNullException.ThrowIfNull(severities);
-        if (pass != _shadowPass)
-        {
-            ClearShadowPass();
-            _shadowPass = pass;
-        }
-
-        _shadowCalled = true;
-        _shadowSerious |= serious;
-        foreach (var severity in severities)
-        {
-            _shadowSeverities[(int)severity]++;
-        }
+        Running?.Shadow.Note(pass, serious, severities.Select(s => (int)s));
     }
 
-    /// <summary><paramref name="pass"/> over: the shadow streak moved once (or left, with no call), and what the pass did.</summary>
+    /// <summary><paramref name="pass"/> over: the shadow streak moved once (or left, with no call), and what the pass did; an empty pass with no audit.</summary>
     public AuditShadowPass EndShadowPass(int pass)
     {
-        bool called = _shadowCalled && _shadowPass == pass;
-        if (called)
-        {
-            ShadowStreak = _shadowSerious ? 0 : ShadowStreak + 1;
-        }
-
-        var ended = new AuditShadowPass(called ? [.. _shadowSeverities] : [0, 0, 0, 0], ShadowStreak, called, called && _shadowSerious);
-        ClearShadowPass();
-        return ended;
-    }
-
-    private void ClearShadowPass()
-    {
-        _shadowCalled = false;
-        _shadowSerious = false;
-        Array.Clear(_shadowSeverities);
-    }
-
-    private void ResetShadow()
-    {
-        ClearShadowPass();
-        _shadowPass = 0;
-        ShadowStreak = 0;
+        var ended = Running?.Shadow.End(pass) ?? GapShadow.Empty;
+        return new AuditShadowPass(ended.Severities, ended.Streak, ended.Called, ended.Serious);
     }
 
     /// <summary>
@@ -512,7 +484,7 @@ public sealed class AuditSession
         var state = new AuditDirectiveState(path, scope.Label, scope.Files, scope.MoreFiles, scope.Skipped, coverage.Unread,
             AuditFocus.PassFocus(Focus, loop.Confirmation), Brief, open, report?.SettledCount ?? 0,
             loop.Pass, loop.Limit, loop.Reviewer, passReviewer, loop.CleanStreak, loop.CleanPasses, loop.Confirmation,
-            askUser, toolBudget, maxToolIterations, scope.Deleted.Count > 0, scope.IsGit, scope.Cut);
+            askUser, toolBudget, maxToolIterations, scope.Deleted.Count > 0, scope.IsGit, scope.Cut, loop.LastLight);
         _turnKey = key;
         _turnState = state;
         return new PlanTurn(AuditText.Directive(state), tool) { Compose = (advisors, research) => AuditText.Directive(state, advisors, research) };

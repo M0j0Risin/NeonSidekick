@@ -1178,7 +1178,7 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 | `present_audit` | `findings?, retract?, revise?, minor?, questions?, covered?, checked?, summary?` | Records a code audit pass in its report (`.neon/audits/<name>.md`), which the app writes. At most 20 findings a call; with nothing new, `checked` is required. A retracted finding comes back only with `reopen`. |
 
 * The header's `status` is `draft`, `approved`, `canceled`, `done` or `incomplete`. A revision without `verify` or `final` keeps the file's; empty clears one. Headless, the plan is saved and `/plan approve` starts it.
-* In a gap review (`/plan gaps`), `gaps` lists what a revision closed; an empty `gaps` ends the review. A pruned stub sent back as `markdown` is refused.
+* In a gap review (`/plan gaps`), `gaps` lists what a revision closed; an empty `gaps` ends the review. Each gap starts with `[high]`, `[medium]` or `[low]`, logged only. A pruned stub sent back as `markdown` is refused.
 * Pictures in the conversation are saved beside the plan (`ref-1.png`…) under `## References`; a step names the ones it needs.
 * **An audit finding** must name a file read this session, quoting evidence within 5 lines of its line; its text is redacted. A duplicate of an open finding is refused; one of a settled finding reopens it.
 

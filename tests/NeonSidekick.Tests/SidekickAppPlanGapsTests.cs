@@ -169,6 +169,38 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_PlanGaps_TheShadowLine_OnceAPass_TheConvergedPassToo()
+    {
+        // 2026-11-17, phase 3: tagged gaps counted by their tags, logged once a pass, the pass that converged inside its turn included.
+        ServerOn1234("llama");
+        _chat.Enqueue(HeadlessPresentPlan());
+        _chat.EnqueueText("Saved.");
+        _chat.Enqueue(HeadlessPresentGaps("p2", "[high] Test it", "Low: Lint it"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.Enqueue(HeadlessPresentGaps("p3"));
+        _chat.EnqueueText("None found.");
+        _chat.Enqueue(HeadlessPresentGaps("p4"));
+        _chat.EnqueueText("Nothing left.");
+        var shadow = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith(PlanText.ShadowLogPrefix, StringComparison.Ordinal)) shadow.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            await Headless("/plan Add a guide\n/plan gaps\n");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(
+            ["plan gaps shadow: pass 1: 1 high, 1 low (serious); shadow streak 0 of 2; real: found something",
+             "plan gaps shadow: pass 2: no gaps; shadow streak 1 of 2; real: clean 1 of 2",
+             "plan gaps shadow: pass 3: no gaps; shadow streak 2 of 2, would converge; real: converged"],
+            shadow);
+    }
+
+    [Fact]
     public async Task Headless_PlanGaps_AnAdvisorReviewer_WithNoAdvisorOffered_IsTheModelOnEveryPass()
     {
         // 2026-10-14, the review: the first pass named the model, passes 2..N the advisor asked for.

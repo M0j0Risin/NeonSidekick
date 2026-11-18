@@ -1412,6 +1412,7 @@ internal sealed partial class ChatScreen
             finished.NoteAdvisor(_lastTurnAdvisor);
             string? finishedBody = finishedPath is null ? null : ReadPlanBody(finishedPath);
             finished.Next(endedOnItsOwn: true, userSpoke: false, finishedBody, PlanMeter());
+            LogGapShadow(finished, PlanGapStop.Converged);
             EndGapReview(finished, PlanGapStop.Converged, finishedPath, finishedBody, failed: false);   // rang as its pane opened (PresentPlanTool's converged hook): once a loop
         }
 
@@ -1473,6 +1474,7 @@ internal sealed partial class ChatScreen
         var stop = loop.Next(onItsOwn, spoke, body, PlanMeter());
         // A pass that would have been retried or followed up, but for the message: the message's stop, the review paused (2026-11-17).
         bool messageStop = spoke && ((transient && loop.RetryLeft) || (reportless && loop.FollowUpLeft));
+        LogGapShadow(loop, messageStop ? PlanGapStop.UserSpoke : stop);
         var cost = loop.History.Count > 0 ? loop.History[^1] : null;
         bool advisorAsked = loop.AdvisorAskedThisPass;
         if (loop.PassGaps.Count > 0)
@@ -1498,6 +1500,13 @@ internal sealed partial class ChatScreen
         // A message never rings the stop tone (2026-11-17: a failed pass with a message waiting rang, against the setting's own rule).
         return EndOrPauseGapReview(loop, messageStop ? PlanGapStop.UserSpoke : reason, path, body, failed: !spoke && _lastTurnFailed && !_lastTurnCancelled);
     }
+
+    /// <summary>
+    /// The plan shadow's line for the pass <paramref name="loop"/> just judged (2026-11-17, phase 3, logged only), with the stop as the screen
+    /// goes on to use it: once a pass, whichever branch says the pass.
+    /// </summary>
+    private static void LogGapShadow(PlanGapLoop loop, PlanGapStop? stop) =>
+        DiagnosticLog.Info(AppCategory, PlanText.ShadowLogLine(loop.Pass, loop.Shadow.End(loop.Pass), loop.CleanPasses, stop, loop.PassClean, loop.CleanCount));
 
     /// <summary>
     /// A review that stopped (<paramref name="reason"/>), ended (<see cref="EndGapReview"/>), or, stopped by the user's message, paused

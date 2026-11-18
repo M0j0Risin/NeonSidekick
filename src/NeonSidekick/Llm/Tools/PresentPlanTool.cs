@@ -50,7 +50,7 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             "title": { "type": "string", "description": "A short title for the plan, a few words." },
             "name": { "type": "string", "description": "A short kebab-case file name saying what the plan does, like add-contributing-guide. Optional: the title is used when it is missing. Ignored after the first presentation, which fixes the file." },
             "markdown": { "type": "string", "description": "The whole plan as Markdown, under 20,000 characters: # title, ## Goal, ## Context, ## Steps (- [ ] checkboxes, each small enough for a fresh session to do and check in one sitting, each with an indented Done when: line), ## Files and areas, ## Risks, ## Verification." },
-            "gaps": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each gap this revision closed; empty when none is left." },
+            "gaps": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each gap this revision closed, each starting with [high], [medium] or [low]; empty when none is left." },
             "checked": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review, with gaps empty: one short line for each part of the plan you checked this pass." },
             "minor": { "type": "array", "items": { "type": "string" }, "description": "Only during a gap review: one short line for each small fix this revision made that is not a gap (wording, formatting, a clarification nobody would stop over)." },
             "verify": { "type": "string", "description": "Optional: a quick command on one line that checks the project (it builds, or its tests pass), run by the app after each step when the plan is carried out step by step. Only a command you have seen this project use (its README, CI file or scripts), such as dotnet build, npm test, cargo test or pytest -q; never a guess. Left out, a revision keeps the plan's; empty clears it." },
@@ -226,6 +226,7 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             if (gaps.Count > 0)
             {
                 loop.Record(gaps, minor);
+                NoteShadow(loop, gaps);
                 var reading = PlanFit.Read(saved.Markdown, null, reviewed: true, _inlineLimit());
                 string result = PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, reading.Structural, bodyChars, tooLong);
                 if (!loss.Any)
@@ -243,11 +244,13 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
                 // Clean, but the streak is short (2026-10-17): no pane; the next pass starts by itself. No structural problem stands (refused above).
                 int clean = loop.CleanCount;
                 loop.MarkClean(@checked, minor);
+                NoteShadow(loop, []);
                 return PlanText.CleanPassResult(path, saved.Revision, clean, loop.CleanPasses, minor.Count, bodyChars, tooLong);
             }
 
             int streak = loop.CleanCount;
             loop.MarkConverged(@checked, minor);
+            NoteShadow(loop, []);
             _session.FinishClosing();
             _converged?.Invoke(loop);
             saved = saved with { Note = PlanText.ConvergedNote(loop.Pass, loop.Closed, streak) };
@@ -273,6 +276,16 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             default:
                 return PlanText.RefineResult(path, verdict.Feedback);
         }
+    }
+
+    /// <summary>
+    /// A recorded call noted in the review's shadow (2026-11-17, phase 3, logged only, <see cref="GapShadow"/>): its gaps counted by their tags
+    /// (<see cref="PlanGapTags"/>), serious when any is above low or untagged. A clean call notes no gaps.
+    /// </summary>
+    private static void NoteShadow(PlanGapLoop loop, IReadOnlyList<string> gaps)
+    {
+        var tags = gaps.Select(g => PlanGapTags.Read(g).Severity).ToList();
+        loop.Shadow.Note(loop.Pass, tags.Any(PlanGapTags.Serious), tags.Select(t => (int)t));
     }
 
     /// <summary>

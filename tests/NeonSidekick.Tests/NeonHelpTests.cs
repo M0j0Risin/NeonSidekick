@@ -437,11 +437,11 @@ public class NeonHelpTests
     [Fact]
     public void TheCodeAuditsHelpLines_HaveAFirstSentenceNeverCut()
     {
-        var settings = new[] { SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone }
+        var settings = new[] { SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditLowKeepsStreak, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone }
             .Select(HelpSettings.Describe);
         var forms = HelpCommands.Commands.Single(c => c.Command == "/code-audit").Forms.Select(f => f.Meaning);
         var lines = settings.Concat(forms).ToList();
-        Assert.Equal(11, lines.Count);
+        Assert.Equal(12, lines.Count);
         Assert.All(lines, line => Assert.False(HelpText.FirstSentence(line).EndsWith('…'), line));
     }
 

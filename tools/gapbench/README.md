@@ -18,6 +18,7 @@ The model never sees this README or any `*.expect.json`: a run copies only `repo
 dotnet run tools/GapBench.cs -- --check                                  # the material is consistent; no model
 dotnet run tools/GapBench.cs -- --url http://127.0.0.1:30000/v1          # every item, 3 runs each
 dotnet run tools/GapBench.cs -- --url http://127.0.0.1:30000/v1 --runs 1 --only version-flag,audit
+dotnet run tools/GapBench.cs -- --url http://127.0.0.1:30000/v1 --only audit --set CodeAuditLowKeepsStreak=true
 dotnet run tools/GapBench.cs -- --score publish/gapbench/<folder>        # re-score saved runs
 ```
 
@@ -29,7 +30,12 @@ A bench uses the published exe (`publish/output`) and takes hours: a run can nee
   bench's own runs never start or stop a server.
 - **Pass the server's real address**, such as a Docker server's published port. The app's `docker.localhost` and
   `embedded.localhost` addresses are refused.
-- **A bench that stops can be resumed.** Run the same command with the same `--out`: finished runs are skipped.
+- **A bench that stops can be resumed.** Run the same command with the same `--out` and the same `--set` pairs:
+  finished runs are skipped. `--fresh` starts the folder over.
+- **`--set Name=value` tries a setting.** The name is a `profile.json` key; a misspelled one is refused.
+
+The results' headline also says how often the plan shadow rule (gaps tagged low don't restart the clean streak) would
+have stopped a review before a planted gap was caught, and how the gaps' severity tags agree with the planted ones.
 
 ## Adding material
 

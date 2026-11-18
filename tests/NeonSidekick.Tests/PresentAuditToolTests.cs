@@ -39,9 +39,9 @@ public sealed class PresentAuditToolTests : IDisposable
 
     public void Dispose() => _box.Dispose();
 
-    private PlanGapLoop Start(AuditScope scope, int limit = 5, int clean = 2)
+    private PlanGapLoop Start(AuditScope scope, int limit = 5, int clean = 2, bool lowKeepsStreak = false)
     {
-        var loop = _audit.Start(_path, scope, AuditFocus.Dimensions, "", PlanReviewer.Model, limit, clean);
+        var loop = _audit.Start(_path, scope, AuditFocus.Dimensions, "", PlanReviewer.Model, limit, clean, lowKeepsStreak);
         loop.BeginPass(Report().StallBody());
         return loop;
     }
@@ -501,6 +501,98 @@ public sealed class PresentAuditToolTests : IDisposable
 
         File.Delete(_box.Full(_path));
         Assert.Equal(AuditText.ReportGoneResult(_path), Report1(FindingJson()));
+    }
+
+    /// <summary>The pass judged and the next begun, as the screen does between passes.</summary>
+    private void NextPass()
+    {
+        Assert.Null(_loop.Next(endedOnItsOwn: true, userSpoke: false, Report().StallBody()));
+        _loop.BeginPass(Report().StallBody());
+    }
+
+    [Fact]
+    public void LowKeepsStreak_Off_ALowFindingRestartsTheStreak()
+    {
+        // 2026-11-17, phase 3: off (the default), today's rule: any change restarts the clean streak.
+        Read();
+        Call("{\"checked\":[\"the queries\"]}");
+        NextPass();
+        Assert.Equal(1, _loop.CleanStreak);
+        Assert.StartsWith("Recorded in " + _path + ": A1 new.", Report1(FindingJson(severity: "low")));
+        Assert.False(_loop.PassClean);
+        Assert.Single(_loop.PassGaps);
+        Assert.Empty(_loop.PassLight);
+        Assert.Equal(1, _loop.CleanCount);
+        Assert.False(_reported[^1].Clean);
+    }
+
+    [Fact]
+    public void LowKeepsStreak_On_LowOnlyCallsCountAsClean_AndConvergeAtTheStreak()
+    {
+        // 2026-11-17, phase 3: the shadow rule adopted. A low-only call is clean to the loop, its changes kept as the pass's light ones; the model
+        // is told what any recorded call is told, and the convergence names what it recorded, never "nothing new" alone.
+        _loop = Start(_audit.Scope!, lowKeepsStreak: true);
+        Read();
+        Read("src/y.cs");
+        string first = Report1(FindingJson(severity: "low"));
+        Assert.StartsWith("Recorded in " + _path + ": A1 new. 1 finding open;", first);
+        Assert.True(_loop.PassClean);
+        Assert.Empty(_loop.PassGaps);
+        Assert.Equal(["src/x.cs — SQL built from input"], _loop.PassLight);
+        var call = _reported[^1];
+        Assert.Equal((true, 1, false), (call.Clean, call.Light, call.Converged));
+        Assert.Contains("1 clean in a row", Report().Header.Passes);
+        NextPass();
+        Assert.Equal((1, 1), (_loop.History[^1].Light, _loop.LastLight));
+
+        string second = Report1(FindingJson(file: "src/y.cs", line: 3, title: "Another small thing", severity: "low"));
+        Assert.Equal("Recorded in " + _path + ": A2 new. Nothing new but low changes: the audit converged after 2 passes (2 clean passes in a row); 2 of 2 files read (100%). Reply with one short line and call no more tools.", second);
+        Assert.True(_loop.Converged);
+        Assert.True(_loop.StreakLight);
+        Assert.Equal(2, Report().Findings.Count);
+    }
+
+    [Fact]
+    public void LowKeepsStreak_On_SeriousChangesStillRestartIt()
+    {
+        // A medium finding, a retraction of a medium one, a revision raising one to medium and new detail all restart the streak; each is a gap.
+        _loop = Start(_audit.Scope!, lowKeepsStreak: true);
+        Read();
+        Read("src/y.cs");
+        Report1(FindingJson(severity: "medium"));
+        Assert.Equal((1, false), (_loop.PassGaps.Count, _loop.PassClean));
+        Report1(FindingJson(file: "src/y.cs", line: 3, title: "Small", severity: "low"));
+        Assert.Equal(1, _loop.PassGaps.Count);
+        Assert.True(_loop.PassClean);
+        // In a pass whose first call was serious, a light one after it counts the pass once.
+        Assert.Equal(1, _loop.CleanCount);
+        Call("{\"revise\":[{\"id\":\"A2\",\"severity\":\"medium\"}]}");
+        Assert.Equal((2, false), (_loop.PassGaps.Count, _loop.PassClean));
+        Call("{\"revise\":[{\"id\":\"A2\",\"detail\":\"Joined twice.\"}]}");
+        Assert.Equal(3, _loop.PassGaps.Count);
+        Call("{\"retract\":[{\"id\":\"A1\",\"reason\":\"checked upstream\"}]}");
+        Assert.Equal((4, false), (_loop.PassGaps.Count, _loop.PassClean));
+        // A line or fix edit of a medium finding is not serious.
+        Call("{\"revise\":[{\"id\":\"A2\",\"line\":4,\"fix\":\"Guard it.\"}]}");
+        Assert.Equal(4, _loop.PassGaps.Count);
+        Assert.True(_loop.PassClean);
+    }
+
+    [Fact]
+    public void LowKeepsStreak_On_ALightPassThenACleanOne_RecordsLightOneThenZero()
+    {
+        _loop = Start(_audit.Scope!, clean: 3, lowKeepsStreak: true);
+        Read();
+        Report1(FindingJson(severity: "low"));
+        NextPass();
+        string clean = Call("{\"checked\":[\"the rest\"]}");
+        Assert.StartsWith("Nothing new this pass (2 of 3 clean passes in a row)", clean);
+        Assert.Equal(["pass 2: the rest"], Report().Checked);
+        NextPass();
+        Assert.Equal([1, 0], _loop.History.Select(p => p.Light));
+        Assert.Equal(0, _loop.LastLight);
+        // The streak this pass would end holds pass 1's light changes, so the convergence says them.
+        Assert.StartsWith("Nothing new but low changes: the audit found nothing new but low changes after 3 passes (3 clean passes in a row)", Call("{\"checked\":[\"again\"]}"));
     }
 
     [Fact]

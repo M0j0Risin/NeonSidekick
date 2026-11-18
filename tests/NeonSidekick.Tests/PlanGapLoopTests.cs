@@ -507,4 +507,66 @@ public class PlanGapLoopTests : IDisposable
         Assert.Equal(3, loop.Limit);
         Assert.Null(_session.Approved);
     }
+
+    [Fact]
+    public void LightChanges_KeepTheStreak_AndAreCountedInThePassRecord()
+    {
+        // 2026-11-17, phase 3 (Code audit low keeps streak): a clean report's light changes are never gaps, so the streak, the stall check and the
+        // confirmations read them as clean; the pass's record counts them, and the next pass reads them as LastLight.
+        var loop = new PlanGapLoop(PlanReviewer.Model, 5, 3);
+        loop.BeginPass("a");
+        Assert.Equal(0, loop.LastLight);
+        loop.MarkClean(["x"], null, ["src/a.cs — small"]);
+        Assert.Equal((true, 1, 0), (loop.PassClean, loop.PassLight.Count, loop.PassGaps.Count));
+        Assert.True(loop.StreakLight);
+        Assert.Null(loop.Next(true, false, "a"));
+        Assert.Equal(1, loop.History[^1].Light);
+        Assert.True(loop.StreakLight);   // after Next, before the next pass: the pass recorded is not counted twice
+
+        loop.BeginPass("a");
+        Assert.Equal((1, 1, 0), (loop.CleanStreak, loop.LastLight, loop.PassLight.Count));
+        Assert.True(loop.StreakLight);   // the streak this pass would extend holds pass 1's
+        loop.MarkClean(["y"]);
+        Assert.Null(loop.Next(true, false, "a"));
+        Assert.Equal([1, 0], loop.History.Select(p => p.Light));
+
+        loop.BeginPass("a");
+        Assert.Equal((2, 0), (loop.CleanStreak, loop.LastLight));
+        Assert.True(loop.WouldConverge);
+        loop.MarkConverged(["z"]);
+        Assert.Equal(PlanGapStop.Converged, loop.Next(true, false, "a"));
+        Assert.True(loop.StreakLight);
+    }
+
+    [Fact]
+    public void LightChanges_AfterAGap_CountThePassOnce_AndAGapPassBreaksAStreakOfThem()
+    {
+        var loop = new PlanGapLoop(PlanReviewer.Model, 5, 2);
+        loop.BeginPass("a");
+        loop.Record(["a gap"]);
+        loop.MarkClean(null, null, ["light"]);
+        Assert.Equal(1, loop.CleanCount);
+        Assert.Null(loop.Next(true, false, "b"));
+        loop.BeginPass("b");
+        Assert.Equal(1, loop.CleanStreak);
+        loop.Record(["another"]);
+        Assert.Null(loop.Next(true, false, "c"));
+        loop.BeginPass("c");
+        Assert.Equal((0, 0), (loop.CleanStreak, loop.LastLight));
+        Assert.False(loop.StreakLight);
+    }
+
+    [Fact]
+    public void TheShadow_LivesOnTheLoop_AndAPausedReviewKeepsIt()
+    {
+        // 2026-11-17, phase 3: the plan shadow counts like the audit's; a review paused and resumed keeps its loop, so its shadow streak too.
+        var loop = new PlanGapLoop(PlanReviewer.Model, 5, 2);
+        loop.BeginPass("a");
+        loop.Shadow.Note(1, serious: false, [(int)PlanGapSeverity.Low]);
+        var one = loop.Shadow.End(1);
+        Assert.Equal((1, true, false), (one.Streak, one.Called, one.Serious));
+        Assert.Equal([0, 0, 1, 0], one.Severities);
+        Assert.Equal(0, new PlanGapLoop(PlanReviewer.Model, 5, 2).Shadow.Streak);
+        Assert.Equal(1, loop.Shadow.Streak);
+    }
 }

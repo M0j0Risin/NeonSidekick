@@ -7,6 +7,7 @@
 //
 //     dotnet run tools/GapBench.cs -- --url http://127.0.0.1:30000/v1                   every item, 3 runs each
 //     dotnet run tools/GapBench.cs -- --url … --runs 1 --only version-flag,audit        a slice
+//     dotnet run tools/GapBench.cs -- --url … --only audit --set CodeAuditLowKeepsStreak=true    a setting under test
 //     dotnet run tools/GapBench.cs -- --check                                           the material is consistent; no model
 //     dotnet run tools/GapBench.cs -- --score publish/gapbench/<folder>                 re-scores saved runs (after a keyword is tuned)
 //     dotnet run tools/GapBench.cs -- --self-test                                       the scorer on built-in samples; no model
@@ -15,6 +16,8 @@
 // daily profile's model settings (--like), and the published exe headless with a script on stdin. The model never sees the answers:
 // no *.expect.json and no README is copied. Runs go in rounds (run 1 of every item, then run 2…), so a bench cut short overnight leaves
 // every item with the same count; a finished run writes done.json, and the same --out resumes.
+// --set Name=value (2026-11-17, phase 3) writes one of the app's settings into each run's profile last; the name must be an AppSettingsData
+// property, and a resume must name the same pairs (bench.json records them), so one folder never mixes runs with and without a setting.
 //
 // Scoring reads stdout (the present_plan calls whole: the --log copy is cut), run.log (passes, retries, follow-ups, Usage, the shadow
 // lines) and the files the run left. The stop notices and log lines are matched against the app's own text functions, rendered through
@@ -70,6 +73,7 @@ sealed class Options
     public const string Usage =
         "Usage: dotnet run tools/GapBench.cs -- --url <http://host:port/v1> [--model <id>] [--runs 3] [--only a,b] [--exe <path>] [--out <folder>] [--fresh]\n" +
         "                                     [--timeout <minutes, 120>] [--like <profile.json>|none] [--reasoning <level>] [--temperature <t>]\n" +
+        "                                     [--set <Setting>=<value>]...   (a profile.json key; the value as JSON, else a string)\n" +
         "       dotnet run tools/GapBench.cs -- --check | --self-test | --score <out folder>";
 
     public Mode Mode { get; private set; } = Mode.Run;
@@ -85,6 +89,51 @@ sealed class Options
     public string? Reasoning { get; private set; }
     public double? Temperature { get; private set; }
     public string? ScoreFolder { get; private set; }
+
+    /// <summary>The <c>--set</c> pairs in the order given (2026-11-17): written into each run's profile after everything else.</summary>
+    public List<(string Name, JsonNode? Value)> Sets { get; } = [];
+
+    /// <summary>
+    /// One <c>--set Name=value</c> (2026-11-17): null with why when the name isn't a public property of the app's <c>AppSettingsData</c> (the app
+    /// ignores an unknown key in profile.json without a word, so a misspelling would quietly measure the default), or is <c>FileTools</c>, which
+    /// a run can't do without. The value reads as JSON (<c>true</c>, <c>3</c>, <c>{…}</c>), else as a string.
+    /// </summary>
+    public static (string Name, JsonNode? Value)? ParseSet(string text, out string? error)
+    {
+        error = null;
+        int eq = text.IndexOf('=', StringComparison.Ordinal);
+        string name = eq > 0 ? text[..eq].Trim() : "";
+        if (name.Length == 0)
+        {
+            error = $"--set {text}: expected Name=value";
+            return null;
+        }
+
+        if (typeof(NeonSidekick.Settings.AppSettingsData).GetProperty(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance) is not { CanWrite: true })
+        {
+            error = $"--set {name}: not one of the app's settings (a property of AppSettingsData, spelled as profile.json spells it)";
+            return null;
+        }
+
+        if (name == "FileTools")
+        {
+            error = "--set FileTools: a run can't read its work folder without the file tools";
+            return null;
+        }
+
+        string raw = text[(eq + 1)..];
+        JsonNode? value;
+        try
+        {
+            value = JsonNode.Parse(raw);
+        }
+        catch (JsonException)
+        {
+            value = JsonValue.Create(raw);
+        }
+
+        return (name, value);
+    }
 
     public static Options? Parse(string[] args)
     {
@@ -140,6 +189,16 @@ sealed class Options
                     break;
                 case "--fresh":
                     o.Fresh = true;
+                    break;
+                case "--set":
+                    if (ParseSet(Next() ?? "", out string? setError) is not { } set)
+                    {
+                        Console.Error.WriteLine(setError);
+                        return null;
+                    }
+
+                    o.Sets.RemoveAll(s => s.Name == set.Name);
+                    o.Sets.Add(set);
                     break;
                 case "--timeout":
                     if (!int.TryParse(Next(), NumberStyles.None, CultureInfo.InvariantCulture, out int minutes) || minutes < 1)
@@ -446,6 +505,44 @@ static partial class Patterns
     public static readonly Regex PlanRetry = Template.Build(PlanText.RetryLogLine(Template.N1, null));
     public static readonly Regex[] PlanFollowUp = [Template.Build(PlanText.FollowUpLogLine(Template.N1, false)), Template.Build(PlanText.FollowUpLogLine(Template.N1, true))];
     public static readonly Regex AuditPass = Template.Build(AuditText.PassLogLine(Template.N1, Template.N2, 0, false, false, null), cutBefore: Template.N2);
+
+    /// <summary>
+    /// A clean audit pass's low changes (2026-11-17, Code audit low keeps streak): the pass line's count captured, its words the app's own in
+    /// both numbers, so "1 change to the findings" never reads as one.
+    /// </summary>
+    public static readonly Regex AuditLight = CountedTail(
+        AuditText.PassLogLine(Template.N1, 0, 0, true, false, null, light: Template.N2), AuditText.PassLogLine(Template.N1, 0, 0, true, false, null, light: 1), Template.N2);
+
+    /// <summary>The plan pass notice's first line (stdout), its pass captured: a pass with gaps, and a clean one (2026-11-17, a call's pass).</summary>
+    public static readonly Regex[] PlanPassNotices =
+    [
+        Template.Build(PlanText.PassNoticeLines(Template.N1, Template.N2, Template.N3, ["QQSENTA"])[0], cutBefore: Template.N3, capture: Template.N1),
+        Template.Build(PlanText.CleanPassNoticeLines(Template.N1, Template.N2, Template.N3, Template.N4, [])[0], cutBefore: Template.N3, capture: Template.N1),
+    ];
+
+    /// <summary>The plan shadow line's pass number (2026-11-17, phase 3), cut before what the pass did, as the audit's.</summary>
+    public static readonly Regex PlanShadowPass = Template.Build(
+        PlanText.ShadowLogLine(Template.N1, new GapShadowPass([Template.N4, 0, 0, 0], Template.N2, true, false), Template.N3, null, false, 0),
+        cutBefore: Template.N4, capture: Template.N1);
+
+    /// <summary>What a plan shadow line adds once its streak reaches the clean passes needed.</summary>
+    public static readonly string PlanWouldConverge = Template.Inserted(
+        PlanText.ShadowLogLine(1, new GapShadowPass([0, 0, 0, 0], 2, true, false), 2, null, true, 1),
+        PlanText.ShadowLogLine(1, new GapShadowPass([0, 0, 0, 0], 1, true, false), 2, null, true, 1));
+
+    /// <summary>
+    /// <paramref name="many"/> (rendered with <paramref name="sentinel"/>) up to the sentinel, then the count captured as <c>n</c> and the words
+    /// after it as either rendering has them (<paramref name="one"/>: the count 1).
+    /// </summary>
+    private static Regex CountedTail(string many, string one, int sentinel)
+    {
+        string s = sentinel.ToString(CultureInfo.InvariantCulture);
+        int at = many.IndexOf(s, StringComparison.Ordinal);
+        string prefix = Template.Build(many, cutBefore: sentinel).ToString();
+        string manyWords = many[(at + s.Length)..];
+        string oneWords = one[(at + 1)..];
+        return new Regex(prefix + @"(?<n>[\d,]+)(?:" + Regex.Escape(manyWords) + "|" + Regex.Escape(oneWords) + ")(?=,|$)", RegexOptions.CultureInvariant);
+    }
     public static readonly Regex AuditRetry = Template.Build(AuditText.RetryLogLine(Template.N1, null));
     public static readonly Regex[] AuditFollowUp = [Template.Build(AuditText.FollowUpLogLine(Template.N1, false)), Template.Build(AuditText.FollowUpLogLine(Template.N1, true))];
 
@@ -493,6 +590,11 @@ static partial class Patterns
             new("converged", PlanGapStop.Converged, Template.Build(AuditText.ConvergedNotice(Template.S1, Template.N1, Template.N2, Template.N3, Template.N3, pane: false))),
             new("converged, part read", PlanGapStop.Converged, Template.Build(AuditText.ConvergedNotice(Template.S1, Template.N1, Template.N2, Template.N3, Template.N4, pane: false))),
             new("converged, part read", PlanGapStop.Converged, Template.Build(AuditText.ConvergedNotice(Template.S1, Template.N1, Template.N2, Template.N3, Template.N4, pane: false, unread: Template.N5))),
+            // A streak low changes kept (2026-11-17, Code audit low keeps streak): its own words, never "nothing new" alone.
+            new("converged", PlanGapStop.Converged, Template.Build(AuditText.ConvergedNotice(Template.S1, Template.N1, Template.N2, Template.N3, Template.N3, pane: false, light: true))),
+            new("converged, part read", PlanGapStop.Converged, Template.Build(AuditText.ConvergedNotice(Template.S1, Template.N1, Template.N2, Template.N3, Template.N4, pane: false, light: true))),
+            new("converged, part read", PlanGapStop.Converged, Template.Build(AuditText.ConvergedNotice(Template.S1, Template.N1, Template.N2, Template.N3, Template.N4, pane: false, unread: Template.N5, light: true))),
+            new(Name(PlanGapStop.Unconfirmed), PlanGapStop.Unconfirmed, Template.Build(AuditText.StopNotice(PlanGapStop.Unconfirmed, Template.S1, Template.N1, lastLight: true))),
         };
         foreach (var reason in Enum.GetValues<PlanGapStop>())
         {
@@ -662,6 +764,15 @@ sealed class LogFacts
     public int? ShadowWouldConvergeAt { get; private set; }
     public string? LastShadowLine { get; private set; }
 
+    /// <summary>The audit's low changes that kept the streak (2026-11-17, Code audit low keeps streak), over every pass, and the passes that had some.</summary>
+    public int AuditLight { get; private set; }
+    public int AuditLightPasses { get; private set; }
+
+    /// <summary>The plan shadow (2026-11-17, phase 3): its lines, the first pass it would have converged at, and its last line.</summary>
+    public int PlanShadowLines { get; private set; }
+    public int? PlanShadowWouldConvergeAt { get; private set; }
+    public string? LastPlanShadowLine { get; private set; }
+
     public static LogFacts Read(string log)
     {
         var f = new LogFacts();
@@ -691,6 +802,20 @@ sealed class LogFacts
                 continue;
             }
 
+            // Before the pass patterns, as the audit's: a shadow line is never a pass.
+            if (line.Contains(PlanText.ShadowLogPrefix, StringComparison.Ordinal))
+            {
+                f.PlanShadowLines++;
+                f.LastPlanShadowLine = line;
+                if (f.PlanShadowWouldConvergeAt is null && line.Contains(Patterns.PlanWouldConverge, StringComparison.Ordinal)
+                    && Patterns.PlanShadowPass.Match(line) is { Success: true } planShadow)
+                {
+                    f.PlanShadowWouldConvergeAt = int.Parse(planShadow.Groups["n"].Value.Replace(",", "", StringComparison.Ordinal), CultureInfo.InvariantCulture);
+                }
+
+                continue;
+            }
+
             if (Patterns.PlanPass.IsMatch(line))
             {
                 f.PlanPasses++;
@@ -710,6 +835,11 @@ sealed class LogFacts
             else if (Patterns.AuditPass.IsMatch(line))
             {
                 f.AuditPasses++;
+                if (Patterns.AuditLight.Match(line) is { Success: true } light)
+                {
+                    f.AuditLight += int.Parse(light.Groups["n"].Value.Replace(",", "", StringComparison.Ordinal), CultureInfo.InvariantCulture);
+                    f.AuditLightPasses++;
+                }
             }
         }
 
@@ -744,6 +874,15 @@ sealed class RunScore
     public List<string> Reargued { get; } = [];
     public PlanLossReport? Loss { get; set; }
 
+    /// <summary>Each present_plan call's pass (2026-11-17), by its ordinal, from stdout's pass notices.</summary>
+    public Dictionary<int, int> CallPasses { get; } = [];
+
+    /// <summary>The planted gaps first caught after the plan shadow would have converged (2026-11-17, phase 3).</summary>
+    public List<string> GapsAfterShadow { get; } = [];
+
+    /// <summary>The pass of <paramref name="call"/>, null when unknown.</summary>
+    public int? PassOf(int? call) => call is int c && CallPasses.TryGetValue(c, out int pass) ? pass : null;
+
     // An audit run.
     public List<BugOutcome> Bugs { get; } = [];
     public List<Spot> DecoysFlagged { get; } = [];
@@ -751,6 +890,10 @@ sealed class RunScore
     public int CoverageRead { get; set; }
     public int CoverageScope { get; set; }
     public List<string> BugsAfterShadow { get; } = [];
+
+    /// <summary>The report's live findings, and those labeled low (2026-11-17: a drift toward low would mean the low-streak rule is gamed).</summary>
+    public int FindingsTotal { get; set; }
+    public int FindingsLow { get; set; }
 
     public bool IsAudit => Item == Material.AuditName;
 
@@ -765,6 +908,39 @@ sealed class RunScore
         : Planted.Any(g => IsHigh(g.Gap.Severity) && g.Status != "caught" && !g.FixedInBody));
 
     public bool ShadowStoppedEarly => BugsAfterShadow.Count > 0;
+
+    public bool PlanShadowStoppedEarly => GapsAfterShadow.Count > 0;
+
+    /// <summary>
+    /// How a caught gap's leading tag (<see cref="PlanGapTags"/>) compares with the planted severity (2026-11-17): same, one off, two off, or
+    /// untagged.
+    /// </summary>
+    public static string LabelOf(GapOutcome g)
+    {
+        if (g.Status != "caught" || g.Line is null)
+        {
+            return "";
+        }
+
+        var tag = PlanGapTags.Read(g.Line).Severity;
+        if (tag == PlanGapSeverity.Untagged)
+        {
+            return "untagged";
+        }
+
+        int planted = g.Gap.Severity.ToLowerInvariant() switch
+        {
+            "critical" or "high" => (int)PlanGapSeverity.High,
+            "medium" => (int)PlanGapSeverity.Medium,
+            _ => (int)PlanGapSeverity.Low,
+        };
+        return Math.Abs((int)tag - planted) switch
+        {
+            0 => "same",
+            1 => "one off",
+            _ => "two off",
+        };
+    }
 
     private static bool IsHigh(string? severity) => severity is "high" or "critical";
 }
@@ -877,6 +1053,56 @@ static class Scorer
         }
 
         score.Loss = PlanLoss.Compare(startBody, finalBody);
+        foreach (var (call, pass) in CallPasses(stdout))
+        {
+            score.CallPasses[call] = pass;
+        }
+
+        if (score.Log.PlanShadowWouldConvergeAt is int at)
+        {
+            score.GapsAfterShadow.AddRange(score.Planted.Where(g => g.Status == "caught" && score.PassOf(g.Call) > at).Select(g => g.Gap.Id));
+        }
+
+        if (score.StopReason is { } reason && score.Stop != "not sent" && score.Log.LastPlanShadowLine is { } shadow && !shadow.TrimEnd().EndsWith(PlanText.StopWord(reason), StringComparison.Ordinal))
+        {
+            score.Flags.Add($"stop mismatch: the notice says {score.Stop}, the last plan shadow line doesn't end in \"{PlanText.StopWord(reason)}\"");
+        }
+    }
+
+    /// <summary>
+    /// Each present_plan call's pass (2026-11-17): a pass's notice ("Gap review pass N of M: …") comes after its calls, so a call belongs to the
+    /// first notice after it, and the calls after the last notice to the pass after that one (the pass the stop notice ends).
+    /// </summary>
+    public static IEnumerable<(int Call, int Pass)> CallPasses(string stdout)
+    {
+        const string call = "[tool] " + PresentPlanTool.ToolName + " ";
+        const string result = "[tool] " + PresentPlanTool.ToolName + " -> ";
+        var waiting = new List<int>();
+        int ordinal = 0;
+        int lastPass = 0;
+        foreach (string raw in stdout.Split('\n'))
+        {
+            string line = raw.TrimEnd('\r');
+            if (line.StartsWith(call, StringComparison.Ordinal) && !line.StartsWith(result, StringComparison.Ordinal))
+            {
+                waiting.Add(++ordinal);
+            }
+            else if (Patterns.PlanPassNotices.Select(p => p.Match(line)).FirstOrDefault(m => m.Success) is { } notice)
+            {
+                lastPass = int.Parse(notice.Groups["n"].Value.Replace(",", "", StringComparison.Ordinal), CultureInfo.InvariantCulture);
+                foreach (int c in waiting)
+                {
+                    yield return (c, lastPass);
+                }
+
+                waiting.Clear();
+            }
+        }
+
+        foreach (int c in waiting)
+        {
+            yield return (c, lastPass + 1);
+        }
     }
 
     public static IEnumerable<GapOutcome> Outcomes(PlanItem plan, List<(int Ordinal, string Text)> gapLines, List<(int Ordinal, string Text)> minorLines, string finalBody)
@@ -997,6 +1223,8 @@ static class Scorer
         }
 
         score.OtherFindings.AddRange(live.Where(f => !used.Contains(f)));
+        score.FindingsTotal = live.Count;
+        score.FindingsLow = live.Count(f => f.Severity == AuditSeverity.Low);
     }
 
     /// <summary>The same file and a line within ±3 (the report may write either separator, or a leading <c>./</c>).</summary>
@@ -1110,9 +1338,16 @@ static class Bench
 
             File.Delete(Path.Combine(outDir, "results.md"));
             File.Delete(Path.Combine(outDir, "results.json"));
+            File.Delete(Path.Combine(outDir, "bench.json"));
         }
 
-        WriteBenchFile(outDir, o.Runs);
+        if (BenchSetsDiffer(outDir, o) is { } recorded)
+        {
+            Console.Error.WriteLine($"{outDir} was run with --set {recorded}; resume with the same --set pairs, or pass --fresh to start over.");
+            return 2;
+        }
+
+        WriteBenchFile(outDir, o.Runs, o.Sets);
         string hash = Material.Hash(Repo.MaterialRoot);
         Console.WriteLine($"GapBench: {items.Count} items × {o.Runs} runs → {outDir}");
         Console.WriteLine($"  {version} · {baseUrl} · settings {settings.ToJsonString()}");
@@ -1320,10 +1555,38 @@ static class Bench
         settings["Advisors"] = false;
         settings["CodeAuditWebResearch"] = false;
         settings["PlanGapPasses"] = 10;
+        // Last, so a --set wins over both the copied settings and the bench's own keys (2026-11-17).
+        foreach (var (name, value) in o.Sets)
+        {
+            settings[name] = value?.DeepClone();
+        }
+
         return settings;
     }
 
-    private static void WriteBenchFile(string outDir, int runs)
+    /// <summary>The --set pairs as bench.json records them: an object, name to value.</summary>
+    public static JsonObject SetsJson(IEnumerable<(string Name, JsonNode? Value)> sets) =>
+        new(sets.Select(s => KeyValuePair.Create(s.Name, s.Value?.DeepClone())));
+
+    /// <summary>
+    /// The pairs <paramref name="outDir"/>'s bench.json recorded, spelled for the error, when they aren't <paramref name="o"/>'s (2026-11-17): a
+    /// resume that forgot a --set would mix runs with and without it. Null when they match, the folder is new, or --fresh starts it over.
+    /// </summary>
+    public static string? BenchSetsDiffer(string outDir, Options o)
+    {
+        string path = Path.Combine(outDir, "bench.json");
+        if (o.Fresh || !File.Exists(path))
+        {
+            return null;
+        }
+
+        var recorded = JsonNode.Parse(File.ReadAllText(path))?["sets"] as JsonObject ?? new JsonObject();
+        var now = SetsJson(o.Sets);
+        bool same = recorded.Count == now.Count && recorded.All(kv => now.ContainsKey(kv.Key) && JsonNode.DeepEquals(kv.Value, now[kv.Key]));
+        return same ? null : recorded.Count == 0 ? "(none)" : string.Join(" ", recorded.Select(kv => $"{kv.Key}={kv.Value?.ToJsonString() ?? "null"}"));
+    }
+
+    private static void WriteBenchFile(string outDir, int runs, IEnumerable<(string Name, JsonNode? Value)> sets)
     {
         string path = Path.Combine(outDir, "bench.json");
         int planned = runs;
@@ -1332,7 +1595,14 @@ static class Bench
             planned = Math.Max(planned, (int)before);
         }
 
-        File.WriteAllText(path, new JsonObject { ["runs"] = planned }.ToJsonString());
+        var bench = new JsonObject { ["runs"] = planned };
+        var setsJson = SetsJson(sets);
+        if (setsJson.Count > 0)
+        {
+            bench["sets"] = setsJson;
+        }
+
+        File.WriteAllText(path, bench.ToJsonString());
     }
 
     private static void CopyRepo(string from, string to)
@@ -1423,8 +1693,18 @@ static class Report
         var md = new StringBuilder();
         md.AppendLine("# GapBench results").AppendLine();
         md.AppendLine($"{outDir} · scored {DateTime.Now.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)}").AppendLine();
-        AppendMeta(md, runs, currentHash);
-        AppendHeadline(md, runs, material);
+        if (runs.Count == 0)
+        {
+            // A bench stopped before its first run finished (Ctrl+C, a server gone): the exe, model and settings come from finished
+            // runs, so there is nothing to show but that (2026-11-17, the Ctrl+C hand check printed empty lines and a zero headline).
+            md.AppendLine("No finished runs yet. Run the same command again to resume.").AppendLine();
+        }
+        else
+        {
+            AppendMeta(md, runs, currentHash);
+            AppendHeadline(md, runs, material);
+        }
+
         var json = new JsonObject
         {
             ["folder"] = outDir,
@@ -1477,6 +1757,15 @@ static class Report
             ["convergedWithHighOpen"] = runs.Count(r => r.ConvergedWithHighOpen),
             ["auditRuns"] = audits.Count,
             ["shadowStoppedEarly"] = audits.Count(r => r.ShadowStoppedEarly),
+            ["planShadowRuns"] = plans.Count(r => r.Log.PlanShadowLines > 0),
+            ["planShadowStoppedEarly"] = plans.Count(r => r.PlanShadowStoppedEarly),
+            ["labelsSame"] = plans.Sum(r => r.Planted.Count(g => RunScore.LabelOf(g) == "same")),
+            ["labelsOneOff"] = plans.Sum(r => r.Planted.Count(g => RunScore.LabelOf(g) == "one off")),
+            ["labelsTwoOff"] = plans.Sum(r => r.Planted.Count(g => RunScore.LabelOf(g) == "two off")),
+            ["labelsUntagged"] = plans.Sum(r => r.Planted.Count(g => RunScore.LabelOf(g) == "untagged")),
+            ["auditLowChanges"] = audits.Sum(r => r.Log.AuditLight),
+            ["findings"] = audits.Sum(r => r.FindingsTotal),
+            ["findingsLow"] = audits.Sum(r => r.FindingsLow),
             ["flaggedRuns"] = runs.Count(r => r.Flags.Count > 0),
         };
     }
@@ -1486,12 +1775,49 @@ static class Report
         var h = Headline(runs, material);
         int I(string k) => (int)h[k]!;
         md.AppendLine("## Headline").AppendLine();
-        md.AppendLine($"- Planted gaps caught: **{I("gapsCaught")} of {I("plannedGaps")}** ({I("gapsMinorOnly")} only as minor fixes, {I("gapsFixedSilently")} fixed without being reported)");
-        md.AppendLine($"- Planted bugs caught: **{I("bugsCaught")} of {I("plantedBugs")}** ({I("bugsFileOnly")} more named only by file, {I("bugsNitOnly")} only as nits)");
-        md.AppendLine($"- Gaps reported on the control plan: **{I("controlGaps")}** over {I("controlRuns")} runs");
-        md.AppendLine($"- Runs that lost content: **{I("runsLostContent")} of {I("planRuns")}**");
+        // A bench of plans only or the audit only (2026-11-17, --only) leaves out the other kind's lines rather than print "0 of 0".
+        bool plans = I("planRuns") > 0, audits = I("auditRuns") > 0;
+        if (plans)
+        {
+            md.AppendLine($"- Planted gaps caught: **{I("gapsCaught")} of {I("plannedGaps")}** ({I("gapsMinorOnly")} only as minor fixes, {I("gapsFixedSilently")} fixed without being reported)");
+        }
+
+        if (audits)
+        {
+            md.AppendLine($"- Planted bugs caught: **{I("bugsCaught")} of {I("plantedBugs")}** ({I("bugsFileOnly")} more named only by file, {I("bugsNitOnly")} only as nits)");
+        }
+
+        if (I("controlRuns") > 0)
+        {
+            md.AppendLine($"- Gaps reported on the control plan: **{I("controlGaps")}** over {I("controlRuns")} runs");
+        }
+
+        if (plans)
+        {
+            md.AppendLine($"- Runs that lost content: **{I("runsLostContent")} of {I("planRuns")}**");
+        }
+
         md.AppendLine($"- Runs that converged with a high gap open or a high bug missed: **{I("convergedWithHighOpen")}**");
-        md.AppendLine($"- Audit runs where the shadow rule would have stopped before a planted bug was found: **{I("shadowStoppedEarly")} of {I("auditRuns")}**");
+        if (audits)
+        {
+            md.AppendLine($"- Audit runs where the shadow rule would have stopped before a planted bug was found: **{I("shadowStoppedEarly")} of {I("auditRuns")}**");
+        }
+
+        if (I("planShadowRuns") > 0)
+        {
+            md.AppendLine($"- Plan runs where the shadow rule would have stopped before a planted gap was caught: **{I("planShadowStoppedEarly")} of {I("planShadowRuns")}**");
+        }
+
+        int labeled = I("labelsSame") + I("labelsOneOff") + I("labelsTwoOff") + I("labelsUntagged");
+        if (labeled > 0 && I("labelsUntagged") < labeled)
+        {
+            md.AppendLine($"- Caught gaps' severity tags against the planted: **{I("labelsSame")} same**, {I("labelsOneOff")} one off, {I("labelsTwoOff")} two off, {I("labelsUntagged")} untagged");
+        }
+
+        if (I("auditRuns") > 0)
+        {
+            md.AppendLine($"- Audit findings labeled low: **{I("findingsLow")} of {I("findings")}**; low changes that kept a streak: {I("auditLowChanges")}");
+        }
         if (I("flaggedRuns") > 0)
         {
             md.AppendLine($"- Runs flagged (read them): **{I("flaggedRuns")}**");
@@ -1515,6 +1841,8 @@ static class Report
             Row(md, "decoys flagged", runs.Select(r => (double)r.DecoysFlagged.Count));
             Row(md, "other findings", runs.Select(r => (double)r.OtherFindings.Count));
             Row(md, "files read %", runs.Select(r => r.CoverageScope > 0 ? Math.Round(100.0 * r.CoverageRead / r.CoverageScope) : 0));
+            Row(md, "findings labeled low", runs.Select(r => (double)r.FindingsLow));
+            Row(md, "low changes kept a streak", runs.Select(r => (double)r.Log.AuditLight));
         }
         else
         {
@@ -1541,12 +1869,16 @@ static class Report
         }
         else if (material.Plan(item) is { } plan && plan.Gaps.Count > 0)
         {
-            md.AppendLine("| gap | severity | caught | minor only | fixed silently | missed |").AppendLine("|---|---|---|---|---|---|");
+            md.AppendLine("| gap | severity | caught | minor only | fixed silently | missed | tag agrees | first pass |").AppendLine("|---|---|---|---|---|---|---|---|");
             foreach (var gap in plan.Gaps)
             {
-                var outcomes = runs.Select(r => r.Planted.FirstOrDefault(g => g.Gap.Id == gap.Id)).OfType<GapOutcome>().ToList();
-                md.AppendLine($"| {gap.Id} {gap.What} | {gap.Severity} | {outcomes.Count(o => o.Status == "caught")} | {outcomes.Count(o => o.Status == "minor only")} | "
-                    + $"{outcomes.Count(o => o.Status == "fixed silently")} | {outcomes.Count(o => o.Status == "missed")} |");
+                var outcomes = runs.Select(r => (Run: r, Outcome: r.Planted.FirstOrDefault(g => g.Gap.Id == gap.Id))).Where(p => p.Outcome is not null).ToList();
+                var caught = outcomes.Where(p => p.Outcome!.Status == "caught").ToList();
+                md.AppendLine($"| {gap.Id} {gap.What} | {gap.Severity} | {caught.Count} | {outcomes.Count(p => p.Outcome!.Status == "minor only")} | "
+                    + $"{outcomes.Count(p => p.Outcome!.Status == "fixed silently")} | {outcomes.Count(p => p.Outcome!.Status == "missed")} | "
+                    + $"{caught.Count(p => RunScore.LabelOf(p.Outcome!) == "same")} same, {caught.Count(p => RunScore.LabelOf(p.Outcome!) == "one off")} one off, "
+                    + $"{caught.Count(p => RunScore.LabelOf(p.Outcome!) == "untagged")} untagged | "
+                    + string.Join(", ", caught.Select(p => p.Run.PassOf(p.Outcome!.Call)?.ToString(CultureInfo.InvariantCulture) ?? "?")) + " |");
             }
 
             md.AppendLine();
@@ -1575,8 +1907,14 @@ static class Report
 
         foreach (var g in r.Planted)
         {
-            md.AppendLine($"- {g.Gap.Id} ({g.Gap.Severity}): **{g.Status}**" + (g.Line is { } line ? $"{(g.Call is { } c ? $" in call {c}" : "")}: «{Flat(line)}»" : "")
+            md.AppendLine($"- {g.Gap.Id} ({g.Gap.Severity}): **{g.Status}**" + (g.Line is { } line ? $"{(g.Call is { } c ? $" in call {c}" : "")}{(r.PassOf(g.Call) is { } gp ? $", pass {gp}" : "")}: «{Flat(line)}»" : "")
                 + (g.Status != "fixed silently" && g.FixedInBody ? " · fixed in the final plan" : ""));
+        }
+
+        if (!r.IsAudit && r.Log.PlanShadowLines > 0)
+        {
+            md.AppendLine($"- Plan shadow rule would converge at pass {r.Log.PlanShadowWouldConvergeAt?.ToString(CultureInfo.InvariantCulture) ?? "—"}"
+                + (r.GapsAfterShadow.Count > 0 ? $"; planted gaps caught after it: **{string.Join(", ", r.GapsAfterShadow)}**" : ""));
         }
 
         if (r.DecisionFolded is { } folded)
@@ -1627,7 +1965,9 @@ static class Report
         if (r.IsAudit)
         {
             md.AppendLine($"- Coverage: {r.CoverageRead} of {r.CoverageScope} files read; shadow rule would converge at pass {r.Log.ShadowWouldConvergeAt?.ToString(CultureInfo.InvariantCulture) ?? "—"}"
-                + (r.BugsAfterShadow.Count > 0 ? $"; planted bugs found after it: **{string.Join(", ", r.BugsAfterShadow)}**" : ""));
+                + (r.BugsAfterShadow.Count > 0 ? $"; planted bugs found after it: **{string.Join(", ", r.BugsAfterShadow)}**" : "")
+                + $"; findings labeled low: {r.FindingsLow} of {r.FindingsTotal}"
+                + (r.Log.AuditLight > 0 ? $"; low changes kept the streak: {r.Log.AuditLight} over {r.Log.AuditLightPasses} passes" : ""));
         }
 
         if (r.OtherFindings.Count > 0)
@@ -1676,6 +2016,12 @@ static class Report
         ["coverageScope"] = r.CoverageScope,
         ["shadowWouldConvergeAt"] = r.Log.ShadowWouldConvergeAt,
         ["bugsAfterShadow"] = new JsonArray([.. r.BugsAfterShadow.Select(b => (JsonNode?)b)]),
+        ["findings"] = r.FindingsTotal,
+        ["findingsLow"] = r.FindingsLow,
+        ["auditLowChanges"] = r.Log.AuditLight,
+        ["planShadowWouldConvergeAt"] = r.Log.PlanShadowWouldConvergeAt,
+        ["gapsAfterShadow"] = new JsonArray([.. r.GapsAfterShadow.Select(g => (JsonNode?)g)]),
+        ["gapLabels"] = new JsonObject(r.Planted.Where(g => g.Status == "caught").Select(g => KeyValuePair.Create(g.Gap.Id, (JsonNode?)RunScore.LabelOf(g)))),
     };
 
     private static void Row(StringBuilder md, string name, IEnumerable<double> values)
@@ -1915,6 +2261,7 @@ static class SelfTest
         _failed = 0;
         Notices();
         LogLines();
+        Severity();
         PlanRun();
         AuditRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
@@ -1990,6 +2337,86 @@ static class SelfTest
         Expect(a.AuditPasses == 2, $"audit passes read as {a.AuditPasses}");
         Expect(a.ShadowWouldConvergeAt == 3, $"shadow would converge read as {a.ShadowWouldConvergeAt}");
         Expect(a.LastShadowLine?.EndsWith(AuditText.StopWord(PlanGapStop.Converged), StringComparison.Ordinal) == true, "the last shadow line's real word");
+    }
+
+    /// <summary>Phase 3 (2026-11-17): --set, the audit's low changes and its light stops, the plan shadow, a call's pass, a gap's tag.</summary>
+    private static void Severity()
+    {
+        Expect(Options.ParseSet("CodeAuditLowKeepsStreak=true", out _) is { Value: JsonValue v } && v.GetValue<bool>(), "--set reads true as JSON");
+        Expect(Options.ParseSet("LlmReasoning=high", out _) is { Value: JsonValue s } && s.GetValue<string>() == "high", "--set reads a bare word as a string");
+        Expect(Options.ParseSet("CodeAuditLowKeepStreak=true", out string? misspelled) is null && misspelled is not null, "--set refuses a name the app doesn't have");
+        Expect(Options.ParseSet("FileTools=false", out string? files) is null && files is not null, "--set refuses FileTools");
+        Expect(Options.ParseSet("=1", out _) is null, "--set refuses a missing name");
+
+        string bench = Scratch();
+        try
+        {
+            Options Opts(params string[] extra) => Options.Parse(["--url", "http://127.0.0.1:1/v1", .. extra])!;
+            var with = Opts("--set", "CodeAuditLowKeepsStreak=true");
+            Expect(Bench.BenchSetsDiffer(bench, with) is null, "a new folder takes any --set");
+            File.WriteAllText(Path.Combine(bench, "bench.json"), new JsonObject { ["runs"] = 3, ["sets"] = Bench.SetsJson(with.Sets) }.ToJsonString());
+            Expect(Bench.BenchSetsDiffer(bench, Opts("--set", "CodeAuditLowKeepsStreak=true")) is null, "a resume with the same --set");
+            Expect(Bench.BenchSetsDiffer(bench, Opts()) == "CodeAuditLowKeepsStreak=true", "a resume that forgot --set names the recorded pair");
+            Expect(Bench.BenchSetsDiffer(bench, Opts("--set", "CodeAuditLowKeepsStreak=false")) is not null, "a resume with another value");
+            Expect(Bench.BenchSetsDiffer(bench, Opts("--fresh")) is null, "--fresh starts over");
+            File.WriteAllText(Path.Combine(bench, "bench.json"), "{\"runs\":3}");
+            Expect(Bench.BenchSetsDiffer(bench, with) == "(none)", "a --set on a folder run without one");
+        }
+        finally
+        {
+            Directory.Delete(bench, recursive: true);
+        }
+
+        string audit = string.Join('\n',
+            "x " + AuditText.PassLogLine(1, 3, 0, false, false, null),
+            "x " + AuditText.PassLogLine(2, 0, 1, true, false, null, light: 1),
+            "x " + AuditText.PassLogLine(3, 0, 0, true, true, null, light: 12),
+            "x " + AuditText.PassLogLine(4, 0, 0, true, false, null));
+        var a = LogFacts.Read(audit);
+        Expect(a.AuditPasses == 4, $"audit passes with low changes read as {a.AuditPasses}");
+        Expect(a.AuditLight == 13 && a.AuditLightPasses == 2, $"low changes read as {a.AuditLight} over {a.AuditLightPasses} passes");
+
+        var converged = Patterns.LastStop(AuditText.ConvergedNotice("audit-x", 4, 2, 9, 9, pane: false, light: true), Patterns.AuditStops);
+        Expect(converged?.Name == "converged", $"a converged audit with low changes read as {converged?.Name ?? "nothing"}");
+        var part = Patterns.LastStop(AuditText.ConvergedNotice("audit-x", 4, 2, 5, 9, pane: false, unread: 4, light: true), Patterns.AuditStops);
+        Expect(part?.Name == "converged, part read", $"a part-read convergence with low changes read as {part?.Name ?? "nothing"}");
+        var unconfirmed = Patterns.LastStop(AuditText.StopNotice(PlanGapStop.Unconfirmed, "audit-x", 5, lastLight: true), Patterns.AuditStops);
+        Expect(unconfirmed?.Reason == PlanGapStop.Unconfirmed, $"an unconfirmed stop after low changes read as {unconfirmed?.Name ?? "nothing"}");
+
+        string plan = string.Join('\n',
+            "x " + PlanText.PassLogLine(1, 2, ["[high] a", "b"], false),
+            "x " + PlanText.ShadowLogLine(1, new GapShadowPass([1, 0, 0, 1], 0, true, true), 2, null, false, 0),
+            "x " + PlanText.PassLogLine(2, 1, ["[low] c"], false),
+            "x " + PlanText.ShadowLogLine(2, new GapShadowPass([0, 0, 1, 0], 1, true, false), 2, null, false, 0),
+            "x " + PlanText.ShadowLogLine(3, new GapShadowPass([0, 0, 0, 0], 2, true, false), 2, null, true, 1),
+            "x " + PlanText.CleanPassLogLine(3, 1, 2, ["steps"]),
+            "x " + PlanText.ShadowLogLine(4, new GapShadowPass([0, 0, 0, 0], 3, true, false), 2, PlanGapStop.Converged, true, 2));
+        var p = LogFacts.Read(plan);
+        Expect(p.PlanPasses == 2 && p.PlanCleanPasses == 1, $"plan shadow lines aren't passes: {p.PlanPasses} + {p.PlanCleanPasses} clean");
+        Expect(p.PlanShadowLines == 4 && p.PlanShadowWouldConvergeAt == 3, $"plan shadow: {p.PlanShadowLines} lines, would converge at {p.PlanShadowWouldConvergeAt}");
+        Expect(p.ShadowWouldConvergeAt is null && p.LastShadowLine is null, "a plan shadow line isn't the audit's");
+        Expect(p.LastPlanShadowLine?.EndsWith(PlanText.StopWord(PlanGapStop.Converged), StringComparison.Ordinal) == true, "the last plan shadow line's real word");
+
+        string stdout = string.Join('\n',
+            "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"a\"]}",
+            "[tool] present_plan -> Error: no.",
+            "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"a\"]}",
+            "[tool] present_plan -> Plan saved as revision 2.",
+            "[notice] " + PlanText.PassNoticeLines(1, 10, 2, ["a"])[0],
+            "[tool] present_plan {\"title\": \"T\", \"gaps\": []}",
+            "[tool] present_plan -> Plan saved as revision 3.",
+            "[notice] " + PlanText.CleanPassNoticeLines(12, 20, 1, 2, ["steps"])[0],
+            "[tool] present_plan {\"title\": \"T\", \"gaps\": []}",
+            "[notice] " + PlanText.ConvergedNotice(".neon/plans/t.md", 13, 1, 2));
+        var passes = Scorer.CallPasses(stdout).ToDictionary(c => c.Call, c => c.Pass);
+        Expect(passes.Count == 4 && passes[1] == 1 && passes[2] == 1 && passes[3] == 12 && passes[4] == 13,
+            "calls' passes: " + string.Join(", ", passes.Select(kv => $"{kv.Key}→{kv.Value}")));
+
+        PlantedGap Gap(string severity) => new("G", severity, "", new Keywords([["x"]]), null, []);
+        string Label(string severity, string line) => RunScore.LabelOf(new GapOutcome(Gap(severity), "caught", line, 1, false));
+        Expect(Label("high", "[high] x") == "same" && Label("medium", "High: x") == "one off" && Label("high", "(low) x") == "two off", "tags against the planted severity");
+        Expect(Label("medium", "x is missing") == "untagged" && Label("high", "High-level x") == "untagged", "an untagged gap");
+        Expect(RunScore.LabelOf(new GapOutcome(Gap("high"), "minor only", "[high] x", 1, false)) == "", "a gap not caught has no label");
     }
 
     private static void PlanRun()

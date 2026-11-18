@@ -174,6 +174,51 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task PlanGaps_TheShadowLine_EveryPass_AndAPauseKeepsItsStreak()
+    {
+        // 2026-11-17, phase 3: the plan shadow logged once a pass, with the stop the screen goes on to use; a review paused for a message and
+        // resumed keeps its loop, so pass 2's shadow streak carries pass 1's.
+        _settings.Update(d => d.PlanGapCleanPasses = 1);
+        PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/plan gaps resume", "/exit");
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 2 && update == 0)
+            {
+                Assert.Equal(WebOutcome.Ok, Web.Send(new WebSendRequest { Text = "add a test step too" }, null).Outcome);
+            }
+
+            return Task.CompletedTask;
+        };
+        _chat.Enqueue(PresentPlanCall());                                                 // 0
+        _chat.EnqueueText("Closing the gaps.");                                           // 1
+        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "[low] Add a test step"));   // 2: pass 1, one low gap
+        _chat.EnqueueText("Pass 1 done.");                                                // 3: then paused
+        _chat.EnqueueText("Added.");                                                      // 4: the page's line
+        _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown));                        // 5: /plan gaps resume: pass 2, nothing left
+        _chat.EnqueueText("Canceled.");                                                   // 6
+        var shadow = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith(PlanText.ShadowLogPrefix, StringComparison.Ordinal)) shadow.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Contains(PlanText.GapsPausedNotice(1), output);
+        Assert.Equal(
+            ["plan gaps shadow: pass 1: 1 low; shadow streak 1 of 1, would converge; real: you spoke",
+             "plan gaps shadow: pass 2: no gaps; shadow streak 2 of 1, would converge; real: converged"],
+            shadow);
+        // The tag is the gap's own text: the user sees it as sent.
+        Assert.Contains("[low] Add a test step", output);
+    }
+
+    [Fact]
     public async Task PlanGaps_ResumeAfterThePlanChanged_IsRefused()
     {
         PlanFixture([[Keys.Char('g'), Keys.Enter]], "/plan Add a guide", "/plan gaps resume", "/plan show", "/exit");

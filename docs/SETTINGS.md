@@ -354,6 +354,7 @@ Plan mode's gap review, the Ralph loop and code audits: jobs the model runs pass
 | Ralph loop stop tone | Rung when a loop stops on its own (done, blocked, stalled…) or a step waits for your check, never on Esc: silent, chime, bell, beep or alarm. | silent |
 | Code audit max passes | The most passes a [code audit](COMMANDS.md#code-audit) runs before its done pane (0–100; 0 is no cap, 100 headless). Esc stops it; a count on `/code-audit` overrides it. | 5 |
 | Code audit clean passes | Passes in a row finding nothing new that end an audit (1–5). A pass after a clean one reads unread files first; `/code-audit confirm` needs at least 2. | 2 |
+| Code audit low keeps streak | On, a pass that changed only low findings (or a finding's line, fix or evidence) still counts toward *Code audit clean passes*. Medium or higher, a retraction or new detail restarts it. | off |
 | Code audit ask user | Whether a pass may ask you, take a photo or capture the screen. Off, or without `ask_user`, a question only you can answer goes in the report's Open questions. | on |
 | Code audit focus | What a `/code-audit` naming none covers: security, correctness, performance, maintainability and tests; at least one stays ticked. | all |
 | Code audit web research | Gives passes `web_search`, `web_fetch` and `web_links`. Off by default: audited code may carry instructions that send code out. Off, an advisor asked in a pass gets none either. | off |

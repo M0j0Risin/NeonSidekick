@@ -75,6 +75,48 @@ public partial class SidekickAppTests
     }
 
     [Fact]
+    public async Task Headless_CodeAudit_LowKeepsStreak_ALowPassCounts_AndNeverSaysNothingNew()
+    {
+        // 2026-11-17, phase 3 (Code audit low keeps streak on): pass 1 serious, pass 2 only a low finding (clean to the streak), pass 3 a low
+        // revision that converges. The pass lines, the log and the stop say the low changes; the model hears what any recorded call hears.
+        ServerOn1234("llama");
+        HeadlessAuditFiles();
+        _settings.Update(d => d.CodeAuditLowKeepsStreak = true);
+        _chat.Enqueue(FakeChatClient.Call("r1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "src/a.cs" }));
+        _chat.Enqueue(HeadlessAuditCall("a1", "{\"findings\":[{\"severity\":\"high\",\"dimension\":\"security\",\"file\":\"src/a.cs\",\"line\":3,\"title\":\"SQL built from input\",\"detail\":\"Joined.\"}]}"));
+        _chat.EnqueueText("Pass 1.");
+        _chat.Enqueue(HeadlessAuditCall("a2", "{\"findings\":[{\"severity\":\"low\",\"dimension\":\"maintainability\",\"file\":\"src/a.cs\",\"line\":1,\"title\":\"Class not sealed\",\"detail\":\"Could be sealed.\"}]}"));
+        _chat.EnqueueText("Pass 2.");
+        _chat.Enqueue(HeadlessAuditCall("a3", "{\"revise\":[{\"id\":\"A2\",\"fix\":\"Seal it.\"}]}"));
+        _chat.EnqueueText("Pass 3.");
+        var log = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith("code audit", StringComparison.Ordinal)) log.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await Headless("/code-audit src\n");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        string path = HeadlessAuditPath;
+        string name = Path.GetFileNameWithoutExtension(path);
+        Assert.Contains("[notice] " + AuditText.CleanPassNotice(2, 5, 1, 2, light: 1), output);
+        Assert.Contains(log, l => l.StartsWith("code audit: pass 2 ended, 1 low change only", StringComparison.Ordinal));
+        Assert.Contains(log, l => l.StartsWith("code audit: pass 2 clean (low changes only); new: A2 Class not sealed", StringComparison.Ordinal));
+        // Pass 3 is the confirming one: told the last pass found only low changes; its result the recorded part, then the convergence.
+        Assert.Contains("You: " + AuditText.PassMessage("src", path, 3, 5, PlanReviewer.Model, AuditFocus.PassFocus(AuditFocus.Dimensions, 1).Short, 1, lastLight: 1), output);
+        var results = _chat.Requests[^1].SelectMany(m => m.Contents).OfType<FunctionResultContent>().Select(r => r.Result?.ToString() ?? "").ToList();
+        Assert.Contains(results, r => r.StartsWith("Recorded in " + path + ": A2 revised. Nothing new but low changes: the audit converged after 3 passes (2 clean passes in a row)", StringComparison.Ordinal));
+        Assert.Contains("[notice] " + AuditText.ConvergedNotice(name, 3, 2, 1, 1, pane: false, light: true), output);
+        Assert.DoesNotContain(log, l => l.StartsWith("code audit: pass 2 ended, nothing new", StringComparison.Ordinal) || l.StartsWith("code audit: pass 3 ended, nothing new", StringComparison.Ordinal));
+        Assert.Contains(log, l => l.StartsWith(AuditText.ShadowLogPrefix + " pass 3: no findings; shadow streak 2 of 2, would converge; real: converged", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Headless_CodeAudit_TheWorkingDirectoryChangedMidPass_StopsInItsOwnFolder()
     {
         // 2026-10-19, after the Ralph loop's reviews: the report and its coverage followed the working directory as the settings have it.

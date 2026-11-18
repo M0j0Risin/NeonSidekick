@@ -150,7 +150,7 @@ internal sealed partial class ChatScreen
             }
 
             int limit = parsed.Passes ?? effective.CodeAuditPasses;
-            return _audit.Start(chosen, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses);
+            return _audit.Start(chosen, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses, effective.CodeAuditLowKeepsStreak);
         }, out string? lockError, out string? unlocked, another: () => AuditFiles.Choose(_files, scope.NameLabel, now));
         if (loop is null)
         {
@@ -289,7 +289,7 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
-            return _audit.Start(held, scope, fresh.Header.Focus, fresh.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses);
+            return _audit.Start(held, scope, fresh.Header.Focus, fresh.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses, effective.CodeAuditLowKeepsStreak);
         }, out string? lockError, out string? unlocked);
         if (loop is null)
         {
@@ -445,7 +445,7 @@ internal sealed partial class ChatScreen
 
         var reviewer = offered ? loop.PassReviewer : PlanReviewer.Model;
         string focus = AuditFocus.PassFocus(_audit.Focus, loop.Confirmation).Short;
-        return AuditText.PassMessage(_audit.Scope!.Label, path, loop.Pass, loop.Limit, reviewer, focus, loop.CleanStreak);
+        return AuditText.PassMessage(_audit.Scope!.Label, path, loop.Pass, loop.Limit, reviewer, focus, loop.CleanStreak, loop.LastLight);
     }
 
     /// <summary>
@@ -730,13 +730,13 @@ internal sealed partial class ChatScreen
 
         var cost = loop.History.Count > 0 ? loop.History[^1] : null;
         bool advisorAsked = loop.AdvisorAskedThisPass;
-        DiagnosticLog.Info(AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, cost));
+        DiagnosticLog.Info(AppCategory, AuditText.PassLogLine(loop.Pass, loop.PassGaps.Count, loop.PassMinor.Count, loop.PassClean, advisorAsked, cost, loop.PassLight.Count));
         DiagnosticLog.Info(AppCategory, AuditText.ShadowLogLine(loop.Pass, _audit.EndShadowPass(loop.Pass), loop.CleanPasses, stop, loop.PassClean, loop.CleanCount));
         if (stop is not { } reason)
         {
             _transcript.Notice(loop.PassGaps.Count > 0
                 ? AuditText.PassDoneNotice(loop.Pass, loop.Limit, loop.PassGaps.Count, loop.PassMinor.Count, coverage.Read, coverage.Scope)
-                : AuditText.CleanPassNotice(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses), NoticeTone.Progress);
+                : AuditText.CleanPassNotice(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassLight.Count), NoticeTone.Progress);
             return new AuditAfterTurn(BeginAuditPass(loop, body), null);
         }
 
@@ -808,8 +808,8 @@ internal sealed partial class ChatScreen
         }
 
         _transcript.Notice(reason == PlanGapStop.Converged
-            ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope, pane: _pane.Enabled || FromWebNow, coverage.Unread.Count)
-            : AuditText.StopNotice(reason, name, loop.Pass), NoticeTone.Progress);
+            ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope, pane: _pane.Enabled || FromWebNow, coverage.Unread.Count, loop.StreakLight)
+            : AuditText.StopNotice(reason, name, loop.Pass, loop.PassLight.Count > 0), NoticeTone.Progress);
         return reason is PlanGapStop.Converged or PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed ? new AuditAfterTurn(null, path) : null;
     }
 
@@ -959,7 +959,7 @@ internal sealed partial class ChatScreen
 
         if (report.Clean)
         {
-            _transcript.Notice(AuditText.CleanNotice(report.Pass, report.CleanCount, report.CleanNeeded, report.Checked));
+            _transcript.Notice(AuditText.CleanNotice(report.Pass, report.CleanCount, report.CleanNeeded, report.Checked, report.Light));
         }
     }
 

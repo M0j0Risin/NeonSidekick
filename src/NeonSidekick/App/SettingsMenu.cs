@@ -1394,6 +1394,13 @@ public enum SettingsField
     /// which sits under the catalog by the user's ask; no reconnect (read at each arming), allowed mid-turn. Last in the enum, as every newcomer.
     /// </summary>
     EmbeddedIdleUnloadMinutes,
+
+    /// <summary>
+    /// A toggle: whether a code audit pass whose changes are all low keeps the clean streak (<see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/>,
+    /// 2026-11-17, phase 3 of the gap and audit improvements). Under <see cref="CodeAuditCleanPasses"/>; read when an audit starts or resumes.
+    /// Last in the enum, as every newcomer.
+    /// </summary>
+    CodeAuditLowKeepsStreak,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1904,7 +1911,7 @@ internal sealed partial class SettingsMenu
          SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded],
         [SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.PlanGapAskUser, SettingsField.PlanGapStopTone,
          SettingsField.RalphLoopReviewer, SettingsField.RalphLoopCheckpoint, SettingsField.RalphLoopPasses, SettingsField.RalphLoopPassesPerStep, SettingsField.RalphLoopCheckTimeoutSeconds, SettingsField.RalphLoopTokenBudget, SettingsField.RalphLoopStopTone,
-         SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone],
+         SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditLowKeepsStreak, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         [SettingsField.SttInput, SettingsField.SttDestination, SettingsField.SttPushToTalkKey, SettingsField.SttWhisperModel,
          SettingsField.SttWake, SettingsField.SttWakePhrase, SettingsField.SttVoskModel,
@@ -2434,7 +2441,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.TimerTools or SettingsField.FileDeletesToRecycleBin or SettingsField.FileCheckpoints or SettingsField.ClockTools or SettingsField.HelpTools
             or SettingsField.NetworkTools or SettingsField.NetworkCertificateStores or SettingsField.ServiceTools or SettingsField.ServiceWrites
             or SettingsField.TaskTools or SettingsField.TaskWrites or SettingsField.DirectoryTools
-            or SettingsField.PlanGapAskUser or SettingsField.CodeAuditAskUser or SettingsField.CodeAuditWebResearch;
+            or SettingsField.PlanGapAskUser or SettingsField.CodeAuditAskUser or SettingsField.CodeAuditWebResearch or SettingsField.CodeAuditLowKeepsStreak;
 
     public static string FieldName(SettingsField field) => field switch
     {
@@ -2524,6 +2531,7 @@ internal sealed partial class SettingsMenu
         SettingsField.RalphLoopStopTone => "Ralph loop stop tone",
         SettingsField.CodeAuditPasses => "Code audit max passes",
         SettingsField.CodeAuditCleanPasses => "Code audit clean passes",
+        SettingsField.CodeAuditLowKeepsStreak => "Code audit low keeps streak",
         SettingsField.CodeAuditAskUser => "Code audit ask user",
         SettingsField.CodeAuditFocus => "Code audit focus",
         SettingsField.CodeAuditWebResearch => "Code audit web research",
@@ -2967,6 +2975,7 @@ internal sealed partial class SettingsMenu
             SettingsField.RalphLoopStopTone => Timers.TimerTones.Normalize(data.RalphLoopStopTone),
             SettingsField.CodeAuditPasses => GapPasses(data.CodeAuditPasses),
             SettingsField.CodeAuditCleanPasses => GapPasses(data.CodeAuditCleanPasses),
+            SettingsField.CodeAuditLowKeepsStreak => OnOff(data.CodeAuditLowKeepsStreak),
             SettingsField.CodeAuditAskUser => OnOff(data.CodeAuditAskUser),
             SettingsField.CodeAuditFocus => CodeAuditFocusValue(data.CodeAuditFocus),
             SettingsField.CodeAuditWebResearch => OnOff(data.CodeAuditWebResearch),
@@ -8510,6 +8519,7 @@ internal sealed partial class SettingsMenu
             SettingsField.HelpTools => data.HelpTools,
             SettingsField.PlanGapAskUser => data.PlanGapAskUser,
             SettingsField.CodeAuditAskUser => data.CodeAuditAskUser,
+            SettingsField.CodeAuditLowKeepsStreak => data.CodeAuditLowKeepsStreak,
             SettingsField.CodeAuditWebResearch => data.CodeAuditWebResearch,
             SettingsField.FileDeletesToRecycleBin => data.FileDeletesToRecycleBin,
             SettingsField.FileCheckpoints => data.FileCheckpoints,
@@ -8653,6 +8663,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.HelpTools: data.HelpTools = on; break;
             case SettingsField.PlanGapAskUser: data.PlanGapAskUser = on; break;
             case SettingsField.CodeAuditAskUser: data.CodeAuditAskUser = on; break;
+            case SettingsField.CodeAuditLowKeepsStreak: data.CodeAuditLowKeepsStreak = on; break;
             case SettingsField.CodeAuditWebResearch: data.CodeAuditWebResearch = on; break;
             case SettingsField.FileDeletesToRecycleBin: data.FileDeletesToRecycleBin = on; break;
             case SettingsField.FileCheckpoints: data.FileCheckpoints = on; break;
@@ -8743,6 +8754,7 @@ internal sealed partial class SettingsMenu
         SettingsField.HelpTools => on ? "help tools enabled" : "help tools disabled",
         SettingsField.PlanGapAskUser => on ? "a gap pass may ask you, take a photo or capture the screen" : "a gap pass never waits on you; your calls go in as open questions",
         SettingsField.CodeAuditAskUser => on ? "an audit pass may ask you, take a photo or capture the screen" : "an audit pass never waits on you; questions go in the report",
+        SettingsField.CodeAuditLowKeepsStreak => on ? "a pass with only low changes keeps the clean streak, from the next audit" : "any change restarts the clean streak, from the next audit",
         SettingsField.CodeAuditWebResearch => on ? "an audit pass may search and read the web" : "an audit pass stays off the web",
         SettingsField.FileDeletesToRecycleBin => on ? "deleted files go to the " + Files.FileText.RecycleBinName : "deleted files skip the " + Files.FileText.RecycleBinName,
         SettingsField.FileCheckpoints => on ? "file checkpoints kept for /undo and /rewind" : "no new file checkpoints; those kept can still be put back",

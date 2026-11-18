@@ -80,9 +80,10 @@ public sealed record PlanPassMeter(DateTimeOffset At, long Tokens, long AdvisorT
 /// One pass of a gap review as the summary tells it (2026-10-17, <see cref="PlanText.ReviewSummaryLines"/>): its number, the gaps and
 /// minor fixes it reported, whether its last report was clean, the confirming focus (<see cref="PlanText.ConfirmFocuses"/>' index, -1 on
 /// a pass that was not confirming), whether an advisor did it under <see cref="PlanReviewer.Confirm"/>, and — when both ends were
-/// metered — its time and tokens.
+/// metered — its time and tokens. <paramref name="Light"/> (2026-11-17, <see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/>): the
+/// changes a clean report recorded that were low only, so a pass that had some is never told as "nothing new".
 /// </summary>
-public sealed record PlanPassRecord(int Pass, int Gaps, int Minor, bool Clean, int Focus, bool Advisor = false, TimeSpan? Elapsed = null, long? Tokens = null, long? AdvisorTokens = null);
+public sealed record PlanPassRecord(int Pass, int Gaps, int Minor, bool Clean, int Focus, bool Advisor = false, TimeSpan? Elapsed = null, long? Tokens = null, long? AdvisorTokens = null, int Light = 0);
 
 /// <summary>
 /// The gap-closing loop (2026-10-13, the user's ask: a <c>Close gaps…</c> choice on the plan's approval pane that keeps
@@ -104,6 +105,7 @@ public sealed class PlanGapLoop
 {
     private List<string> _passGaps = [];
     private List<string> _passMinor = [];
+    private List<string> _passLight = [];
     private readonly List<PlanPassRecord> _history = [];
     private string? _baseline;
     private PlanPassMeter? _passStart;
@@ -202,6 +204,40 @@ public sealed class PlanGapLoop
     /// <summary>The minor fixes this pass reported (2026-10-17), in order.</summary>
     public IReadOnlyList<string> PassMinor => _passMinor;
 
+    /// <summary>
+    /// The changes this pass's clean reports recorded (2026-11-17, <see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/>: an audit's
+    /// low-only changes keep the streak), in order. Never gaps: <see cref="CleanCount"/> doesn't see them.
+    /// </summary>
+    public IReadOnlyList<string> PassLight => _passLight;
+
+    /// <summary>The light changes the pass before this one recorded (2026-11-17, <see cref="PlanPassRecord.Light"/>); 0 on the first pass.</summary>
+    public int LastLight => _history.Count > 0 && Pass > 0 && _history[^1].Pass == Pass - 1 ? _history[^1].Light : 0;
+
+    /// <summary>
+    /// Whether the clean streak this pass stands on (<see cref="CleanCount"/> passes, this one last) holds light changes (2026-11-17): what a
+    /// convergence's texts read, so one that light changes kept is never told as "nothing new". Right before and after <see cref="Next"/> records
+    /// the pass.
+    /// </summary>
+    public bool StreakLight
+    {
+        get
+        {
+            if (_passLight.Count > 0)
+            {
+                return true;
+            }
+
+            int before = _passRecorded && Pass > 0 && _history.Count > 0 && _history[^1].Pass == Pass ? _history.Count - 1 : _history.Count;
+            return _history.Take(before).TakeLast(Math.Max(0, CleanCount - 1)).Any(r => r.Light > 0);
+        }
+    }
+
+    /// <summary>
+    /// The review's shadow streak (2026-11-17, <see cref="GapShadow"/>): logged only. Its life is the loop's, so a new review or audit starts
+    /// it at 0 and a paused review resumed keeps it.
+    /// </summary>
+    public GapShadow Shadow { get; } = new();
+
     /// <summary>What this pass's latest clean report said it checked (2026-10-17, <c>present_plan</c>'s <c>checked</c>); empty otherwise.</summary>
     public IReadOnlyList<string> PassChecked { get; private set; } = [];
 
@@ -251,6 +287,7 @@ public sealed class PlanGapLoop
         CleanStreak = Pass > 0 && PassClean ? CleanCount : 0;
         _passGaps = [];
         _passMinor = [];
+        _passLight = [];
         PassChecked = [];
         PassClean = false;
         Presented = 0;
@@ -333,23 +370,36 @@ public sealed class PlanGapLoop
         AddMinor(minor);
     }
 
-    /// <summary>A revision presented with no gaps that does not end the review yet (2026-10-17): the streak grows when the pass ends.</summary>
-    public void MarkClean(IReadOnlyList<string>? @checked = null, IReadOnlyList<string>? minor = null)
+    /// <summary>
+    /// A revision presented with no gaps that does not end the review yet (2026-10-17): the streak grows when the pass ends. <paramref name="light"/>
+    /// (2026-11-17): changes it recorded that keep the streak (<see cref="PassLight"/>).
+    /// </summary>
+    public void MarkClean(IReadOnlyList<string>? @checked = null, IReadOnlyList<string>? minor = null, IReadOnlyList<string>? light = null)
     {
         Presented++;
         PassClean = true;
         PassChecked = @checked ?? [];
         AddMinor(minor);
+        AddLight(light);
     }
 
-    /// <summary>A revision presented with no gaps that ends the review (<see cref="WouldConverge"/>): the loop has converged.</summary>
-    public void MarkConverged(IReadOnlyList<string>? @checked = null, IReadOnlyList<string>? minor = null)
+    /// <summary>A revision presented with no gaps that ends the review (<see cref="WouldConverge"/>): the loop has converged. <paramref name="light"/> as <see cref="MarkClean"/>'s.</summary>
+    public void MarkConverged(IReadOnlyList<string>? @checked = null, IReadOnlyList<string>? minor = null, IReadOnlyList<string>? light = null)
     {
         Presented++;
         PassClean = true;
         Converged = true;
         PassChecked = @checked ?? [];
         AddMinor(minor);
+        AddLight(light);
+    }
+
+    private void AddLight(IReadOnlyList<string>? light)
+    {
+        if (light is { Count: > 0 })
+        {
+            _passLight.AddRange(light);
+        }
     }
 
     private void AddMinor(IReadOnlyList<string>? minor)
@@ -418,16 +468,19 @@ public sealed class PlanGapLoop
         }
 
         int focus = Confirmation > 0 ? (Confirmation - 1) % _focusCount : -1;
-        _history.Add(new PlanPassRecord(Pass, _passGaps.Count, _passMinor.Count, PassClean, focus, _passAdvisor, elapsed, tokens, advisorTokens));
+        _history.Add(new PlanPassRecord(Pass, _passGaps.Count, _passMinor.Count, PassClean, focus, _passAdvisor, elapsed, tokens, advisorTokens, _passLight.Count));
     }
 
-    /// <summary>The same gaps, order aside: trimmed, case aside, as sets.</summary>
+    /// <summary>
+    /// The same gaps, order aside: trimmed, case aside, as sets. A gap's severity tag is set aside (2026-11-17, <see cref="PlanGapTags"/>), so a
+    /// gap relabeled from <c>[medium]</c> to <c>[high]</c> is still the same gap.
+    /// </summary>
     public static bool SameGaps(IReadOnlyList<string> a, IReadOnlyList<string> b)
     {
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
-        var left = new HashSet<string>(a.Select(g => g.Trim()), StringComparer.OrdinalIgnoreCase);
-        var right = new HashSet<string>(b.Select(g => g.Trim()), StringComparer.OrdinalIgnoreCase);
+        var left = new HashSet<string>(a.Select(g => PlanGapTags.Read(g).Text), StringComparer.OrdinalIgnoreCase);
+        var right = new HashSet<string>(b.Select(g => PlanGapTags.Read(g).Text), StringComparer.OrdinalIgnoreCase);
         return left.SetEquals(right);
     }
 }

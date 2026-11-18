@@ -139,6 +139,47 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public async Task CodeAudit_LowKeepsStreak_ALowPassShowsItsFinding_ThenTheLowChangeLine_AndConverges()
+    {
+        // 2026-11-17, phase 3 (Code audit low keeps streak on): pass 2 adds only a low finding, so its finding shows and then the clean line
+        // naming the low change; pass 3 confirms. Nothing calls pass 2 "nothing new".
+        _settings.Update(d => d.CodeAuditLowKeepsStreak = true);
+        AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
+        _chat.Enqueue(ReadCall("r1"));
+        _chat.Enqueue(FindingCall("a1"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.Enqueue(AuditCall("a2", "{\"findings\":[{\"severity\":\"low\",\"dimension\":\"security\",\"file\":\"src/a.cs\",\"line\":1,\"title\":\"Class not sealed\",\"detail\":\"Could be sealed.\"}]}"));
+        _chat.EnqueueText("Pass 2 done.");
+        _chat.Enqueue(CleanCall("a3"));
+        _chat.EnqueueText("Pass 3 done.");
+        var log = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith("code audit", StringComparison.Ordinal)) log.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        string path = AuditPath;
+        string name = Path.GetFileNameWithoutExtension(path);
+        Assert.Contains("🔎 Pass 2: A2 [low] src/a.cs:1 — Class not sealed", output);
+        Assert.Contains(AuditText.CleanNotice(2, 1, 2, [], light: 1), output);
+        Assert.Contains(AuditText.CleanPassNotice(2, 5, 1, 2, light: 1), output);
+        Assert.Contains(log, l => l.StartsWith("code audit: pass 2 ended, 1 low change only", StringComparison.Ordinal));
+        Assert.DoesNotContain(log, l => l.StartsWith("code audit: pass 2 ended, nothing new", StringComparison.Ordinal));
+        Assert.Equal(AuditText.PassMessage("src", path, 3, 5, PlanReviewer.Model, "security: " + AuditText.ConfirmAngles[0], cleanSoFar: 1, lastLight: 1), LastUserText(_chat.Requests[5]));
+        Assert.Contains("- The last pass found only low changes; this pass checks again (clean pass 2 of 2)", _chat.Requests[5][0].Text);
+        Assert.Contains(AuditText.ConvergedNotice(name, 3, 2, 1, 1, pane: true, light: true), output);
+        Assert.Equal(AuditStatus.Converged, AuditReportNow.Header.Status);
+        Assert.Equal("3 passes, 2 clean in a row, 1 of 1 files read (100%)", AuditReportNow.Header.Passes);
+    }
+
+    [Fact]
     public async Task CodeAudit_TheWorkingDirectoryChangedMidPass_RecordsNothing_AndStopsInItsOwnFolder()
     {
         // 2026-10-19, after the Ralph loop's reviews: the audit read and wrote its report through the working directory as the settings have it, so a

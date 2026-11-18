@@ -191,6 +191,7 @@ public static partial class HelpSettings
         SettingsField.RalphLoopStopTone => "The tone played when a Ralph loop ends, or waits for your check: silent, chime, bell, beep or alarm. Never for a stop you caused. This PC only.",
         SettingsField.CodeAuditPasses => "The most passes a /code-audit may run before it reports (0–100; 0 = no cap).",
         SettingsField.CodeAuditCleanPasses => "The passes in a row that must find nothing new before a code audit ends (1–5).",
+        SettingsField.CodeAuditLowKeepsStreak => "Lets a code audit pass that changed only low-severity findings count toward the clean passes in a row. Medium and higher still restart it.",
         SettingsField.CodeAuditAskUser => "Lets a code audit pass ask you questions, take a photo or capture the screen. Off, its questions go into the report.",
         SettingsField.CodeAuditFocus => "The areas a /code-audit covers when you name none: security, correctness, performance, maintainability and tests. At least one stays ticked.",
         SettingsField.CodeAuditWebResearch => "Gives code audit passes web search and fetch. Audited code may carry instructions that would send code out, so turn it on only for code you trust.",

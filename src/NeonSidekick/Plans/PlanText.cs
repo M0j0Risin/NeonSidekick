@@ -517,6 +517,40 @@ public static class PlanText
     }
 
     /// <summary>
+    /// The plan shadow's <c>--log</c> line, once a pass right after it is decided (2026-11-17, phase 3 of the gap and audit improvements, logged
+    /// only), in the audit's shape (<see cref="Audits.AuditText.ShadowLogLine"/>): the gaps the pass closed by tag (<see cref="PlanGapSeverity"/>'s
+    /// order), whether it was serious, the shadow streak against <paramref name="needed"/>, and the real verdict beside it.
+    /// </summary>
+    public static string ShadowLogLine(int pass, GapShadowPass shadow, int needed, PlanGapStop? stop, bool passClean, int cleanCount)
+    {
+        ArgumentNullException.ThrowIfNull(shadow);
+        string[] names = ["high", "medium", "low", "untagged"];
+        var counts = shadow.Severities.Select((n, i) => (n, i)).Where(c => c.n > 0).Select(c => $"{N(c.n)} {names[c.i]}").ToList();
+        string did = !shadow.Called ? "no present_plan" : (counts.Count > 0 ? string.Join(", ", counts) : "no gaps") + (shadow.Serious ? " (serious)" : "");
+        string real = stop is { } reason ? StopWord(reason) : passClean ? $"clean {N(cleanCount)} of {N(needed)}" : "found something";
+        return $"{ShadowLogPrefix} pass {N(pass)}: {did}; shadow streak {N(shadow.Streak)} of {N(needed)}"
+            + (shadow.Streak >= needed ? ", would converge" : "") + "; real: " + real;
+    }
+
+    /// <summary>The plan shadow line's prefix, for a log search.</summary>
+    public const string ShadowLogPrefix = "plan gaps shadow:";
+
+    /// <summary>
+    /// A stop's reason as a log or header word (2026-11-17, from <see cref="Audits.AuditText.StopWord"/>, which now reads it here): limit, stalled,
+    /// unconfirmed, no report, interrupted (Esc, a failure), you spoke, converged. Not the summary's ending word.
+    /// </summary>
+    public static string StopWord(PlanGapStop reason) => reason switch
+    {
+        PlanGapStop.Limit => "limit",
+        PlanGapStop.Stalled => "stalled",
+        PlanGapStop.Unconfirmed => "unconfirmed",
+        PlanGapStop.NoRevision => "no report",
+        PlanGapStop.UserSpoke => "you spoke",
+        PlanGapStop.Converged => "converged",
+        _ => "interrupted (Esc, a failure)",
+    };
+
+    /// <summary>
     /// What each confirming pass looks hardest at (2026-10-17, the user's pick of idea #1), in turn: the loop's <see cref="PlanGapLoop.Confirmations"/>
     /// counts across streaks, the sixth wrapping to the first. Pinned. The fifth (later on 2026-10-18): each step's size and the plan's length,
     /// what a Ralph loop needs (<see cref="PlanFit"/>).
@@ -936,7 +970,7 @@ public static class PlanText
             (web
                 ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. " + decision + "\n"
                 : "- Research what you need with the read-only tools. " + decision + "\n") +
-            "- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed; put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. " +
+            "- Then call present_plan with the whole revised plan and gaps, one short line for each gap this pass closed, each starting with [high] (the plan would fail or build the wrong thing), [medium] (someone would have to guess a choice that matters, or stop to ask) or [low] (a short stop or a little rework, quickly sorted out: a step missing its Done when:, say); put a small fix that is not a gap (wording, formatting, a clarification nobody would stop over) in minor instead. " +
             "If you find no gaps, call present_plan with the plan as it stands (or with only minor fixes), gaps empty, and checked: one short line for each part you checked." +
             (reviewer.Length > 0 ? "\n" + reviewer : "");
     }
