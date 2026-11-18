@@ -13,7 +13,8 @@
       "what": "Store.bulk_insert doesn't exist: the plan calls a method nobody writes.",
       "match": [["bulk_insert"]],
       "fixed": [["add", "write", "implement", "new", "create"], ["bulk_insert"]],
-      "gone": ["bulk_insert"]
+      "gone": ["bulk_insert"],
+      "inPlan": true
     },
     {
       "id": "C3",

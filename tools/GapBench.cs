@@ -266,7 +266,13 @@ sealed record Keywords(IReadOnlyList<string[]> Groups)
     public override string ToString() => string.Join(" + ", Groups.Select(g => "(" + string.Join(" | ", g) + ")"));
 }
 
-sealed record PlantedGap(string Id, string Severity, string What, Keywords Match, Keywords? Fixed, IReadOnlyList<string> Gone);
+/// <summary>
+/// A planted gap. <paramref name="Hits"/> and <paramref name="Misses"/> (2026-11-18, the keyword check) are lines a reviewer wrote that must or must not
+/// match it, and <paramref name="InPlan"/> lets its match fit a line of the starting plan (C2's <c>bulk_insert</c>, the method the plan calls); only
+/// <c>--check</c> reads them.
+/// </summary>
+sealed record PlantedGap(string Id, string Severity, string What, Keywords Match, Keywords? Fixed, IReadOnlyList<string> Gone,
+    IReadOnlyList<string>? Hits = null, IReadOnlyList<string>? Misses = null, bool InPlan = false);
 
 sealed record PlanItem(string Name, string PlanPath, string ExpectPath, IReadOnlyList<PlantedGap> Gaps, bool Control, string? Chat, Keywords? Decision, Keywords? Reargue, IReadOnlyList<string> Absent);
 
@@ -353,7 +359,10 @@ sealed class Material
                 gaps.Add(new PlantedGap(
                     Str(g, "id"), Str(g, "severity"), Str(g, "what"), Groups(g.GetProperty("match")),
                     g.TryGetProperty("fixed", out var f) ? Groups(f) : null,
-                    g.TryGetProperty("gone", out var gone) ? Strings(gone) : []));
+                    g.TryGetProperty("gone", out var gone) ? Strings(gone) : [],
+                    g.TryGetProperty("hits", out var hits) ? Strings(hits) : [],
+                    g.TryGetProperty("misses", out var misses) ? Strings(misses) : [],
+                    g.TryGetProperty("inPlan", out var inPlan) && inPlan.GetBoolean()));
             }
         }
 
@@ -2267,6 +2276,8 @@ static class Checker
             }
         }
 
+        problems.AddRange(KeywordProblems($"{where}.expect.json", plan.Gaps, body));
+
         if (plan.Control && plan.Gaps.Count > 0)
         {
             problems.Add($"{where}.expect.json: a control plan has no planted gaps");
@@ -2297,6 +2308,55 @@ static class Checker
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// How well the planted gaps' <c>match</c> keywords fit (2026-11-18, the keyword check, once a scratch script): each matches its own <c>what</c> and no
+    /// other gap's; none fits a line of the starting plan (a reported line often quotes the plan), unless the gap says <c>inPlan</c>; every <c>hits</c>
+    /// line matches its gap and no other, unless that other lists it too (a line that reports both); no <c>misses</c> line matches. Old runs' gap lines
+    /// are left to a by-hand read: they live in <c>publish/</c>, which isn't tracked.
+    /// </summary>
+    internal static List<string> KeywordProblems(string where, IReadOnlyList<PlantedGap> gaps, string body)
+    {
+        var problems = new List<string>();
+        static string Cut(string line) => line.Length > 100 ? line[..100] + "…" : line;
+        foreach (var gap in gaps)
+        {
+            if (!gap.Match.In(gap.What))
+            {
+                problems.Add($"{where}: {gap.Id}'s match doesn't match its own what");
+            }
+
+            foreach (var other in gaps.Where(o => o != gap && gap.Match.In(o.What)))
+            {
+                problems.Add($"{where}: {gap.Id}'s match matches {other.Id}'s what");
+            }
+
+            if (!gap.InPlan && gap.Match.LineIn(body) is { } planLine)
+            {
+                problems.Add($"{where}: {gap.Id}'s match fits a line of the starting plan (inPlan: true allows it): «{Cut(planLine)}»");
+            }
+
+            foreach (string hit in gap.Hits ?? [])
+            {
+                if (!gap.Match.In(hit))
+                {
+                    problems.Add($"{where}: {gap.Id}'s match misses its hit «{Cut(hit)}»");
+                }
+
+                foreach (var other in gaps.Where(o => o != gap && o.Match.In(hit) && !(o.Hits ?? []).Contains(hit)))
+                {
+                    problems.Add($"{where}: {other.Id}'s match claims {gap.Id}'s hit «{Cut(hit)}» (list it as {other.Id}'s hit too if it reports both)");
+                }
+            }
+
+            foreach (string miss in (gap.Misses ?? []).Where(gap.Match.In))
+            {
+                problems.Add($"{where}: {gap.Id}'s match matches its miss «{Cut(miss)}»");
+            }
+        }
+
+        return problems;
     }
 
     private static void CheckAudit(Material m, AuditItem audit, List<string> problems)
@@ -2414,6 +2474,7 @@ static class SelfTest
         PlanRun();
         StepChangesRun();
         ItemHashRun();
+        KeywordRun();
         AuditRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
@@ -2744,6 +2805,35 @@ static class SelfTest
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    /// <summary>The keyword check's five rules (2026-11-18), each broken once on built gaps, and a clean set that passes.</summary>
+    private static void KeywordRun()
+    {
+        const string body = "# Plan\n\n- [ ] Add `remove_member`.\n  Done when: it prints removed.";
+        PlantedGap Gap(string id, string what, string[][] match, string[]? hits = null, string[]? misses = null, bool inPlan = false) =>
+            new(id, "high", what, new Keywords(match), null, [], hits, misses, inPlan);
+        var a = Gap("A", "the foreign key fails the delete", [["foreign key"]], ["a foreign key line", "both: foreign key and renewal"], ["a renewal line"]);
+        var b = Gap("B", "renewals are never saved", [["renewal"]], ["a renewal is lost", "both: foreign key and renewal"]);
+        Expect(Checker.KeywordProblems("x", [a, b], body).Count == 0, "a clean set, with a line that is a hit of both: " + string.Join(" / ", Checker.KeywordProblems("x", [a, b], body)));
+
+        bool Flags(string what, IReadOnlyList<PlantedGap> gaps, string text)
+        {
+            var found = Checker.KeywordProblems("x", gaps, body);
+            bool ok = found.Any(p => p.Contains(text, StringComparison.Ordinal));
+            Expect(ok, $"{what}: wanted «{text}», got: {string.Join(" / ", found)}");
+            return ok;
+        }
+
+        Flags("rule 1", [a with { What = "the delete fails" }, b], "A's match doesn't match its own what");
+        Flags("rule 2", [a with { What = "the foreign key fails the renewal" }, b], "B's match matches A's what");
+        Flags("rule 3", [a with { Match = new Keywords([["remove_member"]]), What = "remove_member fails", Hits = [] }, b], "A's match fits a line of the starting plan");
+        Expect(Checker.KeywordProblems("x", [a with { Match = new Keywords([["remove_member"]]), What = "remove_member fails", Hits = [], InPlan = true }, b], body).Count == 0,
+            "inPlan allows a match on a plan line");
+        Flags("rule 4, a missed hit", [a with { Hits = ["nothing here"] }, b], "A's match misses its hit");
+        Flags("rule 4, a hit of one gap claimed by another", [a, b with { Hits = ["a renewal is lost"] }, Gap("C", "the renewal cap", [["renewal cap"]], ["the renewal cap is off"])],
+            "B's match claims C's hit");
+        Flags("rule 5", [a with { Misses = ["a foreign key line"] }, b], "A's match matches its miss");
     }
 
     private static void AuditRun()

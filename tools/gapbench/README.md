@@ -44,5 +44,8 @@ have stopped a review before a planted gap was caught, and how the gaps' severit
   `- [ ]` lines, each with `Done when:`.
 - A run records the hash of what the model saw (`repo/` and its plan). On `--score`, a changed plan flags only its own
   runs, a change to `repo/` flags them all, and a keyword change in an `expect.json` flags none.
-- After any change, `--check` must pass. It checks every snippet against its line, the plans' shape, and that
-  `repo/`'s tests pass.
+- After any change, `--check` must pass. It checks every snippet against its line, the plans' shape, each gap's
+  keywords, and that `repo/`'s tests pass.
+- `--check` also holds each gap's `match` to its own `what` and no other gap's, and keeps it off the starting plan's
+  lines (`inPlan: true` allows a quote, as C2's). Optional `hits` and `misses` hold lines a reviewer wrote that must or
+  must not match. Read the old runs' gap lines by hand when you widen a `match`.

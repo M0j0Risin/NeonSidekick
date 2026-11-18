@@ -6,14 +6,42 @@
       "severity": "high",
       "what": "Nothing says what leave does to a member who still has a book out. It should refuse with a LoanError (return the book first). As planned, the DELETE raises IntegrityError, which main doesn't catch, so the command crashes with a traceback.",
       "match": [["leav", "remov", "delet"], ["still has", "open-loan refusal", "an open loan exists", "open loans exist", "refuse open loans", "refuses open loans", "book out", "books out", "still out", "checked out", "currently has", "has a book lent", "has books lent", "has open loans", "has an open loan", "has a loan", "still borrow", "still lent", "outstanding", "unreturned", "with an open loan", "with open loans"]],
-      "fixed": [["leav", "remov"], ["still has", "open-loan refusal", "an open loan exists", "open loans exist", "refuse open loans", "refuses open loans", "book out", "books out", "still out", "checked out", "currently has", "has a book lent", "has books lent", "has open loans", "has an open loan", "has a loan", "still borrow", "still lent", "outstanding", "unreturned", "with an open loan", "with open loans"], ["refus", "error", "exit 1"]]
+      "fixed": [["leav", "remov"], ["still has", "open-loan refusal", "an open loan exists", "open loans exist", "refuse open loans", "refuses open loans", "book out", "books out", "still out", "checked out", "currently has", "has a book lent", "has books lent", "has open loans", "has an open loan", "has a loan", "still borrow", "still lent", "outstanding", "unreturned", "with an open loan", "with open loans"], ["refus", "error", "exit 1"]],
+      "hits": [
+        "[high] leave doesn't say what happens to a member with books still out",
+        "[high] shelf leave on a member who currently has a book lent should be refused",
+        "[high] removing a member who has books checked out is undefined",
+        "[high] leave must refuse while the member has open loans",
+        "[high] what does remove_member do if the member is still borrowing a book?",
+        "[medium] leaving a member with open loans was undecided and the Verification sequence lends to member 1; specified refusal rule",
+        "[high] remove_member now refuses while an open loan exists",
+        "[high] step 3's plain DELETE would fail under the enabled foreign keys (loans.member_id REFERENCES members(id)): a member with any loan row \u2014 even returned ones \u2014 could never leave; remove_member now clears the member's loan rows in one transaction and refuses while an open loan exists",
+        "[high] remove_member's plain DELETE fails with IntegrityError whenever any loan row references the member (FKs are ON), even for returned loans; specified open-loan refusal plus delete-with-member in one transaction",
+        "[high] remove_member would hit the loans\u2192members FK (uncaught IntegrityError crash, even for members with only returned loans) \u2014 pinned: refuse open loans, delete the member's loan rows, check unknown ids first."
+      ],
+      "misses": [
+        "wording: the Context renewals bullet no longer attributes an increment to loans.renew; step 4 says 'any loan row keeps the member' so the leave test can't be read as open-loan-only.",
+        "[medium] with the soft delete, a member who left can't rejoin: members.email is UNIQUE, so shelf join fails for their address"
+      ]
     },
     {
       "id": "M2",
       "severity": "high",
       "what": "Past loans still reference the member (loans.member_id REFERENCES members(id), PRAGMA foreign_keys = ON), so the DELETE fails with IntegrityError for anyone who ever borrowed. Deleting their loans instead loses the history shelf export writes.",
       "match": [["foreign key", "foreign_keys", "fk on", "fk constraint", "references members", "references the member", "reference the member", "loans.member_id", "loan history", "returned loans", "past loans", "any loan row", "loan rows"], ["returned", "ever borrowed", "any loan", "history", "past loan", "loan row", "old loan"]],
-      "fixed": [["soft delete", "soft-delete", "left_on", "anonymi", "deactivat", "is_active", "inactive", "active column", "left flag", "`left` flag", "instead of deleting", "rather than deleting", "keeps their loan", "keep their loan"]]
+      "fixed": [["soft delete", "soft-delete", "left_on", "anonymi", "deactivat", "is_active", "inactive", "active column", "left flag", "`left` flag", "instead of deleting", "rather than deleting", "keeps their loan", "keep their loan"]],
+      "hits": [
+        "[high] remove_member will fail: the loans table references the member, so the DELETE raises IntegrityError for anyone who ever borrowed",
+        "[high] DELETE FROM members fails once a member has any loan row (FK on loans.member_id), returned or not",
+        "[high] a member with old, returned loans can never leave: their loan rows still point at them",
+        "[high] step 3's plain DELETE would fail under the enabled foreign keys (loans.member_id REFERENCES members(id)): a member with any loan row \u2014 even returned ones \u2014 could never leave; remove_member now clears the member's loan rows in one transaction and refuses while an open loan exists",
+        "[high] remove_member's plain DELETE fails with IntegrityError whenever any loan row references the member (FKs are ON), even for returned loans; specified open-loan refusal plus delete-with-member in one transaction",
+        "[high] remove_member would hit the loans\u2192members FK (uncaught IntegrityError crash, even for members with only returned loans) \u2014 pinned: refuse open loans, delete the member's loan rows, check unknown ids first."
+      ],
+      "misses": [
+        "[medium] Deleting a member with open loans would trip the FK constraint (`PRAGMA foreign_keys = ON`) and raise an uncaught `IntegrityError`",
+        "[medium] with the soft delete, a member who left can't rejoin: members.email is UNIQUE, so shelf join fails for their address"
+      ]
     },
     {
       "id": "M3",
@@ -21,7 +49,16 @@
       "what": "renew never saves renewals (audit bug B4), so renewals left always reads 2. The plan's Context claims it's counted.",
       "match": [["renewal"], ["never saves", "never saved", "doesn't save", "does not save", "never writes", "never written", "never updated", "not updated", "not incremented", "doesn't increment", "does not increment", "never increment", "not persisted", "discard", "doesn't store", "does not store", "never store", "not stored", "only updates due_on", "only sets due_on", "never reached", "always 0", "always 2", "always show 2", "always shows 2", "always print 2", "always prints 2", "never persist", "stays 0", "stays at 0"]],
       "fixed": [["renew"], ["renewals = ", "renewals=", "persist", "save the renewal", "saves the renewal", "write renewals", "update renewals", "set renewals"]],
-      "gone": ["counts each renewal in"]
+      "gone": ["counts each renewal in"],
+      "hits": [
+        "[medium] renew never writes loans.renewals, so 'renewals left' is always 2",
+        "[medium] the renewals column is not updated by renew, so the count stays 0",
+        "[medium] renew doesn't increment the renewals column, so renewals left is wrong",
+        "[medium] renew computes the new renewals count but discards it",
+        "[medium] the Context is wrong: loans.renew does not store renewals (audit B4)",
+        "[medium] renewals left is unreliable: renew only updates due_on",
+        "[high] Context claimed renew persists the renewals count; it does not (cap never enforced, 'renewals left' would always show 2)"
+      ]
     },
     {
       "id": "M4",
@@ -29,7 +66,16 @@
       "what": "Step 3's check runs shelf list, which lists books, not members, so it can't show the removal.",
       "match": [["shelf list", "cmd_list"], ["books", "titles", "not members", "no members", "not the members", "not who", "shows members", "show members", "lists members", "list members", "members at all", "never shows members", "doesn't list members", "does not list members", "the shelf, not"]],
       "fixed": [["done when"], ["leave"], ["no member", "shelf member 2", "member 2` prints", "exits 1"]],
-      "gone": ["no longer shows them"]
+      "gone": ["no longer shows them"],
+      "hits": [
+        "[medium] step 3's check uses `shelf list`, but that only prints titles, so it can't show the member is gone",
+        "[medium] `shelf list` never shows members at all, so 'no longer shows them' proves nothing",
+        "[medium] the leave step's Done when checks shelf list, which shows the shelf, not who the members are",
+        "[medium] step 3 verifies with shelf list, which lists books, not members"
+      ],
+      "misses": [
+        "[low] shelf list doesn't say which member has a lent book"
+      ]
     }
   ]
 }
