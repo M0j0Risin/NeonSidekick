@@ -42,5 +42,7 @@ have stopped a review before a planted gap was caught, and how the gaps' severit
 - A new plan is a `plans/<name>.md` and a `plans/<name>.expect.json`. The bench finds it; nothing is listed in code.
 - Keep keywords specific (`bulk_insert`, `migrat`, never `test`), and keep every plan in the app's shape: steps as
   `- [ ]` lines, each with `Done when:`.
+- A run records the hash of what the model saw (`repo/` and its plan). On `--score`, a changed plan flags only its own
+  runs, a change to `repo/` flags them all, and a keyword change in an `expect.json` flags none.
 - After any change, `--check` must pass. It checks every snippet against its line, the plans' shape, and that
   `repo/`'s tests pass.

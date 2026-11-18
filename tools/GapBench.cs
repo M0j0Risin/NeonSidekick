@@ -400,14 +400,43 @@ sealed class Material
 
     /// <summary>
     /// SHA-256 over the material's files (paths with <c>/</c>, then the text with LF line endings), so a run records what it was scored against and <c>--score</c>
-    /// can say when the material changed since.
+    /// can say when the material changed since. Every file: a run from before <see cref="ItemHash"/> (2026-11-18) has only this one to compare.
     /// </summary>
-    public static string Hash(string root)
+    public static string Hash(string root) => HashFiles(root, _ => true);
+
+    /// <summary>
+    /// The hash of what one item's model saw (2026-11-18, late gaps): <c>repo/</c>, plus <c>plans/&lt;name&gt;.md</c> for a plan (the audit sees the repo
+    /// alone), so adding or changing another plan doesn't flag this item's runs. The <c>*.expect.json</c> files are left out: they are the scorer's key,
+    /// never shown to the model, and re-scoring after a keyword is tuned is what <c>--score</c> is for. A plan whose file is gone hashes <c>""</c>, so its
+    /// runs read as changed.
+    /// </summary>
+    public static string ItemHash(string root, string item)
+    {
+        string plan = "plans/" + item + ".md";
+        bool audit = item == AuditName;
+        if (!audit && !File.Exists(Path.Combine(root, plan)))
+        {
+            return "";
+        }
+
+        return HashFiles(root, f => f.StartsWith("repo/", StringComparison.Ordinal) || (!audit && f == plan));
+    }
+
+    /// <summary>
+    /// The items whose runs were scored against material that has changed since (2026-11-18), once each in ordinal order: a run that recorded an
+    /// <c>itemHash</c> is judged by its own item's, one from before that by the whole <see cref="Hash"/>.
+    /// </summary>
+    public static IReadOnlyList<string> ChangedItems(IEnumerable<(string Item, string? MaterialHash, string? ItemHash)> runs, string currentHash, Func<string, string> currentItemHash) =>
+        [.. runs.Where(r => r.ItemHash is { } own ? own != currentItemHash(r.Item) : r.MaterialHash != currentHash)
+            .Select(r => r.Item).Distinct().Order(StringComparer.Ordinal)];
+
+    private static string HashFiles(string root, Func<string, bool> include)
     {
         using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (string file in Directory.GetFiles(root, "*", SearchOption.AllDirectories)
                      .Where(f => !f.Contains("__pycache__", StringComparison.Ordinal) && !f.Contains(".pytest_cache", StringComparison.Ordinal))
                      .Select(f => Path.GetRelativePath(root, f).Replace('\\', '/'))
+                     .Where(include)
                      .Order(StringComparer.Ordinal))
         {
             sha.AppendData(Encoding.UTF8.GetBytes(file + "\0"));
@@ -1435,6 +1464,7 @@ static class Bench
 
         WriteBenchFile(outDir, o.Runs, o.Sets);
         string hash = Material.Hash(Repo.MaterialRoot);
+        var itemHashes = items.ToDictionary(i => i, i => Material.ItemHash(Repo.MaterialRoot, i), StringComparer.Ordinal);
         Console.WriteLine($"GapBench: {items.Count} items × {o.Runs} runs → {outDir}");
         Console.WriteLine($"  {version} · {baseUrl} · settings {settings.ToJsonString()}");
 
@@ -1465,7 +1495,7 @@ static class Bench
                 }
 
                 first = false;
-                var facts = await RunOneAsync(o, material, item, n, folder, exe, baseUrl, settings, version, hash, interrupt.Token);
+                var facts = await RunOneAsync(o, material, item, n, folder, exe, baseUrl, settings, version, hash, itemHashes[item], interrupt.Token);
                 if (facts is null)
                 {
                     Console.Error.WriteLine("Interrupted: the run in progress has no done.json, so a resume runs it again.");
@@ -1484,7 +1514,7 @@ static class Bench
         return exit;
     }
 
-    private static async Task<JsonObject?> RunOneAsync(Options o, Material m, string item, int n, string folder, string exe, string url, JsonObject settings, string version, string hash, CancellationToken interrupt)
+    private static async Task<JsonObject?> RunOneAsync(Options o, Material m, string item, int n, string folder, string exe, string url, JsonObject settings, string version, string hash, string itemHash, CancellationToken interrupt)
     {
         if (Directory.Exists(folder))
         {
@@ -1592,6 +1622,7 @@ static class Bench
             ["model"] = o.Model,
             ["settings"] = settings.DeepClone(),
             ["materialHash"] = hash,
+            ["itemHash"] = itemHash,
         };
         File.WriteAllText(Path.Combine(folder, "done.json"), facts.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         return facts;
@@ -1816,8 +1847,13 @@ static class Report
         md.AppendLine($"- Model: {Values(r => r.Log.ModelId)} at {Values(r => (string?)r.Facts["url"])}");
         md.AppendLine($"- Settings: {Values(r => r.Facts["settings"]?.ToJsonString())}");
         string hashes = Values(r => ((string?)r.Facts["materialHash"])?[..12]);
-        md.AppendLine($"- Material: {hashes}" + (runs.Any(r => (string?)r.Facts["materialHash"] != currentHash)
-            ? $" — **the material has changed since (now {currentHash[..12]})**: a moved bug line or a changed plan mis-scores these runs"
+        var itemHashes = new Dictionary<string, string>(StringComparer.Ordinal);
+        var changed = Material.ChangedItems(
+            runs.Select(r => (r.Item, (string?)r.Facts["materialHash"], (string?)r.Facts["itemHash"])),
+            currentHash,
+            item => itemHashes.TryGetValue(item, out string? h) ? h : itemHashes[item] = Material.ItemHash(Repo.MaterialRoot, item));
+        md.AppendLine($"- Material: {hashes}" + (changed.Count > 0
+            ? $" — **changed since for {string.Join(", ", changed)}**: a moved bug line or a changed plan mis-scores those runs"
             : ""));
         md.AppendLine();
     }
@@ -2087,7 +2123,7 @@ static class Report
         md.AppendLine();
     }
 
-    private static JsonObject RunJson(RunScore r) => new()
+    internal static JsonObject RunJson(RunScore r) => new()
     {
         ["item"] = r.Item,
         ["run"] = r.Run,
@@ -2101,7 +2137,7 @@ static class Report
         ["minutes"] = r.Minutes,
         ["model"] = r.Log.ModelId,
         ["flags"] = new JsonArray([.. r.Flags.Select(f => (JsonNode?)f)]),
-        ["planted"] = new JsonArray([.. r.Planted.Select(g => (JsonNode?)new JsonObject { ["id"] = g.Gap.Id, ["status"] = g.Status, ["line"] = g.Line, ["call"] = g.Call, ["fixedInBody"] = g.FixedInBody })]),
+        ["planted"] = new JsonArray([.. r.Planted.Select(g => (JsonNode?)new JsonObject { ["id"] = g.Gap.Id, ["status"] = g.Status, ["line"] = g.Line, ["call"] = g.Call, ["pass"] = r.PassOf(g.Call), ["fixedInBody"] = g.FixedInBody })]),
         ["otherGaps"] = new JsonArray([.. r.OtherGaps.Select(g => (JsonNode?)g.Text)]),
         ["decisionFolded"] = r.DecisionFolded,
         ["reargued"] = new JsonArray([.. r.Reargued.Select(t => (JsonNode?)t)]),
@@ -2377,6 +2413,7 @@ static class SelfTest
         Severity();
         PlanRun();
         StepChangesRun();
+        ItemHashRun();
         AuditRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
@@ -2650,6 +2687,62 @@ static class SelfTest
         finally
         {
             Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// The per-item material hash (2026-11-18, late gaps), on a small material root: an item's hash follows <c>repo/</c> and its own plan, not
+    /// another plan or its own key; the whole hash follows all four; the warning names only the runs whose own material changed. And a planted
+    /// gap's pass reaches the run JSON.
+    /// </summary>
+    private static void ItemHashRun()
+    {
+        string root = Scratch();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(root, "repo"));
+            Directory.CreateDirectory(Path.Combine(root, "plans"));
+            void Put(string relative, string text) => File.WriteAllText(Path.Combine(root, relative), text);
+            Put("repo/a.py", "x = 1\n");
+            Put("plans/one.md", "# One\n");
+            Put("plans/one.expect.json", "{\"gaps\": []}");
+            Put("plans/two.md", "# Two\n");
+            string one = Material.ItemHash(root, "one"), audit = Material.ItemHash(root, Material.AuditName), whole = Material.Hash(root);
+
+            Put("plans/two.md", "# Two, changed\n");
+            Expect(Material.ItemHash(root, "one") == one && Material.Hash(root) != whole, "another plan's change moves the whole hash, not this item's");
+            whole = Material.Hash(root);
+            Put("plans/one.expect.json", "{\"gaps\": [], \"control\": true}");
+            Expect(Material.ItemHash(root, "one") == one && Material.Hash(root) != whole, "a key change moves the whole hash, not the item's");
+            whole = Material.Hash(root);
+            Put("plans/one.md", "# One, changed\n");
+            string oneChanged = Material.ItemHash(root, "one");
+            Expect(oneChanged != one && Material.ItemHash(root, Material.AuditName) == audit && Material.Hash(root) != whole, "the item's own plan moves its hash and the whole one, not the audit's");
+            whole = Material.Hash(root);
+            Put("repo/a.py", "x = 2\n");
+            Expect(Material.ItemHash(root, "one") != oneChanged && Material.ItemHash(root, Material.AuditName) != audit && Material.Hash(root) != whole, "a repo change moves every hash");
+            Expect(Material.ItemHash(root, "gone") == "", "a plan whose file is gone hashes empty");
+
+            string now = Material.Hash(root);
+            string Current(string item) => Material.ItemHash(root, item);
+            var changed = Material.ChangedItems(
+                [("one", "old", Current("one")), ("two", "old", "stale"), ("audit", "old", null), ("audit", now, null), ("two", "old", "stale")],
+                now, Current);
+            Expect(changed.SequenceEqual(["audit", "two"]), "the warning names a stale item hash and an old run's changed whole hash, once each, in order: " + string.Join(", ", changed));
+            Expect(Material.ChangedItems([("one", now, null), ("one", "old", Current("one"))], now, Current).Count == 0, "a matching whole hash, or a matching item hash, flags nothing");
+
+            var gap = new PlantedGap("G1", "high", "a gap", new Keywords([["a"]]), null, []);
+            var score = new RunScore { Item = "one", Run = 1, Folder = root, Facts = new JsonObject() };
+            score.CallPasses[1] = 1;
+            score.CallPasses[2] = 3;
+            score.Planted.Add(new GapOutcome(gap, "caught", "[high] a", 2, false));
+            score.Planted.Add(new GapOutcome(gap with { Id = "G2" }, "missed", null, null, false));
+            var planted = Report.RunJson(score)["planted"]!.AsArray();
+            Expect((int?)planted[0]!["pass"] == 3 && (int?)planted[0]!["call"] == 2 && planted[1]!["pass"] is null, $"a planted gap's pass (not its call) in the run JSON: {planted.ToJsonString()}");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
         }
     }
 

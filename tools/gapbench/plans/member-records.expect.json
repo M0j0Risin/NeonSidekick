@@ -1,0 +1,35 @@
+{
+  "absent": ["member_loans", "remove_member", "cmd_leave"],
+  "gaps": [
+    {
+      "id": "M1",
+      "severity": "high",
+      "what": "Nothing says what leave does to a member who still has a book out. It should refuse with a LoanError (return the book first). As planned, the DELETE raises IntegrityError, which main doesn't catch, so the command crashes with a traceback.",
+      "match": [["leav", "remov", "delet"], ["still has", "open-loan refusal", "an open loan exists", "open loans exist", "refuse open loans", "refuses open loans", "book out", "books out", "still out", "checked out", "currently has", "has a book lent", "has books lent", "has open loans", "has an open loan", "has a loan", "still borrow", "still lent", "outstanding", "unreturned", "with an open loan", "with open loans"]],
+      "fixed": [["leav", "remov"], ["still has", "open-loan refusal", "an open loan exists", "open loans exist", "refuse open loans", "refuses open loans", "book out", "books out", "still out", "checked out", "currently has", "has a book lent", "has books lent", "has open loans", "has an open loan", "has a loan", "still borrow", "still lent", "outstanding", "unreturned", "with an open loan", "with open loans"], ["refus", "error", "exit 1"]]
+    },
+    {
+      "id": "M2",
+      "severity": "high",
+      "what": "Past loans still reference the member (loans.member_id REFERENCES members(id), PRAGMA foreign_keys = ON), so the DELETE fails with IntegrityError for anyone who ever borrowed. Deleting their loans instead loses the history shelf export writes.",
+      "match": [["foreign key", "foreign_keys", "fk on", "fk constraint", "references members", "references the member", "reference the member", "loans.member_id", "loan history", "returned loans", "past loans", "any loan row", "loan rows"], ["returned", "ever borrowed", "any loan", "history", "past loan", "loan row", "old loan"]],
+      "fixed": [["soft delete", "soft-delete", "left_on", "anonymi", "deactivat", "is_active", "inactive", "active column", "left flag", "`left` flag", "instead of deleting", "rather than deleting", "keeps their loan", "keep their loan"]]
+    },
+    {
+      "id": "M3",
+      "severity": "medium",
+      "what": "renew never saves renewals (audit bug B4), so renewals left always reads 2. The plan's Context claims it's counted.",
+      "match": [["renewal"], ["never saves", "never saved", "doesn't save", "does not save", "never writes", "never written", "never updated", "not updated", "not incremented", "doesn't increment", "does not increment", "never increment", "not persisted", "discard", "doesn't store", "does not store", "never store", "not stored", "only updates due_on", "only sets due_on", "never reached", "always 0", "always 2", "always show 2", "always shows 2", "always print 2", "always prints 2", "never persist", "stays 0", "stays at 0"]],
+      "fixed": [["renew"], ["renewals = ", "renewals=", "persist", "save the renewal", "saves the renewal", "write renewals", "update renewals", "set renewals"]],
+      "gone": ["counts each renewal in"]
+    },
+    {
+      "id": "M4",
+      "severity": "medium",
+      "what": "Step 3's check runs shelf list, which lists books, not members, so it can't show the removal.",
+      "match": [["shelf list", "cmd_list"], ["books", "titles", "not members", "no members", "not the members", "not who", "shows members", "show members", "lists members", "list members", "members at all", "never shows members", "doesn't list members", "does not list members", "the shelf, not"]],
+      "fixed": [["done when"], ["leave"], ["no member", "shelf member 2", "member 2` prints", "exits 1"]],
+      "gone": ["no longer shows them"]
+    }
+  ]
+}
