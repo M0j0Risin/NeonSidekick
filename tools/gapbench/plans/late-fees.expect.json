@@ -1,6 +1,6 @@
 {
   "chat": "Decided: 0.25 a day, capped at 10.00.",
-  "decision": [["0.25", "25 cents", "25 cent", "= 25", "25 a day", "25 per day"], ["10.00", "1000 cents", "= 1000", "1,000 cents", "10 dollars", "$10"]],
+  "decision": [["0.25", "25 cents", "25 cent", "= 25", "25 a day", "25 per day"], ["10.00", "1000 cent", "= 1000", "1,000 cents", "10 dollars", "$10"]],
   "reargue": [["rate", "a day", "per day", "cap"], ["open question", "undecided", "unspecified", "not specified", "not decided", "unclear", "to be decided", "tbd", "which rate", "no rate", "your call", "left open"]],
   "gaps": []
 }

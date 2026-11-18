@@ -77,6 +77,8 @@ class Store:
         return self.conn.execute("SELECT * FROM books ORDER BY title").fetchall()
 
     def books_by_ids(self, ids):
+        if not ids:
+            return []
         placeholders = ", ".join("?" for _ in ids)
         sql = f"SELECT * FROM books WHERE id IN ({placeholders}) ORDER BY title"
         return self.conn.execute(sql, list(ids)).fetchall()

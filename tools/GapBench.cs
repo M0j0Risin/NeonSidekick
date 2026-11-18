@@ -869,7 +869,11 @@ static class Scorer
 
         if (plan.Reargue is { } reargue)
         {
-            score.Reargued.AddRange(gapLines.Concat(minorLines).Where(l => reargue.In(l.Text)).Select(l => l.Text));
+            // A line that carries the decision itself reports folding it in ("closed the open question: 25 cents a day, cap 1000"),
+            // not a re-argument: the baseline's two "re-argued" runs were both that (2026-11-17).
+            score.Reargued.AddRange(gapLines.Concat(minorLines)
+                .Where(l => reargue.In(l.Text) && plan.Decision?.In(l.Text) != true)
+                .Select(l => l.Text));
         }
 
         score.Loss = PlanLoss.Compare(startBody, finalBody);
@@ -2010,7 +2014,7 @@ static class SelfTest
                 "[tool] present_plan {\"title\": \"T\",",
                 "  \"markdown\": \"# T\\n...\",",
                 "  \"gaps\": [\"Nothing says what a return does to a reserved book\", \"bulk_insert doesn't exist\", \"An unrelated gap\"],",
-                "  \"minor\": [\"Named the migration step\"]}",
+                "  \"minor\": [\"Named the migration step\", \"Closed the open question: the rate is 0.25 a day\"]}",
                 "[tool] present_plan -> Plan saved as revision 2.",
                 "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"The rate is an open question\"], \"markdown\": \"x\"}",
                 "[tool] present_plan -> " + PlanText.CheckedRequiredResult,

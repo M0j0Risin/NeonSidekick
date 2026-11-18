@@ -3,7 +3,7 @@
     {
       "id": "B1",
       "file": "shelf/store.py",
-      "line": 98,
+      "line": 100,
       "contains": "LIKE '%{title}%'",
       "severity": "high",
       "dimension": "security",
@@ -153,7 +153,7 @@
     {
       "id": "D1",
       "file": "shelf/store.py",
-      "line": 81,
+      "line": 83,
       "contains": "WHERE id IN ({placeholders})",
       "what": "An f-string, but it only joins ? placeholders; the ids are bound as parameters."
     },
