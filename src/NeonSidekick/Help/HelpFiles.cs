@@ -59,7 +59,7 @@ internal static class HelpFiles
     public const string McpExample =
         "{\n" +
         "  \"mcpServers\": {\n" +
-        "    \"fetch\": { \"command\": \"uvx\", \"args\": [\"mcp-server-fetch\"] },\n" +
+        "    \"fetch\": { \"command\": \"uvx\", \"args\": [\"mcp-server-fetch\"], \"ask\": \"writes\" },\n" +
         "    \"docs\": { \"type\": \"http\", \"url\": \"http://localhost:8000/mcp\" }\n" +
         "  }\n" +
         "}\n";

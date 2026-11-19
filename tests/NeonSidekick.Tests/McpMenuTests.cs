@@ -329,9 +329,9 @@ public class McpMenuTests : IAsyncDisposable
         // The servers' headings are rules with a gap between them (2026-10-03), the /tools look.
         // The band under the list says the cursor's tool whole (2026-10-05, the user's ask: it stood blank on this tab).
         // The Servers tab's headings (2026-10-10) make it the taller: the Tools tab is padded to it before the band.
-        AssertTabEnds("\n" + Titled(Strip) + "\n" + Servers + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   Echoes the text back.\n▸ docker__fail      off  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   Opens a page.\n", 100);
-        Assert.Contains(MenuLayout.Footer(new MenuFooter("Always fails."), 100), Output);
-        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Echoes the text back."), 100), Output);   // the first, before the move; the padding to the Servers tab's height under it (2026-10-10)
+        AssertTabEnds("\n" + Titled(Strip) + "\n" + Servers + "\n  · 🔌 docker__fail: off\n" + Heading("── docker · 1 of 2") + "\n  docker__echo      on   asks  Echoes the text back.\n▸ docker__fail      off  asks  Always fails.\n  \n" + Heading("── chrome · 1") + "\n  chrome__navigate  on   asks  Opens a page.\n", 100);
+        Assert.Contains(MenuLayout.Footer(new MenuFooter("Always fails.", McpText.ToolAsksFooter), 100), Output);
+        Assert.Contains("\n" + MenuLayout.Footer(new MenuFooter("Echoes the text back.", McpText.ToolAsksFooter), 100), Output);   // the first, before the move; the padding to the Servers tab's height under it (2026-10-10)
         Assert.Contains("  · 🔌 docker__fail: on\n" + Heading("── docker · 2") + "\n", Output);
         Assert.Contains(ToolsText.OfferedKeys, Output);
         pane.Dispose();
@@ -352,7 +352,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(["chrome__navigate"], _settings.Current.ToolsDisabled);
         Assert.Contains(MenuFilter.Caption("navig", 1, 3), Output);
-        Assert.Contains("\n" + Heading("── chrome · 1") + "\n▸ chrome__navigate  on   Opens a page.\n", Output);
+        Assert.Contains("\n" + Heading("── chrome · 1") + "\n▸ chrome__navigate  on   asks  Opens a page.\n", Output);
         Assert.Contains(MenuFilter.Hint(ToolsText.OfferedKeys, "navig"), Output);
         pane.Dispose();
     }
@@ -375,8 +375,8 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(["chrome__navigate"], _settings.Current.ToolsDisabled);
         Assert.EndsWith(" │ ↳ all · docker · chrome ", Servers);
-        Assert.Contains("\n" + Titled(Strip) + "\n" + Servers + "\n  · 🔌 chrome__navigate: off\n" + Heading("── chrome · 0 of 1") + "\n▸ chrome__navigate  off  Opens a page.\n", Output);
-        Assert.Contains("\n" + Titled(Strip) + "\n" + Servers + "\n \n" + Heading("── docker · 2") + "\n▸ docker__echo      on   Echoes the text back.\n  docker__fail      on   Always fails.\n", Output);   // docker's on the way
+        Assert.Contains("\n" + Titled(Strip) + "\n" + Servers + "\n  · 🔌 chrome__navigate: off\n" + Heading("── chrome · 0 of 1") + "\n▸ chrome__navigate  off  asks  Opens a page.\n", Output);
+        Assert.Contains("\n" + Titled(Strip) + "\n" + Servers + "\n \n" + Heading("── docker · 2") + "\n▸ docker__echo      on   asks  Echoes the text back.\n  docker__fail      on   asks  Always fails.\n", Output);   // docker's on the way
         Assert.Contains(MenuFilter.Caption("z", 0, 1), Output);   // the caption counts chrome's one tool
         pane.Dispose();
     }
@@ -481,7 +481,7 @@ public class McpMenuTests : IAsyncDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Contains("  · Servers\n  ·   docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  ·   chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  · Tools\n  ·   docker (1 of 2)\n  ·     docker__echo      on   Echoes the text back.\n  ·     docker__fail      off  Always fails.\n  ·   chrome (1)\n  ·     chrome__navigate  on   Opens a page.\n  · Options\n  ·   MCP servers enabled: on\n  ·   MCP connect timeout (s): 30\n", Output);
+        Assert.Contains("  · Servers\n  ·   docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  ·   chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n  · Tools\n  ·   docker (1 of 2)\n  ·     docker__echo      on   asks  Echoes the text back.\n  ·     docker__fail      off  asks  Always fails.\n  ·   chrome (1)\n  ·     chrome__navigate  on   asks  Opens a page.\n  · Options\n  ·   MCP servers enabled: on\n  ·   MCP connect timeout (s): 30\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

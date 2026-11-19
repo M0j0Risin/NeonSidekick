@@ -158,6 +158,26 @@ public class McpToolTests
         Assert.Equal(("touch", """{"text":"hi"}"""), Assert.Single(server.Calls));
     }
 
+    /// <summary>
+    /// Contradictory hints (2026-11-19, feature idea #28): read-only and destructive together is not read-only, so it asks and isn't sent again
+    /// after a drop; <see cref="McpTool.Destructive"/> keeps the spec's default for a tool that says nothing, and a read-only tool is never it.
+    /// </summary>
+    [Fact]
+    public async Task ReadOnlyAndDestructive_IsNotReadOnly_AndDestructiveIsTheSpecsDefault()
+    {
+        await using var server = McpPipeServer.Start(
+            [("both", "Both."), ("look", "Looks."), ("safe", "Safe."), ("plain", "Plain.")],
+            readOnly: new HashSet<string> { "both", "look" },
+            destructive: new Dictionary<string, bool> { ["both"] = true, ["safe"] = false });
+        await using var client = await McpClient.CreateAsync(server.ClientTransport);
+        var listed = await client.ListToolsAsync((RequestOptions?)null);
+        McpTool Tool(int i) => new("pipe", client, listed[i], "pipe__" + listed[i].Name);
+
+        Assert.Equal([false, true, false, false], Enumerable.Range(0, 4).Select(i => Tool(i).ReadOnly));
+        Assert.Equal([true, false, false, true], Enumerable.Range(0, 4).Select(i => Tool(i).Destructive));
+        Assert.Equal([McpChangeNote.SaysDestructive, McpChangeNote.None, McpChangeNote.None, McpChangeNote.Unstated], Enumerable.Range(0, 4).Select(i => McpAskRule.Note(Tool(i))));
+    }
+
     /// <summary>The app's own error text is unfenced; a failed reconnect's detail (the server's words) is fenced with the quote note.</summary>
     [Fact]
     public void AnOutcome_AnAppErrorIsUnfenced_AFencedOneCarriesTheNote_AnAnswerRendersAsBefore()

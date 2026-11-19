@@ -65,6 +65,7 @@ public sealed record SidekickOptions(
     public const string ImportSettingsFlag = "--import-settings";
     public const string YoloFlag = "--yolo";
     public const string NoPoliceFlag = "--no-police";
+    public const string AllowFlag = "--allow";
     public const string SqlCheckFlag = "--sql-check";
     public const string OracleCheckFlag = "--oracle-check";
     public const string MySqlCheckFlag = "--mysql-check";
@@ -81,6 +82,45 @@ public sealed record SidekickOptions(
     public const string CameraCheckFlag = "--camera-check";
     public const string MonitorCheckFlag = "--monitor-check";
     public const string MidiCheckFlag = "--midi-check";
+
+    /// <summary>
+    /// <c>--allow &lt;list&gt;</c> (2026-11-19, feature idea #45): the calls a headless run may make that would ask, for this run only
+    /// (<see cref="HeadlessAllowances"/>): <c>docker</c>, <c>print</c>, <c>ha</c>, <c>advisor</c>, <c>mcp</c>, <c>mcp:&lt;server&gt;</c>. Each
+    /// <c>--allow</c> adds to the list (a repeat kept once). Never saved, never in <see cref="ActiveFlags"/> (it overrides no setting); without
+    /// <c>--headless</c> it's a bad argument.
+    /// </summary>
+    public IReadOnlyList<string> AllowList { get; init; } = [];
+
+    /// <summary>The refusal for <c>--allow</c> without <c>--headless</c>. Pinned through the parse tests.</summary>
+    public const string AllowNeedsHeadless = "--allow is for --headless runs; the screen asks instead";
+
+    /// <summary>The refusal for a blank server after <c>mcp:</c>.</summary>
+    public const string AllowBlankServer = "--allow mcp: needs a server's name";
+
+    /// <summary>The refusal for an entry <c>--allow</c> doesn't know, naming the ones it does.</summary>
+    public static string AllowUnknown(string entry) =>
+        "--allow doesn't know " + (entry.Length == 0 ? "an empty entry" : "\"" + entry + "\"") + "; use " + string.Join(", ", HeadlessAllowances.Words) + " or mcp:<server>";
+
+    /// <summary>The headless notice for an <c>mcp:&lt;server&gt;</c> that names no server in either <c>mcp.json</c>.</summary>
+    public static string AllowNamesNoServer(string server) => AllowFlag + " mcp:" + server + " names no MCP server";
+
+    /// <summary>The closing summary's MCP line: <c>2 MCP calls were refused: a, b (--allow mcp:github,mcp:notes allows them)</c>.</summary>
+    public static string McpRefusedSummary(int count, IReadOnlyList<string> names, IReadOnlyList<string> entries) =>
+        count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " MCP call was refused: " : " MCP calls were refused: ") + string.Join(", ", names)
+        + " (" + AllowFlag + " " + string.Join(",", entries) + (count == 1 ? " allows it)" : " allows them)");
+
+    /// <summary>The closing summary's line for Docker, print, Home Assistant or an advisor: <c>1 Docker change was refused (--allow docker allows it)</c>.</summary>
+    public static string RefusedSummary(AllowKind kind, int count, string entry)
+    {
+        string noun = kind switch
+        {
+            AllowKind.Docker => count == 1 ? "Docker change" : "Docker changes",
+            AllowKind.Print => count == 1 ? "print" : "prints",
+            AllowKind.Ha => count == 1 ? "Home Assistant call" : "Home Assistant calls",
+            _ => count == 1 ? "advisor call" : "advisor calls",
+        };
+        return count.ToString(CultureInfo.InvariantCulture) + " " + noun + (count == 1 ? " was refused (" : " were refused (") + AllowFlag + " " + entry + (count == 1 ? " allows it)" : " allows them)");
+    }
 
     /// <summary>
     /// <c>--midi-check</c> (2026-11-12, the MIDI plan): run <see cref="App.MidiCheck"/> and exit 0/1 — the inputs listed and opened, every message
@@ -193,7 +233,7 @@ public sealed record SidekickOptions(
     public const string AdCheckMacLine = "prove the directory tools against that domain of ad.json (reads only)";
 
     private const string UsageText =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--midi-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--import-settings <zip>] [--yolo] [--no-police] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--midi-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--import-settings <zip>] [--yolo] [--no-police] [--allow <list>] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"neon\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -223,11 +263,12 @@ public sealed record SidekickOptions(
         "  --import-settings <zip>  add a /settings export zip's profiles and files before the start; a refused zip exits 2, one already imported is skipped\n" +
         "  --yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)\n" +
         "  --no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)\n" +
+        "  --allow <list>  --headless only: run the calls that would ask, this run only: docker, print, ha, advisor, mcp or mcp:<server>, comma-separated\n" +
         "  --log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)\n" +
         "  --version      print the version and exit\n" +
         "  -h, --help     this text\n" +
         "\n" +
-        "Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command was refused\n" +
+        "Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call that asks was refused\n" +
         "\n" +
         "Keys: Esc = cancel/back";
 
@@ -444,6 +485,24 @@ public sealed record SidekickOptions(
                 continue;
             }
 
+            if (TryValueFlag(AllowFlag, args, ref i, arg, lower, out var allow, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                // Each --allow adds to the list (2026-11-19): the other value flags let the last one win.
+                var entries = new List<string>(result.AllowList);
+                if (!HeadlessAllowances.TryParse(allow!, entries, out error))
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { AllowList = entries };
+                continue;
+            }
+
             switch (lower)
             {
                 case "--smoke":
@@ -492,7 +551,8 @@ public sealed record SidekickOptions(
             }
         }
 
-        return result;
+        // After the loop (2026-11-19): arguments are read in order, so a check at the case would refuse "--allow mcp --headless".
+        return result.AllowList.Count > 0 && !result.Headless ? result with { Error = AllowNeedsHeadless } : result;
     }
 
     /// <summary>The flags that carry a value this launch (a test seam since the status panel went, 2026-09-14).</summary>
@@ -614,6 +674,11 @@ public sealed record SidekickOptions(
         if (NoPolice)
         {
             parts.Add(NoPoliceFlag);
+        }
+
+        if (AllowList.Count > 0)
+        {
+            parts.Add(AllowFlag + " " + string.Join(",", AllowList));
         }
 
         if (LogPath is not null)

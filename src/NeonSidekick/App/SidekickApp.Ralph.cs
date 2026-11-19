@@ -98,8 +98,14 @@ public sealed partial class SidekickApp
         public async Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken)
         {
             var effective = app.EffectiveSettings;
-            bool byAdvisor = RalphReviewers.ByAdvisor(loop.Snapshot.Reviewer, app.HeadlessAdvisorsOffered() && !effective.AdvisorConfirm);
+            bool byAdvisor = RalphReviewers.ByAdvisor(loop.Snapshot.Reviewer, app.HeadlessAdvisorsOffered() && !app.HeadlessAdvisorsConfirmBlocked());
             string request = RalphReviewers.Request(step, report, delta, context.Session.ContextLength?.Tokens ?? 0);
+            if (byAdvisor && effective.AdvisorConfirm)
+            {
+                // By advisor only through --allow advisor (2026-11-19): the review calls past the confirm, so it writes the allowance's line itself.
+                HeadlessAllowances.LogAllowed(AllowKind.Advisor, HeadlessAllowances.RalphReviewWhat(loop.Pass));
+            }
+
             var (verdict, tokens) = byAdvisor
                 ? await RalphReviewers.ByAdvisorAsync(context.Advisor, context.Session.Usage, request, effective, cancellationToken).ConfigureAwait(false)
                 : await RalphReviewers.ByModelAsync(context.Session, Files, loop.Snapshot, step, request, effective.LlmPictureKeep, effective.LlmPictureMegabytes, ImageCodecs.Available, cancellationToken).ConfigureAwait(false);

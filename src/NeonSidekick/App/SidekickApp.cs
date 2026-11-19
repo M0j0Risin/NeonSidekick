@@ -442,6 +442,12 @@ public sealed partial class SidekickApp
     /// <summary>The headless run's skill records (2026-09-30): what <c>/skills add</c>'s host tells of an install; null outside a run.</summary>
     private SkillRecords? _headlessSkillRecords;
 
+    /// <summary>
+    /// A headless run's <c>--allow</c> (2026-11-19, feature idea #45): built from the options right after the startup line, before the MCP
+    /// session takes its approver and the tools take their hooks, so every hook shares the one instance. Empty until then, never null.
+    /// </summary>
+    private HeadlessAllowances _headlessAllowances = new();
+
     /// <summary>The file tools' sandbox over the live effective setting (flag &gt; saved) and the loaded profile's directory.</summary>
     public WorkingDirectory BuildWorkingDirectory() =>
         new(() => WorkingDirectory.Resolve(EffectiveSettings.WorkingDirectory, _settings.ProfileDirectory), _time);
@@ -929,6 +935,7 @@ public sealed partial class SidekickApp
         Action<DiagnosticEvent> forward = OnHeadlessDiagnostic;
         DiagnosticLog.Emitted += forward;
         LogStartup();
+        _headlessAllowances = new HeadlessAllowances(_options.AllowList);
         EncryptSqlPasswords();
         EncryptOraclePasswords();
         EncryptMySqlPasswords();
@@ -942,6 +949,8 @@ public sealed partial class SidekickApp
         // The MCP servers (2026-09-20): connected after the LLM, their tools offered per turn like the screen's; disposed after the loop.
         // Headless has no /mcp (2026-11-19): a server that drops and doesn't come back stays down until the next start, and its texts say so.
         await using var mcp = new McpSession(_settings, _mcpTransport, _time, Mcp.McpText.HeadlessRetryTail);
+        // Its calls that ask (2026-11-19, feature idea #28): refused unless --allow names them, each refusal counted toward exit 3.
+        mcp.Approver = _headlessAllowances.Mcp;
         var memory = BuildMemoryStore();
         var memoryTools = ChatScreen.MemoryTools(memory);
         // No timers headless: nothing could deliver the alert (the same rule as speech and voice); PrepareTurn drops the prompt's timer sentence with them (2026-09-20).
@@ -1025,7 +1034,7 @@ public sealed partial class SidekickApp
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);
         // ha_camera (2026-10-27) keeps its stills in the profile's images folder, as the screen's does.
-        var haTools = ChatScreen.HomeAssistantTools(ha, confirm: null, images: images);
+        var haTools = ChatScreen.HomeAssistantTools(ha, confirm: _headlessAllowances.Confirm(AllowKind.Ha), images: images);
         Dictionary<string, string> HomeNotes() => ChatScreen.HomeToolNotes(ImageCodecs.Available, session.EmbeddedServer is { Vision: false });
         // The YouTube search (2026-10-05): no window headless, so youtube_search, and the saved videos (2026-10-07) to list and change.
         var youTubeTools = ChatScreen.YouTubeTools(new YouTube.YouTubeDataApi(_web.Http), player: null, () => EffectiveSettings, _time, HeadlessYouTubeLibrary);
@@ -1038,7 +1047,7 @@ public sealed partial class SidekickApp
         using var docker = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time, _environment.System);
         // The camera (2026-10-02): /camera list only; a photo needs the screen's panes, so camera_capture is never offered here.
         using var camera = new Camera.CameraSession(_camera, () => Camera.CameraSettings.Options(EffectiveSettings), _time);
-        var dockerTools = ChatScreen.DockerTools(docker, confirm: null);
+        var dockerTools = ChatScreen.DockerTools(docker, confirm: _headlessAllowances.Confirm(AllowKind.Docker));
         // The event logs (2026-10-15): read-only, so headless has all four; the ticked computers and the working directory's .evtx files.
         var eventLog = new EventLog.EventLogAccess(_eventLogSystem, () => EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => EffectiveSettings.EventLogComputersOffered, files, _time);
         // A Mac's unified log (2026-10-18, the Mac event-log plan): the same four tool names over it when a reader was given.
@@ -1060,7 +1069,7 @@ public sealed partial class SidekickApp
         var directory = new ActiveDirectory.DirectoryAccess(_directorySystem, () => ActiveDirectory.DirectoryConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory, _joinedDomain()), () => EffectiveSettings.DirectoryDomainsOffered, _joinedDomain, _time);
         var directoryTools = ChatScreen.DirectoryTools(directory, saveRoot: saveRoot);
         // The print tools (2026-09-28): no pane to ask on, so under ask (the default) the model's print is refused; /print works.
-        var printTools = ChatScreen.PrintTools(print, confirm: null);
+        var printTools = ChatScreen.PrintTools(print, confirm: _headlessAllowances.Confirm(AllowKind.Print));
         // The shell tools (2026-09-21): headless has no pane to ask on, so the gate has no asker — under ask the
         // allow list alone decides, and NEONSIDEKICK_COMMAND_POLICY=yolo is how a scripted run says yes.
         var interpreters = new Shell.Interpreters(_environment.System);
@@ -1095,7 +1104,7 @@ public sealed partial class SidekickApp
         TurnToolInputs? lastInputs = null;
         // The code audit (2026-10-18), made here (2026-11-17) for the advisor: a pass of it, or of a gap review, asks without the thread.
         var audit = new Audits.AuditSession(files);
-        var neonAdvisor = ChatScreen.AdvisorTool(advisorHost, () => EffectiveSettings, () => _settings.ProfileName, advisorThreads, () => lastInputs is null ? ([], "") : ChatScreen.AdvisorTurnTools(lastInputs, markdown: false), () => session.History.Messages, null, new HeadlessNeonAdvisorView(this), session.Usage.AddAdvisors,
+        var neonAdvisor = ChatScreen.AdvisorTool(advisorHost, () => EffectiveSettings, () => _settings.ProfileName, advisorThreads, () => lastInputs is null ? ([], "") : ChatScreen.AdvisorTurnTools(lastInputs, markdown: false), () => session.History.Messages, _headlessAllowances.Advisor, new HeadlessNeonAdvisorView(this), session.Usage.AddAdvisors,
             () => plan.Reviewing || audit.InPass);
         var neonAdvisorTools = new List<Microsoft.Extensions.AI.AIFunction> { neonAdvisor };
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
@@ -1140,6 +1149,7 @@ public sealed partial class SidekickApp
                 Sessions = sessionTools,
                 SessionsEnabled = effective.SessionTool,
                 Mcp = mcp.Tools,
+                McpNotes = mcp.ServerInstructions,
                 McpEnabled = effective.McpServers,
                 Git = gitTools,
                 GitEnabled = effective.GitLibTools,
@@ -1275,6 +1285,12 @@ public sealed partial class SidekickApp
             foreach (string warning in mcp.WarningLines())
             {
                 await HeadlessLineAsync(warning).ConfigureAwait(false);
+            }
+
+            // An --allow mcp:<server> that names no server (2026-11-19): one notice each, the run goes on (the file may be edited later).
+            foreach (string notice in _headlessAllowances.KnowServers(mcp.Servers.Select(s => s.Name).Distinct(StringComparer.Ordinal)))
+            {
+                await HeadlessNoticeLineAsync("[notice] " + notice).ConfigureAwait(false);
             }
 
             var assistant = session.Assistant;
@@ -2190,9 +2206,16 @@ public sealed partial class SidekickApp
                 await HeadlessNoticeLineAsync("[notice] " + summary).ConfigureAwait(false);
             }
 
+            // The calls that asked and found no --allow (2026-11-19, feature idea #45): one line per kind, and exit 3 as for the shell.
+            foreach (string line in _headlessAllowances.SummaryLines())
+            {
+                DiagnosticLog.Info(ChatScreen.AppCategory, line);
+                await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
+            }
+
             await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
             await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            return refused.Count > 0 ? HeadlessRefusedExitCode : 0;
+            return refused.Count > 0 || _headlessAllowances.Refusals.Count > 0 ? HeadlessRefusedExitCode : 0;
         }
         finally
         {
@@ -2424,7 +2447,7 @@ public sealed partial class SidekickApp
 
                 Plans.PlanText.ParseGapsArgs(rest, out var named, out int? passes, out _);
                 var reviewer = named ?? Plans.PlanReviewer.Model;
-                if (reviewer != Plans.PlanReviewer.Model && HeadlessAdvisorsOffered() && EffectiveSettings.AdvisorConfirm)
+                if (reviewer != Plans.PlanReviewer.Model && HeadlessAdvisorsOffered() && HeadlessAdvisorsConfirmBlocked())
                 {
                     // No confirm seam headless: every advisor call would be refused, so the model reviews alone.
                     reviewer = Plans.PlanReviewer.Model;
@@ -2559,6 +2582,12 @@ public sealed partial class SidekickApp
     /// <summary>Whether a headless turn offers <c>neon_advisor</c>: Advisors enabled, one listed, the tool not off on <c>/tools</c>.</summary>
     private bool HeadlessAdvisorsOffered() =>
         ChatScreen.AdvisorsOffered(EffectiveSettings) && !ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled).Contains(Llm.Tools.NeonAdvisorTool.ToolName);
+
+    /// <summary>
+    /// Whether <c>Advisor confirm</c> keeps a headless review from its advisors (2026-11-19, feature idea #45): on, and the run has no
+    /// <c>--allow advisor</c>. The gap review's, the audit's and the Ralph loop's fallbacks to the model alone read it.
+    /// </summary>
+    private bool HeadlessAdvisorsConfirmBlocked() => EffectiveSettings.AdvisorConfirm && !_headlessAllowances.Allows(AllowKind.Advisor);
 
     /// <summary>
     /// After a headless turn while a gap-closing loop runs (2026-10-13), the screen's <c>TakeGapPass</c> without a pane or a queue:
@@ -3778,6 +3807,8 @@ public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
         Services.ServiceConfigFile.Family.EncryptAll(_settings.StorageDirectory);
         Tasks.TaskConfigFile.Family.EncryptAll(_settings.StorageDirectory);
         ActiveDirectory.DirectoryConfigFile.EncryptAll(_settings.StorageDirectory);
+        // mcp.json's tokens (2026-11-19, feature idea #29): headers and env values named as secrets, the same way.
+        Mcp.McpConfigFile.EncryptAll(_settings.StorageDirectory);
     }
 
     /// <summary><c>/net</c> headless (2026-10-15): its lines, the model's refusal note after them.</summary>

@@ -974,6 +974,11 @@ internal sealed partial class ChatScreen
             _databaseAllowed.Clear();
         }
 
+        lock (_mcpAllowed)
+        {
+            _mcpAllowed.Clear();
+        }
+
         _projectFileAllowed.Clear();
     }
 
@@ -1438,6 +1443,8 @@ internal sealed partial class ChatScreen
         _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
         // A server that dropped, came back or changed its tools (2026-11-19, feature idea #30) wakes the idle read, so its notice prints at once.
         _mcp.NoticeQueued += WebNudge;
+        // Its calls that ask (2026-11-19, feature idea #28) ask on this screen's pane, the session passed in too; cleared at dispose.
+        _mcp.Approver = AllowMcpAsync;
         _clockTools = ClockTools(time);
         // The sandbox reads the live setting and profile directory on every call: a /cwd save or
         // a profile switch changes the root with nothing to rebind.
@@ -4955,7 +4962,9 @@ internal sealed partial class ChatScreen
             Admin: ComposeTurnTools(TurnInputs(effective)).Rules.Admin,
             DuckDbEnabled: DuckDbOffered(effective, _duckDb),
             DuckDbTools: duckDb.Count,
-            DuckDbWrite: duckDb.Any(t => DuckDbWriteToolNames.Contains(t.Name)));
+            DuckDbWrite: duckDb.Any(t => DuckDbWriteToolNames.Contains(t.Name)),
+            // The servers' notes as the turn would carry them (2026-11-19): the one filter, over the MCP tools the count above reads.
+            McpNotes: Mcp.McpNotes.For(_mcp.ServerInstructions, Without(_mcp.Tools, disabled)));
     }
 
     /// <summary>
@@ -7071,6 +7080,7 @@ internal sealed partial class ChatScreen
         {
             Settings = effective,
             Mcp = name => Help.HelpMcpLookup.Find(_mcp.Servers, name),
+            McpAsksBarred = RalphAsksBarred(),
         };
     }
 
@@ -8189,7 +8199,7 @@ internal sealed partial class ChatScreen
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
         var r = set.Rules;
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.DirectiveFor(r.Advisors ? set.Advisors?.Advisors : null, r.Web ? PlanTurn.ResearchOf(set.Tools) : null) ?? inputs.Pass?.Directive, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres, save: inputs.MemorySave, sqliteWrite: r.Sqlite && r.SqliteWrite, serverWrites: r.ServerWrites, images: r.Images, advisors: r.Advisors, shopping: r.Shopping, globalSkills: globalSkills, eventLog: r.EventLog, clock: r.Clock, duckDb: r.DuckDb, duckDbWrite: r.DuckDb && r.DuckDbWrite);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.DirectiveFor(r.Advisors ? set.Advisors?.Advisors : null, r.Web ? PlanTurn.ResearchOf(set.Tools) : null) ?? inputs.Pass?.Directive, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres, save: inputs.MemorySave, sqliteWrite: r.Sqlite && r.SqliteWrite, serverWrites: r.ServerWrites, images: r.Images, advisors: r.Advisors, shopping: r.Shopping, globalSkills: globalSkills, eventLog: r.EventLog, clock: r.Clock, duckDb: r.DuckDb, duckDbWrite: r.DuckDb && r.DuckDbWrite, mcpNotes: set.McpNotes);
     }
 
     /// <summary>
@@ -8231,6 +8241,7 @@ internal sealed partial class ChatScreen
         Sessions = _sessionTools,
         SessionsEnabled = effective.SessionTool,
         Mcp = _mcp.Tools,
+        McpNotes = _mcp.ServerInstructions,
         McpEnabled = effective.McpServers,
         Git = _gitTools,
         GitEnabled = effective.GitLibTools,
@@ -8277,7 +8288,7 @@ internal sealed partial class ChatScreen
         ScreenEnabled = ScreenOffered(effective),
         // A gap pass that may not wait on the user (2026-10-18) loses the asking tools as a tool switched off on /tools is lost; so does a Ralph pass
         // with the checkpoint off (later that day: an unattended loop never stops on a question).
-        Disabled = RalphAsksBarred() ? PlanTools.WithoutAskingOrConfirming(disabled) : GapAsksBarred(effective) ? PlanTools.WithoutAsking(disabled) : disabled,
+        Disabled = RalphAsksBarred() ? RalphWithheld(disabled) : GapAsksBarred(effective) ? PlanTools.WithoutAsking(disabled) : disabled,
         Plan = _plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled),
         Pass = RalphPassTurn(),
         // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under Code audit web research; an advisor asked in it the same.
@@ -12760,6 +12771,7 @@ internal sealed partial class ChatScreen
             DisposeShopping();
             _skillRecords.Store.Dispose();
             _mcp.NoticeQueued -= WebNudge;
+            _mcp.Approver = null;
             if (_ownsMcp)
             {
                 await _mcp.DisposeAsync().ConfigureAwait(false);

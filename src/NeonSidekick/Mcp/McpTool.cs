@@ -57,9 +57,19 @@ public sealed class McpTool : AIFunction
 
     /// <summary>
     /// Whether the server marks the tool <c>readOnlyHint: true</c> (2026-11-19, feature idea #30): a call cut off by a drop is sent again
-    /// only then. Feature idea #28 (MCP calls ask) reads it too.
+    /// only then. Since later on 2026-11-19 (feature idea #28, MCP calls ask) a tool that also says <c>destructiveHint: true</c> outright is
+    /// not read-only: a server that says both is unsure or wrong, so the call asks and isn't sent again after a drop (Codex CLI lets
+    /// destructive win too). Without the explicit <c>true</c> the spec's destructive default applies only to a tool that isn't read-only,
+    /// so a plain <c>readOnlyHint: true</c> stays read-only. Through the session, a call that isn't read-only is judged by its
+    /// server's <c>ask</c> first (<see cref="McpAskRule"/>).
     /// </summary>
-    public bool ReadOnly => _inner.ProtocolTool.Annotations?.ReadOnlyHint == true;
+    public bool ReadOnly => _inner.ProtocolTool.Annotations is { ReadOnlyHint: true } hints && hints.DestructiveHint != true;
+
+    /// <summary>
+    /// Whether the tool may delete or overwrite things by the spec (2026-11-19, feature idea #28): not <see cref="ReadOnly"/>, and
+    /// <c>destructiveHint</c> isn't <c>false</c> (the spec's default is true, and applies only to a tool that isn't read-only).
+    /// </summary>
+    public bool Destructive => !ReadOnly && _inner.ProtocolTool.Annotations?.DestructiveHint != false;
 
     public override string Name => _name;
 

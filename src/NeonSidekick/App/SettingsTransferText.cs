@@ -133,7 +133,7 @@ public static class SettingsTransferText
 
     /// <summary>Connection files whose passwords sit in the other computer's store (the review's #34).</summary>
     public static string ConnectionPasswords(IReadOnlyList<string> files) =>
-        $"Connection files whose passwords may need setting again (kept in the other computer's store): {Listed(files)}.";
+        $"Files whose passwords or keys may need setting again (kept in the other computer's store): {Listed(files)}.";
 
     public static string Skipped(IReadOnlyList<string> items) => $"Skipped (already here, or not a settings file): {Listed(items)}.";
 

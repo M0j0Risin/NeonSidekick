@@ -166,11 +166,11 @@ public class McpRowsTests : IAsyncDisposable
         Assert.Equal("── docker · 1 of 2", Plain(rows[0].Markup));   // a rule heading (2026-10-03), the /tools look
         Assert.Null(rows[0].Tool);
         Assert.True(rows[0].Heading);
-        Assert.Equal("docker__echo      on   Echoes the text back.", Plain(rows[1].Markup));
-        Assert.Equal("docker__fail      off  Always fails.", Plain(rows[2].Markup));
+        Assert.Equal("docker__echo      on   asks  Echoes the text back.", Plain(rows[1].Markup));
+        Assert.Equal("docker__fail      off  asks  Always fails.", Plain(rows[2].Markup));
         Assert.Equal(("", (string?)null, false), rows[3]);   // the gap before the second server
         Assert.Equal("── chrome · 1", Plain(rows[4].Markup));
-        Assert.Equal("chrome__navigate  on   Opens a page.", Plain(rows[5].Markup));
+        Assert.Equal("chrome__navigate  on   asks  Opens a page.", Plain(rows[5].Markup));
         Assert.Equal([0, 4], ToolsText.HeadingRows(rows).Order());
         Assert.Equal(["docker__echo", "docker__fail", "chrome__navigate"], rows.Where(r => r.Tool is not null).Select(r => r.Tool));
         Assert.Equal(1, ToolsText.FirstToolRow(rows));
@@ -186,11 +186,11 @@ public class McpRowsTests : IAsyncDisposable
         var facts = Facts(session, disabled: ["docker__fail"]);
 
         var rows = McpRows.ToolRows(facts, "PAGE");   // chrome__navigate's description
-        Assert.Equal(["── chrome · 1", "chrome__navigate  on   Opens a page."], rows.Select(r => Plain(r.Markup)));
+        Assert.Equal(["── chrome · 1", "chrome__navigate  on   asks  Opens a page."], rows.Select(r => Plain(r.Markup)));
         Assert.Equal([0], ToolsText.HeadingRows(rows));
 
         rows = McpRows.ToolRows(facts, "docker__");
-        Assert.Equal(["── docker · 1 of 2", "docker__echo      on   Echoes the text back.", "docker__fail      off  Always fails."], rows.Select(r => Plain(r.Markup)));
+        Assert.Equal(["── docker · 1 of 2", "docker__echo      on   asks  Echoes the text back.", "docker__fail      off  asks  Always fails."], rows.Select(r => Plain(r.Markup)));
 
         Assert.Equal([MenuFilter.NoMatchLine("zz")], McpRows.ToolRows(facts, "zz").Select(r => Plain(r.Markup)));
         Assert.Equal(McpRows.ToolRows(facts), McpRows.ToolRows(facts, ""));
@@ -203,8 +203,8 @@ public class McpRowsTests : IAsyncDisposable
         await using var session = await ConnectedAsync(Two);
         var facts = Facts(session, disabled: ["docker__fail"]);
 
-        Assert.Equal(["── chrome · 1", "chrome__navigate  on   Opens a page."], McpRows.ToolRows(facts, "", "chrome").Select(r => Plain(r.Markup)));
-        Assert.Equal(["── docker · 1 of 2", "docker__echo      on   Echoes the text back."], McpRows.ToolRows(facts, "echo", "docker").Select(r => Plain(r.Markup)));
+        Assert.Equal(["── chrome · 1", "chrome__navigate  on   asks  Opens a page."], McpRows.ToolRows(facts, "", "chrome").Select(r => Plain(r.Markup)));
+        Assert.Equal(["── docker · 1 of 2", "docker__echo      on   asks  Echoes the text back."], McpRows.ToolRows(facts, "echo", "docker").Select(r => Plain(r.Markup)));
         Assert.Equal([MenuFilter.NoMatchLine("echo")], McpRows.ToolRows(facts, "echo", "chrome").Select(r => Plain(r.Markup)));
         Assert.Equal(McpRows.ToolRows(facts), McpRows.ToolRows(facts, "", null));
 
@@ -249,8 +249,8 @@ public class McpRowsTests : IAsyncDisposable
         Assert.Equal(
             [
                 "docker (1 of 2)",
-                "  docker__echo  on   Echoes the text back.",
-                "  docker__fail  off  Always fails.",
+                "  docker__echo  on   asks  Echoes the text back.",
+                "  docker__fail  off  asks  Always fails.",
             ],
             McpRows.ToolLines(facts));
         Assert.Equal([McpText.NoToolsLine], McpRows.ToolLines(Facts(await ConnectedAsync("""{ "mcpServers": {} }"""))));
@@ -269,5 +269,33 @@ public class McpRowsTests : IAsyncDisposable
         Assert.Equal(McpText.StatusDropped, McpRows.ServerFooter(facts, new McpRow.Server("docker"))!.Text);
         Assert.DoesNotContain(McpText.StatusDropped, McpRows.StatusText(live), StringComparison.Ordinal);
         Assert.Equal(2, dropped.Tools.Count);
+    }
+    /// <summary>
+    /// The ask and the notes on <c>/mcp</c> (2026-11-19, feature ideas #28 and #59): a connected server's footer leads its last line with how it
+    /// asks and its notes' length (or off); a tool that asks is tagged, and its footer says whether and why not.
+    /// </summary>
+    [Fact]
+    public async Task TheFooters_SayHowAServerAsks_AndItsNotes_AndTheToolsTabTagsTheAskingTools()
+    {
+        _servers.ReadOnly("docker", "echo");
+        _servers.Instructions("docker", "Use echo.");
+        await using var session = await ConnectedAsync("""{ "mcpServers": { "docker": { "command": "docker" }, "chrome": { "url": "http://localhost:9/mcp", "ask": "never", "instructions": false } } }""");
+        var facts = Facts(session);
+
+        Assert.Equal(McpText.AskFooter(McpAskMode.Writes) + " · " + McpText.NotesFooter(9, true) + " · profile · ", McpRows.ServerFooter(facts, new McpRow.Server("docker"))!.Last![..^session.Servers.Single(s => s.Name == "docker").Transport.Length]);
+        Assert.StartsWith(McpText.AskFooter(McpAskMode.Never) + " · " + McpText.NotesFooter(null, false) + " · profile · ", McpRows.ServerFooter(facts, new McpRow.Server("chrome"))!.Last, StringComparison.Ordinal);
+
+        Assert.Equal(McpText.ToolReadOnlyFooter, McpRows.ToolFooter(facts, "docker__echo")!.Last);
+        Assert.Equal(McpText.ToolAsksFooter, McpRows.ToolFooter(facts, "docker__fail")!.Last);
+        Assert.Equal(McpText.ToolNeverFooter, McpRows.ToolFooter(facts, "chrome__navigate")!.Last);
+
+        var lines = McpRows.ToolLines(facts).ToList();
+        Assert.Contains(lines, l => l.Contains("docker__fail", StringComparison.Ordinal) && l.Contains(" " + McpText.AsksTag + "  ", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Contains("docker__echo", StringComparison.Ordinal) && l.Contains(" " + McpText.AsksTag + "  ", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Contains("chrome__navigate", StringComparison.Ordinal) && l.Contains(" " + McpText.AsksTag + "  ", StringComparison.Ordinal));
+
+        var failed = session.Servers.Single(s => s.Name == "docker") with { State = McpState.Failed, Detail = "boom" };
+        var off = new McpFacts([failed], [], true, true, ToolsText.DisabledSet([]), session.ProfilePath, session.GlobalPath);
+        Assert.StartsWith("profile · ", McpRows.ServerFooter(off, new McpRow.Server("docker"))!.Last, StringComparison.Ordinal);   // only a connected row says how it asks
     }
 }

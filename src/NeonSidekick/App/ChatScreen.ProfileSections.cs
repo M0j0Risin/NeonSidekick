@@ -62,7 +62,7 @@ internal sealed partial class ChatScreen
             {
                 writes.Add((name, config, null));
             }
-            else if (held.Value.Fingerprint() == config.Fingerprint())
+            else if (McpSecrets.SameServer(held.Value, config))
             {
                 same++;
             }

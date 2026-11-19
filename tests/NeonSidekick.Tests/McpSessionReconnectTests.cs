@@ -37,7 +37,7 @@ public class McpSessionReconnectTests : IAsyncDisposable
     private const string One = """{ "mcpServers": { "docker": { "command": "docker" } } }""";
     private const string Two = """{ "mcpServers": { "docker": { "command": "docker" }, "chrome": { "command": "chrome" } } }""";
 
-    private McpSession Session(string? tail = null) => new(_settings, _servers.Transport, TimeProvider.System, tail);
+    private McpSession Session(string? tail = null) => new(_settings, _servers.Transport, TimeProvider.System, tail) { Approver = Fakes.McpApprovers.AllowAll };
 
     private void ProfileFile(string json)
     {

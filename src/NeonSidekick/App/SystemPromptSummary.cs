@@ -148,7 +148,8 @@ public sealed record SystemPromptFacts(
     bool ClockEnabled = true,
     bool DuckDbEnabled = false,
     int DuckDbTools = 0,
-    bool DuckDbWrite = false)
+    bool DuckDbWrite = false,
+    IReadOnlyList<Mcp.McpServerNote>? McpNotes = null)
 {
     /// <summary>
     /// These facts with the group <paramref name="group"/> switches turned off (2026-11-02, the review: the <c>/usage</c> Context tab's
@@ -573,6 +574,12 @@ public static class SystemPromptSummary
         // The skills block (2026-09-16): after the memory section, only with tools to load one.
         sections.Add(new(SkillsLabel, SkillsStatus(facts), SkillsSent(facts) ? SkillsPrompt.Section(facts.Skills ?? [], facts.GlobalSkills) : ""));
 
+        // The MCP servers' notes (2026-11-19, feature idea #59) under the prompt's own gate: MCP tools offered, and notes to send.
+        if (facts.Mcp && facts.McpNotes is { Count: > 0 } notes)
+        {
+            sections.Add(new(McpNotesLabel, McpNotesStatus(notes.Count, notes.Sum(n => n.Text.Length)), Mcp.McpText.NotesSection(notes)));
+        }
+
         // Plan mode's directive only while planning (2026-09-26), where the prompt carries it: after the skills, ahead of the voice.
         if (facts.ToolsEnabled && !string.IsNullOrWhiteSpace(facts.PlanDirective))
         {
@@ -681,8 +688,16 @@ public static class SystemPromptSummary
             admin: facts.ToolsEnabled ? facts.Admin : AdminRules.None,
             clock: facts.Clock,
             duckDb: facts.DuckDb,
-            duckDbWrite: facts.DuckDbWriting);
+            duckDbWrite: facts.DuckDbWriting,
+            mcpNotes: facts.McpNotes);
     }
+
+    /// <summary>The label of the MCP servers' notes section (2026-11-19).</summary>
+    public const string McpNotesLabel = "MCP server notes";
+
+    /// <summary>The notes section's status: <c>2 servers (812 chars)</c>.</summary>
+    public static string McpNotesStatus(int servers, int chars) =>
+        servers.ToString(CultureInfo.InvariantCulture) + (servers == 1 ? " server (" : " servers (") + chars.ToString(CultureInfo.InvariantCulture) + " chars)";
 
     /// <summary>The Prompt tab's heading over plan mode's directive (2026-09-26): <see cref="PlanModeLabel"/> and <see cref="PlanModeStatus"/> as <see cref="SystemPromptSection.Heading"/> joins them. Pinned.</summary>
     public const string PlanModeHeading = PlanModeLabel + " — " + PlanModeStatus;

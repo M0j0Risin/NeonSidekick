@@ -18,6 +18,8 @@ public sealed class InProcessMcpServers : IAsyncDisposable
     private readonly Dictionary<string, IReadOnlyList<(string Name, string Description)>> _tools = new(StringComparer.Ordinal);
     private readonly Dictionary<string, IReadOnlySet<string>> _readOnly = new(StringComparer.Ordinal);
     private readonly Dictionary<string, TaskCompletionSource> _held = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Dictionary<string, bool>> _destructive = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string?> _instructions = new(StringComparer.Ordinal);
 
     /// <summary>The default tool list of a server not given its own: an echo and the fail tool.</summary>
     public static readonly IReadOnlyList<(string Name, string Description)> DefaultTools = [("echo", "Echoes the text back."), (McpPipeServer.FailToolName, "Always fails.")];
@@ -42,6 +44,20 @@ public sealed class InProcessMcpServers : IAsyncDisposable
 
     /// <summary>Which of a named server's tools are marked <c>readOnlyHint: true</c> (set before the connect; kept for the reconnects).</summary>
     public void ReadOnly(string name, params string[] tools) => _readOnly[name] = new HashSet<string>(tools, StringComparer.Ordinal);
+
+    /// <summary>A named server's handshake instructions (2026-11-19, feature idea #59; set before the connect, kept for the reconnects).</summary>
+    public void Instructions(string name, string? text) => _instructions[name] = text;
+
+    /// <summary>A named server's tool's <c>destructiveHint</c> (2026-11-19, feature idea #28; set before the connect).</summary>
+    public void Destructive(string name, string tool, bool destructive)
+    {
+        if (!_destructive.TryGetValue(name, out var map))
+        {
+            _destructive[name] = map = new Dictionary<string, bool>(StringComparer.Ordinal);
+        }
+
+        map[tool] = destructive;
+    }
 
     /// <summary>Ends the running server behind <paramref name="name"/>, as a crash would: its client sees the transport close.</summary>
     public async Task Drop(string name) => await _servers[name].DisposeAsync();
@@ -76,7 +92,8 @@ public sealed class InProcessMcpServers : IAsyncDisposable
             _ = old.DisposeAsync();
         }
 
-        var server = McpPipeServer.Start(_tools.TryGetValue(name, out var tools) ? tools : DefaultTools, name, readOnly: _readOnly.GetValueOrDefault(name), drops: !Steady.Contains(name));
+        var server = McpPipeServer.Start(_tools.TryGetValue(name, out var tools) ? tools : DefaultTools, name, readOnly: _readOnly.GetValueOrDefault(name), drops: !Steady.Contains(name),
+            destructive: _destructive.GetValueOrDefault(name), instructions: _instructions.GetValueOrDefault(name));
         _servers[name] = server;
         if (_held.Remove(name, out var gate))
         {

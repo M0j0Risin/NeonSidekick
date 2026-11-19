@@ -23,7 +23,7 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 ## Where tools are offered
 
 * **A group appears only when it can work:** Obsidian needs a vault, the databases and UNC a connection or share you ticked, Home Assistant its URL and key, ComfyUI its URL and a workflow.
-* **Headless** leaves some tools out, and refuses anything that would stop to ask you: [Before you start](HEADLESS.md#before-you-start).
+* **Headless** leaves some tools out, and refuses anything that would stop to ask you unless `--allow` names it: [Before you start](HEADLESS.md#before-you-start).
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps the reading tools, `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. `gitlib_tag`, `gitlib_branch` and `gitlib_stash` stay for listing only. It drops the MCP tools and every tool that changes or starts something (`start_timer`, `open`, `process`, `image_edit`…).
 * **Code audit** ([COMMANDS.md](COMMANDS.md#code-audit)) keeps the file, picture, PDF and git reads, `neon_advisor`, `neon_help`, `get_current_time`, `load_skill`, `recall_memory` and `ask_user`, and adds `present_audit`. The web's reads join under *Code audit web research*; an advisor in a pass gets the same set.
 * **On a Mac:** what runs there is in [MAC.md](MAC.md#what-works); a group that behaves differently has its own "… on a Mac" section below.
@@ -351,7 +351,7 @@ Under *Docker tools*, over *Docker engine pipe* (a socket on a Mac, [below](#doc
 
 * `/docker` runs them yourself ([COMMANDS.md](COMMANDS.md)); `--docker-check` tests them against the real engine.
 * **Container text is untrusted:** `docker_logs`' lines and `docker_inspect`'s labels, command and health-check output reach the model fenced (`⟪ ⟫`); `/docker logs` shows them bare.
-* **Changes need two keys:** *Docker writes* offers them, and each call asks you first (headless refuses). `docker_remove` and `docker_prune` start off even then. Every change is logged.
+* **Changes need two keys:** *Docker writes* offers them, and each call asks you first (headless refuses unless `--allow docker`). `docker_remove` and `docker_prune` start off even then. Every change is logged.
 * **Secrets:** `docker_inspect` shows environment variable names, never values, and hides secret-looking labels and passwords. Logs can't be redacted, so the model is told never to repeat a secret from them.
 
 | Tool | Arguments | What it does |
@@ -1201,13 +1201,18 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **A server that drops** reconnects once at its next call, or on Enter at its `/mcp` row. A call cut off by the drop is sent again only if the server marks it read-only.
 * A server's changed tool list applies from your next message.
 * **Server text is untrusted:** each text a tool returns reaches the model fenced (`⟪ ⟫`); a failed call starts `Error:`. A server's tool descriptions aren't fenced: trusting a server is your choice in `mcp.json`.
+* **Calls ask first** (Deny, Allow once, Allow for this session) unless the server marks the tool read-only. That mark is the server's word, so give a server you don't fully trust `"ask": "always"`; `"never"` asks none. Every call that asks is logged.
+* **Headless** refuses a call that asks unless the run has `--allow mcp`, or `--allow mcp:<server>` ([HEADLESS.md](HEADLESS.md#when-a-command-is-refused)).
+* **Tokens are encrypted:** at the next start, a plain `env` or `headers` value whose name holds `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `AUTH` or `CREDENTIAL` (a header's `COOKIE`, an env value's `CONNECTION`) is encrypted in place for your Windows user ([on a Mac](MAC.md#setup)). `args` aren't.
+* **What encrypting costs:** once a token is encrypted, or with `ask` or `instructions` set, the file may not paste back into Claude Desktop. `/settings export` carries a token only to the same user.
+* **Server notes:** what a server says about using its tools reaches the model fenced, at most 2,000 characters a server, as hints that never override your rules. `"instructions": false` leaves a server's out.
 * **`mcp.json`** (`/mcp`'s **edit** rows open it) takes Claude Desktop's and Claude Code's shape, so a block copied from them works. A server has a `command` (with `args`, `env`, `cwd`) or a `url` (with `headers`), never both:
 
 ```json
 {
   "mcpServers": {
     "gateway": { "command": "docker", "args": ["mcp", "gateway", "run"] },
-    "notes": { "url": "https://mcp.example.com/mcp", "headers": { "Authorization": "Bearer <token>" } }
+    "notes": { "url": "https://mcp.example.com/mcp", "headers": { "Authorization": "Bearer <token>" }, "ask": "writes" }
   }
 }
 ```

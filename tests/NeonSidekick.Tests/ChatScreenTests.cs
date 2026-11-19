@@ -4535,6 +4535,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Startup_WithAnMcpServer_PrintsTheStatusLine_OffersTheTools_AndAModelCallRendersTheDefaultLines()
     {
         _settings.Update(d => d.TtsOutput = false);
+        _mcpServers.ReadOnly("pipe", "echo");   // runs unasked (2026-11-19): this test has no pane to ask on
         McpServer();
         _chat.Enqueue(FakeChatClient.Call("c1", "pipe__echo", new Dictionary<string, object?> { ["text"] = "ping" }));
         _chat.EnqueueText("It said ping.");
@@ -4569,7 +4570,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _settings.Update(d => d.TtsOutput = false);
         _mcpServers.Tools("pipe", ("echo", "Echoes."), (McpPipeServer.DropToolName, "Drops."));
-        McpServer();
+        McpServer("""{ "mcpServers": { "pipe": { "command": "pipe-server", "ask": "never" } } }""");   // a write never asked about (2026-11-19): no pane here
         _chat.Enqueue(FakeChatClient.Call("c1", "pipe__drop", new Dictionary<string, object?> { ["text"] = "x" }));
         _chat.EnqueueText("It dropped.");
         PushLine("drop it");
@@ -4710,7 +4711,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · Servers\n  ·   pipe        on   connected · 2 tools  stdio: pipe-server\n  · Tools\n  ·   pipe (2)\n  ·     pipe__echo  on   Echoes the text back.\n  ·     pipe__fail  on   Always fails.\n  · Options\n  ·   MCP servers enabled: on\n  ·   MCP connect timeout (s): 30\n", output);
+        Assert.Contains("  · Servers\n  ·   pipe        on   connected · 2 tools  stdio: pipe-server\n  · Tools\n  ·   pipe (2)\n  ·     pipe__echo  on   asks  Echoes the text back.\n  ·     pipe__fail  on   asks  Always fails.\n  · Options\n  ·   MCP servers enabled: on\n  ·   MCP connect timeout (s): 30\n", output);
         Assert.Empty(_chat.Requests);
     }
 

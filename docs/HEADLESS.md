@@ -4,7 +4,7 @@ How to run Neon Sidekick from scripts with `--headless`. Back to the [README](..
 
 `NeonSidekick.exe --headless` is a plain stdin/stdout prompt: no TUI, no voice, no timers and nothing that can ask you a question. It answers each line of input on stdout.
 
-It exits at `/exit` or the end of input with code 0, or 3 if a shell command was refused ([When a command is refused](#when-a-command-is-refused)). From a checkout: `dotnet run --project src/NeonSidekick -- --headless …`.
+It exits at `/exit` or the end of input with code 0, or 3 if a shell command or a call that asks was refused ([When a command is refused](#when-a-command-is-refused)). From a checkout: `dotnet run --project src/NeonSidekick -- --headless …`.
 
 ```powershell
 NeonSidekick.exe --headless                                               # type messages yourself (over SSH, or where the TUI misbehaves)
@@ -36,9 +36,11 @@ Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one 
 - **In `profile.json`** the lists are `SqlConnectionsOffered`, `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `DuckDbDatabasesOffered`, `UncSharesOffered` and `ComfyWorkflowsOffered`.
 - **`delete` follows *File deletes to Recycle bin*** (on by default), moving files to the Recycle bin (the Trash on a Mac) as in the TUI.
 - **Tools that need the screen are never offered:** the database write tools (`sqlite_execute`, `duckdb_execute`, `sql_execute`, `oracle_execute`, `mysql_execute`, `postgres_execute`), `camera_capture`, `screen_capture`, `screen_list`, `ask_user`, the timer tools, the YouTube playing tools, the video tools and the monitor tools.
-- **Calls that would ask you first are refused** (service and task changes aren't offered):
-  - the model's Docker changes, `print_file` under *Print action policy* `ask`, `neon_advisor` under *Advisor confirm*, `shopping_clear` with `all`;
-  - Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`.
+- **Calls that would ask you first are refused** unless `--allow` names them ([below](#flags-in-headless-runs); service and task changes aren't offered):
+  - the model's Docker changes, `print_file` under *Print action policy* `ask`, `neon_advisor` under *Advisor confirm*;
+  - Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`;
+  - MCP tools their server doesn't mark read-only (by its `"ask"`, [TOOLS.md](TOOLS.md#mcp-servers));
+  - `shopping_clear` with `all`, which `--allow` doesn't cover.
 - **No Browser window:** a web tool that meets a bot check reports it.
 - **The project file** (`NEON.md`, `AGENTS.md`, `CLAUDE.md`) is never changed; the model is told you can make the change.
 - **`open` starts only safe types** (documents, pictures, PDFs, audio, video, text, folders), as in the TUI; a program a shell command opened closes when the run exits.
@@ -168,6 +170,7 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--log <path>` | Every diagnostic line to a file, first the flags, profile and variables in force; `{ts}` becomes the start time. | `--log C:\Logs\neon_{ts}.log` |
 | `--yolo` | Every shell command runs without asking ([below](#running-yolo-every-shell-command-allowed)). | `--yolo --cwd D:\Repo\MyApp` |
 | `--no-police` | The path police off ([below](#turning-off-the-path-police)). | `--no-police --cwd D:\Repo\MyApp` |
+| `--allow <list>` | Runs the calls that would ask: `docker`, `print`, `ha`, `advisor`, `mcp` (every server) or `mcp:<server>`. Repeats join; each allowed call is logged. | `--allow mcp:github,docker` |
 
 A profile of its own (`--profile automation`) keeps scripted runs' memory, sessions and allow list out of your everyday one.
 
@@ -238,7 +241,14 @@ The run carries on. At the end, if anything was refused, it prints a summary and
 [notice] 2 commands were not run: "npm install", "python script"
 ```
 
-Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument, an unknown profile, a settings zip `--import-settings` refused (nothing imported), or an old copy started during or just after an [update](COMMANDS.md#updating) (nothing ran), **3** at least one command was refused.
+A call that would ask (MCP, Docker, print, Home Assistant, an advisor) is refused the same way, with a line per kind naming its `--allow`:
+
+```
+[notice] 2 MCP calls were refused: github__create_issue, github__push_files (--allow mcp:github allows them)
+[notice] 1 Docker change was refused (--allow docker allows it)
+```
+
+Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument, an unknown profile, a settings zip `--import-settings` refused (nothing imported), or an old copy started during or just after an [update](COMMANDS.md#updating) (nothing ran), **3** at least one command or call that asks was refused.
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --cwd D:\Repo\MyApp | Tee-Object run.txt
@@ -257,6 +267,12 @@ Now check which of those affect files in this folder.
 /new
 Summarize README.md in five bullets.
 "@ | NeonSidekick.exe --headless --cwd D:\Repo\MyApp
+```
+
+A job that may write to GitHub over its MCP server and restart a container, nothing else that asks:
+
+```powershell
+Get-Content D:\Jobs\triage.txt | NeonSidekick.exe --headless --profile automation --allow mcp:github,docker
 ```
 
 A fully pinned job:

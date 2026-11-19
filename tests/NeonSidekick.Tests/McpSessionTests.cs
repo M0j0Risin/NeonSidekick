@@ -27,7 +27,7 @@ public class McpSessionTests : IAsyncDisposable
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
     }
 
-    private McpSession Session() => new(_settings, _servers.Transport, _time);
+    private McpSession Session() => new(_settings, _servers.Transport, _time) { Approver = Fakes.McpApprovers.AllowAll };
 
     private void ProfileFile(string json)
     {

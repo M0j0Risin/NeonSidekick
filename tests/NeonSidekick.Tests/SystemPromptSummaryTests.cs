@@ -1016,6 +1016,42 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], mcp: true), SystemPromptSummary.SystemPrompt(Facts() with { McpTools = 1 }));
     }
 
+    /// <summary>
+    /// The servers' notes (2026-11-19, feature idea #59): their own block after the skills, ahead of the plan directive, each fenced; the
+    /// Prompt tab's entry the same block, so the joined sections stay the prompt; none without MCP's gate (tools off, MCP off, no tool),
+    /// in plan mode, or with no notes. A custom operata.md keeps them.
+    /// </summary>
+    [Fact]
+    public void TheMcpNotes_AreTheirOwnSection_UnderTheMcpGate_AndStayTheSystemPrompt()
+    {
+        IReadOnlyList<Mcp.McpServerNote> notes = [new("github", "Use search before create."), new("notes", "Titles are unique.")];
+        var facts = Facts() with { McpTools = 3, McpNotes = notes };
+
+        var sections = SystemPromptSummary.PromptSections(facts);
+        var entry = Assert.Single(sections, s => s.Label == SystemPromptSummary.McpNotesLabel);
+        Assert.Equal(Mcp.McpText.NotesSection(notes), entry.Body);
+        Assert.Equal(SystemPromptSummary.McpNotesStatus(2, "Use search before create.".Length + "Titles are unique.".Length), entry.Status);
+        Assert.Equal(
+            string.Join("\n\n", sections.Where(s => s.InPrompt).Select(s => s.Body)),
+            SystemPromptSummary.SystemPrompt(facts));
+        Assert.Equal(Assistant.SystemPrompt(false, [], skills: [], mcp: true, mcpNotes: notes), SystemPromptSummary.SystemPrompt(facts));
+        Assert.EndsWith(Mcp.McpText.NotesSection(notes), Assistant.SystemPrompt(false, [], skills: [], mcp: true, mcpNotes: notes));
+        Assert.Contains("\ngithub: ⟪Use search before create.⟫", entry.Body);
+
+        Assert.DoesNotContain(SystemPromptSummary.PromptSections(facts with { ToolsEnabled = false }), s => s.Label == SystemPromptSummary.McpNotesLabel);
+        Assert.DoesNotContain(SystemPromptSummary.PromptSections(facts with { McpEnabled = false }), s => s.Label == SystemPromptSummary.McpNotesLabel);
+        Assert.DoesNotContain(SystemPromptSummary.PromptSections(facts with { McpTools = 0 }), s => s.Label == SystemPromptSummary.McpNotesLabel);
+        Assert.DoesNotContain(SystemPromptSummary.PromptSections(facts with { McpNotes = [] }), s => s.Label == SystemPromptSummary.McpNotesLabel);
+        Assert.DoesNotContain(Mcp.McpText.NotesHeading, SystemPromptSummary.SystemPrompt(facts with { ToolsEnabled = false }));
+        Assert.DoesNotContain(Mcp.McpText.NotesHeading, Assistant.SystemPrompt(false, [], skills: [], mcp: false, mcpNotes: notes));
+        Assert.DoesNotContain(Mcp.McpText.NotesHeading, Assistant.SystemPrompt(false, [], tools: false, skills: [], mcp: true, mcpNotes: notes));
+
+        // A custom operata.md loses the MCP rule sentence, never the notes.
+        string custom = Assistant.SystemPrompt(false, [], operatingRules: "Answer in haiku.", skills: [], mcp: true, mcpNotes: notes);
+        Assert.DoesNotContain(Assistant.McpRule, custom);
+        Assert.Contains(Mcp.McpText.NotesSection(notes), custom);
+    }
+
     [Fact]
     public void ToolLines_AndToolsTab_NameEveryTool_WithItsDescription()
     {

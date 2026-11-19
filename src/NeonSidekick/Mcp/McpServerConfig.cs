@@ -35,6 +35,31 @@ public sealed class McpServerConfig
     /// <summary>Headers sent with every request to the HTTP server (<c>Authorization</c> and the like).</summary>
     public Dictionary<string, string>? Headers { get; set; }
 
+    /// <summary>
+    /// When the server's calls ask (2026-11-19, feature idea #28): <c>writes</c> (the default, also when absent), <c>always</c> or
+    /// <c>never</c>, read without regard to case. Any other word is a <see cref="Problem"/>, never quietly <c>never</c>. Kept as written
+    /// for the round trip; <see cref="AskMode"/> is the parsed value.
+    /// </summary>
+    public string? Ask { get; set; }
+
+    /// <summary>
+    /// Whether the server's own instructions reach the model (2026-11-19, feature idea #59): null or true is on, <c>false</c> leaves them
+    /// out. A server's instructions are its own text, so this is the opt-out for one you don't trust.
+    /// </summary>
+    public bool? Instructions { get; set; }
+
+    /// <summary>
+    /// <see cref="Ask"/> parsed (<see cref="McpAskRule.TryParse"/>); <see cref="McpAskMode.Writes"/> for a bad word too, which is a
+    /// <see cref="Problem"/> and never started. Ignored by the context (2026-11-19): <see cref="Fingerprint"/> and <c>/profile push mcp</c>
+    /// serialize this object, and a push would otherwise write an <c>askMode</c> key into the other profile's file.
+    /// </summary>
+    [JsonIgnore]
+    public McpAskMode AskMode => McpAskRule.TryParse(Ask, out var mode) ? mode : McpAskMode.Writes;
+
+    /// <summary>Whether the server's instructions are kept: not <c>"instructions": false</c>.</summary>
+    [JsonIgnore]
+    public bool InstructionsOn => Instructions != false;
+
     /// <summary>Whether this is a stdio server: a non-blank <see cref="Command"/>.</summary>
     [JsonIgnore]
     public bool IsStdio => !string.IsNullOrWhiteSpace(Command);
@@ -45,8 +70,9 @@ public sealed class McpServerConfig
 
     /// <summary>
     /// The reason this entry cannot be started, or null: neither key (<see cref="McpText.NeitherCommandNorUrl"/>),
-    /// both (<see cref="McpText.BothCommandAndUrl"/>), or a <see cref="Url"/> that is not an absolute http(s)
-    /// address (<see cref="McpText.BadUrl"/>). Pure.
+    /// both (<see cref="McpText.BothCommandAndUrl"/>), a <see cref="Url"/> that is not an absolute http(s)
+    /// address (<see cref="McpText.BadUrl"/>), or an <see cref="Ask"/> that isn't one of its three words (<see cref="McpText.BadAsk"/>,
+    /// 2026-11-19). Pure.
     /// </summary>
     [JsonIgnore]
     public string? Problem
@@ -68,7 +94,7 @@ public sealed class McpServerConfig
                 return McpText.BadUrl(Url!);
             }
 
-            return null;
+            return McpAskRule.TryParse(Ask, out _) ? null : McpText.BadAsk;
         }
     }
 

@@ -46,6 +46,9 @@ internal sealed record TurnToolInputs
     public bool SessionsEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Mcp { get; init; }
     public bool McpEnabled { get; init; }
+
+    /// <summary>Every connected server's notes (2026-11-19, feature idea #59, <see cref="McpSession.ServerInstructions"/>); the set keeps those of the servers it offers a tool of.</summary>
+    public IReadOnlyList<Mcp.McpServerNote>? McpNotes { get; init; }
     public IReadOnlyList<AIFunction>? Git { get; init; }
     public bool GitEnabled { get; init; }
     public IReadOnlyList<AIFunction>? Shell { get; init; }
@@ -137,6 +140,12 @@ internal sealed record TurnToolInputs
 /// </summary>
 internal sealed record TurnToolSet(IReadOnlyList<AIFunction> Tools, IReadOnlyList<AIFunction> Offered, TurnRules Rules, RecallMemoryTool? Recall, RunCommandTool? Shell, NeonAdvisorTool? Advisors = null)
 {
+    /// <summary>
+    /// The servers' notes this turn carries (2026-11-19, feature idea #59): <see cref="Mcp.McpNotes.For"/> over the turn's final MCP list (after
+    /// plan mode, botchat's limit and <c>/mcp</c> › Tools), so a server with no tool in the turn has none. Empty without MCP.
+    /// </summary>
+    public IReadOnlyList<Mcp.McpServerNote> McpNotes { get; init; } = [];
+
     public static readonly TurnToolSet Empty = new([], [], new TurnRules(), null, null);
 
     /// <summary>The names of the set's tools whose <c>path</c> is the working folder's (<see cref="WorkingFolderNamesOf"/>).</summary>
@@ -436,7 +445,10 @@ internal sealed partial class ChatScreen
             rules,
             memoryEnabled ? memoryTools.OfType<RecallMemoryTool>().FirstOrDefault() : null,
             shell ? shellTools!.OfType<RunCommandTool>().FirstOrDefault() : null,
-            advisors ? neonAdvisorTools!.OfType<NeonAdvisorTool>().FirstOrDefault() : null);
+            advisors ? neonAdvisorTools!.OfType<NeonAdvisorTool>().FirstOrDefault() : null)
+        {
+            McpNotes = mcp ? Mcp.McpNotes.For(inputs.McpNotes, mcpTools!) : [],
+        };
     }
 
     /// <summary>

@@ -62,7 +62,33 @@ public sealed partial class ChatScreenTests
         var load = McpConfigFile.Load(McpFileOf("work"));
         Assert.Equal(["Docker", "same", "files"], load.Servers.Select(s => s.Key));
         Assert.Equal("docker-old", load.Servers[0].Value.Command);
-        Assert.Equal("abc", load.Servers[2].Value.Env!["TOKEN"]);
+        Assert.Equal("abc", McpSecrets.Reveal(load.Servers[2].Value).Config!.Env!["TOKEN"]);   // encrypted by the load where the store can (2026-11-19)
+    }
+
+    /// <summary>
+    /// A pushed server's <c>ask</c> and <c>instructions</c> (2026-11-19) arrive as written, and the parsed mode never: no <c>askMode</c> key;
+    /// a server with a bad <c>ask</c> is a problem, skipped and counted.
+    /// </summary>
+    [Fact]
+    public async Task ProfilePushMcp_CarriesAskAndInstructions_AsWritten_AndNoAskMode()
+    {
+        WorkProfile();
+        WriteFile(McpFileHere, """{ "mcpServers": { "careful": { "command": "c", "ask": "always", "instructions": false }, "typo": { "command": "t", "ask": "sometimes" } } }""");
+        WriteFile(McpFileOf("work"), """{ "mcpServers": {} }""");
+        PushLine("/profile push mcp work");
+        PickYes();
+        PushLine("/exit");
+
+        await RunAsync();
+
+        string text = File.ReadAllText(McpFileOf("work"));
+        Assert.Contains("\"ask\": \"always\"", text);
+        Assert.Contains("\"instructions\": false", text);
+        Assert.DoesNotContain("askMode", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("instructionsOn", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("typo", text);
+        var careful = Assert.Single(McpConfigFile.Load(McpFileOf("work")).Servers).Value;
+        Assert.Equal(McpAskMode.Always, careful.AskMode);
     }
 
     /// <summary>With overwrite a same-named server (any case) is replaced, the target's spelling kept; MCP off, a note says so.</summary>

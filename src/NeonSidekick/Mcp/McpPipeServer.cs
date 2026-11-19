@@ -60,18 +60,31 @@ public sealed class McpPipeServer : IAsyncDisposable
     private readonly Pipe _serverToClient = new();
     private readonly CancellationTokenSource _stop = new();
     private readonly List<(string Name, string ArgumentsJson)> _calls = [];
-    private readonly IReadOnlySet<string> _readOnly;
+    private readonly IReadOnlyDictionary<string, bool> _destructive;
     private readonly object _toolsLock = new();
+    private IReadOnlySet<string> _readOnly;
     private IReadOnlyList<(string Name, string Description)> _tools;
     private int _listings;
     private int _disposed;
     private McpServer? _server;
     private Task? _run;
 
-    private McpPipeServer(IReadOnlyList<(string Name, string Description)> tools, IReadOnlySet<string> readOnly)
+    private McpPipeServer(IReadOnlyList<(string Name, string Description)> tools, IReadOnlySet<string> readOnly, IReadOnlyDictionary<string, bool> destructive)
     {
         _tools = tools;
         _readOnly = readOnly;
+        _destructive = destructive;
+    }
+
+    /// <summary>
+    /// A tool's hints as listed (2026-11-19): <c>readOnlyHint: true</c> for one in the read-only set, <c>destructiveHint</c> as the
+    /// destructive map says, null for a tool in neither.
+    /// </summary>
+    private ToolAnnotations? Annotations(string name, IReadOnlySet<string> readOnly)
+    {
+        bool isReadOnly = readOnly.Contains(name);
+        bool? destructive = _destructive.TryGetValue(name, out bool d) ? d : null;
+        return isReadOnly || destructive is not null ? new ToolAnnotations { ReadOnlyHint = isReadOnly ? true : null, DestructiveHint = destructive } : null;
     }
 
     /// <summary>The tools the server lists, in order (swapped whole by <see cref="NotifyToolsChangedAsync"/>).</summary>
@@ -104,16 +117,18 @@ public sealed class McpPipeServer : IAsyncDisposable
     /// <summary>
     /// Starts a server listing <paramref name="tools"/>, their schema closed when <paramref name="closed"/>, those named in
     /// <paramref name="readOnly"/> marked <c>readOnlyHint: true</c>; it runs until disposed. Without <paramref name="drops"/> the
-    /// <see cref="DropToolName"/> tool echoes like any other (the server that came back).
+    /// <see cref="DropToolName"/> tool echoes like any other (the server that came back). <paramref name="destructive"/> (2026-11-19) sets a
+    /// tool's <c>destructiveHint</c>, true or false; <paramref name="instructions"/> is what the handshake tells the client.
     /// </summary>
-    public static McpPipeServer Start(IReadOnlyList<(string Name, string Description)> tools, string serverName = "neon-pipe", bool closed = false, IReadOnlySet<string>? readOnly = null, bool drops = true)
+    public static McpPipeServer Start(IReadOnlyList<(string Name, string Description)> tools, string serverName = "neon-pipe", bool closed = false, IReadOnlySet<string>? readOnly = null, bool drops = true, IReadOnlyDictionary<string, bool>? destructive = null, string? instructions = null)
     {
         var schema = closed ? ClosedSchema : Schema;
         ArgumentNullException.ThrowIfNull(tools);
-        var server = new McpPipeServer(tools, readOnly ?? new HashSet<string>(StringComparer.Ordinal));
+        var server = new McpPipeServer(tools, readOnly ?? new HashSet<string>(StringComparer.Ordinal), destructive ?? new Dictionary<string, bool>(StringComparer.Ordinal));
         var options = new McpServerOptions
         {
             ServerInfo = new Implementation { Name = serverName, Version = "1.0" },
+            ServerInstructions = instructions,
             // ListChanged (2026-11-19): a server that sends notifications/tools/list_changed declares it, as a real one must.
             Capabilities = new ServerCapabilities { Tools = new ToolsCapability { ListChanged = true } },
             Handlers = new McpServerHandlers
@@ -126,14 +141,22 @@ public sealed class McpPipeServer : IAsyncDisposable
                         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
                     }
 
+                    IReadOnlyList<(string Name, string Description)> listed;
+                    IReadOnlySet<string> marked;
+                    lock (server._toolsLock)
+                    {
+                        listed = server._tools;
+                        marked = server._readOnly;
+                    }
+
                     return new ListToolsResult
                     {
-                        Tools = server.Tools.Select(t => new Tool
+                        Tools = listed.Select(t => new Tool
                         {
                             Name = t.Name,
                             Description = t.Description,
                             InputSchema = schema,
-                            Annotations = server._readOnly.Contains(t.Name) ? new ToolAnnotations { ReadOnlyHint = true } : null,
+                            Annotations = server.Annotations(t.Name, marked),
                         }).ToList(),
                     };
                 },
@@ -187,13 +210,20 @@ public sealed class McpPipeServer : IAsyncDisposable
         throw new InvalidOperationException("unreachable");
     }
 
-    /// <summary>Swaps the tool list and sends <c>notifications/tools/list_changed</c> (2026-11-19), with no parameters to serialize (AOT).</summary>
-    public async Task NotifyToolsChangedAsync(IReadOnlyList<(string Name, string Description)> tools, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Swaps the tool list and sends <c>notifications/tools/list_changed</c> (2026-11-19), with no parameters to serialize (AOT); with
+    /// <paramref name="readOnly"/> the read-only marks are swapped with it (a read-only tool that turns into a write).
+    /// </summary>
+    public async Task NotifyToolsChangedAsync(IReadOnlyList<(string Name, string Description)> tools, CancellationToken cancellationToken = default, IReadOnlySet<string>? readOnly = null)
     {
         ArgumentNullException.ThrowIfNull(tools);
         lock (_toolsLock)
         {
             _tools = tools;
+            if (readOnly is not null)
+            {
+                _readOnly = readOnly;
+            }
         }
 
         await _server!.SendNotificationAsync(NotificationMethods.ToolListChangedNotification, cancellationToken).ConfigureAwait(false);

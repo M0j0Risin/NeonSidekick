@@ -11,6 +11,12 @@ namespace NeonSidekick.Help;
 public sealed record HelpMcpLookup(string Server, McpState State)
 {
     /// <summary>
+    /// Whether a call to the tool asks the user first (2026-11-19, feature idea #28): its server's <c>ask</c> over the tool the server lists
+    /// (<see cref="Mcp.McpAskRule.Asks"/>). False when the name only leads with a server's prefix, a tool the server doesn't list.
+    /// </summary>
+    public bool Asks { get; init; }
+
+    /// <summary>
     /// The server a tool's name belongs to among <paramref name="servers"/>: the one listing a tool of that name, else the one whose sanitized
     /// name and <c>__</c> lead it (the longest such); null for none. Shared by the screen and headless.
     /// </summary>
@@ -20,7 +26,8 @@ public sealed record HelpMcpLookup(string Server, McpState State)
         ArgumentNullException.ThrowIfNull(name);
         if (servers.FirstOrDefault(s => s.Tools.Any(t => string.Equals(t.Name, name, StringComparison.Ordinal))) is { } exact)
         {
-            return new HelpMcpLookup(exact.Name, exact.State);
+            var tool = exact.Tools.First(t => string.Equals(t.Name, name, StringComparison.Ordinal));
+            return new HelpMcpLookup(exact.Name, exact.State) { Asks = Mcp.McpAskRule.Asks(exact.Ask, tool) };
         }
 
         var lead = servers
@@ -62,6 +69,12 @@ public sealed record HelpLive(
 
     /// <summary>An MCP tool's name looked up among the session's servers; null when there is no session to ask.</summary>
     public Func<string, HelpMcpLookup?>? Mcp { get; init; }
+
+    /// <summary>
+    /// Whether an unattended Ralph pass leaves out the MCP tools that ask (2026-11-19, feature idea #28): the screen's
+    /// <c>RalphAsksBarred()</c>. Headless leaves it false: its pass offers them and refuses each call.
+    /// </summary>
+    public bool McpAsksBarred { get; init; }
 
     /// <summary>
     /// The live line for an app tool, in the order the screen and headless share: offered first, whatever the catalog says; then the tools
@@ -108,14 +121,15 @@ public sealed record HelpLive(
     }
 
     /// <summary>
-    /// The live line for an MCP tool: offered; else the tools off, plan mode, <c>MCP servers enabled</c> off, no server of that name, its
-    /// server not connected (the state alone), the tool off on <c>/mcp</c> › Tools.
+    /// The live line for an MCP tool: offered, and whether it asks first (2026-11-19); else the tools off, plan mode, <c>MCP servers
+    /// enabled</c> off, no server of that name, its server not connected (the state alone), an unattended Ralph pass leaving out a tool
+    /// that asks, the tool off on <c>/mcp</c> › Tools.
     /// </summary>
     internal string McpLine(string name, HelpMcpLookup? found)
     {
         if (Offered.Contains(name))
         {
-            return HelpText.LiveOffered;
+            return found is { Asks: true } ? HelpText.LiveOfferedAsks : HelpText.LiveOfferedUnasked;
         }
 
         string? why = !ToolsEnabled ? HelpText.LiveToolsOff
@@ -123,6 +137,7 @@ public sealed record HelpLive(
             : Settings is { McpServers: false } ? ToolsText.SwitchOffReason(SettingsField.McpServers)
             : found is null ? HelpText.LiveNoMcpServer
             : found.State != McpState.Connected ? HelpText.LiveMcpState(found.State)
+            : McpAsksBarred && found.Asks ? HelpText.LiveRalphAsk
             : DisabledByName.Contains(name) ? HelpText.LiveMcpOffByName
             : null;
         return HelpText.LiveNotOffered(why);

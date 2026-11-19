@@ -979,6 +979,22 @@ public sealed class SettingsArchiveTests : IDisposable
         Assert.True(line.Warn);
     }
 
+    /// <summary>An <c>mcp.json</c> whose token was encrypted here (2026-11-19, feature idea #29) is named too: the other computer's store holds it.</summary>
+    [Fact]
+    public void Import_NamesAnMcpFileWithAnEncryptedToken()
+    {
+        string zip = Zip([
+            ("profiles/neon/configs/mcp.json", """{ "mcpServers": { "gh": { "command": "x", "env": { "GITHUB_TOKEN": "dpapi:AAAA" } } } }"""),
+            ("configs/mcp.json", """{ "mcpServers": { "plain": { "command": "x", "env": { "PATH": "/usr/bin" } } } }"""),
+        ]);
+
+        var outcome = Import(zip);
+
+        var line = outcome.Lines.Single(l => l.Text == SettingsTransferText.ConnectionPasswords(["profiles/neon/configs/mcp.json"]));
+        Assert.True(line.Warn);
+        Assert.Contains("passwords or keys", SettingsTransferText.ConnectionPasswords(["x.json"]), StringComparison.Ordinal);
+    }
+
     /// <summary>A connection file with a duplicate key, the home's or a profile's, still lands with no error (2026-11-14, the review's #21).</summary>
     [Fact]
     public void Import_AConnectionFileWithADuplicateKey_StillLands()

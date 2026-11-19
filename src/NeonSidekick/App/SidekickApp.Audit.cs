@@ -178,7 +178,7 @@ public sealed partial class SidekickApp
         }
 
         var reviewer = named ?? PlanReviewer.Model;
-        if (reviewer != PlanReviewer.Model && HeadlessAdvisorsOffered() && EffectiveSettings.AdvisorConfirm)
+        if (reviewer != PlanReviewer.Model && HeadlessAdvisorsOffered() && HeadlessAdvisorsConfirmBlocked())
         {
             // No confirm seam headless: every advisor call would be refused, so the model audits alone.
             reviewer = PlanReviewer.Model;

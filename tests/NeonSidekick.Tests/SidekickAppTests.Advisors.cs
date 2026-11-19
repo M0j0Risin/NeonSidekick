@@ -1,4 +1,5 @@
 using NeonSidekick.Advisors;
+using NeonSidekick.App;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
@@ -39,10 +40,38 @@ public partial class SidekickAppTests
         _chat.Enqueue(FakeChatClient.Call("c1", NeonAdvisorTool.ToolName, new Dictionary<string, object?> { ["advisor"] = "dba", ["question"] = "Which index?" }));
         _chat.EnqueueText("Alone, then.");
 
-        string output = await Headless("speed up the joins\n");
+        string output = await Headless("speed up the joins\n", exitCode: SidekickApp.HeadlessRefusedExitCode);
 
         Assert.Contains("[tool] neon_advisor -> " + AdvisorText.NotAskedError, output);
         Assert.Equal(2, _chat.Requests.Count);
+        // Counted since 2026-11-19 (feature idea #45): the summary names its flag, and the run exits 3.
+        Assert.Contains("[notice] " + SidekickOptions.RefusedSummary(AllowKind.Advisor, 1, "advisor"), output);
+    }
+
+    /// <summary><c>--allow advisor</c> (2026-11-19, feature idea #45): the call under Advisor confirm runs, logged, and nothing is counted.</summary>
+    [Fact]
+    public async Task Headless_Advisors_UnderConfirm_RunWithAllowAdvisor()
+    {
+        ServerOn1234("llama");
+        HeadlessAdvisor(confirm: true);
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonAdvisorTool.ToolName, new Dictionary<string, object?> { ["advisor"] = "dba", ["question"] = "Which index?" }));
+        _chat.EnqueueText("Add an index on orders.customer_id.");
+        _chat.EnqueueText("Adding it.");
+        var lines = new List<string>();
+        void Capture(NeonSidekick.Diagnostics.DiagnosticEvent e) => lines.Add(e.Message);
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += Capture;
+        string output;
+        try
+        {
+            output = await Headless("speed up the joins\n", options: SidekickOptions.None with { AllowList = ["advisor"] });
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= Capture;
+        }
+
+        Assert.DoesNotContain(AdvisorText.NotAskedError, output);
+        Assert.Contains(lines, l => l.StartsWith(NeonSidekick.Mcp.McpText.AllowedBy("advisor") + ": dba: Which index?", StringComparison.Ordinal));
     }
 
     [Fact]

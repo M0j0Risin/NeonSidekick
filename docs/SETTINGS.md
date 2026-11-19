@@ -328,7 +328,7 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 | Advisor context | What the model's calls send: `brief` (the question and context) or `recent` (the last 10 messages too). `/advisor` always sends the last 10. A gap review or code audit pass sends only the question and context. | `brief` |
 | Advisor max calls per turn | The most advisor calls one reply may make (1–10). | 2 |
 | Advisor max tool iterations | Tool round trips an advisor may make before answering (0–10; 0 is text only). | 4 |
-| Advisor confirm | Each call waits for your yes; headless refuses them. | off |
+| Advisor confirm | Each call waits for your yes; headless refuses them unless `--allow advisor`. | off |
 | Advisor thread length | Earlier questions and answers each advisor remembers (1–50); `/new` starts over. | 10 |
 | Advisor embedded mode | An advisor on another embedded model: `parent-server` answers on the running model; `multi-server` runs an extra `llama-server` for its model. | `parent-server` |
 
@@ -674,7 +674,7 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 | Setting | What it does | Default |
 |---|---|---|
 | Docker tools | Offers the read-only Docker tools (containers, logs, inspect, stats, resources, compose); `/docker` works either way. See [Docker](TOOLS.md#docker), [Docker on a Mac](TOOLS.md#docker-on-a-mac). | off |
-| Docker writes | The master switch for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune`. Every call asks first; headless refuses them. | off |
+| Docker writes | The master switch for the model's changes: `docker_lifecycle`, `docker_pull`, `docker_remove` and `docker_prune`. Every call asks first; headless refuses them unless `--allow docker`. | off |
 | Docker engine pipe | The engine's named pipe (`docker_engine` is Docker Desktop's). On a Mac the row is *Docker engine socket*, the engine's Unix socket; empty finds it as the `docker` command does. | `\\.\pipe\docker_engine` (on a Mac, found) |
 
 #### ComfyUI
@@ -941,7 +941,7 @@ Each monitor's input names, hidden inputs and *This PC's input* are set per prof
 | Setting | What it does | Default |
 |---|---|---|
 | Print tools | Offers `list_printers` and `print_file`; `/print` works either way. On a Mac they print through CUPS, to the printers in System Settings. | off |
-| Print action policy | `off`: list printers only. `ask`: each print waits for your yes (refused headless). `allow`: prints without asking. `/print` never asks. | `ask` |
+| Print action policy | `off`: list printers only. `ask`: each print waits for your yes (refused headless unless `--allow print`). `allow`: prints without asking. `/print` never asks. | `ask` |
 | Print default printer | Where a print goes when none is named. | empty (the system default) |
 | Print font size (pt) | The body text size for printed listings and Markdown (6–24). | 10 |
 | PDF engine | What makes PDFs for `convert_to_pdf` and `/pdf`: `auto` (a Chromium browser, else Microsoft Print to PDF), `browser` or `printer` (Windows only). Editing a PDF always needs the browser ([Making PDFs](TOOLS.md#making-pdfs)). | `auto` |
@@ -958,7 +958,7 @@ The household's tools.
 | Home Assistant URL | Your server (`http://localhost:8123`, or one on your LAN). | empty |
 | Home Assistant API key | A long-lived access token (your Home Assistant profile › Security), saved encrypted; empty clears it. | empty |
 | Home Assistant test connection | Asks the server for its version with the saved URL and token. | — |
-| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, media and to-do lists run; anything else (a switch, script, automation, a sentence for Assist) asks first, refused headless. `allow`: everything runs. `/ha` never asks. | `ask` |
+| Home Assistant action policy | `off`: read only. `ask`: lights, scenes, media and to-do lists run; anything else (a switch, script, automation, a sentence for Assist) asks first, refused headless unless `--allow ha`. `allow`: everything runs. `/ha` never asks. | `ask` |
 | Home Assistant Assist agent | The conversation agent `ha_assist` and `/ha say` use. | empty (Home Assistant's default) |
 | Home Assistant timeout (s) | How long one request may take (2–60); a camera's picture gets at least 15 s. | 10 |
 
@@ -978,11 +978,11 @@ Outside programs that give the model more tools.
 
 ### Servers
 
-One row per server in `mcp.json` (the profile's, then the home's; the profile's entry wins on a name clash), with its state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off; Enter on a failed one retries. Below: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
+One row per server in `mcp.json` (the profile's, then the home's; the profile's entry wins on a name clash), with its state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off; Enter on a failed one retries. A connected server's footer says how it asks and how long its notes are. Below: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
 
 ### Tools
 
-Every connected server's tools, as `<server>__<tool>`, with their descriptions; Enter or Space switches one. With two or more servers, a second tab row shows one server's tools.
+Every connected server's tools, as `<server>__<tool>`, with their descriptions; Enter or Space switches one. A tool that asks before each call (by its server's `"ask"`) is tagged `asks`, and its footer says whether it asks. With two or more servers, a second tab row shows one server's tools.
 
 ### Options
 
@@ -1003,6 +1003,7 @@ The system prompt section by section, each with its status:
 * **Operating rules** (built in, or `operata.md`)
 * **Project notes** (`NEON.md`, else `AGENTS.md`, else `CLAUDE.md`; see *Project file*)
 * **Memory**
+* **MCP server notes** (what connected servers say about their tools; a server's `"instructions": false` leaves its notes out)
 * **Voice directive** (`vocalia.md`, when it has text; spoken turns only)
 
 ### Tools

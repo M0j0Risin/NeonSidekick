@@ -89,7 +89,7 @@ public class McpConfigFileTests : IDisposable
         var gateway = Assert.Single(load.Servers).Value;
         Assert.True(gateway.IsHttp);
         Assert.Equal("http", gateway.Type);
-        Assert.Equal("Bearer x", gateway.Headers!["Authorization"]);
+        Assert.Equal("Bearer x", McpSecrets.Reveal(gateway).Config!.Headers!["Authorization"]);   // encrypted in place where the store can (2026-11-19)
         Assert.Equal("http: http://localhost:8811/mcp", gateway.Describe());
     }
 

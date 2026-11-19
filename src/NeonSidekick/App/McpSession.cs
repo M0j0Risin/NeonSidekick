@@ -31,6 +31,19 @@ public sealed record McpServerStatus(string Name, McpScope Scope, McpScope? Shad
     /// so the rows the tests build don't change.
     /// </summary>
     public string? Dropped { get; init; }
+
+    /// <summary>
+    /// The server's <c>ask</c> (2026-11-19, feature idea #28), from its live connection: the <c>/mcp</c> footer, the Tools tab's tag and
+    /// <c>neon_help</c> read it, since the published rows are all a static reader has. <see cref="McpAskMode.Writes"/> on a row that isn't
+    /// connected; an init property, so the tests' rows don't change.
+    /// </summary>
+    public McpAskMode Ask { get; init; }
+
+    /// <summary>How many characters of notes the connected server sends (2026-11-19, feature idea #59): null for none. The row never carries the text.</summary>
+    public int? NotesLength { get; init; }
+
+    /// <summary>Whether the server's notes are kept: false for <c>"instructions": false</c> in its entry.</summary>
+    public bool NotesOn { get; init; } = true;
 }
 
 /// <summary>One connected server's tools, for the <c>/usage</c> and <c>/mcp</c> groups.</summary>
@@ -75,9 +88,11 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// One live client: the entry and the timeout it was started with (a reconnect reuses both, so an <c>mcp.json</c> edit waits for a
-    /// reload), its tools, and <see cref="Dropped"/> once its session ended without the app stopping it.
+    /// reload), its tools, and <see cref="Dropped"/> once its session ended without the app stopping it. <see cref="Instructions"/> (2026-11-19,
+    /// feature idea #59) is the server's own text as the handshake gave it, cut at <see cref="McpText.NotesPerServer"/>, or null for none
+    /// or an entry that opts out: read at each connect, so a reconnect refreshes it.
     /// </summary>
-    private sealed record Connection(McpClient Client, string Fingerprint, IReadOnlyList<McpTool> Tools, McpServerEntry Entry, int TimeoutSeconds, Listing Listing)
+    private sealed record Connection(McpClient Client, string Fingerprint, IReadOnlyList<McpTool> Tools, McpServerEntry Entry, int TimeoutSeconds, Listing Listing, string? Instructions)
     {
         public string? Dropped { get; init; }
 
@@ -105,6 +120,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     private IReadOnlyList<McpConfigProblem> _problems = [];
     private IReadOnlyList<AIFunction> _tools = [];
     private IReadOnlyList<McpServerTools> _serverTools = [];
+    private IReadOnlyList<McpServerNote> _notes = [];
     private bool _attempted;
     private bool _disposed;
 
@@ -129,6 +145,30 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
 
     /// <summary>Every connected server's tools by server: the <c>/usage</c> and <c>/mcp</c> groups.</summary>
     public IReadOnlyList<McpServerTools> ServerTools { get { lock (_snapshot) { return _serverTools; } } }
+
+    /// <summary>
+    /// Every connected server's notes (2026-11-19, feature idea #59), in the catalog's order, for the servers that don't opt out and send a
+    /// non-blank text. The session publishes them all; a turn keeps the servers with a tool in it (<see cref="McpNotes.For"/>).
+    /// </summary>
+    public IReadOnlyList<McpServerNote> ServerInstructions { get { lock (_snapshot) { return _notes; } } }
+
+    /// <summary>
+    /// Who answers a call that asks (2026-11-19, feature idea #28): the screen's pane, or headless's <c>--allow</c> judge. Null means
+    /// nobody can be asked, so such a call is refused: the safe default needs no wiring. Read once per call that asks.
+    /// </summary>
+    public Func<McpAsk, CancellationToken, Task<McpVerdict>>? Approver { get; set; }
+
+    /// <summary>The names of the offered tools that would ask under their server's <c>ask</c>: what an unattended Ralph pass leaves out.</summary>
+    public IReadOnlySet<string> AskingNames()
+    {
+        lock (_snapshot)
+        {
+            return _servers
+                .Where(r => r.State == McpState.Connected)
+                .SelectMany(r => r.Tools.Where(t => McpAskRule.Asks(r.Ask, t)).Select(t => t.Name))
+                .ToHashSet(StringComparer.Ordinal);
+        }
+    }
 
     /// <summary>Whether either file names a server or has a problem worth showing.</summary>
     public bool Configured => Servers.Count > 0 || Problems.Count > 0;
@@ -363,7 +403,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
                 {
                     if (_connections.TryGetValue(entry.Name, out var live))
                     {
-                        rows.Add(new McpServerStatus(entry.Name, entry.Scope, null, true, McpState.Connected, null, live.Tools, entry.Config.Describe()) { Dropped = live.Dropped });
+                        rows.Add(ConnectedFacts(new McpServerStatus(entry.Name, entry.Scope, null, true, McpState.Connected, null, live.Tools, entry.Config.Describe()) { Dropped = live.Dropped }, live));
                         kept++;
                         continue;
                     }
@@ -423,23 +463,34 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         var started = _time.GetTimestamp();
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        // A stored value decrypted only here (2026-11-19, feature idea #29): the transport gets the plain copy, while the entry, the
+        // fingerprint and the row keep the stored config. A value that can't be read here fails the server; nothing starts.
+        var revealed = McpSecrets.Reveal(entry.Config);
+        if (revealed.Error is { } unreadable)
+        {
+            DiagnosticLog.Info(Category, McpText.FailedLogLine(name, unreadable));
+            return new McpServerStatus(name, entry.Scope, null, true, McpState.Failed, unreadable, [], entry.Config.Describe());
+        }
+
         McpClient? client = null;
         try
         {
-            var transport = _transport(entry.Config, name);
+            var transport = _transport(revealed.Config!, name);
             var options = new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = ClientName, Version = AppVersion() },
                 InitializationTimeout = TimeSpan.FromSeconds(timeoutSeconds),
             };
             client = await McpClient.CreateAsync(transport, options, null, budget.Token).ConfigureAwait(false);
+            // The server's notes (2026-11-19, feature idea #59) only through the SDK's property, so a later spec that moves them keeps working.
+            string? instructions = entry.Config.InstructionsOn ? McpNotes.Cut(name, client.ServerInstructions) : null;
             var listed = await client.ListToolsAsync((ModelContextProtocol.RequestOptions?)null, budget.Token).ConfigureAwait(false);
             var tools = BuildTools(name, client, listed);
             var elapsed = _time.GetElapsedTime(started);
             var connected = client;
             lock (_snapshot)
             {
-                _connections[name] = new Connection(connected, entry.Config.Fingerprint(), tools, entry, timeoutSeconds, new Listing());
+                _connections[name] = new Connection(connected, entry.Config.Fingerprint(), tools, entry, timeoutSeconds, new Listing(), instructions);
             }
 
             // The watcher only after the store (2026-11-19): a client that died since CreateAsync finds itself current, and its finished
@@ -555,6 +606,57 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         {
             Reconnected(name, reconnected);
             return McpCallOutcome.Failed(McpText.NoLongerOffersError(name, tool.ServerToolName));
+        }
+
+        // The ask (2026-11-19, feature idea #28): judged on the tool as the current list describes it, right before the send.
+        var mode = live.Entry.Config.AskMode;
+        var arguments = (IReadOnlyDictionary<string, System.Text.Json.JsonElement>?)request.Arguments?.ToDictionary(StringComparer.Ordinal);
+        if (McpAskRule.Asks(mode, sending))
+        {
+            var ask = new McpAsk(name, toolName, sending.Name, arguments ?? new Dictionary<string, System.Text.Json.JsonElement>(), McpAskRule.Note(sending));
+            var verdict = Approver is { } approver ? await approver(ask, cancellationToken).ConfigureAwait(false) : McpVerdict.Nobody;
+            switch (verdict)
+            {
+                case McpVerdict.Allowed(var how):
+                    DiagnosticLog.Info(Category, McpText.AuditLogLine(sending.Name, how, arguments));
+                    break;
+                case McpVerdict.NotAsked(var tail):
+                    DiagnosticLog.Info(Category, McpText.AuditLogLine(sending.Name, McpText.NotAskedWord, arguments));
+                    Reconnected(name, reconnected);
+                    return McpCallOutcome.Failed(McpText.NotAskedError(sending.Name, tail));
+                default:
+                    DiagnosticLog.Info(Category, McpText.AuditLogLine(sending.Name, McpText.DeniedWord, arguments));
+                    Reconnected(name, reconnected);
+                    return McpCallOutcome.Failed(McpText.DeniedError(sending.Name));
+            }
+
+            // The pane may have waited: the server can have been switched off, removed, or dropped meanwhile. A dropped one reconnects first
+            // (nothing was sent, so that's safe for any tool) and the call goes out without asking again: the user said yes to this call.
+            var after = Usable(name, toolName);
+            if (after.Refusal is null && (after.Live is null || after.Live.Dead))
+            {
+                after = await ReconnectForCallAsync(name, toolName, after.Live?.Client, null, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (after.Refusal is { } refusedAfter)
+            {
+                Reconnected(name, reconnected);
+                return refusedAfter;
+            }
+
+            reconnected = after.Reconnected ?? reconnected;
+            live = after.Live!;
+            if (Offered(live, tool) is not { } still)
+            {
+                Reconnected(name, reconnected);
+                return McpCallOutcome.Failed(McpText.NoLongerOffersError(name, tool.ServerToolName));
+            }
+
+            sending = still;
+        }
+        else if (!sending.ReadOnly)
+        {
+            DiagnosticLog.Info(Category, McpText.AuditLogLine(sending.Name, McpText.RanUnasked, arguments));
         }
 
         var first = await SendAsync(live, request, cancellationToken).ConfigureAwait(false);
@@ -982,7 +1084,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         lock (_snapshot)
         {
             row = row.State == McpState.Connected && _connections.TryGetValue(row.Name, out var live)
-                ? row with { Tools = live.Tools, Dropped = live.Dropped }
+                ? ConnectedFacts(row with { Tools = live.Tools, Dropped = live.Dropped }, live)
                 : row with { Dropped = null };
             var rows = _servers.ToList();
             Replace(rows, row);
@@ -1007,7 +1109,23 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         var connected = rows.Where(r => r.State == McpState.Connected && r.Tools.Count > 0).ToList();
         _serverTools = connected.Select(r => new McpServerTools(r.Name, r.Tools)).ToArray();
         _tools = connected.SelectMany(r => r.Tools).ToArray();
+        _notes = rows
+            .Where(r => r.State == McpState.Connected && r.Startable)
+            .Select(r => _connections.TryGetValue(r.Name, out var live) && !string.IsNullOrWhiteSpace(live.Instructions) ? new McpServerNote(r.Name, live.Instructions) : null)
+            .OfType<McpServerNote>()
+            .ToArray();
     }
+
+    /// <summary>
+    /// A connected row with the facts only its live connection knows (2026-11-19): the server's <c>ask</c> and its notes' length. One
+    /// helper for a connect, a reload's kept connection (a new row that would otherwise reset both) and every published row.
+    /// </summary>
+    private static McpServerStatus ConnectedFacts(McpServerStatus row, Connection live) => row with
+    {
+        Ask = live.Entry.Config.AskMode,
+        NotesLength = string.IsNullOrWhiteSpace(live.Instructions) ? null : live.Instructions.Length,
+        NotesOn = live.Entry.Config.InstructionsOn,
+    };
 
     private static void Replace(List<McpServerStatus> rows, McpServerStatus row)
     {

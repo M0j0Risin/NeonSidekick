@@ -918,6 +918,7 @@ public partial class SidekickAppTests : IDisposable
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(NeonSidekick.Mcp.McpConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "mcpServers": { "pipe": { "command": "pipe-server" } } }""");
         _settings.Update(d => d.McpServers = true);   // off by default since 2026-09-21: the profile opts in
+        _mcpServers.ReadOnly("pipe", "echo");   // runs unasked (2026-11-19): no --allow here
         _chat.Enqueue(FakeChatClient.Call("c1", "pipe__echo", new Dictionary<string, object?> { ["text"] = "ping" }));
         _chat.EnqueueText("It said ping.");
 
@@ -937,7 +938,10 @@ public partial class SidekickAppTests : IDisposable
     {
         ServerOn1234("llama");
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
-        File.WriteAllText(NeonSidekick.Mcp.McpConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "mcpServers": { "pipe": { "command": "pipe-server" } } }""");
+        // A write is never asked about (2026-11-19): it stays a write, so the test still proves it isn't sent again.
+        File.WriteAllText(NeonSidekick.Mcp.McpConfigFile.ProfilePath(_settings.ProfileDirectory), readOnly
+            ? """{ "mcpServers": { "pipe": { "command": "pipe-server" } } }"""
+            : """{ "mcpServers": { "pipe": { "command": "pipe-server", "ask": "never" } } }""");
         _settings.Update(d => d.McpServers = true);
         _mcpServers.Tools("pipe", ("echo", "Echoes."), (NeonSidekick.Mcp.McpPipeServer.DropToolName, "Drops."));
         if (readOnly)

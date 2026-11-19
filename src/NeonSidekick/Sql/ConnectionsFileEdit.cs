@@ -64,6 +64,133 @@ public static class ConnectionsFileEdit
     /// <summary><see cref="WritePassword(string, string, string, string?, string, string)"/>'s answer when the token no longer held the value expected.</summary>
     public const string PasswordChanged = "the password changed in the file meanwhile";
 
+    /// <summary><see cref="WriteValue"/>'s answer when a key along the path is given twice (the K8/C7 guard: the reader keeps the last, a splice would write the first).</summary>
+    public const string KeyRepeated = "a key along the path is given twice";
+
+    /// <summary><see cref="WriteValue"/>'s answer when the path doesn't end at a string value.</summary>
+    public const string ValueNotInFile = "no such value in the file";
+
+    /// <summary>
+    /// Writes <paramref name="value"/> over the string at <paramref name="keyPath"/> (2026-11-19, feature idea #29: <c>mcp.json</c>'s
+    /// <c>mcpServers.&lt;name&gt;.headers|env.&lt;key&gt;</c>), touching nothing else, and only while it still holds <paramref name="expected"/>
+    /// (else <see cref="PasswordChanged"/>, silent). Every step matches ordinally and untrimmed, as the MCP reader binds them, never as
+    /// <see cref="Locate"/> matches the families' case-blind, trimmed names. A key given twice anywhere along the path is
+    /// <see cref="KeyRepeated"/>. It never inserts, and waits for no other process (it runs inside a load). Null on success, else why not.
+    /// </summary>
+    public static string? WriteValue(string path, IReadOnlyList<string> keyPath, string value, string expected)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(keyPath);
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(expected);
+        if (keyPath.Count == 0)
+        {
+            return ValueNotInFile;
+        }
+
+        lock (LockFor(path))
+        {
+            try
+            {
+                using var _ = CrossProcess(path, TimeSpan.Zero);
+                byte[] bytes = ForEdit(File.ReadAllBytes(path), out var wide);
+                int bom = Bom(bytes);
+                var found = LocateValue(bytes.AsSpan(bom), keyPath);
+                if (found.Error is { } error)
+                {
+                    return error;
+                }
+
+                if (!string.Equals(found.Current, expected, StringComparison.Ordinal))
+                {
+                    return PasswordChanged;
+                }
+
+                string quoted = "\"" + JsonEncodedText.Encode(value, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\"";
+                Splice(path, bytes, bom + found.Start, bom + found.End, quoted, wide);
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                return LogText.Excerpt(ex.Message);
+            }
+            finally
+            {
+                Computers.ConfigCache.Invalidate(path);
+            }
+        }
+    }
+
+    /// <summary>Where <see cref="WriteValue"/> writes: the string token's byte range and its value, or why not.</summary>
+    private readonly record struct ValueSpot(int Start, int End, string? Current, string? Error);
+
+    private static ValueSpot LocateValue(ReadOnlySpan<byte> json, IReadOnlyList<string> keyPath)
+    {
+        var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+        {
+            return new ValueSpot(0, 0, null, ValueNotInFile);
+        }
+
+        var spot = ScanObject(ref reader, keyPath, 0);
+        return spot.Error is null && spot.End == 0 ? new ValueSpot(0, 0, null, ValueNotInFile) : spot;
+    }
+
+    // One object at path level `level`, read to its end brace: a key matching that step (ordinal) twice is a repeat; a match at the last
+    // step must be a string; a match before it must be an object, read the same way. End == 0 with no error means not found here.
+    private static ValueSpot ScanObject(ref Utf8JsonReader reader, IReadOnlyList<string> keyPath, int level)
+    {
+        var found = new ValueSpot(0, 0, null, null);
+        bool matched = false;
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            bool match = string.Equals(reader.GetString(), keyPath[level], StringComparison.Ordinal);
+            reader.Read();
+            if (!match)
+            {
+                reader.Skip();
+                continue;
+            }
+
+            if (matched)
+            {
+                return new ValueSpot(0, 0, null, KeyRepeated);
+            }
+
+            matched = true;
+            if (level == keyPath.Count - 1)
+            {
+                if (reader.TokenType == JsonTokenType.String)
+                {
+                    int start = (int)reader.TokenStartIndex;
+                    found = new ValueSpot(start, start + reader.ValueSpan.Length + 2, reader.GetString(), null);
+                }
+                else
+                {
+                    reader.Skip();
+                }
+
+                continue;
+            }
+
+            if (reader.TokenType != JsonTokenType.StartObject)
+            {
+                reader.Skip();
+                continue;
+            }
+
+            var inner = ScanObject(ref reader, keyPath, level + 1);
+            if (inner.Error is not null)
+            {
+                return inner;
+            }
+
+            found = inner;
+        }
+
+        return found;
+    }
+
     private static string? WritePasswordLocked(string path, string name, string value, string? expected, string section, string noun)
     {
         try

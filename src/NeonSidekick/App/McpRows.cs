@@ -173,13 +173,28 @@ public static class McpRows
                         _ => McpText.StatusOff,
                     };
                 string scope = server.Scope == McpScope.Global ? "global" : "profile";
-                return new MenuFooter(status, scope + " · " + server.Transport);
+                // A connected server's ask and notes first (2026-11-19, feature ideas #28 and #59), where a long transport can't push them off the cut line.
+                string words = server.State == McpState.Connected && server.ShadowedBy is null ? ConnectedWords(server) : "";
+                return new MenuFooter(status, words + scope + " · " + server.Transport);
             }
 
             default:
                 return null;
         }
     }
+
+    /// <summary>A connected server's footer words, each with its <c> · </c>: <c>asks before writes · notes 812 chars · </c>.</summary>
+    private static string ConnectedWords(McpServerStatus server)
+    {
+        string notes = McpText.NotesFooter(server.NotesLength, server.NotesOn);
+        return McpText.AskFooter(server.Ask) + " · " + (notes.Length > 0 ? notes + " · " : "");
+    }
+
+    /// <summary>The width of the Tools tab's ask column (2026-11-19): <see cref="McpText.AsksTag"/> and its gap.</summary>
+    public const int AskWidth = 6;
+
+    /// <summary>The Tools tab's ask column for <paramref name="tool"/> of <paramref name="server"/>: <see cref="McpText.AsksTag"/> or blank, padded.</summary>
+    public static string AskColumn(McpServerStatus server, McpTool tool) => (McpAskRule.Asks(server.Ask, tool) ? McpText.AsksTag : "").PadRight(AskWidth);
 
     /// <summary>
     /// The Tools tab: a heading per connected server (<c>── docker · 14 ───…</c>, <c>── docker · 12 of 14 ───…</c>, a
@@ -238,9 +253,10 @@ public static class McpRows
             foreach (var tool in tools)
             {
                 bool on = !facts.Disabled.Contains(tool.Name);
+                string ask = AskColumn(server, tool);
                 string row = offered && on
-                    ? Styled(Theme.AccentSecondary, tool.Name.PadRight(width)) + Theme.ColorMarkup(Theme.Ink, ToolsText.State(on).PadRight(StateWidth)) + Theme.DimMarkup(tool.Description)
-                    : Theme.DimMarkup(tool.Name.PadRight(width) + ToolsText.State(on).PadRight(StateWidth) + tool.Description);
+                    ? Styled(Theme.AccentSecondary, tool.Name.PadRight(width)) + Theme.ColorMarkup(Theme.Ink, ToolsText.State(on).PadRight(StateWidth)) + Theme.ColorMarkup(Theme.Ink, ask) + Theme.DimMarkup(tool.Description)
+                    : Theme.DimMarkup(tool.Name.PadRight(width) + ToolsText.State(on).PadRight(StateWidth) + ask + tool.Description);
                 rows.Add((row, tool.Name, false));
             }
         }
@@ -294,9 +310,19 @@ public static class McpRows
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(tool);
-        return facts.Servers.Where(s => s.State == McpState.Connected).SelectMany(s => s.Tools).FirstOrDefault(t => string.Equals(t.Name, tool, StringComparison.Ordinal)) is { } found
-            ? new MenuFooter(found.Description)
-            : null;
+        foreach (var server in facts.Servers.Where(s => s.State == McpState.Connected))
+        {
+            if (server.Tools.FirstOrDefault(t => string.Equals(t.Name, tool, StringComparison.Ordinal)) is { } found)
+            {
+                // Whether it asks (2026-11-19, feature idea #28), and why not when it doesn't.
+                string asks = McpAskRule.Asks(server.Ask, found) ? McpText.ToolAsksFooter
+                    : server.Ask == McpAskMode.Never ? McpText.ToolNeverFooter
+                    : McpText.ToolReadOnlyFooter;
+                return new MenuFooter(found.Description, asks);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The first server row (the cursor's opening place); 0 when there is none.</summary>
@@ -375,7 +401,7 @@ public static class McpRows
             yield return SystemPromptSummary.GroupName(server.Name, left, server.Tools.Count);
             foreach (var tool in server.Tools)
             {
-                yield return "  " + tool.Name.PadRight(width) + ToolsText.State(!facts.Disabled.Contains(tool.Name)).PadRight(StateWidth) + tool.Description;
+                yield return "  " + tool.Name.PadRight(width) + ToolsText.State(!facts.Disabled.Contains(tool.Name)).PadRight(StateWidth) + AskColumn(server, tool) + tool.Description;
             }
         }
     }

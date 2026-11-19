@@ -297,6 +297,31 @@ public class NeonHelpCatalogTests
         Assert.EndsWith(HelpText.LiveNotOffered(HelpText.LiveNoMcpServer), Win("other__thing", live: () => live), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The MCP answer's fixed lines (2026-11-19, feature ideas #28 and #45): whether a call asks and the headless <c>--allow</c>, the model's to
+    /// read, so pinned; the live line says asks or unasked when offered, and an unattended Ralph pass's reason for an asking tool alone.
+    /// </summary>
+    [Fact]
+    public void Live_AnMcpTool_SaysWhetherItAsks_AndTheRalphPassLeavesOutOnlyTheAskingOnes()
+    {
+        Assert.Equal("before each call unless the server marks the tool read-only; \"ask\" in mcp.json changes that (writes, always, never)", HelpText.McpAsksLine);
+        Assert.Equal("offered; a call that asks is refused unless the run has --allow mcp, or --allow mcp:<server> for its server", HelpText.McpHeadlessLine);
+        string bare = Win("pipe__push");
+        Assert.Contains("\n  Asks: " + HelpText.McpAsksLine, bare, StringComparison.Ordinal);
+        Assert.Contains("\n  Headless: " + HelpText.McpHeadlessLine, bare, StringComparison.Ordinal);
+
+        var asks = new HelpMcpLookup("pipe", McpState.Connected) { Asks = true };
+        var unasked = new HelpMcpLookup("pipe", McpState.Connected);
+        var on = new AppSettingsData { McpServers = true };
+        Assert.EndsWith(HelpText.LiveOfferedAsks, Win("pipe__push", live: () => Live(offered: ["pipe__push"], settings: on) with { Mcp = _ => asks }), StringComparison.Ordinal);
+        Assert.EndsWith(HelpText.LiveOfferedUnasked, Win("pipe__read", live: () => Live(offered: ["pipe__read"], settings: on) with { Mcp = _ => unasked }), StringComparison.Ordinal);
+
+        var ralph = Live(settings: on) with { McpAsksBarred = true };
+        Assert.EndsWith(HelpText.LiveNotOffered(HelpText.LiveRalphAsk), Win("pipe__push", live: () => ralph with { Mcp = _ => asks }), StringComparison.Ordinal);
+        Assert.EndsWith(HelpText.LiveNotOffered(HelpText.LiveMcpOffByName),
+            Win("pipe__read", live: () => Live(settings: on, disabled: ["pipe__read"]) with { McpAsksBarred = true, Mcp = _ => unasked }), StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Live_IsAskedOnce_AndOnlyByAToolAnswer()
     {

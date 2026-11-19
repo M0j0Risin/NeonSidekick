@@ -319,7 +319,7 @@ internal static class HelpToolCatalog
     private const string DuckDbSetup = "needs a database in `duckdb.json` ticked on `/tools duckdb`, or *DuckDB sandbox files* on";
     private const string UncSetup = "needs a share in `unc.json`, ticked on `/tools unc`";
     private const string UncWriteSetup = "only on a share whose entry says `\"access\": \"readwrite\"`";
-    private const string DockerWriteSetup = "each change asks on the pane; a headless run refuses every one";
+    private const string DockerWriteSetup = "each change asks on the pane; a headless run refuses every one unless it has --allow docker";
     private const string EventLogSetup = "reads the computers ticked in *Event log computers offered*; with none ticked, only log files in the working directory";
     private const string NetworkSetup = "each host is judged by *Network tools reach* and the host lists, within a scan budget each turn";
     private const string ServiceSetup = "reads the computers ticked in *Service computers offered*";

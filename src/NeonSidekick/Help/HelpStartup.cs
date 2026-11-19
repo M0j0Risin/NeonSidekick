@@ -63,6 +63,7 @@ internal static partial class HelpStartup
         new(SidekickOptions.ImportSettingsFlag, [], null),
         new(SidekickOptions.YoloFlag, [], SettingsField.ShellCommandPolicy),
         new(SidekickOptions.NoPoliceFlag, [], SettingsField.ShellPolice),
+        new(SidekickOptions.AllowFlag, [], null),
         new("--log", [], null),
         new("--version", [], null),
         new("--help", ["-h", "-?"], null),

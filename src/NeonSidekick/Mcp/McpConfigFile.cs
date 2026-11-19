@@ -68,7 +68,7 @@ public sealed class McpConfigFile
         }
 
         // "mcpServers": null reads as null past the non-nullable type (2026-10-22, review K1: it threw here, and the
-        // startup encryption pass and every turn's tool build with it). SqliteConfigFile has had this check since 2026-10-04.
+        // startup encryption pass (EncryptAll, since 2026-11-19) and every turn's tool build with it). SqliteConfigFile has had this check since 2026-10-04.
         if (file?.McpServers is not { Count: > 0 })
         {
             return McpConfigLoad.Empty(path);
@@ -90,6 +90,8 @@ public sealed class McpConfigFile
                 continue;
             }
 
+            // Before the problem check (2026-11-19, feature idea #29): a server skipped over a typo keeps no token plain, the families' rule.
+            McpSecrets.EncryptInPlace(path, name, config);
             if (config.Problem is { } reason)
             {
                 problems.Add(new McpConfigProblem(McpText.ServerSource(path, name), reason));
@@ -100,6 +102,33 @@ public sealed class McpConfigFile
         }
 
         return new McpConfigLoad(path, servers, problems);
+    }
+
+    /// <summary>
+    /// Reads the home's file and every profile's (2026-11-19, feature idea #29), so a plain token is encrypted before the first screen or turn,
+    /// as the families' passes do. The paths read. Never throws: a profile folder that can't be listed is one Warn, the home's file still read.
+    /// </summary>
+    public static IReadOnlyList<string> EncryptAll(string home)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(home);
+        var paths = new List<string> { GlobalPath(home) };
+        try
+        {
+            paths.AddRange(NeonSidekick.Settings.Profiles.List(home).Select(name => ProfilePath(NeonSidekick.Settings.Profiles.Directory(home, name))));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn(Category, Computers.ComputerText.ProfilesUnlistedLogLine(FileName, NeonSidekick.Settings.Profiles.Root(home), LogText.Excerpt(ex.Message)));
+        }
+
+        var read = new List<string>();
+        foreach (string path in paths.Where(File.Exists))
+        {
+            Load(path);
+            read.Add(path);
+        }
+
+        return read;
     }
 
     /// <summary>Writes <see cref="EmptyText"/> to <paramref name="path"/> when no file is there (the folder made first); true when it wrote. Throws on an IO failure — the caller's notice.</summary>
