@@ -2412,6 +2412,9 @@ static class Report
         File.WriteAllText(Path.Combine(outDir, "results.json"), json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
+    /// <summary>The header's one line when no run has finished (2026-11-19), in place of the exe, model, settings and material lines.</summary>
+    internal const string NoRunsLine = "- No run has finished yet: nothing to name the exe, model, settings or material by.";
+
     /// <summary>The current hash a run's key is judged by (2026-11-19): a probe's (<see cref="Probe.ItemPrefix"/>) <c>repo/</c> alone, else its item's.</summary>
     internal static string HashFor(string key) => key.StartsWith(Probe.ItemPrefix, StringComparison.Ordinal)
         ? Material.RepoHash(Repo.MaterialRoot)
@@ -2422,8 +2425,16 @@ static class Report
         ? plan.Gaps.Where(g => runs.Any(r => r.Planted.Any(p => p.Gap.Id == g.Id)))
         : plan.Gaps.Where(g => !g.FollowOn);
 
-    private static void AppendMeta(StringBuilder md, List<RunScore> runs, string currentHash)
+    internal static void AppendMeta(StringBuilder md, List<RunScore> runs, string currentHash)
     {
+        if (runs.Count == 0)
+        {
+            // 2026-11-19: a bench cut off before its first run finished printed four empty lines here (the Ctrl+C hand check's blemish).
+            md.AppendLine(NoRunsLine);
+            md.AppendLine();
+            return;
+        }
+
         string Values(Func<RunScore, string?> pick) => string.Join(" / ", runs.Select(pick).Select(v => v ?? "—").Distinct());
         md.AppendLine($"- Exe: {Values(r => (string?)r.Facts["version"])}");
         md.AppendLine($"- Model: {Values(r => r.Log.ModelId)} at {Values(r => (string?)r.Facts["url"])}");
@@ -3299,8 +3310,17 @@ static class SelfTest
         ProbeRun();
         OneCleanRun();
         AuditRun();
+        NoRunsHeader();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
+    }
+
+    /// <summary>A bench with no finished run (2026-11-19): one line in the header, not four empty ones.</summary>
+    private static void NoRunsHeader()
+    {
+        var md = new StringBuilder();
+        Report.AppendMeta(md, [], "");
+        Expect(md.ToString() == Report.NoRunsLine + Environment.NewLine + Environment.NewLine, $"no runs: the header read {md}");
     }
 
     private static void Expect(bool ok, string what)

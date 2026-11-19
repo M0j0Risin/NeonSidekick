@@ -35,6 +35,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_CodeAudit_ChainsPasses_UntilClean_ThenTheNoPaneLines()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         ServerOn1234("llama");
         HeadlessAuditFiles();
         _chat.Enqueue(FakeChatClient.Call("r1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "src/a.cs" }));
@@ -83,6 +84,7 @@ public partial class SidekickAppTests
     [InlineData(false)]
     public async Task Headless_CodeAudit_ConfirmFocusByChange_TheLastFindingsDimension_ElseSecurity(bool byChange)
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         ServerOn1234("llama");
         HeadlessAuditFiles();
         _settings.Update(d => d.ConfirmFocusByChange = byChange);
@@ -114,6 +116,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_CodeAudit_LowKeepsStreak_ALowPassCounts_AndNeverSaysNothingNew()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         // 2026-11-17, phase 3 (Code audit low keeps streak on): pass 1 serious, pass 2 only a low finding (clean to the streak), pass 3 a low
         // revision that converges. The pass lines, the log and the stop say the low changes; the model hears what any recorded call hears.
         ServerOn1234("llama");

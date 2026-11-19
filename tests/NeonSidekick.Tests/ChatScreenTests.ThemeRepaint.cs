@@ -254,6 +254,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_ThePasses_AreInsideTheLoop_ALaterTurnOutside()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("after"), Line("/exit"));
         ThreePasses();
         _chat.EnqueueText("An ordinary turn.");

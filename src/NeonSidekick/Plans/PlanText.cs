@@ -1198,13 +1198,6 @@ public static class PlanText
         return $"Error: this pass found no gaps but removed {LossWords(loss)}. List each in gaps if it was meant, or put it back, and call present_plan again.";
     }
 
-    /// <summary>What a gap revision's result adds when it lost content (2026-11-17): saved, the loss named for the next pass. Pinned.</summary>
-    public static string LossSentence(PlanLossReport loss)
-    {
-        ArgumentNullException.ThrowIfNull(loss);
-        return $"This revision removed {LossWords(loss)}; if any was not meant to go, put it back in the next pass.";
-    }
-
     /// <summary>The <c>--log</c> line of a revision that lost content (2026-11-17), the lines named, for phase 2 to count.</summary>
     public static string LossLogLine(int pass, PlanLossReport loss, bool refused)
     {

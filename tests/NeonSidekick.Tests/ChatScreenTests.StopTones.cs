@@ -73,6 +73,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_Converged_RingsTheStopToneOnce()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
         _settings.Update(d => d.CodeAuditStopTone = TimerTones.Beep);
         ThreePasses();
@@ -131,6 +132,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_TheDefault_RingsNothing()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
         ThreePasses();
 

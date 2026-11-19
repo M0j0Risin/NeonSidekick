@@ -38,7 +38,7 @@ public partial class SettingsMenuTests
     public void TheCodeAuditRows_DefaultsAndValues()
     {
         var data = new AppSettingsData();
-        Assert.Equal((5, 2, true, false, 40), (data.CodeAuditPasses, data.CodeAuditCleanPasses, data.CodeAuditAskUser, data.CodeAuditWebResearch, data.CodeAuditPassToolCalls));
+        Assert.Equal((5, 1, true, false, 40), (data.CodeAuditPasses, data.CodeAuditCleanPasses, data.CodeAuditAskUser, data.CodeAuditWebResearch, data.CodeAuditPassToolCalls));
         Assert.Equal(NeonSidekick.Audits.AuditFocus.Dimensions, data.CodeAuditFocus);
         Assert.Equal("5 passes", SettingsMenu.FieldValue(SettingsField.CodeAuditPasses, data, _settings.ProfileDirectory));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.CodeAuditAskUser, data, _settings.ProfileDirectory));

@@ -976,14 +976,17 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// How many passes in a row must find nothing new before a code audit ends (2026-10-18): a confirming pass looks first where no pass has
-    /// read, with a focus of its own. <c>/code-audit confirm</c> raises it to at least 2. The plan gap clean passes' range
+    /// read, with a focus of its own. 1, the first clean pass ending it, is the default since 2026-11-19 (GapBench's audit benches: 34 of 42
+    /// planted bugs against 32 with 2, about 13% fewer tokens, once a pass that recorded findings stopped counting clean; 2 from 2026-10-18).
+    /// With *Code audit low keeps streak* on as well it missed more (32, one audit ended part read), so that stays off by default.
+    /// <c>/code-audit confirm</c> raises it to at least 2. The plan gap clean passes' range
     /// (<see cref="MinCodeAuditCleanPasses"/> to <see cref="MaxCodeAuditCleanPasses"/>, the loop's clamp). Read when an audit starts. No variable.
     /// </summary>
     public int CodeAuditCleanPasses { get; set; } = DefaultCodeAuditCleanPasses;
 
     public const int MinCodeAuditCleanPasses = MinPlanGapCleanPasses;
     public const int MaxCodeAuditCleanPasses = MaxPlanGapCleanPasses;
-    public const int DefaultCodeAuditCleanPasses = 2;
+    public const int DefaultCodeAuditCleanPasses = 1;
 
     /// <summary>
     /// Whether a code audit pass whose changes are all low keeps the clean streak (2026-11-17, phase 3 of the gap and audit improvements: the

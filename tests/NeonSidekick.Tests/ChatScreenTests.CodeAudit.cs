@@ -70,6 +70,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_ThePassAndDoneLines_AreTheProgressStyle()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
         _console.EmitAnsiSequences();
         ThreePasses();
@@ -85,6 +86,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_ConvergesAfterTwoCleanPasses_ThePaneOpensOnKeep()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
         ThreePasses();
         var shadow = new List<string>();
@@ -141,6 +143,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_LowKeepsStreak_ALowPassShowsItsFinding_ThenTheLowChangeLine_AndConverges()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         // 2026-11-17, phase 3 (Code audit low keeps streak on): pass 2 adds only a low finding, so its finding shows and then the clean line
         // naming the low change; pass 3 confirms. Nothing calls pass 2 "nothing new".
         _settings.Update(d => d.CodeAuditLowKeepsStreak = true);
@@ -246,6 +249,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_FixViaPlan_EntersPlanMode_OnTheOpenFindings()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         AuditFixture(Line("/code-audit src/"), Keys2(Keys.Char('p'), Keys.Enter), Line("/exit"));
         ThreePasses();
         _chat.EnqueueText("Here is how I'd fix it.");   // 7: plan mode's first turn

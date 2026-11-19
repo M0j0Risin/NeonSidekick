@@ -81,8 +81,6 @@ public class PlanLossTests
         var loss = new PlanLossReport(["Publish it"], ["Write it"], ["Risks"], 45);
         Assert.Equal("Error: this pass found no gaps but removed the unfinished step \"Publish it\"; the tick of \"Write it\"; the section \"## Risks\"; 45% of its length. "
             + "List each in gaps if it was meant, or put it back, and call present_plan again.", PlanText.LossCleanResult(loss));
-        Assert.Equal("This revision removed the unfinished step \"Publish it\"; the tick of \"Write it\"; the section \"## Risks\"; 45% of its length; if any was not meant to go, "
-            + "put it back in the next pass.", PlanText.LossSentence(loss));
         Assert.EndsWith("and 2 more", PlanText.LossLogLine(2, new PlanLossReport(["a", "b", "c", "d", "e", "f", "g"], [], [], null), refused: true), StringComparison.Ordinal);
     }
 

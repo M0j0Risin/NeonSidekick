@@ -543,9 +543,10 @@ public class PlanCleanPassesTests : IDisposable
     }
 
     [Fact]
-    public async Task Tool_ACleanPassThatDropsAStep_IsRefused_AndAGapRevisionThatDoesIsSavedAndSaysSo()
+    public async Task Tool_ACleanPassThatDropsAStep_IsRefused_AndAGapRevisionThatDoesIsSaved_TheModelNotTold()
     {
-        // 2026-11-17, the gap-audit-reliability plan (PlanLoss): a clean report may not remove unfinished content; a gap revision may, named.
+        // 2026-11-17, the gap-audit-reliability plan (PlanLoss): a clean report may not remove unfinished content; a gap revision may.
+        // 2026-11-19: the gap revision's result no longer names the loss (every one in the benches was a rewritten step); only the log does.
         var loop = await PassOneAsync(plan: Revised);
         var loss = PlanLoss.Compare(PlanDocument.Body(FileText()), PlanDocument.SavedBody("Guide", Plan));
         Assert.Equal(["Test it"], loss.Steps);
@@ -556,8 +557,24 @@ public class PlanCleanPassesTests : IDisposable
         Assert.Equal(0, loop.Presented);
         Assert.Equal(1, _session.Revision);
 
-        object? gap = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, new[] { "Test it was the same as Write it" }));
-        Assert.EndsWith(" " + PlanText.LossSentence(loss), (string)gap!, StringComparison.Ordinal);
+        var lines = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { lock (lines) { lines.Add(e.Message); } };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        object? gap;
+        try
+        {
+            gap = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan, new[] { "Test it was the same as Write it" }));
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.DoesNotContain("removed", (string)gap!, StringComparison.Ordinal);
+        lock (lines)
+        {
+            Assert.Contains(PlanText.LossLogLine(loop.Pass, loss, refused: false), lines);
+        }
         Assert.Equal(1, loop.Presented);
         Assert.Equal(2, _session.Revision);
     }

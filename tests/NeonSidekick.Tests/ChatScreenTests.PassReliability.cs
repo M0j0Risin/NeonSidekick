@@ -253,6 +253,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_ATransientFailure_IsRetried_WithItsReadsForgotten()
     {
+        _settings.Update(d => d.CodeAuditCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
         _chat.Enqueue(ReadCall("r1"));          // 0: pass 1 reads the file
         _chat.EnqueueText("(never seen)");      // 1: then fails

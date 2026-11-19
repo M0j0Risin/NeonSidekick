@@ -250,14 +250,15 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
                 NoteShadow(loop, gaps);
                 var reading = PlanFit.Read(saved.Markdown, null, reviewed: true, _inlineLimit());
                 string result = PlanText.GapPassResult(path, saved.Revision, gaps.Count, minor.Count, reading.Structural, bodyChars, tooLong);
-                if (!loss.Any)
+                // A gap revision is saved whatever it removed (2026-11-17), the loss logged for GapBench. Until 2026-11-19 its result also told
+                // the model what went, to put it back; over 13 benches all 55 such sentences read on a rewritten step, never a lost one (the
+                // steps pair by wording), so the model was told something false. The clean report's refusal (LossCleanResult) stays.
+                if (loss.Any)
                 {
-                    return result;
+                    DiagnosticLog.Info("App", PlanText.LossLogLine(loop.Pass, loss, refused: false));
                 }
 
-                // A gap revision is saved whatever it removed (2026-11-17), the loss named so a pass that never meant it puts it back.
-                DiagnosticLog.Info("App", PlanText.LossLogLine(loop.Pass, loss, refused: false));
-                return result + " " + PlanText.LossSentence(loss);
+                return result;
             }
 
             LogStepChanges(loop.Pass, previous, saved.Markdown, checks);

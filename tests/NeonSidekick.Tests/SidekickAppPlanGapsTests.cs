@@ -126,7 +126,8 @@ public partial class SidekickAppTests
         var loss = PlanLoss.Compare(HeadlessGapBody(["Test it"]), dropped);
         Assert.Equal(["Test it"], loss.Steps);
         Assert.Equal(PlanText.LossCleanResult(loss), _chat.Requests[5].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p3").Result);
-        Assert.EndsWith(PlanText.LossSentence(loss), (string)_chat.Requests[6].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p4").Result!, StringComparison.Ordinal);
+        // 2026-11-19: the saved gap revision's result no longer names what it removed.
+        Assert.DoesNotContain("removed", (string)_chat.Requests[6].SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Single(r => r.CallId == "p4").Result!, StringComparison.Ordinal);
         Assert.Contains("[notice] " + PlanText.PassNoticeLines(2, 2, 3, ["Test it repeated Write it"])[0], output);
     }
 
