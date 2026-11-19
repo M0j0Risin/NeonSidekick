@@ -37,7 +37,8 @@ A bench uses the published exe (`publish/output`) and takes hours: a run can nee
 The results' headline also says how often the plan shadow rule (gaps tagged low don't restart the clean streak) would
 have stopped a review before a planted gap was caught, and how the gaps' severity tags agree with the planted ones.
 Each plan item counts the focuses its confirming passes looked at (*Confirm focus by change* tries the pick by what
-changed). Runs from before the focus lines are read from the review summary.
+changed). Runs from before the focus lines are read from the review summary. Follow-on gaps get their own line and
+table: how often a revision created them, and whether that revision foresaw them or a later pass caught them.
 
 ## Adding material
 
@@ -46,6 +47,9 @@ changed). Runs from before the focus lines are read from the review summary.
   `- [ ]` lines, each with `Done when:`.
 - A run records the hash of what the model saw (`repo/` and its plan). On `--score`, a changed plan flags only its own
   runs, a change to `repo/` flags them all, and a keyword change in an `expect.json` flags none.
+- A **follow-on gap** has a `trigger`: keywords for a path a revision might take (withdraw-books' `withdrawn_on`
+  column). The starting plan doesn't have the gap, so only a pass after that revision can catch it. The trigger is
+  matched a line at a time and needs a `fixed`; `triggerHits` and `triggerMisses` hold lines it must and mustn't match.
 - After any change, `--check` must pass. It checks every snippet against its line, the plans' shape, each gap's
   keywords, and that `repo/`'s tests pass.
 - `--check` also holds each gap's `match` to its own `what` and no other gap's, and keeps it off the starting plan's

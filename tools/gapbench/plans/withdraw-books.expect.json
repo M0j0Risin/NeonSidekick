@@ -1,0 +1,95 @@
+{
+  "absent": ["withdraw_book", "cmd_withdraw"],
+  "gaps": [
+    {
+      "id": "W1",
+      "severity": "high",
+      "what": "Past loans reference the book (loans.book_id REFERENCES books(id), PRAGMA foreign_keys = ON), so the DELETE fails with IntegrityError for any book ever lent. Deleting its loans instead breaks the Goal: they're what shelf export writes.",
+      "match": [["foreign key", "foreign_keys", "fk constraint", "fk on", "references books", "loans.book_id", "integrityerror", "integrity error", "delete fails", "delete would fail", "can't be deleted", "cannot be deleted"], ["ever lent", "returned", "past loan", "history", "any loan", "loan row", "old loan", "been lent", "was lent", "with loans", "has loans", "loaned book"]],
+      "fixed": [["withdrawn_on", "withdrawn_at", "is_withdrawn", "withdrawn column", "withdrawn flag", "soft delete", "soft-delete", "withdrawn_books", "archive"]],
+      "hits": [
+        "[high] withdraw_book's DELETE fails the foreign key for any book that was ever lent, returned or not",
+        "[high] loans.book_id references books(id) with foreign keys on, so deleting a book with loan history raises IntegrityError",
+        "[high] a plain DELETE FROM books raises IntegrityError on any book with loans (FK is ON), so step 1 as written could never run"
+      ]
+    },
+    {
+      "id": "W2",
+      "severity": "high",
+      "what": "Nothing says what withdraw does to a book that's lent out now. It should refuse with a LoanError (return it first); as planned the command crashes.",
+      "match": [["withdraw"], ["lent out", "currently lent", "still lent", "on loan", "an open loan", "has open loans", "open loans", "checked out", "still out", "book out", "currently borrowed", "borrowed right now"]],
+      "fixed": [["withdraw"], ["refus", "loanerror", "raise", "reject"], ["lent", "open loan", "on loan"]],
+      "hits": [
+        "[high] withdraw must refuse a book that's lent out",
+        "[high] withdrawing a book that is currently lent is undefined; it now refuses with a LoanError",
+        "open loans of a withdrawn book intentionally still appear in `overdue` and remain `return`able; noted in Context."
+      ],
+      "misses": [
+        "[high] lend must refuse a withdrawn book"
+      ]
+    },
+    {
+      "id": "W3",
+      "severity": "medium",
+      "what": "No step adds tests for withdraw: every check only runs the old tests.",
+      "match": [["no test", "new test", "tests for", "test for", "unit test", "test case", "add test", "adds test", "test coverage", "without test", "untested", "tests/test_"], ["withdraw"]],
+      "fixed": [["test"], ["withdraw"]]
+    },
+    {
+      "id": "F1",
+      "severity": "high",
+      "what": "Adding withdrawn_on TEXT to SCHEMA's CREATE TABLE books never reaches an existing shelf.db: CREATE TABLE IF NOT EXISTS skips a table that exists, so every query naming withdrawn_on fails with no such column. It needs a guarded migration.",
+      "trigger": [["withdrawn_on text", "withdrawn_on date", "withdrawn_on integer", "set withdrawn_on", "withdrawn_on is null", "withdrawn_on is not null", "withdrawn_at text", "set withdrawn_at", "withdrawn_at is null", "is_withdrawn", "withdrawn integer", "set withdrawn ="]],
+      "match": [["existing shelf.db", "existing database", "existing db", "existing table", "existing file", "old database", "if not exists", "migrat", "alter table", "no such column"]],
+      "fixed": [["alter table", "migrat", "add column"], ["table_info", "user_version", "if missing", "is missing", "not already", "duplicate column", "if the column", "column exists", "already has", "lacks"]],
+      "hits": [
+        "[high] adding withdrawn_on to SCHEMA does nothing for an existing shelf.db: CREATE TABLE IF NOT EXISTS skips it, so queries fail with no such column",
+        "[high] there's no migration for the new column"
+      ]
+    },
+    {
+      "id": "F2",
+      "severity": "high",
+      "what": "With SET withdrawn_on marking the book, lend still lends a withdrawn book: it only checks store.book(id) is None, which the kept row passes; list and find still show it too.",
+      "trigger": [["withdrawn_on text", "withdrawn_on date", "withdrawn_on integer", "set withdrawn_on", "withdrawn_on is null", "withdrawn_on is not null", "withdrawn_at text", "set withdrawn_at", "withdrawn_at is null", "is_withdrawn", "withdrawn integer", "set withdrawn ="]],
+      "match": [["lend", "lends", "lent", "borrow"], ["withdrawn"]],
+      "fixed": [["lend", "store.book"], ["withdrawn"], ["refus", "raise", "loanerror", "error", "reject", "none", "skip", "exclude"]],
+      "hits": [
+        "[high] lend must refuse a withdrawn book",
+        "[high] a withdrawn book can still be lent: lend only checks that the book row exists"
+      ],
+      "misses": [
+        "[high] withdraw must refuse a book that's lent out"
+      ]
+    },
+    {
+      "id": "F3",
+      "severity": "medium",
+      "what": "With SET withdrawn_on keeping the row, a new copy with the same ISBN is refused as already on the shelf: books.isbn is UNIQUE and the withdrawn row keeps it.",
+      "trigger": [["withdrawn_on text", "withdrawn_on date", "withdrawn_on integer", "set withdrawn_on", "withdrawn_on is null", "withdrawn_on is not null", "withdrawn_at text", "set withdrawn_at", "withdrawn_at is null", "is_withdrawn", "withdrawn integer", "set withdrawn ="]],
+      "match": [["isbn"], ["new copy", "re-add", "readd", "add it again", "added again", "another copy", "replacement copy", "fresh copy", "same isbn", "already on the shelf", "duplicatebook", "as a duplicate", "duplicate isbn"]],
+      "fixed": [["isbn"], ["reactivat", "reuse", "re-use", "clear the isbn", "clears the isbn", "isbn to null", "isbn = null", "partial unique", "partial index", "unique index"]],
+      "hits": [
+        "[medium] the withdrawn row keeps its ISBN, so adding a new copy of the same book fails as already on the shelf"
+      ]
+    },
+    {
+      "id": "F4",
+      "severity": "medium",
+      "what": "Moving the book to a withdrawn_books table, setting loans.book_id to NULL, or deleting the row with foreign_keys = OFF drops its loans from shelf export: export joins books with an INNER JOIN.",
+      "trigger": [["withdrawn_books table", "table withdrawn_books", "into withdrawn_books", "`withdrawn_books`", "archived_books", "archive table", "book_id to null", "book_id = null", "nullable book_id", "on delete set null", "foreign_keys = off", "foreign_keys off", "dangling"]],
+      "triggerHits": [
+        "- [ ] Add `Store.withdraw_book(book_id)` to `shelf/store.py`: a `DELETE FROM books WHERE id = ?` inside `self.transaction()`, with `PRAGMA foreign_keys = OFF` executed on the connection before the transaction",
+        "- Decisions: loans keep the old `book_id` (dangling), so the `loans.book_id` FK must go (new DBs: new schema; old DBs: one-shot rebuild at open)."
+      ],
+      "triggerMisses": [
+        "- `test_export_keeps_a_withdrawn_books_loans`: after `lend` + `withdraw`, `os.chdir` into the temp folder, call `export_loans(store, \"out\")`, read the CSV, assert the book's title (and a loan row) is present."
+      ],
+      "match": [["export"], ["inner join", "drop", "lose", "loses", "lost", "missing", "vanish", "disappear", "omit", "left join"]],
+      "fixed": [["left join", "left outer join"]],
+      "hits": [
+        "[medium] export joins books, so once the book row is gone its loans drop out of the export"
+      ]
+    }
+  ]
+}

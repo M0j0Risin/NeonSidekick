@@ -270,9 +270,18 @@ sealed record Keywords(IReadOnlyList<string[]> Groups)
 /// A planted gap. <paramref name="Hits"/> and <paramref name="Misses"/> (2026-11-18, the keyword check) are lines a reviewer wrote that must or must not
 /// match it, and <paramref name="InPlan"/> lets its match fit a line of the starting plan (C2's <c>bulk_insert</c>, the method the plan calls); only
 /// <c>--check</c> reads them.
+/// <para>
+/// A <paramref name="Trigger"/> (2026-11-18, follow-on gaps) makes it a follow-on gap: one the starting plan doesn't have, that a revision
+/// creates by taking the trigger's path (withdraw-books' <c>withdrawn_on</c> column), so only a pass after that revision can catch it. It's
+/// matched a line at a time; <paramref name="TriggerHits"/> and <paramref name="TriggerMisses"/> are body lines it must and mustn't match.
+/// </para>
 /// </summary>
 sealed record PlantedGap(string Id, string Severity, string What, Keywords Match, Keywords? Fixed, IReadOnlyList<string> Gone,
-    IReadOnlyList<string>? Hits = null, IReadOnlyList<string>? Misses = null, bool InPlan = false);
+    IReadOnlyList<string>? Hits = null, IReadOnlyList<string>? Misses = null, bool InPlan = false,
+    Keywords? Trigger = null, IReadOnlyList<string>? TriggerHits = null, IReadOnlyList<string>? TriggerMisses = null)
+{
+    public bool FollowOn => Trigger is not null;
+}
 
 sealed record PlanItem(string Name, string PlanPath, string ExpectPath, IReadOnlyList<PlantedGap> Gaps, bool Control, string? Chat, Keywords? Decision, Keywords? Reargue, IReadOnlyList<string> Absent);
 
@@ -362,7 +371,10 @@ sealed class Material
                     g.TryGetProperty("gone", out var gone) ? Strings(gone) : [],
                     g.TryGetProperty("hits", out var hits) ? Strings(hits) : [],
                     g.TryGetProperty("misses", out var misses) ? Strings(misses) : [],
-                    g.TryGetProperty("inPlan", out var inPlan) && inPlan.GetBoolean()));
+                    g.TryGetProperty("inPlan", out var inPlan) && inPlan.GetBoolean(),
+                    g.TryGetProperty("trigger", out var trigger) ? Groups(trigger) : null,
+                    g.TryGetProperty("triggerHits", out var triggerHits) ? Strings(triggerHits) : null,
+                    g.TryGetProperty("triggerMisses", out var triggerMisses) ? Strings(triggerMisses) : null));
             }
         }
 
@@ -949,6 +961,26 @@ sealed class LogFacts
 
 sealed record GapOutcome(PlantedGap Gap, string Status, string? Line, int? Call, bool FixedInBody);
 
+/// <summary>
+/// A follow-on gap's outcome (2026-11-18): its status (<see cref="FollowOnStatus"/>), the line that named it or the body line that fixed it,
+/// the accepted call whose body first took its path, and the call whose line named it.
+/// </summary>
+sealed record FollowOnOutcome(PlantedGap Gap, string Status, string? Line, int? Introduced, int? Named);
+
+/// <summary>A follow-on gap's statuses (2026-11-18), in the order they're judged: the first that applies wins.</summary>
+static class FollowOnStatus
+{
+    public const string NotIntroduced = "not introduced";
+    public const string Foreseen = "foreseen";
+    public const string Caught = "caught";
+    public const string MinorOnly = "minor only";
+    public const string FixedSilently = "fixed silently";
+    public const string Dropped = "dropped";
+    public const string Missed = "missed";
+
+    public static readonly string[] All = [NotIntroduced, Foreseen, Caught, MinorOnly, FixedSilently, Dropped, Missed];
+}
+
 sealed record BugOutcome(Spot Bug, string Status, AuditFinding? Finding, string? Nit = null);
 
 /// <summary>One scored run: the facts from done.json, what the logs say, and the item's own scores.</summary>
@@ -1011,6 +1043,9 @@ sealed class RunScore
     // A plan run.
     public List<ToolCallRecord> Calls { get; } = [];
     public List<GapOutcome> Planted { get; } = [];
+
+    /// <summary>The follow-on gaps' outcomes (2026-11-18), kept out of <see cref="Planted"/> so every count of it stays starting-plan only.</summary>
+    public List<FollowOnOutcome> FollowOn { get; } = [];
     public List<(int Call, string Text)> OtherGaps { get; } = [];
     public bool? DecisionFolded { get; set; }
     public List<string> Reargued { get; } = [];
@@ -1065,7 +1100,14 @@ sealed class RunScore
 
     public bool ConvergedWithHighOpen => Converged && (IsAudit
         ? Bugs.Any(b => IsHigh(b.Bug.Severity) && b.Status is not ("caught" or "file only"))
-        : Planted.Any(g => IsHigh(g.Gap.Severity) && g.Status != "caught" && !g.FixedInBody));
+        : Planted.Any(g => IsHigh(g.Gap.Severity) && g.Status != "caught" && !g.FixedInBody)
+            || FollowOn.Any(f => IsHigh(f.Gap.Severity) && f.Status == FollowOnStatus.Missed));
+
+    /// <summary>Whether a pass was a confirming one (2026-11-18): the run's focus records have its number.</summary>
+    public bool IsConfirming(int? pass) => pass is int p && Focuses.Any(f => f.Pass == p);
+
+    /// <summary>A confirming pass's focus (2026-11-18), or null for a pass that wasn't one.</summary>
+    public string? FocusOf(int? pass) => pass is int p ? Focuses.FirstOrDefault(f => f.Pass == p)?.Label : null;
 
     public bool ShadowStoppedEarly => BugsAfterShadow.Count > 0;
 
@@ -1200,6 +1242,10 @@ static class Scorer
         var gapLines = score.Calls.Where(c => c.Accepted).SelectMany(c => c.List(PresentPlanTool.GapsArgument).Select(t => (c.Ordinal, Text: t))).ToList();
         var minorLines = score.Calls.Where(c => c.Accepted).SelectMany(c => c.List(PresentPlanTool.MinorArgument).Select(t => (c.Ordinal, Text: t))).ToList();
         score.Planted.AddRange(Outcomes(plan, gapLines, minorLines, finalBody));
+        var bodies = score.Calls.Where(c => c.Accepted && c.Parsed)
+            .Select(c => (c.Ordinal, Body: PlanDocument.SavedBody(c.Text(PresentPlanTool.TitleArgument) ?? "", c.Text(PresentPlanTool.MarkdownArgument, trim: false) ?? "")))
+            .ToList();
+        score.FollowOn.AddRange(FollowOnOutcomes(plan, bodies, gapLines, minorLines, finalBody));
         foreach (var line in gapLines.Where(l => !plan.Gaps.Any(g => g.Match.In(l.Text))))
         {
             score.OtherGaps.Add(line);
@@ -1228,6 +1274,7 @@ static class Scorer
         if (score.Log.PlanShadowWouldConvergeAt is int at)
         {
             score.GapsAfterShadow.AddRange(score.Planted.Where(g => g.Status == "caught" && score.PassOf(g.Call) > at).Select(g => g.Gap.Id));
+            score.GapsAfterShadow.AddRange(score.FollowOn.Where(f => f.Status == FollowOnStatus.Caught && score.PassOf(f.Named) > at).Select(f => f.Gap.Id));
         }
 
         if (score.StopReason is { } reason && score.Stop != "not sent" && score.Log.LastPlanShadowLine is { } shadow && !shadow.TrimEnd().EndsWith(PlanText.StopWord(reason), StringComparison.Ordinal))
@@ -1306,9 +1353,60 @@ static class Scorer
         }
     }
 
+    /// <summary>
+    /// The follow-on gaps' outcomes (2026-11-18). The introducing call is the first accepted call with a body line on the trigger's path; then
+    /// the first status that applies: <b>foreseen</b> (a gap or minor line of that call or an earlier one names it, or that body already
+    /// holds its fix), <b>caught</b> (a later gap line names it), <b>minor only</b>, <b>fixed silently</b> (the final body holds the fix),
+    /// <b>dropped</b> (the final body left the path) and <b>missed</b> (still on it, unfixed, never named).
+    /// </summary>
+    public static IEnumerable<FollowOnOutcome> FollowOnOutcomes(PlanItem plan, List<(int Ordinal, string Body)> bodies,
+        List<(int Ordinal, string Text)> gapLines, List<(int Ordinal, string Text)> minorLines, string finalBody)
+    {
+        foreach (var gap in plan.Gaps.Where(g => g.FollowOn))
+        {
+            var trigger = gap.Trigger!;
+            if (bodies.FirstOrDefault(b => trigger.LineIn(b.Body) is not null) is not { Body: not null } introducing)
+            {
+                yield return new FollowOnOutcome(gap, FollowOnStatus.NotIntroduced, null, null, null);
+                continue;
+            }
+
+            int at = introducing.Ordinal;
+            var named = gapLines.Concat(minorLines).Where(l => gap.Match.In(l.Text)).OrderBy(l => l.Ordinal).ToList();
+            if (named.FirstOrDefault(l => l.Ordinal <= at) is { Text: not null } early)
+            {
+                yield return new FollowOnOutcome(gap, FollowOnStatus.Foreseen, early.Text, at, early.Ordinal);
+            }
+            else if (gap.Fixed?.LineIn(introducing.Body) is { } handled)
+            {
+                yield return new FollowOnOutcome(gap, FollowOnStatus.Foreseen, handled, at, null);
+            }
+            else if (gapLines.FirstOrDefault(l => l.Ordinal > at && gap.Match.In(l.Text)) is { Text: not null } caught)
+            {
+                yield return new FollowOnOutcome(gap, FollowOnStatus.Caught, caught.Text, at, caught.Ordinal);
+            }
+            else if (minorLines.FirstOrDefault(l => l.Ordinal > at && gap.Match.In(l.Text)) is { Text: not null } minor)
+            {
+                yield return new FollowOnOutcome(gap, FollowOnStatus.MinorOnly, minor.Text, at, minor.Ordinal);
+            }
+            else if (gap.Fixed?.LineIn(finalBody) is { } fix)
+            {
+                yield return new FollowOnOutcome(gap, FollowOnStatus.FixedSilently, fix, at, null);
+            }
+            else if (trigger.LineIn(finalBody) is null)
+            {
+                yield return new FollowOnOutcome(gap, FollowOnStatus.Dropped, null, at, null);
+            }
+            else
+            {
+                yield return new FollowOnOutcome(gap, FollowOnStatus.Missed, null, at, null);
+            }
+        }
+    }
+
     public static IEnumerable<GapOutcome> Outcomes(PlanItem plan, List<(int Ordinal, string Text)> gapLines, List<(int Ordinal, string Text)> minorLines, string finalBody)
     {
-        foreach (var gap in plan.Gaps)
+        foreach (var gap in plan.Gaps.Where(g => !g.FollowOn))
         {
             bool fixedInBody = (gap.Fixed?.LineIn(finalBody) is not null)
                 || (gap.Gone.Count > 0 && gap.Gone.All(g => !finalBody.Contains(g, StringComparison.OrdinalIgnoreCase)));
@@ -1954,6 +2052,15 @@ static class Report
             ["gapsCaught"] = plans.Sum(r => r.Planted.Count(g => g.Status == "caught")),
             ["gapsMinorOnly"] = plans.Sum(r => r.Planted.Count(g => g.Status == "minor only")),
             ["gapsFixedSilently"] = plans.Sum(r => r.Planted.Count(g => g.Status == "fixed silently")),
+            // The follow-on gaps (2026-11-18), all 0 for a bench without them.
+            ["followOnIntroduced"] = plans.Sum(r => r.FollowOn.Count(f => f.Status != FollowOnStatus.NotIntroduced)),
+            ["followOnForeseen"] = plans.Sum(r => r.FollowOn.Count(f => f.Status == FollowOnStatus.Foreseen)),
+            ["followOnCaughtLater"] = plans.Sum(r => r.FollowOn.Count(f => f.Status == FollowOnStatus.Caught)),
+            ["followOnCaughtConfirming"] = plans.Sum(r => r.FollowOn.Count(f => f.Status == FollowOnStatus.Caught && r.IsConfirming(r.PassOf(f.Named)))),
+            ["followOnMinorOnly"] = plans.Sum(r => r.FollowOn.Count(f => f.Status == FollowOnStatus.MinorOnly)),
+            ["followOnFixedSilently"] = plans.Sum(r => r.FollowOn.Count(f => f.Status == FollowOnStatus.FixedSilently)),
+            ["followOnDropped"] = plans.Sum(r => r.FollowOn.Count(f => f.Status == FollowOnStatus.Dropped)),
+            ["followOnMissed"] = plans.Sum(r => r.FollowOn.Count(f => f.Status == FollowOnStatus.Missed)),
             ["plantedBugs"] = audits.Sum(r => r.Bugs.Count),
             ["bugsCaught"] = audits.Sum(r => r.Bugs.Count(b => b.Status == "caught")),
             ["bugsFileOnly"] = audits.Sum(r => r.Bugs.Count(b => b.Status == "file only")),
@@ -1995,6 +2102,13 @@ static class Report
         if (plans)
         {
             md.AppendLine($"- Planted gaps caught: **{I("gapsCaught")} of {I("plannedGaps")}** ({I("gapsMinorOnly")} only as minor fixes, {I("gapsFixedSilently")} fixed without being reported)");
+            // Follow-on gaps (2026-11-18): no "of M", since a run's paths exclude each other (withdraw-books' F1–F3 or F4).
+            if (runs.Any(r => r.FollowOn.Count > 0))
+            {
+                md.AppendLine($"- Follow-on gaps (a revision creates them): **{I("followOnIntroduced")} introduced**; {I("followOnForeseen")} foreseen, "
+                    + $"**{I("followOnCaughtLater")} caught later** ({I("followOnCaughtConfirming")} in a confirming pass), {I("followOnMinorOnly")} only as minor fixes, "
+                    + $"{I("followOnFixedSilently")} fixed silently, {I("followOnDropped")} dropped, **{I("followOnMissed")} missed**");
+            }
         }
 
         if (audits)
@@ -2064,6 +2178,11 @@ static class Report
         else
         {
             Row(md, "planted gaps caught", runs.Select(r => (double)r.Planted.Count(g => g.Status == "caught")));
+            if (runs.Any(r => r.FollowOn.Count > 0))
+            {
+                Row(md, "follow-on gaps caught later", runs.Select(r => (double)r.FollowOn.Count(f => f.Status == FollowOnStatus.Caught)));
+            }
+
             Row(md, material.Plan(item)?.Control == true ? "gaps reported (all false)" : "other gaps reported", runs.Select(r => (double)r.OtherGaps.Count));
             Row(md, "second saves refused", runs.Select(r => (double)r.SecondSavesRefused));
             Row(md, "shape refusals", runs.Select(r => (double)r.ShapeRefusals));
@@ -2095,7 +2214,7 @@ static class Report
         else if (material.Plan(item) is { } plan && plan.Gaps.Count > 0)
         {
             md.AppendLine("| gap | severity | caught | minor only | fixed silently | missed | tag agrees | first pass |").AppendLine("|---|---|---|---|---|---|---|---|");
-            foreach (var gap in plan.Gaps)
+            foreach (var gap in plan.Gaps.Where(g => !g.FollowOn))
             {
                 var outcomes = runs.Select(r => (Run: r, Outcome: r.Planted.FirstOrDefault(g => g.Gap.Id == gap.Id))).Where(p => p.Outcome is not null).ToList();
                 var caught = outcomes.Where(p => p.Outcome!.Status == "caught").ToList();
@@ -2107,6 +2226,7 @@ static class Report
             }
 
             md.AppendLine();
+            AppendFollowOnTable(md, plan, runs);
         }
 
         if (material.Plan(item) is { Decision: not null })
@@ -2118,6 +2238,37 @@ static class Report
         {
             AppendRun(md, run);
         }
+    }
+
+    /// <summary>
+    /// The follow-on gaps' table (2026-11-18): each gap's statuses over the runs, then the passes whose gap lines caught it later, each with
+    /// its focus when it was a confirming pass ("4 (verification)", "3" for a pass after a gap pass). Nothing for an item without them.
+    /// </summary>
+    private static void AppendFollowOnTable(StringBuilder md, PlanItem plan, List<RunScore> runs)
+    {
+        var gaps = plan.Gaps.Where(g => g.FollowOn).ToList();
+        if (gaps.Count == 0)
+        {
+            return;
+        }
+
+        md.AppendLine("| follow-on gap | severity | introduced | foreseen | caught later | minor later | fixed silently | dropped | missed | caught in pass |")
+            .AppendLine("|---|---|---|---|---|---|---|---|---|---|");
+        foreach (var gap in gaps)
+        {
+            var outcomes = runs.Select(r => (Run: r, Outcome: r.FollowOn.FirstOrDefault(f => f.Gap.Id == gap.Id))).Where(p => p.Outcome is not null).ToList();
+            int Count(string status) => outcomes.Count(p => p.Outcome!.Status == status);
+            var caught = outcomes.Where(p => p.Outcome!.Status == FollowOnStatus.Caught).Select(p =>
+            {
+                int? pass = p.Run.PassOf(p.Outcome!.Named);
+                return (pass?.ToString(CultureInfo.InvariantCulture) ?? "?") + (p.Run.FocusOf(pass) is { } focus ? $" ({focus})" : "");
+            });
+            md.AppendLine($"| {gap.Id} {gap.What} | {gap.Severity} | {outcomes.Count - Count(FollowOnStatus.NotIntroduced)} of {outcomes.Count} | {Count(FollowOnStatus.Foreseen)} | "
+                + $"{Count(FollowOnStatus.Caught)} | {Count(FollowOnStatus.MinorOnly)} | {Count(FollowOnStatus.FixedSilently)} | {Count(FollowOnStatus.Dropped)} | "
+                + $"{Count(FollowOnStatus.Missed)} | {string.Join(", ", caught)} |");
+        }
+
+        md.AppendLine();
     }
 
     private static void AppendRun(StringBuilder md, RunScore r)
@@ -2134,6 +2285,14 @@ static class Report
         {
             md.AppendLine($"- {g.Gap.Id} ({g.Gap.Severity}): **{g.Status}**" + (g.Line is { } line ? $"{(g.Call is { } c ? $" in call {c}" : "")}{(r.PassOf(g.Call) is { } gp ? $", pass {gp}" : "")}: «{Flat(line)}»" : "")
                 + (g.Status != "fixed silently" && g.FixedInBody ? " · fixed in the final plan" : ""));
+        }
+
+        foreach (var f in r.FollowOn)
+        {
+            md.AppendLine($"- {f.Gap.Id} ({f.Gap.Severity}, follow-on): **{f.Status}**"
+                + (f.Introduced is { } at ? $"; path taken in call {at}{(r.PassOf(at) is { } ap ? $", pass {ap}" : "")}" : "")
+                + (f.Named is { } n ? $"; named in call {n}{(r.PassOf(n) is { } np ? $", pass {np}" : "")}{(r.FocusOf(r.PassOf(n)) is { } focus ? $" ({focus})" : "")}" : "")
+                + (f.Line is { } line ? $": «{Flat(line)}»" : ""));
         }
 
         if (r.Focuses.Count > 0)
@@ -2234,6 +2393,11 @@ static class Report
         ["model"] = r.Log.ModelId,
         ["flags"] = new JsonArray([.. r.Flags.Select(f => (JsonNode?)f)]),
         ["planted"] = new JsonArray([.. r.Planted.Select(g => (JsonNode?)new JsonObject { ["id"] = g.Gap.Id, ["status"] = g.Status, ["line"] = g.Line, ["call"] = g.Call, ["pass"] = r.PassOf(g.Call), ["fixedInBody"] = g.FixedInBody })]),
+        ["followOn"] = new JsonArray([.. r.FollowOn.Select(f => (JsonNode?)new JsonObject
+        {
+            ["id"] = f.Gap.Id, ["status"] = f.Status, ["line"] = f.Line, ["introducedCall"] = f.Introduced, ["introducedPass"] = r.PassOf(f.Introduced),
+            ["namedCall"] = f.Named, ["namedPass"] = r.PassOf(f.Named), ["namedFocus"] = r.FocusOf(r.PassOf(f.Named)),
+        })]),
         ["otherGaps"] = new JsonArray([.. r.OtherGaps.Select(g => (JsonNode?)g.Text)]),
         ["decisionFolded"] = r.DecisionFolded,
         ["reargued"] = new JsonArray([.. r.Reargued.Select(t => (JsonNode?)t)]),
@@ -2443,9 +2607,52 @@ static class Checker
             {
                 problems.Add($"{where}: {gap.Id}'s match matches its miss «{Cut(miss)}»");
             }
+
+            if (gap.Trigger is { } trigger)
+            {
+                problems.AddRange(FollowOnProblems(where, gap, trigger, body));
+            }
         }
 
         return problems;
+    }
+
+    /// <summary>
+    /// A follow-on gap's own rules (2026-11-18): its trigger fits its own <c>what</c> and no line of the starting plan (the path isn't taken
+    /// yet); it has a <c>fixed</c>, which fits no starting-plan line either (or "foreseen" would come free); each <c>triggerHits</c> line
+    /// matches the trigger and no <c>triggerMisses</c> line does.
+    /// </summary>
+    private static IEnumerable<string> FollowOnProblems(string where, PlantedGap gap, Keywords trigger, string body)
+    {
+        static string Cut(string line) => line.Length > 100 ? line[..100] + "…" : line;
+        if (!trigger.In(gap.What))
+        {
+            yield return $"{where}: {gap.Id}'s trigger doesn't match its own what";
+        }
+
+        if (trigger.LineIn(body) is { } triggered)
+        {
+            yield return $"{where}: {gap.Id}'s trigger fits a line of the starting plan, so the path counts as taken from the start: «{Cut(triggered)}»";
+        }
+
+        if (gap.Fixed is not { } fixedBy)
+        {
+            yield return $"{where}: {gap.Id} is a follow-on gap with no fixed: foreseen and fixed silently can't be told from missed";
+        }
+        else if (fixedBy.LineIn(body) is { } fixedLine)
+        {
+            yield return $"{where}: {gap.Id}'s fixed fits a line of the starting plan, so foreseen would come free: «{Cut(fixedLine)}»";
+        }
+
+        foreach (string hit in (gap.TriggerHits ?? []).Where(h => !trigger.In(h)))
+        {
+            yield return $"{where}: {gap.Id}'s trigger misses its trigger hit «{Cut(hit)}»";
+        }
+
+        foreach (string miss in (gap.TriggerMisses ?? []).Where(trigger.In))
+        {
+            yield return $"{where}: {gap.Id}'s trigger matches its trigger miss «{Cut(miss)}»";
+        }
     }
 
     private static void CheckAudit(Material m, AuditItem audit, List<string> problems)
@@ -2565,6 +2772,7 @@ static class SelfTest
         ItemHashRun();
         KeywordRun();
         FocusRun();
+        FollowOnRun();
         AuditRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
@@ -2929,6 +3137,116 @@ static class SelfTest
             "the summary's labels without focus lines: " + string.Join(",", fromSummary.Select(f => $"{f.Pass}:{f.Label}")));
         Expect(FocusReader.Counts(fromSummary.Append(new FocusRecord(9, "order", ""))) == "order ×2, verification ×1, risks ×1", "the count line: " + FocusReader.Counts(fromSummary));
         Expect(FocusReader.Read(LogFacts.Read(""), "[notice] pass 2: clean · 1s") is ({ Count: 0 }, false), "no labels, no focuses");
+    }
+
+    /// <summary>
+    /// Follow-on gaps (2026-11-18): each status once on built bodies and lines, then a scored run for what only <c>ScorePlan</c> does (a refused
+    /// call's body takes no path, a later catch counts for the shadow, a missed high one leaves a high gap open, the catch's pass and focus),
+    /// and the check's follow-on rules, each broken once.
+    /// </summary>
+    private static void FollowOnRun()
+    {
+        PlantedGap On(string id, string path, string word, string? fix = null, string severity = "medium") =>
+            new(id, severity, id, new Keywords([[word]]), fix is null ? null : new Keywords([[fix]]), [], Trigger: new Keywords([[path]]));
+        var plan = new PlanItem("followon", "", "", [
+            new PlantedGap("W", "high", "", new Keywords([["ordinary"]]), null, []),
+            On("A", "path_a", "alpha", "fix_a"),
+            On("B", "path_b", "beta"),
+            On("C", "path_c", "gamma"),
+            On("D", "path_d", "delta"),
+            On("E", "path_e", "epsilon"),
+            On("F", "path_f", "zeta", "fix_f"),
+            On("G", "path_g", "omega", severity: "high"),
+            On("H", "path_h", "theta"),
+            On("I", "path_i", "iota"),
+            new PlantedGap("J", "medium", "J", new Keywords([["kappa"]]), null, [], Trigger: new Keywords([["path_j"], ["column"]])),
+        ], false, null, null, null, []);
+        var bodies = new List<(int, string)>
+        {
+            (1, "# T\npath_a and fix_a\npath_b\npath_d\npath_e\npath_f\npath_g\npath_h\npath_j\na column"),
+            (2, "# T\npath_c\npath_d\npath_f\npath_g"),
+        };
+        var gapLines = new List<(int, string)> { (1, "beta problem"), (1, "gamma risk ahead"), (1, "an ordinary gap"), (2, "delta found") };
+        var minorLines = new List<(int, string)> { (2, "epsilon tidied") };
+        var outcomes = Scorer.FollowOnOutcomes(plan, bodies, gapLines, minorLines, "# T\npath_c\npath_f with fix_f\npath_g").ToDictionary(o => o.Gap.Id);
+        string Got(string id) => outcomes[id].Status;
+        Expect(!outcomes.ContainsKey("W") && Scorer.Outcomes(plan, gapLines, minorLines, "").Select(o => o.Gap.Id).SequenceEqual(["W"]),
+            "an ordinary gap is scored by Outcomes, a follow-on one only by FollowOnOutcomes");
+        Expect(Got("A") == FollowOnStatus.Foreseen && outcomes["A"].Named is null, "A: the introducing body already holds its fix: " + Got("A"));
+        Expect(Got("B") == FollowOnStatus.Foreseen && outcomes["B"].Named == 1, "B: a line of the introducing call names it: " + Got("B"));
+        Expect(Got("C") == FollowOnStatus.Foreseen && outcomes["C"].Introduced == 2 && outcomes["C"].Named == 1, "C: named in call 1, its path taken in call 2: " + Got("C"));
+        Expect(Got("D") == FollowOnStatus.Caught && outcomes["D"].Introduced == 1 && outcomes["D"].Named == 2, "D: caught by a later gap line: " + Got("D"));
+        Expect(Got("E") == FollowOnStatus.MinorOnly, "E: named only by a later minor line: " + Got("E"));
+        Expect(Got("F") == FollowOnStatus.FixedSilently && outcomes["F"].Line == "path_f with fix_f", "F: the final body holds its fix: " + Got("F"));
+        Expect(Got("G") == FollowOnStatus.Missed, "G: still on the path in the final body: " + Got("G"));
+        Expect(Got("H") == FollowOnStatus.Dropped, "H: the final body left the path: " + Got("H"));
+        Expect(Got("I") == FollowOnStatus.NotIntroduced, "I: no body took the path: " + Got("I"));
+        Expect(Got("J") == FollowOnStatus.NotIntroduced, "J: the trigger's groups on two lines take no path: " + Got("J"));
+
+        string folder = Scratch();
+        try
+        {
+            var scored = new PlanItem("selftest", "", "", [
+                new PlantedGap("K", "high", "K", new Keywords([["migrat"]]), new Keywords([["table_info"]]), [], Trigger: new Keywords([["withdrawn_on text"]])),
+                new PlantedGap("L", "high", "L", new Keywords([["refused words"]]), new Keywords([["fix_l"]]), [], Trigger: new Keywords([["refused_path"]])),
+                new PlantedGap("M", "high", "M", new Keywords([["never named"]]), new Keywords([["fix_m"]]), [], Trigger: new Keywords([["withdrawn_on text"]])),
+            ], false, null, null, null, []);
+            string body = "# T\n\n## Steps\n\n- [ ] Add withdrawn_on TEXT to books.\n  Done when: it passes.\n";
+            File.WriteAllText(Path.Combine(folder, "start.md"), "# T\n\n## Steps\n\n- [ ] Delete the book.\n  Done when: it passes.\n");
+            Directory.CreateDirectory(Path.Combine(folder, "work", ".neon", "plans"));
+            File.WriteAllText(Path.Combine(folder, "work", ".neon", "plans", "selftest.md"), "---\nstatus: draft\nrevision: 3\n---\n" + body);
+            static string Markdown(string text) => JsonValue.Create(text).ToJsonString();
+            string stdout = string.Join('\n',
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"the delete fails\"], \"markdown\": " + Markdown(body) + "}",
+                "[tool] present_plan -> Plan saved as revision 2.",
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"refused words\"], \"markdown\": " + Markdown(body + "refused_path\n") + "}",
+                "[tool] present_plan -> " + PlanText.PassAlreadySavedResult(".neon/plans/selftest.md", 2),
+                "[notice] " + PlanText.PassNoticeLines(1, 10, 1, ["a"])[0],
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"no migration for the new column\"], \"markdown\": " + Markdown(body) + "}",
+                "[tool] present_plan -> Plan saved as revision 3.",
+                "[notice] " + PlanText.PassNoticeLines(2, 10, 1, ["a"])[0],
+                "[notice] " + PlanText.ConvergedNotice(".neon/plans/selftest.md", 2, 3, 1));
+            string log = string.Join('\n',
+                "x " + PlanText.PassLogLine(1, 1, ["a"], false),
+                "x " + PlanText.ShadowLogLine(1, new GapShadowPass([0, 0, 0, 0], 2, true, false), 2, null, true, 1),
+                "x " + PlanText.FocusLogLine(2, "order", "in turn"),
+                "x " + PlanText.PassLogLine(2, 1, ["a"], false));
+            var facts = LogFacts.Read(log);
+            Expect(facts.PlanShadowWouldConvergeAt == 1, $"the sample's shadow would converge at pass 1: {facts.PlanShadowWouldConvergeAt}");
+            var score = new RunScore { Item = "selftest", Run = 1, Folder = folder, Facts = new JsonObject(), Log = facts };
+            var stop = Patterns.LastStop(stdout, Patterns.PlanStops);
+            score.Stop = stop?.Name ?? "unknown";
+            score.StopReason = stop?.Reason;
+            (score.Focuses, score.FocusesFromSummary) = FocusReader.Read(facts, stdout);
+            Scorer.ScorePlan(score, scored, stdout);
+            var k = score.FollowOn.First(f => f.Gap.Id == "K");
+            Expect(score.Planted.Count == 0 && score.FollowOn.Count == 3, $"follow-on gaps aren't planted ones: {score.Planted.Count} planted, {score.FollowOn.Count} follow-on");
+            Expect(k.Status == FollowOnStatus.Caught && k.Introduced == 1 && score.PassOf(k.Named) == 2, $"K caught in pass 2: {k.Status}, call {k.Named}, pass {score.PassOf(k.Named)}");
+            Expect(score.IsConfirming(2) && score.FocusOf(2) == "order" && !score.IsConfirming(1), "pass 2 was a confirming pass, on order");
+            Expect(score.GapsAfterShadow.SequenceEqual(["K"]), "a follow-on gap caught after the shadow's pass counts for it: " + string.Join(", ", score.GapsAfterShadow));
+            Expect(score.FollowOn.First(f => f.Gap.Id == "L").Status == FollowOnStatus.NotIntroduced, "L: only a refused call's body took its path");
+            Expect(score.FollowOn.First(f => f.Gap.Id == "M").Status == FollowOnStatus.Missed && score.Converged && score.ConvergedWithHighOpen,
+                "M: a missed high follow-on gap leaves a high gap open");
+            Expect(!score.OtherGaps.Any(g => g.Text.Contains("migration", StringComparison.Ordinal)), "a line naming a follow-on gap isn't an other gap");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+
+        string start = "# T\n\n## Context\n\n- The books table has isbn and title.\n";
+        PlantedGap Rule(Keywords? trigger, Keywords? fix, string[]? hits = null, string[]? misses = null) =>
+            new("F", "high", "a withdrawn_on column breaks lend", new Keywords([["breaks lend"]]), fix, [], Trigger: trigger, TriggerHits: hits, TriggerMisses: misses);
+        var good = new Keywords([["withdrawn_on"]]);
+        var fixedBy = new Keywords([["refuses"]]);
+        bool Flags(PlantedGap gap, string text) => Checker.KeywordProblems("x", [gap], start).Any(p => p.Contains(text, StringComparison.Ordinal));
+        Expect(Checker.KeywordProblems("x", [Rule(good, fixedBy, ["SET withdrawn_on = today"], ["the title stays"])], start).Count == 0, "a clean follow-on gap passes");
+        Expect(Flags(Rule(new Keywords([["archive"]]), fixedBy), "trigger doesn't match its own what"), "a trigger off its own what");
+        Expect(Flags(Rule(new Keywords([["withdrawn_on", "isbn"]]), fixedBy), "trigger fits a line of the starting plan"), "a trigger already in the starting plan");
+        Expect(Flags(Rule(good, null), "no fixed"), "a follow-on gap with no fixed");
+        Expect(Flags(Rule(good, new Keywords([["title"]])), "fixed fits a line of the starting plan"), "a fix already in the starting plan");
+        Expect(Flags(Rule(good, fixedBy, ["an archive table"]), "misses its trigger hit"), "a trigger hit the trigger misses");
+        Expect(Flags(Rule(good, fixedBy, null, ["rather than a withdrawn_on column"]), "matches its trigger miss"), "a trigger miss the trigger matches");
     }
 
     /// <summary>The keyword check's five rules (2026-11-18), each broken once on built gaps, and a clean set that passes.</summary>
