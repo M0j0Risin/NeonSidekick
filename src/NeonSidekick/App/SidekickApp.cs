@@ -2437,7 +2437,7 @@ public sealed partial class SidekickApp
 
                 // confirm's clean count kept when the fallback above made the model the reviewer (2026-10-17).
                 int clean = named == Plans.PlanReviewer.Confirm ? Math.Max(2, EffectiveSettings.PlanGapCleanPasses) : EffectiveSettings.PlanGapCleanPasses;
-                var loop = plan.StartClosing(reviewer, HeadlessGapLimit(limit), clean);
+                var loop = plan.StartClosing(reviewer, HeadlessGapLimit(limit), clean, EffectiveSettings.ConfirmFocusByChange);
                 if (loop.CleanLowered && EffectiveSettings.PlanGapCleanPasses > loop.CleanPasses)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.CleanLoweredNotice(loop.Limit, EffectiveSettings.PlanGapCleanPasses)).ConfigureAwait(false);
@@ -2446,6 +2446,7 @@ public sealed partial class SidekickApp
                 bool offered = HeadlessAdvisorsOffered();
                 string? firstBody = Plans.PlanFiles.ReadWhole(files, path) is { } text ? Plans.PlanDocument.Body(text) : null;
                 loop.BeginPass(firstBody, meter(), offered);
+                ChatScreen.LogGapFocus(loop);
                 state.Draft = null;
                 // The plan on disk measured (2026-11-18, known problems up front), as the screen's BeginGapPass does.
                 return Plans.PlanText.GapPassMessage(path, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak,
@@ -2625,6 +2626,7 @@ public sealed partial class SidekickApp
         {
             bool offered = HeadlessAdvisorsOffered();
             loop.BeginPass(body, meter, offered);
+            ChatScreen.LogGapFocus(loop);
             return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak,
                 body is null ? null : Plans.PlanFit.Structural(body));
         }

@@ -150,7 +150,7 @@ internal sealed partial class ChatScreen
             }
 
             int limit = parsed.Passes ?? effective.CodeAuditPasses;
-            return _audit.Start(chosen, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses, effective.CodeAuditLowKeepsStreak);
+            return _audit.Start(chosen, scope, focus, parsed.Brief, reviewer, limit, effective.CodeAuditCleanPasses, effective.CodeAuditLowKeepsStreak, effective.ConfirmFocusByChange);
         }, out string? lockError, out string? unlocked, another: () => AuditFiles.Choose(_files, scope.NameLabel, now));
         if (loop is null)
         {
@@ -289,7 +289,7 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
-            return _audit.Start(held, scope, fresh.Header.Focus, fresh.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses, effective.CodeAuditLowKeepsStreak);
+            return _audit.Start(held, scope, fresh.Header.Focus, fresh.Header.Brief, who, passes ?? effective.CodeAuditPasses, effective.CodeAuditCleanPasses, effective.CodeAuditLowKeepsStreak, effective.ConfirmFocusByChange);
         }, out string? lockError, out string? unlocked);
         if (loop is null)
         {
@@ -433,6 +433,21 @@ internal sealed partial class ChatScreen
     private string BeginAuditPass(PlanGapLoop loop) => BeginAuditPass(loop, AuditFiles.Read(_audit.Files, _audit.Path!)?.StallBody());
 
     /// <summary><see cref="BeginAuditPass(PlanGapLoop)"/> over the stall body the caller read just now (2026-10-20, a review: read again for each pass).</summary>
+    /// <summary>
+    /// A confirming audit pass's <c>code audit focus:</c> line (2026-11-18, Phase 3 item 3), right after <see cref="PlanGapLoop.BeginPass"/>: the
+    /// dimension or angle it looks hardest at and how it was picked. Nothing on a pass that isn't confirming. Headless writes it too.
+    /// </summary>
+    internal static void LogAuditFocus(IReadOnlyList<string> dimensions, PlanGapLoop loop)
+    {
+        if (loop.Focus < 0)
+        {
+            return;
+        }
+
+        string focus = AuditFocus.PassFocus(dimensions, loop.Focus + 1).Label;
+        DiagnosticLog.Info(AppCategory, AuditText.FocusLogLine(loop.Pass, focus, Plans.PlanText.FocusHow(loop, dimensions)));
+    }
+
     private string BeginAuditPass(PlanGapLoop loop, string? body)
     {
         bool offered = AdvisorPassOffered();
@@ -443,8 +458,9 @@ internal sealed partial class ChatScreen
             _transcript.Notice(AuditText.CleanLoweredNotice(loop.Limit, loop.CleanAsked));
         }
 
+        LogAuditFocus(_audit.Focus, loop);
         var reviewer = offered ? loop.PassReviewer : PlanReviewer.Model;
-        string focus = AuditFocus.PassFocus(_audit.Focus, loop.Confirmation).Short;
+        string focus = AuditFocus.PassFocus(_audit.Focus, loop.Focus + 1).Short;
         return AuditText.PassMessage(_audit.Scope!.Label, path, loop.Pass, loop.Limit, reviewer, focus, loop.CleanStreak, loop.LastLight);
     }
 

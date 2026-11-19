@@ -383,7 +383,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 **Close gaps…** or `/plan gaps` reviews the plan, one turn a pass, each fixing what would stall the work (a missing step, an open choice, an unread file, an unchecked source, a step too big, a plan too long) and saving a revision.
 
-* **Clean passes:** it ends after *Plan gap clean passes* in a row find no gaps; wording or formatting fixes don't break a streak. Each pass after a clean one checks another area (order, verification, risks, assumptions, size) and says which.
+* **Clean passes:** it ends after *Plan gap clean passes* in a row find no gaps; wording or formatting fixes don't break a streak. Each pass after a clean one checks another area (order, verification, risks, assumptions, size), or, with *Confirm focus by change*, an area the last change touched, the most-changed first, and says which.
 * **Who reviews** (with advisors offered): the model alone (`m`), a fitting advisor (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
 * **Unattended:** with *Plan gap ask user* off (or no `ask_user`), a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, not a gap.
 * **The plan's shape:** no clean end while a step lacks `Done when:`, one step is oversized, steps sit outside `## Steps` or a parent has a by-hand check. A plan too long for a Ralph pass to send whole is noted, not a gap.
@@ -436,7 +436,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
 * **Scope:** the working directory or a path (quoted if it has a blank); `diff` (unstaged, staged and untracked changes), `staged`, or `branch [<base>]` (commits since `main`, else `master`). Past 5,000 files the list is cut, and the start says so.
   * **Left out:** git-ignored files (outside a repository, `bin`, `obj`, `node_modules`, `dist` and the like); minified, map and lock files, generated C# and `vendor/` unless a named path holds them; secret-looking files (`.env`, keys, certificates) always. `.neon/` is refused.
-* **Focus:** any mix of security, correctness, performance, maintainability and tests (`all`; none means *Code audit focus*). A pass after a clean one takes one in turn, or with one chosen an angle (edge cases, error paths, concurrency, outside input).
+* **Focus:** any mix of security, correctness, performance, maintainability and tests (`all`; none means *Code audit focus*). A pass after a clean one takes one in turn, or, with *Confirm focus by change*, an area the last change touched, the most-changed first; with one chosen, an angle (edge cases, error paths, concurrency, outside input).
 * **The brief** starts at the first other word, or is all after `--` (`/code-audit src -- tests are flaky`); a path-like word that names nothing is refused.
 * **Who reviews:** `model` (the default), `advisor` (an advisor finds, the model verifies each cited line), `any` (advisors asked where a role fits) or `confirm` (an advisor on each pass after a clean one; at least 2 clean passes).
   * A number (0–100, 0 for no cap) replaces *Code audit max passes* for the run.

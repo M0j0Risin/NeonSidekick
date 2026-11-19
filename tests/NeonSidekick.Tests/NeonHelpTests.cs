@@ -445,6 +445,17 @@ public class NeonHelpTests
         Assert.All(lines, line => Assert.False(HelpText.FirstSentence(line).EndsWith('…'), line));
     }
 
+    /// <summary>Confirm focus by change's help line (2026-11-18, Phase 3 item 3) holds to the 200-character first sentence, and names both reviews.</summary>
+    [Fact]
+    public void TheConfirmFocusByChangeHelpLine_HasAFirstSentenceNeverCut_AndNamesBoth()
+    {
+        string line = HelpSettings.Describe(SettingsField.ConfirmFocusByChange);
+        string first = HelpText.FirstSentence(line);
+        Assert.False(first.EndsWith('…'), line);
+        Assert.Contains("gap review", first, StringComparison.Ordinal);
+        Assert.Contains("code audit", first, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void FirstSentence_StopsAtTheFirstFullStop_AndCapsALongOne()
     {

@@ -1285,7 +1285,7 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        var loop = _plan.StartClosing(reviewer, passes ?? _effective().PlanGapPasses, _effective().PlanGapCleanPasses);
+        var loop = _plan.StartClosing(reviewer, passes ?? _effective().PlanGapPasses, _effective().PlanGapCleanPasses, _effective().ConfirmFocusByChange);
         return await SendGapPassAsync(BeginGapPass(loop, path, ReadPlanBody(path)), cancellationToken).ConfigureAwait(false);
     }
 
@@ -1321,6 +1321,21 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
+    /// A confirming pass's <c>plan gaps focus:</c> line (2026-11-18, Phase 3 item 3, focus selection), right after <see cref="PlanGapLoop.BeginPass"/>:
+    /// which focus it looks hardest at and how it was picked. Nothing on a pass that isn't confirming. Headless writes it too.
+    /// </summary>
+    internal static void LogGapFocus(PlanGapLoop loop)
+    {
+        if (loop.Focus < 0)
+        {
+            return;
+        }
+
+        var labels = PlanText.ConfirmFocusLabels;
+        DiagnosticLog.Info(AppCategory, PlanText.FocusLogLine(loop.Pass, labels[loop.Focus % labels.Count], PlanText.FocusHow(loop, labels)));
+    }
+
+    /// <summary>
     /// The next pass begun over <paramref name="body"/>: its one-line message (the reviewer the model alone when no advisor is offered). Since
     /// 2026-10-17 the pass's own reviewer (<see cref="PlanGapLoop.PassReviewer"/>), its meter, a confirming pass's wording, and — as pass 1
     /// begins — the notice that a short limit lowered the clean count.
@@ -1329,6 +1344,7 @@ internal sealed partial class ChatScreen
     {
         bool offered = AdvisorPassOffered();
         loop.BeginPass(body, PlanMeter(), offered);
+        LogGapFocus(loop);
         if (loop.Pass == 1)
         {
             // The lines so far (2026-11-17): one typed, held or sent from the page after this pauses the review.

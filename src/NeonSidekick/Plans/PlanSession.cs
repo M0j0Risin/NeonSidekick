@@ -137,14 +137,16 @@ public sealed class PlanSession
     /// <summary>
     /// A fresh loop for <paramref name="reviewer"/>, at most <paramref name="limit"/> passes (0 for no limit), ending on
     /// <paramref name="cleanPasses"/> clean passes in a row (2026-10-17); one already running is replaced. Talking ends: a review
-    /// means the plan is ready to be checked.
+    /// means the plan is ready to be checked. With <paramref name="focusByChange"/> (2026-11-18, <see cref="Settings.AppSettingsData.ConfirmFocusByChange"/>)
+    /// a confirming pass looks hardest at what the last change touched (<see cref="PlanFocusAreas"/>); read here only, so a resumed review
+    /// (<see cref="ResumeClosing"/>) keeps the value it started with.
     /// </summary>
-    public PlanGapLoop StartClosing(PlanReviewer reviewer, int limit, int cleanPasses = 1)
+    public PlanGapLoop StartClosing(PlanReviewer reviewer, int limit, int cleanPasses = 1, bool focusByChange = false)
     {
         Talking = false;
         Paused = null;
         PausedFingerprint = null;
-        return Closing = new PlanGapLoop(reviewer, limit, cleanPasses);
+        return Closing = new PlanGapLoop(reviewer, limit, cleanPasses, weigh: focusByChange ? l => PlanFocusAreas.Weigh(l.ChangeBefore, l.ChangeAfter) : null);
     }
 
     /// <summary>
@@ -403,7 +405,7 @@ public sealed class PlanSession
         // A pass of the gap-closing loop under way (2026-10-13): its rules ride in the directive, so a compaction cannot lose them; the
         // streak, the clean count, the confirmation and the pass's reviewer since 2026-10-17; whether it may ask the user since 2026-10-18.
         var gap = Reviewing && Closing is { } loop
-            ? new PlanGapState(loop.Pass, loop.Limit, loop.Reviewer, loop.CleanStreak, loop.CleanPasses, loop.Confirmation, loop.PassReviewer, gapAsks)
+            ? new PlanGapState(loop.Pass, loop.Limit, loop.Reviewer, loop.CleanStreak, loop.CleanPasses, loop.Confirmation, loop.PassReviewer, gapAsks, loop.Focus)
             : null;
         // /plan chat (2026-10-17): the talking form while talking, the opening labeled while the requirement is only that.
         var talk = new PlanTalk(Talking, RequirementIsOpening);

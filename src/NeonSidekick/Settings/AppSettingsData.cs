@@ -864,6 +864,16 @@ public sealed class AppSettingsData
     public const int DefaultPlanGapCleanPasses = 2;
 
     /// <summary>
+    /// Whether a confirming pass (one after a clean pass) looks hardest at what the last change touched (2026-11-18, Phase 3 item 3 of the gap and audit
+    /// improvements, the user's call: off by default until the bench says otherwise), for plan mode's gap review and <c>/code-audit</c> alike. Off, the
+    /// focus goes in turn, and most reviews confirm once, so they only ever got the first. On, a plan's revision is weighed by area
+    /// (<see cref="Plans.PlanFocusAreas"/>) and an audit's pass by the dimensions of the findings it made, reopened or revised; the pick takes the most-changed
+    /// area not yet looked at (<see cref="Plans.ConfirmFocusPick"/>). Read when a review or an audit starts (a resumed gap review keeps its start's value,
+    /// an audit resume reads it again). The Plan mode section of <c>/settings</c> › Automation, under <see cref="PlanGapCleanPasses"/>. No variable.
+    /// </summary>
+    public bool ConfirmFocusByChange { get; set; }
+
+    /// <summary>
     /// Whether a pass of plan mode's gap review may wait on the user (2026-10-18, the user's ask: a review left to run unattended
     /// stopped on a question). On, the default, a pass is offered <c>ask_user</c>, <c>camera_capture</c> and <c>screen_capture</c>
     /// as any plan-mode turn is; off, it is offered none of the three (whatever <see cref="AskUser"/> and the camera and screen

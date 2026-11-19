@@ -1003,6 +1003,17 @@ public static class PlanSteps
         return level is > 0 and <= 6 && (level == trimmed.Length || trimmed[level] == ' ') ? level : 0;
     }
 
+    /// <summary>
+    /// Whether <paramref name="line"/> is a step's own line, a task box or a <c>Done when:</c> (2026-11-18, Phase 3 item 3, focus selection):
+    /// <see cref="PlanFocusAreas"/> weighs those through <see cref="PlanStepChanges"/> and leaves them out of its section counts.
+    /// </summary>
+    internal static bool IsStepLine(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        string trimmed = line.Trim();
+        return TaskBox(trimmed) is not null || DoneWhenOf(trimmed) is not null;
+    }
+
     /// <summary>A task line's words and box, or null.</summary>
     private static (string Text, bool Ticked)? TaskBox(string trimmed)
     {

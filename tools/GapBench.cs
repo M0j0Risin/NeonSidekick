@@ -565,6 +565,28 @@ static partial class Patterns
         Template.Build(PlanText.CleanPassNoticeLines(Template.N1, Template.N2, Template.N3, Template.N4, [])[0], cutBefore: Template.N3, capture: Template.N1),
     ];
 
+    /// <summary>
+    /// A confirming pass's focus line (2026-11-18, Phase 3 item 3, focus selection): the plan's and the audit's, each with its pass (<c>n</c>), its
+    /// focus (<c>label</c>) and how it was picked (<c>how</c>), split out of the app's own rendering.
+    /// </summary>
+    public static readonly Regex[] FocusLines = [FocusLine(PlanText.FocusLogLine(Template.N1, Template.S1, Template.S2)), FocusLine(AuditText.FocusLogLine(Template.N1, Template.S1, Template.S2))];
+
+    private static Regex FocusLine(string rendered)
+    {
+        string n = Template.N1.ToString(CultureInfo.InvariantCulture);
+        int pass = rendered.IndexOf(n, StringComparison.Ordinal), label = rendered.IndexOf(Template.S1, StringComparison.Ordinal), how = rendered.IndexOf(Template.S2, StringComparison.Ordinal);
+        return new Regex(Regex.Escape(rendered[..pass]) + @"(?<n>\d+)" + Regex.Escape(rendered[(pass + n.Length)..label]) + "(?<label>.+?)"
+            + Regex.Escape(rendered[(label + Template.S1.Length)..how]) + "(?<how>.+)$", RegexOptions.CultureInvariant);
+    }
+
+    /// <summary>
+    /// A plan review summary's pass line in stdout with a confirming focus (2026-11-18): headless prints it as <c>[notice] pass 4: 1 gap, 3 minor fixes
+    /// (order) · 1m 17s</c>. Anchored on the notice at the line's start and the first <c>(label)</c> or <c>(label, advisor)</c> after it, so a reply that
+    /// writes "pass 3: … (order)" isn't read; the label one of <see cref="PlanText.ConfirmFocusLabels"/>. For runs from before the focus lines.
+    /// </summary>
+    public static readonly Regex SummaryFocus = new(@"^\[notice\] pass (?<n>\d+): [^(\n]*?\((?<label>" + string.Join("|", PlanText.ConfirmFocusLabels.Select(Regex.Escape)) + @")(?:, advisor)?\)",
+        RegexOptions.CultureInvariant);
+
     /// <summary>The plan shadow line's pass number (2026-11-17, phase 3), cut before what the pass did, as the audit's.</summary>
     public static readonly Regex PlanShadowPass = Template.Build(
         PlanText.ShadowLogLine(Template.N1, new GapShadowPass([Template.N4, 0, 0, 0], Template.N2, true, false), Template.N3, null, false, 0),
@@ -834,6 +856,9 @@ sealed class LogFacts
     public int AuditLight { get; private set; }
     public int AuditLightPasses { get; private set; }
 
+    /// <summary>The confirming passes' focus lines (2026-11-18, Phase 3 item 3), in order: the pass, its focus, and how it was picked.</summary>
+    public List<FocusRecord> Focuses { get; } = [];
+
     /// <summary>The plan shadow (2026-11-17, phase 3): its lines, the first pass it would have converged at, and its last line.</summary>
     public int PlanShadowLines { get; private set; }
     public int? PlanShadowWouldConvergeAt { get; private set; }
@@ -865,6 +890,13 @@ sealed class LogFacts
                     f.ShadowWouldConvergeAt = int.Parse(shadow.Groups["n"].Value.Replace(",", "", StringComparison.Ordinal), CultureInfo.InvariantCulture);
                 }
 
+                continue;
+            }
+
+            // A focus line (2026-11-18) is never a pass either.
+            if (Patterns.FocusLines.Select(p => p.Match(line)).FirstOrDefault(m => m.Success) is { } focusLine)
+            {
+                f.Focuses.Add(new FocusRecord(int.Parse(focusLine.Groups["n"].Value, CultureInfo.InvariantCulture), focusLine.Groups["label"].Value, focusLine.Groups["how"].Value));
                 continue;
             }
 
@@ -920,6 +952,46 @@ sealed record GapOutcome(PlantedGap Gap, string Status, string? Line, int? Call,
 sealed record BugOutcome(Spot Bug, string Status, AuditFinding? Finding, string? Nit = null);
 
 /// <summary>One scored run: the facts from done.json, what the logs say, and the item's own scores.</summary>
+/// <summary>A confirming pass's focus (2026-11-18, Phase 3 item 3): its pass, its label, and how it was picked (empty when read from the summary).</summary>
+sealed record FocusRecord(int Pass, string Label, string How);
+
+/// <summary>Which focuses a run's confirming passes looked at (2026-11-18, Phase 3 item 3, focus selection).</summary>
+static class FocusReader
+{
+    /// <summary>
+    /// The run's focus lines from its log; a run without them (every run before them) reads the plan review summary's labels in
+    /// <paramref name="stdout"/> (<see cref="Patterns.SummaryFocus"/>), and says so. A pass line without a label adds none.
+    /// </summary>
+    public static (List<FocusRecord> Focuses, bool FromSummary) Read(LogFacts log, string stdout)
+    {
+        if (log.Focuses.Count > 0)
+        {
+            return (log.Focuses, false);
+        }
+
+        var found = new List<FocusRecord>();
+        foreach (string raw in stdout.Split('\n'))
+        {
+            if (Patterns.SummaryFocus.Match(raw.TrimEnd('\r')) is { Success: true } m)
+            {
+                found.Add(new FocusRecord(int.Parse(m.Groups["n"].Value, CultureInfo.InvariantCulture), m.Groups["label"].Value, ""));
+            }
+        }
+
+        return (found, found.Count > 0);
+    }
+
+    /// <summary>Counts in the <c>label ×n</c> form the Stops line uses, the most first, ties by the labels' own order.</summary>
+    public static string Counts(IEnumerable<FocusRecord> focuses) =>
+        string.Join(", ", focuses.GroupBy(f => f.Label).OrderByDescending(g => g.Count()).ThenBy(g => Order(g.Key)).Select(g => $"{g.Key} ×{g.Count()}"));
+
+    private static int Order(string label)
+    {
+        int i = PlanText.ConfirmFocusLabels.ToList().IndexOf(label);
+        return i < 0 ? int.MaxValue : i;
+    }
+}
+
 sealed class RunScore
 {
     public required string Item { get; init; }
@@ -930,6 +1002,10 @@ sealed class RunScore
     public PlanGapStop? StopReason { get; set; }
     public LogFacts Log { get; set; } = new();
     public double Minutes { get; set; }
+
+    /// <summary>The confirming passes' focuses (2026-11-18, Phase 3 item 3), and whether they were read from the review summary (no focus lines).</summary>
+    public List<FocusRecord> Focuses { get; set; } = [];
+    public bool FocusesFromSummary { get; set; }
     public List<string> Flags { get; } = [];
 
     // A plan run.
@@ -1044,6 +1120,7 @@ static class Scorer
         };
         string stdout = ReadText(Path.Combine(folder, "stdout.txt"));
         score.Log = LogFacts.Read(ReadText(Path.Combine(folder, "run.log")));
+        (score.Focuses, score.FocusesFromSummary) = FocusReader.Read(score.Log, stdout);
 
         if (ReadText(Path.Combine(folder, "stderr.txt")).Trim().Length > 0)
         {
@@ -1996,6 +2073,10 @@ static class Report
 
         md.AppendLine();
         md.AppendLine("Stops: " + string.Join(", ", runs.GroupBy(r => r.Stop).Select(g => $"{g.Key} ×{g.Count()}"))).AppendLine();
+        if (runs.SelectMany(r => r.Focuses).ToList() is { Count: > 0 } focuses)
+        {
+            md.AppendLine("Confirming focuses: " + FocusReader.Counts(focuses) + (runs.Any(r => r.FocusesFromSummary) ? " (read from the review summary where a run has no focus lines)" : "")).AppendLine();
+        }
 
         if (item == Material.AuditName && material.Audit is { } audit)
         {
@@ -2053,6 +2134,12 @@ static class Report
         {
             md.AppendLine($"- {g.Gap.Id} ({g.Gap.Severity}): **{g.Status}**" + (g.Line is { } line ? $"{(g.Call is { } c ? $" in call {c}" : "")}{(r.PassOf(g.Call) is { } gp ? $", pass {gp}" : "")}: «{Flat(line)}»" : "")
                 + (g.Status != "fixed silently" && g.FixedInBody ? " · fixed in the final plan" : ""));
+        }
+
+        if (r.Focuses.Count > 0)
+        {
+            md.AppendLine("- Confirming focuses: " + string.Join(", ", r.Focuses.Select(f => $"pass {f.Pass} {f.Label}" + (f.How.Length > 0 ? $" ({f.How})" : "")))
+                + (r.FocusesFromSummary ? " (from the review summary)" : ""));
         }
 
         if (!r.IsAudit && r.Log.PlanShadowLines > 0)
@@ -2170,6 +2257,8 @@ static class Report
         ["findingsLow"] = r.FindingsLow,
         ["auditLowChanges"] = r.Log.AuditLight,
         ["planShadowWouldConvergeAt"] = r.Log.PlanShadowWouldConvergeAt,
+        ["focuses"] = new JsonArray([.. r.Focuses.Select(f => (JsonNode?)new JsonObject { ["pass"] = f.Pass, ["label"] = f.Label, ["how"] = f.How.Length > 0 ? f.How : null })]),
+        ["focusesFromSummary"] = r.FocusesFromSummary,
         ["gapsAfterShadow"] = new JsonArray([.. r.GapsAfterShadow.Select(g => (JsonNode?)g)]),
         ["secondSavesRefused"] = r.SecondSavesRefused,
         ["shapeRefusals"] = r.ShapeRefusals,
@@ -2475,6 +2564,7 @@ static class SelfTest
         StepChangesRun();
         ItemHashRun();
         KeywordRun();
+        FocusRun();
         AuditRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
@@ -2805,6 +2895,40 @@ static class SelfTest
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// Which focuses a run's confirming passes looked at (2026-11-18, Phase 3 item 3): read from the focus lines when the log has them, even with the
+    /// review summary in stdout too; else from the summary's labels (a pass line with none adds nothing, a reply's own "pass 3: … (order)" isn't read).
+    /// </summary>
+    private static void FocusRun()
+    {
+        string stdout = string.Join('\n',
+            "Assistant: pass 3: looked again (order)",
+            "[notice] pass 1: 1 gap · 1m 2s · 90.1k tokens",
+            "[notice] pass 2: clean · 40.0s · 80.0k tokens",
+            "[notice] pass 3: clean, 1 minor fix (verification), confirmed · 47.6s · 93.6k tokens",
+            "[notice] pass 4: 1 gap, 3 minor fixes (order) · 1m 17s · 98.1k tokens",
+            "[notice] pass 6: clean (risks, advisor), confirmed",
+            "[notice] pass 7: clean (advisor)");
+        string log = string.Join('\n',
+            "x " + PlanText.PassLogLine(1, 1, [], false),
+            "x " + PlanText.FocusLogLine(3, "assumptions", "by change (assumptions 4, order 1)"),
+            "x " + PlanText.FocusLogLine(5, "order", "least used"),
+            "x " + AuditText.FocusLogLine(2, "maintainability", "in turn"));
+
+        var logged = LogFacts.Read(log);
+        Expect(logged.PlanPasses == 1, $"a focus line isn't a pass: {logged.PlanPasses}");
+        var (fromLog, summary) = FocusReader.Read(logged, stdout);
+        Expect(!summary && fromLog.Count == 3 && fromLog[0] == new FocusRecord(3, "assumptions", "by change (assumptions 4, order 1)")
+            && fromLog[1] == new FocusRecord(5, "order", "least used") && fromLog[2] == new FocusRecord(2, "maintainability", "in turn"),
+            "the focus lines win over the summary: " + string.Join(" / ", fromLog));
+
+        var (fromSummary, read) = FocusReader.Read(LogFacts.Read(""), stdout);
+        Expect(read && string.Join(",", fromSummary.Select(f => $"{f.Pass}:{f.Label}")) == "3:verification,4:order,6:risks",
+            "the summary's labels without focus lines: " + string.Join(",", fromSummary.Select(f => $"{f.Pass}:{f.Label}")));
+        Expect(FocusReader.Counts(fromSummary.Append(new FocusRecord(9, "order", ""))) == "order ×2, verification ×1, risks ×1", "the count line: " + FocusReader.Counts(fromSummary));
+        Expect(FocusReader.Read(LogFacts.Read(""), "[notice] pass 2: clean · 1s") is ({ Count: 0 }, false), "no labels, no focuses");
     }
 
     /// <summary>The keyword check's five rules (2026-11-18), each broken once on built gaps, and a clean set that passes.</summary>

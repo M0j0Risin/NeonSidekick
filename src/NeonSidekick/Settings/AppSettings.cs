@@ -1093,6 +1093,7 @@ public sealed class AppSettings : IDisposable
         LlmMaxToolIterations = source.LlmMaxToolIterations,
         PlanGapPasses = source.PlanGapPasses,
         PlanGapCleanPasses = source.PlanGapCleanPasses,
+        ConfirmFocusByChange = source.ConfirmFocusByChange,
         PlanGapAskUser = source.PlanGapAskUser,
         PlanGapStopTone = source.PlanGapStopTone,
         RalphLoopReviewer = source.RalphLoopReviewer,

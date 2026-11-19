@@ -549,6 +549,34 @@ public static class PlanText
     public const string ShadowLogPrefix = "plan gaps shadow:";
 
     /// <summary>
+    /// The confirming focus's <c>--log</c> line, once a confirming pass begins (2026-11-18, Phase 3 item 3, focus selection): the pass, the focus's
+    /// label (<see cref="ConfirmFocusLabels"/>) and how it was picked (<see cref="FocusHow"/>). GapBench reads which focuses ran from it.
+    /// </summary>
+    public static string FocusLogLine(int pass, string focus, string how) => $"{FocusLogPrefix} pass {N(pass)}: {focus}, {how}";
+
+    /// <summary>The confirming focus line's prefix, for a log search.</summary>
+    public const string FocusLogPrefix = "plan gaps focus:";
+
+    /// <summary>
+    /// How <paramref name="loop"/> picked this pass's focus, for the focus log lines (2026-11-18, the plan's and the audit's): <c>in turn</c> under the
+    /// rotation; <c>by change (assumptions 12, order 3)</c>, the areas the last change touched heaviest first, named by <paramref name="labels"/>; or
+    /// <c>least used</c> when it touched none a focus can name.
+    /// </summary>
+    public static string FocusHow(PlanGapLoop loop, IReadOnlyList<string> labels)
+    {
+        ArgumentNullException.ThrowIfNull(loop);
+        ArgumentNullException.ThrowIfNull(labels);
+        if (!loop.PicksByChange)
+        {
+            return "in turn";
+        }
+
+        var touched = loop.FocusWeights.Select((weight, i) => (weight, i)).Where(w => w.weight > 0 && w.i < labels.Count)
+            .OrderByDescending(w => w.weight).ThenBy(w => w.i).Select(w => $"{labels[w.i]} {N(w.weight)}").ToList();
+        return touched.Count > 0 ? $"by change ({string.Join(", ", touched)})" : "least used";
+    }
+
+    /// <summary>
     /// A stop's reason as a log or header word (2026-11-17, from <see cref="Audits.AuditText.StopWord"/>, which now reads it here): limit, stalled,
     /// unconfirmed, no report, interrupted (Esc, a failure), you spoke, converged. Not the summary's ending word.
     /// </summary>
@@ -566,7 +594,9 @@ public static class PlanText
     /// <summary>
     /// What each confirming pass looks hardest at (2026-10-17, the user's pick of idea #1), in turn: the loop's <see cref="PlanGapLoop.Confirmations"/>
     /// counts across streaks, the sixth wrapping to the first. Pinned. The fifth (later on 2026-10-18): each step's size and the plan's length,
-    /// what a Ralph loop needs (<see cref="PlanFit"/>).
+    /// what a Ralph loop needs (<see cref="PlanFit"/>). Since 2026-11-18 (Phase 3 item 3, the user's call), with
+    /// <see cref="Settings.AppSettingsData.ConfirmFocusByChange"/> on, the one the last change touched most and not yet looked at
+    /// (<see cref="PlanFocusAreas"/>, <see cref="ConfirmFocusPick"/>): in turn, most reviews confirmed once and only ever got the first.
     /// </summary>
     public static readonly IReadOnlyList<string> ConfirmFocuses =
     [
@@ -960,7 +990,7 @@ public static class PlanText
         // A pass that may not ask (2026-10-18): the user's call becomes an open question in ## Risks, never a question on a pane;
         // one that may (2026-10-21) is asked to put it to the user rather than pick.
         string decision = gap.AskUser ? GapAskSentence : GapOpenQuestionSentence;
-        string focus = ConfirmFocuses[(Math.Max(1, gap.Confirmation) - 1) % ConfirmFocuses.Count];
+        string focus = ConfirmFocuses[(gap.Focus >= 0 ? gap.Focus : Math.Max(1, gap.Confirmation) - 1) % ConfirmFocuses.Count];
         string reviewer = gap.Who switch
         {
             PlanReviewer.Model => "- Review it yourself; do not consult advisors on this pass.",

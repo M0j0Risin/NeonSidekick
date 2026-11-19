@@ -74,6 +74,43 @@ public partial class SidekickAppTests
         Assert.Contains("converged · 1 high", output);   // /code-audit open's list
     }
 
+    /// <summary>
+    /// Confirm focus by change in a headless audit (2026-11-18, Phase 3 item 3): pass 1 a maintainability finding, pass 2 clean, so the confirming
+    /// pass 3 is told maintainability, with a <c>code audit focus:</c> line saying it was picked by change; off, it is security, in turn.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Headless_CodeAudit_ConfirmFocusByChange_TheLastFindingsDimension_ElseSecurity(bool byChange)
+    {
+        ServerOn1234("llama");
+        HeadlessAuditFiles();
+        _settings.Update(d => d.ConfirmFocusByChange = byChange);
+        _chat.Enqueue(FakeChatClient.Call("r1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "src/a.cs" }));
+        _chat.Enqueue(HeadlessAuditCall("a1", "{\"findings\":[{\"severity\":\"medium\",\"dimension\":\"maintainability\",\"file\":\"src/a.cs\",\"line\":1,\"title\":\"One class does three jobs\",\"detail\":\"Split it.\"}]}"));
+        _chat.EnqueueText("Pass 1.");
+        _chat.Enqueue(HeadlessAuditCall("a2", "{\"checked\":[\"the class\"]}"));
+        _chat.EnqueueText("Pass 2.");
+        _chat.Enqueue(HeadlessAuditCall("a3", "{\"checked\":[\"the rest\"]}"));
+        _chat.EnqueueText("Pass 3.");
+        var focus = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith(AuditText.FocusLogPrefix, StringComparison.Ordinal)) focus.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await Headless("/code-audit src\n");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        string dimension = byChange ? AuditFocus.Maintainability : AuditFocus.Security;
+        Assert.Contains("You: " + AuditText.PassMessage("src", HeadlessAuditPath, 3, 5, PlanReviewer.Model, dimension, 1), output);
+        Assert.Equal([byChange ? "code audit focus: pass 3: maintainability, by change (maintainability 1)" : "code audit focus: pass 3: security, in turn"], focus);
+    }
+
     [Fact]
     public async Task Headless_CodeAudit_LowKeepsStreak_ALowPassCounts_AndNeverSaysNothingNew()
     {

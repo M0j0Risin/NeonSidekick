@@ -66,6 +66,8 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     private readonly Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> _review;
     private readonly Func<int> _gapLimit;
     private readonly Func<int> _cleanPasses;
+    // Confirm focus by change (2026-11-18, Phase 3 item 3): read when the verdict starts a review; null keeps it off.
+    private readonly Func<bool>? _focusByChange;
     private readonly Func<string, string, string>? _references;
     private readonly Func<int> _inlineLimit;
     private readonly Action<PlanGapLoop>? _converged;
@@ -86,8 +88,9 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     /// inside the turn, and the review's end is said only once it is answered), with the loop, whose <see cref="PlanGapLoop.TakeRing"/> says the ring
     /// is taken (2026-10-22); null for none (headless, the tests).
     /// </param>
-    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null, Func<int>? inlineLimit = null, Action<PlanGapLoop>? converged = null)
+    public PresentPlanTool(PlanSession session, WorkingDirectory files, TimeProvider time, Func<PlanPresentation, CancellationToken, Task<PlanVerdict>> review, Func<int>? gapLimit = null, Func<int>? cleanPasses = null, Func<string, string, string>? references = null, Func<int>? inlineLimit = null, Action<PlanGapLoop>? converged = null, Func<bool>? focusByChange = null)
     {
+        _focusByChange = focusByChange;
         _converged = converged;
         _references = references;
         _inlineLimit = inlineLimit ?? (() => RalphText.InlinePlanChars);
@@ -279,7 +282,7 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
         switch (verdict.Choice)
         {
             case PlanChoice.CloseGaps:
-                _session.StartClosing(verdict.Reviewer ?? PlanReviewer.Model, _gapLimit(), _cleanPasses());
+                _session.StartClosing(verdict.Reviewer ?? PlanReviewer.Model, _gapLimit(), _cleanPasses(), _focusByChange?.Invoke() ?? false);
                 return PlanText.CloseGapsResult(path);
             case PlanChoice.Approve:
             case PlanChoice.ApproveFresh:

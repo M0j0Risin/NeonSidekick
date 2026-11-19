@@ -40,6 +40,56 @@ public sealed class AuditSessionTests : IDisposable
 
     private void Start(string report) => _audit.Start(report, _scope, AuditFocus.Dimensions, "", PlanReviewer.Model, 5, 2);
 
+    /// <summary>Two passes of an audit over all five dimensions: the first's findings, then a clean one; the third begins confirming.</summary>
+    private PlanGapLoop FindingThenClean(bool byChange, params string[] dimensions)
+    {
+        var loop = _audit.Start(A, _scope, AuditFocus.Dimensions, "", PlanReviewer.Model, 5, 2, focusByChange: byChange);
+        loop.BeginPass(null);
+        _audit.NoteChanged(1, dimensions);
+        loop.Record(["add A1"]);
+        Assert.Null(loop.Next(true, false, "1"));
+        loop.BeginPass("1");
+        loop.MarkClean();
+        Assert.Null(loop.Next(true, false, "1"));
+        loop.BeginPass("1");
+        return loop;
+    }
+
+    [Fact]
+    public void ConfirmFocusByChange_TakesTheDimensionTheLastFindingsTouched()
+    {
+        // 2026-11-18, Phase 3 item 3: on, a maintainability finding makes the confirming pass maintainability's; off, it is security, in turn.
+        var on = FindingThenClean(byChange: true, "maintainability", "maintainability", "tests");
+        Assert.Equal(1, on.Confirmation);
+        Assert.Equal(3, on.Focus);
+        Assert.Equal(["maintainability"], AuditFocus.PassFocus(_audit.Focus, on.Focus + 1).Dimensions);
+        Assert.Equal([0, 0, 0, 2, 1], _audit.ChangedWeights(on));
+        Assert.Equal("by change (maintainability 2, tests 1)", PlanText.FocusHow(on, _audit.Focus));
+
+        var off = FindingThenClean(byChange: false, "maintainability");
+        Assert.Equal(0, off.Focus);
+        Assert.Equal(["security"], AuditFocus.PassFocus(_audit.Focus, off.Focus + 1).Dimensions);
+    }
+
+    [Fact]
+    public void ConfirmFocusByChange_CountsResetOnStart_AndOneDimensionWeighsNothing()
+    {
+        var loop = FindingThenClean(byChange: true, "correctness");
+        Assert.Equal(1, loop.Focus);
+
+        // A new start numbers passes from 1 again: the old counts are gone.
+        var again = _audit.Start(A, _scope, AuditFocus.Dimensions, "", PlanReviewer.Model, 5, 2, focusByChange: true);
+        again.BeginPass(null);
+        again.BeginPass(null);
+        Assert.Empty(_audit.ChangedWeights(again));
+
+        // One dimension chosen: its confirming passes take an angle no finding names, so the pick is the least used.
+        var one = _audit.Start(A, _scope, ["security"], "", PlanReviewer.Model, 5, 2, focusByChange: true);
+        one.BeginPass(null);
+        _audit.NoteChanged(1, ["security"]);
+        Assert.Empty(_audit.ChangedWeights(one));
+    }
+
     [Fact]
     public void TheShadowStreak_MovesOnceAPass_AndResetsOnStartAndStop()
     {

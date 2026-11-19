@@ -50,6 +50,47 @@ public partial class ChatScreenTests
         Assert.Equal(PlanText.ReviewLine(4, 1, PlanGapStop.Converged, 2, PlanDocument.Fingerprint(PlanBodyNow)), PlanHeaderNow.Review);
     }
 
+    /// <summary>
+    /// Confirm focus by change on the screen (2026-11-18, Phase 3 item 3): a gap pass whose revision changes only a <c>Done when:</c>, then a clean pass,
+    /// gives a confirming pass told to look at <i>verification</i>, with a <c>plan gaps focus:</c> line saying it was picked by change; off, the same
+    /// script gives <i>order</i>, in turn.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PlanGaps_ConfirmFocusByChange_ADoneWhenOnlyRevision_GivesVerification_ElseOrder(bool byChange)
+    {
+        const string pinned = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: `test -f guide.md` exits 0\n";
+        _settings.Update(d => d.ConfirmFocusByChange = byChange);
+        PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/exit");
+        _chat.Enqueue(PresentPlanCall());                                               // 0: Close gaps…
+        _chat.EnqueueText("Closing.");                                                  // 1
+        _chat.Enqueue(PresentGapsCall("p2", pinned, "[medium] The check isn't a command")); // 2: pass 1 changes only the Done when
+        _chat.EnqueueText("Found one.");                                                // 3
+        _chat.Enqueue(PresentGapsCall("p3", pinned));                                   // 4: pass 2 clean
+        _chat.EnqueueText("Clean.");                                                    // 5
+        _chat.Enqueue(PresentGapsCall("p4", pinned));                                   // 6: pass 3 confirms: the pane, canceled
+        _chat.EnqueueText("Canceled.");                                                 // 7
+        var focus = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith(PlanText.FocusLogPrefix, StringComparison.Ordinal)) focus.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(8, _chat.Requests.Count);
+        int area = byChange ? PlanFocusAreas.Verification : PlanFocusAreas.Order;
+        Assert.Contains(PlanText.ConfirmFocuses[area], _chat.Requests[6][0].Text);
+        Assert.Equal([byChange ? "plan gaps focus: pass 3: verification, by change (verification 1)" : "plan gaps focus: pass 3: order, in turn"], focus);
+        Assert.Contains($"pass 3: clean ({PlanText.ConfirmFocusLabels[area]}), confirmed", output);
+    }
+
     [Fact]
     public async Task PlanGaps_TheLimitBeforeTheConfirmation_IsUnconfirmed_AndThePaneComesBack()
     {

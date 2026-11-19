@@ -626,6 +626,21 @@ public class PlanCleanPassesTests : IDisposable
         Assert.True(loop.PassClean);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Tool_CloseGaps_StartsAReview_ThatPicksByChange_AsTheSettingSays(bool byChange)
+    {
+        // 2026-11-18, Phase 3 item 3: the review the pane's Close gaps… starts reads Confirm focus by change through the tool.
+        _verdict = new PlanVerdict(PlanChoice.CloseGaps, Reviewer: PlanReviewer.Model);
+        var tool = new PresentPlanTool(_session, _files, _time, (plan, _) => Task.FromResult(_verdict), () => 5, () => 2, focusByChange: () => byChange);
+        _session.Enter("Add a guide");
+
+        await tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Plan));
+
+        Assert.Equal(byChange, _session.Closing!.PicksByChange);
+    }
+
     [Fact]
     public async Task Tool_OnlyMinorFixes_IsClean_SavesItsRevision_AndTheStreakBuilds()
     {

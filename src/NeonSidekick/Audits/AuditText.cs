@@ -821,6 +821,15 @@ public static class AuditText
     /// <summary>The shadow line's prefix, for a log search.</summary>
     public const string ShadowLogPrefix = "code audit shadow:";
 
+    /// <summary>
+    /// A confirming pass's <c>--log</c> line (2026-11-18, Phase 3 item 3, focus selection), in the plan's shape (<see cref="Plans.PlanText.FocusLogLine"/>):
+    /// the pass, its focus (a dimension, or a lone dimension's angle) and how it was picked (<see cref="Plans.PlanText.FocusHow"/>).
+    /// </summary>
+    public static string FocusLogLine(int pass, string focus, string how) => $"{FocusLogPrefix} pass {N(pass)}: {focus}, {how}";
+
+    /// <summary>The audit's confirming focus line's prefix, for a log search.</summary>
+    public const string FocusLogPrefix = "code audit focus:";
+
     /// <summary>The --log line of a pass's end: its changes (a clean pass's <paramref name="light"/> low ones, 2026-11-17), whether an advisor was asked, its cost.</summary>
     public static string PassLogLine(int pass, int changes, int minor, bool clean, bool advisorAsked, PlanPassRecord? cost, int light = 0) =>
         $"code audit: pass {N(pass)} ended, " + (clean ? CleanWord(light) : Changes(changes)) + (minor > 0 ? ", " + Nits(minor) : "")

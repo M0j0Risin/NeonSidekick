@@ -31,6 +31,43 @@ public partial class SidekickAppTests
         Assert.EndsWith("cut short at the limit (body " + PlanDocument.Fingerprint(PlanDocument.Body(File.ReadAllText(HeadlessPlanFile))) + ")", PlanDocument.TryParse(File.ReadAllText(HeadlessPlanFile))!.Review);
     }
 
+    /// <summary>Confirm focus by change headless (2026-11-18, Phase 3 item 3): a <c>Done when:</c>-only revision gives <i>verification</i>; off, <i>order</i>.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Headless_PlanGaps_ConfirmFocusByChange_ADoneWhenOnlyRevision_GivesVerification_ElseOrder(bool byChange)
+    {
+        const string pinned = "# Guide\n\n- [ ] Write it\n  Done when: `test -f guide.md` exits 0\n";
+        ServerOn1234("llama");
+        _settings.Update(d => d.ConfirmFocusByChange = byChange);
+        _chat.Enqueue(HeadlessPresentPlan());
+        _chat.EnqueueText("Saved.");
+        _chat.Enqueue(HeadlessPresentGapsOver("p2", pinned, "[medium] The check isn't a command"));
+        _chat.EnqueueText("Found one.");
+        _chat.Enqueue(HeadlessPresentGapsOver("p3", pinned));
+        _chat.EnqueueText("Clean.");
+        _chat.Enqueue(HeadlessPresentGapsOver("p4", pinned));
+        _chat.EnqueueText("Confirmed.");
+        var focus = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { if (e.Message.StartsWith(PlanText.FocusLogPrefix, StringComparison.Ordinal)) focus.Add(e.Message); };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        string output;
+        try
+        {
+            output = await Headless("/plan Add a guide\n/plan gaps\n");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(8, _chat.Requests.Count);
+        int area = byChange ? PlanFocusAreas.Verification : PlanFocusAreas.Order;
+        Assert.Contains(PlanText.ConfirmFocuses[area], _chat.Requests[6][0].Text);
+        Assert.Equal([byChange ? "plan gaps focus: pass 3: verification, by change (verification 1)" : "plan gaps focus: pass 3: order, in turn"], focus);
+        Assert.Contains($"pass 3: clean ({PlanText.ConfirmFocusLabels[area]}), confirmed", output);
+    }
+
     [Fact]
     public async Task Headless_PlanGaps_ALimitBelowTheCleanCount_SaysSo_AndOneCleanPassEndsIt()
     {

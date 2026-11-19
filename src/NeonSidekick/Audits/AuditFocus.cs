@@ -17,7 +17,9 @@ public sealed record AuditPassFocus(IReadOnlyList<string> Dimensions, string? An
 /// <summary>
 /// A code audit's dimensions (2026-10-18, <c>/code-audit</c>): security, correctness, performance, maintainability and tests, in that order;
 /// <c>all</c> names the five. A finding pass covers every chosen dimension; a confirming pass takes one in rotation, or with one dimension
-/// chosen one of <see cref="AuditText.ConfirmAngles"/> (the plan gaps' <c>ConfirmFocuses</c> idea). Pure.
+/// chosen one of <see cref="AuditText.ConfirmAngles"/> (the plan gaps' <c>ConfirmFocuses</c> idea). Pure. Since 2026-11-18 (Phase 3 item 3, the user's
+/// call), with <see cref="Settings.AppSettingsData.ConfirmFocusByChange"/> on, the dimension the last pass's findings touched most and not yet looked at
+/// (<see cref="AuditSession.ChangedWeights"/>); the caller passes the loop's <see cref="Plans.PlanGapLoop.Focus"/> + 1 as the confirmation either way.
 /// </summary>
 public static class AuditFocus
 {

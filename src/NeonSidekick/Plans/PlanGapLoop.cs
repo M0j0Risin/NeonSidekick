@@ -113,6 +113,11 @@ public sealed class PlanGapLoop
     private bool _passAdvisor;
     private bool _passRecorded = true;
     private readonly int _focusCount;
+    // The pick by change (2026-11-18, Phase 3 item 3, focus selection): what the last change touched per focus, null for today's rotation; how
+    // often this review's confirming passes looked at each focus; and the plan as the pass that just began found it.
+    private readonly Func<PlanGapLoop, IReadOnlyList<int>>? _weigh;
+    private readonly int[] _used;
+    private string? _passStartBody;
 
     /// <summary>
     /// Whether a review or an audit that stopped with <paramref name="reason"/> rings its stop tone (2026-10-21, the user's ask:
@@ -157,9 +162,15 @@ public sealed class PlanGapLoop
     /// How many confirming focuses a pass's record rotates through (2026-10-18, the code audit's dimensions): null for
     /// <see cref="PlanText.ConfirmFocuses"/>' count, a plan's.
     /// </param>
-    public PlanGapLoop(PlanReviewer reviewer, int limit, int cleanPasses, int? focusCount = null)
+    /// <param name="weigh">
+    /// What the last change touched, per focus (2026-11-18, Phase 3 item 3, <see cref="Settings.AppSettingsData.ConfirmFocusByChange"/> on): read as
+    /// each confirming pass begins, so <see cref="Focus"/> is <see cref="ConfirmFocusPick.Pick"/>'s; null for the rotation.
+    /// </param>
+    public PlanGapLoop(PlanReviewer reviewer, int limit, int cleanPasses, int? focusCount = null, Func<PlanGapLoop, IReadOnlyList<int>>? weigh = null)
     {
         _focusCount = Math.Max(1, focusCount ?? PlanText.ConfirmFocuses.Count);
+        _weigh = weigh;
+        _used = new int[_focusCount];
         Reviewer = reviewer;
         Limit = Math.Max(0, limit);
         CleanAsked = Math.Clamp(cleanPasses, Settings.AppSettingsData.MinPlanGapCleanPasses, Settings.AppSettingsData.MaxPlanGapCleanPasses);
@@ -264,6 +275,27 @@ public sealed class PlanGapLoop
     public int Confirmation { get; private set; }
 
     /// <summary>
+    /// The focus this pass looks hardest at (2026-11-18, Phase 3 item 3, focus selection), an index into the loop's focuses; -1 on a pass that is
+    /// not confirming. In turn (<c>(Confirmation - 1) % count</c>) unless the loop picks by change (<see cref="PicksByChange"/>).
+    /// </summary>
+    public int Focus { get; private set; } = -1;
+
+    /// <summary>Whether this loop picks a confirming pass's focus by what changed (<see cref="Settings.AppSettingsData.ConfirmFocusByChange"/>).</summary>
+    public bool PicksByChange => _weigh is not null;
+
+    /// <summary>What the last change touched, per focus, as this pass's focus was picked: empty unless it was picked by change.</summary>
+    public IReadOnlyList<int> FocusWeights { get; private set; } = [];
+
+    /// <summary>
+    /// The plan before and after the change the next confirming pass confirms (2026-11-18): the start body of the last pass that recorded gaps,
+    /// and the body the pass after it began on. Null until such a pass ends, or when either body was unread.
+    /// </summary>
+    public string? ChangeBefore { get; private set; }
+
+    /// <summary>The plan after the change <see cref="ChangeBefore"/> starts.</summary>
+    public string? ChangeAfter { get; private set; }
+
+    /// <summary>
     /// Who reviews this pass (2026-10-17): under <see cref="PlanReviewer.Confirm"/> the advisor on a confirming pass and the model
     /// otherwise; for the other reviewers, the reviewer itself.
     /// </summary>
@@ -282,7 +314,14 @@ public sealed class PlanGapLoop
         if (Pass > 0)
         {
             LastGaps = _passGaps;
+            if (_passGaps.Count > 0)
+            {
+                ChangeBefore = _passStartBody;
+                ChangeAfter = body;
+            }
         }
+
+        _passStartBody = body;
 
         // The streak before the new pass: this one's report, read before its gaps are cleared.
         CleanStreak = Pass > 0 && PassClean ? CleanCount : 0;
@@ -299,6 +338,7 @@ public sealed class PlanGapLoop
 
         Pass++;
         Confirmation = CleanStreak > 0 ? ++Confirmations : 0;
+        PickFocus();
         _passStart = meter;
         _passAdvisor = advisorsOffered && Reviewer == PlanReviewer.Confirm && PassReviewer == PlanReviewer.Advisor;
         _passRecorded = false;
@@ -306,6 +346,29 @@ public sealed class PlanGapLoop
         _followUpTaken = false;
         _shapeRefused = false;
         AdvisorAskedThisPass = false;
+    }
+
+    /// <summary>This pass's <see cref="Focus"/>: in turn, or by what changed, counted as used.</summary>
+    private void PickFocus()
+    {
+        FocusWeights = [];
+        if (Confirmation == 0)
+        {
+            Focus = -1;
+            return;
+        }
+
+        if (_weigh is null)
+        {
+            Focus = (Confirmation - 1) % _focusCount;
+        }
+        else
+        {
+            FocusWeights = _weigh(this);
+            Focus = ConfirmFocusPick.Pick(FocusWeights, _used);
+        }
+
+        _used[Focus]++;
     }
 
     /// <summary>
@@ -495,8 +558,7 @@ public sealed class PlanGapLoop
             advisorTokens = Math.Max(0, end.AdvisorTokens - start.AdvisorTokens);
         }
 
-        int focus = Confirmation > 0 ? (Confirmation - 1) % _focusCount : -1;
-        _history.Add(new PlanPassRecord(Pass, _passGaps.Count, _passMinor.Count, PassClean, focus, _passAdvisor, elapsed, tokens, advisorTokens, _passLight.Count));
+        _history.Add(new PlanPassRecord(Pass, _passGaps.Count, _passMinor.Count, PassClean, Focus, _passAdvisor, elapsed, tokens, advisorTokens, _passLight.Count));
     }
 
     /// <summary>
@@ -519,9 +581,11 @@ public sealed class PlanGapLoop
 /// review ends on, this pass's confirmation (0 when it is not confirming) and who reviews this pass (null for the reviewer chosen); since
 /// 2026-10-18 whether the pass may and can ask the user (<see cref="Settings.AppSettingsData.PlanGapAskUser"/> with <c>ask_user</c> offered, since
 /// 2026-10-21: false, the directive says to ask
-/// nothing and to write a decision only the user can make into <c>## Risks</c> as an open question).
+/// nothing and to write a decision only the user can make into <c>## Risks</c> as an open question). <paramref name="Focus"/> (2026-11-18, Phase 3
+/// item 3): the confirming focus the loop picked (<see cref="PlanGapLoop.Focus"/>), -1 for the rotation from <paramref name="Confirmation"/>.
 /// </summary>
-public sealed record PlanGapState(int Pass, int Limit, PlanReviewer Reviewer, int CleanSoFar = 0, int CleanPasses = 1, int Confirmation = 0, PlanReviewer? PassReviewer = null, bool AskUser = true)
+public sealed record PlanGapState(int Pass, int Limit, PlanReviewer Reviewer, int CleanSoFar = 0, int CleanPasses = 1, int Confirmation = 0, PlanReviewer? PassReviewer = null, bool AskUser = true,
+    int Focus = -1)
 {
     /// <summary>Who reviews this pass: <see cref="PassReviewer"/>, else the reviewer chosen.</summary>
     public PlanReviewer Who => PassReviewer ?? Reviewer;

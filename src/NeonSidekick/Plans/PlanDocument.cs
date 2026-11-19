@@ -260,6 +260,40 @@ public static class PlanDocument
         return sections;
     }
 
+    /// <summary>
+    /// Each <c>##</c> section of <paramref name="body"/> with its lines (2026-11-18, Phase 3 item 3, focus selection: <see cref="PlanFocusAreas"/> compares
+    /// a revision section by section), in order: the name as <see cref="Sections"/> gives it, then the lines up to the next <c>##</c> heading, each with a
+    /// trailing <c>\r</c> dropped, deeper headings kept. Lines in fenced code, the fences and the lines before the first <c>##</c> heading are left out, and so
+    /// is <c>## References</c>, the app's own.
+    /// </summary>
+    public static IReadOnlyList<(string Name, IReadOnlyList<string> Lines)> SectionLines(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        var sections = new List<(string Name, IReadOnlyList<string> Lines)>();
+        List<string>? current = null;
+        foreach (var (_, raw) in Walk(body))
+        {
+            string line = raw.TrimEnd('\r');
+            string trimmed = line.Trim();
+            if (trimmed.StartsWith("## ", StringComparison.Ordinal))
+            {
+                string name = trimmed[3..].Trim().TrimEnd(':').Trim();
+                current = null;
+                if (name.Length > 0 && !string.Equals(name, PlanReferences.Heading, StringComparison.OrdinalIgnoreCase))
+                {
+                    current = [];
+                    sections.Add((name, current));
+                }
+
+                continue;
+            }
+
+            current?.Add(line);
+        }
+
+        return sections;
+    }
+
     /// <summary>The length of a list marker with its space (<c>- </c>, <c>12. </c>) at the start of <paramref name="trimmed"/>, or 0; shared with <see cref="PlanSteps"/> (2026-10-18).</summary>
     internal static int ListMarker(string trimmed)
     {

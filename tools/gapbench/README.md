@@ -36,6 +36,8 @@ A bench uses the published exe (`publish/output`) and takes hours: a run can nee
 
 The results' headline also says how often the plan shadow rule (gaps tagged low don't restart the clean streak) would
 have stopped a review before a planted gap was caught, and how the gaps' severity tags agree with the planted ones.
+Each plan item counts the focuses its confirming passes looked at (*Confirm focus by change* tries the pick by what
+changed). Runs from before the focus lines are read from the review summary.
 
 ## Adding material
 

@@ -738,6 +738,8 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
 
         _session.Changed();
         _session.NoteShadow(pass, seriousCall, shadowFindings);
+        // What the call touched, for Confirm focus by change (2026-11-18, Phase 3 item 3): the dimensions of the findings it made, reopened or revised.
+        _session.NoteChanged(pass, made.Concat(reopened).Concat(revised).Select(f => f.Dimension));
         int cleanCount = loop.CleanCount;
         IReadOnlyList<string>? lightKeys = light ? keys : null;
         if (!clean)

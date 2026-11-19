@@ -3,10 +3,15 @@ namespace NeonSidekick.Plans;
 /// <summary>
 /// How a revision changed a plan's steps (2026-11-18, phase 3 item 2: the mechanical minor check, measured before it is trusted): the steps added,
 /// removed and moved, and the paired steps whose <c>Done when:</c> changed, each by its text. A reworded step that stays paired is no change: that is
-/// the minor fix <c>minor</c> exists for. <see cref="Any"/> when anything changed.
+/// the minor fix <c>minor</c> exists for. <see cref="Any"/> when anything changed. <paramref name="Reworded"/> (2026-11-18, Phase 3 item 3, focus selection):
+/// the paired steps whose own words changed, which <see cref="Any"/> leaves out; <see cref="PlanFocusAreas"/> weighs them as <i>assumptions</i>.
 /// </summary>
-public sealed record PlanStepChangeReport(IReadOnlyList<string> Added, IReadOnlyList<string> Removed, IReadOnlyList<string> Moved, IReadOnlyList<string> DoneWhenChanged)
+public sealed record PlanStepChangeReport(IReadOnlyList<string> Added, IReadOnlyList<string> Removed, IReadOnlyList<string> Moved, IReadOnlyList<string> DoneWhenChanged,
+    IReadOnlyList<string>? Reworded = null)
 {
+    /// <summary>The paired steps whose words changed: <see cref="Reworded"/>, empty for none.</summary>
+    public IReadOnlyList<string> RewordedSteps => Reworded ?? [];
+
     /// <summary>No step changed.</summary>
     public static PlanStepChangeReport None { get; } = new([], [], [], []);
 
@@ -44,6 +49,7 @@ public static class PlanStepChanges
         var added = new List<string>();
         var moved = new List<string>();
         var doneWhen = new List<string>();
+        var reworded = new List<string>();
         for (int i = 0; i < now.Count; i++)
         {
             if (pairs[i] < 0)
@@ -57,6 +63,11 @@ public static class PlanStepChanges
                 moved.Add(now[i].Text);
             }
 
+            if (!string.Equals(Collapsed(was[pairs[i]].Text), Collapsed(now[i].Text), StringComparison.Ordinal))
+            {
+                reworded.Add(now[i].Text);
+            }
+
             if (!string.Equals(Collapsed(was[pairs[i]].DoneWhen), Collapsed(now[i].DoneWhen), StringComparison.Ordinal))
             {
                 doneWhen.Add(now[i].Text);
@@ -65,7 +76,7 @@ public static class PlanStepChanges
 
         var paired = new HashSet<int>(pairs.Where(p => p >= 0));
         var removed = was.Where((_, k) => !paired.Contains(k)).Select(s => s.Text).ToList();
-        return new PlanStepChangeReport(added, removed, moved, doneWhen);
+        return new PlanStepChangeReport(added, removed, moved, doneWhen, reworded);
     }
 
     /// <summary>A <c>Done when:</c> with its whitespace runs as one space, trimmed; null for none.</summary>

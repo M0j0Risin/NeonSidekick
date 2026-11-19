@@ -329,9 +329,12 @@ public sealed class AuditSession
     /// limit), ending on <paramref name="cleanPasses"/> clean passes in a row, the confirming passes rotating through the focus. One already
     /// running is replaced: a pending hold on this report becomes the running one, and the replaced audit's lock goes when it names another.
     /// <paramref name="lowKeepsStreak"/> (2026-11-17): <see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/> as the start or resume
-    /// read it, kept for <c>present_audit</c> (<see cref="LowKeepsStreak"/>).
+    /// read it, kept for <c>present_audit</c> (<see cref="LowKeepsStreak"/>). <paramref name="focusByChange"/> (2026-11-18, Phase 3 item 3):
+    /// <see cref="Settings.AppSettingsData.ConfirmFocusByChange"/>, so a confirming pass takes the dimension the last pass's findings touched most
+    /// (<see cref="ChangedWeights"/>).
     /// </summary>
-    public PlanGapLoop Start(string path, AuditScope scope, IReadOnlyList<string> focus, string brief, PlanReviewer reviewer, int limit, int cleanPasses, bool lowKeepsStreak = false)
+    public PlanGapLoop Start(string path, AuditScope scope, IReadOnlyList<string> focus, string brief, PlanReviewer reviewer, int limit, int cleanPasses, bool lowKeepsStreak = false,
+        bool focusByChange = false)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(scope);
@@ -356,8 +359,60 @@ public sealed class AuditSession
         Focus = AuditFocus.Normalize(focus);
         Brief = brief ?? "";
         LowKeepsStreak = lowKeepsStreak;
+        _changed.Clear();
         Changed();
-        return Running = new PlanGapLoop(reviewer, limit, cleanPasses, AuditFocus.FocusCount(Focus));
+        return Running = new PlanGapLoop(reviewer, limit, cleanPasses, AuditFocus.FocusCount(Focus), focusByChange ? ChangedWeights : null);
+    }
+
+    // The dimensions each pass's findings touched (2026-11-18, Phase 3 item 3), by pass number: a new loop numbers passes from 1, so Start clears them.
+    private readonly Dictionary<int, Dictionary<string, int>> _changed = [];
+
+    /// <summary>
+    /// One <c>present_audit</c> call of <paramref name="pass"/> (2026-11-18, Phase 3 item 3, focus selection): the dimensions of the findings it made,
+    /// reopened or revised, added to that pass's counts. Nothing with no audit running.
+    /// </summary>
+    public void NoteChanged(int pass, IEnumerable<string> dimensions)
+    {
+        ArgumentNullException.ThrowIfNull(dimensions);
+        if (Running is null)
+        {
+            return;
+        }
+
+        if (!_changed.TryGetValue(pass, out var counts))
+        {
+            counts = new Dictionary<string, int>(StringComparer.Ordinal);
+            _changed[pass] = counts;
+        }
+
+        foreach (string dimension in dimensions)
+        {
+            counts[dimension] = counts.GetValueOrDefault(dimension) + 1;
+        }
+    }
+
+    /// <summary>
+    /// What the change a confirming pass confirms touched, per chosen dimension in <see cref="Focus"/>' order (2026-11-18): the counts of the latest pass
+    /// before <paramref name="loop"/>'s current one that has any. Empty with one dimension chosen: its confirming passes take an angle
+    /// (<see cref="AuditText.ConfirmAngles"/>), which no finding names, so the pick falls back to the least used.
+    /// </summary>
+    public IReadOnlyList<int> ChangedWeights(PlanGapLoop loop)
+    {
+        ArgumentNullException.ThrowIfNull(loop);
+        if (Focus.Count < 2)
+        {
+            return [];
+        }
+
+        for (int pass = loop.Pass - 1; pass >= 1; pass--)
+        {
+            if (_changed.TryGetValue(pass, out var counts) && counts.Values.Any(n => n > 0))
+            {
+                return [.. Focus.Select(d => counts.GetValueOrDefault(d))];
+            }
+        }
+
+        return [];
     }
 
     /// <summary>The report or the loop changed (a <c>present_audit</c> call recorded something): the next <see cref="Turn"/> reads them again.</summary>
@@ -482,7 +537,7 @@ public sealed class AuditSession
         List<(string Id, string Title)> open = report?.Open.Select(f => (f.Id, f.Title)).ToList() ?? [];
         var passReviewer = loop.PassReviewer;
         var state = new AuditDirectiveState(path, scope.Label, scope.Files, scope.MoreFiles, scope.Skipped, coverage.Unread,
-            AuditFocus.PassFocus(Focus, loop.Confirmation), Brief, open, report?.SettledCount ?? 0,
+            AuditFocus.PassFocus(Focus, loop.Focus + 1), Brief, open, report?.SettledCount ?? 0,
             loop.Pass, loop.Limit, loop.Reviewer, passReviewer, loop.CleanStreak, loop.CleanPasses, loop.Confirmation,
             askUser, toolBudget, maxToolIterations, scope.Deleted.Count > 0, scope.IsGit, scope.Cut, loop.LastLight);
         _turnKey = key;

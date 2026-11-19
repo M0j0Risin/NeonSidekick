@@ -229,7 +229,7 @@ public sealed partial class SidekickApp
 
             // confirm's clean count kept when the fallback above made the model the reviewer, as the gap review's.
             int clean = named == PlanReviewer.Confirm ? Math.Max(2, EffectiveSettings.CodeAuditCleanPasses) : EffectiveSettings.CodeAuditCleanPasses;
-            return audit.Start(chosen, scope, focus, brief, reviewer, HeadlessGapLimit(limit), clean, EffectiveSettings.CodeAuditLowKeepsStreak);
+            return audit.Start(chosen, scope, focus, brief, reviewer, HeadlessGapLimit(limit), clean, EffectiveSettings.CodeAuditLowKeepsStreak, EffectiveSettings.ConfirmFocusByChange);
         }, out string? lockError, out string? unlocked, another: resuming ? null : () => AuditFiles.Choose(files, scope.NameLabel, now));
         if (loop is null)
         {
@@ -274,7 +274,8 @@ public sealed partial class SidekickApp
     {
         bool offered = HeadlessAdvisorsOffered();
         loop.BeginPass(body, meter, offered);
-        string focus = AuditFocus.PassFocus(audit.Focus, loop.Confirmation).Short;
+        ChatScreen.LogAuditFocus(audit.Focus, loop);
+        string focus = AuditFocus.PassFocus(audit.Focus, loop.Focus + 1).Short;
         return AuditText.PassMessage(audit.Scope!.Label, audit.Path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : PlanReviewer.Model, focus, loop.CleanStreak, loop.LastLight);
     }
 
