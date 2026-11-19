@@ -74,6 +74,7 @@ sealed class Options
         "Usage: dotnet run tools/GapBench.cs -- --url <http://host:port/v1> [--model <id>] [--runs 3] [--only a,b] [--exe <path>] [--out <folder>] [--fresh]\n" +
         "                                     [--timeout <minutes, 120>] [--like <profile.json>|none] [--reasoning <level>] [--temperature <t>]\n" +
         "                                     [--set <Setting>=<value>]...   (a profile.json key; the value as JSON, else a string)\n" +
+        "                                     [--from <bench folder>,...]    (a fresh review of each final plan whose review left a gap missed)\n" +
         "       dotnet run tools/GapBench.cs -- --check | --self-test | --score <out folder>";
 
     public Mode Mode { get; private set; } = Mode.Run;
@@ -89,6 +90,12 @@ sealed class Options
     public string? Reasoning { get; private set; }
     public double? Temperature { get; private set; }
     public string? ScoreFolder { get; private set; }
+
+    /// <summary>
+    /// The <c>--from</c> bench folders (2026-11-19, the fresh-look probe): each finished plan run in them whose review left a gap missed gets a new
+    /// review of its final plan (<see cref="Probe"/>).
+    /// </summary>
+    public List<string>? From { get; private set; }
 
     /// <summary>The <c>--set</c> pairs in the order given (2026-11-17): written into each run's profile after everything else.</summary>
     public List<(string Name, JsonNode? Value)> Sets { get; } = [];
@@ -176,6 +183,14 @@ sealed class Options
                 case "--only":
                     o.Only = [.. (Next() ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
                     if (o.Only.Count == 0)
+                    {
+                        return null;
+                    }
+
+                    break;
+                case "--from":
+                    o.From = [.. (Next() ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+                    if (o.From.Count == 0)
                     {
                         return null;
                     }
@@ -288,6 +303,126 @@ sealed record PlanItem(string Name, string PlanPath, string ExpectPath, IReadOnl
 sealed record Spot(string Id, string File, int Line, string Contains, string? Severity, string? Dimension, string What, Keywords? Nit = null);
 
 sealed record AuditItem(string ExpectPath, IReadOnlyList<Spot> Bugs, IReadOnlyList<Spot> Decoys);
+
+/// <summary>A probe's source (2026-11-19): a run (its folder, relative to the repo root), its item, and the gaps its review left missed.</summary>
+sealed record ProbeSource(string Source, string Item, IReadOnlyList<string> Gaps);
+
+/// <summary>
+/// The fresh-look probe (2026-11-19, <c>--from</c>): a new review started on the final plan of a run whose review left a gap missed, to see
+/// whether a look without that review's memory names it. The follow-on bench's later passes, in the same conversation, caught 1 of 8 F3s
+/// left open and none of 3 F5s; Phase 3's fresh confirming passes are worth building only if a fresh look does better.
+/// </summary>
+static class Probe
+{
+    /// <summary>How <see cref="Report"/> keys a probe run's item for the hash check: it is judged by <see cref="Material.RepoHash"/>.</summary>
+    public const string ItemPrefix = "probe:";
+
+    /// <summary>
+    /// The sources, folders in ordinal order and runs by item then number: each plan run whose review left a gap missed (a planted or a
+    /// follow-on one; "minor only" doesn't count, as the plan names it). Audit runs, runs of an item gone from the material, and runs whose
+    /// final plan is gone are named in <paramref name="skipped"/>.
+    /// </summary>
+    public static List<ProbeSource> Pick(IEnumerable<string> folders, Material material, List<string> skipped)
+    {
+        var picked = new List<ProbeSource>();
+        foreach (string folder in folders.Select(Path.GetFullPath).Order(StringComparer.Ordinal))
+        {
+            var scores = Directory.GetDirectories(folder).Where(d => File.Exists(Path.Combine(d, "done.json"))).Select(d => Scorer.Score(d, material));
+            foreach (var score in scores.OrderBy(s => s.Item, StringComparer.Ordinal).ThenBy(s => s.Run))
+            {
+                string source = Normal(score.Folder);
+                if (score.IsAudit || material.Plan(score.Item) is null)
+                {
+                    skipped.Add($"{source}: {(score.IsAudit ? "an audit run" : "its item is no longer in the material")}");
+                    continue;
+                }
+
+                if (!File.Exists(FinalPlan(source, score.Item)))
+                {
+                    skipped.Add($"{source}: its final plan is gone");
+                    continue;
+                }
+
+                var gaps = MissedGaps(score);
+                if (gaps.Count > 0)
+                {
+                    picked.Add(new ProbeSource(source, score.Item, gaps));
+                }
+            }
+        }
+
+        return picked;
+    }
+
+    /// <summary>The gaps a run's review left missed, planted then follow-on; "minor only", foreseen, caught and fixed ones aren't.</summary>
+    public static List<string> MissedGaps(RunScore score) =>
+        [.. score.Planted.Where(g => g.Status == "missed").Select(g => g.Gap.Id)
+            .Concat(score.FollowOn.Where(f => f.Status == FollowOnStatus.Missed).Select(f => f.Gap.Id))];
+
+    /// <summary>A folder as <c>bench.json</c> and <c>done.json</c> keep it: relative to the repo root, with forward slashes.</summary>
+    public static string Normal(string folder) => Path.GetRelativePath(Repo.Root, Path.GetFullPath(folder)).Replace('\\', '/');
+
+    public static string FinalPlan(string source, string item) => Path.Combine(Repo.Root, source, "work", ".neon", "plans", item + ".md");
+
+    /// <summary>
+    /// The plan as the probe gives it: the source's final plan without its front matter's <c>review:</c> line, which <c>/plan open</c> shows as
+    /// "reviewed" and could tell the model the plan is done. The body is untouched.
+    /// </summary>
+    public static string StripReview(string text)
+    {
+        string nl = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var lines = text.Split(nl).ToList();
+        int end = lines.Count > 0 && lines[0].Trim() == "---" ? lines.FindIndex(1, l => l.Trim() == "---") : -1;
+        for (int i = end - 1; i >= 1; i--)
+        {
+            if (lines[i].StartsWith("review:", StringComparison.Ordinal))
+            {
+                lines.RemoveAt(i);
+            }
+        }
+
+        return string.Join(nl, lines);
+    }
+
+    /// <summary>
+    /// The item a probe run is scored against: only its source's missed gaps, each as an ordinary gap (no trigger), so it scores caught, minor
+    /// only, fixed silently or missed, with the pass that caught it.
+    /// </summary>
+    public static PlanItem Derive(PlanItem plan, IReadOnlyCollection<string> ids) =>
+        plan with { Gaps = [.. plan.Gaps.Where(g => ids.Contains(g.Id)).Select(g => g with { Trigger = null, TriggerHits = null, TriggerMisses = null })] };
+
+    public static JsonArray ToJson(IEnumerable<ProbeSource> sources) =>
+        new([.. sources.Select(s => (JsonNode?)new JsonObject
+        {
+            ["source"] = s.Source, ["item"] = s.Item, ["gaps"] = new JsonArray([.. s.Gaps.Select(g => (JsonNode?)g)]),
+        })]);
+
+    /// <summary>The sources a probe bench recorded, so a resume runs the same list in the same order whatever the keywords say now.</summary>
+    public static List<ProbeSource>? Recorded(string outDir)
+    {
+        string path = Path.Combine(outDir, "bench.json");
+        return File.Exists(path) && JsonNode.Parse(File.ReadAllText(path))?["sources"] is JsonArray sources
+            ? [.. sources.Select(n => new ProbeSource((string)n!["source"]!, (string)n["item"]!, [.. n["gaps"]!.AsArray().Select(g => (string)g!)]))]
+            : null;
+    }
+
+    /// <summary>
+    /// Null when the folder's recorded <c>--from</c> list (none for an ordinary bench) is the one given now, or a folder never run; else the
+    /// recorded list, for the refusal.
+    /// </summary>
+    public static string? FromDiffers(string outDir, IReadOnlyList<string>? from)
+    {
+        string path = Path.Combine(outDir, "bench.json");
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var recorded = JsonNode.Parse(File.ReadAllText(path))?["from"] is JsonArray a ? a.Select(n => (string)n!).ToList() : [];
+        var now = (from ?? []).Select(Normal).ToList();
+        return recorded.SequenceEqual(now, StringComparer.Ordinal) ? null : recorded.Count == 0 ? "(none)" : string.Join(",", recorded);
+    }
+}
 
 sealed class Material
 {
@@ -424,6 +559,9 @@ sealed class Material
     /// can say when the material changed since. Every file: a run from before <see cref="ItemHash"/> (2026-11-18) has only this one to compare.
     /// </summary>
     public static string Hash(string root) => HashFiles(root, _ => true);
+
+    /// <summary><c>repo/</c> alone (2026-11-19): what a probe run saw besides its source's plan, which it keeps as its own <c>start.md</c>.</summary>
+    public static string RepoHash(string root) => HashFiles(root, f => f.StartsWith("repo/", StringComparison.Ordinal));
 
     /// <summary>
     /// The hash of what one item's model saw (2026-11-18, late gaps): <c>repo/</c>, plus <c>plans/&lt;name&gt;.md</c> for a plan (the audit sees the repo
@@ -1027,6 +1165,9 @@ static class FocusReader
 sealed class RunScore
 {
     public required string Item { get; init; }
+
+    /// <summary>A probe run's source (2026-11-19, <c>--from</c>): the run whose final plan it reviewed afresh; null for an ordinary run.</summary>
+    public string? Source { get; set; }
     public required int Run { get; init; }
     public required string Folder { get; init; }
     public required JsonObject Facts { get; init; }
@@ -1091,6 +1232,8 @@ sealed class RunScore
     public int FindingsLow { get; set; }
 
     public bool IsAudit => Item == Material.AuditName;
+
+    public bool IsProbe => Source is not null;
 
     public int Passes => IsAudit ? Log.AuditPasses : Log.PlanPasses + Log.PlanCleanPasses;
 
@@ -1201,7 +1344,16 @@ static class Scorer
         }
         else if (material.Plan(score.Item) is { } plan)
         {
-            ScorePlan(score, plan, stdout);
+            if (facts["probeGaps"] is JsonArray ids)
+            {
+                // A probe run (2026-11-19): only its source's missed gaps, scored as ordinary ones; other gaps still judged against them all.
+                score.Source = (string?)facts["source"] ?? "?";
+                ScorePlan(score, Probe.Derive(plan, [.. ids.Select(i => (string)i!)]), stdout, plan.Gaps);
+            }
+            else
+            {
+                ScorePlan(score, plan, stdout);
+            }
         }
         else
         {
@@ -1211,7 +1363,9 @@ static class Scorer
         return score;
     }
 
-    public static void ScorePlan(RunScore score, PlanItem plan, string stdout)
+    /// <param name="otherGapsAgainst">The gaps a line must name none of to be an "other gap" (2026-11-19): a probe's whole material item, where
+    /// <paramref name="plan"/> holds only the gaps it probes; by default <paramref name="plan"/>'s own.</param>
+    public static void ScorePlan(RunScore score, PlanItem plan, string stdout, IReadOnlyList<PlantedGap>? otherGapsAgainst = null)
     {
         score.Calls.AddRange(StdoutReader.Calls(stdout, PresentPlanTool.ToolName));
         foreach (var c in score.Calls.Where(c => !c.Parsed))
@@ -1246,7 +1400,7 @@ static class Scorer
             .Select(c => (c.Ordinal, Body: PlanDocument.SavedBody(c.Text(PresentPlanTool.TitleArgument) ?? "", c.Text(PresentPlanTool.MarkdownArgument, trim: false) ?? "")))
             .ToList();
         score.FollowOn.AddRange(FollowOnOutcomes(plan, bodies, gapLines, minorLines, finalBody));
-        foreach (var line in gapLines.Where(l => !plan.Gaps.Any(g => g.Match.In(l.Text))))
+        foreach (var line in gapLines.Where(l => !(otherGapsAgainst ?? plan.Gaps).Any(g => g.Match.In(l.Text))))
         {
             score.OtherGaps.Add(line);
         }
@@ -1589,6 +1743,21 @@ static class Bench
             return 2;
         }
 
+        if (o.From is { } fromFolders)
+        {
+            if (o.Only is not null)
+            {
+                Console.Error.WriteLine("--from picks its own runs; leave out --only.");
+                return 2;
+            }
+
+            if (fromFolders.FirstOrDefault(f => !Directory.Exists(f)) is { } missing)
+            {
+                Console.Error.WriteLine($"--from {missing}: no such folder.");
+                return 2;
+            }
+        }
+
         var items = material.ItemNames.ToList();
         if (o.Only is { } only)
         {
@@ -1646,10 +1815,53 @@ static class Bench
             return 2;
         }
 
-        WriteBenchFile(outDir, o.Runs, o.Sets);
+        if (Probe.FromDiffers(outDir, o.From) is { } recordedFrom)
+        {
+            Console.Error.WriteLine($"{outDir} was run with --from {recordedFrom}; resume with the same --from, or pass --fresh to start over.");
+            return 2;
+        }
+
+        List<ProbeSource>? sources = null;
+        if (o.From is { } from)
+        {
+            // A resume runs the recorded sources: a keyword change since could change the pick and shift every run's number.
+            var skipped = new List<string>();
+            sources = Probe.Recorded(outDir) ?? Probe.Pick(from, material, skipped);
+            skipped.ForEach(s => Console.WriteLine("  skipped " + s));
+            if (sources.Count == 0)
+            {
+                Console.Error.WriteLine("No run in --from left a gap missed: nothing to probe.");
+                return 1;
+            }
+        }
+
+        WriteBenchFile(outDir, sources is null ? o.Runs : sources.Count * o.Runs, o.Sets, o.From, sources);
         string hash = Material.Hash(Repo.MaterialRoot);
-        var itemHashes = items.ToDictionary(i => i, i => Material.ItemHash(Repo.MaterialRoot, i), StringComparer.Ordinal);
-        Console.WriteLine($"GapBench: {items.Count} items × {o.Runs} runs → {outDir}");
+
+        // The runs to make (2026-11-19): every item × --runs, n outer; with --from, the sources in order --runs times over, numbered on.
+        var jobs = new List<(string Item, int N, int Of, ProbeSource? Source)>();
+        if (sources is null)
+        {
+            for (int n = 1; n <= o.Runs; n++)
+            {
+                jobs.AddRange(items.Select(item => (item, n, o.Runs, (ProbeSource?)null)));
+            }
+        }
+        else
+        {
+            int total = sources.Count * o.Runs;
+            for (int k = 1; k <= total; k++)
+            {
+                var source = sources[(k - 1) % sources.Count];
+                jobs.Add((source.Item, k, total, source));
+            }
+        }
+
+        var itemHashes = jobs.Select(j => j.Item).Distinct().ToDictionary(i => i, i => Material.ItemHash(Repo.MaterialRoot, i), StringComparer.Ordinal);
+        string repoHash = Material.RepoHash(Repo.MaterialRoot);
+        Console.WriteLine(sources is null
+            ? $"GapBench: {items.Count} items × {o.Runs} runs → {outDir}"
+            : $"GapBench: a fresh review of {sources.Count} final plans × {o.Runs} → {outDir}");
         Console.WriteLine($"  {version} · {baseUrl} · settings {settings.ToJsonString()}");
 
         using var interrupt = new CancellationTokenSource();
@@ -1661,36 +1873,38 @@ static class Bench
 
         int exit = 0;
         bool first = true;
-        for (int n = 1; n <= o.Runs && exit == 0; n++)
+        foreach (var (item, n, of, source) in jobs)
         {
-            foreach (string item in items)
+            string folder = Path.Combine(outDir, $"{item}-{n}");
+            if (File.Exists(Path.Combine(folder, "done.json")))
             {
-                string folder = Path.Combine(outDir, $"{item}-{n}");
-                if (File.Exists(Path.Combine(folder, "done.json")))
-                {
-                    continue;
-                }
-
-                if (!first && await ServerAnswersAsync(baseUrl) is { } gone)
-                {
-                    Console.Error.WriteLine($"The server stopped answering ({gone}): the bench stops. Run the same command again to resume.");
-                    exit = 1;
-                    break;
-                }
-
-                first = false;
-                var facts = await RunOneAsync(o, material, item, n, folder, exe, baseUrl, settings, version, hash, itemHashes[item], interrupt.Token);
-                if (facts is null)
-                {
-                    Console.Error.WriteLine("Interrupted: the run in progress has no done.json, so a resume runs it again.");
-                    exit = 1;
-                    break;
-                }
-
-                var score = Scorer.Score(folder, material);
-                Console.WriteLine($"  {item} {n}/{o.Runs}: {score.Stop}, {score.Passes} passes, {score.Minutes.ToString("0.0", CultureInfo.InvariantCulture)} min"
-                    + (score.Flags.Count > 0 ? " (" + string.Join("; ", score.Flags) + ")" : ""));
+                continue;
             }
+
+            if (!first && await ServerAnswersAsync(baseUrl) is { } gone)
+            {
+                Console.Error.WriteLine($"The server stopped answering ({gone}): the bench stops. Run the same command again to resume.");
+                exit = 1;
+                break;
+            }
+
+            first = false;
+            var facts = source is null
+                ? await RunOneAsync(o, material, item, n, folder, exe, baseUrl, settings, version, hash, itemHashes[item], interrupt.Token)
+                : await RunOneAsync(o, material, item, n, folder, exe, baseUrl, settings, version, hash, repoHash, interrupt.Token,
+                    Probe.StripReview(File.ReadAllText(Probe.FinalPlan(source.Source, item))),
+                    new JsonObject { ["source"] = source.Source, ["probeGaps"] = new JsonArray([.. source.Gaps.Select(g => (JsonNode?)g)]) });
+            if (facts is null)
+            {
+                Console.Error.WriteLine("Interrupted: the run in progress has no done.json, so a resume runs it again.");
+                exit = 1;
+                break;
+            }
+
+            var score = Scorer.Score(folder, material);
+            Console.WriteLine($"  {item} {n}/{of}" + (source is null ? "" : $" ({source.Source}: {string.Join(", ", source.Gaps)})")
+                + $": {score.Stop}, {score.Passes} passes, {score.Minutes.ToString("0.0", CultureInfo.InvariantCulture)} min"
+                + (score.Flags.Count > 0 ? " (" + string.Join("; ", score.Flags) + ")" : ""));
         }
 
         Report.Write(outDir, material);
@@ -1698,7 +1912,8 @@ static class Bench
         return exit;
     }
 
-    private static async Task<JsonObject?> RunOneAsync(Options o, Material m, string item, int n, string folder, string exe, string url, JsonObject settings, string version, string hash, string itemHash, CancellationToken interrupt)
+    private static async Task<JsonObject?> RunOneAsync(Options o, Material m, string item, int n, string folder, string exe, string url, JsonObject settings, string version, string hash, string itemHash, CancellationToken interrupt,
+        string? planText = null, JsonObject? extraFacts = null)
     {
         if (Directory.Exists(folder))
         {
@@ -1712,8 +1927,17 @@ static class Bench
         {
             string plans = Path.Combine(work, ".neon", "plans");
             Directory.CreateDirectory(plans);
-            File.Copy(plan.PlanPath, Path.Combine(plans, plan.Name + ".md"));
-            File.Copy(plan.PlanPath, Path.Combine(folder, "start.md"));
+            // A probe (2026-11-19) starts from its source's final plan; it is its start.md too, so the run keeps what the model saw.
+            if (planText is not null)
+            {
+                File.WriteAllText(Path.Combine(plans, plan.Name + ".md"), planText);
+                File.WriteAllText(Path.Combine(folder, "start.md"), planText);
+            }
+            else
+            {
+                File.Copy(plan.PlanPath, Path.Combine(plans, plan.Name + ".md"));
+                File.Copy(plan.PlanPath, Path.Combine(folder, "start.md"));
+            }
             script.Add($"/plan open {plan.Name} --chat");
             if (plan.Chat is { } chat)
             {
@@ -1808,6 +2032,11 @@ static class Bench
             ["materialHash"] = hash,
             ["itemHash"] = itemHash,
         };
+        foreach (var (key, value) in extraFacts ?? [])
+        {
+            facts[key] = value?.DeepClone();
+        }
+
         File.WriteAllText(Path.Combine(folder, "done.json"), facts.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
         return facts;
     }
@@ -1887,7 +2116,8 @@ static class Bench
         return same ? null : recorded.Count == 0 ? "(none)" : string.Join(" ", recorded.Select(kv => $"{kv.Key}={kv.Value?.ToJsonString() ?? "null"}"));
     }
 
-    private static void WriteBenchFile(string outDir, int runs, IEnumerable<(string Name, JsonNode? Value)> sets)
+    private static void WriteBenchFile(string outDir, int runs, IEnumerable<(string Name, JsonNode? Value)> sets,
+        IReadOnlyList<string>? from = null, IReadOnlyList<ProbeSource>? sources = null)
     {
         string path = Path.Combine(outDir, "bench.json");
         int planned = runs;
@@ -1901,6 +2131,13 @@ static class Bench
         if (setsJson.Count > 0)
         {
             bench["sets"] = setsJson;
+        }
+
+        // A probe bench (2026-11-19) keeps its --from list and the sources it picked, for the resume.
+        if (from is not null && sources is not null)
+        {
+            bench["from"] = new JsonArray([.. from.Select(f => (JsonNode?)Probe.Normal(f))]);
+            bench["sources"] = Probe.ToJson(sources);
         }
 
         File.WriteAllText(path, bench.ToJsonString());
@@ -2012,7 +2249,17 @@ static class Report
             ["plannedRuns"] = planned,
             ["materialHash"] = currentHash,
             ["headline"] = Headline(runs, material),
-            ["runs"] = new JsonArray([.. runs.Select(RunJson)]),
+            ["runs"] = new JsonArray([.. runs.Select(r =>
+            {
+                var run = RunJson(r);
+                if (r.IsProbe)
+                {
+                    run["source"] = r.Source;
+                    run["probeGaps"] = new JsonArray([.. r.Planted.Select(g => (JsonNode?)g.Gap.Id)]);
+                }
+
+                return (JsonNode?)run;
+            })]),
         };
 
         foreach (var group in runs.GroupBy(r => r.Item))
@@ -2024,6 +2271,16 @@ static class Report
         File.WriteAllText(Path.Combine(outDir, "results.json"), json.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
     }
 
+    /// <summary>The current hash a run's key is judged by (2026-11-19): a probe's (<see cref="Probe.ItemPrefix"/>) <c>repo/</c> alone, else its item's.</summary>
+    internal static string HashFor(string key) => key.StartsWith(Probe.ItemPrefix, StringComparison.Ordinal)
+        ? Material.RepoHash(Repo.MaterialRoot)
+        : Material.ItemHash(Repo.MaterialRoot, key);
+
+    /// <summary>The plan gap table's rows (2026-11-19): a probe bench's are the gaps its runs probed, follow-on ones too; else the planted ones.</summary>
+    internal static IEnumerable<PlantedGap> TableGaps(PlanItem plan, List<RunScore> runs) => runs.Any(r => r.IsProbe)
+        ? plan.Gaps.Where(g => runs.Any(r => r.Planted.Any(p => p.Gap.Id == g.Id)))
+        : plan.Gaps.Where(g => !g.FollowOn);
+
     private static void AppendMeta(StringBuilder md, List<RunScore> runs, string currentHash)
     {
         string Values(Func<RunScore, string?> pick) => string.Join(" / ", runs.Select(pick).Select(v => v ?? "—").Distinct());
@@ -2033,9 +2290,9 @@ static class Report
         string hashes = Values(r => ((string?)r.Facts["materialHash"])?[..12]);
         var itemHashes = new Dictionary<string, string>(StringComparer.Ordinal);
         var changed = Material.ChangedItems(
-            runs.Select(r => (r.Item, (string?)r.Facts["materialHash"], (string?)r.Facts["itemHash"])),
+            runs.Select(r => (r.IsProbe ? Probe.ItemPrefix + r.Item : r.Item, (string?)r.Facts["materialHash"], (string?)r.Facts["itemHash"])),
             currentHash,
-            item => itemHashes.TryGetValue(item, out string? h) ? h : itemHashes[item] = Material.ItemHash(Repo.MaterialRoot, item));
+            item => itemHashes.TryGetValue(item, out string? h) ? h : itemHashes[item] = HashFor(item));
         md.AppendLine($"- Material: {hashes}" + (changed.Count > 0
             ? $" — **changed since for {string.Join(", ", changed)}**: a moved bug line or a changed plan mis-scores those runs"
             : ""));
@@ -2046,7 +2303,7 @@ static class Report
     {
         var plans = runs.Where(r => !r.IsAudit).ToList();
         var audits = runs.Where(r => r.IsAudit).ToList();
-        return new JsonObject
+        var h = new JsonObject
         {
             ["plannedGaps"] = plans.Sum(r => r.Planted.Count),
             ["gapsCaught"] = plans.Sum(r => r.Planted.Count(g => g.Status == "caught")),
@@ -2090,6 +2347,21 @@ static class Report
             ["findingsLow"] = audits.Sum(r => r.FindingsLow),
             ["flaggedRuns"] = runs.Count(r => r.Flags.Count > 0),
         };
+
+        // A probe bench (2026-11-19): its gaps by when the fresh review named them. Left out otherwise, so older results don't change.
+        var probes = plans.Where(r => r.IsProbe).ToList();
+        if (probes.Count > 0)
+        {
+            int Count(Func<RunScore, GapOutcome, bool> pick) => probes.Sum(r => r.Planted.Count(g => pick(r, g)));
+            h["probeGaps"] = Count((_, _) => true);
+            h["probeCaughtPass1"] = Count((r, g) => g.Status == "caught" && r.PassOf(g.Call) == 1);
+            h["probeCaughtLater"] = Count((r, g) => g.Status == "caught" && r.PassOf(g.Call) != 1);
+            h["probeMinorOnly"] = Count((_, g) => g.Status == "minor only");
+            h["probeFixedSilently"] = Count((_, g) => g.Status == "fixed silently");
+            h["probeMissed"] = Count((_, g) => g.Status == "missed");
+        }
+
+        return h;
     }
 
     private static void AppendHeadline(StringBuilder md, List<RunScore> runs, Material material)
@@ -2102,6 +2374,12 @@ static class Report
         if (plans)
         {
             md.AppendLine($"- Planted gaps caught: **{I("gapsCaught")} of {I("plannedGaps")}** ({I("gapsMinorOnly")} only as minor fixes, {I("gapsFixedSilently")} fixed without being reported)");
+            if (h.ContainsKey("probeGaps"))
+            {
+                md.AppendLine($"- Fresh look on **{I("probeGaps")} gaps a review left open**: **{I("probeCaughtPass1")} caught in pass 1**, {I("probeCaughtLater")} later, "
+                    + $"{I("probeMinorOnly")} only as minor fixes, {I("probeFixedSilently")} fixed silently, {I("probeMissed")} missed");
+            }
+
             // Follow-on gaps (2026-11-18): no "of M", since a run's paths exclude each other (withdraw-books' F1–F3 or F4).
             if (runs.Any(r => r.FollowOn.Count > 0))
             {
@@ -2214,7 +2492,8 @@ static class Report
         else if (material.Plan(item) is { } plan && plan.Gaps.Count > 0)
         {
             md.AppendLine("| gap | severity | caught | minor only | fixed silently | missed | tag agrees | first pass |").AppendLine("|---|---|---|---|---|---|---|---|");
-            foreach (var gap in plan.Gaps.Where(g => !g.FollowOn))
+            bool probe = runs.Any(r => r.IsProbe);
+            foreach (var gap in TableGaps(plan, runs))
             {
                 var outcomes = runs.Select(r => (Run: r, Outcome: r.Planted.FirstOrDefault(g => g.Gap.Id == gap.Id))).Where(p => p.Outcome is not null).ToList();
                 var caught = outcomes.Where(p => p.Outcome!.Status == "caught").ToList();
@@ -2226,7 +2505,10 @@ static class Report
             }
 
             md.AppendLine();
-            AppendFollowOnTable(md, plan, runs);
+            if (!probe)
+            {
+                AppendFollowOnTable(md, plan, runs);
+            }
         }
 
         if (material.Plan(item) is { Decision: not null })
@@ -2275,6 +2557,11 @@ static class Report
     {
         md.AppendLine($"### {r.Item} run {r.Run}").AppendLine();
         md.AppendLine($"- `{r.Folder}`");
+        if (r.Source is { } source)
+        {
+            md.AppendLine($"- A fresh review of `{source}`'s final plan, for {string.Join(", ", r.Planted.Select(g => g.Gap.Id))}");
+        }
+
         md.AppendLine($"- {r.Stop}; {r.Passes} passes, {r.Log.Retries} retries, {r.Log.FollowUps} follow-ups; {Math.Round(r.Log.Tokens / 1000.0, 1).ToString(CultureInfo.InvariantCulture)}k tokens over {r.Log.Requests} requests; {r.Minutes.ToString("0.0", CultureInfo.InvariantCulture)} min");
         foreach (string flag in r.Flags)
         {
@@ -2773,6 +3060,7 @@ static class SelfTest
         KeywordRun();
         FocusRun();
         FollowOnRun();
+        ProbeRun();
         AuditRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
@@ -3247,6 +3535,103 @@ static class SelfTest
         Expect(Flags(Rule(good, new Keywords([["title"]])), "fixed fits a line of the starting plan"), "a fix already in the starting plan");
         Expect(Flags(Rule(good, fixedBy, ["an archive table"]), "misses its trigger hit"), "a trigger hit the trigger misses");
         Expect(Flags(Rule(good, fixedBy, null, ["rather than a withdrawn_on column"]), "matches its trigger miss"), "a trigger miss the trigger matches");
+    }
+
+    /// <summary>
+    /// The fresh-look probe (2026-11-19): which runs it picks, the plan it gives (no <c>review:</c> line), the derived item, a probe run scored
+    /// (caught in pass 1, a line naming a gap it doesn't probe kept out of other gaps), the gap table's rows, its hash key, and the resume check.
+    /// </summary>
+    private static void ProbeRun()
+    {
+        PlantedGap Gap(string id, string word, bool followOn = false) =>
+            new(id, "medium", id, new Keywords([[word]]), null, [], Trigger: followOn ? new Keywords([["path_" + id]]) : null);
+        var plan = new PlanItem("probe", "", "", [Gap("W", "ordinary"), Gap("F", "isbn reuse", followOn: true), Gap("G", "gamma", followOn: true)],
+            false, null, null, null, []);
+        RunScore Built(params (string Id, string Status)[] gaps)
+        {
+            var built = new RunScore { Item = "probe", Run = 1, Folder = "x", Facts = new JsonObject(), Log = LogFacts.Read("") };
+            foreach (var (id, status) in gaps)
+            {
+                var gap = plan.Gaps.First(g => g.Id == id);
+                if (gap.FollowOn)
+                {
+                    built.FollowOn.Add(new FollowOnOutcome(gap, status, null, 1, null));
+                }
+                else
+                {
+                    built.Planted.Add(new GapOutcome(gap, status, null, null, false));
+                }
+            }
+
+            return built;
+        }
+
+        Expect(Probe.MissedGaps(Built(("W", "missed"), ("F", FollowOnStatus.Missed), ("G", FollowOnStatus.Foreseen))).SequenceEqual(["W", "F"]),
+            "a missed planted gap and a missed follow-on gap pick the run; a foreseen one doesn't");
+        Expect(Probe.MissedGaps(Built(("W", "minor only"), ("F", FollowOnStatus.MinorOnly), ("G", FollowOnStatus.Caught))).Count == 0, "minor only and caught don't");
+
+        string withReview = "---\r\nstatus: draft\r\nreview: 5 passes, confirmed\r\nrevision: 4\r\n---\r\n# T\r\nreview: kept in the body\r\n";
+        string stripped = Probe.StripReview(withReview);
+        Expect(stripped == "---\r\nstatus: draft\r\nrevision: 4\r\n---\r\n# T\r\nreview: kept in the body\r\n", "the front matter's review: line goes, the body's stays: " + stripped);
+        Expect(Probe.StripReview("# T\nreview: x\n") == "# T\nreview: x\n", "no front matter, nothing taken");
+
+        var derived = Probe.Derive(plan, ["F"]);
+        Expect(derived.Gaps.Count == 1 && derived.Gaps[0].Id == "F" && !derived.Gaps[0].FollowOn, "the derived item: F alone, as an ordinary gap");
+
+        string folder = Scratch();
+        try
+        {
+            string body = "# T\n\n## Steps\n\n- [ ] Keep the row.\n  Done when: it passes.\n";
+            File.WriteAllText(Path.Combine(folder, "start.md"), body);
+            Directory.CreateDirectory(Path.Combine(folder, "work", ".neon", "plans"));
+            File.WriteAllText(Path.Combine(folder, "work", ".neon", "plans", "probe.md"), "---\nstatus: draft\nrevision: 2\n---\n" + body);
+            static string Markdown(string text) => JsonValue.Create(text).ToJsonString();
+            string stdout = string.Join('\n',
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"an ordinary gap again\", \"the isbn reuse problem\", \"a new finding\"], \"markdown\": " + Markdown(body) + "}",
+                "[tool] present_plan -> Plan saved as revision 2.",
+                "[notice] " + PlanText.PassNoticeLines(1, 10, 3, ["a"])[0]);
+            var score = new RunScore
+            {
+                Item = "probe", Run = 1, Folder = folder, Facts = new JsonObject(), Log = LogFacts.Read("x " + PlanText.PassLogLine(1, 3, ["a"], false)),
+                Source = "publish/gapbench/x/probe-1",
+            };
+            Scorer.ScorePlan(score, derived, stdout, plan.Gaps);
+            var f = score.Planted.Single();
+            Expect(f.Gap.Id == "F" && f.Status == "caught" && score.PassOf(f.Call) == 1, $"the probed gap caught in pass 1: {f.Status}, pass {score.PassOf(f.Call)}");
+            Expect(score.OtherGaps.Count == 1 && score.OtherGaps[0].Text == "a new finding",
+                "a line naming W, which isn't probed, isn't another gap: " + string.Join("; ", score.OtherGaps.Select(g => g.Text)));
+            Expect(score.FollowOn.Count == 0, "a probe run scores no follow-on gaps");
+            Expect(Report.TableGaps(plan, [score]).Select(g => g.Id).SequenceEqual(["F"]), "a probe bench's table rows are the probed gaps");
+            Expect(Report.TableGaps(plan, [Built()]).Select(g => g.Id).SequenceEqual(["W"]), "an ordinary bench's are the planted ones");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+
+        Expect(Report.HashFor(Probe.ItemPrefix + "withdraw-books") == Material.RepoHash(Repo.MaterialRoot)
+            && Report.HashFor("withdraw-books") == Material.ItemHash(Repo.MaterialRoot, "withdraw-books"), "a probe run's hash key is repo/ alone");
+        Expect(Material.ChangedItems([(Probe.ItemPrefix + "withdraw-books", "old", Material.RepoHash(Repo.MaterialRoot))], "now", Report.HashFor).Count == 0,
+            "a probe run that saw today's repo/ isn't flagged, whatever the plan file says now");
+
+        string bench = Scratch();
+        try
+        {
+            string a = Path.Combine(Repo.Root, "publish", "gapbench", "a"), b = Path.Combine(Repo.Root, "publish", "gapbench", "b");
+            Expect(Probe.FromDiffers(bench, [a]) is null, "a folder never run takes any --from");
+            var sources = new List<ProbeSource> { new("publish/gapbench/a/probe-2", "probe", ["F"]) };
+            File.WriteAllText(Path.Combine(bench, "bench.json"),
+                new JsonObject { ["runs"] = 1, ["from"] = new JsonArray("publish/gapbench/a"), ["sources"] = Probe.ToJson(sources) }.ToJsonString());
+            Expect(Probe.FromDiffers(bench, [a]) is null, "a resume with the same --from");
+            Expect(Probe.FromDiffers(bench, [a, b]) is not null && Probe.FromDiffers(bench, null) is not null, "another --from, or none, is refused");
+            Expect(Probe.Recorded(bench) is [{ Source: "publish/gapbench/a/probe-2", Item: "probe", Gaps: ["F"] }], "the recorded sources read back");
+            File.WriteAllText(Path.Combine(bench, "bench.json"), "{\"runs\":3}");
+            Expect(Probe.FromDiffers(bench, null) is null && Probe.FromDiffers(bench, [a]) is not null, "an ordinary bench resumes as one, and takes no probe");
+        }
+        finally
+        {
+            Directory.Delete(bench, recursive: true);
+        }
     }
 
     /// <summary>The keyword check's five rules (2026-11-18), each broken once on built gaps, and a clean set that passes.</summary>

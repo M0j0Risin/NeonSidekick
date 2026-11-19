@@ -20,7 +20,11 @@ dotnet run tools/GapBench.cs -- --url http://127.0.0.1:30000/v1          # every
 dotnet run tools/GapBench.cs -- --url http://127.0.0.1:30000/v1 --runs 1 --only version-flag,audit
 dotnet run tools/GapBench.cs -- --url http://127.0.0.1:30000/v1 --only audit --set CodeAuditLowKeepsStreak=true
 dotnet run tools/GapBench.cs -- --score publish/gapbench/<folder>        # re-score saved runs
+dotnet run tools/GapBench.cs -- --url http://127.0.0.1:30000/v1 --from publish/gapbench/<folder>,... --out publish/gapbench/<probe>
 ```
+
+`--from` starts a new review on the final plan of each run whose review left a gap missed. It shows whether a look
+without that review's memory names the gap; the report counts those caught in the new review's pass 1.
 
 A bench uses the published exe (`publish/output`) and takes hours: a run can need 50 minutes on a 27B model.
 

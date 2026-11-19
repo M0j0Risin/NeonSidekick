@@ -90,6 +90,24 @@
       "hits": [
         "[medium] export joins books, so once the book row is gone its loans drop out of the export"
       ]
+    },
+    {
+      "id": "F5",
+      "severity": "medium",
+      "what": "Deleting the book row with foreign_keys = OFF, or with the FK dropped, leaves loans.book_id pointing at a free id: books.id is INTEGER PRIMARY KEY without AUTOINCREMENT, so the next book added takes the id, and its loans then read as the new book's.",
+      "trigger": [["foreign_keys = off", "foreign_keys off", "dangling"]],
+      "triggerHits": [
+        "  - in one transaction: `UPDATE loans SET book_title = ? WHERE book_id = ?` (the book's title), then `DELETE FROM books WHERE id = ?`. The FK blocks the delete, so run `PRAGMA foreign_keys = OFF` before the transaction (it is a no-op inside one) and back to ON in a `finally`.",
+        "- Decisions: loans keep the old `book_id` (dangling), so the `loans.book_id` FK must go (new DBs: new schema; old DBs: one-shot rebuild at open)."
+      ],
+      "match": [["book_id", "rowid", "primary key", "autoincrement", "its id", "the id"], ["reuse", "reused", "re-use", "recycl", "taken", "next book", "new book", "another book", "wrong book", "wrong title"], ["loan", "history", "export", "title"]],
+      "fixed": [["integer primary key autoincrement", "add autoincrement", "adds autoincrement", "with autoincrement", "sqlite_sequence", "never reused", "not reused", "never be reused", "won't be reused"]],
+      "hits": [
+        "[medium] after the hard delete, the next book added reuses the freed book_id, so the withdrawn book's loans show under the new book's title"
+      ],
+      "misses": [
+        "[high] The CLI check added book 2 after withdrawing book 1, but books.id has no AUTOINCREMENT so an emptied shelf reuses rowid 1; lend 2 / withdraw 2 would read \"no book 2\" and the still-lent case would never fire"
+      ]
     }
   ]
 }
