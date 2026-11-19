@@ -133,6 +133,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_PlanGaps_RunsPassesWithNoInput_UntilNoneAreLeft()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         ServerOn1234("llama");
         _chat.Enqueue(HeadlessPresentPlan());
         _chat.EnqueueText("Saved.");
@@ -204,6 +205,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_PlanGaps_TheShadowLine_OnceAPass_TheConvergedPassToo()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         // 2026-11-17, phase 3: tagged gaps counted by their tags, logged once a pass, the pass that converged inside its turn included.
         ServerOn1234("llama");
         _chat.Enqueue(HeadlessPresentPlan());

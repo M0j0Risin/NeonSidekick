@@ -65,6 +65,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_ASecondPresentInOnePass_IsRefused_ThePassKeepsItsFirstRevision()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         // 2026-11-17, one revision a pass (the csv-import-1 shape): pass 1 presents, then presents again in the same turn; the second is refused,
         // the pass's notice names only the first call's gaps, and pass 2 reviews revision 2.
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
@@ -91,6 +92,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_PassesUntilNoneAreLeft_ThenThePaneAgain_AndApproveRunsIt()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
         _chat.Enqueue(PresentPlanCall());                                               // 0: presented; Close gaps… (no advisors: the model)
         _chat.EnqueueText("Closing the gaps.");                                         // 1
@@ -258,6 +260,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_ThePassAndDoneLines_AreTheProgressStyle_AndTheirItemsPlain()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
         _console.EmitAnsiSequences();
         _chat.Enqueue(PresentPlanCall());

@@ -850,8 +850,9 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// How many passes in a row must find no gaps before plan mode's gap-closing loop ends (2026-10-17, the user's report: a pass
-    /// sometimes answered "0 gaps" when the next review would still find plenty, and one such pass ended the review). 1 is the
-    /// behavior until then, the first clean pass ending it; 2, the default, asks one confirming pass, told the last pass found
+    /// sometimes answered "0 gaps" when the next review would still find plenty, and one such pass ended the review). 1, the first
+    /// clean pass ending it, is the default again since 2026-11-19 (GapBench's one-clean bench: about 30% fewer tokens and no planted
+    /// gap lost, since nearly every gap is found in pass 1; 2 from 2026-10-17); 2 asks one confirming pass, told the last pass found
     /// none and pointed at an area no earlier pass covered. Every pass counts toward <see cref="PlanGapPasses"/>; a clean pass at
     /// that limit stops the loop unconfirmed, and a limit below this count lowers it to the limit for that review. <c>/plan gaps
     /// confirm</c> raises it to at least 2. <see cref="MinPlanGapCleanPasses"/> to <see cref="MaxPlanGapCleanPasses"/>. Read when a
@@ -861,7 +862,7 @@ public sealed class AppSettingsData
 
     public const int MinPlanGapCleanPasses = 1;
     public const int MaxPlanGapCleanPasses = 5;
-    public const int DefaultPlanGapCleanPasses = 2;
+    public const int DefaultPlanGapCleanPasses = 1;
 
     /// <summary>
     /// Whether a confirming pass (one after a clean pass) looks hardest at what the last change touched (2026-11-18, Phase 3 item 3 of the gap and audit

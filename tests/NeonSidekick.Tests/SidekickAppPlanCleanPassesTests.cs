@@ -14,6 +14,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_PlanGaps_TheLimitBeforeTheConfirmation_NamesPlanApprove()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         ServerOn1234("llama");
         _settings.Update(d => d.PlanGapPasses = 2);
         _chat.Enqueue(HeadlessPresentPlan());
@@ -37,6 +38,7 @@ public partial class SidekickAppTests
     [InlineData(false)]
     public async Task Headless_PlanGaps_ConfirmFocusByChange_ADoneWhenOnlyRevision_GivesVerification_ElseOrder(bool byChange)
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         const string pinned = "# Guide\n\n- [ ] Write it\n  Done when: `test -f guide.md` exits 0\n";
         ServerOn1234("llama");
         _settings.Update(d => d.ConfirmFocusByChange = byChange);
@@ -71,6 +73,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_PlanGaps_ALimitBelowTheCleanCount_SaysSo_AndOneCleanPassEndsIt()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         ServerOn1234("llama");
         _chat.Enqueue(HeadlessPresentPlan());
         _chat.EnqueueText("Saved.");

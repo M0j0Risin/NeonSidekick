@@ -20,6 +20,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_AConfirmingPassThatFindsGaps_ResetsTheStreak_AndTheReviewGoesOn()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/exit");
         _chat.Enqueue(PresentPlanCall());                                               // 0: Close gaps…
         _chat.EnqueueText("Closing.");                                                  // 1
@@ -60,6 +61,7 @@ public partial class ChatScreenTests
     [InlineData(false)]
     public async Task PlanGaps_ConfirmFocusByChange_ADoneWhenOnlyRevision_GivesVerification_ElseOrder(bool byChange)
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         const string pinned = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: `test -f guide.md` exits 0\n";
         _settings.Update(d => d.ConfirmFocusByChange = byChange);
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/exit");
@@ -94,6 +96,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_TheLimitBeforeTheConfirmation_IsUnconfirmed_AndThePaneComesBack()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         _settings.Update(d => d.PlanGapPasses = 2);
         PlanGapsFixture([[Keys.Char('g'), Keys.Enter]], Line("/plan Add a guide"), Key(Keys.Escape), Line("/exit"));
         _chat.Enqueue(PresentPlanCall());
@@ -156,6 +159,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_ALimitBelowTheCleanCount_LowersIt_WithANotice()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         PlanGapsFixture([[Keys.Escape], [Keys.Escape]], Line("/plan Add a guide"), Line("/plan gaps 1"), Line("/exit"));
         _chat.Enqueue(PresentPlanCall());                     // Esc keeps refining
         _chat.EnqueueText("Noted.");

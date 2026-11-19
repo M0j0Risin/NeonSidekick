@@ -15,6 +15,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task PlanGaps_Converged_RingsTheStopToneOnce()
     {
+        _settings.Update(d => d.PlanGapCleanPasses = 2);   // the confirming pass is this test's subject (1 is the default since 2026-11-19)
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('a'), Keys.Enter]], "/plan Add a guide", "/exit");
         _settings.Update(d => d.PlanGapStopTone = TimerTones.Chime);
         _chat.Enqueue(PresentPlanCall());                                               // presented; Close gaps…

@@ -342,7 +342,7 @@ Plan mode's gap review, the Ralph loop and code audits: jobs the model runs pass
 | Setting | What it does | Default |
 |---|---|---|
 | Plan gap max passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs (0–100; 0 is no cap, 100 headless). Esc stops it; a count on `/plan gaps` overrides it. | 50 |
-| Plan gap clean passes | Passes in a row with no gaps that end the review (1–5); a lower pass limit lowers it. `/plan gaps confirm` needs at least 2. | 2 |
+| Plan gap clean passes | Passes in a row with no gaps that end the review (1–5); a lower pass limit lowers it. `/plan gaps confirm` needs at least 2. | 1 |
 | Confirm focus by change | On, a pass after a clean one looks hardest at what the last change touched, in gap reviews and code audits alike; off, it takes the next area in turn. Read when a review or audit starts. | off |
 | Plan gap ask user | Whether a pass may use `ask_user`, `camera_capture` and `screen_capture`. Off, or without `ask_user` (headless), a call only you can make goes into `## Risks`. | on |
 | Plan gap stop tone | Rung when a review stops on its own (done, at the limit, stalled, a failed pass), never on Esc or a message: silent, chime, bell, beep or alarm. | silent |
