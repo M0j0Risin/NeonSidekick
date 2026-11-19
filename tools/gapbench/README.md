@@ -42,7 +42,8 @@ The results' headline also says how often the plan shadow rule (gaps tagged low 
 have stopped a review before a planted gap was caught, and how the gaps' severity tags agree with the planted ones.
 Each plan item counts the focuses its confirming passes looked at (*Confirm focus by change* tries the pick by what
 changed). Runs from before the focus lines are read from the review summary. Follow-on gaps get their own line and
-table: how often a revision created them, and whether that revision foresaw them or a later pass caught them.
+table: how often a revision created them, and whether that revision foresaw them or a later pass caught them. It also says what stopping at the first clean pass would have saved
+(passes, tokens, minutes) and lost (catches and other gaps after it), for a call on *Plan gap clean passes*.
 
 ## Adding material
 

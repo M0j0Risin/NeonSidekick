@@ -688,8 +688,8 @@ static partial class Patterns
     public static readonly IReadOnlyList<StopPattern> AuditStops = BuildAuditStops();
 
     // The --log lines (PlanText/AuditText), cut where a line's variable tail starts.
-    public static readonly Regex PlanPass = Template.Build(PlanText.PassLogLine(Template.N1, Template.N2, [], false), cutBefore: Template.N2);
-    public static readonly Regex PlanClean = Template.Build(PlanText.CleanPassLogLine(Template.N1, Template.N2, Template.N3, []), cutBefore: Template.N2);
+    public static readonly Regex PlanPass = Template.Build(PlanText.PassLogLine(Template.N1, Template.N2, [], false), cutBefore: Template.N2, capture: Template.N1);
+    public static readonly Regex PlanClean = Template.Build(PlanText.CleanPassLogLine(Template.N1, Template.N2, Template.N3, []), cutBefore: Template.N2, capture: Template.N1);
     public static readonly Regex PlanRetry = Template.Build(PlanText.RetryLogLine(Template.N1, null));
 
     /// <summary>A second <c>present_plan</c> in a gap pass, refused (2026-11-17, one revision a pass): read from the call's result in stdout.</summary>
@@ -699,7 +699,52 @@ static partial class Patterns
     public static readonly Regex ShapeGap = Template.Build(PlanText.ShapeGapResult([Template.S1]));
     public static readonly Regex MeasuredLeft = Template.Build(PlanText.MeasuredSentence([Template.S1]));
     public static readonly Regex[] PlanFollowUp = [Template.Build(PlanText.FollowUpLogLine(Template.N1, false)), Template.Build(PlanText.FollowUpLogLine(Template.N1, true))];
-    public static readonly Regex AuditPass = Template.Build(AuditText.PassLogLine(Template.N1, Template.N2, 0, false, false, null), cutBefore: Template.N2);
+    public static readonly Regex AuditPass = Template.Build(AuditText.PassLogLine(Template.N1, Template.N2, 0, false, false, null), cutBefore: Template.N2, capture: Template.N1);
+
+    /// <summary>
+    /// What comes before an audit shadow line's real verdict (2026-11-19, the one-clean-pass count): the two renderings' shared tail, from its last
+    /// "; ", so the words stay the app's.
+    /// </summary>
+    public static readonly string AuditRealSeparator = RealSeparator(
+        AuditText.ShadowLogLine(1, new AuditShadowPass([0, 0, 0, 0], 0, true, false), 2, null, false, 0),
+        AuditText.ShadowLogLine(1, new AuditShadowPass([0, 0, 0, 0], 0, true, false), 2, null, true, 1));
+
+    /// <summary>An audit shadow line's real verdict for a clean pass that didn't end the review: <c>clean 1 of 2</c>.</summary>
+    public static readonly Regex AuditRealClean = new("^" + Template.Build(
+        AuditText.ShadowLogLine(1, new AuditShadowPass([0, 0, 0, 0], 0, true, false), Template.N2, null, true, Template.N1).Split(AuditRealSeparator)[^1]) + "$",
+        RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// Whether an audit shadow line says its pass was clean (2026-11-19): <c>clean 1 of 2</c>, or a stop only a clean pass makes (converged, or
+    /// unconfirmed at the limit). A light pass under <c>CodeAuditLowKeepsStreak</c> reads <c>clean</c> here, as the real streak counted it.
+    /// </summary>
+    public static bool AuditShadowClean(string line)
+    {
+        int at = line.LastIndexOf(AuditRealSeparator, StringComparison.Ordinal);
+        if (at < 0)
+        {
+            return false;
+        }
+
+        string real = line[(at + AuditRealSeparator.Length)..].TrimEnd();
+        return real == AuditText.StopWord(PlanGapStop.Converged) || real == AuditText.StopWord(PlanGapStop.Unconfirmed) || AuditRealClean.IsMatch(real);
+    }
+
+    private static string RealSeparator(string found, string clean)
+    {
+        int p = 0;
+        while (p < found.Length && p < clean.Length && found[p] == clean[p])
+        {
+            p++;
+        }
+
+        string shared = found[..p];
+        return shared[shared.LastIndexOf("; ", StringComparison.Ordinal)..];
+    }
+
+    /// <summary>A <c>--log</c> line's time (2026-11-19): its leading <c>yyyy-MM-dd HH:mm:ss.fff</c>, or null for a line without one.</summary>
+    public static DateTime? LineTime(string line) =>
+        line.Length >= 23 && DateTime.TryParseExact(line[..23], "yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture, DateTimeStyles.None, out var at) ? at : null;
 
     /// <summary>
     /// A clean audit pass's low changes (2026-11-17, Code audit low keeps streak): the pass line's count captured, its words the app's own in
@@ -989,6 +1034,9 @@ static class StdoutReader
 }
 
 /// <summary>What a run's --log says.</summary>
+/// <summary>One pass from the log (2026-11-19, the one-clean-pass count): its number, its tokens, whether it was clean, and its line's time.</summary>
+sealed record PassRecord(int Pass, long Tokens, bool Clean, DateTime? At);
+
 sealed class LogFacts
 {
     public int PlanPasses { get; private set; }
@@ -1014,9 +1062,26 @@ sealed class LogFacts
     public int? PlanShadowWouldConvergeAt { get; private set; }
     public string? LastPlanShadowLine { get; private set; }
 
+    /// <summary>
+    /// Each pass in order (2026-11-19, the one-clean-pass count): its tokens are the <c>Usage:</c> lines since the previous pass line, so a retry
+    /// or follow-up turn falls in its pass. A plan pass is clean by its own line; an audit pass by its shadow line's real verdict, which follows it.
+    /// </summary>
+    public List<PassRecord> PassList { get; } = [];
+
+    /// <summary>The first clean pass, where <c>PlanGapCleanPasses</c> (or the audit's) at 1 would have stopped (2026-11-19); null with none.</summary>
+    public int? OneCleanAt => PassList.FirstOrDefault(p => p.Clean)?.Pass;
+
     public static LogFacts Read(string log)
     {
         var f = new LogFacts();
+        long pending = 0;
+        void AddPass(Match m, bool clean, string line)
+        {
+            f.PassList.Add(new PassRecord(int.Parse(m.Groups["n"].Value.Replace(",", "", StringComparison.Ordinal), CultureInfo.InvariantCulture), pending, clean,
+                Patterns.LineTime(line)));
+            pending = 0;
+        }
+
         foreach (string raw in log.Split('\n'))
         {
             string line = raw.TrimEnd('\r');
@@ -1027,7 +1092,9 @@ sealed class LogFacts
 
             if (Patterns.Usage().Match(line) is { Success: true } usage)
             {
-                f.Tokens += long.Parse(usage.Groups["total"].Value, CultureInfo.InvariantCulture);
+                long total = long.Parse(usage.Groups["total"].Value, CultureInfo.InvariantCulture);
+                f.Tokens += total;
+                pending += total;
                 f.Requests++;
             }
 
@@ -1038,6 +1105,17 @@ sealed class LogFacts
                     && Patterns.ShadowPass.Match(line) is { Success: true } shadow)
                 {
                     f.ShadowWouldConvergeAt = int.Parse(shadow.Groups["n"].Value.Replace(",", "", StringComparison.Ordinal), CultureInfo.InvariantCulture);
+                }
+
+                // The pass it follows was clean (2026-11-19): the real verdict, not the shadow's.
+                if (Patterns.AuditShadowClean(line) && Patterns.ShadowPass.Match(line) is { Success: true } verdict)
+                {
+                    int pass = int.Parse(verdict.Groups["n"].Value.Replace(",", "", StringComparison.Ordinal), CultureInfo.InvariantCulture);
+                    int i = f.PassList.FindLastIndex(p => p.Pass == pass);
+                    if (i >= 0)
+                    {
+                        f.PassList[i] = f.PassList[i] with { Clean = true };
+                    }
                 }
 
                 continue;
@@ -1064,13 +1142,15 @@ sealed class LogFacts
                 continue;
             }
 
-            if (Patterns.PlanPass.IsMatch(line))
+            if (Patterns.PlanPass.Match(line) is { Success: true } planPass)
             {
                 f.PlanPasses++;
+                AddPass(planPass, false, line);
             }
-            else if (Patterns.PlanClean.IsMatch(line))
+            else if (Patterns.PlanClean.Match(line) is { Success: true } planClean)
             {
                 f.PlanCleanPasses++;
+                AddPass(planClean, true, line);
             }
             else if (Patterns.PlanRetry.IsMatch(line) || Patterns.AuditRetry.IsMatch(line))
             {
@@ -1080,9 +1160,10 @@ sealed class LogFacts
             {
                 f.FollowUps++;
             }
-            else if (Patterns.AuditPass.IsMatch(line))
+            else if (Patterns.AuditPass.Match(line) is { Success: true } auditPass)
             {
                 f.AuditPasses++;
+                AddPass(auditPass, false, line);
                 if (Patterns.AuditLight.Match(line) is { Success: true } light)
                 {
                     f.AuditLight += int.Parse(light.Groups["n"].Value.Replace(",", "", StringComparison.Ordinal), CultureInfo.InvariantCulture);
@@ -1253,6 +1334,66 @@ sealed class RunScore
     public string? FocusOf(int? pass) => pass is int p ? Focuses.FirstOrDefault(f => f.Pass == p)?.Label : null;
 
     public bool ShadowStoppedEarly => BugsAfterShadow.Count > 0;
+
+    // The one-clean-pass count (2026-11-19): what stopping at the first clean pass would have saved and lost.
+    public int? OneCleanAt => Log.OneCleanAt;
+
+    /// <summary>Whether the first clean pass came before the last pass: only then would stopping there have saved or lost anything.</summary>
+    public bool StopsEarly => OneCleanAt is int s && Log.PassList.Any(p => p.Pass > s);
+
+    private bool AfterOneClean(int? pass) => StopsEarly && pass is int p && p > OneCleanAt!.Value;
+
+    private IEnumerable<PassRecord> PassesAfter => StopsEarly ? Log.PassList.Where(p => p.Pass > OneCleanAt!.Value) : [];
+
+    public int PassesAfterOneClean => PassesAfter.Count();
+
+    public long TokensAfterOneClean => PassesAfter.Sum(p => p.Tokens);
+
+    /// <summary>The passes' tokens together: the share's whole (no model call comes before pass 1 or after the last pass line).</summary>
+    public long PassesTokens => Log.PassList.Sum(p => p.Tokens);
+
+    /// <summary>The minutes from the first clean pass's line to the last pass's: 0 when nothing is saved, null when a line has no time.</summary>
+    public double? MinutesAfterOneClean =>
+        !StopsEarly ? 0
+        : Log.PassList.First(p => p.Pass == OneCleanAt).At is { } from && Log.PassList[^1].At is { } to ? Math.Round((to - from).TotalMinutes, 1) : null;
+
+    /// <summary>
+    /// The scored catches after the stop: planted (and probe) gaps by the naming call's pass, follow-on gaps named after it whose path was taken by
+    /// then (one taken later would never have existed), and audit bugs by their finding's pass.
+    /// </summary>
+    public List<string> CaughtAfterOneClean =>
+    [
+        .. Planted.Where(g => g.Status == "caught" && AfterOneClean(PassOf(g.Call))).Select(g => g.Gap.Id),
+        .. FollowOn.Where(f => f.Status == FollowOnStatus.Caught && AfterOneClean(PassOf(f.Named)) && !AfterOneClean(PassOf(f.Introduced))).Select(f => f.Gap.Id),
+        .. Bugs.Where(b => b.Status == "caught" && b.Finding is { } x && AfterOneClean(x.Pass)).Select(b => b.Bug.Id),
+    ];
+
+    /// <summary>The other gap lines (plans, by their leading tag) or other findings (audits, by severity) made after the stop.</summary>
+    public List<(int Pass, string Tag, string Text)> OtherAfterOneClean =>
+    [
+        .. OtherGaps.Where(g => AfterOneClean(PassOf(g.Call))).Select(g => (PassOf(g.Call)!.Value, TagWord(PlanGapTags.Read(g.Text).Severity), g.Text)),
+        .. OtherFindings.Where(f => AfterOneClean(f.Pass)).Select(f => (f.Pass, AuditFinding.Word(f.Severity), $"{f.Id} {f.Location}: {f.Title}")),
+    ];
+
+    /// <summary>Catches and other gap lines whose call has no known pass, in a run that stops early: shown, never dropped.</summary>
+    public int UnknownAfterOneClean => !StopsEarly ? 0
+        : Planted.Count(g => g.Status == "caught" && PassOf(g.Call) is null)
+            + FollowOn.Count(f => f.Status == FollowOnStatus.Caught && PassOf(f.Named) is null)
+            + OtherGaps.Count(g => PassOf(g.Call) is null);
+
+    /// <summary>Beside, not counted: planted gaps fixed only as minor lines or silently after the stop.</summary>
+    public int MinorOrSilentAfterOneClean => Planted.Count(g => g.Status is "minor only" or "fixed silently" && AfterOneClean(PassOf(g.Call)));
+
+    /// <summary>Beside, not counted: follow-on paths first taken after the stop, which stopping there would have avoided.</summary>
+    public int PathsAfterOneClean => FollowOn.Count(f => f.Status != FollowOnStatus.NotIntroduced && AfterOneClean(PassOf(f.Introduced)));
+
+    public static string TagWord(PlanGapSeverity severity) => severity switch
+    {
+        PlanGapSeverity.High => "high",
+        PlanGapSeverity.Medium => "medium",
+        PlanGapSeverity.Low => "low",
+        _ => "untagged",
+    };
 
     public bool PlanShadowStoppedEarly => GapsAfterShadow.Count > 0;
 
@@ -2348,6 +2489,9 @@ static class Report
             ["flaggedRuns"] = runs.Count(r => r.Flags.Count > 0),
         };
 
+        // The one-clean-pass count (2026-11-19), plans and audits apart.
+        h["oneClean"] = new JsonObject { ["plans"] = OneCleanTotals(plans, PlanTags), ["audits"] = OneCleanTotals(audits, AuditTags) };
+
         // A probe bench (2026-11-19): its gaps by when the fresh review named them. Left out otherwise, so older results don't change.
         var probes = plans.Where(r => r.IsProbe).ToList();
         if (probes.Count > 0)
@@ -2362,6 +2506,62 @@ static class Report
         }
 
         return h;
+    }
+
+    private static readonly string[] PlanTags = ["high", "medium", "low", "untagged"];
+    private static readonly string[] AuditTags = ["critical", "high", "medium", "low"];
+
+    /// <summary>
+    /// What stopping at the first clean pass would have saved and lost over <paramref name="runs"/> (2026-11-19): passes, tokens (of the passes'
+    /// tokens) and minutes (of the runs' minutes) after it; scored catches after it; other gaps or findings after it by <paramref name="tags"/>;
+    /// those whose pass is unknown; and, beside, planted gaps fixed only as minor or silent lines and follow-on paths first taken after it.
+    /// </summary>
+    internal static JsonObject OneCleanTotals(List<RunScore> runs, string[] tags)
+    {
+        var other = runs.SelectMany(r => r.OtherAfterOneClean).ToList();
+        var byTag = new JsonObject();
+        foreach (string tag in tags)
+        {
+            byTag[tag] = other.Count(o => o.Tag == tag);
+        }
+
+        return new JsonObject
+        {
+            ["runs"] = runs.Count,
+            ["stoppedEarly"] = runs.Count(r => r.StopsEarly),
+            ["passesSaved"] = runs.Sum(r => r.PassesAfterOneClean),
+            ["passes"] = runs.Sum(r => r.Log.PassList.Count),
+            ["tokensSaved"] = runs.Sum(r => r.TokensAfterOneClean),
+            ["tokens"] = runs.Sum(r => r.PassesTokens),
+            ["minutesSaved"] = Math.Round(runs.Sum(r => r.MinutesAfterOneClean ?? 0), 1),
+            ["minutes"] = Math.Round(runs.Sum(r => r.Minutes), 1),
+            ["minutesUnknown"] = runs.Count(r => r.MinutesAfterOneClean is null),
+            ["caught"] = runs.Sum(r => r.CaughtAfterOneClean.Count),
+            ["runsWithCatches"] = runs.Count(r => r.CaughtAfterOneClean.Count > 0),
+            ["other"] = other.Count,
+            ["runsWithOther"] = runs.Count(r => r.OtherAfterOneClean.Count > 0),
+            ["otherByTag"] = byTag,
+            ["passUnknown"] = runs.Sum(r => r.UnknownAfterOneClean),
+            ["minorOrSilent"] = runs.Sum(r => r.MinorOrSilentAfterOneClean),
+            ["pathsAfter"] = runs.Sum(r => r.PathsAfterOneClean),
+        };
+    }
+
+    private static void AppendOneClean(StringBuilder md, JsonObject o, string kind, string otherWord, string[] tags)
+    {
+        int I(string k) => (int)o[k]!;
+        long L(string k) => (long)o[k]!;
+        double D(string k) => (double)o[k]!;
+        string Pct(double part, double whole) => whole > 0 ? Math.Round(100 * part / whole).ToString(CultureInfo.InvariantCulture) + "%" : "—";
+        string K(long tokens) => Math.Round(tokens / 1000.0).ToString(CultureInfo.InvariantCulture) + "k";
+        md.AppendLine($"- One clean pass would have stopped **{I("stoppedEarly")} of {I("runs")}** {kind} runs early, saving {I("passesSaved")} of {I("passes")} passes, "
+            + $"**{K(L("tokensSaved"))} of {K(L("tokens"))} tokens ({Pct(L("tokensSaved"), L("tokens"))})** and {D("minutesSaved").ToString("0.0", CultureInfo.InvariantCulture)} of "
+            + $"{D("minutes").ToString("0.0", CultureInfo.InvariantCulture)} minutes ({Pct(D("minutesSaved"), D("minutes"))})"
+            + (I("minutesUnknown") > 0 ? $", {I("minutesUnknown")} runs' minutes unknown" : "")
+            + $"; catches after it: **{I("caught")}** (in {I("runsWithCatches")} runs); {otherWord} after it: **{I("other")}** (in {I("runsWithOther")} runs; "
+            + string.Join(", ", tags.Select(t => $"{(int)o["otherByTag"]![t]!} {t}")) + ")"
+            + (I("passUnknown") > 0 ? $"; pass unknown: {I("passUnknown")}" : "")
+            + (I("minorOrSilent") + I("pathsAfter") > 0 ? $"; beside: {I("minorOrSilent")} planted gaps fixed only as minor or silent lines after it, {I("pathsAfter")} follow-on paths first taken after it" : ""));
     }
 
     private static void AppendHeadline(StringBuilder md, List<RunScore> runs, Material material)
@@ -2415,6 +2615,16 @@ static class Report
         if (I("planShadowRuns") > 0)
         {
             md.AppendLine($"- Plan runs where the shadow rule would have stopped before a planted gap was caught: **{I("planShadowStoppedEarly")} of {I("planShadowRuns")}**");
+        }
+
+        if (plans)
+        {
+            AppendOneClean(md, h["oneClean"]!["plans"]!.AsObject(), "plan", "other gaps", PlanTags);
+        }
+
+        if (audits)
+        {
+            AppendOneClean(md, h["oneClean"]!["audits"]!.AsObject(), "audit", "other findings", AuditTags);
         }
 
         int labeled = I("labelsSame") + I("labelsOneOff") + I("labelsTwoOff") + I("labelsUntagged");
@@ -2594,6 +2804,19 @@ static class Report
                 + (r.GapsAfterShadow.Count > 0 ? $"; planted gaps caught after it: **{string.Join(", ", r.GapsAfterShadow)}**" : ""));
         }
 
+        if (r.StopsEarly)
+        {
+            var caught = r.CaughtAfterOneClean;
+            md.AppendLine($"- One clean pass would stop at pass {r.OneCleanAt}: {r.PassesAfterOneClean} passes, {Math.Round(r.TokensAfterOneClean / 1000.0, 1).ToString(CultureInfo.InvariantCulture)}k tokens, "
+                + $"{r.MinutesAfterOneClean?.ToString("0.0", CultureInfo.InvariantCulture) ?? "?"} min after it"
+                + (caught.Count > 0 ? $"; catches after it: **{string.Join(", ", caught)}**" : "")
+                + (r.UnknownAfterOneClean > 0 ? $"; pass unknown: {r.UnknownAfterOneClean}" : ""));
+            foreach (var (pass, tag, text) in r.OtherAfterOneClean)
+            {
+                md.AppendLine($"  - pass {pass} ({tag}): {Flat(text)}");
+            }
+        }
+
         foreach (var s in r.StepChanges)
         {
             md.AppendLine($"- Clean report in call {s.Call}{(r.PassOf(s.Call) is { } sp ? $", pass {sp}" : "")} changed steps: {s.Added} added, {s.Removed} removed, {s.Moved} moved, "
@@ -2708,6 +2931,19 @@ static class Report
         ["findingsLow"] = r.FindingsLow,
         ["auditLowChanges"] = r.Log.AuditLight,
         ["planShadowWouldConvergeAt"] = r.Log.PlanShadowWouldConvergeAt,
+        ["oneClean"] = new JsonObject
+        {
+            ["at"] = r.OneCleanAt,
+            ["passesAfter"] = r.PassesAfterOneClean,
+            ["tokensAfter"] = r.TokensAfterOneClean,
+            ["passesTokens"] = r.PassesTokens,
+            ["minutesAfter"] = r.MinutesAfterOneClean,
+            ["caughtAfter"] = new JsonArray([.. r.CaughtAfterOneClean.Select(id => (JsonNode?)id)]),
+            ["otherAfter"] = new JsonArray([.. r.OtherAfterOneClean.Select(o => (JsonNode?)new JsonObject { ["pass"] = o.Pass, ["tag"] = o.Tag, ["text"] = o.Text })]),
+            ["passUnknown"] = r.UnknownAfterOneClean,
+            ["minorOrSilentAfter"] = r.MinorOrSilentAfterOneClean,
+            ["pathsAfter"] = r.PathsAfterOneClean,
+        },
         ["focuses"] = new JsonArray([.. r.Focuses.Select(f => (JsonNode?)new JsonObject { ["pass"] = f.Pass, ["label"] = f.Label, ["how"] = f.How.Length > 0 ? f.How : null })]),
         ["focusesFromSummary"] = r.FocusesFromSummary,
         ["gapsAfterShadow"] = new JsonArray([.. r.GapsAfterShadow.Select(g => (JsonNode?)g)]),
@@ -3061,6 +3297,7 @@ static class SelfTest
         FocusRun();
         FollowOnRun();
         ProbeRun();
+        OneCleanRun();
         AuditRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
@@ -3632,6 +3869,84 @@ static class SelfTest
         {
             Directory.Delete(bench, recursive: true);
         }
+    }
+
+    /// <summary>
+    /// The one-clean-pass count (2026-11-19): where a plan or audit run would have stopped at its first clean pass, the passes, tokens and minutes after
+    /// it, what it would have lost (a planted gap; not a follow-on gap whose path came later), other gaps by tag, an unknown pass, and the runs that save
+    /// nothing.
+    /// </summary>
+    private static void OneCleanRun()
+    {
+        static string At(int minute, string text) => $"2026-11-18 01:{minute:00}:00.000 [Info] App: " + text;
+        static string Use(long total) => $"2026-11-18 01:00:00.000 [Debug] Llm: Usage: 1 in, 1 out, {total} total; first token after 0.1s.";
+        string log = string.Join('\n',
+            Use(100), At(1, PlanText.PassLogLine(1, 2, ["a gap"], false)),
+            Use(200), At(2, PlanText.CleanPassLogLine(2, 1, 2, ["steps"])),
+            Use(300), At(4, PlanText.PassLogLine(3, 3, ["late"], false)),
+            Use(400), At(5, PlanText.CleanPassLogLine(4, 1, 2, [])),
+            Use(250), Use(250), At(7, PlanText.CleanPassLogLine(5, 2, 2, [])));
+        var facts = LogFacts.Read(log);
+        Expect(facts.PassList.Select(p => p.Pass).SequenceEqual([1, 2, 3, 4, 5]) && facts.PassList.Select(p => p.Tokens).SequenceEqual([100L, 200, 300, 400, 500]),
+            "each pass's tokens are the usage lines since the last pass line: " + string.Join(", ", facts.PassList.Select(p => $"{p.Pass}:{p.Tokens}")));
+        Expect(facts.OneCleanAt == 2 && facts.PlanShadowLines == 0, $"a log with no shadow lines stops at the first clean pass: {facts.OneCleanAt}");
+
+        PlantedGap Gap(string id, bool followOn = false) => new(id, "medium", id, new Keywords([[id.ToLowerInvariant()]]), null, [], Trigger: followOn ? new Keywords([["path"]]) : null);
+        var score = new RunScore { Item = "one", Run = 1, Folder = "x", Facts = new JsonObject(), Log = facts, Minutes = 7.5 };
+        score.CallPasses[1] = 1;
+        score.CallPasses[2] = 3;
+        score.CallPasses[3] = 4;
+        score.Planted.Add(new GapOutcome(Gap("G1"), "caught", "[medium] g1", 2, false));
+        score.Planted.Add(new GapOutcome(Gap("G2"), "caught", "[medium] g2", 1, false));
+        score.Planted.Add(new GapOutcome(Gap("G3"), "minor only", "g3", 3, false));
+        score.FollowOn.Add(new FollowOnOutcome(Gap("F1", true), FollowOnStatus.Caught, "f1", 2, 3));
+        score.FollowOn.Add(new FollowOnOutcome(Gap("F2", true), FollowOnStatus.Caught, "f2", 1, 3));
+        score.OtherGaps.Add((3, "[high] a high one"));
+        score.OtherGaps.Add((3, "no tag at all"));
+        score.OtherGaps.Add((1, "[low] before the stop"));
+        score.OtherGaps.Add((9, "[low] a call with no known pass"));
+        Expect(score.StopsEarly && score.PassesAfterOneClean == 3 && score.TokensAfterOneClean == 1200 && score.PassesTokens == 1500 && score.MinutesAfterOneClean == 5,
+            $"stop at 2, then 3 passes, 1200 of 1500 tokens, 5 minutes: {score.PassesAfterOneClean}, {score.TokensAfterOneClean}, {score.PassesTokens}, {score.MinutesAfterOneClean}");
+        Expect(score.CaughtAfterOneClean.SequenceEqual(["G1", "F2"]),
+            "lost: G1 (pass 3) and F2 (path by pass 1, named in pass 4); not G2 (pass 1) or F1 (path first taken in pass 3): " + string.Join(", ", score.CaughtAfterOneClean));
+        Expect(score.OtherAfterOneClean.Select(o => o.Tag).SequenceEqual(["high", "untagged"]) && score.UnknownAfterOneClean == 1,
+            $"other gaps after the stop by tag, the one with no known pass apart: {string.Join(", ", score.OtherAfterOneClean.Select(o => o.Tag))}; unknown {score.UnknownAfterOneClean}");
+        Expect(score.MinorOrSilentAfterOneClean == 1 && score.PathsAfterOneClean == 1, $"beside: G3 minor only, F1's path: {score.MinorOrSilentAfterOneClean}, {score.PathsAfterOneClean}");
+        var totals = Report.OneCleanTotals([score], ["high", "medium", "low", "untagged"]);
+        Expect((int)totals["stoppedEarly"]! == 1 && (int)totals["caught"]! == 2 && (int)totals["otherByTag"]!["high"]! == 1 && (double)totals["minutesSaved"]! == 5,
+            "the headline totals: " + totals.ToJsonString());
+        var runJson = Report.RunJson(score)["oneClean"]!;
+        Expect((int?)runJson["at"] == 2 && (long)runJson["tokensAfter"]! == 1200, "the run JSON's oneClean: " + runJson.ToJsonString());
+
+        string baseline = "2026-11-18 01:33:35.123 [Info] App: plan gaps: pass 2 clean (1 of 2), 34.5s, 56.1k tokens: checked: each step has a Done when line";
+        var old = LogFacts.Read(At(1, PlanText.PassLogLine(1, 2, ["a"], false)) + "\n" + baseline);
+        Expect(old.OneCleanAt == 2 && old.PassList[1].At == new DateTime(2026, 11, 18, 1, 33, 35, 123), $"a clean line copied from baseline csv-import-2's log: {old.OneCleanAt}");
+
+        var lastOnly = new RunScore { Item = "one", Run = 1, Folder = "x", Facts = new JsonObject(), Log = LogFacts.Read(At(1, PlanText.PassLogLine(1, 2, ["a"], false)) + "\n" + At(2, PlanText.CleanPassLogLine(2, 1, 1, []))) };
+        var noClean = new RunScore { Item = "one", Run = 1, Folder = "x", Facts = new JsonObject(), Log = LogFacts.Read(At(1, PlanText.PassLogLine(1, 2, ["a"], false)) + "\n" + At(2, PlanText.PassLogLine(2, 3, ["b"], false))) };
+        noClean.OtherGaps.Add((1, "[high] x"));
+        Expect(lastOnly.OneCleanAt == 2 && !lastOnly.StopsEarly && lastOnly.PassesAfterOneClean == 0 && lastOnly.MinutesAfterOneClean == 0,
+            "a run converged at its first clean pass saves nothing");
+        Expect(noClean.OneCleanAt is null && !noClean.StopsEarly && noClean.OtherAfterOneClean.Count == 0 && noClean.UnknownAfterOneClean == 0,
+            "a run that hit the limit with no clean pass saves and loses nothing");
+
+        string auditLog = string.Join('\n',
+            Use(100), At(1, AuditText.PassLogLine(1, 6, 0, false, false, null)),
+            At(1, AuditText.ShadowLogLine(1, new AuditShadowPass([0, 1, 0, 0], 0, true, true), 2, null, false, 0)),
+            Use(200), At(3, AuditText.PassLogLine(2, 0, 0, true, false, null, light: 3)),
+            At(3, AuditText.ShadowLogLine(2, new AuditShadowPass([0, 0, 0, 3], 1, true, false), 2, null, true, 1)),
+            Use(300), At(4, AuditText.PassLogLine(3, 0, 0, true, false, null)),
+            At(4, AuditText.ShadowLogLine(3, new AuditShadowPass([0, 0, 0, 0], 2, true, false), 2, PlanGapStop.Converged, true, 2)));
+        var audit = LogFacts.Read(auditLog);
+        Expect(audit.PassList.Select(p => p.Clean).SequenceEqual([false, true, true]) && audit.OneCleanAt == 2,
+            "an audit pass is clean by its shadow line's real verdict, a light pass too: " + string.Join(", ", audit.PassList.Select(p => $"{p.Pass}:{p.Clean}")));
+        var auditScore = new RunScore { Item = Material.AuditName, Run = 1, Folder = "x", Facts = new JsonObject(), Log = audit };
+        auditScore.Bugs.Add(new BugOutcome(new Spot("B1", "a.py", 1, "x", "high", "security", "b1"), "caught",
+            new AuditFinding("A7", AuditSeverity.High, "security", "a.py", 1, "t", "d", null, null, 3, false, false, null, [])));
+        auditScore.OtherFindings.Add(new AuditFinding("A8", AuditSeverity.Low, "tests", "b.py", null, "t", "d", null, null, 3, false, false, null, []));
+        Expect(auditScore.TokensAfterOneClean == 300 && auditScore.MinutesAfterOneClean == 1 && auditScore.CaughtAfterOneClean.SequenceEqual(["B1"])
+            && auditScore.OtherAfterOneClean.Single().Tag == "low",
+            $"an audit stopped at its light pass: {auditScore.TokensAfterOneClean} tokens, {auditScore.MinutesAfterOneClean} min, {string.Join(", ", auditScore.CaughtAfterOneClean)}");
     }
 
     /// <summary>The keyword check's five rules (2026-11-18), each broken once on built gaps, and a clean set that passes.</summary>
