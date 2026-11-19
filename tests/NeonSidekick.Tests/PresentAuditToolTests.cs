@@ -522,8 +522,34 @@ public sealed class PresentAuditToolTests : IDisposable
         Assert.False(_loop.PassClean);
         Assert.Single(_loop.PassGaps);
         Assert.Empty(_loop.PassLight);
-        Assert.Equal(1, _loop.CleanCount);
+        Assert.Equal(0, _loop.CleanCount);   // 2026-11-19: a pass that recorded a finding counts 0
         Assert.False(_reported[^1].Clean);
+    }
+
+    /// <summary>
+    /// 2026-11-19 (GapBench's audit-one bench, run 5): under one clean pass, a pass that recorded a finding and then called clean ended the
+    /// audit on the pass that found it. Now that pass counts 0: no convergence, its own reply, and the next clean pass ends it.
+    /// </summary>
+    [Fact]
+    public void OneCleanPass_ACleanCallAfterAFindingInTheSamePass_DoesntConverge_TheNextCleanPassDoes()
+    {
+        _loop = Start(_audit.Scope!, clean: 1);
+        Read();
+        Read("src/y.cs");
+        Report1(FindingJson());
+
+        string clean = Call("{\"checked\":[\"the queries again\"]}");
+
+        Assert.Equal(AuditText.CleanAfterChangesResult(1, 2, 2), clean);
+        Assert.Equal("Nothing new since your last call, but this pass recorded changes, so it doesn't count toward 1 clean pass in a row; 2 of 2 files read (100%). Reply with one short line and call no more tools; the next pass starts by itself.", clean);
+        Assert.False(_loop.Converged);
+        Assert.False(_reported[^1].Converged);
+        Assert.Contains("0 clean in a row", Report().Header.Passes);
+        NextPass();
+        Assert.Equal(0, _loop.CleanStreak);
+
+        Assert.StartsWith("Nothing new: the audit converged after 2 passes", Call("{\"checked\":[\"everything\"]}"), StringComparison.Ordinal);
+        Assert.True(_loop.Converged);
     }
 
     [Fact]
@@ -564,8 +590,8 @@ public sealed class PresentAuditToolTests : IDisposable
         Report1(FindingJson(file: "src/y.cs", line: 3, title: "Small", severity: "low"));
         Assert.Single(_loop.PassGaps);
         Assert.True(_loop.PassClean);
-        // In a pass whose first call was serious, a light one after it counts the pass once.
-        Assert.Equal(1, _loop.CleanCount);
+        // In a pass whose first call was serious, a light one after it doesn't count the pass (2026-11-19; once until then).
+        Assert.Equal(0, _loop.CleanCount);
         Call("{\"revise\":[{\"id\":\"A2\",\"severity\":\"medium\"}]}");
         Assert.Equal((2, false), (_loop.PassGaps.Count, _loop.PassClean));
         Call("{\"revise\":[{\"id\":\"A2\",\"detail\":\"Joined twice.\"}]}");

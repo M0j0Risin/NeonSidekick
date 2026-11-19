@@ -105,17 +105,23 @@ public class PlanCleanPassesTests : IDisposable
     }
 
     [Fact]
-    public void Loop_AGapThenNoneInOnePass_StartsAStreakOfOne_AndAPassNeverConfirmsItself()
+    public void Loop_AGapThenNoneInOnePass_StartsNoStreak_AndAPassNeverConfirmsItself()
     {
+        // 2026-11-19: a pass that recorded a gap counts 0, not 1 (an audit pass under one clean pass ended on the pass that found something).
         var loop = new PlanGapLoop(PlanReviewer.Model, 0, 2);
         loop.BeginPass("a");
         loop.Record(["gap"]);
-        Assert.Equal(1, loop.CleanCount);
+        Assert.Equal(0, loop.CleanCount);
         loop.MarkClean();
-        Assert.Equal(1, loop.CleanCount);                        // a second clean report in the same pass adds nothing
+        Assert.Equal(0, loop.CleanCount);                        // a clean report after it in the same pass adds nothing
         Assert.False(loop.WouldConverge);
         Assert.Null(loop.Next(true, false, "b"));
         loop.BeginPass("b");
+        Assert.Equal(0, loop.CleanStreak);
+        Assert.False(loop.WouldConverge);
+        loop.MarkClean();
+        Assert.Null(loop.Next(true, false, "c"));
+        loop.BeginPass("c");
         Assert.Equal(1, loop.CleanStreak);
         Assert.True(loop.WouldConverge);
     }

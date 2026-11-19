@@ -771,7 +771,9 @@ public sealed partial class PresentAuditTool : AIFunction, IRefusesPrunedStubs, 
 
         return converging
             ? AuditText.ConvergedResult(pass, cleanCount, coverage.Read, coverage.Scope, light ? AuditText.RecordedPart(path, addedIds, reopenedIds, retractedList, revisedIds) : null, loop.StreakLight)
-            : AuditText.CleanResult(cleanCount, loop.CleanPasses, coverage.Read, coverage.Scope);
+            : cleanCount == 0
+                ? AuditText.CleanAfterChangesResult(loop.CleanPasses, coverage.Read, coverage.Scope)   // 2026-11-19: the pass recorded changes first
+                : AuditText.CleanResult(cleanCount, loop.CleanPasses, coverage.Read, coverage.Scope);
     }
 
     /// <summary>A covered entry in the one path form when it names a file or folder here, else its words on one line.</summary>

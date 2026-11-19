@@ -613,15 +613,19 @@ public class PlanGapLoopTests : IDisposable
     }
 
     [Fact]
-    public void LightChanges_AfterAGap_CountThePassOnce_AndAGapPassBreaksAStreakOfThem()
+    public void LightChanges_AfterAGap_DontCountThePass_AndAGapPassBreaksAStreakOfThem()
     {
         var loop = new PlanGapLoop(PlanReviewer.Model, 5, 2);
         loop.BeginPass("a");
         loop.Record(["a gap"]);
         loop.MarkClean(null, null, ["light"]);
-        Assert.Equal(1, loop.CleanCount);
+        Assert.Equal(0, loop.CleanCount);                        // 2026-11-19: a pass that recorded a gap starts no streak
         Assert.Null(loop.Next(true, false, "b"));
         loop.BeginPass("b");
+        Assert.Equal(0, loop.CleanStreak);
+        loop.MarkClean(null, null, ["light"]);
+        Assert.Null(loop.Next(true, false, "b2"));
+        loop.BeginPass("b2");
         Assert.Equal(1, loop.CleanStreak);
         loop.Record(["another"]);
         Assert.Null(loop.Next(true, false, "c"));

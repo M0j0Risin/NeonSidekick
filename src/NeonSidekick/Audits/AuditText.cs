@@ -611,6 +611,13 @@ public static class AuditText
             + "Go on within the pass's budget, or end your reply with one short line; the next pass starts by itself.";
     }
 
+    /// <summary>
+    /// A clean call in a pass that already recorded changes (2026-11-19): the pass found something, so it starts no streak and the next
+    /// pass checks again. Pinned.
+    /// </summary>
+    public static string CleanAfterChangesResult(int needed, int read, int scope) =>
+        $"Nothing new since your last call, but this pass recorded changes, so it doesn't count toward {CleanPasses(needed)} in a row; {AuditReport.CoverageLine(read, scope)[..^1]}. Reply with one short line and call no more tools; the next pass starts by itself.";
+
     /// <summary>A clean call that does not end the audit (2026-10-18). Pinned.</summary>
     public static string CleanResult(int clean, int needed, int read, int scope) =>
         $"Nothing new this pass ({N(clean)} of {CleanPasses(needed)} in a row); {AuditReport.CoverageLine(read, scope)[..^1]}. Reply with one short line and call no more tools; the next pass starts by itself.";

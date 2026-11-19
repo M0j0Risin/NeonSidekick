@@ -262,8 +262,12 @@ public sealed class PlanGapLoop
     /// <summary>This pass's latest <c>present_plan</c> reported no gaps (2026-10-17).</summary>
     public bool PassClean { get; private set; }
 
-    /// <summary>What this pass adds to the streak if its report stands: one more than the streak, or 1 for a pass that closed gaps first.</summary>
-    public int CleanCount => _passGaps.Count == 0 ? CleanStreak + 1 : 1;
+    /// <summary>
+    /// What this pass adds to the streak if its report stands: one more than the streak, or 0 for a pass that recorded gaps first. Until
+    /// 2026-11-19 that pass counted 1, so under one clean pass an audit pass that recorded a finding and then called clean ended the review
+    /// on the pass that found it (GapBench's audit-one bench, run 5). A plan pass can't hit it: it refuses a second <c>present_plan</c>.
+    /// </summary>
+    public int CleanCount => _passGaps.Count == 0 ? CleanStreak + 1 : 0;
 
     /// <summary>A clean report now would end the review: read before <see cref="MarkClean"/> or <see cref="MarkConverged"/>.</summary>
     public bool WouldConverge => CleanCount >= CleanPasses;
