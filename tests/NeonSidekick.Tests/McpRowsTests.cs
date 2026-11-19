@@ -255,4 +255,19 @@ public class McpRowsTests : IAsyncDisposable
             McpRows.ToolLines(facts));
         Assert.Equal([McpText.NoToolsLine], McpRows.ToolLines(Facts(await ConnectedAsync("""{ "mcpServers": {} }"""))));
     }
+
+    /// <summary>A dropped server (2026-11-19): still connected, so its tools still count, but its row and footer say it dropped.</summary>
+    [Fact]
+    public async Task ADroppedRow_SaysSoInItsStatusAndFooter_ALiveOneDoesnt()
+    {
+        await using var session = await ConnectedAsync(Two);
+        var live = session.Servers.Single(s => s.Name == "docker");
+        var dropped = live with { Dropped = "(exit code 1)" };
+        var facts = new McpFacts([dropped], [], true, true, ToolsText.DisabledSet([]), session.ProfilePath, session.GlobalPath);
+
+        Assert.StartsWith(McpText.StatusDropped, McpRows.StatusText(dropped), StringComparison.Ordinal);
+        Assert.Equal(McpText.StatusDropped, McpRows.ServerFooter(facts, new McpRow.Server("docker"))!.Text);
+        Assert.DoesNotContain(McpText.StatusDropped, McpRows.StatusText(live), StringComparison.Ordinal);
+        Assert.Equal(2, dropped.Tools.Count);
+    }
 }

@@ -10,7 +10,7 @@ namespace NeonSidekick.App;
 /// <see cref="ToolsMenu"/> shape. The Servers tab lists every server the two <c>mcp.json</c> files name
 /// with <c>on</c> / <c>off</c> and its state (<see cref="McpRows.ServerRows"/>); Enter or Space on a server
 /// flips it — the name into or out of <c>McpServersDisabled</c> — and connects or disconnects it right
-/// there, the outcome on the status line; Enter on a failed server that is on retries it; the three
+/// there, the outcome on the status line; Enter on a failed server that is on retries it, and on a dropped one (2026-11-19) reconnects it; the three
 /// rows after the servers open the profile's or the home's file in the editor (made with the empty
 /// shape first when missing) or re-read both files and reconcile. While the master switch is off
 /// (later on 2026-09-20, the user's ask) a server row answers <see cref="McpText.OffNotice"/> and
@@ -344,6 +344,14 @@ internal sealed class McpMenu
             return;
         }
 
+        if (server.Enabled && server.Dropped is not null)
+        {
+            // Enter on a dropped server (2026-11-19, feature idea #30): reconnect it from the config it was connected with, as its next call
+            // would, nothing saved. Turning it off is what Enter does on a live row; a user who reads "dropped" doesn't mean that.
+            await ReconnectAsync(name, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         bool on = !server.Enabled;   // off now → on
         _settings.Update(d => d.McpServersDisabled = ToolsText.Flip(d.McpServersDisabled, name));
         Sink.Notice(McpText.ServerFlippedNotice(name, on));
@@ -362,6 +370,20 @@ internal sealed class McpMenu
         Sink.Notice(McpText.ConnectingNotice(name));
         await _session.ConnectServerAsync(name, effective, cancellationToken).ConfigureAwait(false);
         var after = _session.Servers.FirstOrDefault(s => s.Name == name);
+        if (after is { State: McpState.Connected })
+        {
+            Sink.Notice(McpText.ConnectedNotice(name, after.Tools.Count));
+        }
+        else
+        {
+            Sink.Error(McpText.FailedNotice(name, after?.Detail ?? ""));
+        }
+    }
+
+    private async Task ReconnectAsync(string name, CancellationToken cancellationToken)
+    {
+        Sink.Notice(McpText.ConnectingNotice(name));
+        var after = await _session.ReconnectAsync(name, cancellationToken).ConfigureAwait(false);
         if (after is { State: McpState.Connected })
         {
             Sink.Notice(McpText.ConnectedNotice(name, after.Tools.Count));

@@ -940,7 +940,8 @@ public sealed partial class SidekickApp
         using var dockerServers = BuildDockerServers();
         using var session = new LlmSession(_probe, _contextProbe, _chatClientFactory, _time, _samplingProbe, embedded, claudeServer, ClaudeCliOffered, dockerServers);
         // The MCP servers (2026-09-20): connected after the LLM, their tools offered per turn like the screen's; disposed after the loop.
-        await using var mcp = new McpSession(_settings, _mcpTransport, _time);
+        // Headless has no /mcp (2026-11-19): a server that drops and doesn't come back stays down until the next start, and its texts say so.
+        await using var mcp = new McpSession(_settings, _mcpTransport, _time, Mcp.McpText.HeadlessRetryTail);
         var memory = BuildMemoryStore();
         var memoryTools = ChatScreen.MemoryTools(memory);
         // No timers headless: nothing could deliver the alert (the same rule as speech and voice); PrepareTurn drops the prompt's timer sentence with them (2026-09-20).
@@ -1338,6 +1339,7 @@ public sealed partial class SidekickApp
                     await HeadlessNoticeLineAsync("[notice] " + Shell.ShellText.AlertLine(alert)).ConfigureAwait(false);
                 }
 
+                await HeadlessMcpNoticesAsync(mcp).ConfigureAwait(false);
                 await _headlessOutput.WriteAsync("You: ").ConfigureAwait(false);
                 await _headlessOutput.FlushAsync(cancellationToken).ConfigureAwait(false);
                 _headlessAtLineStart = false;
@@ -2179,6 +2181,7 @@ public sealed partial class SidekickApp
                 }
             }
 
+            await HeadlessMcpNoticesAsync(mcp).ConfigureAwait(false);   // the last turn's, when the input ended
             var refused = gate.Refusals;
             if (refused.Count > 0)
             {
@@ -3589,6 +3592,18 @@ public sealed partial class SidekickApp
     /// A notice line, on a line of its own; since 2026-10-17 spaced after a selector sequence the terminal draws one cell wide
     /// (<see cref="UI.TextCells.SpaceSelectorSequences"/> under <c>headlessNarrow</c>, Terminal.app's main screen, never a pipe). A reply never is.
     /// </summary>
+    /// <summary>
+    /// The MCP session's queued notices as headless lines (2026-11-19, feature idea #30): after each turn and before each line is read,
+    /// a reconnect or a changed tool list as <c>[notice]</c>, a server that didn't come back as <c>[error]</c>.
+    /// </summary>
+    private async Task HeadlessMcpNoticesAsync(McpSession mcp)
+    {
+        foreach (var (text, error) in mcp.TakeNotices())
+        {
+            await HeadlessNoticeLineAsync((error ? "[error] " : "[notice] ") + text).ConfigureAwait(false);
+        }
+    }
+
     private async Task HeadlessNoticeLineAsync(string line)
     {
         await EnsureHeadlessLineStartAsync().ConfigureAwait(false);

@@ -729,6 +729,26 @@ internal sealed partial class ChatScreen
         }
     }
 
+    /// <summary>
+    /// The MCP session's queued notices (2026-11-19, feature idea #30: a drop, a reconnect, a changed tool list), on the screen's task at
+    /// the idle line's top and the turn's act drain, as <see cref="PrintWebNotices"/>; a server that didn't come back as an error. The
+    /// transcript's feed mirrors them to the page.
+    /// </summary>
+    private void PrintMcpNotices()
+    {
+        foreach (var (text, error) in _mcp.TakeNotices())
+        {
+            if (error)
+            {
+                _transcript.Error(text);
+            }
+            else
+            {
+                _transcript.Notice(text);
+            }
+        }
+    }
+
     // ── The page's state and Stop ─────────────────────────────────────────
 
     /// <summary>The page's header and composer, read on the sampler's timer thread (reads only).</summary>

@@ -177,6 +177,59 @@ public class McpMenuTests : IAsyncDisposable
         pane.Dispose();
     }
 
+    /// <summary>The server dropped and its row marked (2026-11-19), waited for on the watcher's thread.</summary>
+    private async Task DroppedAsync(string name)
+    {
+        await _servers.Drop(name);
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (_session.Servers.Single(s => s.Name == name).Dropped is null)
+        {
+            Assert.True(DateTime.UtcNow < deadline, name + " never marked dropped");
+            await Task.Delay(10);
+        }
+    }
+
+    [Fact]
+    public async Task OnThePane_EnterOnADroppedServer_ReconnectsIt_FromTheConnectedConfig_SavingNothing()
+    {
+        await ConnectedAsync();
+        File.WriteAllText(McpConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "mcpServers": { "docker": { "command": "docker2" }, "chrome": { "url": "http://localhost:9/mcp" } } }""");
+        await DroppedAsync("docker");
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Enter);                          // docker: reconnect, not off
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_settings.Current.McpServersDisabled);
+        Assert.Contains("▸ docker      on   " + McpText.StatusDropped, Output);
+        Assert.Contains("  · 🔌 connecting docker…\n  · 🔌 docker: connected, 2 tools\n", Output);
+        Assert.Equal(["docker", "chrome", "docker"], _servers.Requested.Select(r => r.Name));
+        Assert.Equal("docker", _servers.Requested[^1].Config.Command);   // the connected config: the edit waits for a reload
+        Assert.Null(_session.Servers[0].Dropped);
+        Assert.Equal(McpState.Connected, _session.Servers[0].State);
+        Assert.Empty(_session.TakeNotices());   // the pane said how it went
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task MidTurn_EnterOnADroppedServer_IsRefused_AndReconnectsNothing()
+    {
+        await ConnectedAsync();
+        await DroppedAsync("docker");
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Enter);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: true);
+
+        Assert.Contains("  · " + SettingsMenu.NotWhileReplyRunsNotice + "\n", Output);
+        Assert.Equal(2, _servers.Requested.Count);
+        Assert.NotNull(_session.Servers[0].Dropped);
+        Assert.Empty(_settings.Current.McpServersDisabled);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_AFailedConnect_IsAnErrorOnTheStatusLine()
     {

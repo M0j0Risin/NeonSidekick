@@ -34,7 +34,10 @@ public static class McpText
         ConnectingLabel + " (" + done.ToString(CultureInfo.InvariantCulture) + " of " + total.ToString(CultureInfo.InvariantCulture) + ")";
 
     /// <summary>A server that did not finish its handshake and tool list inside <c>MCP connect timeout (s)</c>.</summary>
-    public static string TimedOut(int seconds) => "timed out after " + seconds.ToString(CultureInfo.InvariantCulture) + " s";
+    public static string TimedOut(int seconds) => TimedOutPrefix + seconds.ToString(CultureInfo.InvariantCulture) + " s";
+
+    /// <summary>How <see cref="TimedOut"/> starts: the session tells its own detail from a server's by it (2026-11-19, the fence).</summary>
+    public const string TimedOutPrefix = "timed out after ";
 
     /// <summary>A connect the user cancelled (Ctrl+C under the spinner); the same word the speech session uses.</summary>
     public const string Cancelled = "canceled";
@@ -131,7 +134,7 @@ public static class McpText
     public static readonly IReadOnlyList<string> TabTitles = [ServersTabTitle, ToolsTabTitle, OptionsTabTitle];
 
     /// <summary>The Servers tab's hint.</summary>
-    public const string ServersKeys = "Enter / Space = on or off · Enter on failed = retry · ←/→ tabs · Esc = close";
+    public const string ServersKeys = "Enter / Space = on or off · Enter on failed or dropped = retry · ←/→ tabs · Esc = close";
 
     /// <summary>The Servers and Tools tabs' first line while the master switch is off (shortened later on 2026-09-20: the server rows are inert then).</summary>
     public const string OffLine = "MCP servers is off (the Options tab)";
@@ -185,6 +188,66 @@ public static class McpText
     public static string StoppedLogLine(string name) => "Stopped " + name;
     public static string ConfigProblemLogLine(string path, string detail) => "Could not read " + path + ": " + detail;
     public static string StderrLogLine(string name, string line) => name + " stderr: " + line;
+
+    // ── A server that drops (2026-11-19, feature idea #30) ──────────────────
+
+    /// <summary>The retry tail of the texts below: interactively <c>/mcp</c> retries a server that didn't come back.</summary>
+    public const string RetryTail = "/mcp retries it";
+
+    /// <summary>The headless tail: headless has no <c>/mcp</c>, so a server that didn't come back stays down for the run.</summary>
+    public const string HeadlessRetryTail = "the next start retries it";
+
+    /// <summary>The row's status while its server is dropped: still connected, its tools still offered, back at the next call.</summary>
+    public const string StatusDropped = "dropped · reconnects at the next call or on Enter";
+
+    /// <summary>The failed row's detail when a read-only call drops the server again on its one retry.</summary>
+    public const string DroppedAgainDetail = "dropped again on the retried call";
+
+    /// <summary>
+    /// Why a client's session ended, in parentheses: <c>(exit code 1)</c> for a stdio child, <c>(HTTP 404)</c> for a hosted server,
+    /// empty when neither is known (the pipe transport's, or a graceful end). The status is an enum written as its number, invariant.
+    /// A stdio child's stderr tail is never part of it: it can carry tokens.
+    /// </summary>
+    public static string DropReason(ModelContextProtocol.Client.ClientCompletionDetails? details) => details switch
+    {
+        ModelContextProtocol.Client.StdioClientCompletionDetails { ExitCode: { } code } => "(exit code " + code.ToString(CultureInfo.InvariantCulture) + ")",
+        ModelContextProtocol.Client.HttpClientCompletionDetails { HttpStatusCode: { } status } => "(HTTP " + ((int)status).ToString(CultureInfo.InvariantCulture) + ")",
+        _ => "",
+    };
+
+    private static string Dropped(string reason) => reason.Length > 0 ? "dropped " + reason : "dropped";
+
+    /// <summary>The model's text when a non-read-only call was cut off by a drop: the server came back, the call wasn't sent again. Pinned.</summary>
+    public static string DroppedNotResentError(string server) =>
+        server + " dropped during the call and reconnected; the call wasn't sent again, since it may have changed something: check before calling it again";
+
+    /// <summary>The model's text when a read-only call dropped the server again on its retry. Pinned.</summary>
+    public static string DroppedAgainError(string server, string tail) => server + " dropped again; " + tail;
+
+    /// <summary>The model's text when the reconnect failed, <paramref name="detail"/> fenced by the caller when it can be the server's. Pinned.</summary>
+    public static string NotBackError(string server, string detail, string tail) => server + " dropped and didn't come back: " + detail + "; " + tail;
+
+    /// <summary>The model's text for a tool its server no longer lists (a reconnect or a changed list took it away). Pinned.</summary>
+    public static string NoLongerOffersError(string server, string tool) => server + " no longer offers " + tool;
+
+    /// <summary>The model's text for a call after the session was disposed, or during the dispose. Pinned.</summary>
+    public static string StoppedError(string server) => server + ": the MCP servers were stopped";
+
+    /// <summary>The notice when a dropped server came back: <c>🔌 MCP: docker dropped (exit code 1); reconnected</c>.</summary>
+    public static string ReconnectedNotice(string server, string reason) => Glyph + " MCP: " + server + " " + Dropped(reason) + "; reconnected";
+
+    /// <summary>The notice when it didn't: <c>🔌 MCP: docker dropped and didn't come back: …; /mcp retries it</c>.</summary>
+    public static string NotBackNotice(string server, string detail, string tail) => Glyph + " MCP: " + NotBackError(server, detail, tail);
+
+    /// <summary>The notice when a server's tool list changed: <c>🔌 MCP: docker's tools changed: 12 tools, from the next message</c>.</summary>
+    public static string ToolsChangedNotice(string server, int tools) => Glyph + " MCP: " + server + "'s tools changed: " + Tools(tools) + ", from the next message";
+
+    public static string DroppedLogLine(string name, string reason) => "Dropped " + name + (reason.Length > 0 ? " " + reason : "");
+    public static string DroppedStderrLogLine(string name, string tail) => name + " stderr before the drop: " + tail;
+    public static string ReconnectedLogLine(string name, int tools) => "Reconnected " + name + ": " + Tools(tools);
+    public static string ReconnectFailedLogLine(string name, string detail) => "Reconnect failed " + name + ": " + detail;
+    public static string ToolsChangedLogLine(string name, int tools) => "Tools changed " + name + ": " + Tools(tools);
+    public static string ListingFailedLogLine(string name, string detail) => "Tool list failed " + name + ": " + detail;
 
     private static string Article(string word) =>
         word.Length > 0 && "aeiouAEIOU".Contains(word[0]) ? "an" : "a";

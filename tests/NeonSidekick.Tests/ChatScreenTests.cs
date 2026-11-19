@@ -4560,6 +4560,48 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([("echo", """{"text":"ping"}""")], _mcpServers.Server("pipe").Calls);
     }
 
+    /// <summary>
+    /// A server that drops under the reply (2026-11-19, feature idea #30): the call comes back as an error result, never sent twice, and
+    /// the reconnect's notice prints; a read-only call that drops again leaves the server failed, its notice an error.
+    /// </summary>
+    [Fact]
+    public async Task Turn_AnMcpServerThatDropsUnderACall_ReconnectsWithANotice_AndOneThatDropsAgainIsAnError()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _mcpServers.Tools("pipe", ("echo", "Echoes."), (McpPipeServer.DropToolName, "Drops."));
+        McpServer();
+        _chat.Enqueue(FakeChatClient.Call("c1", "pipe__drop", new Dictionary<string, object?> { ["text"] = "x" }));
+        _chat.EnqueueText("It dropped.");
+        PushLine("drop it");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var result = Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>());
+        Assert.Equal(McpText.ErrorPrefix + McpText.DroppedNotResentError("pipe"), result.Result);
+        Assert.Contains(McpText.ReconnectedNotice("pipe", ""), output);
+        Assert.DoesNotContain("threw", output);
+        Assert.Equal(2, _mcpServers.Requested.Count);
+    }
+
+    [Fact]
+    public async Task Turn_AReadOnlyMcpCallThatDropsAgain_LeavesTheServerFailed_ItsNoticeAnError()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _mcpServers.Tools("pipe", ("echo", "Echoes."), (McpPipeServer.DropToolName, "Drops."));
+        _mcpServers.ReadOnly("pipe", McpPipeServer.DropToolName);
+        McpServer();
+        _chat.Enqueue(FakeChatClient.Call("c1", "pipe__drop", new Dictionary<string, object?> { ["text"] = "x" }));
+        _chat.EnqueueText("It dropped twice.");
+        PushLine("drop it");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("✗ " + McpText.NotBackNotice("pipe", McpText.DroppedAgainDetail, McpText.RetryTail), output);
+        Assert.Equal(McpState.Failed, _mcp!.Servers.Single().State);
+    }
+
     [Fact]
     public async Task Startup_AnMcpServerThatFails_IsAWarning_AndNothingIsOffered()
     {

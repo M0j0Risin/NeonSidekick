@@ -933,6 +933,50 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal([("echo", """{"text":"ping"}""")], _mcpServers.Server("pipe").Calls);
     }
 
+    private void HeadlessPipeWithDrop(bool readOnly)
+    {
+        ServerOn1234("llama");
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
+        File.WriteAllText(NeonSidekick.Mcp.McpConfigFile.ProfilePath(_settings.ProfileDirectory), """{ "mcpServers": { "pipe": { "command": "pipe-server" } } }""");
+        _settings.Update(d => d.McpServers = true);
+        _mcpServers.Tools("pipe", ("echo", "Echoes."), (NeonSidekick.Mcp.McpPipeServer.DropToolName, "Drops."));
+        if (readOnly)
+        {
+            _mcpServers.ReadOnly("pipe", NeonSidekick.Mcp.McpPipeServer.DropToolName);
+        }
+    }
+
+    /// <summary>A server that drops under a call (2026-11-19, feature idea #30): reconnected, the call not sent again, a [notice] before the next line.</summary>
+    [Fact]
+    public async Task Headless_AnMcpServerThatDropsUnderACall_Reconnects_WithANotice()
+    {
+        HeadlessPipeWithDrop(readOnly: false);
+        _chat.Enqueue(FakeChatClient.Call("c1", "pipe__drop", new Dictionary<string, object?> { ["text"] = "x" }));
+        _chat.EnqueueText("It dropped.");
+        _chat.EnqueueText("hi");
+
+        string output = await Headless("drop it\nhi\n");
+
+        Assert.Contains("[tool] pipe__drop -> " + NeonSidekick.Mcp.McpText.ErrorPrefix + NeonSidekick.Mcp.McpText.DroppedNotResentError("pipe"), output);
+        Assert.Contains("[notice] " + NeonSidekick.Mcp.McpText.ReconnectedNotice("pipe", "") + Environment.NewLine, output);
+        Assert.Equal(2, _mcpServers.Requested.Count);
+    }
+
+    /// <summary>Headless has no /mcp (2026-11-19): a server that doesn't come back says the next start retries it, as an [error].</summary>
+    [Fact]
+    public async Task Headless_AnMcpServerThatDoesntComeBack_SaysTheNextStartRetriesIt_NeverMcp()
+    {
+        HeadlessPipeWithDrop(readOnly: true);
+        _chat.Enqueue(FakeChatClient.Call("c1", "pipe__drop", new Dictionary<string, object?> { ["text"] = "x" }));
+        _chat.EnqueueText("It dropped twice.");
+
+        string output = await Headless("drop it\n");
+
+        Assert.Contains("[tool] pipe__drop -> " + NeonSidekick.Mcp.McpText.ErrorPrefix + NeonSidekick.Mcp.McpText.DroppedAgainError("pipe", NeonSidekick.Mcp.McpText.HeadlessRetryTail), output);
+        Assert.Contains("[error] " + NeonSidekick.Mcp.McpText.NotBackNotice("pipe", NeonSidekick.Mcp.McpText.DroppedAgainDetail, NeonSidekick.Mcp.McpText.HeadlessRetryTail), output);
+        Assert.DoesNotContain(NeonSidekick.Mcp.McpText.RetryTail, output);
+    }
+
     [Fact]
     public async Task Headless_McpServerFails_IsALine_AndTheMasterOffConnectsNothing()
     {

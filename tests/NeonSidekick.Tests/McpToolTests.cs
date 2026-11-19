@@ -140,4 +140,31 @@ public class McpToolTests
         Assert.Equal(McpText.ImageDropped, picture);
         Assert.Empty(none);
     }
+
+    /// <summary>The read-only mark (2026-11-19, feature idea #30) comes from the server's <c>readOnlyHint</c>; a tool with no caller still calls its client.</summary>
+    [Fact]
+    public async Task ReadOnly_IsTheServersHint_AndWithoutACaller_TheToolCallsItsClient()
+    {
+        await using var server = McpPipeServer.Start([("look", "Looks."), ("touch", "Touches.")], readOnly: new HashSet<string> { "look" });
+        await using var client = await McpClient.CreateAsync(server.ClientTransport);
+        var listed = await client.ListToolsAsync((RequestOptions?)null);
+        var look = new McpTool("pipe", client, listed[0], "pipe__look");
+        var touch = new McpTool("pipe", client, listed[1], "pipe__touch");
+
+        Assert.True(look.ReadOnly);
+        Assert.False(touch.ReadOnly);
+        var (text, _) = await Assistant.InvokeToolAsync([touch], new FunctionCallContent("c1", "pipe__touch", new Dictionary<string, object?> { ["text"] = "hi" }), CancellationToken.None);
+        Assert.Equal("⟪echo: hi⟫\n" + UntrustedText.QuoteNote, text);
+        Assert.Equal(("touch", """{"text":"hi"}"""), Assert.Single(server.Calls));
+    }
+
+    /// <summary>The app's own error text is unfenced; a failed reconnect's detail (the server's words) is fenced with the quote note.</summary>
+    [Fact]
+    public void AnOutcome_AnAppErrorIsUnfenced_AFencedOneCarriesTheNote_AnAnswerRendersAsBefore()
+    {
+        Assert.Equal(McpText.ErrorPrefix + "docker: the MCP servers were stopped", McpCallOutcome.Failed(McpText.StoppedError("docker")).Render());
+        Assert.Equal(McpText.ErrorPrefix + "x ⟪y⟫\n" + UntrustedText.QuoteNote, McpCallOutcome.Failed("x " + UntrustedText.Fenced("y"), fenced: true).Render());
+        var answer = new CallToolResult { Content = [new TextContentBlock { Text = "ok" }] };
+        Assert.Equal(McpTool.Render(answer), McpCallOutcome.Answered(answer).Render());
+    }
 }

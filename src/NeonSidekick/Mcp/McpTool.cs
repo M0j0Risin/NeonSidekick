@@ -16,7 +16,9 @@ namespace NeonSidekick.Mcp;
 /// placeholder, an <c>isError</c> result prefixed <c>Error:</c> so the trace, the log and the session
 /// telemetry see it. The SDK's own <see cref="McpClientTool"/> is never handed to the model: its result
 /// is the raw protocol object, which the turn loop would stringify. A transport failure throws and the
-/// loop answers <c>Error: &lt;name&gt; failed: …</c> as for any tool.
+/// loop answers <c>Error: &lt;name&gt; failed: …</c> as for any tool. Since 2026-11-19 (feature idea #30) a tool the session built
+/// calls through the session's caller by server name, so a drop reconnects and comes back as an <c>Error:</c> result
+/// (<see cref="McpCallOutcome"/>); only a tool built without a caller (a test's, the smoke probe's) still throws.
 /// </summary>
 public sealed class McpTool : AIFunction
 {
@@ -24,12 +26,14 @@ public sealed class McpTool : AIFunction
     private readonly McpClientTool _inner;
     private readonly string _name;
     private readonly string _description;
+    private readonly Func<McpTool, CallToolRequestParams, CancellationToken, ValueTask<McpCallOutcome>>? _caller;
 
     /// <param name="server">The configured server's name (unsanitised; the prefix is <paramref name="name"/>'s).</param>
-    /// <param name="client">The connected client the call goes through.</param>
+    /// <param name="client">The client at build time: the call goes through it only when there is no <paramref name="caller"/>.</param>
     /// <param name="inner">The server's tool as the SDK listed it.</param>
     /// <param name="name">The prefixed, de-duplicated name (<see cref="McpToolName.Unique"/>).</param>
-    public McpTool(string server, McpClient client, McpClientTool inner, string name)
+    /// <param name="caller">The session's call (2026-11-19): it finds the server's current client, reconnects a dropped one, and answers.</param>
+    public McpTool(string server, McpClient client, McpClientTool inner, string name, Func<McpTool, CallToolRequestParams, CancellationToken, ValueTask<McpCallOutcome>>? caller = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(server);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -37,6 +41,7 @@ public sealed class McpTool : AIFunction
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _name = name;
+        _caller = caller;
         string described = McpText.OneLine(inner.Description);
         _description = described.Length > 0 ? described : McpText.NoDescription;
     }
@@ -46,6 +51,15 @@ public sealed class McpTool : AIFunction
 
     /// <summary>The tool's name on the server (what the call carries).</summary>
     public string ServerToolName => _inner.Name;
+
+    /// <summary>The tool as the server listed it: its name, description and schema (what a changed list is compared by).</summary>
+    public Tool ProtocolTool => _inner.ProtocolTool;
+
+    /// <summary>
+    /// Whether the server marks the tool <c>readOnlyHint: true</c> (2026-11-19, feature idea #30): a call cut off by a drop is sent again
+    /// only then. Feature idea #28 (MCP calls ask) reads it too.
+    /// </summary>
+    public bool ReadOnly => _inner.ProtocolTool.Annotations?.ReadOnlyHint == true;
 
     public override string Name => _name;
 
@@ -57,6 +71,12 @@ public sealed class McpTool : AIFunction
     {
         ArgumentNullException.ThrowIfNull(arguments);
         var request = new CallToolRequestParams { Name = ServerToolName, Arguments = Arguments(arguments) };
+        if (_caller is not null)
+        {
+            var outcome = await _caller(this, request, cancellationToken).ConfigureAwait(false);
+            return outcome.Render();
+        }
+
         var result = await _client.CallToolAsync(request, cancellationToken).ConfigureAwait(false);
         return Render(result);
     }

@@ -1198,6 +1198,8 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 
 * Each connected server is a tool group, its tools named `<server>__<tool>` (`gateway__get_current_time`). `/mcp` switches servers and single tools.
 * Servers connect in the background (🔌 on the status bar); a reply started meanwhile gets those already connected.
+* **A server that drops** reconnects once at its next call, or on Enter at its `/mcp` row. A call cut off by the drop is sent again only if the server marks it read-only.
+* A server's changed tool list applies from your next message.
 * **Server text is untrusted:** each text a tool returns reaches the model fenced (`⟪ ⟫`); a failed call starts `Error:`. A server's tool descriptions aren't fenced: trusting a server is your choice in `mcp.json`.
 * **`mcp.json`** (`/mcp`'s **edit** rows open it) takes Claude Desktop's and Claude Code's shape, so a block copied from them works. A server has a `command` (with `args`, `env`, `cwd`) or a `url` (with `headers`), never both:
 
@@ -1226,4 +1228,5 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **Oracle before 23ai:** a `SELECT` calling a function declared `PRAGMA AUTONOMOUS_TRANSACTION` commits what it writes, past the read-only transaction and the rollback. Give the account no such function, or use 23ai.
 * **Large cells in MySQL and PostgreSQL** are read whole before being cut to the answer's size; SQL Server and Oracle read only what they show.
 * **SQLite's `ON CONFLICT REPLACE`:** an `INSERT` into a table declared that way replaces rows with only `data` ticked; the gate sees the statement, not the table.
+* **A hosted MCP server that ends its session** has been tried only against the app's in-process test server, not a real one.
 * **SQL Server `runas` on another machine:** a dropped session the SQL Server driver reconnects, and the sign-in hold against a real domain account, are untried on a second machine.

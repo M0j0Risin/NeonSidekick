@@ -58,6 +58,7 @@ public static class McpRows
 
         string status = server.State switch
         {
+            McpState.Connected when server.Dropped is not null => McpText.StatusDropped,   // 2026-11-19: its tools still offered, back at the next call
             McpState.Connected => McpText.StatusConnected(server.Tools.Count),
             McpState.Connecting => McpText.StatusConnecting,
             McpState.Failed => McpText.StatusFailed(server.Detail ?? ""),
@@ -165,6 +166,7 @@ public static class McpRows
                 string status = server.ShadowedBy is not null ? McpText.StatusShadowed
                     : server.State switch
                     {
+                        McpState.Connected when server.Dropped is not null => McpText.StatusDropped,
                         McpState.Connected => McpText.StatusConnected(server.Tools.Count) + (server.Tools.Count > 0 ? ": " + string.Join(", ", server.Tools.Select(t => t.Name)) : ""),
                         McpState.Connecting => McpText.StatusConnecting,
                         McpState.Failed => McpText.StatusFailed(server.Detail ?? ""),

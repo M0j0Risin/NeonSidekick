@@ -1436,6 +1436,8 @@ internal sealed partial class ChatScreen
         _closeThumbs = closeThumbs;
         _ownsMcp = mcp is null;
         _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
+        // A server that dropped, came back or changed its tools (2026-11-19, feature idea #30) wakes the idle read, so its notice prints at once.
+        _mcp.NoticeQueued += WebNudge;
         _clockTools = ClockTools(time);
         // The sandbox reads the live setting and profile directory on every call: a /cwd save or
         // a profile switch changes the root with nothing to rebind.
@@ -12241,6 +12243,7 @@ internal sealed partial class ChatScreen
                 DrainDiagnostics();
                 // The Web UI's notices (a sign-in, the server's start) and, as a backstop, its server as the settings now say (2026-10-14).
                 PrintWebNotices();
+                PrintMcpNotices();   // a server's drop, reconnect or changed tools (2026-11-19)
                 PrintUpdateLines();   // the update's lines (2026-11-04, self-update), at the idle line alone
                 ShowHomeCameras(idle: true);   // the camera chips' stills (2026-10-27)
                 ReconcileWebUi();
@@ -12756,6 +12759,7 @@ internal sealed partial class ChatScreen
             _webUi.Dispose();
             DisposeShopping();
             _skillRecords.Store.Dispose();
+            _mcp.NoticeQueued -= WebNudge;
             if (_ownsMcp)
             {
                 await _mcp.DisposeAsync().ConfigureAwait(false);
