@@ -66,12 +66,11 @@ public static partial class DatabaseAudit
         _ => "not run",
     };
 
-    /// <summary>The statement as a line keeps it: one line, redacted, scrubbed, cut.</summary>
+    /// <summary>The statement as a line keeps it: one line, then <see cref="ToolRedaction.AuditText"/> (redacted, cut, scrubbed: since 2026-11-20 the cut before the scrub).</summary>
     public static string Statement(string sql)
     {
         ArgumentNullException.ThrowIfNull(sql);
-        string text = NameScrub.Display(ToolRedaction.Text(Whitespace().Replace(sql.Trim(), " ")));
-        return text.Length <= MaxStatementChars ? text : TextCut.Safe(text, MaxStatementChars) + "…";
+        return ToolRedaction.AuditText(Whitespace().Replace(sql.Trim(), " "), MaxStatementChars);
     }
 
     [GeneratedRegex(@"\s+")]

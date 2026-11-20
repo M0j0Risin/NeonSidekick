@@ -899,6 +899,13 @@ public static class RalphText
     public const string ReviewConfirmFallbackNotice =
         Glyph + " Advisor confirm is on and the loop has no checkpoint, so nobody is there to say yes: the model reviews each step instead.";
 
+    /// <summary>
+    /// Headless's twin (2026-11-20, the mcp-ask review's #12): Advisor confirm on and no <c>--allow advisor</c>, so an advisor review falls
+    /// back to the model, said once a loop. Pinned.
+    /// </summary>
+    public const string HeadlessReviewConfirmFallbackNotice =
+        Glyph + " Advisor confirm is on and headless cannot ask, so the model reviews each step instead; --allow advisor lets the advisors review.";
+
     /// <summary>What Advisor confirm's question says the advisor is asked for: the step's review. Pinned.</summary>
     public static string ReviewConfirmQuestion(string stepText) => "review the Ralph loop's step \"" + Flatten(stepText) + "\"";
 

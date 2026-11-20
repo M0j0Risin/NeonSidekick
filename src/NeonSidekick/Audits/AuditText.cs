@@ -241,8 +241,8 @@ public static class AuditText
     /// <summary>A listed report another live NeonSidekick is auditing now (instead of <c>stopped</c>).</summary>
     public const string ElsewhereStatus = "running elsewhere";
 
-    /// <summary>Headless (2026-10-18): no confirm to ask on, so every advisor call would be refused.</summary>
-    public const string ConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model audits alone.";
+    /// <summary>Headless (2026-10-18) without <c>--allow advisor</c> (2026-11-20, the mcp-ask review's #12): every advisor call would be refused.</summary>
+    public const string ConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model audits alone; --allow advisor lets the advisors review.";
 
     /// <summary>Headless: no Esc to stop an audit with no limit; <paramref name="fromCommand"/> when the 0 was typed on the line.</summary>
     public static string HeadlessCapNotice(int cap, bool fromCommand) => fromCommand

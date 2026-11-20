@@ -382,7 +382,7 @@ public class ToolArgumentCheckTests
     [Fact]
     public async Task AnMcpToolsUndeclaredKey_IsRefused_AndItsDeclaredOnesReachTheServer()
     {
-        await using var server = McpPipeServer.Start([("echo", "Echoes.")], closed: true);
+        await using var server = McpPipeServer.Start([("echo", "Echoes.")], options: new McpPipeServerOptions { Closed = true });
         await using var client = await McpClient.CreateAsync(server.ClientTransport);
         var listed = await client.ListToolsAsync((RequestOptions?)null);
         AIFunction tool = new McpTool("pipe", client, listed[0], "pipe__echo");

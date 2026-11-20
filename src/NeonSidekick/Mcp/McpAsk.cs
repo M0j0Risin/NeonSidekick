@@ -32,7 +32,17 @@ public enum McpChangeNote
 /// name on the server, the prefixed name the model and the pane use (<see cref="McpToolName"/>, sanitised), the arguments as sent, and
 /// what the caption may say of its effects.
 /// </summary>
-public sealed record McpAsk(string Server, string ServerTool, string Name, IReadOnlyDictionary<string, JsonElement> Arguments, McpChangeNote Note);
+public sealed record McpAsk(string Server, string ServerTool, string Name, IReadOnlyDictionary<string, JsonElement> Arguments, McpChangeNote Note)
+{
+    /// <summary>
+    /// The live connection's config fingerprint as asked about (2026-11-20, the mcp-ask review's #3, #4, #51): a session allow holds it, and
+    /// a call whose server changed while the pane was open is not sent. Empty where no session built the ask (a test's).
+    /// </summary>
+    public string Fingerprint { get; init; } = "";
+
+    /// <summary>The tool's <see cref="McpTool.DefinitionKey"/> as asked about (#116): a redefined tool asks again. Empty where no session built the ask.</summary>
+    public string Definition { get; init; } = "";
+}
 
 /// <summary>
 /// An approver's answer (2026-11-19, feature idea #28). <see cref="Allowed"/> carries the audit's word for how (<c>allowed once</c>,
@@ -68,7 +78,10 @@ public abstract record McpVerdict
 /// </summary>
 public static class McpAskRule
 {
-    /// <summary>The words <c>"ask"</c> takes, as the problem text names them.</summary>
+    /// <summary>
+    /// The words <c>"ask"</c> takes, as the problem text names them, in <see cref="McpAskMode"/>'s order: the word at index <c>i</c> is mode
+    /// <c>i</c> (2026-11-20, the mcp-ask review's #30, #34: <see cref="TryParse"/> and <see cref="McpText.BadAsk"/> read this one list).
+    /// </summary>
     public static readonly IReadOnlyList<string> Words = ["writes", "always", "never"];
 
     /// <summary>Whether a call to <paramref name="tool"/> asks under <paramref name="mode"/>.</summary>
@@ -104,18 +117,16 @@ public static class McpAskRule
             return true;
         }
 
-        switch (value.Trim().ToLowerInvariant())
+        var word = value.AsSpan().Trim();
+        for (int i = 0; i < Words.Count; i++)
         {
-            case "writes":
+            if (word.Equals(Words[i], StringComparison.OrdinalIgnoreCase))
+            {
+                mode = (McpAskMode)i;
                 return true;
-            case "always":
-                mode = McpAskMode.Always;
-                return true;
-            case "never":
-                mode = McpAskMode.Never;
-                return true;
-            default:
-                return false;
+            }
         }
+
+        return false;
     }
 }

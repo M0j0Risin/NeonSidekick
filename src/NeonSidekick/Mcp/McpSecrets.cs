@@ -12,35 +12,36 @@ namespace NeonSidekick.Mcp;
 /// </summary>
 public static class McpSecrets
 {
-    /// <summary>The words a header's name is judged by, besides <see cref="Shell.ChildEnvironment.SecretWords"/>.</summary>
-    private static readonly string[] HeaderWords = ["AUTH", "KEY", "TOKEN", "SECRET", "PASSWORD", "COOKIE", "CREDENTIAL"];
-
     private const string HeadersKey = "headers";
     private const string EnvKey = "env";
 
     /// <summary>
-    /// Whether a value named <paramref name="name"/> is one to encrypt: a header holding <c>AUTH</c>, <c>KEY</c>, <c>TOKEN</c>, <c>SECRET</c>,
-    /// <c>PASSWORD</c>, <c>COOKIE</c> or <c>CREDENTIAL</c>; an env name holding one of <see cref="Shell.ChildEnvironment.SecretWords"/> or
-    /// <c>AUTH</c>. Without regard to case, anywhere in the name (no prefix rule). Pure.
+    /// Whether a <c>headers</c> or <c>env</c> value is one to encrypt (2026-11-20, the mcp-ask review's #21, #47): its name says it's a secret
+    /// (<see cref="SecretNames.IsSecret"/>, one rule for both), or the value is a URL carrying a password (<c>DATABASE_URL</c>'s
+    /// <c>postgres://app:pw@db</c>, <c>redis://:pw@cache</c>), whatever its name. Pure.
     /// </summary>
-    public static bool IsSecretName(string name, bool header)
+    public static bool IsSecret(string name, string? value)
     {
         ArgumentNullException.ThrowIfNull(name);
-        IEnumerable<string> words = header ? HeaderWords : [.. Shell.ChildEnvironment.SecretWords, "AUTH"];
-        return words.Any(word => name.Contains(word, StringComparison.OrdinalIgnoreCase));
+        return SecretNames.IsSecret(name) || (!string.IsNullOrEmpty(value) && Llm.Tools.ToolRedaction.Url(value) != value);
     }
 
-    /// <summary>Whether <paramref name="value"/> is one to encrypt now: not empty, not a <c>${…}</c> reference, not already sealed.</summary>
+    /// <summary>
+    /// Whether <paramref name="value"/> is one to encrypt now: not empty, holding no <c>${…}</c> reference (since 2026-11-20 anywhere in it,
+    /// <c>Bearer ${GITHUB_TOKEN}</c> too: a reference is expanded at connect and is no secret itself), not already sealed.
+    /// </summary>
     public static bool NeedsSealing(string? value) =>
         !string.IsNullOrEmpty(value)
-        && !(value.StartsWith("${", StringComparison.Ordinal) && value.EndsWith('}'))
+        && !value.Contains("${", StringComparison.Ordinal)
         && !WindowsCredentials.IsSealed(value);
 
     /// <summary>
     /// Encrypts every plain secret of server <paramref name="server"/> in <paramref name="path"/>, and sets each one in
-    /// <paramref name="config"/> to the stored value. Where the store can't encrypt, nothing changes. A failure leaves that value plain and
-    /// working, with a Warn that never holds it; a value changed in the file meanwhile is left alone, silent (the next load sees it). A key
-    /// repeated along the path leaves the server plain, with one Warn. Never throws on IO.
+    /// <paramref name="config"/> to the stored value. Where the store can't encrypt, nothing changes. Every value is encrypted first, then
+    /// all are written in one atomic write (2026-11-20, the mcp-ask review's #42: <see cref="ConnectionsFileEdit.WriteValues"/>, one read and
+    /// one write where each value used to be its own). A failure leaves that value plain and working, with a Warn that never holds it; a
+    /// value changed in the file meanwhile is left alone, silent (the next load sees it); a key repeated along a value's path leaves that
+    /// value plain, with one Warn for the server. Never throws on IO.
     /// </summary>
     public static void EncryptInPlace(string path, string server, McpServerConfig config)
     {
@@ -52,25 +53,55 @@ public static class McpSecrets
             return;
         }
 
-        if (!Seal(path, server, config.Headers, HeadersKey, header: true))
+        var pending = new List<(Dictionary<string, string> Values, string Key, string Sealed)>();
+        var writes = new List<ConnectionsFileEdit.ValueWrite>();
+        Collect(path, server, config.Headers, HeadersKey, pending, writes);
+        Collect(path, server, config.Env, EnvKey, pending, writes);
+        if (writes.Count == 0)
         {
             return;
         }
 
-        Seal(path, server, config.Env, EnvKey, header: false);
+        var failed = ConnectionsFileEdit.WriteValues(path, writes).ToDictionary(e => e.Index, e => e.Error);
+        bool repeatSaid = false;
+        for (int i = 0; i < pending.Count; i++)
+        {
+            var (values, key, sealedValue) = pending[i];
+            switch (failed.GetValueOrDefault(i))
+            {
+                case null:
+                    values[key] = sealedValue;
+                    DiagnosticLog.Info(McpConfigFile.Category, McpText.EncryptedLogLine(path, server, key));
+                    break;
+                case ConnectionsFileEdit.PasswordChanged:
+                    break;
+                case ConnectionsFileEdit.KeyRepeated:
+                    if (!repeatSaid)
+                    {
+                        repeatSaid = true;
+                        DiagnosticLog.Warn(McpConfigFile.Category, McpText.RepeatedKeyLogLine(path, server));
+                    }
+
+                    break;
+                case { } error:
+                    DiagnosticLog.Warn(McpConfigFile.Category, McpText.EncryptFailedLogLine(path, server, key, error));
+                    break;
+            }
+        }
     }
 
-    /// <summary>One dictionary's values; false once a repeated key stopped the server (its Warn written).</summary>
-    private static bool Seal(string path, string server, Dictionary<string, string>? values, string section, bool header)
+    /// <summary>One dictionary's plain secrets, each encrypted now and queued for the one write; a value the store can't encrypt is a Warn and stays plain.</summary>
+    private static void Collect(string path, string server, Dictionary<string, string>? values, string section,
+        List<(Dictionary<string, string> Values, string Key, string Sealed)> pending, List<ConnectionsFileEdit.ValueWrite> writes)
     {
         if (values is not { Count: > 0 })
         {
-            return true;
+            return;
         }
 
-        foreach (var (key, value) in values.ToList())
+        foreach (var (key, value) in values)
         {
-            if (!IsSecretName(key, header) || !NeedsSealing(value))
+            if (!IsSecret(key, value) || !NeedsSealing(value))
             {
                 continue;
             }
@@ -82,71 +113,41 @@ public static class McpSecrets
                 continue;
             }
 
-            string? error = ConnectionsFileEdit.WriteValue(path, ["mcpServers", server, section, key], encrypted.Value!, value);
-            switch (error)
-            {
-                case null:
-                    values[key] = encrypted.Value!;
-                    DiagnosticLog.Info(McpConfigFile.Category, McpText.EncryptedLogLine(path, server, key));
-                    break;
-                case ConnectionsFileEdit.PasswordChanged:
-                    break;
-                case ConnectionsFileEdit.KeyRepeated:
-                    DiagnosticLog.Warn(McpConfigFile.Category, McpText.RepeatedKeyLogLine(path, server));
-                    return false;
-                default:
-                    DiagnosticLog.Warn(McpConfigFile.Category, McpText.EncryptFailedLogLine(path, server, key, error));
-                    break;
-            }
+            pending.Add((values, key, encrypted.Value!));
+            writes.Add(new ConnectionsFileEdit.ValueWrite(["mcpServers", server, section, key], encrypted.Value!, value));
         }
-
-        return true;
     }
 
     /// <summary>
     /// <paramref name="config"/> with every sealed <c>headers</c> and <c>env</c> value decrypted, as a copy (the stored config never holds the
-    /// plain text), or the failed row's detail (<see cref="McpText.CannotReveal"/>) for the first value that can't be read here. A config
-    /// with nothing sealed comes back as it is.
+    /// plain text; <see cref="McpServerConfig.With"/>, new dictionaries), or the failed row's detail (<see cref="McpText.CannotReveal"/>) for
+    /// the first value that can't be read here. A config with nothing sealed comes back as it is (since 2026-11-20, the mcp-ask review's
+    /// #107, judged by the one walk, not a scan before it).
     /// </summary>
     public static (McpServerConfig? Config, string? Error) Reveal(McpServerConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
-        bool sealedAny = (config.Headers?.Values.Any(WindowsCredentials.IsSealed) ?? false) || (config.Env?.Values.Any(WindowsCredentials.IsSealed) ?? false);
-        if (!sealedAny)
-        {
-            return (config, null);
-        }
-
-        var (headers, headerError) = Open(config.Headers);
+        var (headers, headersChanged, headerError) = Open(config.Headers);
         if (headerError is not null)
         {
             return (null, headerError);
         }
 
-        var (env, envError) = Open(config.Env);
+        var (env, envChanged, envError) = Open(config.Env);
         if (envError is not null)
         {
             return (null, envError);
         }
 
-        return (new McpServerConfig
-        {
-            Type = config.Type,
-            Command = config.Command,
-            Args = config.Args,
-            Env = env,
-            Cwd = config.Cwd,
-            Url = config.Url,
-            Headers = headers,
-            Ask = config.Ask,
-            Instructions = config.Instructions,
-        }, null);
+        return headersChanged || envChanged
+            ? (config.With(env: envChanged ? env : null, headers: headersChanged ? headers : null), null)
+            : (config, null);
     }
 
     /// <summary>
     /// Whether two entries are the same server (2026-11-19, <c>/profile push|pull mcp</c>): their fingerprints once each is
     /// <see cref="Reveal"/>ed, since a DPAPI value is randomized and two encrypted copies of one token never read alike; the stored ones
-    /// when either can't be revealed here.
+    /// when either can't be revealed here. <c>ask</c> and <c>instructions</c> count: a push that changes them changes the server.
     /// </summary>
     public static bool SameServer(McpServerConfig a, McpServerConfig b)
     {
@@ -162,14 +163,48 @@ public static class McpSecrets
         return openA is not null && openB is not null && openA.Fingerprint() == openB.Fingerprint();
     }
 
-    private static (Dictionary<string, string>? Values, string? Error) Open(Dictionary<string, string>? values)
+    /// <summary>
+    /// Whether a reload can keep <paramref name="was"/>'s live connection for <paramref name="now"/> (2026-11-20, the mcp-ask review's #16,
+    /// #53, #115): the same connection shape (<see cref="McpServerConfig.ConnectionFingerprint"/>, so <c>ask</c> and <c>instructions</c> don't
+    /// count: those are taken on in place). Equal as stored is the same; a shape that differs with every <c>env</c> and <c>headers</c> value
+    /// blanked is a different server; otherwise the values decide once revealed, since a token sealed again reads differently. A value that
+    /// can't be revealed here is a different server, so the connect's own failure says why.
+    /// </summary>
+    public static bool SameConnection(McpServerConfig was, McpServerConfig now)
+    {
+        ArgumentNullException.ThrowIfNull(was);
+        ArgumentNullException.ThrowIfNull(now);
+        if (was.ConnectionFingerprint() == now.ConnectionFingerprint())
+        {
+            return true;
+        }
+
+        if (Blanked(was).ConnectionFingerprint() != Blanked(now).ConnectionFingerprint())
+        {
+            return false;
+        }
+
+        var (openWas, _) = Reveal(was);
+        var (openNow, _) = Reveal(now);
+        return openWas is not null && openNow is not null && openWas.ConnectionFingerprint() == openNow.ConnectionFingerprint();
+    }
+
+    private static McpServerConfig Blanked(McpServerConfig config) =>
+        config.With(env: BlankValues(config.Env), headers: BlankValues(config.Headers));
+
+    private static Dictionary<string, string>? BlankValues(Dictionary<string, string>? values) =>
+        values?.ToDictionary(v => v.Key, _ => "", values.Comparer);
+
+    /// <summary>One dictionary with its sealed values opened, as a new one; whether any was sealed; or the first one's error.</summary>
+    private static (Dictionary<string, string>? Values, bool Changed, string? Error) Open(Dictionary<string, string>? values)
     {
         if (values is null)
         {
-            return (null, null);
+            return (null, false, null);
         }
 
         var open = new Dictionary<string, string>(values.Comparer);
+        bool changed = false;
         foreach (var (key, value) in values)
         {
             if (!WindowsCredentials.IsSealed(value))
@@ -181,12 +216,13 @@ public static class McpSecrets
             var plain = WindowsCredentials.Unprotect(value);
             if (plain.Error is { } error)
             {
-                return (null, McpText.CannotReveal(key, error));
+                return (null, false, McpText.CannotReveal(key, error));
             }
 
             open[key] = plain.Value!;
+            changed = true;
         }
 
-        return (open, null);
+        return (open, changed, null);
     }
 }

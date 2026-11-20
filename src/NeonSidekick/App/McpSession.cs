@@ -25,6 +25,29 @@ public sealed record McpServerStatus(string Name, McpScope Scope, McpScope? Shad
     public bool Startable => ShadowedBy is null;
 
     /// <summary>
+    /// The first of <paramref name="servers"/> listing a tool named <paramref name="name"/> (the model's prefixed name), with that tool; null
+    /// for none (2026-11-20, the mcp-ask review's #119). Each caller passes its own rows: prefixed names are unique within one server only
+    /// (<c>my.srv</c> and <c>my_srv</c> both make <c>my_srv__echo</c>), so which rows are searched decides the pick. Pure.
+    /// </summary>
+    public static (McpServerStatus Server, McpTool Tool)? FindTool(IEnumerable<McpServerStatus> servers, string name)
+    {
+        ArgumentNullException.ThrowIfNull(servers);
+        ArgumentNullException.ThrowIfNull(name);
+        foreach (var server in servers)
+        {
+            foreach (var tool in server.Tools)
+            {
+                if (string.Equals(tool.Name, name, StringComparison.Ordinal))
+                {
+                    return (server, tool);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Why a connected server's client is gone (2026-11-19, feature idea #30): <c>(exit code 1)</c>, <c>(HTTP 404)</c>, or empty when
     /// that isn't known; null while it's live. The row stays <see cref="McpState.Connected"/>, its tools still offered, and the next call
     /// reconnects first. Apart from <see cref="Detail"/>, the <see cref="McpState.Failed"/> reason. An init property, not a positional one,
@@ -39,11 +62,30 @@ public sealed record McpServerStatus(string Name, McpScope Scope, McpScope? Shad
     /// </summary>
     public McpAskMode Ask { get; init; }
 
-    /// <summary>How many characters of notes the connected server sends (2026-11-19, feature idea #59): null for none. The row never carries the text.</summary>
+    /// <summary>
+    /// How many characters of notes the connected server sends (2026-11-19, feature idea #59): null for none; of notes that were cut
+    /// (<see cref="NotesRaw"/> set), the characters of their own text kept. The row never carries the text.
+    /// </summary>
     public int? NotesLength { get; init; }
+
+    /// <summary>The notes' whole length when they were cut (2026-11-20, the mcp-ask review's #43): the footer's <c>2000 of 5000</c>. Null when they weren't.</summary>
+    public int? NotesRaw { get; init; }
+
+    /// <summary>
+    /// Whether the servers' notes together pass the total with every server's tools offered, so this one's are left out (2026-11-20, #43): the
+    /// footer's <c>left out</c>. A turn that offers fewer tools may fit them.
+    /// </summary>
+    public bool NotesLeftOut { get; init; }
 
     /// <summary>Whether the server's notes are kept: false for <c>"instructions": false</c> in its entry.</summary>
     public bool NotesOn { get; init; } = true;
+
+    /// <summary>
+    /// Whether <see cref="Detail"/> is the app's own words (2026-11-20, the mcp-ask review's #118): a cancel, a timeout, a drop on the
+    /// retried call, a value that can't be decrypted. A detail that isn't (a connect exception's message, maybe the server's) is fenced
+    /// when the model reads it.
+    /// </summary>
+    public bool DetailIsApps { get; init; }
 }
 
 /// <summary>One connected server's tools, for the <c>/usage</c> and <c>/mcp</c> groups.</summary>
@@ -88,20 +130,28 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// One live client: the entry and the timeout it was started with (a reconnect reuses both, so an <c>mcp.json</c> edit waits for a
-    /// reload), its tools, and <see cref="Dropped"/> once its session ended without the app stopping it. <see cref="Instructions"/> (2026-11-19,
-    /// feature idea #59) is the server's own text as the handshake gave it, cut at <see cref="McpText.NotesPerServer"/>, or null for none
-    /// or an entry that opts out: read at each connect, so a reconnect refreshes it.
+    /// reload), its tools, and <see cref="Dropped"/> once its session ended without the app stopping it. <see cref="Notes"/> (2026-11-19,
+    /// feature idea #59) is the server's own text as the handshake gave it, scrubbed and cut (<see cref="McpNotes.Cut"/>), or null for none:
+    /// read at each connect, so a reconnect refreshes it. Kept whatever the entry says (2026-11-20), so a reload that turns
+    /// <c>"instructions"</c> back on, which updates the connection in place, has them; <see cref="Instructions"/> is what the prompt gets.
     /// </summary>
-    private sealed record Connection(McpClient Client, string Fingerprint, IReadOnlyList<McpTool> Tools, McpServerEntry Entry, int TimeoutSeconds, Listing Listing, string? Instructions)
+    private sealed record Connection(McpClient Client, string Fingerprint, IReadOnlyList<McpTool> Tools, McpServerEntry Entry, int TimeoutSeconds, Listing Listing, McpCutNotes? Notes)
     {
         public string? Dropped { get; init; }
+
+        /// <summary>The notes the prompt carries: <see cref="Notes"/>' text, or null for none or an entry that opts out.</summary>
+        public string? Instructions => Entry.Config.InstructionsOn ? Notes?.Text : null;
 
         /// <summary>Marked dropped, or its session already over (the watcher not run yet).</summary>
         public bool Dead => Dropped is not null || Client.Completion.IsCompleted;
     }
 
-    /// <summary>What a call has to go on: the server's live connection, or the error the call returns instead.</summary>
-    private readonly record struct Ready(Connection? Live, McpCallOutcome? Refusal, string? Reconnected);
+    /// <summary>
+    /// What a call has to go on: the server's live connection and the tool as its current list has it, or the error the call returns
+    /// instead. <see cref="NotBack"/> marks a refusal for a server that didn't come back (2026-11-20, the mcp-ask review's #54): its own
+    /// notice says so, and a held "reconnected" notice would contradict it.
+    /// </summary>
+    private readonly record struct Ready(Connection? Live, McpCallOutcome? Refusal, string? Reconnected, bool NotBack = false, McpTool? Tool = null);
 
     /// <summary>What one send came to: the server's answer, or a drop with what the client knew about it.</summary>
     private readonly record struct Sent(CallToolResult? Result, ClientCompletionDetails? Details);
@@ -121,6 +171,17 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     private IReadOnlyList<AIFunction> _tools = [];
     private IReadOnlyList<McpServerTools> _serverTools = [];
     private IReadOnlyList<McpServerNote> _notes = [];
+    private IReadOnlySet<string> _askingNames = new HashSet<string>(StringComparer.Ordinal);
+    private HashSet<string> _notesLeftOut = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The keys of the lines said once per session (2026-11-20, the mcp-ask review's #7: once per process before, so a second session never
+    /// said them): a server's notes cut or left out, an unset <c>${NAME}</c>. Its own lock.
+    /// </summary>
+    private readonly HashSet<string> _loggedOnce = new(StringComparer.Ordinal);
+
+    /// <summary>Lines owed while the snapshot lock was held, written once it is let go (<see cref="FlushLogs"/>): the session never logs under it.</summary>
+    private readonly ConcurrentQueue<(string Line, bool Warn)> _owedLogs = new();
     private bool _attempted;
     private bool _disposed;
 
@@ -158,16 +219,48 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// </summary>
     public Func<McpAsk, CancellationToken, Task<McpVerdict>>? Approver { get; set; }
 
-    /// <summary>The names of the offered tools that would ask under their server's <c>ask</c>: what an unattended Ralph pass leaves out.</summary>
+    /// <summary>
+    /// The names of the offered tools that would ask under their server's <c>ask</c>: what an unattended Ralph pass, and a screen with no
+    /// pane, leave out. Worked out when the rows are published (2026-11-20, the mcp-ask review's #69), not at every turn.
+    /// </summary>
     public IReadOnlySet<string> AskingNames()
     {
         lock (_snapshot)
         {
-            return _servers
-                .Where(r => r.State == McpState.Connected)
-                .SelectMany(r => r.Tools.Where(t => McpAskRule.Asks(r.Ask, t)).Select(t => t.Name))
-                .ToHashSet(StringComparer.Ordinal);
+            return _askingNames;
         }
+    }
+
+    /// <summary>
+    /// A session allow's key (2026-11-20, the mcp-ask review's #3, #51, #116): the server's name as the catalog holds it, the tool's as the
+    /// server names it, the server's config fingerprint and the tool's <see cref="McpTool.DefinitionKey"/> as approved, joined with
+    /// <c>\0</c>. A reload to a new command or url, a changed <c>ask</c> or a redefined tool makes a new key, so it asks again. Pure.
+    /// </summary>
+    public static string McpAllowKey(string server, string serverTool, string fingerprint, string definition) =>
+        string.Join('\0', server, serverTool, fingerprint, definition);
+
+    /// <summary>
+    /// <see cref="McpAllowKey"/> for the offered tool named <paramref name="prefixedName"/> (the model's name), from its live connection and
+    /// current listing, or null when no connected server offers it: what the help's live line and <c>/mcp</c> look a session allow up by.
+    /// </summary>
+    public string? AllowKeyFor(string prefixedName)
+    {
+        ArgumentNullException.ThrowIfNull(prefixedName);
+        lock (_snapshot)
+        {
+            foreach (var live in _connections.Values)
+            {
+                foreach (var tool in live.Tools)
+                {
+                    if (string.Equals(tool.Name, prefixedName, StringComparison.Ordinal))
+                    {
+                        return McpAllowKey(live.Entry.Name, tool.ServerToolName, live.Fingerprint, tool.DefinitionKey);
+                    }
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Whether either file names a server or has a problem worth showing.</summary>
@@ -239,8 +332,19 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         return environment;
     }
 
-    /// <summary>The two files merged as they stand on disk.</summary>
-    public McpMerged Read() => McpCatalog.Merge(McpConfigFile.Load(ProfilePath), McpConfigFile.Load(GlobalPath));
+    /// <summary>
+    /// The two files merged as they stand on disk. With <paramref name="seal"/> (the default: connect, reload) their plain tokens are
+    /// encrypted first; without it (2026-11-20, the mcp-ask review's #84: a read that only looks, such as whether any server is set up)
+    /// nothing is written or logged.
+    /// </summary>
+    public McpMerged Read(bool seal = true) => McpCatalog.Merge(McpConfigFile.Load(ProfilePath, seal), McpConfigFile.Load(GlobalPath, seal));
+
+    /// <summary>Both files read from the disk at the next <see cref="Read"/> (2026-11-20, #17): a connect and a reload never trust the cache's stamp.</summary>
+    private void ForgetCachedFiles()
+    {
+        Computers.ConfigCache.Invalidate(ProfilePath);
+        Computers.ConfigCache.Invalidate(GlobalPath);
+    }
 
     /// <summary>
     /// Drops every client, re-reads both files and starts every server that is on, in parallel; the
@@ -255,6 +359,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         try
         {
             await DisposeAllAsync().ConfigureAwait(false);
+            ForgetCachedFiles();
             var merged = Read();
             var disabled = ToolsText.DisabledSet(effective.McpServersDisabled);
             var rows = merged.Entries.Select(e => Initial(e, effective.McpServers, disabled)).ToList();
@@ -368,7 +473,10 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// <summary>
     /// Re-reads both files and reconciles: a new or changed server is started, a gone one stopped, an
     /// unchanged connected one kept as it is. Returns the counts for the notice. Since 2026-11-19 a dropped one is started again even
-    /// when its config didn't change, counted like a changed one: kept, its row would hide a dead client.
+    /// when its config didn't change, counted like a changed one: kept, its row would hide a dead client. Since 2026-11-20 (the mcp-ask
+    /// review's #16, #115) "changed" means a change to how it connects (<see cref="McpSecrets.SameConnection"/>): a new <c>ask</c> or
+    /// <c>instructions</c>, or a token typed again and sealed anew, updates the kept connection in place, and a session allow keyed to the
+    /// old config asks again.
     /// </summary>
     public async Task<(int Added, int Removed, int Kept)> ReloadAsync(AppSettingsData effective, CancellationToken cancellationToken)
     {
@@ -376,18 +484,22 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            ForgetCachedFiles();
             var merged = Read();
             var disabled = ToolsText.DisabledSet(effective.McpServersDisabled);
             var entries = merged.Entries.Where(e => e.Startable).ToDictionary(e => e.Name, StringComparer.Ordinal);   // a shadowed global shares its name with the profile's
-            List<string> stale;
+            List<(string Name, Connection Live)> held;
             lock (_snapshot)
             {
                 // Read under the snapshot lock (2026-11-19): the watcher and the background listing write the connections without the gate.
-                stale = _connections
-                    .Where(c => !entries.TryGetValue(c.Key, out var entry) || !entry.Startable || entry.Config.Fingerprint() != c.Value.Fingerprint || c.Value.Dead)
-                    .Select(c => c.Key)
-                    .ToList();
+                held = _connections.Select(c => (c.Key, c.Value)).ToList();
             }
+
+            // Judged outside the lock: SameConnection may decrypt.
+            var stale = held
+                .Where(c => !entries.TryGetValue(c.Name, out var entry) || c.Live.Dead || !McpSecrets.SameConnection(c.Live.Entry.Config, entry.Config))
+                .Select(c => c.Name)
+                .ToList();
 
             foreach (string name in stale)
             {
@@ -401,8 +513,17 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
                 var rows = new List<McpServerStatus>();
                 foreach (var entry in merged.Entries)
                 {
-                    if (_connections.TryGetValue(entry.Name, out var live))
+                    // Only the startable entry keeps the connection (2026-11-20, the mcp-ask review's #1): a shadowed global of the same name
+                    // falls through to its own Off row, not a second connected one.
+                    if (entry.Startable && _connections.TryGetValue(entry.Name, out var live))
                     {
+                        string fingerprint = entry.Config.Fingerprint();
+                        if (fingerprint != live.Fingerprint)
+                        {
+                            live = live with { Entry = entry, Fingerprint = fingerprint };
+                            _connections[entry.Name] = live;
+                        }
+
                         rows.Add(ConnectedFacts(new McpServerStatus(entry.Name, entry.Scope, null, true, McpState.Connected, null, live.Tools, entry.Config.Describe()) { Dropped = live.Dropped }, live));
                         kept++;
                         continue;
@@ -419,6 +540,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
                 Publish(rows, merged.Problems, attempted: _attempted || toStart.Count > 0);
             }
 
+            FlushLogs();
             var outcomes = await Task.WhenAll(toStart.Select(e => ConnectOneAsync(e, effective.McpConnectTimeoutSeconds, cancellationToken))).ConfigureAwait(false);
             foreach (var outcome in outcomes)
             {
@@ -460,22 +582,32 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     private async Task<McpServerStatus> ConnectOneAsync(McpServerEntry entry, int timeoutSeconds, CancellationToken cancellationToken)
     {
         string name = entry.Name;
-        var started = _time.GetTimestamp();
+        long started = 0;
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        budget.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-        // A stored value decrypted only here (2026-11-19, feature idea #29): the transport gets the plain copy, while the entry, the
-        // fingerprint and the row keep the stored config. A value that can't be read here fails the server; nothing starts.
-        var revealed = McpSecrets.Reveal(entry.Config);
-        if (revealed.Error is { } unreadable)
-        {
-            DiagnosticLog.Info(Category, McpText.FailedLogLine(name, unreadable));
-            return new McpServerStatus(name, entry.Scope, null, true, McpState.Failed, unreadable, [], entry.Config.Describe());
-        }
-
         McpClient? client = null;
         try
         {
-            var transport = _transport(revealed.Config!, name);
+            // A stored value decrypted only here (2026-11-19, feature idea #29): the transport gets the plain copy, while the entry, the
+            // fingerprint and the row keep the stored config. A value that can't be read here fails the server; nothing starts. Inside the
+            // try since 2026-11-20 (the mcp-ask review's #98), so an unexpected throw is a failed row, and before the budget starts: a
+            // Keychain prompt waits on the user, not on the server (DPAPI never prompts).
+            var revealed = McpSecrets.Reveal(entry.Config);
+            if (revealed.Error is { } unreadable)
+            {
+                DiagnosticLog.Info(Category, McpText.FailedLogLine(name, unreadable));
+                return new McpServerStatus(name, entry.Scope, null, true, McpState.Failed, unreadable, [], entry.Config.Describe()) { DetailIsApps = true };
+            }
+
+            // ${NAME} filled from the child environment (2026-11-20, the mcp-ask review's #72), on a copy: the cached config keeps its text.
+            var (config, unset) = McpReferences.Expand(revealed.Config!, Shell.ChildEnvironment.ForReference);
+            foreach (var reference in unset)
+            {
+                LogOnce("unset\0" + name + "\0" + reference.Key + "\0" + reference.Name, McpText.UnsetReferenceLogLine(name, reference.Key, reference.Name), warn: true);
+            }
+
+            started = _time.GetTimestamp();
+            budget.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            var transport = _transport(config, name);
             var options = new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = ClientName, Version = AppVersion() },
@@ -483,14 +615,15 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
             };
             client = await McpClient.CreateAsync(transport, options, null, budget.Token).ConfigureAwait(false);
             // The server's notes (2026-11-19, feature idea #59) only through the SDK's property, so a later spec that moves them keeps working.
-            string? instructions = entry.Config.InstructionsOn ? McpNotes.Cut(name, client.ServerInstructions) : null;
+            var notes = McpNotes.Cut(name, client.ServerInstructions, entry.Config.InstructionsOn ? (key, line) => LogOnce(key, line) : null);
             var listed = await client.ListToolsAsync((ModelContextProtocol.RequestOptions?)null, budget.Token).ConfigureAwait(false);
             var tools = BuildTools(name, client, listed);
             var elapsed = _time.GetElapsedTime(started);
             var connected = client;
+            var connection = new Connection(connected, entry.Config.Fingerprint(), tools, entry, timeoutSeconds, new Listing(), notes);
             lock (_snapshot)
             {
-                _connections[name] = new Connection(connected, entry.Config.Fingerprint(), tools, entry, timeoutSeconds, new Listing(), instructions);
+                _connections[name] = connection;
             }
 
             // The watcher only after the store (2026-11-19): a client that died since CreateAsync finds itself current, and its finished
@@ -502,11 +635,14 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
                 return ValueTask.CompletedTask;
             });
             DiagnosticLog.Info(Category, McpText.ConnectedLogLine(name, tools.Count, elapsed));
-            return new McpServerStatus(name, entry.Scope, null, true, McpState.Connected, null, tools, entry.Config.Describe());
+            FlushLogs();
+            // With the connection's facts (2026-11-20, the mcp-ask review's #68): a caller that publishes this row as it is shows them too.
+            return ConnectedFacts(new McpServerStatus(name, entry.Scope, null, true, McpState.Connected, null, tools, entry.Config.Describe()), connection);
         }
         catch (Exception ex)
         {
-            string detail = ex is OperationCanceledException
+            bool cancelled = ex is OperationCanceledException;
+            string detail = cancelled
                 ? (cancellationToken.IsCancellationRequested ? McpText.Cancelled : McpText.TimedOut(timeoutSeconds))
                 : LogText.Excerpt(ex.Message);
             DiagnosticLog.Info(Category, McpText.FailedLogLine(name, detail));
@@ -515,7 +651,8 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
                 await DisposeQuietlyAsync(client).ConfigureAwait(false);
             }
 
-            return new McpServerStatus(name, entry.Scope, null, true, McpState.Failed, detail, [], entry.Config.Describe());
+            FlushLogs();
+            return new McpServerStatus(name, entry.Scope, null, true, McpState.Failed, detail, [], entry.Config.Describe()) { DetailIsApps = cancelled };
         }
     }
 
@@ -570,6 +707,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
             }
         }
 
+        FlushLogs();
         DiagnosticLog.Info(Category, McpText.DroppedLogLine(name, reason));
         if (details is StdioClientCompletionDetails { StandardErrorTail: { Count: > 0 } tail })
         {
@@ -583,17 +721,14 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// drops on that retry, or on the call right after its reconnect, is taken as crashing on it and goes <see cref="McpState.Failed"/>.
     /// Every one of those is a returned <c>Error:</c> result. The turn's own cancel is rethrown; any other exception from a server whose
     /// session is still alive is an answer and is thrown as before.
+    /// <para>A call that asks, or one that may change things and doesn't (<c>"ask": "never"</c>), is audited with one line once it's over
+    /// (2026-11-20, the mcp-ask review's #121 and #15): the decision and what came of it, <c>ran</c>, <c>error</c>, <c>not sent</c>,
+    /// <c>dropped, may have changed something</c>, <c>canceled</c> or <c>failed: …</c>, written in a <c>finally</c> so a throw is audited too.</para>
     /// </summary>
     private async ValueTask<McpCallOutcome> CallAsync(McpTool tool, CallToolRequestParams request, CancellationToken cancellationToken)
     {
         string name = tool.ServerName;
-        string toolName = tool.ServerToolName;
-        var ready = Usable(name, toolName);
-        if (ready.Refusal is null && (ready.Live is null || ready.Live.Dead))
-        {
-            ready = await ReconnectForCallAsync(name, toolName, ready.Live?.Client, null, cancellationToken).ConfigureAwait(false);
-        }
-
+        var ready = await ResolveAsync(name, tool, null, cancellationToken).ConfigureAwait(false);
         if (ready.Refusal is { } refused)
         {
             return refused;
@@ -602,104 +737,187 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         // The reconnected notice waits for the call (2026-11-19): a server that drops on it again gives the one "didn't come back" notice.
         string? reconnected = ready.Reconnected;
         var live = ready.Live!;
-        if (Offered(live, tool) is not { } sending)
-        {
-            Reconnected(name, reconnected);
-            return McpCallOutcome.Failed(McpText.NoLongerOffersError(name, tool.ServerToolName));
-        }
+        var sending = ready.Tool!;
 
         // The ask (2026-11-19, feature idea #28): judged on the tool as the current list describes it, right before the send.
-        var mode = live.Entry.Config.AskMode;
-        var arguments = (IReadOnlyDictionary<string, System.Text.Json.JsonElement>?)request.Arguments?.ToDictionary(StringComparer.Ordinal);
-        if (McpAskRule.Asks(mode, sending))
+        bool asks = McpAskRule.Asks(live.Entry.Config.AskMode, sending);
+        if (!asks && sending.ReadOnly)
         {
-            var ask = new McpAsk(name, toolName, sending.Name, arguments ?? new Dictionary<string, System.Text.Json.JsonElement>(), McpAskRule.Note(sending));
-            var verdict = Approver is { } approver ? await approver(ask, cancellationToken).ConfigureAwait(false) : McpVerdict.Nobody;
-            switch (verdict)
-            {
-                case McpVerdict.Allowed(var how):
-                    DiagnosticLog.Info(Category, McpText.AuditLogLine(sending.Name, how, arguments));
-                    break;
-                case McpVerdict.NotAsked(var tail):
-                    DiagnosticLog.Info(Category, McpText.AuditLogLine(sending.Name, McpText.NotAskedWord, arguments));
-                    Reconnected(name, reconnected);
-                    return McpCallOutcome.Failed(McpText.NotAskedError(sending.Name, tail));
-                default:
-                    DiagnosticLog.Info(Category, McpText.AuditLogLine(sending.Name, McpText.DeniedWord, arguments));
-                    Reconnected(name, reconnected);
-                    return McpCallOutcome.Failed(McpText.DeniedError(sending.Name));
-            }
-
-            // The pane may have waited: the server can have been switched off, removed, or dropped meanwhile. A dropped one reconnects first
-            // (nothing was sent, so that's safe for any tool) and the call goes out without asking again: the user said yes to this call.
-            var after = Usable(name, toolName);
-            if (after.Refusal is null && (after.Live is null || after.Live.Dead))
-            {
-                after = await ReconnectForCallAsync(name, toolName, after.Live?.Client, null, cancellationToken).ConfigureAwait(false);
-            }
-
-            if (after.Refusal is { } refusedAfter)
-            {
-                Reconnected(name, reconnected);
-                return refusedAfter;
-            }
-
-            reconnected = after.Reconnected ?? reconnected;
-            live = after.Live!;
-            if (Offered(live, tool) is not { } still)
-            {
-                Reconnected(name, reconnected);
-                return McpCallOutcome.Failed(McpText.NoLongerOffersError(name, tool.ServerToolName));
-            }
-
-            sending = still;
-        }
-        else if (!sending.ReadOnly)
-        {
-            DiagnosticLog.Info(Category, McpText.AuditLogLine(sending.Name, McpText.RanUnasked, arguments));
+            return (await SendAndRecoverAsync(name, tool, live, sending, request, reconnected, asked: false, cancellationToken).ConfigureAwait(false)).Outcome;
         }
 
+        // Only the audited calls copy the arguments and write their JSON, once (2026-11-20, the mcp-ask review's #10).
+        var arguments = (IReadOnlyDictionary<string, System.Text.Json.JsonElement>?)request.Arguments?.ToDictionary(StringComparer.Ordinal)
+            ?? new Dictionary<string, System.Text.Json.JsonElement>();
+        string json = McpText.ArgumentsJson(arguments, indented: false, redact: true);
+        string audited = sending.Name;
+        string decision = asks ? McpText.DeniedWord : McpText.RanUnasked;
+        string outcome = McpText.OutcomeNotSent;
+        bool decided = !asks;
+        try
+        {
+            if (asks)
+            {
+                var ask = new McpAsk(name, sending.ServerToolName, sending.Name, arguments, McpAskRule.Note(sending))
+                {
+                    Fingerprint = live.Fingerprint,
+                    Definition = sending.DefinitionKey,
+                };
+                var verdict = Approver is { } approver ? await approver(ask, cancellationToken).ConfigureAwait(false) : McpVerdict.Nobody;
+                decided = true;
+                switch (verdict)
+                {
+                    case McpVerdict.Allowed(var how):
+                        decision = how;
+                        break;
+                    case McpVerdict.NotAsked(var tail):
+                        decision = McpText.NotAskedWord;
+                        Reconnected(name, reconnected);
+                        return McpCallOutcome.Failed(McpText.NotAskedError(sending.Name, tail));
+                    default:
+                        Reconnected(name, reconnected);
+                        return McpCallOutcome.Failed(McpText.DeniedError(sending.Name));
+                }
+
+                // The pane may have waited: the server can have been switched off, removed, dropped or changed meanwhile. A dropped one
+                // reconnects first (nothing was sent, so that's safe for any tool) and the call goes out without asking again: the user said
+                // yes to this call. One whose config changed is refused (2026-11-20, #4): the yes was to the server as it was.
+                var after = await ResolveAsync(name, tool, live.Fingerprint, cancellationToken).ConfigureAwait(false);
+                if (after.Refusal is { } refusedAfter)
+                {
+                    if (!after.NotBack)
+                    {
+                        Reconnected(name, reconnected);
+                    }
+
+                    return refusedAfter;
+                }
+
+                reconnected = after.Reconnected ?? reconnected;
+                live = after.Live!;
+                sending = after.Tool!;
+            }
+
+            var sent = await SendAndRecoverAsync(name, tool, live, sending, request, reconnected, asked: asks, cancellationToken).ConfigureAwait(false);
+            outcome = sent.Word;
+            return sent.Outcome;
+        }
+        catch (OperationCanceledException)
+        {
+            outcome = McpText.OutcomeCanceled;
+            if (!decided)
+            {
+                // A stop on the pane (2026-11-20, #23) is a no, and the reconnect the call waited on is still said.
+                decision = McpText.DeniedWord;
+                Reconnected(name, reconnected);
+            }
+
+            throw;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            outcome = McpText.OutcomeFailed(ex.GetType().Name);
+            throw;
+        }
+        finally
+        {
+            DiagnosticLog.Info(Category, McpText.AuditLogLine(audited, decision, outcome, json));
+        }
+    }
+
+    /// <summary>
+    /// The server's connection and the tool as its current list has it (2026-11-20, the mcp-ask review's #40: the one path before the ask
+    /// and after it): <see cref="Usable"/>, a reconnect of a dead one, then <see cref="Offered"/>. With <paramref name="asked"/> (the
+    /// fingerprint the pane asked about) a connection whose config changed meanwhile is refused (#4). A refusal after a reconnect says that
+    /// reconnect itself; a success leaves it to the call.
+    /// </summary>
+    private async Task<Ready> ResolveAsync(string name, McpTool tool, string? asked, CancellationToken cancellationToken)
+    {
+        var ready = Usable(name, tool.ServerToolName);
+        if (ready.Refusal is null && (ready.Live is null || ready.Live.Dead))
+        {
+            ready = await ReconnectForCallAsync(name, tool.ServerToolName, ready.Live?.Client, null, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (ready.Refusal is not null)
+        {
+            return ready;
+        }
+
+        var live = ready.Live!;
+        if (asked is not null && !string.Equals(live.Fingerprint, asked, StringComparison.Ordinal))
+        {
+            Reconnected(name, ready.Reconnected);
+            return new Ready(null, McpCallOutcome.Failed(McpText.ChangedWhileAsking(name)), null);
+        }
+
+        if (Offered(live, tool) is not { } offered)
+        {
+            Reconnected(name, ready.Reconnected);
+            return new Ready(null, McpCallOutcome.Failed(McpText.NoLongerOffersError(name, tool.ServerToolName)), null);
+        }
+
+        return ready with { Tool = offered };
+    }
+
+    /// <summary>
+    /// The send and what a drop makes of it, with the audit's word for each end: <c>ran</c> or <c>error</c> for an answer, <c>dropped, may
+    /// have changed something</c> for every end after a first send that got none, whatever came next. After a drop the call goes again only
+    /// when the reconnected listing still marks the tool read-only, and it was asked already or its server's <c>ask</c> wouldn't ask now
+    /// (2026-11-20, the mcp-ask review's #14): the resend is judged on the server as it came back.
+    /// </summary>
+    private async Task<(McpCallOutcome Outcome, string Word)> SendAndRecoverAsync(string name, McpTool tool, Connection live, McpTool sending, CallToolRequestParams request, string? reconnected, bool asked, CancellationToken cancellationToken)
+    {
         var first = await SendAsync(live, request, cancellationToken).ConfigureAwait(false);
         if (first.Result is { } answer)
         {
             Reconnected(name, reconnected);
-            return McpCallOutcome.Answered(answer);
+            return (McpCallOutcome.Answered(answer), RanWord(answer));
         }
 
         if (reconnected is not null)
         {
             // Dropped again right after its reconnect: no second one for this call.
-            return await DroppedAgainAsync(name, live, first.Details).ConfigureAwait(false);
+            return (await DroppedAgainAsync(name, live, first.Details).ConfigureAwait(false), McpText.OutcomeDropped);
         }
 
-        var again = await ReconnectForCallAsync(name, toolName, live.Client, first.Details, cancellationToken).ConfigureAwait(false);
+        var again = await ReconnectForCallAsync(name, tool.ServerToolName, live.Client, first.Details, cancellationToken).ConfigureAwait(false);
         if (again.Refusal is { } gone)
         {
-            return gone;
+            return (gone, McpText.OutcomeDropped);
         }
 
         var back = again.Live!;
         if (!sending.ReadOnly)
         {
             Reconnected(name, again.Reconnected);
-            return McpCallOutcome.Failed(McpText.DroppedNotResentError(name));
+            return (McpCallOutcome.Failed(McpText.DroppedNotResentError(name)), McpText.OutcomeDropped);
         }
 
-        if (Offered(back, tool) is null)
+        if (Offered(back, tool) is not { } fresh)
         {
             Reconnected(name, again.Reconnected);
-            return McpCallOutcome.Failed(McpText.NoLongerOffersError(name, tool.ServerToolName));
+            return (McpCallOutcome.Failed(McpText.NoLongerOffersError(name, tool.ServerToolName)), McpText.OutcomeDropped);
+        }
+
+        if (!fresh.ReadOnly || (!asked && McpAskRule.Asks(back.Entry.Config.AskMode, fresh)))
+        {
+            Reconnected(name, again.Reconnected);
+            return (McpCallOutcome.Failed(McpText.DroppedNotResentError(name)), McpText.OutcomeDropped);
         }
 
         var second = await SendAsync(back, request, cancellationToken).ConfigureAwait(false);
         if (second.Result is { } retried)
         {
             Reconnected(name, again.Reconnected);
-            return McpCallOutcome.Answered(retried);
+            return (McpCallOutcome.Answered(retried), McpText.OutcomeDropped);
         }
 
-        return await DroppedAgainAsync(name, back, second.Details).ConfigureAwait(false);
+        return (await DroppedAgainAsync(name, back, second.Details).ConfigureAwait(false), McpText.OutcomeDropped);
     }
+
+    /// <summary>An answer's audit word: <c>error</c> for an <c>isError</c> result, else <c>ran</c>.</summary>
+    private static string RanWord(CallToolResult answer) => answer.IsError == true ? McpText.OutcomeError : McpText.OutcomeRan;
 
     /// <summary>The tool as the server's current list has it, by its name on the server, or null when the list no longer holds it.</summary>
     private static McpTool? Offered(Connection live, McpTool tool) =>
@@ -730,7 +948,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
 
             return Row(name) switch
             {
-                { State: McpState.Failed } row => new Ready(null, NotBack(name, row.Detail ?? ""), null),
+                { State: McpState.Failed } row => new Ready(null, NotBack(row), null, NotBack: true),
                 { State: McpState.Connecting } => new Ready(null, null, null),   // a connect holds the gate: wait for it
                 _ => new Ready(null, McpCallOutcome.Failed(McpText.NoLongerOffersError(name, tool)), null),
             };
@@ -781,7 +999,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
 
             if (outcome.State != McpState.Connected)
             {
-                return new Ready(null, NotBack(name, outcome.Detail ?? ""), null);
+                return new Ready(null, NotBack(outcome), null, NotBack: true);
             }
 
             lock (_snapshot)
@@ -833,6 +1051,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
             PublishRow(outcome);
         }
 
+        FlushLogs();
         DiagnosticLog.Info(Category, McpText.ReconnectFailedLogLine(name, outcome.Detail ?? ""));
         if (!quiet)
         {
@@ -848,7 +1067,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// </summary>
     private async Task<McpCallOutcome> DroppedAgainAsync(string name, Connection live, ClientCompletionDetails? details)
     {
-        var failed = new McpServerStatus(name, live.Entry.Scope, null, true, McpState.Failed, McpText.DroppedAgainDetail, [], live.Entry.Config.Describe());
+        var failed = new McpServerStatus(name, live.Entry.Scope, null, true, McpState.Failed, McpText.DroppedAgainDetail, [], live.Entry.Config.Describe()) { DetailIsApps = true };
         MarkDropped(name, live.Client, details);
         bool ours;
         lock (_snapshot)
@@ -861,6 +1080,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
             }
         }
 
+        FlushLogs();
         if (ours)
         {
             await DisposeQuietlyAsync(live.Client).ConfigureAwait(false);
@@ -908,14 +1128,16 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
 
     /// <summary>
     /// The text for a server that didn't come back. Its detail can be the server's own (a connect exception's message, such as a JSON-RPC
-    /// error from its <c>initialize</c>), so it is fenced on its own; the app's own details (a timeout, a cancel, a drop on the retry) aren't.
+    /// error from its <c>initialize</c>), so it is fenced on its own; the app's own details (a timeout, a cancel, a drop on the retry, a value
+    /// that can't be decrypted) aren't. Told apart by where the detail came from (2026-11-20, the mcp-ask review's #118), not by its words:
+    /// a server's message that began like the app's would have gone unfenced.
     /// </summary>
-    private McpCallOutcome NotBack(string name, string detail)
+    private McpCallOutcome NotBack(McpServerStatus row)
     {
-        bool own = detail == McpText.Cancelled || detail == McpText.DroppedAgainDetail || detail.StartsWith(McpText.TimedOutPrefix, StringComparison.Ordinal);
-        return own
-            ? McpCallOutcome.Failed(McpText.NotBackError(name, detail, _retryTail))
-            : McpCallOutcome.Failed(McpText.NotBackError(name, Llm.Tools.UntrustedText.Fenced(detail), _retryTail), fenced: true);
+        string detail = row.Detail ?? "";
+        return row.DetailIsApps
+            ? McpCallOutcome.Failed(McpText.NotBackError(row.Name, detail, _retryTail))
+            : McpCallOutcome.Failed(McpText.NotBackError(row.Name, Llm.Tools.UntrustedText.Fenced(detail), _retryTail), fenced: true);
     }
 
     private void Notice(string text, bool error)
@@ -1028,10 +1250,15 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
             count = tools.Count;
         }
 
+        FlushLogs();
         DiagnosticLog.Info(Category, McpText.ToolsChangedLogLine(name, count));
         Notice(McpText.ToolsChangedNotice(name, count), error: false);
     }
 
+    /// <summary>
+    /// Whether a new listing says what the old one did, tool by tool in order, by <see cref="McpTool.DefinitionKeyOf"/> (2026-11-20, the
+    /// mcp-ask review's #87: the hints too, so a tool that stops saying it's read-only is applied, and asks).
+    /// </summary>
     private static bool SameTools(IReadOnlyList<McpTool> tools, IList<McpClientTool> listed)
     {
         if (tools.Count != listed.Count)
@@ -1041,11 +1268,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
 
         for (int i = 0; i < tools.Count; i++)
         {
-            var was = tools[i].ProtocolTool;
-            var now = listed[i].ProtocolTool;
-            if (!string.Equals(was.Name, now.Name, StringComparison.Ordinal)
-                || !string.Equals(was.Description, now.Description, StringComparison.Ordinal)
-                || !string.Equals(was.InputSchema.GetRawText(), now.InputSchema.GetRawText(), StringComparison.Ordinal))
+            if (!string.Equals(tools[i].DefinitionKey, McpTool.DefinitionKeyOf(listed[i].ProtocolTool), StringComparison.Ordinal))
             {
                 return false;
             }
@@ -1070,8 +1293,10 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
             _servers = rows.ToArray();
             _problems = problems;
             _attempted = attempted;
-            RebuildTools(rows);
+            RebuildTools();
         }
+
+        FlushLogs();
     }
 
     /// <summary>
@@ -1099,13 +1324,20 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
                 _attempted = tried;
             }
 
-            RebuildTools(rows);
+            RebuildTools();
         }
+
+        FlushLogs();
     }
 
-    /// <summary>Under the snapshot lock.</summary>
-    private void RebuildTools(IReadOnlyList<McpServerStatus> rows)
+    /// <summary>
+    /// Under the snapshot lock: everything worked out from <c>_servers</c> as just written. The tools, the notes, the names that would ask
+    /// (2026-11-20, #69), and each row's notes-left-out mark (#43): a server whose mark turns on is said once per session, by a line owed
+    /// until the lock is let go.
+    /// </summary>
+    private void RebuildTools()
     {
+        var rows = _servers;
         var connected = rows.Where(r => r.State == McpState.Connected && r.Tools.Count > 0).ToList();
         _serverTools = connected.Select(r => new McpServerTools(r.Name, r.Tools)).ToArray();
         _tools = connected.SelectMany(r => r.Tools).ToArray();
@@ -1114,6 +1346,65 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
             .Select(r => _connections.TryGetValue(r.Name, out var live) && !string.IsNullOrWhiteSpace(live.Instructions) ? new McpServerNote(r.Name, live.Instructions) : null)
             .OfType<McpServerNote>()
             .ToArray();
+        _askingNames = rows
+            .Where(r => r.State == McpState.Connected)
+            .SelectMany(r => r.Tools.Where(t => McpAskRule.Asks(r.Ask, t)).Select(t => t.Name))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var leftOut = McpNotes.LeftOut(_notes, _tools).ToHashSet(StringComparer.Ordinal);
+        if (rows.Any(r => r.NotesLeftOut != (r.State == McpState.Connected && r.Startable && leftOut.Contains(r.Name))))
+        {
+            _servers = rows.Select(r => r with { NotesLeftOut = r.State == McpState.Connected && r.Startable && leftOut.Contains(r.Name) }).ToArray();
+        }
+
+        foreach (var note in _notes)
+        {
+            if (leftOut.Contains(note.Server) && !_notesLeftOut.Contains(note.Server))
+            {
+                LogOnce("total\0" + note.Server + "\0" + note.Text, McpText.InstructionsLeftOutLogLine(note.Server));
+            }
+        }
+
+        _notesLeftOut = leftOut;
+    }
+
+    /// <summary>
+    /// Writes <paramref name="line"/> once per session for <paramref name="key"/> (#7): at once, or, under the snapshot lock, owed until it
+    /// is let go (<see cref="FlushLogs"/>).
+    /// </summary>
+    private void LogOnce(string key, string line, bool warn = false)
+    {
+        lock (_loggedOnce)
+        {
+            if (!_loggedOnce.Add(key))
+            {
+                return;
+            }
+        }
+
+        _owedLogs.Enqueue((line, warn));
+        FlushLogs();
+    }
+
+    /// <summary>Writes the owed lines, unless this thread still holds the snapshot lock (a nested publish): the outer caller flushes after it.</summary>
+    private void FlushLogs()
+    {
+        if (Monitor.IsEntered(_snapshot))
+        {
+            return;
+        }
+
+        while (_owedLogs.TryDequeue(out var owed))
+        {
+            if (owed.Warn)
+            {
+                DiagnosticLog.Warn(Category, owed.Line);
+            }
+            else
+            {
+                DiagnosticLog.Info(Category, owed.Line);
+            }
+        }
     }
 
     /// <summary>
@@ -1123,7 +1414,8 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     private static McpServerStatus ConnectedFacts(McpServerStatus row, Connection live) => row with
     {
         Ask = live.Entry.Config.AskMode,
-        NotesLength = string.IsNullOrWhiteSpace(live.Instructions) ? null : live.Instructions.Length,
+        NotesLength = live.Instructions is null ? null : live.Notes?.Shown,
+        NotesRaw = live.Instructions is null ? null : live.Notes?.Raw,
         NotesOn = live.Entry.Config.InstructionsOn,
     };
 

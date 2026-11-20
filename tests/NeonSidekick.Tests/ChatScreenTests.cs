@@ -4535,7 +4535,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Startup_WithAnMcpServer_PrintsTheStatusLine_OffersTheTools_AndAModelCallRendersTheDefaultLines()
     {
         _settings.Update(d => d.TtsOutput = false);
-        _mcpServers.ReadOnly("pipe", "echo");   // runs unasked (2026-11-19): this test has no pane to ask on
+        _mcpServers.ReadOnly("pipe", "echo", "fail");   // run unasked (2026-11-19), and offered (2026-11-20, #55): this test has no pane to ask on
         McpServer();
         _chat.Enqueue(FakeChatClient.Call("c1", "pipe__echo", new Dictionary<string, object?> { ["text"] = "ping" }));
         _chat.EnqueueText("It said ping.");
@@ -4638,6 +4638,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task Turn_AnMcpToolSwitchedOffOnThePane_IsNotOffered_AndTheGroupCountsIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = ["pipe__fail"]; });
+        _mcpServers.ReadOnly("pipe", "echo");   // offered with no pane to ask on (2026-11-20, #55)
         McpServer();
         _chat.EnqueueText("hi");
         PushLine("hi");
@@ -4654,6 +4655,29 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("pipe__fail", output);
         Assert.DoesNotContain(SystemPromptSummary.NotOffered(SystemPromptSummary.McpDisabledSuffix), output);
         Assert.DoesNotContain("MCP servers — ", output);   // no MCP heading on the Prompt tab since 2026-09-26
+    }
+
+    /// <summary>
+    /// A screen with no pane (2026-11-20, the mcp-ask review's #55) leaves out the MCP tools that would ask, as it does the database
+    /// writes, and /usage counts what the turn sends (#79, #85); the read-only one stays.
+    /// </summary>
+    [Fact]
+    public async Task Turn_WithNoPane_LeavesOutTheMcpToolsThatAsk_AndUsageCountsWhatIsSent()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _mcpServers.ReadOnly("pipe", "echo");
+        McpServer();
+        _chat.EnqueueText("hi");
+        PushLine("hi");
+        PushLine("/usage tools");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var offered = _chat.Options[0]!.Tools!.Cast<AIFunction>().Select(t => t.Name).ToArray();
+        Assert.Contains("pipe__echo", offered);
+        Assert.DoesNotContain("pipe__fail", offered);
+        Assert.Contains("MCP pipe (1)", output);
     }
 
     [Fact]

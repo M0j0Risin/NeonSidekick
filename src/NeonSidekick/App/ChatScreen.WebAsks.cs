@@ -16,6 +16,20 @@ namespace NeonSidekick.App;
 /// <summary>What an ask came to: the answer, who gave it, or never asked (no watcher to run the pane).</summary>
 internal readonly record struct AskOutcome<T>(T? Value, AskSource? Who, bool NeverAsked);
 
+/// <summary>
+/// What an allow with a session choice came to (2026-11-20, the mcp-ask review's #60): <see cref="AllowSession.HeldEarlier"/> for a key
+/// "Allow for this session" was picked for before, never shown; <see cref="AllowSession.NeverAsked"/> only for a pane never shown (no pane,
+/// no watcher). A pane shown but not answered (it threw, or closed under its View) is <see cref="AllowSession.Denied"/> (#48): the user was asked.
+/// </summary>
+internal enum AllowSession
+{
+    HeldEarlier,
+    Once,
+    Session,
+    Denied,
+    NeverAsked,
+}
+
 internal sealed partial class ChatScreen
 {
     /// <summary>
@@ -132,17 +146,78 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<CameraAllow?> AllowBothAsync(string title, string prompt, IReadOnlyList<string>? whole, Func<CancellationToken, Task<CameraAllow?>> pane, CancellationToken turnToken)
     {
+        var outcome = await AllowBothOutcomeAsync(title, prompt, whole, pane, turnToken).ConfigureAwait(false);
+        return outcome.NeverAsked ? null : outcome.Value;
+    }
+
+    /// <summary>
+    /// <see cref="AllowBothAsync"/> before its fold (2026-11-20, the mcp-ask review's #48): <see cref="AskOutcome{T}.NeverAsked"/> apart from a
+    /// pane shown with no answer, which <see cref="AllowWithSessionAsync"/> counts as a Deny. The camera and the screen keep the fold's null.
+    /// </summary>
+    private Task<AskOutcome<CameraAllow?>> AllowBothOutcomeAsync(string title, string prompt, IReadOnlyList<string>? whole, Func<CancellationToken, Task<CameraAllow?>> pane, CancellationToken turnToken)
+    {
         var spec = new WebAskSpec("allow", title,
             [new WebChoice("deny", CameraText.DenyRow), new WebChoice("once", CameraText.AllowOnceRow), new WebChoice("session", CameraText.AllowSessionRow)],
             Body: prompt, Lines: whole);
-        var outcome = await AskBothAsync(spec, pane, a => a.Choice switch
+        return AskBothAsync(spec, pane, a => a.Choice switch
         {
             "once" => CameraAllow.Once,
             "session" => CameraAllow.Session,
             _ => (CameraAllow?)CameraAllow.Deny,
-        }, "The allow pane failed: ", turnToken).ConfigureAwait(false);
-        return outcome.NeverAsked ? null : outcome.Value;
+        }, "The allow pane failed: ", turnToken);
     }
+
+    /// <summary>
+    /// The one allow with a session choice (2026-11-20, the mcp-ask review's #60: five copies, in the server and file database writes, DuckDB,
+    /// SQLite, the project file and MCP calls): a <paramref name="key"/> already in <paramref name="allowed"/> is
+    /// <see cref="AllowSession.HeldEarlier"/>; else the allow pane at the PC and on the page, <paramref name="whole"/> behind the PC's View
+    /// and whole on the page; "Allow for this session" adds the key. Without a pane, <see cref="AllowSession.NeverAsked"/>. The turn's stop
+    /// throws through, as before; only the MCP gate makes it a Deny (#23). <paramref name="allowed"/> is its own lock.
+    /// </summary>
+    private async Task<AllowSession> AllowWithSessionAsync(HashSet<string> allowed, string key, string title, string caption, IReadOnlyList<string>? whole, CancellationToken turnToken)
+    {
+        if (!_pane.Enabled)
+        {
+            return AllowSession.NeverAsked;
+        }
+
+        lock (allowed)
+        {
+            if (allowed.Contains(key))
+            {
+                return AllowSession.HeldEarlier;
+            }
+        }
+
+        var outcome = await AllowBothOutcomeAsync(title, caption, whole, token => _cameraMenu.AllowAsync(caption, token, title, whole is null ? null : title, whole), turnToken).ConfigureAwait(false);
+        if (outcome.NeverAsked)
+        {
+            return AllowSession.NeverAsked;
+        }
+
+        switch (outcome.Value)
+        {
+            case CameraAllow.Session:
+                lock (allowed)
+                {
+                    allowed.Add(key);
+                }
+
+                return AllowSession.Session;
+            case CameraAllow.Once:
+                return AllowSession.Once;
+            default:
+                return AllowSession.Denied;
+        }
+    }
+
+    /// <summary>An <see cref="AllowSession"/> as the database and file allows return it: true to go, false for a no, null when nobody was asked.</summary>
+    private static bool? Goes(AllowSession allow) => allow switch
+    {
+        AllowSession.NeverAsked => null,
+        AllowSession.Denied => false,
+        _ => true,
+    };
 
     /// <summary>The page's form of a command's approval: the whole command (the PC's View), the PC's four rows, the prefixes named.</summary>
     internal static WebAskSpec ApprovalSpec(CommandRequest request) =>

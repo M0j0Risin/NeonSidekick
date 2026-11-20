@@ -72,6 +72,32 @@ public partial class SidekickAppTests
         Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
     }
 
+    /// <summary>
+    /// An advisor review under Advisor confirm and no <c>--allow advisor</c> (2026-11-20, the mcp-ask review's #12): the model reviews
+    /// instead, said once a loop, naming the flag.
+    /// </summary>
+    [Fact]
+    public async Task Headless_PlanRalph_AnAdvisorReviewUnderConfirm_FallsBackToTheModel_SaidOnce()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        HeadlessAdvisor(confirm: true);
+        _settings.Update(d => d.RalphLoopReviewer = "advisor");
+        HeadlessRalphPass("1");
+        _chat.EnqueueText("verdict: pass\nIt did.");
+        HeadlessRalphPass("2");
+        _chat.EnqueueText("verdict: pass\nIt did.");
+
+        string output = await Headless("/plan ralph add-guide\n");
+
+        Assert.Equal(
+            "🔁 Advisor confirm is on and headless cannot ask, so the model reviews each step instead; --allow advisor lets the advisors review.",
+            RalphText.HeadlessReviewConfirmFallbackNotice.Replace(RalphText.Glyph, "🔁", StringComparison.Ordinal));
+        int said = output.Split(RalphText.HeadlessReviewConfirmFallbackNotice).Length - 1;
+        Assert.Equal(1, said);
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
+    }
+
     [Fact]
     public async Task Headless_PlanRalph_APlanWithItsStepsUnderAnotherHeading_IsRefused_NamingThem()
     {

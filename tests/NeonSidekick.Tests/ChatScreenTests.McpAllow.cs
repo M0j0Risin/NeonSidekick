@@ -88,7 +88,7 @@ public partial class ChatScreenTests
     }
 
     private static int Asked(List<string> audit, string name, string outcome) =>
-        audit.Count(l => l.StartsWith(name + " " + outcome + ": ", StringComparison.Ordinal));
+        audit.Count(l => l.StartsWith(McpText.AuditPrefix(name, outcome), StringComparison.Ordinal));
 
     private List<string> McpResults() =>
         [.. _chat.Requests.SelectMany(r => r).SelectMany(m => m.Contents.OfType<FunctionResultContent>()).Select(r => (string)r.Result!).Distinct()];
@@ -102,7 +102,7 @@ public partial class ChatScreenTests
         var (output, audit) = await RunMcpAsync();
 
         Assert.Equal(2, Asked(audit, "pipe__echo", McpText.AllowedOnce));
-        Assert.Contains(McpText.AllowCaption("pipe", "pipe__echo", McpChangeNote.Unstated, cut: false), output);
+        Assert.Contains(McpText.AllowCaption("pipe", "echo", McpChangeNote.Unstated, cut: false), output);
         Assert.Equal([("echo", """{"text":"a"}"""), ("echo", """{"text":"b"}""")], _mcpServers.Server("pipe").Calls);
     }
 
@@ -160,8 +160,8 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(McpText.AllowCaption("pipe", "pipe__echo", McpChangeNote.Unstated, cut: true), output);
-        Assert.Contains(McpText.ViewCutNote, McpText.AllowCaption("pipe", "pipe__echo", McpChangeNote.Unstated, cut: true));
+        Assert.Contains(McpText.AllowCaption("pipe", "echo", McpChangeNote.Unstated, cut: true), output);
+        Assert.Contains(McpText.ViewCutNote, McpText.AllowCaption("pipe", "echo", McpChangeNote.Unstated, cut: true));
         Assert.Empty(_mcpServers.Server("pipe").Calls);
     }
 
@@ -205,6 +205,7 @@ public partial class ChatScreenTests
     public async Task McpNotes_RideTheTurn_UnlessEveryToolOfTheServerIsOff(bool allOff)
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolsDisabled = allOff ? ["pipe__echo", "pipe__fail"] : ["pipe__fail"]; });
+        _mcpServers.ReadOnly("pipe", "echo");   // offered with no pane to ask on (2026-11-20, #55)
         _mcpServers.Instructions("pipe", "Call echo with short text.");
         McpServer(PipeOnly);
         _chat.EnqueueText("Noted.");

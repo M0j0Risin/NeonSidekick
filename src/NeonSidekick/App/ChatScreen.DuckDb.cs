@@ -22,36 +22,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool?> AllowDuckDbWriteAsync(DuckDbTarget target, string sql, bool creating, IReadOnlyList<Sql.SqlParameterValue> parameters, CancellationToken turnToken)
     {
-        if (!_pane.Enabled)
-        {
-            return null;
-        }
-
-        string key = DuckDbAllowKey(target.FullPath);
-        lock (_duckDbAllowed)
-        {
-            if (_duckDbAllowed.Contains(key))
-            {
-                return true;
-            }
-        }
-
         var whole = Shell.ShellText.WholeCommandLines(new Shell.CommandRequest("sql", Files.NameScrub.Display(Sql.ServerWriteText.Lines(sql), keepLineBreaks: true) + Sql.ServerWriteText.Bound(parameters), [], IsScript: true));
         string caption = DuckDbText.AllowCaption(target, sql, creating, parameters);
-        var allow = await AllowBothAsync(DuckDbText.AllowTitle, caption, whole, token => _cameraMenu.AllowAsync(caption, token, DuckDbText.AllowTitle, DuckDbText.AllowTitle, whole), turnToken).ConfigureAwait(false);
-        if (allow is not { } choice)
-        {
-            return null;
-        }
-
-        if (choice == CameraAllow.Session)
-        {
-            lock (_duckDbAllowed)
-            {
-                _duckDbAllowed.Add(key);
-            }
-        }
-
-        return choice != CameraAllow.Deny;
+        return Goes(await AllowWithSessionAsync(_duckDbAllowed, DuckDbAllowKey(target.FullPath), DuckDbText.AllowTitle, caption, whole, turnToken).ConfigureAwait(false));
     }
 }

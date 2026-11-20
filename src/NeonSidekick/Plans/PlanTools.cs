@@ -155,22 +155,40 @@ public static class PlanTools
         Llm.Tools.PostgresExecuteTool.ToolName, Llm.Tools.SqliteExecuteTool.ToolName, Llm.Tools.DuckDbExecuteTool.ToolName,
     };
 
-    /// <summary><paramref name="disabled"/> with <see cref="AskingTools"/> and <see cref="ConfirmingTools"/> added: what an unattended Ralph pass leaves out. Pure.</summary>
-    public static IReadOnlySet<string> WithoutAskingOrConfirming(IReadOnlySet<string> disabled)
+    /// <summary>
+    /// <paramref name="disabled"/> with <see cref="AskingTools"/> and <see cref="ConfirmingTools"/> added: what an unattended Ralph pass leaves
+    /// out. <paramref name="extraAsking"/> (2026-11-20, the mcp-ask review's #29) adds the names only the session knows: the MCP tools that
+    /// would ask under their server's <c>ask</c>. Pure.
+    /// </summary>
+    public static IReadOnlySet<string> WithoutAskingOrConfirming(IReadOnlySet<string> disabled, IReadOnlySet<string>? extraAsking = null)
     {
         ArgumentNullException.ThrowIfNull(disabled);
         var union = new HashSet<string>(disabled, StringComparer.Ordinal);
         union.UnionWith(AskingTools);
         union.UnionWith(ConfirmingTools);
+        if (extraAsking is not null)
+        {
+            union.UnionWith(extraAsking);
+        }
+
         return union;
     }
 
-    /// <summary><paramref name="disabled"/> with every one of <see cref="AskingTools"/> added (2026-10-18): what a gap pass that may not wait on the user leaves out. Pure.</summary>
-    public static IReadOnlySet<string> WithoutAsking(IReadOnlySet<string> disabled)
+    /// <summary>
+    /// <paramref name="disabled"/> with every one of <see cref="AskingTools"/> added (2026-10-18): what a gap pass that may not wait on the
+    /// user leaves out, and (2026-11-20, #55) what a screen with no pane leaves out. <paramref name="extraAsking"/> as in
+    /// <see cref="WithoutAskingOrConfirming"/>. Pure.
+    /// </summary>
+    public static IReadOnlySet<string> WithoutAsking(IReadOnlySet<string> disabled, IReadOnlySet<string>? extraAsking = null)
     {
         ArgumentNullException.ThrowIfNull(disabled);
         var union = new HashSet<string>(disabled, StringComparer.Ordinal);
         union.UnionWith(AskingTools);
+        if (extraAsking is not null)
+        {
+            union.UnionWith(extraAsking);
+        }
+
         return union;
     }
 

@@ -11,7 +11,7 @@ namespace NeonSidekick.Llm.Tools;
 /// printer; anything else (a PDF, an Office file) goes to the program Windows has for it, on the Windows default printer. Behind
 /// <see cref="PrintPolicy"/>: under <c>ask</c> (the default) every call waits for the user's yes on the pane, which names the file,
 /// the printer and the sheets (<see cref="PrintText.ConfirmQuestion"/>); <c>confirm</c> is the advisor's seam — true yes, false no,
-/// null nothing could ask — and itself null where nothing ever can (headless).
+/// null nothing could ask; headless answers through <c>--allow print</c> since 2026-11-19.
 /// </summary>
 public sealed class PrintFileTool : AIFunction
 {
@@ -38,6 +38,15 @@ public sealed class PrintFileTool : AIFunction
 
     private readonly PrintService _print;
     private readonly Func<string, CancellationToken, Task<bool?>>? _confirm;
+
+    /// <summary>
+    /// What the "nobody could be asked" refusal ends with (2026-11-20, the mcp-ask review's #24, #57): empty on the screen; headless names
+    /// its <c>--allow</c> entry (<c>AllowText.NotAskedTail</c>), as an MCP refusal does.
+    /// </summary>
+    public string NotAskedTail { get; init; } = "";
+
+    /// <summary><paramref name="text"/> with <see cref="NotAskedTail"/> after it, the sentence closed first.</summary>
+    private string WithTail(string text) => NotAskedTail.Length == 0 ? text : text.TrimEnd('.') + "." + NotAskedTail;
 
     public PrintFileTool(PrintService print, Func<string, CancellationToken, Task<bool?>>? confirm)
     {
@@ -102,7 +111,7 @@ public sealed class PrintFileTool : AIFunction
                 case false:
                     return PrintText.Declined;
                 case null:
-                    return PrintText.NotAsked;
+                    return WithTail(PrintText.NotAsked);
             }
         }
 

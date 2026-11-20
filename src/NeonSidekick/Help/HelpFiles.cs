@@ -77,7 +77,8 @@ internal static class HelpFiles
         string configs = Profiles.ConfigsDirectoryName + "/";
         var families = new List<(string File, string Holds, string Word)>
         {
-            (Mcp.McpConfigFile.FileName, "MCP servers", "mcp"),
+            // The mcp-ask review's #58 (2026-11-20): what the file does beyond listing servers.
+            (Mcp.McpConfigFile.FileName, "MCP servers; a token in env or headers is encrypted when they connect, ${NAME} is filled from your environment, and each server's ask and instructions set what asks and what reaches the prompt", "mcp"),
             (Sql.SqlConfigFile.FileName, "SQL Server connections", "sql"),
             (Oracle.OracleConfigFile.FileName, "Oracle connections", "oracle"),
             (MySql.MySqlConfigFile.FileName, "MySQL and MariaDB connections", "mysql"),

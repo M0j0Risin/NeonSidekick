@@ -304,17 +304,34 @@ public class NeonHelpCatalogTests
     [Fact]
     public void Live_AnMcpTool_SaysWhetherItAsks_AndTheRalphPassLeavesOutOnlyTheAskingOnes()
     {
-        Assert.Equal("before each call unless the server marks the tool read-only; \"ask\" in mcp.json changes that (writes, always, never)", HelpText.McpAsksLine);
+        Assert.Equal("before each call unless the server marks the tool read-only and not destructive; \"ask\" in mcp.json changes that (writes, always, never)", HelpText.McpAsksLine);
         Assert.Equal("offered; a call that asks is refused unless the run has --allow mcp, or --allow mcp:<server> for its server", HelpText.McpHeadlessLine);
         string bare = Win("pipe__push");
         Assert.Contains("\n  Asks: " + HelpText.McpAsksLine, bare, StringComparison.Ordinal);
         Assert.Contains("\n  Headless: " + HelpText.McpHeadlessLine, bare, StringComparison.Ordinal);
 
         var asks = new HelpMcpLookup("pipe", McpState.Connected) { Asks = true };
-        var unasked = new HelpMcpLookup("pipe", McpState.Connected);
+        var unasked = new HelpMcpLookup("pipe", McpState.Connected) { Asks = false };
         var on = new AppSettingsData { McpServers = true };
         Assert.EndsWith(HelpText.LiveOfferedAsks, Win("pipe__push", live: () => Live(offered: ["pipe__push"], settings: on) with { Mcp = _ => asks }), StringComparison.Ordinal);
         Assert.EndsWith(HelpText.LiveOfferedUnasked, Win("pipe__read", live: () => Live(offered: ["pipe__read"], settings: on) with { Mcp = _ => unasked }), StringComparison.Ordinal);
+
+        // 2026-11-20, the mcp-ask review's #6, #25, #82: allowed for this session, headless with and without --allow, and a prefix-only name.
+        Assert.Equal("Right now: offered; the user allowed its calls for this session, so they run without asking.", HelpText.LiveOfferedAllowed);
+        Assert.Equal("Right now: offered; this run's --allow lets its calls run without asking.", HelpText.LiveOfferedHeadlessAllowed);
+        Assert.Equal("Right now: offered, but each call is refused: this headless run has no --allow for its server.", HelpText.LiveOfferedHeadlessRefused);
+        Assert.EndsWith(HelpText.LiveOfferedAllowed,
+            Win("pipe__push", live: () => Live(offered: ["pipe__push"], settings: on) with { Mcp = _ => asks, McpAllowed = n => n == "pipe__push" }), StringComparison.Ordinal);
+        Assert.EndsWith(HelpText.LiveOfferedAsks,
+            Win("pipe__push", live: () => Live(offered: ["pipe__push"], settings: on) with { Mcp = _ => asks, McpAllowed = _ => false }), StringComparison.Ordinal);
+        Assert.EndsWith(HelpText.LiveOfferedHeadlessAllowed,
+            Win("pipe__push", live: () => Live(offered: ["pipe__push"], headless: true, settings: on) with { Mcp = _ => asks, McpAllowed = _ => true }), StringComparison.Ordinal);
+        Assert.EndsWith(HelpText.LiveOfferedHeadlessRefused,
+            Win("pipe__push", live: () => Live(offered: ["pipe__push"], headless: true, settings: on) with { Mcp = _ => asks, McpAllowed = _ => false }), StringComparison.Ordinal);
+        var prefixOnly = new HelpMcpLookup("pipe", McpState.Connected);
+        Assert.Null(prefixOnly.Asks);
+        Assert.EndsWith(HelpText.LiveOffered,
+            Win("pipe__ghost", live: () => Live(offered: ["pipe__ghost"], settings: on) with { Mcp = _ => prefixOnly, McpAllowed = _ => true }), StringComparison.Ordinal);
 
         var ralph = Live(settings: on) with { McpAsksBarred = true };
         Assert.EndsWith(HelpText.LiveNotOffered(HelpText.LiveRalphAsk), Win("pipe__push", live: () => ralph with { Mcp = _ => asks }), StringComparison.Ordinal);

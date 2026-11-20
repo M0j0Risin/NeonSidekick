@@ -501,8 +501,8 @@ public static class PlanText
     /// <summary>Close gaps… chosen inside a reply while a message of the user's was queued (2026-10-14): the message goes first.</summary>
     public const string GapsYieldedNotice = Glyph + " The gap review was chosen but your message goes first: /plan gaps starts it.";
 
-    /// <summary>Headless (2026-10-13): no confirm to ask on, so every advisor call would be refused.</summary>
-    public const string GapsConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model reviews the plan alone.";
+    /// <summary>Headless (2026-10-13) without <c>--allow advisor</c> (2026-11-20, the mcp-ask review's #12): every advisor call would be refused.</summary>
+    public const string GapsConfirmFallbackNotice = Glyph + " Advisor confirm is on and headless cannot ask, so the model reviews the plan alone; --allow advisor lets the advisors review.";
 
     /// <summary>Headless (2026-10-13): no Esc to stop a loop with no limit; <paramref name="fromCommand"/> (2026-10-17) when the 0 was typed as <c>/plan gaps 0</c>.</summary>
     public static string GapsHeadlessCapNotice(int cap, bool fromCommand = false) => fromCommand

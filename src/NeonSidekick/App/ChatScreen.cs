@@ -952,7 +952,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Every "Allow for this session" let go: the camera, the screen, the bot check, the database changes, the project file (2026-10-24, the
-    /// database review's D3: a restored session kept them, so an allow given in one conversation ran another's changes unasked).
+    /// database review's D3: a restored session kept them, so an allow given in one conversation ran another's changes unasked), and the MCP
+    /// calls (2026-11-19). <c>/new</c>, <c>/clear</c>, <c>/resume</c>, a profile switch and deleting the current session reach it (2026-11-20,
+    /// the mcp-ask review's #101).
     /// </summary>
     private void ForgetAllows()
     {
@@ -4885,6 +4887,11 @@ internal sealed partial class ChatScreen
         // The web, ask and session sentences (2026-10-04: /sys had left them out of its rules), read as ComposeTurnTools reads them.
         var web = Without(WebToolsFor(_webTools, filesOffered), disabled);
         IReadOnlyList<AIFunction> ask = AskOffered(effective) ? Without(_askTools, disabled) : [];
+        // The turn's own set, composed once and first read after Catalog(effective) below (arguments run in order) (2026-11-20, the mcp-ask
+        // review's #79, #85): the MCP count, the admin sentences and the servers' notes all come from it, so /sysprompt counts the MCP tools
+        // the turn offers, beside notes that already left the withheld ones out.
+        TurnToolSet? composed = null;
+        TurnToolSet Composed() => composed ??= ComposeTurnTools(TurnInputs(effective));
         return new SystemPromptFacts(
             _persona.Read(),
             _operata.Read(),
@@ -4903,7 +4910,7 @@ internal sealed partial class ChatScreen
             disabled,
             effective.ProjectFile,
             effective.McpServers,
-            Without(_mcp.Tools, disabled).Count,
+            Composed().Tools.OfType<Mcp.McpTool>().Count(),
             effective.GitLibTools,
             Without(_gitTools, disabled).Count,
             ShellOffered(effective),
@@ -4959,12 +4966,12 @@ internal sealed partial class ChatScreen
             TimersEnabled: TimersOffered(effective),
             ClockEnabled: ClockOffered(effective),
             // The admin families' sentences as the turn would carry them (2026-10-15, the admin-tools plan).
-            Admin: ComposeTurnTools(TurnInputs(effective)).Rules.Admin,
+            Admin: Composed().Rules.Admin,
             DuckDbEnabled: DuckDbOffered(effective, _duckDb),
             DuckDbTools: duckDb.Count,
             DuckDbWrite: duckDb.Any(t => DuckDbWriteToolNames.Contains(t.Name)),
             // The servers' notes as the turn would carry them (2026-11-19): the one filter, over the MCP tools the count above reads.
-            McpNotes: Mcp.McpNotes.For(_mcp.ServerInstructions, Without(_mcp.Tools, disabled)));
+            McpNotes: Composed().McpNotes);
     }
 
     /// <summary>
@@ -6671,7 +6678,10 @@ internal sealed partial class ChatScreen
     private McpFacts McpFacts()
     {
         var effective = _effective();
-        return new McpFacts(_mcp.Servers, _mcp.Problems, effective.McpServers, effective.LlmOfferTools, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.ProfilePath, _mcp.GlobalPath);
+        return new McpFacts(_mcp.Servers, _mcp.Problems, effective.McpServers, effective.LlmOfferTools, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.ProfilePath, _mcp.GlobalPath)
+        {
+            Allowed = McpHeldForSession,
+        };
     }
 
     private ToolsFacts ToolsFacts()
@@ -7081,6 +7091,7 @@ internal sealed partial class ChatScreen
             Settings = effective,
             Mcp = name => Help.HelpMcpLookup.Find(_mcp.Servers, name),
             McpAsksBarred = RalphAsksBarred(),
+            McpAllowed = McpHeldForSession,
         };
     }
 
@@ -8288,7 +8299,7 @@ internal sealed partial class ChatScreen
         ScreenEnabled = ScreenOffered(effective),
         // A gap pass that may not wait on the user (2026-10-18) loses the asking tools as a tool switched off on /tools is lost; so does a Ralph pass
         // with the checkpoint off (later that day: an unattended loop never stops on a question).
-        Disabled = RalphAsksBarred() ? RalphWithheld(disabled) : GapAsksBarred(effective) ? PlanTools.WithoutAsking(disabled) : disabled,
+        Disabled = WithheldForAsking(disabled, effective),
         Plan = _plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled),
         Pass = RalphPassTurn(),
         // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under Code audit web research; an advisor asked in it the same.
@@ -14706,7 +14717,7 @@ internal sealed partial class ChatScreen
     private async Task ConnectMcpAsync(CancellationToken cancellationToken)
     {
         var effective = _effective();
-        var merged = _mcp.Read();
+        var merged = _mcp.Read(seal: false);   // only whether any is on (2026-11-20, #84): the connect seals and logs
         var disabled = ToolsText.DisabledSet(effective.McpServersDisabled);
         bool any = effective.McpServers && merged.Entries.Any(e => e.Startable && !disabled.Contains(e.Name));
         if (any)

@@ -145,7 +145,7 @@ public class McpToolTests
     [Fact]
     public async Task ReadOnly_IsTheServersHint_AndWithoutACaller_TheToolCallsItsClient()
     {
-        await using var server = McpPipeServer.Start([("look", "Looks."), ("touch", "Touches.")], readOnly: new HashSet<string> { "look" });
+        await using var server = McpPipeServer.Start([("look", "Looks."), ("touch", "Touches.")], options: new McpPipeServerOptions { ReadOnly = new HashSet<string> { "look" } });
         await using var client = await McpClient.CreateAsync(server.ClientTransport);
         var listed = await client.ListToolsAsync((RequestOptions?)null);
         var look = new McpTool("pipe", client, listed[0], "pipe__look");
@@ -167,8 +167,11 @@ public class McpToolTests
     {
         await using var server = McpPipeServer.Start(
             [("both", "Both."), ("look", "Looks."), ("safe", "Safe."), ("plain", "Plain.")],
-            readOnly: new HashSet<string> { "both", "look" },
-            destructive: new Dictionary<string, bool> { ["both"] = true, ["safe"] = false });
+            options: new McpPipeServerOptions
+            {
+                ReadOnly = new HashSet<string> { "both", "look" },
+                Destructive = new Dictionary<string, bool> { ["both"] = true, ["safe"] = false },
+            });
         await using var client = await McpClient.CreateAsync(server.ClientTransport);
         var listed = await client.ListToolsAsync((RequestOptions?)null);
         McpTool Tool(int i) => new("pipe", client, listed[i], "pipe__" + listed[i].Name);

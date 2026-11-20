@@ -49,6 +49,16 @@ public static class McpCatalog
             }
         }
 
+        // A profile entry with a problem still takes its name (2026-11-20, the mcp-ask review's #64): a typo in the profile's copy must not
+        // quietly start the home's server of the same name in its place.
+        foreach (var problem in profile.Problems)
+        {
+            if (problem.Name is { } named)
+            {
+                taken.Add(named);
+            }
+        }
+
         foreach (var (name, config) in global.Servers)
         {
             entries.Add(new McpServerEntry(name, config, McpScope.Global, taken.Contains(name) ? McpScope.Profile : null));

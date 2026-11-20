@@ -407,7 +407,7 @@ public class SidekickOptionsTests
         Assert.Contains("--yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)", SidekickOptions.Usage);
         Assert.Contains("[--no-police]", SidekickOptions.Usage);
         Assert.Contains("--no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)", SidekickOptions.Usage);
-        Assert.Contains("Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call that asks was refused", SidekickOptions.Usage);
+        Assert.Contains("Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call --allow covers was refused", SidekickOptions.Usage);
         Assert.Contains("[--allow <list>]", SidekickOptions.Usage);
         Assert.Contains("--profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE; default neon)", SidekickOptions.Usage);
         Assert.Contains("--log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)", SidekickOptions.Usage);

@@ -1185,7 +1185,7 @@ Offered only in [plan mode](COMMANDS.md#plan-mode).
 
 ### Ralph loop
 
-Offered only in a [Ralph loop](COMMANDS.md#ralph-loop)'s pass, beside every other tool. A pass with no checkpoint, which no one watches, doesn't get the tools that change a computer and ask first (services, tasks, monitors).
+Offered only in a [Ralph loop](COMMANDS.md#ralph-loop)'s pass, beside every other tool. A pass with no checkpoint, which no one watches, doesn't get the tools that change a computer and ask first (services, tasks, monitors, MCP tools that would ask).
 
 | Tool | Arguments | What it does |
 |---|---|---|
@@ -1198,14 +1198,17 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 
 * Each connected server is a tool group, its tools named `<server>__<tool>` (`gateway__get_current_time`). `/mcp` switches servers and single tools.
 * Servers connect in the background (🔌 on the status bar); a reply started meanwhile gets those already connected.
-* **A server that drops** reconnects once at its next call, or on Enter at its `/mcp` row. A call cut off by the drop is sent again only if the server marks it read-only.
+* **A server that drops** reconnects once at its next call, or on Enter at its `/mcp` row. A call cut off by the drop is sent again only if the server marks it read-only and not destructive.
 * A server's changed tool list applies from your next message.
 * **Server text is untrusted:** each text a tool returns reaches the model fenced (`⟪ ⟫`); a failed call starts `Error:`. A server's tool descriptions aren't fenced: trusting a server is your choice in `mcp.json`.
-* **Calls ask first** (Deny, Allow once, Allow for this session) unless the server marks the tool read-only. That mark is the server's word, so give a server you don't fully trust `"ask": "always"`; `"never"` asks none. Every call that asks is logged.
+* **Calls ask first** (Deny, Allow once, Allow for this session) unless the server marks the tool read-only and not destructive. An allow lasts until `/new`, `/clear`, `/resume` or a profile switch.
+* **A server you don't fully trust:** its marks are its own word, so give it `"ask": "always"` and `"instructions": false`. `"never"` asks none; every call that asks is logged.
 * **Headless** refuses a call that asks unless the run has `--allow mcp`, or `--allow mcp:<server>` ([HEADLESS.md](HEADLESS.md#when-a-command-is-refused)).
-* **Tokens are encrypted:** at the next start, a plain `env` or `headers` value whose name holds `KEY`, `TOKEN`, `SECRET`, `PASSWORD`, `AUTH` or `CREDENTIAL` (a header's `COOKIE`, an env value's `CONNECTION`) is encrypted in place for your Windows user ([on a Mac](MAC.md#setup)). `args` aren't.
-* **What encrypting costs:** once a token is encrypted, or with `ask` or `instructions` set, the file may not paste back into Claude Desktop. `/settings export` carries a token only to the same user.
-* **Server notes:** what a server says about using its tools reaches the model fenced, at most 2,000 characters a server, as hints that never override your rules. `"instructions": false` leaves a server's out.
+* **Tokens are encrypted** in place for your Windows user ([on a Mac](MAC.md#setup)) when the app next starts or connects its servers (a `/mcp` reload too). That covers a plain `env` or `headers` value named with a word like `TOKEN`, `SECRET`, `PASSWORD`, `AUTH`, `CREDENTIAL` or `COOKIE`, or ending in `KEY`, and a URL with a password.
+* **Where a token goes:** `args` and `url` aren't encrypted, so put a token in `env` (a `command` server) or `headers` (a `url` server).
+* **`${NAME}`** (or `${NAME:-default}`) in `command`, `args`, `env`, `url` or `headers` is filled from your environment when the server starts, never with a variable the app [keeps from children](ENVIRONMENT.md). One in `url` or `headers` sends that value to the server; an unset one goes as written, with a warning.
+* **What encrypting costs:** once a token is encrypted, or with `ask` or `instructions` set, the file may not paste back into Claude Desktop. `/settings export` carries a token only to the same user on the same computer.
+* **Server notes:** what a server says about using its tools reaches the model fenced, at most 2,000 characters a server and 6,000 in all, as hints that never override your rules. `"instructions": false` leaves a server's out.
 * **`mcp.json`** (`/mcp`'s **edit** rows open it) takes Claude Desktop's and Claude Code's shape, so a block copied from them works. A server has a `command` (with `args`, `env`, `cwd`) or a `url` (with `headers`), never both:
 
 ```json

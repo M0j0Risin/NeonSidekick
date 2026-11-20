@@ -4,7 +4,14 @@ using NeonSidekick.Diagnostics;
 namespace NeonSidekick.Mcp;
 
 /// <summary>One thing a load could not use: the file itself, or one server in it. <see cref="Source"/> is the path, or the path and the server's name.</summary>
-public sealed record McpConfigProblem(string Source, string Reason);
+public sealed record McpConfigProblem(string Source, string Reason)
+{
+    /// <summary>
+    /// The server's name for a problem of one server (2026-11-20, the mcp-ask review's #64 and #124), null for the whole file's or a blank
+    /// name's: a broken profile entry still shadows the home's of that name, and headless <c>--allow mcp:&lt;name&gt;</c> knows it.
+    /// </summary>
+    public string? Name { get; init; }
+}
 
 /// <summary>What <see cref="McpConfigFile.Load"/> found: the usable servers in file order and the problems, never a throw.</summary>
 public sealed record McpConfigLoad(string Path, IReadOnlyList<KeyValuePair<string, McpServerConfig>> Servers, IReadOnlyList<McpConfigProblem> Problems)
@@ -32,8 +39,11 @@ public sealed class McpConfigFile
     /// <summary>What a fresh file holds: no servers, the key ready to fill. Pinned.</summary>
     public const string EmptyText = "{\n  \"mcpServers\": {}\n}\n";
 
-    /// <summary>The servers by name, in file order (the deserializer keeps it).</summary>
-    public Dictionary<string, McpServerConfig> McpServers { get; set; } = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The servers by name, in file order (the deserializer keeps it), each as its raw JSON (2026-11-20, the mcp-ask review's #5): read one
+    /// at a time (<see cref="Parse"/>), so a mistyped value is that server's problem and the others still load.
+    /// </summary>
+    public Dictionary<string, JsonElement>? McpServers { get; set; }
 
     /// <summary>The profile's file: <c>&lt;profile&gt;\configs\mcp.json</c> (<c>configs</c> since 2026-10-16).</summary>
     public static string ProfilePath(string profileDirectory) => NeonSidekick.Settings.Profiles.ConfigPath(profileDirectory, FileName);
@@ -42,41 +52,114 @@ public sealed class McpConfigFile
     public static string GlobalPath(string home) => NeonSidekick.Settings.Profiles.HomeConfigPath(home, FileName);
 
     /// <summary>
-    /// Reads <paramref name="path"/>: the usable servers in file order, a problem per server that names
-    /// neither or both transports or has a blank name, and — for a file that is not JSON or cannot be
-    /// read — one problem for the file and one <c>Mcp</c> warning. A missing file is
-    /// <see cref="McpConfigLoad.Empty"/>. Never throws.
+    /// Reads <paramref name="path"/>: the usable servers in file order, a problem per server that names neither or both transports, has a
+    /// blank name or won't read (2026-11-20, the mcp-ask review's #5: one entry at a time), and — for a file that is not JSON, cannot be
+    /// read or whose <c>mcpServers</c> isn't an object — one problem for the file. A missing file is <see cref="McpConfigLoad.Empty"/>. Never
+    /// throws.
+    /// <para>With <paramref name="seal"/> (the default) the plain tokens are encrypted first (<see cref="SealFile"/>), and the read is cached
+    /// per file stamp (<see cref="Computers.ConfigCache"/>, 2026-11-20, #17): a file's problems are logged once per change, not at every read.
+    /// Sealing runs before the cached read, never inside it: the cache stamps the file before its loader, and a loader that wrote would store
+    /// a stale stamp and read, and warn, again. Without <paramref name="seal"/> (#84, #122: the reads that only look, such as <c>/profile
+    /// push|pull mcp</c> and whether any server is set up) nothing is written, nothing logged and nothing cached.</para>
     /// </summary>
-    public static McpConfigLoad Load(string path)
+    public static McpConfigLoad Load(string path, bool seal = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if (!seal)
+        {
+            return Parse(path, log: false);
+        }
+
+        Computers.ConfigCache.Get(SealFamily, path, () => SealFile(path));
+        return Computers.ConfigCache.Get(Category, path, () => Parse(path, log: true));
+    }
+
+    /// <summary>The cache family of <see cref="SealFile"/>'s run, so a seal that can't write (a read-only file) is tried, and warned about, once per change.</summary>
+    private const string SealFamily = "mcp-seal";
+
+    /// <summary>
+    /// Encrypts every plain token in <paramref name="path"/> (<see cref="McpSecrets.EncryptInPlace"/>), every server that reads at all
+    /// included, one skipped over a typo too (the families' rule: no token stays plain for a typo). Quiet about the file's problems: the
+    /// cached <see cref="Parse"/> after it logs them. True, for the cache.
+    /// </summary>
+    private static bool SealFile(string path)
+    {
+        if (!File.Exists(path) || ReadFile(path, out _) is not { } servers)
+        {
+            return true;
+        }
+
+        foreach (var (name, element) in servers)
+        {
+            if (string.IsNullOrWhiteSpace(name) || element.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            McpServerConfig? config;
+            try
+            {
+                config = element.Deserialize(McpJsonContext.Default.McpServerConfig);
+            }
+            catch (JsonException)
+            {
+                continue;
+            }
+
+            if (config is not null)
+            {
+                McpSecrets.EncryptInPlace(path, name, config);
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>The file's servers as raw JSON, null when there are none to read; <paramref name="error"/> says why a file couldn't be read.</summary>
+    private static Dictionary<string, JsonElement>? ReadFile(string path, out string? error)
+    {
+        error = null;
+        try
+        {
+            var file = JsonSerializer.Deserialize(File.ReadAllText(path), McpJsonContext.Default.McpConfigFile);
+            return file?.McpServers is { Count: > 0 } servers ? servers : null;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            error = LogText.Excerpt(ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>One read of the file, with no writes: <see cref="Load"/>'s body. <paramref name="log"/> writes each problem's Warn.</summary>
+    private static McpConfigLoad Parse(string path, bool log)
+    {
         if (!File.Exists(path))
         {
             return McpConfigLoad.Empty(path);
         }
 
-        McpConfigFile? file;
-        try
+        // "mcpServers": null reads as none (2026-10-22, review K1: it threw here, and the startup encryption pass and every turn's tool build
+        // with it). SqliteConfigFile has had this check since 2026-10-04.
+        var servers = ReadFile(path, out string? unreadable);
+        if (unreadable is not null)
         {
-            file = JsonSerializer.Deserialize(File.ReadAllText(path), McpJsonContext.Default.McpConfigFile);
-        }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
-        {
-            string detail = LogText.Excerpt(ex.Message);
-            DiagnosticLog.Warn(Category, McpText.ConfigProblemLogLine(path, detail));
-            return new McpConfigLoad(path, [], [new McpConfigProblem(path, McpText.UnreadableFile(detail))]);
+            if (log)
+            {
+                DiagnosticLog.Warn(Category, McpText.ConfigProblemLogLine(path, unreadable));
+            }
+
+            return new McpConfigLoad(path, [], [new McpConfigProblem(path, McpText.UnreadableFile(unreadable))]);
         }
 
-        // "mcpServers": null reads as null past the non-nullable type (2026-10-22, review K1: it threw here, and the
-        // startup encryption pass (EncryptAll, since 2026-11-19) and every turn's tool build with it). SqliteConfigFile has had this check since 2026-10-04.
-        if (file?.McpServers is not { Count: > 0 })
+        if (servers is null)
         {
             return McpConfigLoad.Empty(path);
         }
 
-        var servers = new List<KeyValuePair<string, McpServerConfig>>(file.McpServers.Count);
+        var usable = new List<KeyValuePair<string, McpServerConfig>>(servers.Count);
         var problems = new List<McpConfigProblem>();
-        foreach (var (name, config) in file.McpServers)
+        foreach (var (name, element) in servers)
         {
             if (string.IsNullOrWhiteSpace(name))
             {
@@ -84,24 +167,40 @@ public sealed class McpConfigFile
                 continue;
             }
 
+            string source = McpText.ServerSource(path, name);
+            McpServerConfig? config;
+            try
+            {
+                config = element.ValueKind == JsonValueKind.Null ? null : element.Deserialize(McpJsonContext.Default.McpServerConfig);
+            }
+            catch (JsonException ex)
+            {
+                string detail = LogText.Excerpt(ex.Message);
+                if (log)
+                {
+                    DiagnosticLog.Warn(Category, McpText.ConfigProblemLogLine(source, detail));
+                }
+
+                problems.Add(new McpConfigProblem(source, McpText.BadEntry(detail)) { Name = name });
+                continue;
+            }
+
             if (config is null)
             {
-                problems.Add(new McpConfigProblem(McpText.ServerSource(path, name), McpText.NeitherCommandNorUrl));
+                problems.Add(new McpConfigProblem(source, McpText.NeitherCommandNorUrl) { Name = name });
                 continue;
             }
 
-            // Before the problem check (2026-11-19, feature idea #29): a server skipped over a typo keeps no token plain, the families' rule.
-            McpSecrets.EncryptInPlace(path, name, config);
             if (config.Problem is { } reason)
             {
-                problems.Add(new McpConfigProblem(McpText.ServerSource(path, name), reason));
+                problems.Add(new McpConfigProblem(source, reason) { Name = name });
                 continue;
             }
 
-            servers.Add(new KeyValuePair<string, McpServerConfig>(name, config));
+            usable.Add(new KeyValuePair<string, McpServerConfig>(name, config));
         }
 
-        return new McpConfigLoad(path, servers, problems);
+        return new McpConfigLoad(path, usable, problems);
     }
 
     /// <summary>
@@ -111,21 +210,10 @@ public sealed class McpConfigFile
     public static IReadOnlyList<string> EncryptAll(string home)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(home);
-        var paths = new List<string> { GlobalPath(home) };
-        try
-        {
-            paths.AddRange(NeonSidekick.Settings.Profiles.List(home).Select(name => ProfilePath(NeonSidekick.Settings.Profiles.Directory(home, name))));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Warn(Category, Computers.ComputerText.ProfilesUnlistedLogLine(FileName, NeonSidekick.Settings.Profiles.Root(home), LogText.Excerpt(ex.Message)));
-        }
-
-        var read = new List<string>();
-        foreach (string path in paths.Where(File.Exists))
+        var read = NeonSidekick.Settings.Profiles.ExistingConfigFiles(home, GlobalPath(home), ProfilePath, Category, (folder, detail) => Computers.ComputerText.ProfilesUnlistedLogLine(FileName, folder, detail));
+        foreach (string path in read)
         {
             Load(path);
-            read.Add(path);
         }
 
         return read;

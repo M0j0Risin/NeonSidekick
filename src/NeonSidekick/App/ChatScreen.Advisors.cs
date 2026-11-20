@@ -40,8 +40,8 @@ internal sealed partial class ChatScreen
     /// (<see cref="TokenTally.AddAdvisors"/>, later on 2026-10-10). Shared with headless. <paramref name="inPass"/> (2026-11-17): whether a gap
     /// review's or a code audit's pass runs, when a call goes without the advisor's thread.
     /// </summary>
-    public static NeonAdvisorTool AdvisorTool(IAdvisorHost host, Func<AppSettingsData> effective, Func<string> master, AdvisorThreads threads, Func<(IReadOnlyList<AIFunction> Tools, string Rules)> offered, Func<IReadOnlyList<ChatMessage>> history, Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? confirm, IAdvisorView? view, Action<TokenUsage, int>? spent, Func<bool>? inPass = null) =>
-        new(host, effective, master, threads, offered, history, confirm, view, spent, inPass);
+    public static NeonAdvisorTool AdvisorTool(IAdvisorHost host, Func<AppSettingsData> effective, Func<string> master, AdvisorThreads threads, Func<(IReadOnlyList<AIFunction> Tools, string Rules)> offered, Func<IReadOnlyList<ChatMessage>> history, Func<AdvisorEntry, string, CancellationToken, Task<bool?>>? confirm, IAdvisorView? view, Action<TokenUsage, int>? spent, Func<bool>? inPass = null, string notAskedTail = "") =>
+        new(host, effective, master, threads, offered, history, confirm, view, spent, inPass) { NotAskedTail = notAskedTail };
 
     /// <summary>Whether a turn offers <c>neon_advisor</c>: <c>Advisors enabled</c> on and an advisor listed (2026-10-10). Pure.</summary>
     public static bool AdvisorsOffered(AppSettingsData effective)

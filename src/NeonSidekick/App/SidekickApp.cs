@@ -60,6 +60,12 @@ public sealed partial class SidekickApp
     /// </summary>
     public const int HeadlessRefusedExitCode = 3;
 
+    /// <summary>
+    /// The exit code of a headless run whose <c>--allow mcp:&lt;name&gt;</c> names no server, or several (2026-11-20, the mcp-ask review's
+    /// #124, #75): a bad argument's, said before anything connects.
+    /// </summary>
+    public const int HeadlessBadAllowExitCode = 2;
+
     private readonly IAnsiConsole _console;
     private readonly AppSettings _settings;
     private readonly EnvironmentOverrides _environment;
@@ -571,11 +577,7 @@ public sealed partial class SidekickApp
             try
             {
                 LogStartup();
-                EncryptSqlPasswords();
-                EncryptOraclePasswords();
-                EncryptMySqlPasswords();
-                EncryptPostgresPasswords();
-                EncryptUncPasswords();
+                EncryptStoredSecrets();
                 // The screen wipes and draws the banner itself, inside the alternate buffer its
                 // pane enters (RenderScreen(IAnsiConsole) through the pane), so the shell's screen is untouched.
                 return await RunInteractiveAsync(cancellationToken).ConfigureAwait(false);
@@ -936,11 +938,7 @@ public sealed partial class SidekickApp
         DiagnosticLog.Emitted += forward;
         LogStartup();
         _headlessAllowances = new HeadlessAllowances(_options.AllowList);
-        EncryptSqlPasswords();
-        EncryptOraclePasswords();
-        EncryptMySqlPasswords();
-        EncryptPostgresPasswords();
-        EncryptUncPasswords();
+        EncryptStoredSecrets();
         await using var embedded = _embeddedLlm?.Invoke();
         await using var claudeServer = _claudeServerFactory();
         _claudeServer = claudeServer;
@@ -1034,7 +1032,7 @@ public sealed partial class SidekickApp
         // The Home Assistant tools (2026-09-28): no pane to ask on, so an asked call is refused; the policy's safe list runs.
         using var ha = new HomeAssistant.HaSession(() => EffectiveSettings, _haClient, _time);
         // ha_camera (2026-10-27) keeps its stills in the profile's images folder, as the screen's does.
-        var haTools = ChatScreen.HomeAssistantTools(ha, confirm: _headlessAllowances.Confirm(AllowKind.Ha), images: images);
+        var haTools = ChatScreen.HomeAssistantTools(ha, confirm: _headlessAllowances.Confirm(AllowKind.Ha), images: images, notAskedTail: AllowText.NotAskedTail(AllowKind.Ha), showsQuestion: false);
         Dictionary<string, string> HomeNotes() => ChatScreen.HomeToolNotes(ImageCodecs.Available, session.EmbeddedServer is { Vision: false });
         // The YouTube search (2026-10-05): no window headless, so youtube_search, and the saved videos (2026-10-07) to list and change.
         var youTubeTools = ChatScreen.YouTubeTools(new YouTube.YouTubeDataApi(_web.Http), player: null, () => EffectiveSettings, _time, HeadlessYouTubeLibrary);
@@ -1047,7 +1045,7 @@ public sealed partial class SidekickApp
         using var docker = new Docker.DockerSession(() => EffectiveSettings, _dockerClient, _time, _environment.System);
         // The camera (2026-10-02): /camera list only; a photo needs the screen's panes, so camera_capture is never offered here.
         using var camera = new Camera.CameraSession(_camera, () => Camera.CameraSettings.Options(EffectiveSettings), _time);
-        var dockerTools = ChatScreen.DockerTools(docker, confirm: _headlessAllowances.Confirm(AllowKind.Docker));
+        var dockerTools = ChatScreen.DockerTools(docker, confirm: _headlessAllowances.Confirm(AllowKind.Docker), notAskedTail: AllowText.NotAskedTail(AllowKind.Docker));
         // The event logs (2026-10-15): read-only, so headless has all four; the ticked computers and the working directory's .evtx files.
         var eventLog = new EventLog.EventLogAccess(_eventLogSystem, () => EventLog.EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory), () => EffectiveSettings.EventLogComputersOffered, files, _time);
         // A Mac's unified log (2026-10-18, the Mac event-log plan): the same four tool names over it when a reader was given.
@@ -1069,7 +1067,7 @@ public sealed partial class SidekickApp
         var directory = new ActiveDirectory.DirectoryAccess(_directorySystem, () => ActiveDirectory.DirectoryConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory, _joinedDomain()), () => EffectiveSettings.DirectoryDomainsOffered, _joinedDomain, _time);
         var directoryTools = ChatScreen.DirectoryTools(directory, saveRoot: saveRoot);
         // The print tools (2026-09-28): no pane to ask on, so under ask (the default) the model's print is refused; /print works.
-        var printTools = ChatScreen.PrintTools(print, confirm: _headlessAllowances.Confirm(AllowKind.Print));
+        var printTools = ChatScreen.PrintTools(print, confirm: _headlessAllowances.Confirm(AllowKind.Print), notAskedTail: AllowText.NotAskedTail(AllowKind.Print));
         // The shell tools (2026-09-21): headless has no pane to ask on, so the gate has no asker — under ask the
         // allow list alone decides, and NEONSIDEKICK_COMMAND_POLICY=yolo is how a scripted run says yes.
         var interpreters = new Shell.Interpreters(_environment.System);
@@ -1105,7 +1103,7 @@ public sealed partial class SidekickApp
         // The code audit (2026-10-18), made here (2026-11-17) for the advisor: a pass of it, or of a gap review, asks without the thread.
         var audit = new Audits.AuditSession(files);
         var neonAdvisor = ChatScreen.AdvisorTool(advisorHost, () => EffectiveSettings, () => _settings.ProfileName, advisorThreads, () => lastInputs is null ? ([], "") : ChatScreen.AdvisorTurnTools(lastInputs, markdown: false), () => session.History.Messages, _headlessAllowances.Advisor, new HeadlessNeonAdvisorView(this), session.Usage.AddAdvisors,
-            () => plan.Reviewing || audit.InPass);
+            () => plan.Reviewing || audit.InPass, notAskedTail: AllowText.NotAskedTail(AllowKind.Advisor));
         var neonAdvisorTools = new List<Microsoft.Extensions.AI.AIFunction> { neonAdvisor };
         var sessionTools = ChatScreen.SessionTools(sessions, () => EffectiveSettings, () => sessionId, _time);
         // Plan mode (2026-09-26, made above): no pane to approve on, so a presented plan is saved and the user approves it with
@@ -1229,6 +1227,7 @@ public sealed partial class SidekickApp
             {
                 Settings = effective,
                 Mcp = name => Help.HelpMcpLookup.Find(mcp.Servers, name),
+                McpAllowed = name => Help.HelpMcpLookup.Find(mcp.Servers, name) is { } found && _headlessAllowances.AllowsMcp(found.Server),
             };
         }
         // The gap-closing loop's next pass (2026-10-13): sent as the next line without reading stdin, since headless has no pane to chain on.
@@ -1244,6 +1243,28 @@ public sealed partial class SidekickApp
         {
             await HeadlessLineAsync(VersionLine).ConfigureAwait(false);
             await HeadlessLineAsync(HeadlessModeLine).ConfigureAwait(false);
+
+            // --allow mcp:<name> checked against every name the files hold, broken entries too, before the model or a server starts
+            // (2026-11-20, the mcp-ask review's #9, #124, #75, #111): a typo is exit 2, as a bad argument is. Read without sealing or logging,
+            // so the connect's read says the files' problems once.
+            var mcpFiles = mcp.Read(seal: false);
+            var allowErrors = _headlessAllowances.KnowServers(mcpFiles.Entries.Select(e => e.Name).Concat(mcpFiles.Problems.Select(p => p.Name).OfType<string>()));
+            if (allowErrors.Count > 0)
+            {
+                foreach (string error in allowErrors)
+                {
+                    DiagnosticLog.Info(Category, error);
+                    await HeadlessNoticeLineAsync("[error] " + error).ConfigureAwait(false);
+                }
+
+                return HeadlessBadAllowExitCode;
+            }
+
+            foreach (string notice in HeadlessAllowNotices(EffectiveSettings, mcpFiles))
+            {
+                DiagnosticLog.Info(Category, notice);
+                await HeadlessNoticeLineAsync("[notice] " + notice).ConfigureAwait(false);
+            }
 
             // A chosen Docker container (2026-10-02) takes minutes to load: each step of its switch is a notice, said once. Since 2026-10-26
             // (the review's R38) whenever Docker servers are offered: a clear before the embedded model or a server on this computer says its stops too.
@@ -1285,12 +1306,6 @@ public sealed partial class SidekickApp
             foreach (string warning in mcp.WarningLines())
             {
                 await HeadlessLineAsync(warning).ConfigureAwait(false);
-            }
-
-            // An --allow mcp:<server> that names no server (2026-11-19): one notice each, the run goes on (the file may be edited later).
-            foreach (string notice in _headlessAllowances.KnowServers(mcp.Servers.Select(s => s.Name).Distinct(StringComparer.Ordinal)))
-            {
-                await HeadlessNoticeLineAsync("[notice] " + notice).ConfigureAwait(false);
             }
 
             var assistant = session.Assistant;
@@ -2215,7 +2230,7 @@ public sealed partial class SidekickApp
 
             await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
             await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            return refused.Count > 0 || _headlessAllowances.Refusals.Count > 0 ? HeadlessRefusedExitCode : 0;
+            return refused.Count > 0 || _headlessAllowances.AnyRefused ? HeadlessRefusedExitCode : 0;
         }
         finally
         {
@@ -2449,7 +2464,7 @@ public sealed partial class SidekickApp
                 var reviewer = named ?? Plans.PlanReviewer.Model;
                 if (reviewer != Plans.PlanReviewer.Model && HeadlessAdvisorsOffered() && HeadlessAdvisorsConfirmBlocked())
                 {
-                    // No confirm seam headless: every advisor call would be refused, so the model reviews alone.
+                    // Advisor confirm without --allow advisor (2026-11-20, #105): every advisor call would be refused, so the model reviews alone.
                     reviewer = Plans.PlanReviewer.Model;
                     await HeadlessNoticeLineAsync("[notice] " + Plans.PlanText.GapsConfirmFallbackNotice).ConfigureAwait(false);
                 }
@@ -2587,6 +2602,49 @@ public sealed partial class SidekickApp
     /// Whether <c>Advisor confirm</c> keeps a headless review from its advisors (2026-11-19, feature idea #45): on, and the run has no
     /// <c>--allow advisor</c>. The gap review's, the audit's and the Ralph loop's fallbacks to the model alone read it.
     /// </summary>
+    /// <summary>
+    /// The start's notices for the <c>--allow</c> entries that let nothing through under this run's settings (2026-11-20, the mcp-ask
+    /// review's #110): a family switched off, or one that never asks. Each read as the tool itself reads it (<see cref="Printing.PrintPolicy.Resolve"/>,
+    /// <see cref="HomeAssistant.HaPolicy.Resolve"/>), so a notice can't disagree with the tool. An <c>mcp:&lt;server&gt;</c> whose <c>"ask"</c> is
+    /// <c>never</c> is named; a <c>"writes"</c> server whose tools are all read-only isn't, since only a connect lists them.
+    /// </summary>
+    internal IReadOnlyList<string> HeadlessAllowNotices(AppSettingsData effective, Mcp.McpMerged files)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        ArgumentNullException.ThrowIfNull(files);
+        var notices = new List<string>();
+        void Check(AllowKind kind, params (bool Holds, string Why)[] reasons)
+        {
+            if (_headlessAllowances.Allows(kind) && reasons.FirstOrDefault(r => r.Holds) is { Why: { } why })
+            {
+                notices.Add(AllowText.ChangesNothing(HeadlessAllowances.Info(kind).Word, why));
+            }
+        }
+
+        Check(AllowKind.Docker, (!effective.DockerTools, AllowText.DockerOff), (!effective.DockerWrites, AllowText.DockerWritesOff));
+        Check(AllowKind.Print, (!effective.PrintTools, AllowText.PrintOff), (Printing.PrintPolicy.Resolve(effective.PrintActionPolicy) != Printing.PrintPolicy.Ask, AllowText.PrintNotAsk));
+        Check(AllowKind.Ha, (!effective.HomeAssistantTools, AllowText.HaOff), (HomeAssistant.HaPolicy.Resolve(effective.HomeAssistantActionPolicy) != HomeAssistant.HaPolicy.Ask, AllowText.HaNotAsk));
+        Check(AllowKind.Advisor, (!effective.Advisors, AllowText.AdvisorOff), (!effective.AdvisorConfirm, AllowText.AdvisorConfirmOff));
+        Check(AllowKind.Mcp, (!effective.McpServers, AllowText.McpOff));
+        foreach (string server in _headlessAllowances.McpServers)
+        {
+            string entry = HeadlessAllowances.McpServerPrefix + server;
+            if (!effective.McpServers)
+            {
+                notices.Add(AllowText.ChangesNothing(entry, AllowText.McpOff));
+                continue;
+            }
+
+            var named = files.Entries.Where(e => e.Startable && _headlessAllowances.AllowsMcp(e.Name) && (string.Equals(e.Name, server, StringComparison.OrdinalIgnoreCase))).ToList();
+            if (named.Count == 1 && named[0].Config.AskMode == Mcp.McpAskMode.Never)
+            {
+                notices.Add(AllowText.ChangesNothing(entry, AllowText.AskNever(named[0].Name)));
+            }
+        }
+
+        return notices;
+    }
+
     private bool HeadlessAdvisorsConfirmBlocked() => EffectiveSettings.AdvisorConfirm && !_headlessAllowances.Allows(AllowKind.Advisor);
 
     /// <summary>
@@ -3782,33 +3840,26 @@ public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
     /// snapshot, so a flag's or a variable's value shows as the setting it became).
     /// </summary>
     /// <summary>
-    /// A plain password typed into any <c>sql.json</c> — the home's or any profile's — encrypted before the first
-    /// screen or turn (later on 2026-09-23, the user's ask), whatever the SQL tools' switch says: a secret on disk
-    /// is the thing to fix, not only a secret about to be used. The interactive and headless modes only.
+    /// Every stored secret typed in plain text encrypted before the first screen or turn, whatever each family's switch says: a secret on
+    /// disk is the thing to fix, not only a secret about to be used. The interactive and headless modes only. One call for every family
+    /// (2026-11-20, the mcp-ask review's #95; each family's own pass since its day): <c>sql.json</c> (later on 2026-09-23, the user's ask),
+    /// <c>oracle.json</c> and <c>mysql.json</c> (2026-09-30), <c>postgres.json</c> (2026-10-04), <c>unc.json</c>'s runas passwords
+    /// (2026-09-30), <c>eventlog.json</c>, <c>services.json</c>, <c>tasks.json</c> and <c>ad.json</c> (2026-10-15), and <c>mcp.json</c>'s
+    /// tokens (2026-11-19, feature idea #29).
     /// </summary>
-    private void EncryptSqlPasswords() => Sql.SqlConfigFile.EncryptAll(_settings.StorageDirectory);
-
-    /// <summary>A plain password typed into any <c>oracle.json</c> encrypted before the first screen or turn (2026-09-30), as <see cref="EncryptSqlPasswords"/> does for <c>sql.json</c>.</summary>
-    private void EncryptOraclePasswords() => Oracle.OracleConfigFile.EncryptAll(_settings.StorageDirectory);
-
-    /// <summary>A plain password typed into any <c>mysql.json</c> encrypted before the first screen or turn (2026-09-30), as for <c>sql.json</c> and <c>oracle.json</c>.</summary>
-    private void EncryptMySqlPasswords() => MySql.MySqlConfigFile.EncryptAll(_settings.StorageDirectory);
-
-    /// <summary>A plain password typed into any <c>postgres.json</c> encrypted before the first screen or turn (2026-10-04), as for <c>mysql.json</c>.</summary>
-    private void EncryptPostgresPasswords() => Postgres.PostgresConfigFile.EncryptAll(_settings.StorageDirectory);
-
-    /// <summary>A plain runas password typed into any <c>unc.json</c> encrypted before the first screen or turn (2026-09-30), as <see cref="EncryptSqlPasswords"/> does for <c>sql.json</c>.</summary>
-    private void EncryptUncPasswords()
+    private void EncryptStoredSecrets()
     {
-        Unc.UncConfigFile.EncryptAll(_settings.StorageDirectory);
-        // eventlog.json's runas passwords (2026-10-15) are encrypted at startup the same way.
-        EventLog.EventLogConfigFile.EncryptAll(_settings.StorageDirectory);
-        // services.json, tasks.json and ad.json (2026-10-15, the admin-tools plan) the same way.
-        Services.ServiceConfigFile.Family.EncryptAll(_settings.StorageDirectory);
-        Tasks.TaskConfigFile.Family.EncryptAll(_settings.StorageDirectory);
-        ActiveDirectory.DirectoryConfigFile.EncryptAll(_settings.StorageDirectory);
-        // mcp.json's tokens (2026-11-19, feature idea #29): headers and env values named as secrets, the same way.
-        Mcp.McpConfigFile.EncryptAll(_settings.StorageDirectory);
+        string home = _settings.StorageDirectory;
+        Sql.SqlConfigFile.EncryptAll(home);
+        Oracle.OracleConfigFile.EncryptAll(home);
+        MySql.MySqlConfigFile.EncryptAll(home);
+        Postgres.PostgresConfigFile.EncryptAll(home);
+        Unc.UncConfigFile.EncryptAll(home);
+        EventLog.EventLogConfigFile.EncryptAll(home);
+        Services.ServiceConfigFile.Family.EncryptAll(home);
+        Tasks.TaskConfigFile.Family.EncryptAll(home);
+        ActiveDirectory.DirectoryConfigFile.EncryptAll(home);
+        Mcp.McpConfigFile.EncryptAll(home);
     }
 
     /// <summary><c>/net</c> headless (2026-10-15): its lines, the model's refusal note after them.</summary>

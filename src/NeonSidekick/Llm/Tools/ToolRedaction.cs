@@ -61,7 +61,26 @@ public static partial class ToolRedaction
         return result;
     }
 
-    [GeneratedRegex(@"(?<head>[a-z][a-z0-9+.\-]*://[^:/@\s]+:)[^@\s/]+@", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    // The user part may be empty (2026-11-20, the mcp-ask review's #21): redis://:pw@host carries a password with no user name.
+    /// <summary>The longest an audit line's text runs before its <c>…</c> (<see cref="AuditText"/>).</summary>
+    public const int AuditChars = 2000;
+
+    /// <summary>
+    /// Text as an audit line keeps it (2026-11-20, the mcp-ask review's #11, #100, #96, #41, #123): redacted (<see cref="Text"/>), cut at
+    /// <paramref name="max"/> characters of the raw text without splitting a pair (<c>…</c> after a cut), and only then its hiding characters
+    /// escaped (<see cref="Files.NameScrub.Display"/>). Redacting first, so a cut can't split a secret past its pattern; escaping last, so the
+    /// escapes neither count against the cap nor get cut in half (each is six characters for one). One line: the caller folds its breaks.
+    /// The database audit, the MCP audit and headless <c>--allow</c>'s line share it. Pure.
+    /// </summary>
+    public static string AuditText(string text, int max = AuditChars)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string redacted = Text(text);
+        string cut = redacted.Length <= max ? redacted : Files.TextCut.Safe(redacted, max) + "…";
+        return Files.NameScrub.Display(cut);
+    }
+
+    [GeneratedRegex(@"(?<head>[a-z][a-z0-9+.\-]*://[^:/@\s]*:)[^@\s/]+@", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UrlCredentials();
 
     // A quoted or bare value, the shape every rule below hides.

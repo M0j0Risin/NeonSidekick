@@ -175,6 +175,30 @@ public static class Profiles
         fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? ConfigPath(profileDirectory, fileName) : Path.Combine(profileDirectory, fileName);
 
     /// <summary>
+    /// A config family's files that exist under <paramref name="home"/> (2026-11-20, the mcp-ask review's #46 and #95: the one loop the
+    /// startup encryption of every family shared six times): the home's <paramref name="globalPath"/>, then each profile's
+    /// (<paramref name="profilePath"/> of its folder), in <see cref="List"/>'s order. A profiles folder that can't be listed is one Warn under
+    /// <paramref name="category"/>, worded by <paramref name="unlisted"/> (the folder, the detail), and the home's file alone. Never throws on IO.
+    /// </summary>
+    public static IReadOnlyList<string> ExistingConfigFiles(string home, string globalPath, Func<string, string> profilePath, string category, Func<string, string, string> unlisted)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(home);
+        ArgumentNullException.ThrowIfNull(profilePath);
+        ArgumentNullException.ThrowIfNull(unlisted);
+        var paths = new List<string> { globalPath };
+        try
+        {
+            paths.AddRange(List(home).Select(name => profilePath(Directory(home, name))));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn(category, unlisted(Root(home), LogText.Excerpt(ex.Message)));
+        }
+
+        return paths.Where(File.Exists).ToList();
+    }
+
+    /// <summary>
     /// Every profile, <see cref="DefaultName"/> first (listed even when its directory is missing),
     /// the rest sorted ignoring case. Directories with a name <see cref="IsValidName"/> refuses are
     /// not profiles and are skipped. A missing <c>profiles</c> directory lists the default alone.

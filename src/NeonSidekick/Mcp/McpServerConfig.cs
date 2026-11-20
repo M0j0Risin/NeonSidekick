@@ -89,7 +89,8 @@ public sealed class McpServerConfig
                 return McpText.NeitherCommandNorUrl;
             }
 
-            if (IsHttp && (!Uri.TryCreate(Url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)))
+            // A url holding a ${NAME} is checked at connect, once expanded (2026-11-20, the mcp-ask review's #72).
+            if (IsHttp && !Url!.Contains("${", StringComparison.Ordinal) && (!Uri.TryCreate(Url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)))
             {
                 return McpText.BadUrl(Url!);
             }
@@ -103,6 +104,39 @@ public sealed class McpServerConfig
     /// (the file's own spacing and key order never count). Through the source-generated context.
     /// </summary>
     public string Fingerprint() => JsonSerializer.Serialize(this, McpJsonContext.Default.McpServerConfig);
+
+    /// <summary>
+    /// The connection's shape only (2026-11-20, the mcp-ask review's #16): <see cref="Fingerprint"/> without <see cref="Ask"/> and
+    /// <see cref="Instructions"/>, which a kept connection takes on in place. A reload restarts a server only when this differs.
+    /// </summary>
+    public string ConnectionFingerprint() => WithoutAskOrNotes().Fingerprint();
+
+    /// <summary>
+    /// A copy with the given fields replaced (2026-11-20, the mcp-ask review's #18), every other field the same; a null argument keeps the
+    /// original's. Shallow (<see cref="object.MemberwiseClone"/>): a caller that edits a list or dictionary passes its own new one, so a
+    /// config the load cache shares is never changed.
+    /// </summary>
+    public McpServerConfig With(List<string>? args = null, Dictionary<string, string>? env = null, string? command = null, string? url = null,
+        Dictionary<string, string>? headers = null, string? ask = null, bool? instructions = null)
+    {
+        var copy = (McpServerConfig)MemberwiseClone();
+        copy.Args = args ?? Args;
+        copy.Env = env ?? Env;
+        copy.Command = command ?? Command;
+        copy.Url = url ?? Url;
+        copy.Headers = headers ?? Headers;
+        copy.Ask = ask ?? Ask;
+        copy.Instructions = instructions ?? Instructions;
+        return copy;
+    }
+
+    private McpServerConfig WithoutAskOrNotes()
+    {
+        var copy = (McpServerConfig)MemberwiseClone();
+        copy.Ask = null;
+        copy.Instructions = null;
+        return copy;
+    }
 
     /// <summary>What the pane says of the transport: <c>stdio: docker mcp gateway run</c> or <c>http: http://…</c>. Pinned through <see cref="McpText.Transport"/>.</summary>
     public string Describe() => McpText.Transport(this);

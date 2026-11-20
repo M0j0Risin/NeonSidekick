@@ -192,6 +192,14 @@ public sealed record SystemPromptFacts(
         _ => this,
     };
 
+    /// <summary>
+    /// These facts without one MCP server's notes (2026-11-20, the mcp-ask review's #97): what a server's own <c>/usage</c> row saves. Its
+    /// switch is the shared <c>MCP servers</c>, so <see cref="Without(SettingsField)"/> would count every server's notes and the MCP rule
+    /// under each row. The notes' order is kept, so the rest measure as the turn sends them.
+    /// </summary>
+    public SystemPromptFacts WithoutMcpServer(string server) =>
+        McpNotes is { Count: > 0 } notes ? this with { McpNotes = notes.Where(n => !string.Equals(n.Server, server, StringComparison.Ordinal)).ToList() } : this;
+
     /// <summary>Whether the rules carry <see cref="Assistant.EventLogRuleHere"/> (Windows' sentence, or the Mac's since 2026-10-18): tools on, the switch on with a reader (wevtapi, or the unified log on a Mac) and an event-log tool offered (2026-10-15).</summary>
     public bool EventLog => ToolsEnabled && EventLogEnabled && EventLogTools > 0;
 

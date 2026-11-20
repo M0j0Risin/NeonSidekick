@@ -292,21 +292,10 @@ public sealed class EventLogConfigFile
     public static IReadOnlyList<string> EncryptAll(string home)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(home);
-        var paths = new List<string> { GlobalPath(home) };
-        try
-        {
-            paths.AddRange(Settings.Profiles.List(home).Select(name => ProfilePath(Settings.Profiles.Directory(home, name))));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            DiagnosticLog.Warn(EventLogText.Category, EventLogText.ProfilesUnlistedLogLine(Settings.Profiles.Root(home), LogText.Excerpt(ex.Message)));
-        }
-
-        var read = new List<string>();
-        foreach (string path in paths.Where(File.Exists))
+        var read = Settings.Profiles.ExistingConfigFiles(home, GlobalPath(home), ProfilePath, EventLogText.Category, EventLogText.ProfilesUnlistedLogLine);
+        foreach (string path in read)
         {
             Load(path);
-            read.Add(path);
         }
 
         return read;

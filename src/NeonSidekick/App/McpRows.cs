@@ -12,7 +12,14 @@ namespace NeonSidekick.App;
 /// <param name="Disabled">The tools switched off by name (<c>ToolsDisabled</c>, the prefixed names among them).</param>
 /// <param name="ProfilePath">The profile's <c>mcp.json</c>.</param>
 /// <param name="GlobalPath">The home's <c>mcp.json</c>.</param>
-public sealed record McpFacts(IReadOnlyList<McpServerStatus> Servers, IReadOnlyList<McpConfigProblem> Problems, bool Enabled, bool ToolsEnabled, IReadOnlySet<string> Disabled, string ProfilePath, string GlobalPath);
+public sealed record McpFacts(IReadOnlyList<McpServerStatus> Servers, IReadOnlyList<McpConfigProblem> Problems, bool Enabled, bool ToolsEnabled, IReadOnlySet<string> Disabled, string ProfilePath, string GlobalPath)
+{
+    /// <summary>
+    /// Whether <i>Allow for this session</i> holds for a tool, by its prefixed name (2026-11-20, the mcp-ask review's #25): the Tools tab's
+    /// footer says so. Null reads as none, as the tests' facts have it. The <c>asks</c> tag stays: the rule applies again after <c>/new</c>.
+    /// </summary>
+    public Func<string, bool>? Allowed { get; init; }
+}
 
 /// <summary>What a row of the Servers tab does on Enter: a server's flip, one of the two edit rows, the reload row.</summary>
 public abstract record McpRow
@@ -186,12 +193,15 @@ public static class McpRows
     /// <summary>A connected server's footer words, each with its <c> · </c>: <c>asks before writes · notes 812 chars · </c>.</summary>
     private static string ConnectedWords(McpServerStatus server)
     {
-        string notes = McpText.NotesFooter(server.NotesLength, server.NotesOn);
+        string notes = McpText.NotesFooter(server.NotesLength, server.NotesRaw, server.NotesLeftOut, server.NotesOn);
         return McpText.AskFooter(server.Ask) + " · " + (notes.Length > 0 ? notes + " · " : "");
     }
 
-    /// <summary>The width of the Tools tab's ask column (2026-11-19): <see cref="McpText.AsksTag"/> and its gap.</summary>
-    public const int AskWidth = 6;
+    /// <summary>
+    /// The width of the Tools tab's ask column (2026-11-19): <see cref="McpText.AsksTag"/> and its gap, measured (2026-11-20, the mcp-ask
+    /// review's #73), so the tag can't outgrow it; a string's length is no constant.
+    /// </summary>
+    public static readonly int AskWidth = McpText.AsksTag.Length + 2;
 
     /// <summary>The Tools tab's ask column for <paramref name="tool"/> of <paramref name="server"/>: <see cref="McpText.AsksTag"/> or blank, padded.</summary>
     public static string AskColumn(McpServerStatus server, McpTool tool) => (McpAskRule.Asks(server.Ask, tool) ? McpText.AsksTag : "").PadRight(AskWidth);
@@ -237,7 +247,9 @@ public static class McpRows
         int shownServers = 0;
         foreach (var server in connected)
         {
-            var tools = server.Tools.Where(t => MenuFilter.Matches(filter, t.Name, t.Description)).ToList();
+            // A tool that asks also matches its tag (2026-11-20, the mcp-ask review's #114): typing "asks" keeps the tools the column marks.
+            var tools = server.Tools.Where(t => MenuFilter.Matches(filter, t.Name, t.Description)
+                || (McpAskRule.Asks(server.Ask, t) && MenuFilter.Matches(filter, McpText.AsksTag, null))).ToList();
             if (tools.Count == 0 && filter.Length > 0)
             {
                 continue;
@@ -310,19 +322,17 @@ public static class McpRows
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(tool);
-        foreach (var server in facts.Servers.Where(s => s.State == McpState.Connected))
+        // The connected rows only (#119's FindTool, each caller its rows): the tab lists no other.
+        if (McpServerStatus.FindTool(facts.Servers.Where(s => s.State == McpState.Connected), tool) is not var (server, found))
         {
-            if (server.Tools.FirstOrDefault(t => string.Equals(t.Name, tool, StringComparison.Ordinal)) is { } found)
-            {
-                // Whether it asks (2026-11-19, feature idea #28), and why not when it doesn't.
-                string asks = McpAskRule.Asks(server.Ask, found) ? McpText.ToolAsksFooter
-                    : server.Ask == McpAskMode.Never ? McpText.ToolNeverFooter
-                    : McpText.ToolReadOnlyFooter;
-                return new MenuFooter(found.Description, asks);
-            }
+            return null;
         }
 
-        return null;
+        // Whether it asks (2026-11-19, feature idea #28), and why not when it doesn't; held for this session (2026-11-20, #25).
+        string asks = !McpAskRule.Asks(server.Ask, found) ? (server.Ask == McpAskMode.Never ? McpText.ToolNeverFooter : McpText.ToolReadOnlyFooter)
+            : facts.Allowed?.Invoke(found.Name) == true ? McpText.ToolAllowedFooter
+            : McpText.ToolAsksFooter;
+        return new MenuFooter(found.Description, asks);
     }
 
     /// <summary>The first server row (the cursor's opening place); 0 when there is none.</summary>

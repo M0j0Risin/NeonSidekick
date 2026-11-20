@@ -42,10 +42,10 @@ public partial class SidekickAppTests
 
         string output = await Headless("speed up the joins\n", exitCode: SidekickApp.HeadlessRefusedExitCode);
 
-        Assert.Contains("[tool] neon_advisor -> " + AdvisorText.NotAskedError, output);
+        Assert.Contains("[tool] neon_advisor -> " + AdvisorText.NotAskedError + AllowText.NotAskedTail(AllowKind.Advisor), output);
         Assert.Equal(2, _chat.Requests.Count);
         // Counted since 2026-11-19 (feature idea #45): the summary names its flag, and the run exits 3.
-        Assert.Contains("[notice] " + SidekickOptions.RefusedSummary(AllowKind.Advisor, 1, "advisor"), output);
+        Assert.Contains("[notice] " + AllowText.RefusedSummary(AllowKind.Advisor, 1), output);
     }
 
     /// <summary><c>--allow advisor</c> (2026-11-19, feature idea #45): the call under Advisor confirm runs, logged, and nothing is counted.</summary>
@@ -71,7 +71,7 @@ public partial class SidekickAppTests
         }
 
         Assert.DoesNotContain(AdvisorText.NotAskedError, output);
-        Assert.Contains(lines, l => l.StartsWith(NeonSidekick.Mcp.McpText.AllowedBy("advisor") + ": dba: Which index?", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith(AllowText.AllowedBy("advisor") + ": dba: Which index?", StringComparison.Ordinal));
     }
 
     [Fact]

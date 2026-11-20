@@ -8,14 +8,23 @@ namespace NeonSidekick.Llm.Tools;
 /// What the ten Docker tools share (2026-10-02, the <see cref="HaTool"/> and <see cref="UncTool"/> shapes): the
 /// <see cref="DockerSession"/> door, the settings in force at each call, the container lookup, and the gate every changing
 /// tool passes before it acts — <c>Docker writes</c> read again (<see cref="DockerPolicy.WriteRefusal"/>), then the user's yes
-/// through <c>confirm</c> (true yes, false no, null nothing could ask; the seam itself null where nothing ever can,
-/// headless). Every change asks: there is no policy that lets one through unasked. A refusal is an <c>Error:</c> sentence,
+/// through <c>confirm</c> (true yes, false no, null nothing could ask; headless answers through <c>--allow docker</c> since
+/// 2026-11-19). Every change asks: there is no policy that lets one through unasked. A refusal is an <c>Error:</c> sentence,
 /// never a throw.
 /// </summary>
 public abstract class DockerTool : AIFunction
 {
     private readonly DockerSession _docker;
     private readonly Func<string, CancellationToken, Task<bool?>>? _confirm;
+
+    /// <summary>
+    /// What the "nobody could be asked" refusal ends with (2026-11-20, the mcp-ask review's #24, #57): empty on the screen; headless names
+    /// its <c>--allow</c> entry (<c>AllowText.NotAskedTail</c>), as an MCP refusal does.
+    /// </summary>
+    public string NotAskedTail { get; init; } = "";
+
+    /// <summary><paramref name="text"/> with <see cref="NotAskedTail"/> after it, the sentence closed first.</summary>
+    private string WithTail(string text) => NotAskedTail.Length == 0 ? text : text.TrimEnd('.') + "." + NotAskedTail;
 
     protected DockerTool(DockerSession docker, Func<string, CancellationToken, Task<bool?>>? confirm)
     {
@@ -83,7 +92,7 @@ public abstract class DockerTool : AIFunction
         {
             true => null,
             false => DockerText.Declined,
-            null => DockerText.NotAsked,
+            null => WithTail(DockerText.NotAsked),
         };
     }
 }

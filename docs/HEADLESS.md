@@ -4,7 +4,7 @@ How to run Neon Sidekick from scripts with `--headless`. Back to the [README](..
 
 `NeonSidekick.exe --headless` is a plain stdin/stdout prompt: no TUI, no voice, no timers and nothing that can ask you a question. It answers each line of input on stdout.
 
-It exits at `/exit` or the end of input with code 0, or 3 if a shell command or a call that asks was refused ([When a command is refused](#when-a-command-is-refused)). From a checkout: `dotnet run --project src/NeonSidekick -- --headless …`.
+It exits at `/exit` or the end of input with code 0, or 3 if a shell command or a call `--allow` covers was refused ([When a command is refused](#when-a-command-is-refused)). From a checkout: `dotnet run --project src/NeonSidekick -- --headless …`.
 
 ```powershell
 NeonSidekick.exe --headless                                               # type messages yourself (over SSH, or where the TUI misbehaves)
@@ -39,7 +39,7 @@ Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one 
 - **Calls that would ask you first are refused** unless `--allow` names them ([below](#flags-in-headless-runs); service and task changes aren't offered):
   - the model's Docker changes, `print_file` under *Print action policy* `ask`, `neon_advisor` under *Advisor confirm*;
   - Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`;
-  - MCP tools their server doesn't mark read-only (by its `"ask"`, [TOOLS.md](TOOLS.md#mcp-servers));
+  - MCP tools that would ask, by their server's `"ask"` ([TOOLS.md](TOOLS.md#mcp-servers));
   - `shopping_clear` with `all`, which `--allow` doesn't cover.
 - **No Browser window:** a web tool that meets a bot check reports it.
 - **The project file** (`NEON.md`, `AGENTS.md`, `CLAUDE.md`) is never changed; the model is told you can make the change.
@@ -128,7 +128,7 @@ They need no server unless the row says so.
 
 - **Plan mode:** a presented plan is saved as `.neon/plans/<name>.md`, named in a `[notice]`. Then type `/plan approve [--fresh | --ralph [<passes>]]`, `cancel`, `show`, `save [<name>]`, `open [<name>] [--chat]` (alone, it lists the plans), `gaps [model|advisor|any|confirm]`, `chat` or `ready`. `/plan template` writes the example plan; `/plan edit` needs the screen.
 - **`/plan chat`** sends nothing; your next line opens the talk, and the model writes the plan when you ask. `/plan ready` asks for it or, once one is presented, prints where it stands.
-- **`/plan gaps` and `/code-audit`** run every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run; 0 (no limit) means 100, as there's no Esc. Under *Advisor confirm* the model works alone.
+- **`/plan gaps` and `/code-audit`** run every pass without waiting, each echoed as a `You:` line. A count (`/plan gaps 3`) caps the run; 0 (no limit) means 100, as there's no Esc. Under *Advisor confirm* the model works alone, and a Ralph loop's advisor review falls back to the model, unless the run has `--allow advisor`.
   - A server failure is tried once more, and a pass that reports nothing is asked once, as on the screen.
 - **A gap review** stops as on the screen but never pauses: no line is read during passes, so `/plan gaps resume` has nothing to resume. A clean pass cut short at the limit names `/plan approve`. Your calls go into `## Risks` as open questions.
 - **An audit** prints each `present_audit` call as any tool's, and at its end the way on: `/code-audit fix <name>` (plan mode on the open findings) and `/code-audit open <name>`. `open`, `fix` and `resume` work as on the screen.
@@ -170,7 +170,9 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--log <path>` | Every diagnostic line to a file, first the flags, profile and variables in force; `{ts}` becomes the start time. | `--log C:\Logs\neon_{ts}.log` |
 | `--yolo` | Every shell command runs without asking ([below](#running-yolo-every-shell-command-allowed)). | `--yolo --cwd D:\Repo\MyApp` |
 | `--no-police` | The path police off ([below](#turning-off-the-path-police)). | `--no-police --cwd D:\Repo\MyApp` |
-| `--allow <list>` | Runs the calls that would ask: `docker`, `print`, `ha`, `advisor`, `mcp` (every server) or `mcp:<server>`. Repeats join; each allowed call is logged. | `--allow mcp:github,docker` |
+| `--allow <list>` | Runs the calls that would ask: `docker`, `print`, `ha`, `advisor`, `mcp` (every server) or `mcp:<server>`. Repeats join; each allowed call is logged with `--log`. | `--allow mcp:github,docker` |
+
+`mcp:<server>` names a server as `mcp.json` spells it; another case matches only when one server fits. A name that matches no server, or several, is exit 2 before anything starts. An entry that changes nothing under the run's settings gets a `[notice]`.
 
 A profile of its own (`--profile automation`) keeps scripted runs' memory, sessions and allow list out of your everyday one.
 
@@ -235,7 +237,7 @@ Under `ask`, a command not on the allow list isn't run; nothing waits or crashes
 [tool] run_command -> Error: the command was not run: there was no screen to ask the user on (...)
 ```
 
-The run carries on. At the end, if anything was refused, it prints a summary and exits with **3**:
+The run carries on. At the end, if a command was refused, it prints a summary and exits with **3**:
 
 ```
 [notice] 2 commands were not run: "npm install", "python script"
@@ -248,7 +250,7 @@ A call that would ask (MCP, Docker, print, Home Assistant, an advisor) is refuse
 [notice] 1 Docker change was refused (--allow docker allows it)
 ```
 
-Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** nothing was refused, **2** a bad argument, an unknown profile, a settings zip `--import-settings` refused (nothing imported), or an old copy started during or just after an [update](COMMANDS.md#updating) (nothing ran), **3** at least one command or call that asks was refused.
+Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** no command or call `--allow` covers was refused, **2** a bad argument, an unknown profile, an `--allow mcp:<server>` that names no server or several, a settings zip `--import-settings` refused (nothing imported), or an old copy started during or just after an [update](COMMANDS.md#updating) (nothing ran), **3** at least one command or call `--allow` covers was refused.
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --cwd D:\Repo\MyApp | Tee-Object run.txt

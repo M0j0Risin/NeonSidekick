@@ -66,6 +66,28 @@ public sealed partial class ChatScreenTests
     }
 
     /// <summary>
+    /// A push answered No changes no byte of the other profile's file (2026-11-20, the mcp-ask review's #122): the reads behind the question
+    /// only look, so its plain token stays plain until that profile connects, and the question no longer calls the values plain text.
+    /// </summary>
+    [Fact]
+    public async Task ProfilePushMcp_AnsweredNo_ChangesNoByte_OfTheOtherProfilesFile()
+    {
+        WorkProfile();
+        WriteFile(McpFileHere, """{ "mcpServers": { "files": { "command": "files-server", "env": { "GITHUB_TOKEN": "plain-here" } } } }""");
+        WriteFile(McpFileOf("work"), """{ "mcpServers": { "other": { "command": "o", "env": { "API_KEY": "plain-there" } } } }""");
+        byte[] there = File.ReadAllBytes(McpFileOf("work"));   // this profile's own file is sealed by the start's connect, as designed
+        PushLine("/profile push mcp work");
+        _console.Input.PushKey(Keys.Enter);   // No is on the cursor
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.ProfileMcpPrompt(["files"], 0, "work", pull: false), output);
+        Assert.EndsWith("Their env, headers and args go as written; an encrypted value stays encrypted.", ChatScreen.ProfileMcpPrompt(["files"], 0, "work", pull: false));
+        Assert.Equal(there, File.ReadAllBytes(McpFileOf("work")));
+    }
+
+    /// <summary>
     /// A pushed server's <c>ask</c> and <c>instructions</c> (2026-11-19) arrive as written, and the parsed mode never: no <c>askMode</c> key;
     /// a server with a bad <c>ask</c> is a problem, skipped and counted.
     /// </summary>

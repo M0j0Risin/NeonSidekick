@@ -312,7 +312,7 @@ public static class HelpText
     public static string McpToolHeading(string name) => $"MCP tool `{name}`: a tool an MCP server offers, named after its server: the server's name, two underscores, then the tool's.";
 
     /// <summary>The MCP answer's <c>Asks:</c> line (2026-11-19, feature idea #28). Pinned: the model reads it.</summary>
-    public const string McpAsksLine = "before each call unless the server marks the tool read-only; \"ask\" in mcp.json changes that (writes, always, never)";
+    public const string McpAsksLine = "before each call unless the server marks the tool read-only and not destructive; \"ask\" in mcp.json changes that (writes, always, never)";
 
     /// <summary>The MCP answer's <c>Headless:</c> line (2026-11-19, feature idea #45). Pinned: the model reads it.</summary>
     public const string McpHeadlessLine = "offered; a call that asks is refused unless the run has --allow mcp, or --allow mcp:<server> for its server";
@@ -364,6 +364,15 @@ public static class HelpText
 
     /// <summary>An offered MCP tool that runs without asking: marked read-only by its server, or its server's ask is never. Pinned.</summary>
     public const string LiveOfferedUnasked = "Right now: offered; its calls run without asking.";
+
+    /// <summary>An offered MCP tool the user allowed for this session (2026-11-20, the mcp-ask review's #6, #25). Pinned: the model reads it.</summary>
+    public const string LiveOfferedAllowed = "Right now: offered; the user allowed its calls for this session, so they run without asking.";
+
+    /// <summary>Headless, an MCP tool that asks and the run's <c>--allow</c> covers its server (2026-11-20). Pinned.</summary>
+    public const string LiveOfferedHeadlessAllowed = "Right now: offered; this run's --allow lets its calls run without asking.";
+
+    /// <summary>Headless, an MCP tool that asks and no <c>--allow</c> covers its server (2026-11-20). Pinned.</summary>
+    public const string LiveOfferedHeadlessRefused = "Right now: offered, but each call is refused: this headless run has no --allow for its server.";
     public const string LiveToolsOff = SystemPromptSummary.ToolsOffSuffix;
     public const string LiveNotHeadless = "a headless run never offers it";
     public const string LivePlanMode = "plan mode offers only the tools that read";

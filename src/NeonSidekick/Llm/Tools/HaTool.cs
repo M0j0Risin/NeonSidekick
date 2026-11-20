@@ -8,12 +8,28 @@ namespace NeonSidekick.Llm.Tools;
 /// What the nine Home Assistant tools share (2026-09-28): the <see cref="HaSession"/> door, the settings in force at each
 /// call, the snapshot lookup, and the gate every acting tool passes before a service call — <see cref="HaPolicy.Judge"/>,
 /// then, for an asked call, the user's yes through <c>confirm</c> (the advisor's seam: true yes, false no, null nothing
-/// could ask; the seam itself null where nothing ever can, headless). A refusal is an <c>Error:</c> sentence, never a throw.
+/// could ask; headless answers through <c>--allow ha</c> since 2026-11-19). A refusal is an <c>Error:</c> sentence, never a throw.
 /// </summary>
 public abstract class HaTool : AIFunction
 {
     private readonly HaSession _ha;
     private readonly Func<string, CancellationToken, Task<bool?>>? _confirm;
+
+    /// <summary>
+    /// What the "nobody could be asked" refusal ends with (2026-11-20, the mcp-ask review's #24, #57): empty on the screen; headless names
+    /// its <c>--allow</c> entry (<c>AllowText.NotAskedTail</c>), as an MCP refusal does.
+    /// </summary>
+    public string NotAskedTail { get; init; } = "";
+
+    /// <summary><paramref name="text"/> with <see cref="NotAskedTail"/> after it, the sentence closed first.</summary>
+    private string WithTail(string text) => NotAskedTail.Length == 0 ? text : text.TrimEnd('.') + "." + NotAskedTail;
+
+    /// <summary>
+    /// Whether the question is shown to someone (2026-11-20, the mcp-ask review's #38): false headless, where <c>--allow ha</c> answers
+    /// without showing it, so data or an Assist sentence the pane couldn't show whole isn't refused for that. The log line still escapes
+    /// and cuts it.
+    /// </summary>
+    public bool ShowsQuestion { get; init; } = true;
 
     protected HaTool(HaSession ha, Func<string, CancellationToken, Task<bool?>>? confirm)
     {
@@ -82,7 +98,7 @@ public abstract class HaTool : AIFunction
     protected Task<string?> GateAsync(string domain, string service, IReadOnlyList<HaEntity> targets, string? data, CancellationToken cancellationToken)
     {
         string? shown = string.IsNullOrWhiteSpace(data) ? null : HaJson.Shown(data);
-        if (shown is not null && HaPolicy.Judge(Effective, domain, service) == HaVerdict.Ask && HaText.DataUnshowable(shown) is { } unshowable)
+        if (ShowsQuestion && shown is not null && HaPolicy.Judge(Effective, domain, service) == HaVerdict.Ask && HaText.DataUnshowable(shown) is { } unshowable)
         {
             return Task.FromResult<string?>(unshowable);
         }
@@ -109,7 +125,7 @@ public abstract class HaTool : AIFunction
         {
             true => null,
             false => HaText.Declined,
-            null => HaText.NotAsked,
+            null => WithTail(HaText.NotAsked),
         };
     }
 

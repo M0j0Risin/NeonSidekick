@@ -13,7 +13,7 @@ namespace NeonSidekick.Tests;
 /// MCP calls that ask (2026-11-19, feature idea #28) over in-process pipe servers: the server's <c>ask</c>, the tools' hints, the approver's
 /// verdicts and what each sends, the audit line, a drop while the pane waits, and the server's notes (feature idea #59).
 /// </summary>
-public class McpSessionAskTests : IAsyncDisposable
+public partial class McpSessionAskTests : IAsyncDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly AppSettings _settings;
@@ -156,7 +156,7 @@ public class McpSessionAskTests : IAsyncDisposable
 
         lock (lines)
         {
-            Assert.Contains(lines, l => l.StartsWith("docker__fail " + McpText.RanUnasked + ": ", StringComparison.Ordinal));
+            Assert.Contains(lines, l => l.StartsWith(McpText.AuditPrefix("docker__fail", McpText.RanUnasked), StringComparison.Ordinal));
             Assert.DoesNotContain(lines, l => l.StartsWith("docker__echo ", StringComparison.Ordinal));   // read-only: nothing changed by the server's word
         }
     }
@@ -199,6 +199,23 @@ public class McpSessionAskTests : IAsyncDisposable
         Assert.Equal([false, true, true], new[] { ro, rw, both }.Select(t => McpAskRule.Asks(McpAskMode.Writes, t)));
         Assert.Equal([true, true, true], new[] { ro, rw, both }.Select(t => McpAskRule.Asks(McpAskMode.Always, t)));
         Assert.Equal([false, false, false], new[] { ro, rw, both }.Select(t => McpAskRule.Asks(McpAskMode.Never, t)));
+    }
+
+    /// <summary>#30, #34 (2026-11-20): <c>Words</c> is in the enum's order, read without regard to case, and the problem text names them.</summary>
+    [Fact]
+    public void TheAskWords_AreTheModesInOrder()
+    {
+        foreach (var mode in Enum.GetValues<McpAskMode>())
+        {
+            Assert.True(McpAskRule.TryParse(McpAskRule.Words[(int)mode], out var parsed));
+            Assert.Equal(mode, parsed);
+            Assert.True(McpAskRule.TryParse("  " + McpAskRule.Words[(int)mode].ToUpperInvariant() + " ", out parsed));
+            Assert.Equal(mode, parsed);
+        }
+
+        Assert.Equal(Enum.GetValues<McpAskMode>().Length, McpAskRule.Words.Count);
+        Assert.False(McpAskRule.TryParse("sometimes", out _));
+        Assert.Equal("ask must be writes, always or never", McpText.BadAsk);
     }
 
     [Fact]
@@ -316,7 +333,7 @@ public class McpSessionAskTests : IAsyncDisposable
 
         lock (lines)
         {
-            string audit = Assert.Single(lines, l => l.StartsWith("docker__echo " + McpText.AllowedOnce + ": ", StringComparison.Ordinal));
+            string audit = Assert.Single(lines, l => l.StartsWith(McpText.AuditPrefix("docker__echo", McpText.AllowedOnce), StringComparison.Ordinal));
             Assert.Contains("\"text\":\"hi\"", audit);
             Assert.DoesNotContain("hunter2", audit);
         }
@@ -382,7 +399,7 @@ public class McpSessionAskTests : IAsyncDisposable
 
         lock (lines)
         {
-            Assert.Single(lines, l => l == McpText.InstructionsCutLogLine("chrome", 2500));
+            Assert.Single(lines, l => l == McpText.InstructionsCutLogLine("chrome", 2500, McpText.NotesPerServer - 1));
         }
     }
 
@@ -393,7 +410,8 @@ public class McpSessionAskTests : IAsyncDisposable
             """{ "mcpServers": { "a": { "command": "a" }, "b": { "command": "b" }, "c": { "command": "c" }, "d": { "command": "d" } } }""",
             McpApprovers.AllowAll);
         AIFunction Of(string server) => session.Tools.First(t => ((McpTool)t).ServerName == server);
-        var notes = new List<McpServerNote> { new("a", new string('a', 2000)), new("b", new string('b', 2000)), new("c", new string('c', 2000)), new("d", "short") };
+        // Each line counts its name and fence too (2026-11-20, #28), so three notes of 1,990 fit the 6,000 and a fourth doesn't.
+        var notes = new List<McpServerNote> { new("a", new string('a', 1990)), new("b", new string('b', 1990)), new("c", new string('c', 1990)), new("d", new string('d', 50)) };
         var offered = new List<AIFunction> { Of("a"), Of("b"), Of("d") };
 
         Assert.Equal(["a", "b", "d"], McpNotes.For(notes, offered).Select(n => n.Server));   // c has no tool in the turn

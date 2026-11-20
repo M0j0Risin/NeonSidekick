@@ -109,25 +109,61 @@ public class McpSecretsTests : IDisposable
         Assert.Equal(stamp, File.GetLastWriteTimeUtc(path));
     }
 
+    /// <summary>
+    /// One rule for headers and env (2026-11-20, the mcp-ask review's #21, #47): long words anywhere, short words only whole, KEY only last,
+    /// and a URL carrying a password whatever its name.
+    /// </summary>
+    [Theory]
+    [InlineData("Authorization")]
+    [InlineData("Proxy-Authorization")]
+    [InlineData("X-API-Key")]
+    [InlineData("Cookie")]
+    [InlineData("GITHUB_PERSONAL_ACCESS_TOKEN")]
+    [InlineData("OAuthToken")]
+    [InlineData("OPENAI_API_KEY")]
+    [InlineData("SSH_KEY")]
+    [InlineData("DB_PASS")]
+    [InlineData("MYSQL_PWD")]
+    [InlineData("GPG_PASSPHRASE")]
+    [InlineData("GITHUB_PAT")]
+    [InlineData("SENTRY_DSN")]
+    [InlineData("client_secret")]
+    [InlineData("AZURE_STORAGE_CONNECTION_STRING")]
+    public void TheSecretNames_AreSealed(string name) => Assert.True(McpSecrets.IsSecret(name, "x"), name);
+
+    [Theory]
+    [InlineData("Accept")]
+    [InlineData("PATH")]
+    [InlineData("MAX_TOKENS")]
+    [InlineData("TOKENIZERS_PARALLELISM")]
+    [InlineData("GIT_AUTHOR_NAME")]
+    [InlineData("CONNECTION_TIMEOUT")]
+    [InlineData("db_connection")]
+    [InlineData("OAUTH_CLIENT")]
+    [InlineData("KEY_ID")]
+    [InlineData("KEYBOARD_LAYOUT")]
+    [InlineData("MONKEY")]
+    public void TheirNeighbors_StayPlain(string name) => Assert.False(McpSecrets.IsSecret(name, "x"), name);
+
     [Fact]
-    public void TheSecretNames_AreTheHeaderAndEnvWords_AnywhereInTheName()
+    public void AUrlWithAPassword_IsSealed_WhateverItsName_AndAReferenceNever()
     {
-        Assert.True(McpSecrets.IsSecretName("Authorization", header: true));
-        Assert.True(McpSecrets.IsSecretName("Proxy-Authorization", header: true));
-        Assert.True(McpSecrets.IsSecretName("X-API-Key", header: true));
-        Assert.True(McpSecrets.IsSecretName("Cookie", header: true));
-        Assert.False(McpSecrets.IsSecretName("Accept", header: true));
-        Assert.True(McpSecrets.IsSecretName("GITHUB_PERSONAL_ACCESS_TOKEN", header: false));
-        Assert.True(McpSecrets.IsSecretName("db_connection", header: false));
-        Assert.True(McpSecrets.IsSecretName("OAUTH_CLIENT", header: false));
-        Assert.False(McpSecrets.IsSecretName("PATH", header: false));
+        Assert.True(McpSecrets.IsSecret("DATABASE_URL", "postgres://app:pw@db:5432/x"));
+        Assert.True(McpSecrets.IsSecret("CACHE", "redis://:pw@cache:6379/0"));
+        Assert.False(McpSecrets.IsSecret("DATABASE_URL", "postgres://db:5432/x"));
         Assert.False(McpSecrets.NeedsSealing(""));
         Assert.False(McpSecrets.NeedsSealing("${GITHUB_TOKEN}"));
         Assert.True(McpSecrets.NeedsSealing("dpapi:not-a-blob"));   // the prefix without the shape is plain text
     }
 
     [WindowsFact]
-    public void ARepeatedKey_LeavesThatServerPlain_WithAWarn_AndAServerWithAProblemIsEncryptedToo()
+    public void ARepeatedKey_LeavesThatServerPlain_WithAWarn_AndAServerWithAProblemIsEncryptedToo_DpapiOnWindows() => ARepeatedKey_LeavesThatServerPlain_WithAWarn_AndAServerWithAProblemIsEncryptedTooBody();
+
+    // The Keychain's twin (2026-11-20, the mcp-ask review's #80): sealing runs on a Mac too.
+    [MacFact]
+    public void ARepeatedKey_LeavesThatServerPlain_WithAWarn_AndAServerWithAProblemIsEncryptedToo_KeychainOnAMac() => ARepeatedKey_LeavesThatServerPlain_WithAWarn_AndAServerWithAProblemIsEncryptedTooBody();
+
+    private void ARepeatedKey_LeavesThatServerPlain_WithAWarn_AndAServerWithAProblemIsEncryptedTooBody()
     {
         string path = Write("""
             { "mcpServers": {
@@ -160,7 +196,13 @@ public class McpSecretsTests : IDisposable
     }
 
     [WindowsFact]
-    public void AReadOnlyFile_LeavesTheValuesPlain_WithAWarn_AndLoadStillReturnsTheServers()
+    public void AReadOnlyFile_LeavesTheValuesPlain_WithAWarn_AndLoadStillReturnsTheServers_DpapiOnWindows() => AReadOnlyFile_LeavesTheValuesPlain_WithAWarn_AndLoadStillReturnsTheServersBody();
+
+    // The Keychain's twin (2026-11-20, the mcp-ask review's #80): sealing runs on a Mac too.
+    [MacFact]
+    public void AReadOnlyFile_LeavesTheValuesPlain_WithAWarn_AndLoadStillReturnsTheServers_KeychainOnAMac() => AReadOnlyFile_LeavesTheValuesPlain_WithAWarn_AndLoadStillReturnsTheServersBody();
+
+    private void AReadOnlyFile_LeavesTheValuesPlain_WithAWarn_AndLoadStillReturnsTheServersBody()
     {
         string path = Write("""{ "mcpServers": { "gh": { "command": "x", "env": { "GITHUB_TOKEN": "plain-ro" } } } }""");
         File.SetAttributes(path, FileAttributes.ReadOnly);
@@ -180,10 +222,22 @@ public class McpSecretsTests : IDisposable
         Assert.Null(open);
         Assert.StartsWith("TOKEN in mcp.json: ", error);
         Assert.EndsWith("; type it again in plain text", error);
+        // #70 (2026-11-20): one tail, and the value isn't called a password.
+        Assert.DoesNotContain(SqlText.SqlMenuPath, error);
+        Assert.DoesNotContain("password", error);
+        Assert.Equal(
+            "TOKEN in mcp.json: the value cannot be decrypted — it was saved by another Windows user or on another machine (x); type it again in plain text",
+            McpText.CannotReveal("TOKEN", "the password cannot be decrypted — it was saved by another Windows user or on another machine (x); set it again on " + SqlText.SqlMenuPath));
     }
 
     [WindowsFact]
-    public void EncryptAll_CoversTheHomeAndEveryProfile()
+    public void EncryptAll_CoversTheHomeAndEveryProfile_DpapiOnWindows() => EncryptAll_CoversTheHomeAndEveryProfileBody();
+
+    // The Keychain's twin (2026-11-20, the mcp-ask review's #80): sealing runs on a Mac too.
+    [MacFact]
+    public void EncryptAll_CoversTheHomeAndEveryProfile_KeychainOnAMac() => EncryptAll_CoversTheHomeAndEveryProfileBody();
+
+    private void EncryptAll_CoversTheHomeAndEveryProfileBody()
     {
         string home = Path.Combine(_dir, "home");
         Profiles.Create(home, "work", new AppSettingsData());
@@ -202,13 +256,19 @@ public class McpSecretsTests : IDisposable
     }
 
     [WindowsFact]
-    public void TwoEncryptedCopiesOfOneToken_AreTheSameServer()
+    public void TwoEncryptedCopiesOfOneToken_AreTheSameServer_DpapiOnWindows() => TwoEncryptedCopiesOfOneToken_AreTheSameServerBody();
+
+    // The Keychain's twin (2026-11-20, the mcp-ask review's #80): sealing runs on a Mac too.
+    [MacFact]
+    public void TwoEncryptedCopiesOfOneToken_AreTheSameServer_KeychainOnAMac() => TwoEncryptedCopiesOfOneToken_AreTheSameServerBody();
+
+    private static void TwoEncryptedCopiesOfOneToken_AreTheSameServerBody()
     {
         var a = new McpServerConfig { Command = "x", Env = new() { ["TOKEN"] = WindowsCredentials.Protect("same").Value! } };
         var b = new McpServerConfig { Command = "x", Env = new() { ["TOKEN"] = WindowsCredentials.Protect("same").Value! } };
         var c = new McpServerConfig { Command = "x", Env = new() { ["TOKEN"] = WindowsCredentials.Protect("other").Value! } };
 
-        Assert.NotEqual(a.Fingerprint(), b.Fingerprint());   // DPAPI is randomized
+        Assert.NotEqual(a.Fingerprint(), b.Fingerprint());   // DPAPI is randomized, and so is the Keychain's wrapping
         Assert.True(McpSecrets.SameServer(a, b));
         Assert.False(McpSecrets.SameServer(a, c));
     }

@@ -497,6 +497,10 @@ public sealed class PrintTests : IDisposable
         answer = null;
         Assert.Equal(PrintText.NotAsked, await tool.InvokeAsync(Args(("path", "a.txt"))));
         Assert.Equal(PrintText.NotAsked, await new PrintFileTool(_print, null).InvokeAsync(Args(("path", "a.txt"))));
+        // Headless's refusal names --allow print (2026-11-20, the mcp-ask review's #24).
+        string tail = NeonSidekick.App.AllowText.NotAskedTail(NeonSidekick.App.AllowKind.Print);
+        Assert.Equal(" A headless run allows it with --allow print.", tail);
+        Assert.Equal(PrintText.NotAsked + "." + tail, await new PrintFileTool(_print, null) { NotAskedTail = tail }.InvokeAsync(Args(("path", "a.txt"))));
         Assert.Single(_spooler.Jobs);
 
         _settings.PrintActionPolicy = PrintPolicy.Off;

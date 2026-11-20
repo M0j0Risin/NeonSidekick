@@ -74,9 +74,15 @@ internal sealed partial class ChatScreen
         var promptFacts = SystemPromptFacts(effective, disabled);
         var prompt = PromptParts(promptFacts);
         long promptTokens = prompt.Sum(p => p.Tokens);
+        // An MCP server's row (2026-11-20, the mcp-ask review's #97) saves its own notes alone; its name is the label's, since a connected
+        // server can list no tools.
+        SystemPromptFacts Off(string label, SettingsField field) =>
+            field == SettingsField.McpServers && label.StartsWith(SystemPromptSummary.McpGroupPrefix, StringComparison.Ordinal)
+                ? promptFacts.WithoutMcpServer(label[SystemPromptSummary.McpGroupPrefix.Length..])
+                : promptFacts.Without(field);
         var groups = ToolGroups(effective, disabled)
             .Select(g => new ContextToolGroup(g.Label, g.Tools.Count, g.Tools.Sum(ToolTokens), g.Switch is not null,
-                g.Switch is { } field ? Math.Max(0, promptTokens - PromptParts(promptFacts.Without(field)).Sum(p => p.Tokens)) : 0))
+                g.Switch is { } field ? Math.Max(0, promptTokens - PromptParts(Off(g.Label, field)).Sum(p => p.Tokens)) : 0))
             .ToList();
         string? noTools = groups.Count == 0 ? SystemPromptSummary.NoToolsLine(effective.LlmOfferTools) : null;
         ConversationCompactor.TokenEstimate? history = null;

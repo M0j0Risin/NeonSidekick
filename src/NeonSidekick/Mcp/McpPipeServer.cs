@@ -9,6 +9,27 @@ using NeonSidekick.Llm.Tools;
 namespace NeonSidekick.Mcp;
 
 /// <summary>
+/// How <see cref="McpPipeServer.Start"/> shapes its server (2026-11-20, the mcp-ask review's #63): the tools' schema closed
+/// (<c>additionalProperties: false</c>), those in <see cref="ReadOnly"/> marked <c>readOnlyHint: true</c>, <see cref="Destructive"/>'s
+/// <c>destructiveHint</c>, true or false; without <see cref="Drops"/> the drop tool echoes like any other (the server that came back);
+/// <see cref="Instructions"/> is what the handshake tells the client.
+/// </summary>
+public sealed record McpPipeServerOptions
+{
+    public static readonly McpPipeServerOptions Default = new();
+
+    public bool Closed { get; init; }
+
+    public IReadOnlySet<string>? ReadOnly { get; init; }
+
+    public bool Drops { get; init; } = true;
+
+    public IReadOnlyDictionary<string, bool>? Destructive { get; init; }
+
+    public string? Instructions { get; init; }
+}
+
+/// <summary>
 /// An MCP server in this process over a pair of pipes (2026-09-20): the smoke probe's proof that the
 /// SDK's JSON path survives ILC and the tests' stand-in for a real server, so <see cref="McpTool"/> and
 /// the session run over the real <see cref="McpClient"/> with no child process. Every tool echoes its
@@ -115,20 +136,20 @@ public sealed class McpPipeServer : IAsyncDisposable
     public IClientTransport ClientTransport => new StreamClientTransport(_clientToServer.Writer.AsStream(), _serverToClient.Reader.AsStream());
 
     /// <summary>
-    /// Starts a server listing <paramref name="tools"/>, their schema closed when <paramref name="closed"/>, those named in
-    /// <paramref name="readOnly"/> marked <c>readOnlyHint: true</c>; it runs until disposed. Without <paramref name="drops"/> the
-    /// <see cref="DropToolName"/> tool echoes like any other (the server that came back). <paramref name="destructive"/> (2026-11-19) sets a
-    /// tool's <c>destructiveHint</c>, true or false; <paramref name="instructions"/> is what the handshake tells the client.
+    /// Starts a server listing <paramref name="tools"/>, shaped by <paramref name="options"/> (<see cref="McpPipeServerOptions"/>, 2026-11-20,
+    /// the mcp-ask review's #63: the test-only knobs in one record); it runs until disposed.
     /// </summary>
-    public static McpPipeServer Start(IReadOnlyList<(string Name, string Description)> tools, string serverName = "neon-pipe", bool closed = false, IReadOnlySet<string>? readOnly = null, bool drops = true, IReadOnlyDictionary<string, bool>? destructive = null, string? instructions = null)
+    public static McpPipeServer Start(IReadOnlyList<(string Name, string Description)> tools, string serverName = "neon-pipe", McpPipeServerOptions? options = null)
     {
-        var schema = closed ? ClosedSchema : Schema;
         ArgumentNullException.ThrowIfNull(tools);
-        var server = new McpPipeServer(tools, readOnly ?? new HashSet<string>(StringComparer.Ordinal), destructive ?? new Dictionary<string, bool>(StringComparer.Ordinal));
-        var options = new McpServerOptions
+        var shape = options ?? McpPipeServerOptions.Default;
+        var schema = shape.Closed ? ClosedSchema : Schema;
+        bool drops = shape.Drops;
+        var server = new McpPipeServer(tools, shape.ReadOnly ?? new HashSet<string>(StringComparer.Ordinal), shape.Destructive ?? new Dictionary<string, bool>(StringComparer.Ordinal));
+        var serverOptions = new McpServerOptions
         {
             ServerInfo = new Implementation { Name = serverName, Version = "1.0" },
-            ServerInstructions = instructions,
+            ServerInstructions = shape.Instructions,
             // ListChanged (2026-11-19): a server that sends notifications/tools/list_changed declares it, as a real one must.
             Capabilities = new ServerCapabilities { Tools = new ToolsCapability { ListChanged = true } },
             Handlers = new McpServerHandlers
@@ -169,7 +190,7 @@ public sealed class McpPipeServer : IAsyncDisposable
             },
         };
         var transport = new StreamServerTransport(server._clientToServer.Reader.AsStream(), server._serverToClient.Writer.AsStream(), serverName);
-        server._server = McpServer.Create(transport, options);
+        server._server = McpServer.Create(transport, serverOptions);
         server._run = server._server.RunAsync(server._stop.Token);
         return server;
     }
@@ -214,7 +235,7 @@ public sealed class McpPipeServer : IAsyncDisposable
     /// Swaps the tool list and sends <c>notifications/tools/list_changed</c> (2026-11-19), with no parameters to serialize (AOT); with
     /// <paramref name="readOnly"/> the read-only marks are swapped with it (a read-only tool that turns into a write).
     /// </summary>
-    public async Task NotifyToolsChangedAsync(IReadOnlyList<(string Name, string Description)> tools, CancellationToken cancellationToken = default, IReadOnlySet<string>? readOnly = null)
+    public async Task NotifyToolsChangedAsync(IReadOnlyList<(string Name, string Description)> tools, IReadOnlySet<string>? readOnly = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(tools);
         lock (_toolsLock)

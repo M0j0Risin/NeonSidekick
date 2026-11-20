@@ -81,38 +81,10 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool?> AllowDatabaseWriteAsync(ServerWriteFamily family, ExecuteTarget target, string sql, IReadOnlyList<SqlParameterValue> parameters, CancellationToken turnToken)
     {
-        if (!_pane.Enabled)
-        {
-            return null;
-        }
-
-        string key = DatabaseAllowKey(family, target);
-        lock (_databaseAllowed)
-        {
-            if (_databaseAllowed.Contains(key))
-            {
-                return true;
-            }
-        }
-
         // The whole statement for the pane's v, its line ends as the server reads them and its hiding characters escaped (F16), the bound
         // values under it (B5); the caption the same on the PC's pane and the Web UI's ask.
         var whole = Shell.ShellText.WholeCommandLines(new Shell.CommandRequest("sql", Files.NameScrub.Display(ServerWriteText.Lines(sql), keepLineBreaks: true) + ServerWriteText.Bound(parameters), [], IsScript: true));
         string caption = ServerWriteText.AllowCaption(family, target.Connection, target.Place, sql, target.Where, parameters, target.Places.Count);
-        var allow = await AllowBothAsync(ServerWriteText.AllowTitle(family), caption, whole, token => _cameraMenu.AllowAsync(caption, token, ServerWriteText.AllowTitle(family), ServerWriteText.AllowTitle(family), whole), turnToken).ConfigureAwait(false);
-        if (allow is not { } choice)
-        {
-            return null;
-        }
-
-        if (choice == CameraAllow.Session)
-        {
-            lock (_databaseAllowed)
-            {
-                _databaseAllowed.Add(key);
-            }
-        }
-
-        return choice != CameraAllow.Deny;
+        return Goes(await AllowWithSessionAsync(_databaseAllowed, DatabaseAllowKey(family, target), ServerWriteText.AllowTitle(family), caption, whole, turnToken).ConfigureAwait(false));
     }
 }

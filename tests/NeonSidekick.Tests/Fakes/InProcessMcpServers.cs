@@ -92,8 +92,13 @@ public sealed class InProcessMcpServers : IAsyncDisposable
             _ = old.DisposeAsync();
         }
 
-        var server = McpPipeServer.Start(_tools.TryGetValue(name, out var tools) ? tools : DefaultTools, name, readOnly: _readOnly.GetValueOrDefault(name), drops: !Steady.Contains(name),
-            destructive: _destructive.GetValueOrDefault(name), instructions: _instructions.GetValueOrDefault(name));
+        var server = McpPipeServer.Start(_tools.TryGetValue(name, out var tools) ? tools : DefaultTools, name, new McpPipeServerOptions
+        {
+            ReadOnly = _readOnly.GetValueOrDefault(name),
+            Drops = !Steady.Contains(name),
+            Destructive = _destructive.GetValueOrDefault(name),
+            Instructions = _instructions.GetValueOrDefault(name),
+        });
         _servers[name] = server;
         if (_held.Remove(name, out var gate))
         {

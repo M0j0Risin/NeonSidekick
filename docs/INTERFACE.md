@@ -153,6 +153,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · Esc denies |
+| An MCP call's approval | `d` deny · `o` once · `s` session · `v` the arguments · Esc denies |
 | The project file's approval | `d` deny · `o` once · `s` session · Esc denies: the model's change to `NEON.md`, `AGENTS.md` or `CLAUDE.md` |
 | **Servers and processes** | |
 | `/server`, `/model` | Enter chooses · type to filter |
@@ -693,8 +694,8 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 #### Questions
 
-* **On both sides at once** (the first answer wins): a command's approval, `ask_user`, an allow (camera, screen, a database write), a yes/no, the plan's approval, a code audit's done pane and a reflection's skill.
-* The page shows a command or a statement whole, and a reflection's skill as its summary with **Keep** and **Discard**.
+* **On both sides at once** (the first answer wins): a command's approval, `ask_user`, an allow (camera, screen, a database write, an MCP call), a yes/no, the plan's approval, a code audit's done pane and a reflection's skill.
+* The page shows a command, a statement or an MCP call's arguments whole, and a reflection's skill as its summary with **Keep** and **Discard**.
 * **The camera's shutter** (*Camera shutter* `user`) offers **Take and send**: the PC's camera takes the photo, with no preview.
 * **At the PC only:** the plan's Close gaps and a code audit's reviewer page; meanwhile the page says "waiting for an answer at the PC".
 * **A bot check:** the allow question, then a card ([A bot check from the page](#a-bot-check-from-the-page)).

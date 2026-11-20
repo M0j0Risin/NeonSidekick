@@ -260,7 +260,7 @@ internal static class HelpToolCatalog
         T(HaAssistTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Hands one plain sentence to Home Assistant's own Assist agent.", setup: HaSetup),
         // Print
         T(ListPrintersTool.ToolName, ToolsText.PrintTabTitle, SettingsField.PrintTools, "Lists the printers installed on the user's computer, marking the default."),
-        T(PrintFileTool.ToolName, ToolsText.PrintTabTitle, SettingsField.PrintTools, "Prints a file from the working directory on the user's printer."),
+        T(PrintFileTool.ToolName, ToolsText.PrintTabTitle, SettingsField.PrintTools, "Prints a file from the working directory on the user's printer.", setup: PrintSetup),
         // Camera
         T(CameraCaptureTool.ToolName, ToolsText.CameraTabTitle, SettingsField.CameraTools, "Asks the user for a photo from their camera and shows it to the model.", headless: false, pane: true, setup: PictureSetup("a camera")),
         // Screen
@@ -291,7 +291,7 @@ internal static class HelpToolCatalog
         T(MonitorInputTool.ToolName, ToolsText.MonitorsMenuTitle, SettingsField.MonitorTools, "Switches a monitor's input, after asking the user.", headless: false, pane: true),
         T(MonitorLayoutTool.ToolName, ToolsText.MonitorsMenuTitle, SettingsField.MonitorTools, "Changes the monitors' layout (extend, duplicate, one monitor, primary), after asking the user.", headless: false, pane: true),
         // Advisors
-        T(NeonAdvisorTool.ToolName, ToolsText.AdvisorsGroupTitle, SettingsField.Advisors, "Asks one of the user's advisors, another profile with its own model, for its view.", setup: "needs a profile in *Advisor list*"),
+        T(NeonAdvisorTool.ToolName, ToolsText.AdvisorsGroupTitle, SettingsField.Advisors, "Asks one of the user's advisors, another profile with its own model, for its view.", setup: AdvisorSetup),
         // Web
         T(WebSearchTool.ToolName, WebGroup, SettingsField.WebTools, "Searches the web and gives back the top results, from the past day, week, month or year if asked."),
         T(WebFetchTool.ToolName, WebGroup, SettingsField.WebTools, "Fetches a web page and gives back its readable text as Markdown, a part at a time, or its headings, or the passages holding given words."),
@@ -327,7 +327,11 @@ internal static class HelpToolCatalog
     private const string TaskSetup = "reads the computers ticked in *Task computers offered*";
     private const string TaskWriteSetup = "needs a ticked computer with `\"access\": \"readwrite\"` whose control list allows the action; each change asks on the pane";
     private const string DirectorySetup = "needs a domain ticked in *Directory domains offered*: one in `ad.json`, or `current` where this computer is joined to one";
-    private const string HaSetup = "needs *Home Assistant URL* and *Home Assistant API key*; an asked call waits on the pane";
+    private const string HaSetup = "needs *Home Assistant URL* and *Home Assistant API key*; an asked call waits on the pane; a headless run refuses an asked call unless it has --allow ha";
+
+    // The headless --allow pointers (2026-11-20, the mcp-ask review's #57), in DockerWriteSetup's shape.
+    private const string PrintSetup = "asks under *Print action policy* ask; a headless run refuses it unless it has --allow print";
+    private const string AdvisorSetup = "needs a profile in *Advisor list*; with *Advisor confirm* on, a headless run refuses it unless it has --allow advisor";
     private const string VideoSetup = "needs a video player here";
 
     private static string Conn(string file, string word) => string.Format(System.Globalization.CultureInfo.InvariantCulture, ConnectionSetup, file, word);

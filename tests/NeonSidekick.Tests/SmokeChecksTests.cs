@@ -113,7 +113,10 @@ public class SmokeChecksTests
         Assert.EndsWith("1 FTS5 hit, 1 OR hit, a skill's usage and a reflection recorded, 2 messages restored, 1 purged, skills.db written and read with its history", check.Detail);   // the schema-3 legs since 2026-09-19; the migration legs went 2026-09-24
     }
 
-    /// <summary>The MCP round trip (2026-09-20): an in-process server over a pipe, the real client, the app's adapter answering an echo.</summary>
+    /// <summary>
+    /// The MCP round trip (2026-09-20): an in-process server over a pipe, the real client, the app's adapter answering an echo; since 2026-11-20
+    /// (#65) through an McpSession's ask gate and audit.
+    /// </summary>
     [Fact]
     public void ProbeMcp_RoundTripsAnEchoTool_ThroughTheAdapter()
     {
@@ -121,7 +124,7 @@ public class SmokeChecksTests
 
         Assert.Equal("mcp:roundtrip", check.Name);
         Assert.True(check.Passed, check.Detail);
-        Assert.Equal("1 tool listed as smoke__echo (smoke 1.0); echo answered through McpTool", check.Detail);
+        Assert.Equal("1 tool listed as smoke__echo (smoke) through McpSession; echo asked, allowed and answered; audited with the token redacted", check.Detail);
     }
 
     /// <summary>The Claude Code server's relay (2026-09-30): the app's MCP listener, the relay over a pipe pair as the CLI's stdio, a call carrying its tool-use id.</summary>

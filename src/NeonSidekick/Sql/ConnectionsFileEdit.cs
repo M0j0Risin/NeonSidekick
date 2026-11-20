@@ -121,6 +121,82 @@ public static class ConnectionsFileEdit
         }
     }
 
+    /// <summary>One value for <see cref="WriteValues"/>: written over the string at <see cref="KeyPath"/> while it still holds <see cref="Expected"/>.</summary>
+    public readonly record struct ValueWrite(IReadOnlyList<string> KeyPath, string Value, string Expected);
+
+    /// <summary>
+    /// <see cref="WriteValue"/> for several values at once (2026-11-20, the mcp-ask review's #42, #94): one read, every splice applied from
+    /// the end, one atomic write, under the same two locks and with the same checks, so sealing a server's tokens is one write, not one per
+    /// value. An item whose value changed meanwhile, whose path is gone or repeats a key is left out with its answer, and the rest are still
+    /// written. Returns one <c>(index, error)</c> per item left out, empty when all were written; a failure of the whole file is every
+    /// item's. Waits for no other process (it runs inside a load).
+    /// </summary>
+    public static IReadOnlyList<(int Index, string Error)> WriteValues(string path, IReadOnlyList<ValueWrite> items)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Count == 0)
+        {
+            return [];
+        }
+
+        var errors = new List<(int Index, string Error)>();
+        lock (LockFor(path))
+        {
+            try
+            {
+                using var _ = CrossProcess(path, TimeSpan.Zero);
+                byte[] bytes = ForEdit(File.ReadAllBytes(path), out var wide);
+                int bom = Bom(bytes);
+                var splices = new List<(int Start, int End, string Insert)>();
+                for (int i = 0; i < items.Count; i++)
+                {
+                    var item = items[i];
+                    if (item.KeyPath.Count == 0)
+                    {
+                        errors.Add((i, ValueNotInFile));
+                        continue;
+                    }
+
+                    var found = LocateValue(bytes.AsSpan(bom), item.KeyPath);
+                    if (found.Error is { } error)
+                    {
+                        errors.Add((i, error));
+                        continue;
+                    }
+
+                    if (!string.Equals(found.Current, item.Expected, StringComparison.Ordinal))
+                    {
+                        errors.Add((i, PasswordChanged));
+                        continue;
+                    }
+
+                    splices.Add((bom + found.Start, bom + found.End, "\"" + JsonEncodedText.Encode(item.Value, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\""));
+                }
+
+                if (splices.Count > 0)
+                {
+                    SpliceAll(path, bytes, splices, wide);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                string detail = LogText.Excerpt(ex.Message);
+                errors.Clear();
+                for (int i = 0; i < items.Count; i++)
+                {
+                    errors.Add((i, detail));
+                }
+            }
+            finally
+            {
+                Computers.ConfigCache.Invalidate(path);
+            }
+        }
+
+        return errors;
+    }
+
     /// <summary>Where <see cref="WriteValue"/> writes: the string token's byte range and its value, or why not.</summary>
     private readonly record struct ValueSpot(int Start, int End, string? Current, string? Error);
 
@@ -585,6 +661,28 @@ public static class ConnectionsFileEdit
         bytes.AsSpan(0, start).CopyTo(rewritten);
         inserted.CopyTo(rewritten.AsSpan(start));
         bytes.AsSpan(end).CopyTo(rewritten.AsSpan(start + inserted.Length));
+        byte[] written = wide is null ? rewritten : [.. wide.GetPreamble(), .. wide.GetBytes(Encoding.UTF8.GetString(rewritten))];
+        Files.WorkingDirectory.WriteAtomically(path, written);
+    }
+
+    /// <summary>
+    /// <see cref="Splice"/>'s twin for several ranges (2026-11-20, <see cref="WriteValues"/>): each <c>[Start, End)</c> replaced by its text,
+    /// applied from the last so the earlier offsets still hold, then one atomic write in the file's own encoding. The ranges never overlap
+    /// (each is one string token).
+    /// </summary>
+    private static void SpliceAll(string path, byte[] bytes, List<(int Start, int End, string Insert)> splices, Encoding? wide)
+    {
+        byte[] rewritten = bytes;
+        foreach (var (start, end, insert) in splices.OrderByDescending(s => s.Start))
+        {
+            byte[] inserted = Encoding.UTF8.GetBytes(insert);
+            var next = new byte[rewritten.Length - (end - start) + inserted.Length];
+            rewritten.AsSpan(0, start).CopyTo(next);
+            inserted.CopyTo(next.AsSpan(start));
+            rewritten.AsSpan(end).CopyTo(next.AsSpan(start + inserted.Length));
+            rewritten = next;
+        }
+
         byte[] written = wide is null ? rewritten : [.. wide.GetPreamble(), .. wide.GetBytes(Encoding.UTF8.GetString(rewritten))];
         Files.WorkingDirectory.WriteAtomically(path, written);
     }

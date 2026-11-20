@@ -55,6 +55,44 @@ public sealed class McpTool : AIFunction
     /// <summary>The tool as the server listed it: its name, description and schema (what a changed list is compared by).</summary>
     public Tool ProtocolTool => _inner.ProtocolTool;
 
+    private string? _definitionKey;
+
+    /// <summary>
+    /// <see cref="DefinitionKeyOf"/> of this tool's <see cref="ProtocolTool"/>, worked out once (a listing builds new tools, so it never goes
+    /// stale).
+    /// </summary>
+    public string DefinitionKey => _definitionKey ??= DefinitionKeyOf(_inner.ProtocolTool);
+
+    /// <summary>
+    /// One key for everything a server says of a tool (2026-11-20, the mcp-ask review's #87 and #116): a SHA-256 in lower hex over its
+    /// name, description, input schema as raw JSON and every annotation (<c>readOnlyHint</c>, <c>destructiveHint</c>,
+    /// <c>idempotentHint</c>, <c>openWorldHint</c>, <c>title</c>), in that order, joined with <c>\0</c> so text moved from one part to
+    /// the next changes it. A hint not set is empty. A changed list is applied when a key differs, and a session allow holds it, so a
+    /// redefined tool, a changed hint included, asks again. Pure.
+    /// </summary>
+    public static string DefinitionKeyOf(Tool tool)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        var hints = tool.Annotations;
+        string joined = string.Join('\0',
+            tool.Name,
+            tool.Description ?? "",
+            tool.InputSchema.ValueKind == JsonValueKind.Undefined ? "" : tool.InputSchema.GetRawText(),
+            Hint(hints?.ReadOnlyHint),
+            Hint(hints?.DestructiveHint),
+            Hint(hints?.IdempotentHint),
+            Hint(hints?.OpenWorldHint),
+            hints?.Title ?? "");
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(joined)));
+
+        static string Hint(bool? value) => value switch
+        {
+            true => "true",
+            false => "false",
+            null => "",
+        };
+    }
+
     /// <summary>
     /// Whether the server marks the tool <c>readOnlyHint: true</c> (2026-11-19, feature idea #30): a call cut off by a drop is sent again
     /// only then. Since later on 2026-11-19 (feature idea #28, MCP calls ask) a tool that also says <c>destructiveHint: true</c> outright is

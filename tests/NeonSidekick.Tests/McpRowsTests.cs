@@ -282,8 +282,8 @@ public class McpRowsTests : IAsyncDisposable
         await using var session = await ConnectedAsync("""{ "mcpServers": { "docker": { "command": "docker" }, "chrome": { "url": "http://localhost:9/mcp", "ask": "never", "instructions": false } } }""");
         var facts = Facts(session);
 
-        Assert.Equal(McpText.AskFooter(McpAskMode.Writes) + " · " + McpText.NotesFooter(9, true) + " · profile · ", McpRows.ServerFooter(facts, new McpRow.Server("docker"))!.Last![..^session.Servers.Single(s => s.Name == "docker").Transport.Length]);
-        Assert.StartsWith(McpText.AskFooter(McpAskMode.Never) + " · " + McpText.NotesFooter(null, false) + " · profile · ", McpRows.ServerFooter(facts, new McpRow.Server("chrome"))!.Last, StringComparison.Ordinal);
+        Assert.Equal(McpText.AskFooter(McpAskMode.Writes) + " · " + McpText.NotesFooter(9, null, false, true) + " · profile · ", McpRows.ServerFooter(facts, new McpRow.Server("docker"))!.Last![..^session.Servers.Single(s => s.Name == "docker").Transport.Length]);
+        Assert.StartsWith(McpText.AskFooter(McpAskMode.Never) + " · " + McpText.NotesFooter(null, null, false, false) + " · profile · ", McpRows.ServerFooter(facts, new McpRow.Server("chrome"))!.Last, StringComparison.Ordinal);
 
         Assert.Equal(McpText.ToolReadOnlyFooter, McpRows.ToolFooter(facts, "docker__echo")!.Last);
         Assert.Equal(McpText.ToolAsksFooter, McpRows.ToolFooter(facts, "docker__fail")!.Last);
@@ -297,5 +297,28 @@ public class McpRowsTests : IAsyncDisposable
         var failed = session.Servers.Single(s => s.Name == "docker") with { State = McpState.Failed, Detail = "boom" };
         var off = new McpFacts([failed], [], true, true, ToolsText.DisabledSet([]), session.ProfilePath, session.GlobalPath);
         Assert.StartsWith("profile · ", McpRows.ServerFooter(off, new McpRow.Server("docker"))!.Last, StringComparison.Ordinal);   // only a connected row says how it asks
+    }
+
+    /// <summary>
+    /// The mcp-ask review's #25, #73, #114 (2026-11-20): a held tool's footer says it's allowed for this session, the ask column fits its tag,
+    /// and typing the tag keeps the tools that ask.
+    /// </summary>
+    [Fact]
+    public async Task AHeldToolsFooter_SaysAllowed_TheColumnFitsTheTag_AndTheTagFilters()
+    {
+        _servers.ReadOnly("docker", "echo");
+        await using var session = await ConnectedAsync("""{ "mcpServers": { "docker": { "command": "docker" } } }""");
+        var held = Facts(session) with { Allowed = name => name == "docker__fail" };
+
+        Assert.Equal(McpText.ToolAllowedFooter, McpRows.ToolFooter(held, "docker__fail")!.Last);
+        Assert.Equal(McpText.ToolReadOnlyFooter, McpRows.ToolFooter(held with { Allowed = _ => true }, "docker__echo")!.Last);   // unasked stays unasked
+        Assert.Equal(McpText.ToolAsksFooter, McpRows.ToolFooter(Facts(session), "docker__fail")!.Last);
+
+        Assert.Equal(McpText.AsksTag.Length + 2, McpRows.AskWidth);
+        var server = session.Servers.Single();
+        Assert.Equal(McpRows.AskWidth, McpRows.AskColumn(server, server.Tools.Single(t => t.Name == "docker__fail")).Length);
+
+        var tools = McpRows.ToolRows(Facts(session), McpText.AsksTag).Select(r => r.Tool).OfType<string>().ToList();
+        Assert.Equal(["docker__fail"], tools);
     }
 }

@@ -19,12 +19,13 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The print tools (2026-09-28): <c>list_printers</c>, then <c>print_file</c> behind <paramref name="confirm"/> for what the
-    /// policy asks about (null where nothing can ask: headless). Shared with headless.
+    /// policy asks about; headless's is <c>--allow print</c>'s (2026-11-19), with <paramref name="notAskedTail"/> naming the entry
+    /// (2026-11-20, the mcp-ask review's #24, #62). Shared with headless.
     /// </summary>
-    public static IReadOnlyList<AIFunction> PrintTools(PrintService print, Func<string, CancellationToken, Task<bool?>>? confirm) =>
+    public static IReadOnlyList<AIFunction> PrintTools(PrintService print, Func<string, CancellationToken, Task<bool?>>? confirm, string notAskedTail = "") =>
     [
         new ListPrintersTool(print),
-        new PrintFileTool(print, confirm),
+        new PrintFileTool(print, confirm) { NotAskedTail = notAskedTail },
     ];
 
     /// <summary>The print tools' names: their result's first line is the transcript's note (<see cref="PrintText.Note"/>).</summary>

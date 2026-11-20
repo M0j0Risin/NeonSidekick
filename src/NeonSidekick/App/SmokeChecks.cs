@@ -271,7 +271,9 @@ public static partial class SmokeChecks
     /// server over a pipe (<see cref="Mcp.McpPipeServer"/>, hand-written handlers), the real
     /// <c>McpClient</c> initialising and listing its one tool, the app's <see cref="Mcp.McpTool"/> wrapping it
     /// and answering an echo through <see cref="Assistant.InvokeToolAsync"/> — the whole path the screen
-    /// takes with a real server, without a child process.
+    /// takes with a real server, without a child process. Since 2026-11-20 (the mcp-ask review's #65) through an <see cref="McpSession"/>
+    /// over a scratch home (never the user's, deleted after): the unmarked echo asks, an approver allows it, and the audit line must come out
+    /// with its <c>token</c> argument redacted, so the gate's JSON, redaction and audit run on the published build.
     /// </summary>
     public static SmokeCheck ProbeMcp()
     {
@@ -355,26 +357,68 @@ public static partial class SmokeChecks
 
     private static async Task<SmokeCheck> ProbeMcpAsync(string name)
     {
+        const string secret = "smoke-secret-value";
         await using var server = Mcp.McpPipeServer.Start([("echo", "Echoes the text back.")], "smoke");
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        await using var client = await ModelContextProtocol.Client.McpClient.CreateAsync(server.ClientTransport, new ModelContextProtocol.Client.McpClientOptions
+        string home = Path.Combine(Path.GetTempPath(), "NeonSidekick.smoke", Guid.NewGuid().ToString("N"));
+        var audit = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> heard = e =>
         {
-            ClientInfo = new ModelContextProtocol.Protocol.Implementation { Name = McpSession.ClientName, Version = "smoke" },
-        }, null, budget.Token).ConfigureAwait(false);
-        var listed = await client.ListToolsAsync((ModelContextProtocol.RequestOptions?)null, budget.Token).ConfigureAwait(false);
-        if (listed.Count != 1)
+            if (e.Category == McpSession.Category)
+            {
+                lock (audit)
+                {
+                    audit.Add(e.Message);
+                }
+            }
+        };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += heard;
+        try
         {
-            return new SmokeCheck(name, false, $"{listed.Count} tools listed, expected 1");
-        }
+            using var settings = new NeonSidekick.Settings.AppSettings(home);
+            Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(settings.ProfileDirectory));
+            File.WriteAllText(Mcp.McpConfigFile.ProfilePath(settings.ProfileDirectory), """{ "mcpServers": { "smoke": { "command": "smoke-server" } } }""");
+            // MCP on in a copy, never through Update (its debounced save could write profile.json after the delete).
+            var effective = NeonSidekick.Settings.AppSettings.Copy(settings.Current);
+            effective.McpServers = true;
+            await using var session = new McpSession(settings, (_, _) => server.ClientTransport)
+            {
+                Approver = (_, _) => Task.FromResult<Mcp.McpVerdict>(new Mcp.McpVerdict.Allowed(Mcp.McpText.AllowedOnce)),
+            };
+            await session.ConnectAllAsync(effective, null, budget.Token).ConfigureAwait(false);
+            var tools = session.Tools;
+            if (tools.Count != 1 || session.Servers.FirstOrDefault() is not { State: McpState.Connected } row)
+            {
+                return new SmokeCheck(name, false, $"{tools.Count} tools offered, expected 1 from a connected smoke server");
+            }
 
-        var tool = new Mcp.McpTool("smoke", client, listed[0], Mcp.McpToolName.Prefixed("smoke", listed[0].Name));
-        var call = new FunctionCallContent("smoke1", tool.Name, new Dictionary<string, object?> { ["text"] = "ping" });
-        var (text, _) = await Assistant.InvokeToolAsync([tool], call, budget.Token).ConfigureAwait(false);
-        // Fenced as the server's text (2026-11-15, the web-tools plan's §3), the note last: the published exe proves the fence too.
-        string expected = Llm.Tools.UntrustedText.Fenced(Mcp.McpPipeServer.EchoPrefix + "ping") + "\n" + Llm.Tools.UntrustedText.QuoteNote;
-        return text == expected
-            ? new SmokeCheck(name, true, $"{listed.Count} tool listed as {tool.Name} ({client.ServerInfo.Name} {client.ServerInfo.Version}); echo answered through McpTool")
-            : new SmokeCheck(name, false, $"echo answered \"{text}\", expected \"{expected}\"");
+            var tool = tools[0];
+            var call = new FunctionCallContent("smoke1", tool.Name, new Dictionary<string, object?> { ["text"] = "ping", ["token"] = secret });
+            var (text, _) = await Assistant.InvokeToolAsync(tools, call, budget.Token).ConfigureAwait(false);
+            // Fenced as the server's text (2026-11-15, the web-tools plan's §3), the note last: the published exe proves the fence too.
+            string expected = Llm.Tools.UntrustedText.Fenced(Mcp.McpPipeServer.EchoPrefix + "ping") + "\n" + Llm.Tools.UntrustedText.QuoteNote;
+            if (text != expected)
+            {
+                return new SmokeCheck(name, false, $"echo answered \"{text}\", expected \"{expected}\"");
+            }
+
+            string prefix = Mcp.McpText.AuditPrefix(tool.Name, Mcp.McpText.AllowedOnce);
+            string? line;
+            lock (audit)
+            {
+                line = audit.FirstOrDefault(l => l.StartsWith(prefix, StringComparison.Ordinal));
+            }
+
+            return line is null ? new SmokeCheck(name, false, "the asked call wrote no audit line")
+                : line.Contains(secret, StringComparison.Ordinal) || !line.Contains(Llm.Tools.ToolRedaction.Placeholder, StringComparison.Ordinal)
+                    ? new SmokeCheck(name, false, "the audit line kept the token argument")
+                    : new SmokeCheck(name, true, $"1 tool listed as {tool.Name} ({row.Name}) through McpSession; echo asked, allowed and answered; audited with the token redacted");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= heard;
+            Files.WorkingDirectory.DeleteDirectoryQuietly(home);
+        }
     }
 
     /// <summary>

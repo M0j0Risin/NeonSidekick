@@ -69,6 +69,22 @@ public static class ChildEnvironment
     /// every <see cref="IsWithheld"/> name in the app's environment, read from a <see cref="ProcessStartInfo"/>'s snapshot. A server's own
     /// <c>env</c> entries go on top.
     /// </summary>
+    /// <summary>
+    /// The value a <c>${NAME}</c> in <c>mcp.json</c> expands to (2026-11-20, the mcp-ask review's #72): <paramref name="name"/> read from the
+    /// same <see cref="ProcessStartInfo"/> snapshot <see cref="WithheldForMcp"/> reads (without regard to case on Windows, as Windows reads
+    /// it), or null when it isn't set or is <see cref="IsWithheld"/>. So a reference sees exactly what a server's process would.
+    /// </summary>
+    public static string? ForReference(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (IsWithheld(name))
+        {
+            return null;
+        }
+
+        return new ProcessStartInfo().Environment.TryGetValue(name, out string? value) ? value : null;
+    }
+
     public static Dictionary<string, string?> WithheldForMcp()
     {
         var removals = new Dictionary<string, string?>(StringComparer.Ordinal);

@@ -18,35 +18,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool?> AllowProjectFileAsync(string full, CancellationToken turnToken)
     {
-        if (!_pane.Enabled)
-        {
-            return null;
-        }
-
-        lock (_projectFileAllowed)
-        {
-            if (_projectFileAllowed.Contains(full))
-            {
-                return true;
-            }
-        }
-
         string name = Path.GetFileName(full);
         string caption = FileText.ProjectFileAllowCaption(name);
-        var allow = await AllowBothAsync(FileText.ProjectFileAllowTitle, caption, null, token => _cameraMenu.AllowAsync(caption, token, FileText.ProjectFileAllowTitle), turnToken).ConfigureAwait(false);
-        if (allow is not { } choice)
-        {
-            return null;
-        }
-
-        if (choice == CameraAllow.Session)
-        {
-            lock (_projectFileAllowed)
-            {
-                _projectFileAllowed.Add(full);
-            }
-        }
-
-        return choice != CameraAllow.Deny;
+        return Goes(await AllowWithSessionAsync(_projectFileAllowed, full, FileText.ProjectFileAllowTitle, caption, null, turnToken).ConfigureAwait(false));
     }
 }

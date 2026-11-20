@@ -29,10 +29,11 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The Docker tools (2026-10-02): the six reads (containers, logs, inspect, stats, resources, compose), then the four
-    /// changes (lifecycle, pull, remove, prune) behind <paramref name="confirm"/> — every change asks; null where nothing can
-    /// ask (headless), so there every change is refused. What a turn offers of them is <see cref="DockerToolsFor"/>'s.
+    /// changes (lifecycle, pull, remove, prune) behind <paramref name="confirm"/> — every change asks; headless's confirm is
+    /// <c>--allow docker</c>'s (2026-11-19), refusing every change without it, with <paramref name="notAskedTail"/> naming the entry
+    /// (2026-11-20, the mcp-ask review's #24, #62). What a turn offers of them is <see cref="DockerToolsFor"/>'s.
     /// </summary>
-    public static IReadOnlyList<AIFunction> DockerTools(DockerSession docker, Func<string, CancellationToken, Task<bool?>>? confirm) =>
+    public static IReadOnlyList<AIFunction> DockerTools(DockerSession docker, Func<string, CancellationToken, Task<bool?>>? confirm, string notAskedTail = "") =>
     [
         new DockerContainersTool(docker),
         new DockerLogsTool(docker),
@@ -40,10 +41,10 @@ internal sealed partial class ChatScreen
         new DockerStatsTool(docker),
         new DockerResourcesTool(docker),
         new DockerComposeTool(docker),
-        new DockerLifecycleTool(docker, confirm),
-        new DockerPullTool(docker, confirm),
-        new DockerRemoveTool(docker, confirm),
-        new DockerPruneTool(docker, confirm),
+        new DockerLifecycleTool(docker, confirm) { NotAskedTail = notAskedTail },
+        new DockerPullTool(docker, confirm) { NotAskedTail = notAskedTail },
+        new DockerRemoveTool(docker, confirm) { NotAskedTail = notAskedTail },
+        new DockerPruneTool(docker, confirm) { NotAskedTail = notAskedTail },
     ];
 
     /// <summary>The Docker tools that change something (2026-10-02): offered only under <c>Docker writes</c> (<see cref="DockerToolsFor"/>).</summary>

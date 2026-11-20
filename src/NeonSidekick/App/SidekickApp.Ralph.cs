@@ -43,6 +43,9 @@ public sealed partial class SidekickApp
         public bool HadPictures { get; set; }
         public string Line { get; set; } = "";
         public string Title { get; set; } = "";
+
+        /// <summary>Whether this loop has said <see cref="RalphText.HeadlessReviewConfirmFallbackNotice"/> (2026-11-20, #12): once a loop, as the screen's.</summary>
+        public bool ConfirmFallbackSaid { get; set; }
     }
 
     /// <summary>The next line the headless loop sends without reading stdin: its text, its echo and its pictures.</summary>
@@ -98,12 +101,21 @@ public sealed partial class SidekickApp
         public async Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken)
         {
             var effective = app.EffectiveSettings;
-            bool byAdvisor = RalphReviewers.ByAdvisor(loop.Snapshot.Reviewer, app.HeadlessAdvisorsOffered() && !app.HeadlessAdvisorsConfirmBlocked());
+            // An advisor review Advisor confirm keeps from its advisors falls back to the model, said once a loop (2026-11-20, the mcp-ask
+            // review's #12), as the screen's does; a reviewer that picks the model anyway says nothing.
+            bool wanted = RalphReviewers.ByAdvisor(loop.Snapshot.Reviewer, app.HeadlessAdvisorsOffered());
+            bool byAdvisor = wanted && !app.HeadlessAdvisorsConfirmBlocked();
+            if (wanted && !byAdvisor && !ralph.ConfirmFallbackSaid)
+            {
+                ralph.ConfirmFallbackSaid = true;
+                notices.Add(RalphText.HeadlessReviewConfirmFallbackNotice);
+            }
+
             string request = RalphReviewers.Request(step, report, delta, context.Session.ContextLength?.Tokens ?? 0);
             if (byAdvisor && effective.AdvisorConfirm)
             {
                 // By advisor only through --allow advisor (2026-11-19): the review calls past the confirm, so it writes the allowance's line itself.
-                HeadlessAllowances.LogAllowed(AllowKind.Advisor, HeadlessAllowances.RalphReviewWhat(loop.Pass));
+                HeadlessAllowances.LogAllowed(AllowKind.Advisor, AllowText.RalphReviewWhat(loop.Pass));
             }
 
             var (verdict, tokens) = byAdvisor

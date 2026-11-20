@@ -31,36 +31,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private async Task<bool?> AllowSqliteWriteAsync(SqliteTarget target, string sql, bool creating, IReadOnlyList<Sql.SqlParameterValue> parameters, CancellationToken turnToken)
     {
-        if (!_pane.Enabled)
-        {
-            return null;
-        }
-
-        string key = SqliteAllowKey(target.FullPath);
-        lock (_sqliteAllowed)
-        {
-            if (_sqliteAllowed.Contains(key))
-            {
-                return true;
-            }
-        }
-
         var whole = Shell.ShellText.WholeCommandLines(new Shell.CommandRequest("sql", Files.NameScrub.Display(Sql.ServerWriteText.Lines(sql), keepLineBreaks: true) + Sql.ServerWriteText.Bound(parameters), [], IsScript: true));
         string caption = SqliteText.AllowCaption(target, sql, creating, parameters);
-        var allow = await AllowBothAsync(SqliteText.AllowTitle, caption, whole, token => _cameraMenu.AllowAsync(caption, token, SqliteText.AllowTitle, SqliteText.AllowTitle, whole), turnToken).ConfigureAwait(false);
-        if (allow is not { } choice)
-        {
-            return null;
-        }
-
-        if (choice == CameraAllow.Session)
-        {
-            lock (_sqliteAllowed)
-            {
-                _sqliteAllowed.Add(key);
-            }
-        }
-
-        return choice != CameraAllow.Deny;
+        return Goes(await AllowWithSessionAsync(_sqliteAllowed, SqliteAllowKey(target.FullPath), SqliteText.AllowTitle, caption, whole, turnToken).ConfigureAwait(false));
     }
 }

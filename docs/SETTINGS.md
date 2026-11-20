@@ -978,11 +978,11 @@ Outside programs that give the model more tools.
 
 ### Servers
 
-One row per server in `mcp.json` (the profile's, then the home's; the profile's entry wins on a name clash), with its state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off; Enter on a failed one retries. A connected server's footer says how it asks and how long its notes are. Below: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
+One row per server in `mcp.json` (the profile's, then the home's; the profile's entry wins on a name clash), with its state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off; Enter on a failed one retries. A connected server's footer says how it asks and how long its notes are: `notes 2000 of 5000 chars` when cut, `notes left out (over 6000 in all)` when every server's together are too long. Below: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
 
 ### Tools
 
-Every connected server's tools, as `<server>__<tool>`, with their descriptions; Enter or Space switches one. A tool that asks before each call (by its server's `"ask"`) is tagged `asks`, and its footer says whether it asks. With two or more servers, a second tab row shows one server's tools.
+Every connected server's tools, as `<server>__<tool>`, with their descriptions; Enter or Space switches one. A tool that asks before each call (by its server's `"ask"`) is tagged `asks` (typing `asks` filters to them), and its footer says whether it asks or is allowed for this session. With two or more servers, a second tab row shows one server's tools.
 
 ### Options
 

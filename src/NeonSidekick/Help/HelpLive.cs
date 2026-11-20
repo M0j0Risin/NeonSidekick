@@ -12,21 +12,22 @@ public sealed record HelpMcpLookup(string Server, McpState State)
 {
     /// <summary>
     /// Whether a call to the tool asks the user first (2026-11-19, feature idea #28): its server's <c>ask</c> over the tool the server lists
-    /// (<see cref="Mcp.McpAskRule.Asks"/>). False when the name only leads with a server's prefix, a tool the server doesn't list.
+    /// (<see cref="Mcp.McpAskRule.Asks"/>). Null when the name only leads with a server's prefix, a tool the server doesn't list (2026-11-20,
+    /// the mcp-ask review's #82): nothing is known of it, so the live line says plain offered.
     /// </summary>
-    public bool Asks { get; init; }
+    public bool? Asks { get; init; }
 
     /// <summary>
-    /// The server a tool's name belongs to among <paramref name="servers"/>: the one listing a tool of that name, else the one whose sanitized
-    /// name and <c>__</c> lead it (the longest such); null for none. Shared by the screen and headless.
+    /// The server a tool's name belongs to among <paramref name="servers"/>: the one listing a tool of that name
+    /// (<see cref="McpServerStatus.FindTool"/> over every row, since the answer says the server's state), else the one whose sanitized name
+    /// and <c>__</c> lead it (the longest such); null for none. Shared by the screen and headless.
     /// </summary>
     public static HelpMcpLookup? Find(IReadOnlyList<McpServerStatus> servers, string name)
     {
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(name);
-        if (servers.FirstOrDefault(s => s.Tools.Any(t => string.Equals(t.Name, name, StringComparison.Ordinal))) is { } exact)
+        if (McpServerStatus.FindTool(servers, name) is var (exact, tool))
         {
-            var tool = exact.Tools.First(t => string.Equals(t.Name, name, StringComparison.Ordinal));
             return new HelpMcpLookup(exact.Name, exact.State) { Asks = Mcp.McpAskRule.Asks(exact.Ask, tool) };
         }
 
@@ -72,9 +73,17 @@ public sealed record HelpLive(
 
     /// <summary>
     /// Whether an unattended Ralph pass leaves out the MCP tools that ask (2026-11-19, feature idea #28): the screen's
-    /// <c>RalphAsksBarred()</c>. Headless leaves it false: its pass offers them and refuses each call.
+    /// <c>RalphAsksBarred()</c>. Headless leaves it false: its pass offers them and refuses each call without <c>--allow</c>, and lets them
+    /// run with it (2026-11-20, the mcp-ask review's #74).
     /// </summary>
     public bool McpAsksBarred { get; init; }
+
+    /// <summary>
+    /// Whether an MCP tool's calls run without asking because the user allowed them (2026-11-20, the mcp-ask review's #6, #25), by the
+    /// model's prefixed name: the screen's <i>Allow for this session</i> (held for the live connection and the tool as listed), headless's
+    /// <c>--allow</c>. Null where nothing allows, as the bots' copy.
+    /// </summary>
+    public Func<string, bool>? McpAllowed { get; init; }
 
     /// <summary>
     /// The live line for an app tool, in the order the screen and headless share: offered first, whatever the catalog says; then the tools
@@ -129,7 +138,15 @@ public sealed record HelpLive(
     {
         if (Offered.Contains(name))
         {
-            return found is { Asks: true } ? HelpText.LiveOfferedAsks : HelpText.LiveOfferedUnasked;
+            // What a call does now (2026-11-20, #6, #25, #82): allowed runs; headless without --allow refuses; else it asks.
+            bool allowed = McpAllowed?.Invoke(name) == true;
+            return found?.Asks switch
+            {
+                null => HelpText.LiveOffered,
+                false => HelpText.LiveOfferedUnasked,
+                true when allowed => Headless ? HelpText.LiveOfferedHeadlessAllowed : HelpText.LiveOfferedAllowed,
+                true => Headless ? HelpText.LiveOfferedHeadlessRefused : HelpText.LiveOfferedAsks,
+            };
         }
 
         string? why = !ToolsEnabled ? HelpText.LiveToolsOff
@@ -137,7 +154,7 @@ public sealed record HelpLive(
             : Settings is { McpServers: false } ? ToolsText.SwitchOffReason(SettingsField.McpServers)
             : found is null ? HelpText.LiveNoMcpServer
             : found.State != McpState.Connected ? HelpText.LiveMcpState(found.State)
-            : McpAsksBarred && found.Asks ? HelpText.LiveRalphAsk
+            : McpAsksBarred && found.Asks == true ? HelpText.LiveRalphAsk
             : DisabledByName.Contains(name) ? HelpText.LiveMcpOffByName
             : null;
         return HelpText.LiveNotOffered(why);

@@ -23,20 +23,20 @@ public class HeadlessAllowancesTests
         Assert.Null(await allow.Advisor(new AdvisorEntry("dba"), "Which index?", CancellationToken.None));
 
         Assert.Equal([AllowKind.Print, AllowKind.Advisor], allow.Refusals);
-        Assert.Equal([SidekickOptions.RefusedSummary(AllowKind.Print, 1, "print"), SidekickOptions.RefusedSummary(AllowKind.Advisor, 1, "advisor")], allow.SummaryLines());
-        Assert.Equal("1 Docker change was refused (--allow docker allows it)", SidekickOptions.RefusedSummary(AllowKind.Docker, 1, "docker"));
-        Assert.Equal("2 prints were refused (--allow print allows them)", SidekickOptions.RefusedSummary(AllowKind.Print, 2, "print"));
+        Assert.Equal([AllowText.RefusedSummary(AllowKind.Print, 1), AllowText.RefusedSummary(AllowKind.Advisor, 1)], allow.SummaryLines());
+        Assert.Equal("1 Docker change was refused (--allow docker allows it)", AllowText.RefusedSummary(AllowKind.Docker, 1));
+        Assert.Equal("2 prints were refused (--allow print allows them)", AllowText.RefusedSummary(AllowKind.Print, 2));
     }
 
     [Fact]
     public async Task Mcp_AllowsEveryServer_AndMcpServer_OneMatchedWithoutRegardToCase()
     {
         var all = new HeadlessAllowances(["mcp"]);
-        Assert.Equal(new McpVerdict.Allowed(McpText.AllowedBy("mcp")), await all.Mcp(Ask("anything", "anything__x"), CancellationToken.None));
+        Assert.Equal(new McpVerdict.Allowed(AllowText.AllowedBy("mcp")), await all.Mcp(Ask("anything", "anything__x"), CancellationToken.None));
 
         var one = new HeadlessAllowances(["mcp:GitHub"]);
         one.KnowServers(["github", "notes"]);
-        Assert.Equal(new McpVerdict.Allowed(McpText.AllowedBy("mcp:GitHub")), await one.Mcp(Ask("github", "github__push"), CancellationToken.None));
+        Assert.Equal(new McpVerdict.Allowed(AllowText.AllowedBy("mcp:GitHub")), await one.Mcp(Ask("github", "github__push"), CancellationToken.None));
         Assert.True(one.AllowsMcp("github"));
         Assert.False(one.AllowsMcp("notes"));
         Assert.Equal(new McpVerdict.NotAsked(McpText.HeadlessAllowTail("notes")), await one.Mcp(Ask("notes", "notes__add"), CancellationToken.None));
@@ -50,10 +50,12 @@ public class HeadlessAllowancesTests
         Assert.True(exact.AllowsMcp("github"));
         Assert.False(exact.AllowsMcp("GitHub"));
 
+        // #75 (2026-11-20): a case-blind name over two servers is an error, and allows neither.
         var blind = new HeadlessAllowances(["mcp:GITHUB"]);
-        blind.KnowServers(["GitHub", "github"]);
-        Assert.True(blind.AllowsMcp("github"));
-        Assert.True(blind.AllowsMcp("GitHub"));
+        Assert.Equal([AllowText.Ambiguous("GITHUB", ["GitHub", "github"])], blind.KnowServers(["GitHub", "github"]));
+        Assert.False(blind.AllowsMcp("github"));
+        Assert.False(blind.AllowsMcp("GitHub"));
+        Assert.Equal("--allow mcp:GITHUB matches GitHub and github; give the name as mcp.json spells it", AllowText.Ambiguous("GITHUB", ["GitHub", "github"]));
     }
 
     [Fact]
@@ -69,11 +71,11 @@ public class HeadlessAllowancesTests
     }
 
     [Fact]
-    public void AnEntryThatNamesNoServer_IsOneNotice()
+    public void AnEntryThatNamesNoServer_IsAnError()
     {
         var allow = new HeadlessAllowances(["mcp:typo", "mcp:GitHub"]);
-        Assert.Equal([SidekickOptions.AllowNamesNoServer("typo")], allow.KnowServers(["github"]));
-        Assert.Equal("--allow mcp:typo names no MCP server", SidekickOptions.AllowNamesNoServer("typo"));
+        Assert.Equal([AllowText.NamesNoServer("typo")], allow.KnowServers(["github"]));
+        Assert.Equal("--allow mcp:typo names no MCP server", AllowText.NamesNoServer("typo"));
     }
 
     [Fact]
@@ -93,7 +95,7 @@ public class HeadlessAllowancesTests
 
         lock (lines)
         {
-            var line = Assert.Single(lines, l => l.Message.StartsWith(McpText.AllowedBy("docker") + ": ", StringComparison.Ordinal));
+            var line = Assert.Single(lines, l => l.Message.StartsWith(AllowText.AllowedBy("docker") + ": ", StringComparison.Ordinal));
             Assert.Equal(Docker.DockerText.Category, line.Category);
             Assert.DoesNotContain("hunter2", line.Message);
         }

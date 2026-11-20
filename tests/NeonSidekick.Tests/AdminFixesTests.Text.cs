@@ -57,6 +57,7 @@ public sealed partial class AdminFixesTests
     [InlineData("<Password>hunter2</Password>", "hunter2")]
     [InlineData("https://x.example/cb?access_token=tok123&x=1", "tok123")]
     [InlineData("refresh_token=rt-1", "rt-1")]
+    [InlineData("redis://:pw0rd@cache:6379/0", "pw0rd")]
     public void A3_C5_TheNewSecretForms_AreHidden(string text, string secret)
     {
         string redacted = ToolRedaction.Text(text);

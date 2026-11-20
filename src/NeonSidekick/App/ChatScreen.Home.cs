@@ -20,21 +20,22 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The Home Assistant tools (2026-09-28): the four reads (overview, states, history and, since 2026-10-27, <c>ha_camera</c>), the four
     /// typed acts (lights, scene, media, to-do), the generic service call and Assist — the acts and Assist behind <paramref name="confirm"/>
-    /// for what the policy asks about (null where nothing can ask: headless). <c>ha_camera</c> keeps its stills in <paramref name="images"/>,
-    /// and is left out without one. Shared with headless.
+    /// for what the policy asks about (headless's is <c>--allow ha</c>'s since 2026-11-19). <c>ha_camera</c> keeps its stills in
+    /// <paramref name="images"/>, and is left out without one. Shared with headless, which passes its <paramref name="notAskedTail"/> and
+    /// <paramref name="showsQuestion"/> false (2026-11-20, the mcp-ask review's #24, #38).
     /// </summary>
-    public static IReadOnlyList<AIFunction> HomeAssistantTools(HaSession ha, Func<string, CancellationToken, Task<bool?>>? confirm, TimeZoneInfo? zone = null, Files.WorkingDirectory? images = null) =>
+    public static IReadOnlyList<AIFunction> HomeAssistantTools(HaSession ha, Func<string, CancellationToken, Task<bool?>>? confirm, TimeZoneInfo? zone = null, Files.WorkingDirectory? images = null, string notAskedTail = "", bool showsQuestion = true) =>
     [
         new HaOverviewTool(ha),
         new HaStatesTool(ha),
         new HaHistoryTool(ha, zone),
         .. images is null ? [] : new AIFunction[] { new HaCameraTool(ha, images, zone) },
-        new HaLightsTool(ha, confirm),
-        new HaSceneTool(ha, confirm),
-        new HaMediaTool(ha, confirm),
-        new HaTodoTool(ha, confirm),
-        new HaCallServiceTool(ha, confirm),
-        new HaAssistTool(ha, confirm),
+        new HaLightsTool(ha, confirm) { NotAskedTail = notAskedTail, ShowsQuestion = showsQuestion },
+        new HaSceneTool(ha, confirm) { NotAskedTail = notAskedTail, ShowsQuestion = showsQuestion },
+        new HaMediaTool(ha, confirm) { NotAskedTail = notAskedTail, ShowsQuestion = showsQuestion },
+        new HaTodoTool(ha, confirm) { NotAskedTail = notAskedTail, ShowsQuestion = showsQuestion },
+        new HaCallServiceTool(ha, confirm) { NotAskedTail = notAskedTail, ShowsQuestion = showsQuestion },
+        new HaAssistTool(ha, confirm) { NotAskedTail = notAskedTail, ShowsQuestion = showsQuestion },
     ];
 
     /// <summary>The Home Assistant tools' names: their result's first line is the transcript's note (<see cref="HaText.Note"/>).</summary>

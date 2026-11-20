@@ -1,9 +1,11 @@
-using System.Globalization;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Mcp;
 using NeonSidekick.Settings;
 
 namespace NeonSidekick.App;
+
+/// <summary>One kind of <c>--allow</c> (2026-11-20, the mcp-ask review's #31, #113, #120, #33): its word, the log category its allowed calls go under, and the summary's nouns.</summary>
+public sealed record AllowKindInfo(AllowKind Kind, string Word, string Category, string One, string Many);
 
 /// <summary>The kinds of call <c>--allow</c> can let a headless run make (2026-11-19, feature idea #45).</summary>
 public enum AllowKind
@@ -25,8 +27,24 @@ public enum AllowKind
 /// </summary>
 public sealed class HeadlessAllowances
 {
+    /// <summary>
+    /// Every kind, in the order the help names them: the one table each word, category and noun is read from (2026-11-20, the mcp-ask
+    /// review's #31, #113, #120, #33), so a new kind can't be missed by a switch's default.
+    /// </summary>
+    public static readonly IReadOnlyList<AllowKindInfo> Kinds =
+    [
+        new(AllowKind.Docker, "docker", Docker.DockerText.Category, "Docker change", "Docker changes"),
+        new(AllowKind.Print, "print", Printing.PrintText.Category, "print", "prints"),
+        new(AllowKind.Ha, "ha", HomeAssistant.HaText.Category, "Home Assistant call", "Home Assistant calls"),
+        new(AllowKind.Advisor, "advisor", Advisors.AdvisorText.Category, "advisor call", "advisor calls"),
+        new(AllowKind.Mcp, "mcp", McpConfigFile.Category, "MCP call", "MCP calls"),
+    ];
+
     /// <summary>The words an entry may be, besides <c>mcp:&lt;server&gt;</c>, in the order the help names them.</summary>
-    public static readonly IReadOnlyList<string> Words = ["docker", "print", "ha", "advisor", "mcp"];
+    public static readonly IReadOnlyList<string> Words = Kinds.Select(k => k.Word).ToArray();
+
+    /// <summary><paramref name="kind"/>'s row of <see cref="Kinds"/>.</summary>
+    public static AllowKindInfo Info(AllowKind kind) => Kinds.First(k => k.Kind == kind);
 
     /// <summary>The prefix of a one-server MCP entry.</summary>
     public const string McpServerPrefix = "mcp:";
@@ -95,29 +113,44 @@ public sealed class HeadlessAllowances
         return true;
     }
 
-    private static AllowKind? KindOf(string word) => word switch
-    {
-        "docker" => AllowKind.Docker,
-        "print" => AllowKind.Print,
-        "ha" => AllowKind.Ha,
-        "advisor" => AllowKind.Advisor,
-        "mcp" => AllowKind.Mcp,
-        _ => null,
-    };
+    /// <summary>The kind an entry's word names, or null for a word no kind has.</summary>
+    private static AllowKind? KindOf(string word) => Kinds.FirstOrDefault(k => k.Word == word)?.Kind;
 
     /// <summary>
-    /// The catalog's server names, after the headless connect: what an <c>mcp:&lt;server&gt;</c> entry matches against (a name typed exactly
-    /// picks that server alone). The notice lines for the entries that name no server, one each.
+    /// Every server name the files hold, read before anything connects (2026-11-20, the mcp-ask review's #9, #49, #124, #75, #111): the
+    /// entries and the ones skipped for a problem, so a typo in a server's own entry isn't taken for a typo in <c>--allow</c>. What an
+    /// <c>mcp:&lt;server&gt;</c> entry matches against: a name typed exactly picks that server alone, else one server without regard to case.
+    /// The errors, one per entry, that end the run with exit 2: a name that matches no server (<see cref="AllowText.NamesNoServer"/>), or
+    /// several (<see cref="AllowText.Ambiguous"/>).
     /// </summary>
     public IReadOnlyList<string> KnowServers(IEnumerable<string> names)
     {
         ArgumentNullException.ThrowIfNull(names);
-        _known = names.ToList();
-        return _mcpServers
-            .Where(entry => !_known.Any(name => string.Equals(name, entry, StringComparison.OrdinalIgnoreCase)))
-            .Select(SidekickOptions.AllowNamesNoServer)
-            .ToList();
+        _known = names.Distinct(StringComparer.Ordinal).ToList();
+        var errors = new List<string>();
+        foreach (string entry in _mcpServers)
+        {
+            if (_known.Contains(entry, StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            var matches = _known.Where(name => string.Equals(name, entry, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (matches.Count == 0)
+            {
+                errors.Add(AllowText.NamesNoServer(entry));
+            }
+            else if (matches.Count > 1)
+            {
+                errors.Add(AllowText.Ambiguous(entry, matches));
+            }
+        }
+
+        return errors;
     }
+
+    /// <summary>The <c>mcp:&lt;server&gt;</c> entries as given, for the start's never-asks notices.</summary>
+    public IReadOnlyList<string> McpServers => _mcpServers;
 
     /// <summary>Whether the run allows <paramref name="kind"/> (for MCP: every server). No log line.</summary>
     public bool Allows(AllowKind kind) => _kinds.Contains(kind);
@@ -127,7 +160,9 @@ public sealed class HeadlessAllowances
 
     /// <summary>
     /// The entry that lets <paramref name="server"/>'s calls run: <c>mcp</c>, or <c>mcp:&lt;server&gt;</c> matched without regard to case,
-    /// unless some server has the entry's exact name, which then matches that server alone. Null when none does.
+    /// unless some server has the entry's exact name, which then matches that server alone. Null when none does, and (2026-11-20, the
+    /// mcp-ask review's #75) for an entry that matches several servers without regard to case and none exactly: the run has ended with
+    /// exit 2 by then, and this keeps a caller that skipped the check from guessing.
     /// </summary>
     private string? McpEntry(string server)
     {
@@ -139,7 +174,9 @@ public sealed class HeadlessAllowances
         foreach (string entry in _mcpServers)
         {
             bool exactElsewhere = _known.Contains(entry, StringComparer.Ordinal);
-            bool match = exactElsewhere ? string.Equals(entry, server, StringComparison.Ordinal) : string.Equals(entry, server, StringComparison.OrdinalIgnoreCase);
+            bool match = exactElsewhere
+                ? string.Equals(entry, server, StringComparison.Ordinal)
+                : string.Equals(entry, server, StringComparison.OrdinalIgnoreCase) && _known.Count(name => string.Equals(name, entry, StringComparison.OrdinalIgnoreCase)) <= 1;
             if (match)
             {
                 return McpServerPrefix + entry;
@@ -150,37 +187,30 @@ public sealed class HeadlessAllowances
     }
 
     /// <summary>The <c>confirm</c> hook for Docker, print or Home Assistant: true (logged) when allowed, else the refusal recorded and null.</summary>
-    public Func<string, CancellationToken, Task<bool?>> Confirm(AllowKind kind) => (prompt, _) =>
+    public Func<string, CancellationToken, Task<bool?>> Confirm(AllowKind kind) => (prompt, _) => Task.FromResult(Judge(kind, prompt));
+
+    /// <summary>The advisor's confirm hook (<c>neon_advisor</c> under <c>Advisor confirm</c>).</summary>
+    public Func<AdvisorEntry, string, CancellationToken, Task<bool?>> Advisor => (advisor, question, _) => Task.FromResult(Judge(AllowKind.Advisor, advisor.Profile + ": " + question));
+
+    /// <summary>The one judge of the confirm hooks (#31): true, logged, when the run allows <paramref name="kind"/>; else the refusal recorded and null.</summary>
+    private bool? Judge(AllowKind kind, string what)
     {
         if (Allows(kind))
         {
-            LogAllowed(kind, prompt);
-            return Task.FromResult<bool?>(true);
+            LogAllowed(kind, what);
+            return true;
         }
 
         Refused(kind, null, null);
-        return Task.FromResult<bool?>(null);
-    };
-
-    /// <summary>The advisor's confirm hook (<c>neon_advisor</c> under <c>Advisor confirm</c>).</summary>
-    public Func<AdvisorEntry, string, CancellationToken, Task<bool?>> Advisor => (advisor, question, _) =>
-    {
-        if (Allows(AllowKind.Advisor))
-        {
-            LogAllowed(AllowKind.Advisor, advisor.Profile + ": " + question);
-            return Task.FromResult<bool?>(true);
-        }
-
-        Refused(AllowKind.Advisor, null, null);
-        return Task.FromResult<bool?>(null);
-    };
+        return null;
+    }
 
     /// <summary>The MCP session's approver: the session audits an allowed call itself, with the entry that matched as the word.</summary>
     public Func<McpAsk, CancellationToken, Task<McpVerdict>> Mcp => (ask, _) =>
     {
         if (McpEntry(ask.Server) is { } entry)
         {
-            return Task.FromResult<McpVerdict>(new McpVerdict.Allowed(McpText.AllowedBy(entry)));
+            return Task.FromResult<McpVerdict>(new McpVerdict.Allowed(AllowText.AllowedBy(entry)));
         }
 
         Refused(AllowKind.Mcp, ask.Server, ask.Name);
@@ -188,47 +218,35 @@ public sealed class HeadlessAllowances
     };
 
     /// <summary>
-    /// One <c>allowed by --allow &lt;entry&gt;: &lt;what&gt;</c> line under <paramref name="kind"/>'s category, <paramref name="what"/> redacted
-    /// and its hiding characters escaped: what a pass that calls past the confirm (a Ralph review by advisor) writes itself.
+    /// One <c>allowed by --allow &lt;entry&gt;: &lt;what&gt;</c> line under <paramref name="kind"/>'s category: what a pass that calls past
+    /// the confirm (a Ralph review by advisor) writes itself. <paramref name="what"/> on one line (Home Assistant's question has two), then
+    /// redacted, cut and its hiding characters escaped by the one audit helper (2026-11-20, the mcp-ask review's #96, #41).
     /// </summary>
     public static void LogAllowed(AllowKind kind, string what)
     {
         ArgumentNullException.ThrowIfNull(what);
-        string text = Files.NameScrub.Display(Llm.Tools.ToolRedaction.Text(what));
-        if (text.Length > McpText.AuditArgumentChars)
-        {
-            text = Files.TextCut.Safe(text, McpText.AuditArgumentChars) + "…";
-        }
-
-        DiagnosticLog.Info(CategoryOf(kind), McpText.AllowedBy(EntryWord(kind)) + ": " + text);
+        string text = Llm.Tools.ToolRedaction.AuditText(what.ReplaceLineEndings(" "), McpText.AuditArgumentChars);
+        var info = Info(kind);
+        DiagnosticLog.Info(info.Category, AllowText.AllowedBy(info.Word) + ": " + text);
     }
-
-    /// <summary>What a Ralph review by advisor logs as allowed: <c>Ralph review of pass 3</c>.</summary>
-    public static string RalphReviewWhat(int pass) => "Ralph review of pass " + pass.ToString(CultureInfo.InvariantCulture);
-
-    private static string EntryWord(AllowKind kind) => kind switch
-    {
-        AllowKind.Docker => "docker",
-        AllowKind.Print => "print",
-        AllowKind.Ha => "ha",
-        AllowKind.Advisor => "advisor",
-        _ => "mcp",
-    };
-
-    private static string CategoryOf(AllowKind kind) => kind switch
-    {
-        AllowKind.Docker => Docker.DockerText.Category,
-        AllowKind.Print => Printing.PrintText.Category,
-        AllowKind.Ha => HomeAssistant.HaText.Category,
-        AllowKind.Advisor => Advisors.AdvisorText.Category,
-        _ => McpConfigFile.Category,
-    };
 
     private void Refused(AllowKind kind, string? server, string? name)
     {
         lock (_refusals)
         {
             _refusals.Add((kind, server, name));
+        }
+    }
+
+    /// <summary>Whether the run refused any call for want of an <c>--allow</c> (#31): exit 3's half of it.</summary>
+    public bool AnyRefused
+    {
+        get
+        {
+            lock (_refusals)
+            {
+                return _refusals.Count > 0;
+            }
         }
     }
 
@@ -257,23 +275,24 @@ public sealed class HeadlessAllowances
         }
 
         var lines = new List<string>();
-        foreach (var kind in new[] { AllowKind.Mcp, AllowKind.Docker, AllowKind.Print, AllowKind.Ha, AllowKind.Advisor })
+        // MCP's line first, as since the start; the rest in the table's order.
+        foreach (var info in Kinds.OrderBy(k => k.Kind == AllowKind.Mcp ? 0 : 1))
         {
-            var of = refusals.Where(r => r.Kind == kind).ToList();
+            var of = refusals.Where(r => r.Kind == info.Kind).ToList();
             if (of.Count == 0)
             {
                 continue;
             }
 
-            if (kind == AllowKind.Mcp)
+            if (info.Kind == AllowKind.Mcp)
             {
                 var names = of.Select(r => r.Name!).Distinct(StringComparer.Ordinal).ToList();
-                var servers = of.Select(r => McpServerPrefix + r.Server).Distinct(StringComparer.Ordinal).ToList();
-                lines.Add(SidekickOptions.McpRefusedSummary(of.Count, names, servers));
+                var servers = of.Select(r => McpText.AllowEntry(r.Server!)).Distinct(StringComparer.Ordinal).ToList();
+                lines.Add(AllowText.McpRefusedSummary(of.Count, names, servers));
             }
             else
             {
-                lines.Add(SidekickOptions.RefusedSummary(kind, of.Count, EntryWord(kind)));
+                lines.Add(AllowText.RefusedSummary(info.Kind, of.Count));
             }
         }
 

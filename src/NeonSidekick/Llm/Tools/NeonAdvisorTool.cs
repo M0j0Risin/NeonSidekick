@@ -72,13 +72,22 @@ public sealed class NeonAdvisorTool : AIFunction
     private readonly Func<bool>? _inPass;
     private int _calls;
 
+    /// <summary>
+    /// What the "nobody could be asked" refusal ends with (2026-11-20, the mcp-ask review's #24, #57): empty on the screen; headless names
+    /// its <c>--allow</c> entry (<c>AllowText.NotAskedTail</c>), as an MCP refusal does.
+    /// </summary>
+    public string NotAskedTail { get; init; } = "";
+
+    /// <summary><paramref name="text"/> with <see cref="NotAskedTail"/> after it, the sentence closed first.</summary>
+    private string WithTail(string text) => NotAskedTail.Length == 0 ? text : text.TrimEnd('.') + "." + NotAskedTail;
+
     /// <param name="host">The advisors' profiles and links.</param>
     /// <param name="effective">The settings, read at every call.</param>
     /// <param name="master">The loaded profile's name, for the framing.</param>
     /// <param name="threads">The advisors' threads, the screen's (or headless's) to store and drop.</param>
     /// <param name="offered">The tools this chat would offer a turn now and their rules' text; filtered here to the read-only ones.</param>
     /// <param name="history">The conversation, for <c>Advisor context: recent</c>.</param>
-    /// <param name="confirm">Asks the user: true for yes, false for no, null when nothing could ask; the seam itself null where nothing ever can (headless).</param>
+    /// <param name="confirm">Asks the user: true for yes, false for no, null when nothing could ask; headless's is <c>--allow advisor</c>'s (2026-11-19, the mcp-ask review's #62).</param>
     /// <param name="view">Shows the call as it runs; null shows nothing.</param>
     /// <param name="spent">
     /// Told what each answer's requests used, the requests that reported and their tokens summed (2026-10-10, found comparing botchat with
@@ -159,7 +168,7 @@ public sealed class NeonAdvisorTool : AIFunction
             bool? yes = _confirm is null ? null : await _confirm(advisor, question, cancellationToken).ConfigureAwait(false);
             if (yes is null)
             {
-                return AdvisorText.NotAskedError;
+                return WithTail(AdvisorText.NotAskedError);
             }
 
             if (yes == false)

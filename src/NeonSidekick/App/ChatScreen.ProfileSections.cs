@@ -35,8 +35,8 @@ internal sealed partial class ChatScreen
     {
         string ours = McpConfigFile.ProfilePath(_settings.ProfileDirectory);
         string theirs = McpConfigFile.ProfilePath(Profiles.Directory(home, other));
-        var source = McpConfigFile.Load(pull ? theirs : ours);
-        var target = McpConfigFile.Load(pull ? ours : theirs);
+        var source = McpConfigFile.Load(pull ? theirs : ours, seal: false);
+        var target = McpConfigFile.Load(pull ? ours : theirs, seal: false);
         foreach (var (load, isSource) in new[] { (source, true), (target, false) })
         {
             if (FileProblem(load) is { } problem)
@@ -713,7 +713,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The question before an <c>mcp</c> copy: the servers named, the replaced ones counted, and what travels with them:
-    /// <c>🔌 Copy 2 MCP servers (docker, github) into "work"? Their env, headers and args go as written, plain text.</c>
+    /// <c>🔌 Copy 2 MCP servers (docker, github) into "work"? Their env, headers and args go as written; an encrypted value stays encrypted.</c>
+    /// The reads behind it don't seal (2026-11-20, the mcp-ask review's #122): a copy answered No writes nothing, and a plain token travels
+    /// plain, to be sealed where it lands at that profile's next connect.
     /// </summary>
     public static string ProfileMcpPrompt(IReadOnlyList<string> names, int replacing, string profile, bool pull)
     {
@@ -721,7 +723,7 @@ internal sealed partial class ChatScreen
         string servers = $"{McpServerCount(names.Count)} ({ProfileSectionNames(names)})";
         string where = pull ? $"from \"{profile}\" into this profile" : $"into \"{profile}\"";
         string replaced = replacing == 0 ? "" : $", replacing {replacing.ToString(CultureInfo.InvariantCulture)} of the same name";
-        return $"{McpText.Glyph} Copy {servers} {where}{replaced}? Their env, headers and args go as written, plain text.";
+        return $"{McpText.Glyph} Copy {servers} {where}{replaced}? Their env, headers and args go as written; an encrypted value stays encrypted.";
     }
 
     /// <summary>

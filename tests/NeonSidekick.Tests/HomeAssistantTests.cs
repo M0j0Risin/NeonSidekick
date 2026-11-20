@@ -611,6 +611,28 @@ public sealed class HomeAssistantTests : IDisposable
         Assert.Equal("Assist (action done): Turned off the lights", await HaAssistTool.AskAsync(_ha, "turn off the kitchen", CancellationToken.None));
     }
 
+    /// <summary>
+    /// Headless's Home Assistant tools (2026-11-20, the mcp-ask review's #24, #38): a refusal ends with <c>--allow ha</c>'s tail, and a
+    /// sentence or data the pane couldn't show whole isn't refused for that, since no pane shows it.
+    /// </summary>
+    [Fact]
+    public async Task Headless_ARefusalNamesAllowHa_AndNothingIsRefusedForThePanesSake()
+    {
+        _stub.Map(Server + "/api/conversation/process", HttpStatusCode.OK, """{"response":{"response_type":"action_done","speech":{"plain":{"speech":"Done"}}},"conversation_id":"x"}""");
+        string tail = NeonSidekick.App.AllowText.NotAskedTail(NeonSidekick.App.AllowKind.Ha);
+        Assert.Equal(" A headless run allows it with --allow ha.", tail);
+        Assert.Equal(HaText.NotAsked + "." + tail, await Invoke(new HaAssistTool(_ha, null) { NotAskedTail = tail, ShowsQuestion = false }, ("text", "unlock the front door")));
+
+        string sentence = "unlock the front door\nand " + new string('x', HaText.AssistMaxChars);
+        Assert.Equal(HaText.AssistUnshowable(sentence), await Invoke(new HaAssistTool(_ha, Answer(true)), ("text", sentence)));
+        Assert.StartsWith("Assist (action done)", await Invoke(new HaAssistTool(_ha, Answer(true)) { ShowsQuestion = false }, ("text", sentence)));
+
+        var data = JsonDocument.Parse("{\"command\":\"" + new string('x', HaText.ConfirmDataMaxChars) + "\"}").RootElement.Clone();
+        Assert.StartsWith("Error: that call's data is ", await Invoke(new HaCallServiceTool(_ha, Answer(true)), ("domain", "remote"), ("service", "send_command"), ("entity", "remote.bravia_xr_55a80l"), ("data", data)));
+        var unshown = new HaCallServiceTool(_ha, Answer(true)) { ShowsQuestion = false };
+        Assert.Equal("remote.send_command → BRAVIA XR-55A80L", await Invoke(unshown, ("domain", "remote"), ("service", "send_command"), ("entity", "remote.bravia_xr_55a80l"), ("data", data)));
+    }
+
     [Fact]
     public async Task Assist_UnderAsk_WaitsForTheUsersYes_UnlessAllowedOrListedSafe()
     {

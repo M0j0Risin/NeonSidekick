@@ -101,26 +101,6 @@ public sealed record SidekickOptions(
     public static string AllowUnknown(string entry) =>
         "--allow doesn't know " + (entry.Length == 0 ? "an empty entry" : "\"" + entry + "\"") + "; use " + string.Join(", ", HeadlessAllowances.Words) + " or mcp:<server>";
 
-    /// <summary>The headless notice for an <c>mcp:&lt;server&gt;</c> that names no server in either <c>mcp.json</c>.</summary>
-    public static string AllowNamesNoServer(string server) => AllowFlag + " mcp:" + server + " names no MCP server";
-
-    /// <summary>The closing summary's MCP line: <c>2 MCP calls were refused: a, b (--allow mcp:github,mcp:notes allows them)</c>.</summary>
-    public static string McpRefusedSummary(int count, IReadOnlyList<string> names, IReadOnlyList<string> entries) =>
-        count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " MCP call was refused: " : " MCP calls were refused: ") + string.Join(", ", names)
-        + " (" + AllowFlag + " " + string.Join(",", entries) + (count == 1 ? " allows it)" : " allows them)");
-
-    /// <summary>The closing summary's line for Docker, print, Home Assistant or an advisor: <c>1 Docker change was refused (--allow docker allows it)</c>.</summary>
-    public static string RefusedSummary(AllowKind kind, int count, string entry)
-    {
-        string noun = kind switch
-        {
-            AllowKind.Docker => count == 1 ? "Docker change" : "Docker changes",
-            AllowKind.Print => count == 1 ? "print" : "prints",
-            AllowKind.Ha => count == 1 ? "Home Assistant call" : "Home Assistant calls",
-            _ => count == 1 ? "advisor call" : "advisor calls",
-        };
-        return count.ToString(CultureInfo.InvariantCulture) + " " + noun + (count == 1 ? " was refused (" : " were refused (") + AllowFlag + " " + entry + (count == 1 ? " allows it)" : " allows them)");
-    }
 
     /// <summary>
     /// <c>--midi-check</c> (2026-11-12, the MIDI plan): run <see cref="App.MidiCheck"/> and exit 0/1 — the inputs listed and opened, every message
@@ -268,7 +248,7 @@ public sealed record SidekickOptions(
         "  --version      print the version and exit\n" +
         "  -h, --help     this text\n" +
         "\n" +
-        "Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call that asks was refused\n" +
+        "Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call --allow covers was refused\n" +
         "\n" +
         "Keys: Esc = cancel/back";
 
@@ -552,7 +532,8 @@ public sealed record SidekickOptions(
         }
 
         // After the loop (2026-11-19): arguments are read in order, so a check at the case would refuse "--allow mcp --headless".
-        return result.AllowList.Count > 0 && !result.Headless ? result with { Error = AllowNeedsHeadless } : result;
+        // --help and --version answer first (2026-11-20, the mcp-ask review's #26): "--allow mcp --help" shows the help, not this error.
+        return result.AllowList.Count > 0 && !result.Headless && !result.ShowHelp && !result.ShowVersion ? result with { Error = AllowNeedsHeadless } : result;
     }
 
     /// <summary>The flags that carry a value this launch (a test seam since the status panel went, 2026-09-14).</summary>
