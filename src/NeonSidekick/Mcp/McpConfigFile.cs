@@ -11,6 +11,12 @@ public sealed record McpConfigProblem(string Source, string Reason)
     /// name's: a broken profile entry still shadows the home's of that name, and headless <c>--allow mcp:&lt;name&gt;</c> knows it.
     /// </summary>
     public string? Name { get; init; }
+
+    /// <summary>
+    /// The file a problem of one server sits in (2026-11-20, plan idempotent-mixing-ripple): the <c>/mcp</c> line of a server whose <c>ask</c>
+    /// is a typo takes <c>a</c>, which writes there; null beside a null <see cref="Name"/>.
+    /// </summary>
+    public string? Path { get; init; }
 }
 
 /// <summary>What <see cref="McpConfigFile.Load"/> found: the usable servers in file order and the problems, never a throw.</summary>
@@ -35,6 +41,12 @@ public sealed class McpConfigFile
 
     /// <summary>The log category of everything MCP.</summary>
     public const string Category = "Mcp";
+
+    /// <summary>The key the servers sit under: what the byte-level edits (a sealed token, a server's <c>ask</c>) name as the first step.</summary>
+    public const string ServersKey = "mcpServers";
+
+    /// <summary>A server's <c>ask</c> key, as <see cref="McpServerConfig.Ask"/> binds it (camel-case, case-sensitive).</summary>
+    public const string AskKey = "ask";
 
     /// <summary>What a fresh file holds: no servers, the key ready to fill. Pinned.</summary>
     public const string EmptyText = "{\n  \"mcpServers\": {}\n}\n";
@@ -181,19 +193,19 @@ public sealed class McpConfigFile
                     DiagnosticLog.Warn(Category, McpText.ConfigProblemLogLine(source, detail));
                 }
 
-                problems.Add(new McpConfigProblem(source, McpText.BadEntry(detail)) { Name = name });
+                problems.Add(new McpConfigProblem(source, McpText.BadEntry(detail)) { Name = name, Path = path });
                 continue;
             }
 
             if (config is null)
             {
-                problems.Add(new McpConfigProblem(source, McpText.NeitherCommandNorUrl) { Name = name });
+                problems.Add(new McpConfigProblem(source, McpText.NeitherCommandNorUrl) { Name = name, Path = path });
                 continue;
             }
 
             if (config.Problem is { } reason)
             {
-                problems.Add(new McpConfigProblem(source, reason) { Name = name });
+                problems.Add(new McpConfigProblem(source, reason) { Name = name, Path = path });
                 continue;
             }
 

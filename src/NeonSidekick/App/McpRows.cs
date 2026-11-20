@@ -24,10 +24,24 @@ public sealed record McpFacts(IReadOnlyList<McpServerStatus> Servers, IReadOnlyL
 /// <summary>What a row of the Servers tab does on Enter: a server's flip, one of the two edit rows, the reload row.</summary>
 public abstract record McpRow
 {
-    public sealed record Server(string Name) : McpRow;
+    public sealed record Server(string Name) : McpRow
+    {
+        /// <summary>
+        /// Which file's entry the row is (2026-11-20, plan idempotent-mixing-ripple): a shadowed global row and the profile row that shadows it
+        /// share a name, and <c>a</c> writes the ask into one file. Null where a test builds a row by name alone: the first of that name.
+        /// </summary>
+        public McpScope? Scope { get; init; }
+    }
+
     public sealed record EditProfile : McpRow;
     public sealed record EditGlobal : McpRow;
     public sealed record Reload : McpRow;
+
+    /// <summary>
+    /// A skipped server whose <c>ask</c> is a typo (2026-11-20, the user's call): its line under Skipped takes <c>a</c>, which writes a mode over
+    /// the bad value in <paramref name="Path"/>; Enter and Space do nothing there, as on every other skipped line.
+    /// </summary>
+    public sealed record BadAsk(string Name, string Path) : McpRow;
 }
 
 /// <summary>
@@ -113,7 +127,7 @@ public static class McpRows
             string row = live
                 ? Styled(Theme.AccentSecondary, server.Name.PadRight(width)) + Theme.ColorMarkup(Theme.Ink, state) + Theme.DimMarkup(StatusText(server))
                 : Theme.DimMarkup(server.Name.PadRight(width) + state + StatusText(server));
-            rows.Add((row, new McpRow.Server(server.Name), false));
+            rows.Add((row, new McpRow.Server(server.Name) { Scope = server.Scope }, false));
         }
 
         Heading(McpText.FilesHeading, null);
@@ -129,7 +143,9 @@ public static class McpRows
             Heading(McpText.ProblemsHeading, facts.Problems.Count);
             foreach (var problem in facts.Problems)
             {
-                rows.Add((Theme.DimMarkup(McpText.ProblemLine(problem)), null, false));
+                // A typo in a server's ask (2026-11-20, the user's call) is the one problem a key mends: the line carries its server and file.
+                McpRow? mend = problem is { Name: { } name, Path: { } path } && string.Equals(problem.Reason, McpText.BadAsk, StringComparison.Ordinal) ? new McpRow.BadAsk(name, path) : null;
+                rows.Add((Theme.DimMarkup(McpText.ProblemLine(problem)), mend, false));
             }
         }
 
@@ -154,6 +170,17 @@ public static class McpRows
     }
 
     /// <summary>
+    /// The server a Servers-tab row names (2026-11-20, plan idempotent-mixing-ripple): by name, and by scope when the row carries one, so a
+    /// shadowed global row and the profile row that shadows it each find their own. Null when the session no longer holds it.
+    /// </summary>
+    public static McpServerStatus? ServerOf(McpFacts facts, McpRow.Server row)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(row);
+        return facts.Servers.FirstOrDefault(s => s.Name == row.Name && (row.Scope is null || s.Scope == row.Scope));
+    }
+
+    /// <summary>
     /// The footer under the Servers tab for <paramref name="row"/> (2026-10-07, the user's ask: a failed server's error was the row's
     /// cut end, and the tab's band stood blank): a server's whole status — the error whole, or the tools it offers by name — then its
     /// scope and transport (<c>profile · stdio: docker mcp gateway run</c>), shadowed said so; an edit row the file it opens; null for
@@ -168,7 +195,9 @@ public static class McpRows
                 return new MenuFooter(facts.ProfilePath);
             case McpRow.EditGlobal:
                 return new MenuFooter(facts.GlobalPath);
-            case McpRow.Server { Name: var name } when facts.Servers.FirstOrDefault(s => s.Name == name) is { } server:
+            case McpRow.BadAsk:
+                return new MenuFooter(McpText.BadAskFixFooter);
+            case McpRow.Server named when ServerOf(facts, named) is { } server:
             {
                 string status = server.ShadowedBy is not null ? McpText.StatusShadowed
                     : server.State switch

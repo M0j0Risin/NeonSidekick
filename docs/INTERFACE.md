@@ -153,6 +153,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · Esc denies |
+| `/mcp` › Servers | `a` the server's ask (writes, always, never), written into its mcp.json; also on a skipped server whose ask is a typo |
 | An MCP call's approval | `d` deny · `o` once · `s` session · `v` the arguments · Esc denies |
 | The project file's approval | `d` deny · `o` once · `s` session · Esc denies: the model's change to `NEON.md`, `AGENTS.md` or `CLAUDE.md` |
 | **Servers and processes** | |

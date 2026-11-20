@@ -40,6 +40,9 @@ internal sealed class McpMenu
     /// <summary>The Options tab's index into <see cref="McpText.TabTitles"/>.</summary>
     public const int OptionsTab = 2;
 
+    /// <summary>The hidden button behind the Servers tab's <c>a</c> (never drawn, so never seen).</summary>
+    private const string AskButtonTitle = "ask";
+
     /// <summary>Whether the MCP wave still runs behind the input line (2026-09-29): the rows that take the session's gate are refused meanwhile.</summary>
     public Func<bool> Connecting { get; init; } = static () => false;
 
@@ -92,6 +95,9 @@ internal sealed class McpMenu
         return MenuPage.Tabbed(McpText.Label, tabs, tab, SettingsMenu.TabKeys) with
         {
             SpaceToggles = true,
+            // A server's ask on Servers alone (2026-11-20, plan idempotent-mixing-ripple): tied to tab 0, an `a` on the Tools tab still filters,
+            // and no TabButtons, whose strip would drop the Options tab's badge.
+            Buttons = [new MenuButton(AskButtonTitle, 'a') { Hidden = true, Tab = 0 }],
             TabCursors = [McpRows.FirstServerRow(servers), ToolsText.FirstToolRow(tools), 0],
             // The Tools tab's band says the cursor's tool (2026-10-05, /tools' Offered shape); the Servers tab's the cursor's server whole (2026-10-07).
             Footer = (t, row) => t switch
@@ -201,6 +207,17 @@ internal sealed class McpMenu
                     shownServer = toolTabs[sub];
                     tools = byServer[sub].Item2;
                 }
+                if (pick.Button >= 0)
+                {
+                    // The Servers tab's `a` (2026-11-20): first, or the tab's branch below would read it as Enter and flip the server.
+                    if (tab == 0 && cursor >= 0 && cursor < servers.Count)
+                    {
+                        await AskAsync(servers[cursor].Row, facts, reply.Running, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
                 if (pick.Filter is { } typed)
                 {
                     // The Tools tab's filter (2026-10-03): the rows again under it, the cursor on the first tool left.
@@ -211,9 +228,9 @@ internal sealed class McpMenu
 
                 if (tab == 0)
                 {
-                    if (cursor >= servers.Count || servers[cursor].Row is not { } row)
+                    if (cursor >= servers.Count || servers[cursor].Row is not { } row || row is McpRow.BadAsk)
                     {
-                        continue;   // a heading, the off lines, a problem
+                        continue;   // a heading, the off lines, a problem (a typo'd ask's too: only `a` mends it)
                     }
 
                     await ActAsync(row, facts, reply.Running, cancellationToken).ConfigureAwait(false);
@@ -393,6 +410,99 @@ internal sealed class McpMenu
             Sink.Error(McpText.FailedNotice(name, after?.Detail ?? ""));
         }
     }
+
+    /// <summary>
+    /// The Servers tab's <c>a</c> (2026-11-20, plan idempotent-mixing-ripple, the user's ask after writing <c>"ask": "always"</c> by hand for a
+    /// hand check): a picker of the three modes, the cursor on the file's, and the one chosen written into that server's own <c>mcp.json</c>
+    /// (<see cref="Sql.ConnectionsFileEdit.SetEntryString"/>, nothing else in the file touched), then the session's reload: a change of
+    /// <c>ask</c> alone updates the kept connection in place, and its session allows lapse with it. A skipped server whose <c>ask</c> is a
+    /// typo is mended the same way (the user's call), the reload bringing it back. A shadowed row, mid-turn and the connect wave are refused;
+    /// with the master switch off, or a server not connected, it is only written. Logged, since it changes what asks.
+    /// </summary>
+    private async Task AskAsync(McpRow? row, McpFacts facts, bool midTurn, CancellationToken cancellationToken)
+    {
+        string name;
+        string path;
+        bool global;
+        McpAskMode current;
+        bool later;
+        switch (row)
+        {
+            case McpRow.Server named when McpRows.ServerOf(facts, named) is { } server:
+                if (server.ShadowedBy is not null)
+                {
+                    Sink.Notice(McpText.AskShadowedNotice(server.Name));
+                    return;
+                }
+
+                name = server.Name;
+                global = server.Scope == McpScope.Global;
+                path = global ? facts.GlobalPath : facts.ProfilePath;
+                current = _session.Read(seal: false).Entries.FirstOrDefault(e => e.Name == name && e.Scope == server.Scope)?.Config.AskMode ?? McpAskMode.Writes;
+                later = !facts.Enabled || server.State != McpState.Connected;
+                break;
+            case McpRow.BadAsk bad:
+                name = bad.Name;
+                path = bad.Path;
+                global = string.Equals(path, facts.GlobalPath, StringComparison.Ordinal);
+                current = McpAskMode.Writes;   // the file's word means none of them: the default first
+                later = !facts.Enabled;
+                break;
+            default:
+                return;   // an edit row, the reload row, a heading, a plain skipped line
+        }
+
+        if (midTurn)
+        {
+            Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
+            return;
+        }
+
+        if (Connecting())
+        {
+            Sink.Notice(BackgroundJobText.McpStillConnecting);
+            return;
+        }
+
+        var rows = McpAskRule.Words
+            .Select((word, i) => Theme.ColorMarkup(Theme.Ink, word.PadRight(AskWordWidth)) + Theme.DimMarkup(McpText.AskModeMeanings[i]))
+            .ToList();
+        var picker = new MenuPage(McpText.AskPickerTitle(name), rows, McpText.AskPickerKeys);
+        if (await _pane.PickAsync(picker, (int)current, cancellationToken).ConfigureAwait(false) is not { } pick || pick.Row < 0 || pick.Row >= rows.Count)
+        {
+            return;   // Esc: back to Servers, nothing written
+        }
+
+        var mode = (McpAskMode)pick.Row;
+        if (mode == current && row is McpRow.Server)
+        {
+            Sink.Notice(McpText.AskUnchangedNotice(name, mode));
+            return;
+        }
+
+        if (Sql.ConnectionsFileEdit.SetEntryString(path, McpConfigFile.ServersKey, name, McpConfigFile.AskKey, McpAskRule.Words[(int)mode]) is { } error)
+        {
+            Sink.Error(McpText.AskFailedError(name, error));
+            return;
+        }
+
+        DiagnosticLog.Info(McpConfigFile.Category, McpText.AskSetLogLine(name, mode, path));
+        if (facts.Enabled)
+        {
+            // The reload applies it: in place for a kept connection (its ask is no connection shape), a mended server started. Other edits
+            // made meanwhile come with it, so their count is said when there are any.
+            var (added, removed, kept) = await _session.ReloadAsync(_effective(), cancellationToken).ConfigureAwait(false);
+            if (added > 0 || removed > 0)
+            {
+                Sink.Notice(McpText.ReloadedNotice(added, removed, kept));
+            }
+        }
+
+        Sink.Notice(McpText.AskSetNotice(name, mode, global, later));
+    }
+
+    /// <summary>The picker's word column: the longest mode word and three spaces.</summary>
+    private static readonly int AskWordWidth = McpAskRule.Words.Max(w => w.Length) + 3;
 
     /// <summary>Opens one of the two files in the editor, made with the empty shape first when missing; an IO failure is an error on the status line.</summary>
     private void Open(string path, bool profile)

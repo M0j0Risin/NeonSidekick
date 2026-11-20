@@ -1029,6 +1029,36 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// A button tied to one tab (2026-11-20, plan idempotent-mixing-ripple: <c>/mcp</c> › Servers' <c>a</c>): its key presses it on that tab
+    /// of a page without <see cref="MenuPage.TabButtons"/>, and on another tab, one with a filter, the letter goes into the filter. The
+    /// strip is the tabs' alone, its badge kept.
+    /// </summary>
+    [Fact]
+    public async Task AButtonTiedToATab_IsAKeyThereAlone_AndTheStripKeepsItsBadges()
+    {
+        var tabs = new MenuTab[] { new("One", ["a", "b"]), new("Two", ["c"]) { Filter = "" }, new("Three", ["d"]) { Badge = "¹" } };
+        MenuPage Shown(int tab) => MenuPage.Tabbed("Settings", tabs, tab, "h") with { Buttons = [new MenuButton("ask", 'a') { Hidden = true, Tab = 0 }] };
+        Assert.Equal(MenuPane.TopMarkup(MenuPage.Tabbed("Settings", tabs, 0, "h")), MenuPane.TopMarkup(Shown(0)));
+        Assert.Equal(0, MenuPane.ButtonFor(Shown(0).Buttons!, 'a', 0));
+        Assert.Null(MenuPane.ButtonFor(Shown(0).Buttons!, 'a', 1));
+        Assert.Equal(0, MenuPane.ButtonFor(Shown(0).Buttons!, 'a', null));   // a one-list page passes none over
+
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        input.Push(Keys.Down, Keys.Char('a'));
+        Assert.Equal(new MenuPick(0, 1, Button: 0), await menu.PickAsync(Shown(0), 0, CancellationToken.None));
+
+        input.Push(Keys.Char('a'));
+        Assert.Equal(new MenuPick(1, 0, Filter: "a"), await menu.PickAsync(Shown(1), 0, CancellationToken.None));
+
+        input.Push(Keys.Char('a'), Keys.Enter);   // the third tab: no filter, the button not its own, the letter swallowed
+        Assert.Equal(new MenuPick(2, 0), await menu.PickAsync(Shown(2), 0, CancellationToken.None));
+        menu.Close();
+    }
+
     /// <summary>The × at the first row's right edge (columns 37–39 at width 40) is ESC: null, the pane still open; a click just left of it is the title, nothing (2026-09-18).</summary>
     [Fact]
     public async Task AClickOnTheCloseGlyph_IsEsc_OnAFlatAndATabbedPage()

@@ -10,7 +10,7 @@ using Spectre.Console.Testing;
 namespace NeonSidekick.Tests;
 
 /// <summary>The <c>/mcp</c> pane (2026-09-20) over in-process pipe servers: the server flips that connect and disconnect, the tool flips, the edit rows, the reload, the Options tab, the refusals.</summary>
-public class McpMenuTests : IAsyncDisposable
+public partial class McpMenuTests : IAsyncDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly TestConsole _console = new TestConsole().Interactive();

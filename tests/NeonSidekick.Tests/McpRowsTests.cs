@@ -97,8 +97,8 @@ public class McpRowsTests : IAsyncDisposable
         Assert.Equal("── " + McpText.ServersHeading + " · 2", Plain(rows[0].Markup));
         Assert.Equal("docker      on   connected · 2 tools  stdio: docker mcp gateway run", Plain(rows[1].Markup));
         Assert.Equal("chrome      on   failed: no such command: http://localhost:9/mcp  http: http://localhost:9/mcp", Plain(rows[2].Markup));
-        Assert.Equal(new McpRow.Server("docker"), rows[1].Row);
-        Assert.Equal(new McpRow.Server("chrome"), rows[2].Row);
+        Assert.Equal(new McpRow.Server("docker") { Scope = McpScope.Profile }, rows[1].Row);   // the scope since 2026-11-20: a shadowed row and its shadow share a name
+        Assert.Equal(new McpRow.Server("chrome") { Scope = McpScope.Profile }, rows[2].Row);
         Assert.Equal(("", false), (rows[3].Markup, rows[3].Heading));
         Assert.Equal("── " + McpText.FilesHeading, Plain(rows[4].Markup));
         Assert.Equal("edit profile mcp.json", Plain(rows[5].Markup));

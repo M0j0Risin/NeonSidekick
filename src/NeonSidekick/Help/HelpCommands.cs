@@ -257,7 +257,7 @@ public static class HelpCommands
         ]),
         new("/mcp",
         [
-            new("/mcp", "Open the MCP pane: connect external MCP servers and switch their tools on or off. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, Esc clears it, a second Esc closes."),
+            new("/mcp", "Open the MCP pane: connect external MCP servers and switch their tools on or off. On the Servers tab, a sets a server's ask (writes, always or never) in its mcp.json. On the Tools tab, typing narrows the list to the tools whose name or description holds the text; Backspace erases, Esc clears it, a second Esc closes."),
         ]),
         new("/memory",
         [

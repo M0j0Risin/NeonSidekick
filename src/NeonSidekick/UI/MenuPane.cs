@@ -119,6 +119,13 @@ public sealed record MenuButton(string Title, char? Key, bool On = false)
     /// the button's pick, the strip neither draws nor clicks it. Hidden buttons go after the drawn ones, so a click's index is the same.
     /// </summary>
     public bool Hidden { get; init; }
+
+    /// <summary>
+    /// The one tab of a tabbed page this button's key works on (2026-11-20, plan idempotent-mixing-ripple: <c>/mcp</c> › Servers' <c>a</c>,
+    /// while an <c>a</c> on the Tools tab goes into its filter); null for every tab. A button with a tab is a key on a tabbed page even
+    /// without <see cref="MenuPage.TabButtons"/>, whose strip would lose the tabs' badges, so it is never drawn or clicked there.
+    /// </summary>
+    public int? Tab { get; init; }
 }
 
 /// <summary>
@@ -1181,8 +1188,8 @@ public sealed class MenuPane : INoticeSink
                 // buttons): a filter may start with a button's letter that way. The modifier, not the case, so Caps Lock leaves the buttons
                 // be on Windows; a Unix terminal sends the character alone (VtInputParser reads A–Z as Shift), so there Caps Lock filters.
                 bool shiftedLetter = (k.Modifiers & ConsoleModifiers.Shift) != 0 && char.IsLetter(k.KeyChar);
-                bool buttonKey = page.Filter is { Length: 0 } && (page.Tabs is null || page.TabButtons) && page.Buttons is { Count: > 0 } offered && !shiftedLetter
-                    && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar) && ButtonFor(offered, k.KeyChar) is not null;
+                bool buttonKey = page.Filter is { Length: 0 } && page.Buttons is { Count: > 0 } offered && !shiftedLetter
+                    && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar) && KeyedButton(page, offered, k.KeyChar) is not null;
                 if (!buttonKey && page.Filter is { } filter && MenuFilter.Edit(filter, k, page.SpaceFlips) is { } typed)
                 {
                     // Typed into the filter (2026-10-03): the keys already waiting go on it too, so a fast typist's word is one rebuild.
@@ -1195,8 +1202,8 @@ public sealed class MenuPane : INoticeSink
                     return new MenuPick(page.Tab, _cursor, Filter: typed, Sub: page.Sub);
                 }
 
-                if ((page.Tabs is null || page.TabButtons) && page.Buttons is { Count: > 0 } keyed && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar)
-                    && ButtonFor(keyed, k.KeyChar) is int pressed)
+                if (page.Buttons is { Count: > 0 } keyed && k.KeyChar is not '\0' && !char.IsControl(k.KeyChar)
+                    && KeyedButton(page, keyed, k.KeyChar) is int pressed)
                 {
                     _status.Clear();
                     return new MenuPick(page.Tab, _cursor, Button: pressed, Sub: page.Sub);
@@ -1433,6 +1440,31 @@ public sealed class MenuPane : INoticeSink
         var lit = Lit(buttons).Select(i => tabs + i).ToHashSet();
         lit.Add(tab);
         return lit;
+    }
+
+    /// <summary>
+    /// The button <paramref name="key"/> presses on <paramref name="page"/>: on a one-list page or one with <see cref="MenuPage.TabButtons"/>
+    /// any of them (a tabbed one's by its tab too), else only one tied to the tab on show (<see cref="MenuButton.Tab"/>). Null for none.
+    /// </summary>
+    private static int? KeyedButton(MenuPage page, IReadOnlyList<MenuButton> buttons, char key) =>
+        ButtonFor(buttons, key, page.Tabs is null ? null : page.Tab) is int i && (page.Tabs is null || page.TabButtons || buttons[i].Tab is not null) ? i : null;
+
+    /// <summary>
+    /// <see cref="ButtonFor(IReadOnlyList{MenuButton}, char)"/> on tab <paramref name="tab"/> of a tabbed page: a button tied to another tab is
+    /// passed over (2026-11-20). Null <paramref name="tab"/> (a one-list page) passes none over. Pure.
+    /// </summary>
+    public static int? ButtonFor(IReadOnlyList<MenuButton> buttons, char key, int? tab)
+    {
+        ArgumentNullException.ThrowIfNull(buttons);
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            if (buttons[i].Key is { } k && char.ToLowerInvariant(k) == char.ToLowerInvariant(key) && (tab is null || buttons[i].Tab is null || buttons[i].Tab == tab))
+            {
+                return i;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>The index of the button whose key is <paramref name="key"/> (ignoring case), null for none. Pure.</summary>

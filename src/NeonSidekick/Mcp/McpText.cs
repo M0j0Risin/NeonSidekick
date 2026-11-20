@@ -139,7 +139,7 @@ public static class McpText
     public static readonly IReadOnlyList<string> TabTitles = [ServersTabTitle, ToolsTabTitle, OptionsTabTitle];
 
     /// <summary>The Servers tab's hint.</summary>
-    public const string ServersKeys = "Enter / Space = on or off · Enter on failed or dropped = retry · ←/→ tabs · Esc = close";
+    public const string ServersKeys = "Enter / Space = on or off · a = ask · Enter on failed or dropped = retry · ←/→ tabs · Esc = close";
 
     /// <summary>The Servers and Tools tabs' first line while the master switch is off (shortened later on 2026-09-20: the server rows are inert then).</summary>
     public const string OffLine = "MCP servers is off (the Options tab)";
@@ -184,6 +184,51 @@ public static class McpText
     /// <summary>After an edit row: <c>opened the profile's mcp.json</c> / <c>opened the global mcp.json</c> (the path is long; the row says which).</summary>
     public static string EditingNotice(bool profile) => Glyph + " opened the " + (profile ? "profile's" : "global") + " " + McpConfigFile.FileName;
     public static string EditFailedError(string path, string detail) => "could not open " + path + ": " + detail;
+
+    // ── A server's ask from the Servers tab (2026-11-20, plan idempotent-mixing-ripple) ──
+
+    /// <summary>The picker's title over a server's three modes: <c>🔌 MCP › docker › Ask</c>.</summary>
+    public static string AskPickerTitle(string server) => Label + " › " + Files.NameScrub.Display(server) + " › Ask";
+
+    /// <summary>What each mode does, in <see cref="McpAskRule.Words"/>' order: the picker's rows after the word.</summary>
+    public static readonly IReadOnlyList<string> AskModeMeanings =
+    [
+        "asks unless the server marks the tool read-only and not destructive",
+        "asks before every call",
+        "never asks, not even for a write",
+    ];
+
+    /// <summary>The picker's hint: the app's picker wording.</summary>
+    public const string AskPickerKeys = "Enter = choose · Esc = back";
+
+    /// <summary>
+    /// The status line after a write: <c>🔌 docker: now asks before every call (ask: always, in the global mcp.json)</c>. The words after "now"
+    /// are <see cref="AskFooter"/>'s, so the notice and the server's footer agree; <paramref name="later"/> when nothing reloads (the master
+    /// switch off, or the server not connected).
+    /// </summary>
+    public static string AskSetNotice(string server, McpAskMode mode, bool global, bool later) =>
+        Glyph + " " + Files.NameScrub.Display(server) + ": now " + AskFooter(mode) + " (ask: " + McpAskRule.Words[(int)mode] + ", in " + FileWords(global) + ")"
+        + (later ? ", from its next connect" : "");
+
+    /// <summary>The status line when the mode picked is the one the file holds: nothing written.</summary>
+    public static string AskUnchangedNotice(string server, McpAskMode mode) =>
+        Glyph + " " + Files.NameScrub.Display(server) + ": already ask: " + McpAskRule.Words[(int)mode] + ", nothing written";
+
+    /// <summary>The status line for <c>a</c> on a shadowed row: its entry isn't in force here.</summary>
+    public static string AskShadowedNotice(string server) =>
+        Glyph + " " + Files.NameScrub.Display(server) + " here is shadowed by the profile's entry; set the ask on that one";
+
+    /// <summary>The status line when the write was refused: the file's own reason.</summary>
+    public static string AskFailedError(string server, string detail) => "could not set " + Files.NameScrub.Display(server) + "'s ask: " + detail;
+
+    /// <summary>The footer under a skipped server whose <c>ask</c> is a typo: <see cref="BadAsk"/>, and the way out.</summary>
+    public static string BadAskFixFooter => BadAsk + "; a picks one";
+
+    /// <summary>The Info line for a change to what asks: <c>MCP: docker ask set to always in C:\…\mcp.json</c>.</summary>
+    public static string AskSetLogLine(string server, McpAskMode mode, string path) =>
+        "MCP: " + Files.NameScrub.Display(server) + " ask set to " + McpAskRule.Words[(int)mode] + " in " + path;
+
+    private static string FileWords(bool global) => (global ? "the global " : "this profile's ") + McpConfigFile.FileName;
 
     // ── The Mcp log lines ───────────────────────────────────────────────────
 

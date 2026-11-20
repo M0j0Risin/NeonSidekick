@@ -1201,8 +1201,8 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **A server that drops** reconnects once at its next call, or on Enter at its `/mcp` row. A call cut off by the drop is sent again only if the server marks it read-only and not destructive.
 * A server's changed tool list applies from your next message.
 * **Server text is untrusted:** each text a tool returns reaches the model fenced (`⟪ ⟫`); a failed call starts `Error:`. A server's tool descriptions aren't fenced: trusting a server is your choice in `mcp.json`.
-* **Calls ask first** (Deny, Allow once, Allow for this session) unless the server marks the tool read-only and not destructive. An allow lasts until `/new`, `/clear`, `/resume` or a profile switch.
-* **A server you don't fully trust:** its marks are its own word, so give it `"ask": "always"` and `"instructions": false`. `"never"` asks none; every call that asks is logged.
+* **Calls ask first** (Deny, Allow once, Allow for this session) unless the server marks the tool read-only and not destructive. An allow lasts until `/new`, `/clear`, `/resume`, a profile switch, or a change to that server's settings.
+* **A server you don't fully trust:** its marks are its own word, so give it `"ask": "always"` (in `mcp.json`, or `a` on `/mcp` › Servers) and `"instructions": false`. `"never"` asks none; every call that asks is logged.
 * **Headless** refuses a call that asks unless the run has `--allow mcp`, or `--allow mcp:<server>` ([HEADLESS.md](HEADLESS.md#when-a-command-is-refused)).
 * **Tokens are encrypted** in place for your Windows user ([on a Mac](MAC.md#setup)) when the app next starts or connects its servers (a `/mcp` reload too). That covers a plain `env` or `headers` value named with a word like `TOKEN`, `SECRET`, `PASSWORD`, `AUTH`, `CREDENTIAL` or `COOKIE`, or ending in `KEY`, and a URL with a password.
 * **Where a token goes:** `args` and `url` aren't encrypted, so put a token in `env` (a `command` server) or `headers` (a `url` server).

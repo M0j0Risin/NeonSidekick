@@ -114,7 +114,7 @@ public static class McpSecrets
             }
 
             pending.Add((values, key, encrypted.Value!));
-            writes.Add(new ConnectionsFileEdit.ValueWrite(["mcpServers", server, section, key], encrypted.Value!, value));
+            writes.Add(new ConnectionsFileEdit.ValueWrite([McpConfigFile.ServersKey, server, section, key], encrypted.Value!, value));
         }
     }
 

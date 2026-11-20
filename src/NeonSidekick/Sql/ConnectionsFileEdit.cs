@@ -197,6 +197,205 @@ public static class ConnectionsFileEdit
         return errors;
     }
 
+    /// <summary><see cref="SetEntryString"/>'s answer when the file holds no object entry of that name under the section.</summary>
+    public const string EntryNotInFile = "no such entry in the file";
+
+    /// <summary>
+    /// Sets <c>&lt;section&gt;.&lt;name&gt;.&lt;key&gt;</c> to the string <paramref name="value"/> (2026-11-20, plan idempotent-mixing-ripple: an MCP
+    /// server's <c>ask</c> from <c>/mcp</c> › Servers), touching nothing else. A key already there is replaced whatever its token (a bad
+    /// <c>"ask": 5</c> too); a missing one is inserted after the entry's last value, on its own line with that property's indentation and the
+    /// file's own line break when the entry spans lines (the shape of a hand edit), else inline; a trailing comma is kept and not doubled.
+    /// Every step matches ordinally and untrimmed, as the MCP reader binds them, never as <see cref="RepeatedKeys"/> and
+    /// <see cref="RepeatedNames"/> fold case: <c>MCP_DOCKER</c> and <c>mcp_docker</c> are two servers to MCP, and a stray <c>"Ask"</c> is never
+    /// read. A step given twice is <see cref="KeyRepeated"/>, a missing entry <see cref="EntryNotInFile"/>. A user's act, so it waits the usual
+    /// <see cref="CrossProcessWait"/> for another process's edit. Null on success, else why not.
+    /// </summary>
+    public static string? SetEntryString(string path, string section, string name, string key, string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentException.ThrowIfNullOrWhiteSpace(section);
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentNullException.ThrowIfNull(value);
+        lock (LockFor(path))
+        {
+            try
+            {
+                using var _ = CrossProcess(path);
+                byte[] bytes = ForEdit(File.ReadAllBytes(path), out var wide);
+                int bom = Bom(bytes);
+                var spot = LocateEntryKey(bytes.AsSpan(bom), section, name, key);
+                if (spot.Error is { } error)
+                {
+                    return error;
+                }
+
+                string quoted = Quoted(value);
+                Splice(path, bytes, bom + spot.Start, bom + spot.End, spot.Replace ? quoted : spot.Prefix + Quoted(key) + ": " + quoted + spot.Suffix, wide);
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            {
+                return LogText.Excerpt(ex.Message);
+            }
+            finally
+            {
+                Computers.ConfigCache.Invalidate(path);
+            }
+        }
+
+        static string Quoted(string text) => "\"" + JsonEncodedText.Encode(text, JavaScriptEncoder.UnsafeRelaxedJsonEscaping) + "\"";
+    }
+
+    /// <summary>Where <see cref="SetEntryString"/> writes: the token to replace, or the empty range to insert at with what goes either side; or why not.</summary>
+    private readonly record struct EntrySpotKey(int Start, int End, bool Replace, string Prefix, string Suffix, string? Error);
+
+    private static EntrySpotKey LocateEntryKey(ReadOnlySpan<byte> json, string section, string name, string key)
+    {
+        var missing = new EntrySpotKey(0, 0, false, "", "", EntryNotInFile);
+        var reader = new Utf8JsonReader(json, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+        {
+            return missing;
+        }
+
+        EntrySpotKey? found = null;
+        bool sectionSeen = false;
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            bool isSection = string.Equals(reader.GetString(), section, StringComparison.Ordinal);
+            reader.Read();
+            if (!isSection || reader.TokenType != JsonTokenType.StartObject)
+            {
+                reader.Skip();
+                if (isSection && sectionSeen)
+                {
+                    return missing with { Error = KeyRepeated };
+                }
+
+                sectionSeen |= isSection;
+                continue;
+            }
+
+            if (sectionSeen)
+            {
+                return missing with { Error = KeyRepeated };
+            }
+
+            sectionSeen = true;
+            bool entrySeen = false;
+            while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+            {
+                bool isEntry = string.Equals(reader.GetString(), name, StringComparison.Ordinal);
+                reader.Read();
+                if (!isEntry)
+                {
+                    reader.Skip();
+                    continue;
+                }
+
+                if (entrySeen)
+                {
+                    return missing with { Error = KeyRepeated };
+                }
+
+                entrySeen = true;
+                if (reader.TokenType != JsonTokenType.StartObject)
+                {
+                    reader.Skip();
+                    continue;
+                }
+
+                var inEntry = ScanEntry(ref reader, json, key);
+                if (inEntry.Error is not null)
+                {
+                    return inEntry;
+                }
+
+                found = inEntry;
+            }
+        }
+
+        return found ?? missing;
+    }
+
+    // One entry's object, from its opening brace to its closing one: the key's whole token when it is there (given twice: a repeat), else
+    // where it goes after the last value, laid out as the entry is.
+    private static EntrySpotKey ScanEntry(ref Utf8JsonReader reader, ReadOnlySpan<byte> json, string key)
+    {
+        int open = (int)reader.TokenStartIndex;
+        int lastName = -1;
+        int lastEnd = -1;
+        EntrySpotKey? replace = null;
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            int nameStart = (int)reader.TokenStartIndex;
+            bool isKey = string.Equals(reader.GetString(), key, StringComparison.Ordinal);
+            reader.Read();
+            int valueStart = (int)reader.TokenStartIndex;
+            reader.Skip();
+            int valueEnd = (int)reader.BytesConsumed;
+            if (isKey)
+            {
+                if (replace is not null)
+                {
+                    return new EntrySpotKey(0, 0, false, "", "", KeyRepeated);
+                }
+
+                replace = new EntrySpotKey(valueStart, valueEnd, true, "", "", null);
+            }
+
+            lastName = nameStart;
+            lastEnd = valueEnd;
+        }
+
+        if (replace is { } spot)
+        {
+            return spot;
+        }
+
+        if (lastName < 0)
+        {
+            // An empty object: inside its braces, a space either side when they touch.
+            return new EntrySpotKey(open + 1, open + 1, false, " ", json[open + 1] == (byte)'}' ? " " : "", null);
+        }
+
+        int at = lastEnd;
+        int next = at;
+        while (next < json.Length && json[next] is (byte)' ' or (byte)'\t' or (byte)'\r' or (byte)'\n')
+        {
+            next++;
+        }
+
+        bool trailingComma = next < json.Length && json[next] == (byte)',';
+        if (trailingComma)
+        {
+            at = next + 1;   // after the comma the reader allowed; no second one
+        }
+
+        // The last property's own line: only whitespace before its name means the entry is laid out a property a line.
+        int lineStart = lastName;
+        while (lineStart > 0 && json[lineStart - 1] is not ((byte)'\n' or (byte)'\r'))
+        {
+            lineStart--;
+        }
+
+        bool ownLine = lineStart > open;
+        for (int i = lineStart; i < lastName && ownLine; i++)
+        {
+            ownLine = json[i] is (byte)' ' or (byte)'\t';
+        }
+
+        if (!ownLine)
+        {
+            return new EntrySpotKey(at, at, false, trailingComma ? " " : ", ", "", null);
+        }
+
+        string indent = Encoding.UTF8.GetString(json[lineStart..lastName]);
+        string lineBreak = lineStart >= 2 && json[lineStart - 1] == (byte)'\n' && json[lineStart - 2] == (byte)'\r' ? "\r\n" : "\n";
+        return new EntrySpotKey(at, at, false, (trailingComma ? "" : ",") + lineBreak + indent, "", null);
+    }
+
     /// <summary>Where <see cref="WriteValue"/> writes: the string token's byte range and its value, or why not.</summary>
     private readonly record struct ValueSpot(int Start, int End, string? Current, string? Error);
 
