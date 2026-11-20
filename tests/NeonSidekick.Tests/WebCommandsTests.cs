@@ -146,6 +146,7 @@ public sealed class WebCommandsTests
     [InlineData("/stt wake on", WebCommandKind.Refused)]
     [InlineData("/memory", WebCommandKind.Refused)]
     [InlineData("/memory forget", WebCommandKind.Refused)]
+    [InlineData("/memory on", WebCommandKind.Refused)]   // read-write's alias until 2026-11-20: the pane's pointer now, as any unknown word
     [InlineData("/cwd D:\\work", WebCommandKind.Refused)]
     [InlineData("/plan edit", WebCommandKind.Refused)]   // 2026-10-20: an editor on the PC
     [InlineData("/plan edit my-plan", WebCommandKind.Refused)]

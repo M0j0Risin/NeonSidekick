@@ -1231,13 +1231,18 @@ public sealed partial class WebUiTests : IDisposable
         Assert.True(App.SettingsMenu.IsToggle(App.SettingsField.WebUi));
         Assert.Equal("must be a port from 1024 to 65535", App.SettingsMenu.WebUiPortRangeError);
         // Server, Guardrails, Tabs (2026-10-16, the user's ask); the Funnel row under Guardrails since 2026-11-13.
-        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiHttpsAddress, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
+        Assert.Equal([App.SettingsField.WebUi, App.SettingsField.WebUiPort, App.SettingsField.WebUiReach, App.SettingsField.WebUiHttpsAddress, App.SettingsField.WebUiSignInMode, App.SettingsField.WebUiCommands, App.SettingsField.WebUiConnectionDetails,
             App.SettingsField.WebUiBotCheckControl, App.SettingsField.WebUiProfileTheme, App.SettingsField.WebUiChatControls, App.SettingsField.WebUiVoice, App.SettingsField.WebUiHomeControls, App.SettingsField.WebUiShoppingControls, App.SettingsField.WebUiYouTubeControls],
             App.SettingsMenu.TabFields[(int)App.SettingsTab.WebUi]);
         // Web UI HTTPS address (2026-10-31): read when /webui opens, so neither a restart nor refused under a reply; typed, not a toggle.
         Assert.False(App.SettingsMenu.IsWebUiField(App.SettingsField.WebUiHttpsAddress));
         Assert.False(App.SettingsMenu.RefusedMidTurn(App.SettingsField.WebUiHttpsAddress));
         Assert.False(App.SettingsMenu.IsToggle(App.SettingsField.WebUiHttpsAddress));
+        // Web UI sign in mode (2026-11-20, the user's ask: Web browser sign in mode on /tools › Web until then): read when the
+        // default browser is sent to the page, so neither a restart nor refused under a reply; a picker.
+        Assert.False(App.SettingsMenu.IsWebUiField(App.SettingsField.WebUiSignInMode));
+        Assert.False(App.SettingsMenu.RefusedMidTurn(App.SettingsField.WebUiSignInMode));
+        Assert.False(App.SettingsMenu.IsToggle(App.SettingsField.WebUiSignInMode));
         // The Guardrails and Tabs rows (later on 2026-10-14; the Home tab's and the theme's 2026-10-15; the Chat and Shopping tabs' later that day) are read at each
         // request: none restarts the server or is refused under a reply.
         foreach (var field in new[]

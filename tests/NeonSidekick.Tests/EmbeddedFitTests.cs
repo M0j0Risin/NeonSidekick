@@ -7,8 +7,8 @@ namespace NeonSidekick.Tests;
 /// <summary>
 /// Whether an embedded model fits, before the download (2026-11-16, plan lucid-roaming-lantern #43): each mark at its edges, the budget off
 /// and on, vision and the drafter counted only when on, no mark on the CPU backend, with no read, a read of 0 or a layer count with
-/// <i>Embedded VRAM only</i> off; <c>all</c> marks ✗ where <c>auto</c> marks 🐢; the caption's GPU in whole GB and its fixed-context clause;
-/// a ✗ row's marks in the columns a ✅ row's are.
+/// <i>Embedded VRAM only</i> off; <c>all</c> marks 🚫 (✗ until 2026-11-20) where <c>auto</c> marks 🐢; the legends, and the note's GPU in whole GB
+/// and its fixed-context clause; a 🚫 row's marks in the columns a ✅ row's are.
 /// </summary>
 public class EmbeddedFitTests
 {
@@ -113,10 +113,11 @@ public class EmbeddedFitTests
     {
         Assert.Equal("24 GB", EmbeddedLlmText.GpuGb(Gpu));
         Assert.Equal("8 GB", EmbeddedLlmText.GpuGb(8 * GiB - 100 * MiB));
-        Assert.Equal(
-            "✅ fits · ⚠️ small context only · ✗ won't fit · 🐢 partly on the CPU: an estimate for this GPU's 24 GB, with nothing else on it",
-            EmbeddedLlmText.FitLegend(Gpu, fixedContext: false));
-        Assert.EndsWith(", with nothing else on it, for a fitted context", EmbeddedLlmText.FitLegend(Gpu, fixedContext: true));
+        // The legend in the user's two lines and a dim note under them (2026-11-20, the user's ask; one sentence until then).
+        Assert.Equal("✅ fits · ⚠️ small context only · 🚫 won't fit · 🐢 partly on the CPU", EmbeddedLlmText.FitMarksLegend);
+        Assert.Equal("⚡ drafter · 👁️ vision · 🛠️ tools · ⛓️‍💥 uncensored", EmbeddedLlmText.CapabilityLegend);
+        Assert.Equal("An estimate for this GPU's 24 GB, with nothing else on it.", EmbeddedLlmText.FitEstimateNote(Gpu, fixedContext: false));
+        Assert.EndsWith(", with nothing else on it, for a fitted context.", EmbeddedLlmText.FitEstimateNote(Gpu, fixedContext: true));
 
         var fixedContext = Plain();
         Assert.False(EmbeddedFit.FixedContext(fixedContext));
@@ -126,7 +127,7 @@ public class EmbeddedFitTests
         Assert.False(EmbeddedFit.FixedContext(fixedContext));
 
         Assert.All(Enum.GetValues<FitNone>(), why => Assert.StartsWith("No fit marks: ", EmbeddedLlmText.FitNoneCaption(why)));
-        Assert.All(Enum.GetValues<FitMark>(), mark => Assert.InRange(TextCells.Width(EmbeddedLlmText.FitGlyph(mark)), 1, 2));
+        Assert.All(Enum.GetValues<FitMark>(), mark => Assert.Equal(2, TextCells.Width(EmbeddedLlmText.FitGlyph(mark))));   // every mark two cells since 🚫
     }
 
     [Fact]

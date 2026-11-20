@@ -197,8 +197,7 @@ public class BotChatPicturesTests
     public void PictureInstruction_WithNothingToRework_IsTheOldOne()
     {
         var pony = Workflow("pony");
-        Assert.Equal(BotChat.ImagePromptInstruction(pony), BotChat.PictureInstruction(false, [pony], [Workflow("edit", image: true)], []));
-        Assert.Equal(BotChat.PromisedPictureInstruction(pony), BotChat.PictureInstruction(true, [pony], [], Two));
+        Assert.Equal(BotChat.ImagePromptInstruction(pony), BotChat.PictureInstruction([pony], [Workflow("edit", image: true)], []));
     }
 
     [Fact]
@@ -207,7 +206,7 @@ public class BotChatPicturesTests
         var pony = Workflow("pony");
         var edit = Workflow("edit", image: true, family: ComfyFamily.Flux, tips: "Keep the faces.");
 
-        string both = BotChat.PictureInstruction(false, [pony], [edit], Two);
+        string both = BotChat.PictureInstruction([pony], [edit], Two);
         Assert.Contains(ComfyFamilies.StyleGuide(ComfyFamily.Pony), both);
         Assert.Contains("You may instead rework one of the chat's pictures", both);
         Assert.Contains("\n1. the picture of default's reply\n2. ada's picture\n", both);
@@ -216,14 +215,10 @@ public class BotChatPicturesTests
         Assert.Contains("Tips for the rework workflow: Keep the faces.", both);
         Assert.EndsWith("Answer with the prompt alone, or the REWORK line and then the prompt: no preamble, no explanation, no quotes.", both);
 
-        string latest = BotChat.PictureInstruction(false, [], [edit], [Two[1]]);
+        string latest = BotChat.PictureInstruction([], [edit], [Two[1]]);
         Assert.Contains("write a single prompt that reworks the chat's latest picture (ada's picture) so that it illustrates the line", latest);
         Assert.Contains("Put REWORK alone on the first line", latest);
         Assert.DoesNotContain("1. ", latest);
-
-        string promised = BotChat.PictureInstruction(true, [pony], [edit], [Two[0]]);
-        Assert.Contains($"answer exactly {BotChat.NoPictureAnswer}", promised);
-        Assert.EndsWith($"the REWORK line and then the prompt, or {BotChat.NoPictureAnswer}: no preamble, no explanation, no quotes.", promised);
     }
 
     /// <summary>2026-10-04 (the user's pick): several of a kind are listed by name, each in its style, and the writer names its pick.</summary>
@@ -233,7 +228,7 @@ public class BotChatPicturesTests
         var pony = Workflow("pony", tips: "Score tags first.");
         var flux = Workflow("flux-dev", family: ComfyFamily.Flux);
 
-        string fresh = BotChat.PictureInstruction(false, [pony, flux], [], []);
+        string fresh = BotChat.PictureInstruction([pony, flux], [], []);
         Assert.Contains("no screens of text. Choose the workflow that suits the picture best and write the prompt in its style. The workflows:", fresh);
         Assert.Contains("\n\npony: " + ComfyFamilies.StyleGuide(ComfyFamily.Pony) + "\nTips for pony: Score tags first.", fresh);
         Assert.Contains("\n\nflux-dev: " + ComfyFamilies.StyleGuide(ComfyFamily.Flux), fresh);
@@ -241,12 +236,8 @@ public class BotChatPicturesTests
         Assert.EndsWith("\n\nAnswer with the WORKFLOW line and then the prompt: no preamble, no explanation, no quotes.", fresh);
         Assert.DoesNotContain(BotChat.ReworkAnswer, fresh);
 
-        string promised = BotChat.PictureInstruction(true, [pony, flux], [], []);
-        Assert.Contains($"answer exactly {BotChat.NoPictureAnswer}", promised);
-        Assert.EndsWith($"the WORKFLOW line and then the prompt, or {BotChat.NoPictureAnswer}: no preamble, no explanation, no quotes.", promised);
-
         var restyle = Workflow("restyle", image: true, family: ComfyFamily.Flux);
-        string reworks = BotChat.PictureInstruction(false, [pony], [Workflow("edit", image: true), restyle], Two);
+        string reworks = BotChat.PictureInstruction([pony], [Workflow("edit", image: true), restyle], Two);
         Assert.Contains("Write it in this style: " + ComfyFamilies.StyleGuide(ComfyFamily.Pony), reworks);   // one fresh workflow: as before
         Assert.Contains("put REWORK n (n the picture's number) alone on the first line of your answer, WORKFLOW name (the workflow's name as listed) alone on the second and the prompt after them. ", reworks);
         Assert.Contains("The rework workflows:\n\nedit: " + ComfyFamilies.StyleGuide(ComfyFamily.Pony), reworks);
@@ -275,20 +266,6 @@ public class BotChatPicturesTests
         Assert.Equal(mode, BotChatImg2ImgMode.Resolve(new AppSettingsData { BotChatImg2ImgMode = saved }));
         Assert.Equal("latest", new AppSettingsData().BotChatImg2ImgMode);
         Assert.All(BotChatImg2ImgMode.Names, name => Assert.NotEmpty(BotChatImg2ImgMode.Describe(name)));
-    }
-
-    [Theory]
-    [InlineData("disabled", BotImageMention.Disabled)]
-    [InlineData(" Generate ", BotImageMention.Generate)]
-    [InlineData("always", BotImageMention.Disabled)]   // a hand-edited word: the default
-    public void ImageMentionMode_ResolvesTheSavedWord(string saved, BotImageMention mode)
-    {
-        Assert.Equal(mode, BotChatImageMentionMode.Resolve(new AppSettingsData { BotChatImageMentionMode = saved }));
-        Assert.Equal("off", new AppSettingsData().BotChatImageMentionMode);   // the user's default (2026-10-13)
-        Assert.Equal(["off", "generate"], BotChatImageMentionMode.Names);
-        Assert.Equal("mentioned images are ignored", BotChatImageMentionMode.Describe("off"));
-        Assert.Equal("mentioned images are generated for the bots", BotChatImageMentionMode.Describe("generate"));
-        Assert.Equal("generate", BotChatImageMentionMode.Name(BotImageMention.Generate));
     }
 
     [Fact]
@@ -386,7 +363,7 @@ public class BotChatPicturesTests
     [Theory]
     [InlineData("automatic", BotImageMode.Automatic, true, false)]
     [InlineData("Autonomous", BotImageMode.Autonomous, false, true)]
-    [InlineData("sometimes", BotImageMode.Automatic, true, false)]   // a hand-edited word: the default
+    [InlineData("sometimes", BotImageMode.Autonomous, false, true)]   // a hand-edited word: the default (autonomous since 2026-11-20)
     public void ImageMode_ResolvesTheSavedWord(string saved, BotImageMode mode, bool draws, bool offers)
     {
         var resolved = BotChatImageMode.Resolve(new AppSettingsData { BotChatImageMode = saved });
@@ -395,6 +372,8 @@ public class BotChatPicturesTests
         Assert.Equal(draws, BotChatImageMode.Draws(resolved));
         Assert.Equal(offers, BotChatImageMode.Offers(resolved));
         Assert.All(BotChatImageMode.Names, name => Assert.NotEmpty(BotChatImageMode.Describe(name)));
+        // Nothing drawn for an autonomous bot since 2026-11-20 (the user's call): the hint no longer says a mentioned picture is.
+        Assert.Equal("the bots are offered generate_image and draw when they choose", BotChatImageMode.Describe("autonomous"));
     }
 
     [Theory]
@@ -409,15 +388,15 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsThirdUnderClient_ItsRowsDefaultingToSingle_ParentServer_KillOn_NoWorkflows_Automatic_Latest_Async_AFiveSecondPause_NoTools_NoSkills_MemoryShared_AndNoVision()
+    public void TheBotchatTab_IsThirdUnderClient_ItsRowsDefaultingToSingle_ParentServer_KillOn_NoWorkflows_Autonomous_Latest_Async_AFiveSecondPause_NoTools_NoSkills_MemoryShared_AndNoVision()
     {
         var data = new AppSettingsData();
 
         Assert.Equal("Botchat", SettingsMenu.TabTitles[(int)SettingsTab.BotChat]);
         Assert.Equal(2, (int)SettingsTab.BotChat);   // third, under Client after Chat and Sessions, since later on 2026-10-10 (the user's order); before the Advisors tab from 2026-10-10; last again from later on 2026-09-27 (the Claude tab moved to /tools)
         Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
-        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
-        Assert.Equal(["Botchat LLM mode", "Botchat embedded mode", "Botchat stop extra servers", "Botchat limited workflows", "Botchat image mode", "Botchat rework source", "Botchat image mention mode", "Botchat image async", "Botchat reading pause (s)", "Botchat limited tools", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera", "Botchat recent context"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
+        Assert.Equal([SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext], SettingsMenu.TabFields[(int)SettingsTab.BotChat]);
+        Assert.Equal(["Botchat LLM mode", "Botchat embedded mode", "Botchat stop extra servers", "Botchat limited workflows", "Botchat image mode", "Botchat rework source", "Botchat image async", "Botchat reading pause (s)", "Botchat limited tools", "Botchat limited skills", "Botchat memory enabled", "Botchat memory mode", "Botchat vision enabled", "Botchat camera", "Botchat recent context"], SettingsMenu.TabFields[(int)SettingsTab.BotChat].Select(SettingsMenu.FieldName));
         // Botchat recent context (later still on 2026-10-10): a toggle, off, saying what the bots are told.
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatRecentContext));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatRecentContext, data, "."));
@@ -443,13 +422,8 @@ public class BotChatPicturesTests
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatImageAsync));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImageMode));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImg2ImgMode));
-        Assert.Equal("automatic", SettingsMenu.FieldValue(SettingsField.BotChatImageMode, data, "."));
+        Assert.Equal("autonomous", SettingsMenu.FieldValue(SettingsField.BotChatImageMode, data, "."));   // the default since 2026-11-20
         Assert.Equal("latest", SettingsMenu.FieldValue(SettingsField.BotChatImg2ImgMode, data, "."));
-        // Botchat image mention mode (2026-10-13, the user's ask): a picker, disabled by default, shown as "Image mention mode" on its tab.
-        Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatImageMentionMode));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatImageMentionMode, data, "."));
-        Assert.Equal("Image mention mode", SettingsMenu.RowName(SettingsField.BotChatImageMentionMode, "Botchat"));
-        Assert.Equal("generate  " + NeonSidekick.UI.Theme.DimMarkup("mentioned images are generated for the bots"), SettingsMenu.BotChatImageMentionModeLabel("generate"));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatImageAsync, data, "."));
         // The pause with no voice (2026-09-26): typed seconds, 5 by default, 0 off.
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatNonTtsDelaySeconds));
@@ -500,77 +474,6 @@ public class BotChatPicturesTests
 
         Assert.Equal("Here is my dog.", BotChat.ReplyText(events));
         Assert.Equal("", BotChat.ReplyText([]));
-    }
-
-    [Theory]
-    [InlineData("Here's a quick sketch of the harbour I made.", true)]
-    [InlineData("I drew us a dragon!", true)]
-    [InlineData("Let me paint you a PICTURE of it.", true)]
-    [InlineData("Check out this pic.", true)]
-    [InlineData("Imagine the illustration on the cover.", true)]
-    [InlineData("Here's an image I generated for you.", true)]
-    [InlineData("Took a selfie at the beach!", true)]
-    [InlineData("I made some art for you.", true)]
-    [InlineData("A little cartoon of us both.", true)]
-    [InlineData("Read this article first.", false)]    // "art" is a whole word only
-    [InlineData("Let's start again.", false)]
-    [InlineData("I think pineapple belongs on pizza.", false)]
-    [InlineData("The withdrawal was slow.", false)]      // a stem only at a word's start
-    [InlineData("", false)]
-    [InlineData(null, false)]
-    public void MentionsPicture_IsTheLooseSieve(string? reply, bool expected)
-    {
-        Assert.Equal(expected, BotChat.MentionsPicture(reply));
-    }
-
-    [Fact]
-    public void PictureAttempt_TellsATriedCall_FromOneThatDrew()
-    {
-        var drew = new List<ChatMessage>
-        {
-            new(ChatRole.User, "hi"),
-            new(ChatRole.Assistant, [new FunctionCallContent("g1", "generate_image")]),
-            new(ChatRole.Tool, [new FunctionResultContent("g1", "generated 1 picture with pony")]),
-        };
-        var failed = new List<ChatMessage>
-        {
-            new(ChatRole.Assistant, [new FunctionCallContent("g1", "generate_image")]),
-            new(ChatRole.Tool, [new FunctionResultContent("g1", ComfyText.NoPrompt)]),
-        };
-        var other = new List<ChatMessage>
-        {
-            new(ChatRole.Assistant, [new FunctionCallContent("c1", "get_time")]),
-            new(ChatRole.Tool, [new FunctionResultContent("c1", "noon")]),
-            new(ChatRole.Assistant, "I drew a dog."),
-        };
-
-        Assert.Equal((true, true), BotChat.PictureAttempt(drew));
-        Assert.Equal((true, false), BotChat.PictureAttempt(failed));
-        Assert.Equal((false, false), BotChat.PictureAttempt(other));
-        Assert.Equal((false, false), BotChat.PictureAttempt([]));
-    }
-
-    [Fact]
-    public void PromisedPictureInstruction_CarriesTheStyle_TheTips_AndTheNoPictureAnswer()
-    {
-        string flux = BotChat.PromisedPictureInstruction(Workflow("flux", family: ComfyFamily.Flux, tips: "Always golden hour."));
-
-        Assert.Contains(ComfyFamilies.StyleGuide(ComfyFamily.Flux), flux);
-        Assert.Contains("Tips for this workflow: Always golden hour.", flux);
-        Assert.Contains("answer exactly " + BotChat.NoPictureAnswer, flux);
-        Assert.Contains("image, photo", flux);
-        Assert.DoesNotContain("Tips for this workflow", BotChat.PromisedPictureInstruction(Workflow("pony")));
-    }
-
-    [Theory]
-    [InlineData("", true)]
-    [InlineData("NONE", true)]
-    [InlineData("none.", true)]
-    [InlineData("a dog surfing", false)]
-    [InlineData("none of the dogs are wet", false)]
-    public void IsNoPicture_IsEmptyOrNone(string prompt, bool expected)
-    {
-        Assert.Equal(expected, BotChat.IsNoPicture(prompt));
     }
 
     [Fact]

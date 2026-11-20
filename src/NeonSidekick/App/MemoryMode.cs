@@ -18,7 +18,7 @@ public enum MemoryAccess
 
 /// <summary>
 /// The setting <c>Memory mode</c> (2026-10-04, the user's ask and words: the General tab's Memory switch, a bool until then, became
-/// <c>read-write</c> / <c>read-only</c> / <c>disabled</c> (<c>off</c> since 2026-10-13), read-write the default; no migration, the earlier renames' call — a saved
+/// <c>read-write</c> / <c>read-only</c> / <c>disabled</c> (<c>off</c> since 2026-10-13), read-write the default until 2026-11-20 and read-only since; no migration, the earlier renames' call — a saved
 /// <c>"Memory": false</c> is skipped and the default stands). Read-only is about the model alone: <c>/remember</c>, a row removed on
 /// <c>/memory</c> and <c>/memory forget</c> stay the user's hand; disabled refuses <c>/remember</c> as off did. The
 /// <see cref="BotChatMemoryMode"/> shape: <see cref="Resolve"/> is the one place the saved string becomes the enum, a hand-edited
@@ -30,8 +30,14 @@ public static class MemoryMode
     public const string ReadOnly = "read-only";
     public const string Off = "off";   // "disabled" until 2026-10-13 (the settings verbiage pass), still read (Retired)
 
-    /// <summary>Read and write: the compiled default (the user's call), what the old switch's on was. Pinned.</summary>
-    public const string Default = ReadWrite;
+    /// <summary>
+    /// Read-only: the compiled default since 2026-11-20 (the user's call: the model reads memories but saves none until the user says so;
+    /// read-write, what the old switch's on was, until then). A saved profile keeps its own value. Pinned.
+    /// </summary>
+    public const string Default = ReadOnly;
+
+    /// <summary><see cref="Default"/>'s kind: what a miss in <see cref="TryParse"/> and an unknown value in <see cref="Resolve"/> read as.</summary>
+    private const MemoryAccess DefaultAccess = MemoryAccess.ReadOnly;
 
     /// <summary>The modes in menu order.</summary>
     public static readonly string[] Names = { ReadWrite, ReadOnly, Off };
@@ -45,8 +51,8 @@ public static class MemoryMode
     private const string Category = "Screen";
 
     /// <summary>
-    /// Trims and ignores case; false (and <see cref="MemoryAccess.ReadWrite"/>) for anything that is not one of <see cref="Names"/>.
-    /// <c>off</c> is the value since 2026-10-13; <c>on</c> is <c>/memory</c>'s alias for read-write (<see cref="ChatScreen.MemoryOnWord"/>), read there.
+    /// Trims and ignores case; false (and the <see cref="Default"/>'s kind) for anything that is not one of <see cref="Names"/>.
+    /// <c>off</c> is the value since 2026-10-13. <c>on</c> is none: <c>/memory on</c>, read-write's alias, went on 2026-11-20 (the user's call).
     /// </summary>
     public static bool TryParse(string? text, out MemoryAccess mode)
     {
@@ -55,7 +61,7 @@ public static class MemoryMode
             case ReadWrite: mode = MemoryAccess.ReadWrite; return true;
             case ReadOnly: mode = MemoryAccess.ReadOnly; return true;
             case Off: mode = MemoryAccess.Disabled; return true;
-            default: mode = MemoryAccess.ReadWrite; return false;
+            default: mode = DefaultAccess; return false;
         }
     }
 
@@ -91,12 +97,12 @@ public static class MemoryMode
         string value = effective.MemoryMode ?? "";
         if (string.Equals(Interlocked.Exchange(ref s_warned, value), value, StringComparison.Ordinal))
         {
-            return MemoryAccess.ReadWrite;
+            return DefaultAccess;
         }
 
         DiagnosticLog.Warn(Category,
             $"{nameof(AppSettingsData.MemoryMode)}='{effective.MemoryMode}' is not one of {string.Join(", ", Names)}. Using {Default}.");
-        return MemoryAccess.ReadWrite;
+        return DefaultAccess;
     }
 
     /// <summary>Memory on at all (read-write or read-only): the section, the list and <c>recall_memory</c>. What the old switch's on meant.</summary>

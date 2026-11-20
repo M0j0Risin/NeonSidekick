@@ -49,9 +49,8 @@ public class AppSettingsTests : IDisposable
         BotChatLlmMode = "multi",
         LlmMidTurnUsage = "estimate",   // last-known is the default since later on 2026-09-25
         BotChatLimitedComfyWorkflows = ["flux", "flux-edit"],
-        BotChatImageMode = "autonomous",
+        BotChatImageMode = "automatic",   // autonomous is the default since 2026-11-20
         BotChatImg2ImgMode = "chat-history",
-        BotChatImageMentionMode = "generate",   // disabled by default since 2026-10-13
         BotChatImageAsync = false,
         BotChatNonTtsDelaySeconds = 12,
         BotChatLimitedTools = ["web_search", "read_file"],
@@ -59,7 +58,7 @@ public class AppSettingsTests : IDisposable
         BotChatMemory = false,
         BotChatMemoryMode = "independent",
         BotChatVision = true,
-        MemoryMode = "read-only",
+        MemoryMode = "read-write",   // read-only is the default since 2026-11-20
         PastePreviewLines = 7,
         QueueCancelMode = "drain",
         QueueMode = "manual",
@@ -1750,7 +1749,7 @@ public class AppSettingsTests : IDisposable
         Assert.Equal("none", s.LlmReasoning);
         Assert.Equal("am_eric", s.TtsVoice2);   // the defaults since 2026-09-16 fill the missing fields
         Assert.Equal(80, s.TtsVoiceMix);
-        Assert.Equal("read-write", s.MemoryMode);
+        Assert.Equal("read-only", s.MemoryMode);   // the default since 2026-11-20
         Assert.Equal(100, s.SttInterruptEchoGuard);
         Assert.Equal(200, s.SttInterruptConfirmMs);   // 150 until 2026-09-17
         Assert.Equal("", s.WorkingDirectory);

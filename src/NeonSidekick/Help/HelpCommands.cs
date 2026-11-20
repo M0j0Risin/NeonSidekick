@@ -262,7 +262,7 @@ public static class HelpCommands
         new("/memory",
         [
             new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **forget** (after a yes); **+ add** (`a`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
-            new("/memory read-write|read-only|off|on", "Set *Memory mode* (`on` is read-write)."),
+            new("/memory read-write|read-only|off", "Set *Memory mode*."),
             new("/memory forget|edit", "Forget every memory, after a yes (`forget`), or open `memory.json` in your editor (`edit`; invalid JSON is ignored with a warning)."),
         ]),
         new("/midi",
@@ -533,6 +533,7 @@ public static class HelpCommands
         [
             new("/theme [<name>]", "Switch the color theme (*Theme*), built-in or your own. Alone, it lists the themes, previewing the highlighted one beside the list when the window is wide enough; a typed letter jumps to the next theme starting with it, and nothing changes until Enter. During a reply, it runs when the reply ends; Ctrl+Z runs it too."),
             new("/theme export <name> [<new-name>]", "Write a theme to the `themes` folder as a file to edit, under a new name if one is given."),
+            new("/theme delete <name>", "Delete one of your themes, after a yes: to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good. A built-in can't be deleted; deleting a file that replaces a built-in brings the built-in back. Deleting the theme in force puts the default in force."),
             new("/theme edit [<name>]", "Edit a theme's colors in a pane, previewed live, with pairs that read poorly listed; alone, the theme in force. Enter opens a hue, saturation and lightness picker or takes a hex value. A built-in offers its `<name>-custom` copy. Saving the theme in force redraws the screen in it."),
         ]),
         new("/timer",
@@ -607,7 +608,7 @@ public static class HelpCommands
             new("/webui", "Show the Web UI: on or off, its port and reach, and a tab per address with its sign-in link to open in a browser and, where a phone can reach it, a QR code to scan (the HTTPS tab first when there is one; Tailscale Serve's works anywhere on your tailnet); its buttons: e turns it on or off, l switches the reach between lan and local, r makes a new token after a yes, c copies the shown link. A double-click on the link or the QR code opens it on this PC, as `/webui browser` does. The link signs the browser in and leaves the address bar at once; the browser keeps a cookie for a year. *Web UI* (`/settings` › Client › Web UI) turns it on. Opens over a reply too. Ctrl+Alt+W runs it too."),
             new("/webui on|off", "Turn the Web UI on or off for this profile: the server starts or stops at once."),
             new("/webui copy", "Copy the first sign-in link (the HTTPS one, else Tailscale's, when there is one) to the clipboard."),
-            new("/webui browser [--external]", "Open the Web UI on this PC, signed in: in the Browser window under *Web browser open* `browser-window`, else in your default browser, signed in as *Web browser sign in mode* says (a link good once for a minute, or the usual link). `--external` always uses the default browser. The Web UI must be on. Ctrl+W runs it too."),
+            new("/webui browser [--external]", "Open the Web UI on this PC, signed in: in the Browser window under *Web browser open* `browser-window`, else in your default browser, signed in as *Web UI sign in mode* says (a link good once for a minute, or the usual link). `--external` always uses the default browser. The Web UI must be on. Ctrl+W runs it too."),
             new("/webui reset", "Make a new sign-in token, after a yes: every browser signed in will be signed out, and `/webui` shows the new link."),
         ]),
         new("/window",

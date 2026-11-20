@@ -281,8 +281,8 @@ public static class WebCommands
     /// <summary><c>/learn</c>'s word for its stored sessions' form.</summary>
     public const string LearnSessionsWord = "sessions";
 
-    /// <summary>The words <c>/memory</c> takes for a mode.</summary>
-    public static readonly IReadOnlyList<string> MemoryModes = ["read-write", "read-only", "off", "on"];
+    /// <summary>The words <c>/memory</c> takes for a mode (<c>on</c>, read-write's alias, went on 2026-11-20: the page shows the pane for it, as for any unknown word).</summary>
+    public static readonly IReadOnlyList<string> MemoryModes = ["read-write", "read-only", "off"];
 
     private static WebCommandVerdict Refused(string reason) => new(WebCommandKind.Refused, reason);
 

@@ -639,12 +639,10 @@ internal sealed partial class ChatScreen
     public const string MemoryForgetNote = "forget every memory";
     public const string MemoryEditWord = "edit";   // 2026-09-23, the user's ask: memory.json in the editor, as /profile edit opens profile.json
     public const string MemoryEditNote = "open memory.json in your editor";
-    public const string MemoryOnWord = "on";   // 2026-10-03, the user's ask: the Memory setting from the line, as the 💾 pane's buttons; read-write's alias since 2026-10-04
-    public const string MemoryOffWord = "off";   // disabled's alias since 2026-10-04
+    // /memory on and off (2026-10-03, the user's ask: the Memory setting from the line) were aliases from 2026-10-04: on for read-write,
+    // off for disabled. off has been the mode's own name since 2026-10-13, read by MemoryMode.TryParse; on went on 2026-11-20 (the
+    // user's call: with read-only the default, "on" read as the memory being off before).
     public const string MemoryReadWriteNote = "the model reads and saves memories";   // 2026-10-04, the user's ask: Memory mode's three words
-
-    /// <summary>The note beside <see cref="MemoryOnWord"/> on the argument list (2026-10-27). Pinned.</summary>
-    public const string MemoryOnNote = "the same as read-write";
     public const string MemoryReadOnlyNote = "the model reads memories, never saves one";
     public const string MemoryDisabledNote = "no memory (what is remembered stays)";
     public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or off sets Memory mode; forget forgets them all; edit opens memory.json in your editor.";
@@ -3947,19 +3945,10 @@ internal sealed partial class ChatScreen
             return new(MemoryActionKind.Edit);
         }
 
+        // A mode's own name, off among them; on is none since 2026-11-20 (the usage error, as any other word).
         if (words.Length == 1 && MemoryMode.TryParse(words[0], out var mode))
         {
             return new(MemoryActionKind.Mode, Mode: mode);
-        }
-
-        if (words.Length == 1 && words[0].Equals(MemoryOnWord, StringComparison.OrdinalIgnoreCase))
-        {
-            return new(MemoryActionKind.Mode, Mode: MemoryAccess.ReadWrite);
-        }
-
-        if (words.Length == 1 && words[0].Equals(MemoryOffWord, StringComparison.OrdinalIgnoreCase))
-        {
-            return new(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled);
         }
 
         return new(MemoryActionKind.Invalid);
@@ -5367,7 +5356,8 @@ internal sealed partial class ChatScreen
         IReadOnlyList<string>? Stopwatches = null, Func<string, IReadOnlyList<CompletionItem>>? Prompts = null,
         Func<string, IReadOnlyList<CompletionItem>>? BrowserLinks = null, Func<string, IReadOnlyList<CompletionItem>>? YouTubeSaved = null,
         Func<string, IReadOnlyList<CompletionItem>>? Cameras = null, Func<string, IReadOnlyList<CompletionItem>>? Midi = null,
-        Func<string, MentionResult>? VideoFiles = null, Func<IReadOnlyList<string>>? SettingsZips = null);
+        Func<string, MentionResult>? VideoFiles = null, Func<IReadOnlyList<string>>? SettingsZips = null,
+        Func<IReadOnlyList<CompletionItem>>? CustomThemes = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -5688,16 +5678,18 @@ internal sealed partial class ChatScreen
             case SlashCommand.Theme:
             {
                 // The built-ins and the user's themes (2026-10-01), then export and edit (2026-11-16); after "export " or "edit " the names
-                // again, built-ins too (an edit offers a built-in's copy), for the first word only.
+                // again, built-ins too (an edit offers a built-in's copy), for the first word only. After "delete " (2026-11-20) the user's
+                // themes alone: a built-in can't be deleted, and with no source there is nothing to offer.
                 var themes = sources.Themes?.Invoke() ?? ThemeName.Names.Select(name => new CompletionItem(name, ThemeName.Describe(name))).ToList();
                 foreach (string word in ThemeText.SubcommandWords)
                 {
                     string head = word + " ";
                     if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
                     {
+                        var names = word == ThemeText.DeleteWord ? sources.CustomThemes?.Invoke() ?? [] : themes;
                         return argText[head.Length..].Contains(' ', StringComparison.Ordinal)
                             ? []
-                            : MentionCompleter.Matches(themes.Select(t => new CompletionItem(head + t.Text, t.Note)).ToList(), argText);
+                            : MentionCompleter.Matches(names.Select(t => new CompletionItem(head + t.Text, t.Note)).ToList(), argText);
                     }
                 }
 
@@ -5932,7 +5924,7 @@ internal sealed partial class ChatScreen
             {
                 // The modes, forget and edit (copy and its profiles until 2026-10-13: /profile push|pull memory since).
                 // on (2026-10-27, the completion survey): read-write's documented alias, after it.
-                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryOnWord, MemoryOnNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
+                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
             }
 
             case SlashCommand.Sys:
@@ -6553,6 +6545,10 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<CompletionItem> ThemeChoices() =>
         ThemeCatalog.Scan(_settings.ThemesDirectory).Themes.Select(t => new CompletionItem(t.Name, t.Description)).ToList();
 
+    /// <summary>The user's themes alone (a file each), for <c>/theme delete</c>'s list (2026-11-20).</summary>
+    private IReadOnlyList<CompletionItem> CustomThemeChoices() =>
+        ThemeCatalog.Scan(_settings.ThemesDirectory).Themes.Where(t => !t.IsBuiltIn).Select(t => new CompletionItem(t.Name, t.Description)).ToList();
+
     /// <summary>The argument list's live sources: the profiles on disk, the board's timers, the sandbox's folders, its text files and its image files, and any drive's folders for <c>/cwd</c>.</summary>
     private ArgumentList ArgumentChoices(string command, string argText)
     {
@@ -6573,6 +6569,7 @@ internal sealed partial class ChatScreen
             AnyFiles: prefix => _files.Complete(prefix),
             Print: PrintChoices,
             Themes: ThemeChoices,
+            CustomThemes: CustomThemeChoices,
             Docker: DockerChoices,
             Screen: ScreenChoices,
             Server: ServerChoices,
@@ -15112,7 +15109,10 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Theme:
-                if (await _menu.PickThemeAsync(args, cancellationToken).ConfigureAwait(false))
+                // /theme delete (2026-11-20, the user's ask): the screen's, for its yes (a typed y without menus) and its bin.
+                if (ThemeText.Subcommand(args.Trim(), out string deleteRest) == ThemeText.DeleteWord
+                    ? await _menu.DeleteThemeAsync(deleteRest, ConfirmAsync, _effective().FileDeletesToRecycleBin ? _recycleBin : null, cancellationToken).ConfigureAwait(false)
+                    : await _menu.PickThemeAsync(args, cancellationToken).ConfigureAwait(false))
                 {
                     RestartInTheme();
                 }
@@ -16655,10 +16655,9 @@ internal sealed partial class ChatScreen
     /// written unseen first (<see cref="CollectBotTurnAsync"/>), its picture made, and then the turn is replayed — the name,
     /// the picture, the reply shown and spoken; on, the reply streams as ever and its picture renders while the next bot
     /// answers, drawn when nothing streams (<see cref="ShowReadyBotPictures"/>). The pictures never reach the bots nor the session row.
-    /// Under <c>autonomous</c> (later on 2026-09-25, the user's ask: the reply should be true) a reply that talks about a picture its
-    /// bot did not draw (<see cref="BotChat.MentionsPicture"/>, <see cref="BotChat.PictureAttempt"/> — a failed call counts as not
-    /// drawn) gets it from the app, the prompt written by <see cref="BotChat.PromisedPictureInstruction"/> — or nothing, when the model
-    /// finds no picture promised. A call the bot writes out as text runs as a real one (<see cref="Assistant.TextToolCalls"/>).</para>
+    /// Under <c>autonomous</c> the bots' own <c>generate_image</c> calls are the only pictures (since 2026-11-20, the user's call: from
+    /// later on 2026-09-25 the app drew one for a reply that talked about a picture, or whose call failed). A call the bot writes out
+    /// as text runs as a real one (<see cref="Assistant.TextToolCalls"/>).</para>
     ///
     /// <para>Resuming (2026-09-25, the user's ask: a stopped chat could only start over): however a chat ends, its cast, topic,
     /// lines, last speaker, reply count and session row are kept (<see cref="_lastBotChat"/>, this run only), and
@@ -17080,29 +17079,8 @@ internal sealed partial class ChatScreen
                     }
                 }
 
-                // Autonomous (2026-09-25, the user's ask: a bot said it drew something and had not): a reply that talks about
-                // a picture its bot never called generate_image for gets that picture from the app, so the reply is true. A call
-                // that failed (no prompt, later the same day) drew nothing and is intent enough: the word sieve is skipped.
-                // A mention alone only under Botchat image mention mode generate since 2026-10-13 (the user's ask; disabled by default).
-                var attempt = BotChat.PictureAttempt(history.Messages);
-                if (imageMode == BotImageMode.Autonomous && imageTool is not null && reply.Length > 0
-                    && !attempt.Drew && (attempt.Tried || (BotChatImageMentionMode.Resolve(effective) == BotImageMention.Generate && BotChat.MentionsPicture(reply))))
-                {
-                    if (effective.BotChatImageAsync)
-                    {
-                        await DrawBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictures, pacer, pictureCts.Token, promised: true).ConfigureAwait(false);
-                    }
-                    else if (await PaintBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureCts.Token, promised: true).ConfigureAwait(false) is { } promised)
-                    {
-                        // The reply has streamed already: its picture goes under it.
-                        ShowBotPicture(bot, promised, late: false);
-                    }
-
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        break;
-                    }
-                }
+                // Autonomous draws nothing for a bot (2026-11-20, the user's call): from 2026-09-25 a reply that talked about a picture
+                // its bot never drew, or whose generate_image call failed, got one from the app. The bot's own call is the picture now.
 
                 // Speech on: the next voice waits for this one's audio to end — under ESC, which stops the chat,
                 // and under the line hook, so a line sent meanwhile joins the chat at once.
@@ -17439,9 +17417,9 @@ internal sealed partial class ChatScreen
     /// <see cref="BotPicturePacer.Applies"/>, read at the send) the generation goes through <paramref name="pacer"/>: after
     /// the one before it, and a second after that one was made.
     /// </summary>
-    private async Task DrawBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotPicturePacer pacer, CancellationToken pictureToken, bool promised = false)
+    private async Task DrawBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, List<(BotParticipant Bot, Task<ComfyGeneration?> Job)> pictures, BotPicturePacer pacer, CancellationToken pictureToken)
     {
-        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureToken, promised).ConfigureAwait(false) is { } job)
+        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureToken).ConfigureAwait(false) is { } job)
         {
             var paceSettings = _effective();
             bool paced = BotPicturePacer.Applies(paceSettings, BotsSpeak(paceSettings));
@@ -17464,9 +17442,9 @@ internal sealed partial class ChatScreen
     /// (<see cref="WriteBotPictureAsync"/>), then the generation under a spinner, not drawn — <see cref="RunTurnAsync"/> draws
     /// it under the speaker's name, above the reply. Null when there is no picture; ESC skips it alone, the reply still shows.
     /// </summary>
-    private async Task<ComfyGeneration?> PaintBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, CancellationToken pictureToken, bool promised = false)
+    private async Task<ComfyGeneration?> PaintBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, CancellationToken pictureToken)
     {
-        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureToken, promised).ConfigureAwait(false) is not { } job)
+        if (await WriteBotPictureAsync(assistant, bot, reply, topic, effective, botSkills, pictureToken).ConfigureAwait(false) is not { } job)
         {
             return null;
         }
@@ -17493,11 +17471,9 @@ internal sealed partial class ChatScreen
     /// is never asked two things at once). Since 2026-09-27 (the user's ask) the writer may answer <see cref="BotChat.ReworkAnswer"/>
     /// to rework one of the chat's pictures with the img2img workflow instead (<see cref="BotChat.ParseImagePrompt"/>). Null,
     /// with its notice, when there is no workflow, no prompt came back, or ESC skipped it; the chat goes on.
-    /// <paramref name="promised"/> (2026-09-25, <c>autonomous</c>: a picture the bot talked about but did not draw) asks the
-    /// promised-picture form instead, and its <see cref="BotChat.NoPictureAnswer"/> is no picture, quietly.
     /// <paramref name="botSkills"/> is the reply's own (2026-09-28, code review): read once by the loop, not scanned again here.
     /// </summary>
-    private async Task<ComfyRequest?> WriteBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, CancellationToken pictureToken, bool promised = false)
+    private async Task<ComfyRequest?> WriteBotPictureAsync(Assistant assistant, BotParticipant bot, string reply, string topic, AppSettingsData effective, BotSkillSet botSkills, CancellationToken pictureToken)
     {
         // A fresh picture, or (2026-09-27, the user's ask) a rework of one of the chat's pictures: the prompt writer's choice.
         var (fresh, rework, candidates) = BotWorkflows(effective);
@@ -17516,7 +17492,7 @@ internal sealed partial class ChatScreen
         // own gate and catalog, so a topic naming the skill for pictures is obeyed before the prompt is written; the Botchat
         // limited skills alone (2026-10-04). The reply's, read by the loop.
         var (skills, skillTool) = botSkills;
-        string system = BotChat.PictureInstruction(promised, fresh, rework, candidates);
+        string system = BotChat.PictureInstruction(fresh, rework, candidates);
         var request = new List<ChatMessage>
         {
             new(ChatRole.System, skills is null ? system : system + "\n\n" + BotChat.ImagePromptSkills(skills)),
@@ -17551,12 +17527,6 @@ internal sealed partial class ChatScreen
         string workflow = (named ?? kind[0]).Name;
         // AnyWorkflow: the named one out of every installed workflow, as /imagine's — the botchat workflows need not be offered.
         var job = new ComfyRequest(prompt, Workflow: workflow, Images: reworked is null ? null : [reworked.Path], AnyWorkflow: true);
-        if (promised && BotChat.IsNoPicture(prompt))
-        {
-            // The picture word was only a word: the reply promised nothing, so nothing is owed.
-            return null;
-        }
-
         if (prompt.Length == 0)
         {
             _transcript.Notice(BotChat.NoPromptNotice);
@@ -17568,9 +17538,7 @@ internal sealed partial class ChatScreen
             DiagnosticLog.Warn(AppCategory, BotChat.UnnamedWorkflowLogLine(bot.Name, workflow));
         }
 
-        DiagnosticLog.Info(AppCategory, promised
-            ? BotChat.PromisedPictureLogLine(bot.Name, workflow, prompt)
-            : reworked is null ? BotChat.ImagePromptLogLine(bot.Name, workflow, prompt) : BotChat.ReworkLogLine(bot.Name, workflow, reworked, prompt));
+        DiagnosticLog.Info(AppCategory, reworked is null ? BotChat.ImagePromptLogLine(bot.Name, workflow, prompt) : BotChat.ReworkLogLine(bot.Name, workflow, reworked, prompt));
         return job;
     }
 
@@ -17592,7 +17560,7 @@ internal sealed partial class ChatScreen
     /// tools and is answered <c>Error: unknown tool</c>, as a native one is; the other forms catch the two names alone.</para>
     /// <para>Words beside a call are never the prompt (2026-09-30, code review: taken as the prompt when every call answered
     /// <see cref="SkillText.AlreadyLoaded"/>, a lead-in — "I'll load the pony-prompts skill first." — was sent to ComfyUI, and in
-    /// the promised form drew a picture no reply promised): in a round that offers tools the writer is asked again, the tool's
+    /// the promised form, until 2026-11-20, drew a picture no reply promised): in a round that offers tools the writer is asked again, the tool's
     /// answer in front of it; in the last round, or one whose only call was broken, the words after the last call are the
     /// prompt (<see cref="Assistant.SideResponse.AfterWritten"/>) — a lead-in comes before its call — and none after it is none.</para>
     /// <para>A round whose calls all repeat ones already answered (2026-09-30, code review: a writer that wrote the same load

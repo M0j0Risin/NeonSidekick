@@ -179,6 +179,20 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public bool CaptionGrows { get; init; }
 
     /// <summary>
+    /// A line break in the <see cref="Caption"/> starts a row of its own, each line wrapped by itself (2026-11-20, the user's ask: the
+    /// embedded models' two-line legend), as <see cref="MenuFooter.KeepLines"/> keeps a footer's; unlike the footer's, a line too long
+    /// for the row wraps rather than being cut. False (every other page): any whitespace, a line break too, reads as one space.
+    /// </summary>
+    public bool CaptionKeepLines { get; init; }
+
+    /// <summary>
+    /// A dim line after the <see cref="Caption"/>, wrapped the same way (2026-11-20, the user's pick: the fit marks' estimate under their
+    /// legend), as <see cref="MenuFooter.Last"/> gives a footer a line of its own. The first cut when the rows run out
+    /// (<see cref="MenuPane.CaptionLines"/>). Null for none.
+    /// </summary>
+    public string? CaptionNote { get; init; }
+
+    /// <summary>
     /// Space returns the cursor's row as a <see cref="MenuPick"/> with <see cref="MenuPick.Toggle"/>
     /// set, the status cleared as Enter clears it (a checkbox list); false (every other page):
     /// Space is swallowed.
@@ -741,6 +755,54 @@ public sealed class MenuPane : INoticeSink
         }
 
         return (Math.Clamp(first, 0, count - shown), shown);
+    }
+
+    /// <summary>
+    /// <paramref name="page"/>'s <see cref="MenuPage.Caption"/> and <see cref="MenuPage.CaptionNote"/> laid out for a row of
+    /// <paramref name="width"/> cells, each row with whether it is drawn dim (2026-11-20, the embedded models' legend): the caption's
+    /// rows first (<see cref="CaptionRows"/>, or each of its lines through it under <see cref="MenuPage.CaptionKeepLines"/>, a line
+    /// past the room joined to the last row and cut with an ellipsis), then the note, dim, in the rows left, so the note is cut
+    /// first. At most <paramref name="maxRows"/>. A page with neither property gets <see cref="CaptionRows"/>' rows. Pure.
+    /// </summary>
+    public static IReadOnlyList<(string Text, bool Dim)> CaptionLines(MenuPage page, int width, int maxRows)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        var rows = new List<(string Text, bool Dim)>();
+        if (page.Caption is { } caption)
+        {
+            if (page.CaptionKeepLines)
+            {
+                var lines = caption.ReplaceLineEndings("\n").Split('\n');
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    int left = maxRows - rows.Count;
+                    if (left <= 0)
+                    {
+                        // No room for this line or the rest: they join the last row, cut with an ellipsis, as CaptionRows' overflow does.
+                        if (rows.Count > 0 && width > 0)
+                        {
+                            string rest = string.Join(' ', lines.Skip(i).Where(line => line.Trim().Length > 0));
+                            rows[^1] = (ScreenPane.Fit(rows[^1].Text + (rest.Length > 0 ? " " + rest : ""), width), false);
+                        }
+
+                        break;
+                    }
+
+                    rows.AddRange(CaptionRows(lines[i], width, left).Select(row => (row, false)));
+                }
+            }
+            else
+            {
+                rows.AddRange(CaptionRows(caption, width, maxRows).Select(row => (row, false)));
+            }
+        }
+
+        if (page.CaptionNote is { } note && maxRows - rows.Count > 0)
+        {
+            rows.AddRange(CaptionRows(note, width, maxRows - rows.Count).Select(row => (row, true)));
+        }
+
+        return rows;
     }
 
     /// <summary>
@@ -1690,8 +1752,9 @@ public sealed class MenuPane : INoticeSink
         int content = _pane.MenuContentRows(Height, _inputRows);
         // A question's caption (2026-10-10, CaptionGrows) takes what the room leaves over a few list rows, not three.
         int captionMax = page.CaptionGrows ? CaptionRoom(content, _stripRows, _statusRows, footer, page.Rows.Count) : CaptionMaxRows;
-        IReadOnlyList<string> caption = page.Caption is { } captionText ? CaptionRows(captionText, _listWidth, captionMax) : [];
-        var captionLines = Drawn(caption.Select(row => (IRenderable)new Markup(Markup.Escape(row), Theme.Body).Overflow(Overflow.Ellipsis)).ToList(), _sideWidth > 0);
+        // The caption's rows, a note under them dim (2026-11-20, CaptionLines).
+        var caption = CaptionLines(page, _listWidth, captionMax);
+        var captionLines = Drawn(caption.Select(row => (IRenderable)new Markup(Markup.Escape(row.Text), row.Dim ? Theme.DimText : Theme.Body).Overflow(Overflow.Ellipsis)).ToList(), _sideWidth > 0);
         _captionRows = captionLines.Count;
         int header = Header;
         int capacity = content - header - footer;

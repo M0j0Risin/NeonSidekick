@@ -7,7 +7,7 @@ namespace NeonSidekick.Tests;
 /// <summary>The built-in metasearch's two rows on <c>/tools</c>' Web tab (2026-11-06).</summary>
 public partial class ToolsMenuTests
 {
-    private const int MetasearchEnginesRow = 11;
+    private const int MetasearchEnginesRow = 10;
 
     /// <summary>The Web tab's sections (2026-11-07, the user's ask): the switch alone under Web, the SearXNG URL alone under SearXNG (external), and its row still typed.</summary>
     [Fact]

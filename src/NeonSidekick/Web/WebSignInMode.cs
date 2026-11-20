@@ -14,7 +14,7 @@ public enum WebSignInModeKind
 }
 
 /// <summary>
-/// The setting <c>Web browser sign in mode</c> (later on 2026-10-15, the user's ask and words): how <c>/webui browser</c> and a double-click on
+/// The setting <c>Web UI sign in mode</c> (later on 2026-10-15, the user's ask and words; <i>Web browser sign in mode</i> on <c>/tools</c> › Web until 2026-11-20, when it moved to <c>/settings</c> › Client › Web UI): how <c>/webui browser</c> and a double-click on
 /// <c>/webui</c>'s link sign the default browser in — <c>one-time-link</c> (the default) or <c>url-with-token</c>. The app's own Browser window
 /// uses the usual link, or a one-time link under <i>Web browser privacy</i> <c>keep-history</c>. The <see cref="OpenLinksIn"/> shape: an unknown
 /// word reads as <see cref="Default"/>, with a warning once. Pure; pinned.

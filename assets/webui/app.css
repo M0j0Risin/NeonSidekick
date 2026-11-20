@@ -1,12 +1,14 @@
 /* NeonSidekick's Web UI (2026-10-14): one fixed dark style, phone first. No inline styles anywhere (the page's policy forbids them). */
 :root {
-  /* WebTheme.PageGround and PageText hold these two for the manifest and the home tiles: change them together. */
-  --bg: #120b1f;
-  --panel: #1c1230;
-  --panel-2: #251940;
-  --line: #3a2a5c;
+  /* WebTheme.PageGround and PageText hold these two for the manifest and the home tiles: change them together (WebUiStylesTests holds it).
+     On black with neutral greys since 2026-11-20 (the user's ask): the app's windows with Themed external windows off (ViewerStyle.Black);
+     a dark purple (#120b1f, #1c1230, #251940, #3a2a5c, the dim #9a8bb8) until then. --panel-2 can go no lighter: --speaker-2 is 4.51:1 on it. */
+  --bg: #000000;
+  --panel: #141414;
+  --panel-2: #202020;
+  --line: #404040;
   --text: #efe6ff;
-  --dim: #9a8bb8;
+  --dim: #9a9a9a;
   --accent: #ff4fd8;
   --accent-2: #4fe3ff;
   /* A botchat's speakers (2026-11-12): the terminal's six hues in its order, each ≥4.5:1 on --bg; /theme.css sends the theme's. */
@@ -36,7 +38,7 @@
   --radius: 10px;
   /* The picture overlay's inks (2026-11-17): its grounds stay dark under any theme, so /theme.css never sends these. */
   --overlay-ink: #efe6ff;
-  --overlay-dim: #9a8bb8;
+  --overlay-dim: #9a9a9a;   /* neutral, like --dim (2026-11-20) */
   --overlay-accent: #ff4fd8;
   --overlay-accent-2: #4fe3ff;
   color-scheme: dark;
@@ -263,7 +265,7 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
   position: fixed;
   inset: 0;
   z-index: 10;
-  background: rgba(8, 4, 16, 0.94);
+  background: rgba(0, 0, 0, 0.94);   /* neutral since 2026-11-20, like the page's black */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -279,7 +281,7 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
   align-items: center;
   gap: 12px;
   padding: 6px 12px;
-  background: rgba(28, 18, 48, 0.9);
+  background: rgba(20, 20, 20, 0.9);
 }
 .overlay-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--overlay-dim); }
 /* Following new pictures (later on 2026-10-15): a small pill before the name; the name gives way on a narrow phone, never the tag. */
@@ -305,17 +307,17 @@ body[data-user-line="slab"] .entry.user { color: var(--text); background: var(--
   max-width: calc(100vw - 32px);
   padding: 6px 12px;
   border-radius: 8px;
-  background: rgba(28, 18, 48, 0.95);
+  background: rgba(20, 20, 20, 0.95);
   color: var(--overlay-ink);
   font-size: 14px;
 }
-.overlay-step { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; padding: 6px 14px; background: rgba(37, 25, 64, 0.8); color: var(--overlay-ink); }
+.overlay-step { position: absolute; top: 50%; transform: translateY(-50%); font-size: 28px; padding: 6px 14px; background: rgba(32, 32, 32, 0.8); color: var(--overlay-ink); }
 .overlay-step.prev { left: 8px; }
 .overlay-step.next { right: 8px; }
 
 .body a { color: var(--accent-2); }
 .body pre, .ask pre {
-  background: var(--code-bg, #0c0716);
+  background: var(--code-bg, #0c0c0c);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 10px;
@@ -482,6 +484,9 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .manage { display: flex; flex-direction: column; gap: 6px; }
 .manage-note { color: var(--warn); font-size: 14px; }
 .manage-list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
+/* Each row its own height, the list scrolling (2026-11-20, the user's screenshot: with dozens of sessions every title showed a sliver of its
+   glyphs). Before it scrolls a flex column shrinks its children, down to a row's 44 px min-height, and a two-line session row lost its title. */
+.manage-list > * { flex: none; }
 .manage-none { color: var(--dim); font-size: 14px; }
 .manage-head { color: var(--dim); font-size: 14px; margin-top: 4px; }
 .manage-row { display: flex; gap: 6px; align-items: center; min-height: 44px; }
@@ -493,6 +498,8 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 /* The Sessions tab (2026-11-16, #40): each row a button, its title over when, turns and model (or "tap again to resume" while armed), a
    hit's snippet under it with the match marked; the current one disabled, every row dimmed while the PC is busy. */
 .manage-row.session-row { flex-direction: column; align-items: stretch; gap: 2px; text-align: left; padding: 6px 10px; }
+/* The title its own line height in the column (2026-11-20): flex 1's zero basis left it what the meta line did not take. */
+.session-row .manage-text { flex: none; }
 .session-row .manage-meta, .session-row .manage-snippet { color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
 .session-row .manage-snippet mark { background: var(--panel-2); color: var(--text); border-radius: 3px; }
 .manage-list.dim .session-row { opacity: 0.55; }
@@ -874,7 +881,7 @@ main.home { display: flex; flex-direction: column; gap: 12px; }
 .meter .bar { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
 .meter .bar i { display: block; height: 100%; background: var(--accent-2); }
 .model-name { font-weight: 600; }
-.sheet-back { position: fixed; inset: 0; z-index: 10; background: rgba(8, 4, 16, 0.6); display: flex; align-items: flex-end; justify-content: center; }
+.sheet-back { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.6); display: flex; align-items: flex-end; justify-content: center; }
 .sheet {
   width: 100%;
   max-width: 640px;

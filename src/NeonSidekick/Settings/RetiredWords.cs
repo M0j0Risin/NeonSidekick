@@ -44,7 +44,6 @@ public static class RetiredWords
         data.WelcomeSplashMode = Swap(data.WelcomeSplashMode, SplashMode.Retired);
         data.MemoryMode = Swap(data.MemoryMode, MemoryMode.Retired);
         data.QueueMode = Swap(data.QueueMode, QueueMode.Retired);
-        data.BotChatImageMentionMode = Swap(data.BotChatImageMentionMode, BotChatImageMentionMode.Retired);
         data.CameraPreview = Swap(data.CameraPreview, CameraPreviewMode.Retired);
         data.WebSearchMethod = Swap(data.WebSearchMethod, SearchMethod.Retired);   // 2026-11-07: the DuckDuckGo scrape went, its word reading as the metasearch
     }

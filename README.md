@@ -205,7 +205,7 @@ Type `/` to list every command; [COMMANDS.md](docs/COMMANDS.md) has them all, [C
 | Image tools | `/tools` › Files › Image | The model looks at and edits pictures. | off |
 | Web tools | `/tools` › Core › Web | The model searches the web and reads pages. | off |
 | Shell command policy | `/tools` › Core › Shell | `off`, `ask` (you approve any command not on the allowed list) or `yolo` (no asking). | `off` |
-| Memory mode | `/settings` › Client › Chat | Whether the model saves facts about you between conversations. | `read-write` |
+| Memory mode | `/settings` › Client › Chat | Whether the model saves facts about you between conversations. | `read-only` |
 
 ## Using the app
 

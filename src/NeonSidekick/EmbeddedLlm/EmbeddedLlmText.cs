@@ -73,8 +73,8 @@ public static class EmbeddedLlmText
     /// </summary>
     /// <remarks>
     /// <paramref name="fit"/> (2026-11-16, plan lucid-roaming-lantern #43): the fit mark's slot first, padded to two cells by
-    /// <see cref="UI.TextCells.Width"/> (✗ has no emoji form and takes one), so a ✗ row's marks sit where a ✅ row's do; null leaves the
-    /// row as it was.
+    /// <see cref="UI.TextCells.Width"/> (the ✗ it began with took one; every mark is two cells since 🚫, 2026-11-20), so each row's
+    /// marks keep their columns; null leaves the row as it was.
     /// </remarks>
     public static string CapabilityColumns(EmbeddedModel? model, string detail, int detailWidth, FitMark? fit = null)
     {
@@ -118,12 +118,15 @@ public static class EmbeddedLlmText
     public static string IdleUnloadedParkedLogLine(string modelId, string? behind, TimeSpan idle) =>
         string.Create(CultureInfo.InvariantCulture, $"Unloaded {modelId}, parked behind {behind ?? "no server"}, after {idle.TotalMinutes:0} min idle.");
 
-    /// <summary>The fit marks (2026-11-16, #43): ✅ fits, ⚠️ small context only, ✗ won't fit, 🐢 partly on the CPU. Pinned.</summary>
+    /// <summary>
+    /// The fit marks (2026-11-16, #43): ✅ fits, ⚠️ small context only, 🚫 won't fit (✗ until 2026-11-20, the user's ask: the one
+    /// mark with no emoji form), 🐢 partly on the CPU. Pinned.
+    /// </summary>
     public static string FitGlyph(FitMark mark) => mark switch
     {
         FitMark.Fits => "✅",
         FitMark.SmallContext => "⚠️",
-        FitMark.WontFit => "✗",
+        FitMark.WontFit => "🚫",
         _ => "🐢",
     };
 
@@ -132,12 +135,27 @@ public static class EmbeddedLlmText
         Math.Round(bytes / (double)(1L << 30), MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture) + " GB";
 
     /// <summary>
-    /// The picker's caption over marked rows (2026-11-16, #43): the legend, then what the estimate is for; <paramref name="fixedContext"/>
-    /// (a set <c>Embedded context size</c>) adds that the marks are for a fitted context, a large set one needing more. Pinned.
+    /// The fit marks' legend, the first line over marked rows (2026-11-20, the user's ask and layout: the legend was one sentence with the
+    /// estimate's note until then, wrapping mid-phrase), built from <see cref="FitGlyph"/> so the marks and their legend can't drift. Pinned.
     /// </summary>
-    public static string FitLegend(long gpuBytes, bool fixedContext) =>
-        "✅ fits · ⚠️ small context only · ✗ won't fit · 🐢 partly on the CPU: an estimate for this GPU's " + GpuGb(gpuBytes)
-        + ", with nothing else on it" + (fixedContext ? ", for a fitted context" : "");
+    public static string FitMarksLegend =>
+        FitGlyph(FitMark.Fits) + " fits · " + FitGlyph(FitMark.SmallContext) + " small context only · " + FitGlyph(FitMark.WontFit) + " won't fit · "
+        + FitGlyph(FitMark.PartlyCpu) + " partly on the CPU";
+
+    /// <summary>
+    /// The capability columns' legend, the line under <see cref="FitMarksLegend"/> (2026-11-20, the user's ask: the columns had none),
+    /// built from the columns' own glyphs. Shown over every embedded list, marked or not. Pinned.
+    /// </summary>
+    public static string CapabilityLegend =>
+        DrafterGlyph + " drafter · " + VisionGlyph + " vision · " + ToolsGlyph + " tools · " + UncensoredGlyph + " uncensored";
+
+    /// <summary>
+    /// What the fit marks' estimate is for, the dim line under the legend (2026-11-20, the user's pick; the legend's tail until then):
+    /// <paramref name="fixedContext"/> (a set <c>Embedded context size</c>) adds that the marks are for a fitted context, a large set one
+    /// needing more. Pinned.
+    /// </summary>
+    public static string FitEstimateNote(long gpuBytes, bool fixedContext) =>
+        "An estimate for this GPU's " + GpuGb(gpuBytes) + ", with nothing else on it" + (fixedContext ? ", for a fitted context" : "") + ".";
 
     /// <summary>The catalog's caption when no mark is given, saying why (2026-11-16, #43). Pinned.</summary>
     public static string FitNoneCaption(FitNone why) => why switch

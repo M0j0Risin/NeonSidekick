@@ -1041,8 +1041,6 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Skills.ReflectionConfirmMode.Names"/>: which of a reflection's writes wait for the user (<see cref="Settings.AppSettingsData.ReflectionConfirmMode"/>). The Reflection tab of <c>/skills</c>, the first row of What it may change (2026-10-12, the user's ask and place); no reconnect (read when a reflection is decided). Last in the enum, as every newcomer.</summary>
     ReflectionConfirmMode,
 
-    /// <summary>A picker: what a <c>/botchat</c> bot's mention of a picture it never drew does — <c>disabled</c> / <c>generate</c> (<see cref="Settings.AppSettingsData.BotChatImageMentionMode"/>). The Botchat tab, right under <see cref="BotChatImg2ImgMode"/> (2026-10-13, the user's ask and place); no reconnect (read per reply). Last in the enum, as every newcomer.</summary>
-    BotChatImageMentionMode,
 
     /// <summary>A picker over <see cref="Web.BotcheckWindow.Names"/>: what a bot check the web tools cannot get past does — <c>ask</c> / <c>automatic</c> / <c>disabled</c> (<see cref="Settings.AppSettingsData.WebBrowserBotcheckWindow"/>). The Web tab, right under <see cref="WebBrowserPath"/> (2026-10-13, the user's ask and name); no reconnect (read at each bot check). Last in the enum, as every newcomer.</summary>
     WebBrowserBotcheckWindow,
@@ -1119,8 +1117,8 @@ public enum SettingsField
     /// <summary>A toggle: whether deletes go to the Recycle bin, the Trash on a Mac (<see cref="Settings.AppSettingsData.FileDeletesToRecycleBin"/>). The File menu's second row (later on 2026-10-15, the user's ask); read at each delete. Last in the enum, as every newcomer.</summary>
     FileDeletesToRecycleBin,
 
-    /// <summary>A picker over <see cref="Web.WebSignInMode.Names"/>: how the default browser signs in to the Web UI (<see cref="Settings.AppSettingsData.WebBrowserSignInMode"/>). The Web tab, right under <see cref="WebOpenLinksIn"/> (later on 2026-10-15, the user's ask and name); read at each open. Last in the enum, as every newcomer.</summary>
-    WebBrowserSignInMode,
+    /// <summary>A picker over <see cref="Web.WebSignInMode.Names"/>: how the default browser signs in to the Web UI (<see cref="Settings.AppSettingsData.WebBrowserSignInMode"/>, the key kept). The Web UI tab, under <see cref="WebUiHttpsAddress"/> since 2026-11-20 (the user's ask: it was <i>Web browser sign in mode</i> on <c>/tools</c> › Web, under <see cref="WebOpenLinksIn"/>, from later on 2026-10-15); read at each open.</summary>
+    WebUiSignInMode,
 
     // ── The admin families (2026-10-15, the admin-tools plan): kept together, NetworkTools first and DirectoryDomainsGlobal last (FieldValue's range) ──
 
@@ -1897,8 +1895,8 @@ internal sealed partial class SettingsMenu
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
          SettingsField.SessionNamingMode, SettingsField.SessionShowName,
          SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
-        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageMentionMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
-        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiVoice, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
+        [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
+        [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiSignInMode, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiVoice, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         [SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmOneLocalModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -1972,7 +1970,7 @@ internal sealed partial class SettingsMenu
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
         [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
-        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebMetasearchBraveApiKey, SettingsField.WebSearxngUrl, SettingsField.WebDownloadMaxMegabytes],
+        [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebMetasearchBraveApiKey, SettingsField.WebSearxngUrl, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds],
         [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileCheckpoints, SettingsField.FileCheckpointKeepDays, SettingsField.FileCheckpointMaxMegabytes, SettingsField.FileCheckpointLargestFileMegabytes, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
@@ -2642,7 +2640,6 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatLimitedComfyWorkflows => "Botchat limited workflows",   // "Limited workflows" on the Botchat tab (RowName); "Botchat ComfyUI limited workflows" until 2026-10-27
         SettingsField.BotChatImageMode => "Botchat image mode",
         SettingsField.BotChatImg2ImgMode => "Botchat rework source",
-        SettingsField.BotChatImageMentionMode => "Botchat image mention mode",   // "Image mention mode" on the Botchat tab (RowName)
         SettingsField.BotChatImageAsync => "Botchat image async",
         SettingsField.BotChatNonTtsDelaySeconds => "Botchat reading pause (s)",
         SettingsField.BotChatLimitedTools => "Botchat limited tools",
@@ -2751,7 +2748,7 @@ internal sealed partial class SettingsMenu
         SettingsField.WebBrowserHomePage => "Web browser home page",
         SettingsField.BrowserPrivacy => "Web browser privacy",
         SettingsField.WebOpenLinksIn => "Web browser open",
-        SettingsField.WebBrowserSignInMode => "Web browser sign in mode",
+        SettingsField.WebUiSignInMode => "Web UI sign in mode",
         SettingsField.WebBrowserNetworkMode => "Web browser network mode",
         SettingsField.WebSearxngUrl => "Web SearXNG URL",
         SettingsField.WebMetasearchEngines => "Web metasearch engines",
@@ -3098,7 +3095,6 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatLimitedComfyWorkflows => LimitedNamesValue(data.BotChatLimitedComfyWorkflows),
             SettingsField.BotChatImageMode => data.BotChatImageMode,
             SettingsField.BotChatImg2ImgMode => data.BotChatImg2ImgMode,
-            SettingsField.BotChatImageMentionMode => data.BotChatImageMentionMode,
             SettingsField.BotChatImageAsync => OnOff(data.BotChatImageAsync),
             SettingsField.BotChatNonTtsDelaySeconds => SecondsLabel(data.BotChatNonTtsDelaySeconds),
             SettingsField.BotChatLimitedTools => LimitedNamesValue(data.BotChatLimitedTools),
@@ -3205,7 +3201,7 @@ internal sealed partial class SettingsMenu
             SettingsField.WebBrowserBotcheckWindow => data.WebBrowserBotcheckWindow,
             SettingsField.BrowserPrivacy => data.BrowserPrivacy,
             SettingsField.WebOpenLinksIn => data.WebOpenLinksIn,
-            SettingsField.WebBrowserSignInMode => data.WebBrowserSignInMode,
+            SettingsField.WebUiSignInMode => data.WebBrowserSignInMode,
             SettingsField.WebBrowserHomePage => string.IsNullOrWhiteSpace(data.WebBrowserHomePage) ? BlankHomePageLabel : data.WebBrowserHomePage,
             SettingsField.WebBrowserPath => string.IsNullOrWhiteSpace(data.WebBrowserPath) ? AutoBrowserLabel(locatedBrowser) : data.WebBrowserPath,
             SettingsField.DraftEditor => string.IsNullOrWhiteSpace(data.DraftEditor) ? DefaultDraftEditorLabel : data.DraftEditor,
@@ -4174,7 +4170,7 @@ internal sealed partial class SettingsMenu
     public static string WebOpenLinksInLabel(string name) =>
         Markup.Escape(name.PadRight(16)) + Theme.DimMarkup(Web.OpenLinksIn.Describe(name));
 
-    /// <summary>One row of the Web browser sign in mode picker (later on 2026-10-15): the choice and its hint, padded to fifteen (<c>url-with-token</c> is fourteen). Pinned.</summary>
+    /// <summary>One row of the Web UI sign in mode picker (later on 2026-10-15): the choice and its hint, padded to fifteen (<c>url-with-token</c> is fourteen). Pinned.</summary>
     public static string WebSignInModeLabel(string name) =>
         Markup.Escape(name.PadRight(15)) + Theme.DimMarkup(Web.WebSignInMode.Describe(name));
 
@@ -4221,10 +4217,6 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the botchat-img2img-mode picker: the mode and its hint (padded to thirteen: <c>chat-history</c> is twelve). Pinned.</summary>
     public static string BotChatImg2ImgModeLabel(string name) =>
         Markup.Escape(name.PadRight(13)) + Theme.DimMarkup(App.BotChatImg2ImgMode.Describe(name));
-
-    /// <summary>One row of the botchat image mention mode picker (2026-10-13): the word, then its hint dimmed. Pinned.</summary>
-    public static string BotChatImageMentionModeLabel(string name) =>
-        Markup.Escape(name.PadRight(10)) + Theme.DimMarkup(App.BotChatImageMentionMode.Describe(name));
 
     /// <summary>One row of the memory-mode picker (2026-10-04): the mode and its hint (padded to twelve: <c>read-write</c> is ten). Pinned.</summary>
     public static string MemoryModeLabel(string name) =>
@@ -5290,12 +5282,16 @@ internal sealed partial class SettingsMenu
             cursor >= 0 && cursor < servers.Count && NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[cursor].BaseUrl) ? EmbeddedRowModel(servers[cursor]) : null);
         // The embedded filter buttons only while an embedded model is listed; the typed filter always (2026-10-07, the user's ask).
         bool embedded = servers.Any(s => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(s.BaseUrl));
-        // The fit marks (2026-11-16, #43), read once at the open; the legend shows only over a marked embedded row, and gives way to
+        // The fit marks (2026-11-16, #43), read once at the open; the legend (below) gives way to
         // the typed filter's caption while text is typed.
         var marks = embedded ? FitMarks() : default;
         NeonSidekick.EmbeddedLlm.FitMark? MarkOf(LlmServer server) =>
             marks.Fit is { } fit && NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl) && EmbeddedRowModel(server) is { } model ? fit(model) : null;
-        string? legend = servers.Any(s => MarkOf(s) is not null) ? marks.Legend : null;
+        // Since 2026-11-20 (the user's ask) the capability legend whenever an embedded row is listed, whose glyphs it explains, marked or
+        // not; the fit marks' legend and the estimate's note only over a marked row.
+        bool marked = servers.Any(s => MarkOf(s) is not null);
+        string? legend = marked ? marks.Caption : embedded ? NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityLegend : null;
+        string? legendNote = marked ? marks.Note : null;
         var labels = ServerLabels(servers, MarkOf);
         string baseHint = embedded ? keys.Replace(" · Esc", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · Esc", StringComparison.Ordinal) : keys;
         string text = "";
@@ -5309,6 +5305,9 @@ internal sealed partial class SettingsMenu
                     Filter = text,
                     Placeholder = shown.Count == 0,
                     Caption = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) ?? legend,
+                    // The legend's lines kept apart and its note under it; the typed filter's caption takes over both.
+                    CaptionKeepLines = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) is null,
+                    CaptionNote = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) is null ? legendNote : null,
                     Footer = (_, row) => row < shown.Count ? ServerFooter(servers[shown[row]]) : null,
                 };
                 if (await _pane.PickAsync(page with { Buttons = embedded ? filter.Buttons() : null }, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
@@ -5685,7 +5684,7 @@ internal sealed partial class SettingsMenu
             return await PickWebOpenLinksInAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.WebBrowserSignInMode)
+        if (field == SettingsField.WebUiSignInMode)
         {
             return await PickWebSignInModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
@@ -5843,11 +5842,6 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.BotChatLimitedComfyWorkflows)
         {
             return await EditBotChatLimitedComfyAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        if (field == SettingsField.BotChatImageMentionMode)
-        {
-            return await PickBotChatImageMentionModeAsync(saved, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.BotChatImg2ImgMode)
@@ -8126,7 +8120,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// Memory mode set straight (2026-10-03 as the Memory switch's on and off, the user's ask: the buttons on the 💾 pane and
-    /// <c>/memory on|off</c>; three modes since 2026-10-04): the Memory mode row's own save and notice, on the pane's status line
+    /// <c>/memory on|off</c>; three modes since 2026-10-04, <c>/memory read-write|read-only|off</c> since 2026-11-20): the Memory mode row's own save and notice, on the pane's status line
     /// while one is open. False, with <see cref="UnchangedNotice"/>, when it already is.
     /// </summary>
     internal bool SetMemoryMode(MemoryAccess mode)
@@ -8952,7 +8946,7 @@ internal sealed partial class SettingsMenu
             // Every row laid out over the whole catalog, so a filter does not move the columns.
             var labels = EmbeddedModelLabels(embedded.Catalog, embedded.State, embedded.BytesToDownload, marks.Fit);
             var shown = filter.Arrange(Enumerable.Range(0, embedded.Catalog.Count).Where(i => filter.Matches(embedded.Catalog[i], embedded.State(embedded.Catalog[i]).IsInstalled, marks.Fit)).ToList(), i => embedded.Catalog[i]);
-            var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys) { Placeholder = shown.Count == 0, Caption = marks.Legend };
+            var page = new MenuPage(Crumb(FieldName(SettingsField.EmbeddedModels)), FilteredRows(labels, shown), EmbeddedModelsKeys) { Placeholder = shown.Count == 0, Caption = marks.Caption, CaptionKeepLines = true, CaptionNote = marks.Note };
             if (await PickChecklistAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken, filter.Buttons(withInstalled: true)).ConfigureAwait(false) is not { } pick)
             {
                 return Unchanged();
@@ -9102,13 +9096,15 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The pickers' fit marks (2026-11-16, plan lucid-roaming-lantern #43), read once at an open: the GPU's memory and the backend a start
     /// would use, under the settings now (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedFit"/>). The mark of a model, whether the size button
-    /// may stop at fits, and the caption: the legend, or why no mark is given; all empty with no embedded service.
+    /// may stop at fits, and the caption with its dim note (2026-11-20, the user's layout): the fit marks' legend and the capability columns'
+    /// on two lines (<see cref="MenuPage.CaptionKeepLines"/>) over what the estimate is for, or the capability legend over why no mark is
+    /// given; all empty with no embedded service.
     /// </summary>
-    private (Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.FitMark?>? Fit, bool CanFit, string? Legend) FitMarks()
+    private (Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.FitMark?>? Fit, bool CanFit, string? Caption, string? Note) FitMarks()
     {
         if (EmbeddedLlm is not { } embedded)
         {
-            return (null, false, null);
+            return (null, false, null, null);
         }
 
         var effective = EffectiveNow();
@@ -9116,11 +9112,12 @@ internal sealed partial class SettingsMenu
         var backend = embedded.Backend(effective).Backend;
         if (NeonSidekick.EmbeddedLlm.EmbeddedFit.WhyNone(effective, gpu, backend) is { } why)
         {
-            return (null, false, NeonSidekick.EmbeddedLlm.EmbeddedLlmText.FitNoneCaption(why));
+            return (null, false, NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityLegend, NeonSidekick.EmbeddedLlm.EmbeddedLlmText.FitNoneCaption(why));
         }
 
         return (m => NeonSidekick.EmbeddedLlm.EmbeddedFit.Mark(m, effective, gpu, backend), true,
-            NeonSidekick.EmbeddedLlm.EmbeddedLlmText.FitLegend(gpu!.Value, NeonSidekick.EmbeddedLlm.EmbeddedFit.FixedContext(effective)));
+            NeonSidekick.EmbeddedLlm.EmbeddedLlmText.FitMarksLegend + "\n" + NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityLegend,
+            NeonSidekick.EmbeddedLlm.EmbeddedLlmText.FitEstimateNote(gpu!.Value, NeonSidekick.EmbeddedLlm.EmbeddedFit.FixedContext(effective)));
     }
 
     /// <summary>
@@ -9222,12 +9219,12 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The Web browser sign in mode picker (later on 2026-10-15): one <see cref="WebSignInModeLabel"/> row per <see cref="Web.WebSignInMode.Names"/> entry, the saved one under the cursor.</summary>
+    /// <summary>The Web UI sign in mode picker (later on 2026-10-15): one <see cref="WebSignInModeLabel"/> row per <see cref="Web.WebSignInMode.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickWebSignInModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
         var names = Web.WebSignInMode.Names;
         string current = Web.WebSignInMode.TryParse(saved.WebBrowserSignInMode, out var kind) ? Web.WebSignInMode.Name(kind) : Web.WebSignInMode.Default;
-        var page = new MenuPage(Crumb(FieldName(SettingsField.WebBrowserSignInMode)), names.Select(WebSignInModeLabel).ToList(), PickKeys);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.WebUiSignInMode)), names.Select(WebSignInModeLabel).ToList(), PickKeys);
         int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, current)), cancellationToken).ConfigureAwait(false);
         if (picked is not { } index)
         {
@@ -9235,7 +9232,7 @@ internal sealed partial class SettingsMenu
         }
 
         string name = names[index];
-        Apply(SettingsField.WebBrowserSignInMode, d => d.WebBrowserSignInMode = name);
+        Apply(SettingsField.WebUiSignInMode, d => d.WebBrowserSignInMode = name);
         return true;
     }
 
@@ -10241,22 +10238,6 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
-    /// <summary>The botchat-image-mention-mode picker under the settings list (2026-10-13): one <see cref="BotChatImageMentionModeLabel"/> row per <see cref="App.BotChatImageMentionMode.Names"/> entry, the saved one under the cursor.</summary>
-    private async Task<bool> PickBotChatImageMentionModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
-    {
-        var names = App.BotChatImageMentionMode.Names;
-        var page = new MenuPage(Crumb(FieldName(SettingsField.BotChatImageMentionMode)), names.Select(BotChatImageMentionModeLabel).ToList(), PickKeys);
-        int? picked = await PickAsync(page, Math.Max(0, Array.IndexOf(names, saved.BotChatImageMentionMode)), cancellationToken).ConfigureAwait(false);
-        if (picked is not { } index)
-        {
-            return Unchanged();
-        }
-
-        string name = names[index];
-        Apply(SettingsField.BotChatImageMentionMode, d => d.BotChatImageMentionMode = name);
-        return true;
-    }
-
     /// <summary>The welcome-splash picker under the settings list: one <see cref="WelcomeSplashModeLabel"/> row per <see cref="UI.SplashMode.Names"/> entry, the saved one under the cursor (2026-09-24).</summary>
     private async Task<bool> PickWelcomeSplashModeAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
@@ -10366,7 +10347,7 @@ internal sealed partial class SettingsMenu
     /// the one already in force says <see cref="ThemeAlreadyNotice"/>, ESC <see cref="UnchangedNotice"/>.
     /// Without menus the guard prints. The user's themes (2026-10-01) are read afresh each time, their
     /// files' problems said as warnings; <c>/theme export …</c> is <see cref="ExportTheme"/>, <c>/theme edit …</c> <see cref="EditThemeAsync"/>
-    /// (one of <see cref="ThemeText.SubcommandWords"/>, 2026-11-17, #217). The editor's lines are held: the caller prints them with
+    /// (one of <see cref="ThemeText.SubcommandWords"/>, 2026-11-17, #217); <c>/theme delete …</c> is the screen's (<see cref="DeleteThemeAsync"/>). The editor's lines are held: the caller prints them with
     /// <see cref="PrintHeld"/> after any repaint.
     /// </summary>
     public async Task<bool> PickThemeAsync(string requestedName, CancellationToken cancellationToken)
@@ -10381,6 +10362,9 @@ internal sealed partial class SettingsMenu
             case ThemeText.EditWord:
                 // /theme edit (2026-11-16, plan sharded-hugging-puppy #54): true only when it saved the theme in force, so /theme repaints in it.
                 return await EditThemeAsync(rest, cancellationToken).ConfigureAwait(false);
+            case ThemeText.DeleteWord:
+                // The screen's (2026-11-20): its yes falls back to a typed y, and the bin is its own (DeleteThemeAsync).
+                throw new System.Diagnostics.UnreachableException("/theme delete is handled by the screen.");
             case null:
                 break;
             default:
@@ -10503,6 +10487,100 @@ internal sealed partial class SettingsMenu
         }
 
         return Encoding.UTF8.GetBytes(ThemeFile.Export(palette, newName));
+    }
+
+    /// <summary>
+    /// <c>/theme delete &lt;name&gt;</c> (2026-11-20, the user's ask): one of the user's themes (a file under the themes folder) deleted after
+    /// a yes through <paramref name="confirm"/> (the screen's, which falls back to a typed <c>y</c>), to <paramref name="bin"/> when given
+    /// (<i>File deletes to Recycle bin</i>; probed first, so the question says where it goes, as the purges do), else for good. A built-in
+    /// is refused, an unknown name gets <see cref="ThemeNameError"/>, no name or two <see cref="ThemeText.DeleteUsage"/>; a no is
+    /// <see cref="ChatScreen.KeptNotice"/>. The bin's refusal keeps the file (never deleted directly behind it); a drive with no bin deletes
+    /// for good. When the theme in force went, the scan names it again: the built-in its file replaced, else the default, saved and put in
+    /// force. Returns whether the theme in force changed. Its lines are held (<see cref="PrintHeld"/>), printed after the repaint.
+    /// </summary>
+    public async Task<bool> DeleteThemeAsync(string rest, Func<string, CancellationToken, Task<bool>> confirm, IRecycleBin? bin, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(rest);
+        ArgumentNullException.ThrowIfNull(confirm);
+        string[] words = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length != 1)
+        {
+            _held.Error(ThemeText.DeleteUsage);
+            return false;
+        }
+
+        var scan = ScanThemes();
+        if (!ThemeName.TryParse(words[0], scan.Themes, out var palette))
+        {
+            _held.Error(ThemeNameError(words[0], scan.Names));
+            return false;
+        }
+
+        if (palette.SourcePath is not { } path)
+        {
+            _held.Error(ThemeText.DeleteBuiltIn);
+            return false;
+        }
+
+        // Where it goes, judged before the question (the purges' rule, 2026-10-20): a drive with no bin deletes for good, a bin that can
+        // never take from the folder refuses here, nothing asked.
+        bool toBin = bin is not null;
+        if (bin?.Probe(Path.GetDirectoryName(path)!) is { } probe)
+        {
+            if (probe.Outcome == RecycleOutcome.Failed)
+            {
+                _held.Error(ThemeText.DeleteFailed(probe.Message));
+                return false;
+            }
+
+            toBin = false;
+        }
+
+        string shown = Path.Combine("themes", Path.GetRelativePath(_settings.ThemesDirectory, path));
+        bool revealsBuiltIn = ThemeLibrary.TryGet(palette.Name, out _);
+        if (!await confirm(ThemeText.DeleteQuestion(palette.Name, shown, toBin, revealsBuiltIn), cancellationToken).ConfigureAwait(false))
+        {
+            _held.Notice(ChatScreen.KeptNotice);
+            return false;
+        }
+
+        bool recycled = false;
+        try
+        {
+            switch (toBin ? bin!.Move(path) : null)
+            {
+                case { Outcome: RecycleOutcome.Recycled }:
+                    recycled = true;
+                    break;
+                case { Outcome: RecycleOutcome.Failed } refused:
+                    _held.Error(ThemeText.DeleteFailed(refused.Message));
+                    return false;
+                default:
+                    // Not to the bin, or the bin found none on that drive after all: for good, and the line says so.
+                    File.Delete(path);
+                    break;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _held.Error(ThemeText.DeleteFailed(ex.Message));
+            return false;
+        }
+
+        _held.Notice(ThemeText.DeleteDone(palette.Name, recycled));
+        bool inForce = string.Equals(Theme.Current.SourcePath, path, StringComparison.Ordinal)
+            || string.Equals(_settings.Current.Theme, palette.Name, StringComparison.OrdinalIgnoreCase);
+        if (!inForce)
+        {
+            return false;
+        }
+
+        // The theme in force went: the same name again (the built-in the file replaced), else the default as the scan has it.
+        var after = ScanThemes(report: false);
+        var next = ThemeName.TryParse(palette.Name, after.Themes, out var same) ? same
+            : ThemeName.TryParse(ThemeLibrary.Default.Name, after.Themes, out var fallback) ? fallback : ThemeLibrary.Default;
+        _held.Notice(ThemeText.DeleteInForce(next.Name));
+        return SaveTheme(next);
     }
 
     /// <summary>

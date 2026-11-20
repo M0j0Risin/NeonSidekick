@@ -88,6 +88,41 @@ public sealed partial class WebUiStylesTests
         }
     }
 
+    /// <summary>
+    /// The un-themed page on black (2026-11-20, the user's ask: like the app's windows with <i>Themed external windows</i> off): app.css's
+    /// <c>--bg</c> and <c>--text</c> are <see cref="WebTheme.PageGround"/> and <see cref="WebTheme.PageText"/> (the manifest's and the home
+    /// tiles' twins, "change them together"), and the text, the dim text and each speaker read at 4.5:1 on the ground and both panels.
+    /// </summary>
+    [Fact]
+    public void ThePagesOwnLook_IsBlack_TheConstantsMatch_AndItsInksRead()
+    {
+        string css = Encoding.UTF8.GetString(WebUiAssets.Find("app.css")!.Bytes);
+        string Var(string name)
+        {
+            var found = Regex.Match(css, "--" + name + @":\s*(#[0-9a-fA-F]{6})");
+            Assert.True(found.Success, "--" + name);
+            return found.Groups[1].Value;
+        }
+
+        Assert.Equal("#000000", Var("bg"));
+        Assert.Equal(WebTheme.PageGround, Var("bg"));
+        Assert.Equal(WebTheme.PageText, Var("text"));
+        Assert.True(UI.ThemeFile.TryParseColor(WebTheme.PageGround, out var groundColor));
+        Assert.Equal(WebTheme.PageGroundColor, groundColor);
+
+        string[] grounds = ["bg", "panel", "panel-2"];
+        string[] inks = ["text", "dim", "speaker-0", "speaker-1", "speaker-2", "speaker-3", "speaker-4", "speaker-5"];
+        foreach (string ground in grounds)
+        {
+            Assert.True(UI.ThemeFile.TryParseColor(Var(ground), out var back));
+            foreach (string ink in inks)
+            {
+                Assert.True(UI.ThemeFile.TryParseColor(Var(ink), out var fore));
+                Assert.True(UI.ColorContrast.Contrast(fore, back) >= 4.5, "--" + ink + " on --" + ground);
+            }
+        }
+    }
+
     /// <summary>Each top-level rule's selector text with the line it begins on: comments left out, at-rule blocks (<c>@media</c>…) skipped whole.</summary>
     internal static IEnumerable<(string Selector, int Line)> TopLevelSelectors(string css)
     {

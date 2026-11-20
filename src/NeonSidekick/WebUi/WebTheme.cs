@@ -23,14 +23,17 @@ public static class WebTheme
     /// <summary>The least contrast (WCAG's ratio) between the theme's ink and its ground for the page to take its grounds.</summary>
     public const double MinContrast = 4.5;
 
-    /// <summary>The page's own ground (<c>app.css</c>'s <c>--bg</c>), the manifest's colors while the theme is off.</summary>
-    public const string PageGround = "#120b1f";
+    /// <summary>
+    /// The page's own ground (<c>app.css</c>'s <c>--bg</c>), the manifest's colors while the theme is off: black since 2026-11-20 (the
+    /// user's ask: the app's windows with <i>Themed external windows</i> off), <c>#120b1f</c> until then.
+    /// </summary>
+    public const string PageGround = "#000000";
 
     /// <summary>The page's own text (<c>app.css</c>'s <c>--text</c>).</summary>
     public const string PageText = "#efe6ff";
 
     /// <summary><see cref="PageGround"/> as a color (2026-11-17, the admin-themes-render review's #82): the home tiles' ground while the theme is off.</summary>
-    public static readonly Color PageGroundColor = new(0x12, 0x0B, 0x1F);
+    public static readonly Color PageGroundColor = new(0x00, 0x00, 0x00);
 
     /// <summary><see cref="PageText"/> as a color.</summary>
     public static readonly Color PageTextColor = new(0xEF, 0xE6, 0xFF);
@@ -107,7 +110,7 @@ public static class WebTheme
             Token("--dim", palette.Dim);
 
             // The diff slabs and the code block's ground as the terminal draws them, the text on the accent and on the error, and the code
-            // colors through the export's map: for any readable theme (2026-11-17, #123, #39: app.css's own were tuned for its #120b1f, not
+            // colors through the export's map: for any readable theme (2026-11-17, #123, #39: app.css's own were tuned for its own ground, not
             // the theme's ground).
             Token("--diff-add", Theme.Mix(palette.Bg, palette.Good, Theme.DiffSlabShare));
             Token("--diff-del", Theme.Mix(palette.Bg, palette.Bad, Theme.DiffSlabShare));

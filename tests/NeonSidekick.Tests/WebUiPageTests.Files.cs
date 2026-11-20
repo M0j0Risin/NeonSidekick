@@ -50,6 +50,21 @@ public sealed partial class WebUiPageTests
         Assert.Equal(WebUiText.FilesHint, await page.TextAsync("document.querySelector('#manage-list .files-hint').textContent"));
     }
 
+    /// <summary>A long Files list (2026-11-20, beside the Sessions tab's clipped titles): every row keeps its 44 px and the list scrolls.</summary>
+    [WindowsFact]
+    public async Task ALongList_KeepsEachRowsHeight_AndScrolls()
+    {
+        var rows = Enumerable.Range(0, 30).Select(i => FileRowOf("file " + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".pdf")).ToArray();
+        if (await FilesPageAsync(new WebFilesView(rows)) is not { } page)
+        {
+            return;
+        }
+
+        Assert.Equal(30, (await page.EvalAsync("document.querySelectorAll('#manage-list a.file-row').length")).GetInt32());
+        Assert.True((await page.EvalAsync("Math.min(...[...document.querySelectorAll('#manage-list a.file-row')].map(r => r.getBoundingClientRect().height))")).GetDouble() >= 44);
+        Assert.True((await page.EvalAsync("(() => { const l = document.getElementById('manage-list'); return l.scrollHeight > l.clientHeight + 1; })()")).GetBoolean());
+    }
+
     [WindowsFact]
     public async Task InAnInstalledAppsOwnWindow_ARowOpensInPlace()
     {

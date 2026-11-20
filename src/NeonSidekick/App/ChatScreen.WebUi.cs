@@ -1230,7 +1230,7 @@ internal sealed partial class ChatScreen
     /// link (its tab's <c>http://host:port</c> or <c>https://host[:port]</c>). <i>Web browser open</i> <c>browser-window</c> (and not <paramref name="external"/>) opens
     /// the app's Browser window with the usual sign-in link, or a one-time link under <i>Web browser privacy</i> <c>keep-history</c>, whose kept
     /// history would hold the token; a window that can't take it now, and <c>default-browser</c>, go to the default browser, signed in as
-    /// <i>Web browser sign in mode</i> says. The notice and the log name where, never the link; the window hands none of its cookies over.
+    /// <i>Web UI sign in mode</i> says. The notice and the log name where, never the link; the window hands none of its cookies over.
     /// </summary>
     private async Task OpenWebUiHereAsync(string? baseAddress, bool external, INoticeSink sink)
     {

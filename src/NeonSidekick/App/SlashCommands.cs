@@ -29,7 +29,7 @@ public enum SlashCommand
     /// through the file tools, the conversation kept. <c>/undo purge [all]</c> deletes this folder's (every folder's) file checkpoints.
     /// </summary>
     Undo,
-    /// <summary><c>/theme</c>: pick the colour theme from a list, or <c>/theme &lt;name&gt;</c> (2026-09-23, the user's ask); a change draws the screen again in the new colours, the conversation kept and redrawn as a resume draws it (2026-11-16; until then it started over the way <c>/splash</c> does). Waits for a reply to end.</summary>
+    /// <summary><c>/theme</c>: pick the colour theme from a list, or <c>/theme &lt;name&gt;</c> (2026-09-23, the user's ask); a change draws the screen again in the new colours, the conversation kept and redrawn as a resume draws it (2026-11-16; until then it started over the way <c>/splash</c> does). <c>/theme delete &lt;name&gt;</c> (2026-11-20) deletes one of the user's themes after a yes. Waits for a reply to end.</summary>
     Theme,
 
     /// <summary>
@@ -65,7 +65,7 @@ public enum SlashCommand
     /// <summary><c>/remember &lt;text&gt;</c>: keep one fact across sessions.</summary>
     Remember,
 
-    /// <summary><c>/memory</c>: list what is remembered, Enter removing one; <c>/memory on|off</c> switches Memory (2026-10-03, the user's ask); <c>/memory forget</c> erases every one, after a confirmation (2026-09-22, the user's ask, twice: the wipe was <c>/forget</c>, its own command, until that morning, and <c>/memory copy &lt;profile&gt; [overwrite]</c> was <c>/memcopy</c> (2026-09-17) until later that day; both words are unknown commands now, and the copy itself went on 2026-10-13, <c>/profile push|pull memory</c> since).</summary>
+    /// <summary><c>/memory</c>: list what is remembered, Enter removing one; <c>/memory read-write|read-only|off</c> sets Memory mode (<c>on|off</c> from 2026-10-03, the user's ask; <c>on</c> gone since 2026-11-20); <c>/memory forget</c> erases every one, after a confirmation (2026-09-22, the user's ask, twice: the wipe was <c>/forget</c>, its own command, until that morning, and <c>/memory copy &lt;profile&gt; [overwrite]</c> was <c>/memcopy</c> (2026-09-17) until later that day; both words are unknown commands now, and the copy itself went on 2026-10-13, <c>/profile push|pull memory</c> since).</summary>
     Memory,
 
     /// <summary><c>/msgclear</c> (<c>/cmdclear</c> from 2026-09-25, the user's ask, until 2026-10-10, the user's rename; the old word is an unknown command now): this profile's message history — the input line's Up/Down recall, stored in <c>sessions.db</c> under <c>Keep message history</c> — emptied, stored and in memory, after a confirmation. No argument.</summary>
@@ -566,7 +566,7 @@ public static class SlashCommands
             new("/sys", "edit the persona, rules or voice"),   // "show or edit the system prompt" until 2026-11-07, when /usage took the showing
             new("/terminal", "open a terminal in a folder"),
             new("/test", "benchmark the connected model"),
-            new("/theme", "switch, edit or export the color theme"),
+            new("/theme", "switch, edit, export or delete themes"),   // delete since 2026-11-20; the summary kept short (DescriptionWidth)
             new(UI.MarkText.Word, UI.MarkText.HelpSummary),
             new("/timer", "set, list and stop timers, stopwatches"),
             new("/toolbar", ToolbarItems.HelpSummary),

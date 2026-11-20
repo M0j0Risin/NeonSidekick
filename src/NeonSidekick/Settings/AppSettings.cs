@@ -1313,7 +1313,6 @@ public sealed class AppSettings : IDisposable
         BotChatLimitedComfyWorkflows = source.BotChatLimitedComfyWorkflows is null ? null : [.. source.BotChatLimitedComfyWorkflows],
         BotChatImageMode = source.BotChatImageMode,
         BotChatImg2ImgMode = source.BotChatImg2ImgMode,
-        BotChatImageMentionMode = source.BotChatImageMentionMode,
         BotChatImageAsync = source.BotChatImageAsync,
         BotChatNonTtsDelaySeconds = source.BotChatNonTtsDelaySeconds,
         BotChatLimitedTools = source.BotChatLimitedTools is null ? null : [.. source.BotChatLimitedTools],

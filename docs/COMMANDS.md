@@ -75,7 +75,7 @@ Elsewhere:
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
 | `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) into the working folder, never over a file: Markdown with Obsidian properties and a pictures folder, or one HTML page in your theme, with each turn's sources. |
 | `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), forget or add one. |
-| `/memory read-write\|read-only\|off\|on` | Sets *Memory mode* (`on` is read-write). |
+| `/memory read-write\|read-only\|off` | Sets *Memory mode*. |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
 | `/remember <text>` | Adds a memory; refused while *Memory mode* is `off`. |
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
@@ -311,6 +311,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/theme [<name>]` | Switches the color theme (*Theme*); alone, a picker with a live preview. |
 | `/theme export <name> [<new-name>]` | Writes a theme to a file to edit. See [Custom themes](#custom-themes). |
 | `/theme edit [<name>]` | Edits a theme's colors in a pane with a live preview; alone, the theme in force. See [Custom themes](#custom-themes). |
+| `/theme delete <name>` | Deletes one of your themes after a yes, to the Recycle bin when *File deletes to Recycle bin* is on. See [Custom themes](#custom-themes). |
 | `/mark`, `/mark <color>`, `/mark default` | Colors the rules around the input line for this conversation (red, orange, yellow, green, cyan, blue, purple, pink, white or gray), kept with the session; `default` takes it off, and alone it lists the choices. |
 | `/header [on\|off]` | Shows or hides the banner (*Show header*) from the next clear. |
 | `/toolbar [on\|off]`, `/toolbar edit` | Hides or shows the [toolbar](INTERFACE.md#the-toolbar), or opens its checklist (*Tool bar*). |
@@ -645,6 +646,8 @@ Your own are JSON files in the home's `themes` folder (and subfolders one level 
 Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.json` (`<name>-custom` by default) with every color filled in (a built-in's copy is its file with the new name, role words and comments kept), never over a file.
 
 `/theme edit [<name>]` changes the colors in the app: each role with its swatch, the theme previewed beside the list and pairs that read poorly listed under it. Its keys and the picker's are in [Pane keys](INTERFACE.md#pane-keys). A built-in offers its `<name>-custom` copy; a save changes only the colors you changed, and keeps the file's comments and layout.
+
+`/theme delete <name>` removes one of your themes after a yes; a built-in it replaced comes back, and deleting the theme in force puts the default in force.
 
 ```jsonc
 {

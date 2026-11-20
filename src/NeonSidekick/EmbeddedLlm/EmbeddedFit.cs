@@ -11,7 +11,7 @@ public enum FitMark
     /// <summary>⚠️ The files fit with a small context only, about llama.cpp's 4096-token floor.</summary>
     SmallContext,
 
-    /// <summary>✗ Every layer is held on the GPU (<c>Embedded VRAM only</c>, or <c>Embedded GPU layers</c> <c>all</c>) and the files don't fit.</summary>
+    /// <summary>🚫 (✗ until 2026-11-20) Every layer is held on the GPU (<c>Embedded VRAM only</c>, or <c>Embedded GPU layers</c> <c>all</c>) and the files don't fit.</summary>
     WontFit,
 
     /// <summary>🐢 The files don't fit, so llama.cpp's fit puts some layers on the CPU: it runs, slower.</summary>

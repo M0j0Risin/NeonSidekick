@@ -47,7 +47,6 @@ public class RetiredWordsTests : IDisposable
         Assert.True(SplashMode.TryParse("disabled", out var sp) && sp == SplashStyle.Disabled);
         Assert.True(MemoryMode.TryParse("disabled", out var mem) && mem == MemoryAccess.Disabled);
         Assert.True(QueueMode.TryParse(" Disabled ", out var q) && q == Queueing.Disabled);   // trimmed, any case, as before
-        Assert.True(BotChatImageMentionMode.TryParse("disabled", out var im) && im == BotImageMention.Disabled);
         Assert.True(CameraPreviewMode.TryParse("disabled", out var cp) && cp == CameraPreview.Disabled);
     }
 
@@ -67,7 +66,6 @@ public class RetiredWordsTests : IDisposable
         Assert.Equal(["image", "robot", "off"], SplashMode.Names);
         Assert.Equal(["read-write", "read-only", "off"], MemoryMode.Names);
         Assert.Equal(["automatic", "manual", "off"], QueueMode.Names);
-        Assert.Equal(["off", "generate"], BotChatImageMentionMode.Names);
         Assert.Equal(["live", "post", "off"], CameraPreviewMode.Names);
     }
 
@@ -100,10 +98,11 @@ public class RetiredWordsTests : IDisposable
         using var settings = new AppSettings(_dir);
         var d = settings.Current;
         Assert.Equal(
-            ["lan", "browser", "off", "lan", "off", "hide-hidden", "apply", "edit", "all", "half", "off", "off", "off", "off", "off"],
+            ["lan", "browser", "off", "lan", "off", "hide-hidden", "apply", "edit", "all", "half", "off", "off", "off", "off"],
             [d.WebBrowserNetworkMode, d.WebBrowserMode, d.WebBrowserBotcheckWindow, d.LlmScanMode, d.LlmToolCompactType, d.FileBrowserMode,
              d.FileMentionFolderMode, d.ReflectionConfirmMode, d.SessionShowName, d.MenuMaxHeight, d.WelcomeSplashMode, d.MemoryMode,
-             d.QueueMode, d.BotChatImageMentionMode, d.CameraPreview]);
+             d.QueueMode, d.CameraPreview]);
+        // BotChatImageMentionMode, a setting since gone (2026-11-20, the user's call): the old key above is skipped and the file still loads.
 
         // Another profile's file read for a copy (/profile push|pull, botchat, advisors) reads the same way.
         Assert.Equal("lan", Profiles.ReadProfileFile(path).WebBrowserNetworkMode);

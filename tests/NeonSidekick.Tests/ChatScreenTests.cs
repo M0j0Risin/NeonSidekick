@@ -138,6 +138,10 @@ public partial class ChatScreenTests : IDisposable
         _settings.Update(d => d.ReflectionAutoLearn = false);
         // The user avatar has a default (🙊, 🧿 from 2026-10-18 to 2026-11-01): these scripts pin the sent line's ›, so the fixture opts out; the avatar's own tests set one.
         _settings.Update(d => d.UserAvatar = "");
+        // Memory mode is read-only by default since 2026-11-20 (the user's call): these scripts were written to read-write (save_memory offered,
+        // the save sentences in the prompt, the pickers walked from it), so the fixture opts in; the default's own pins are MemoryModeTests',
+        // the settings menu's and the headless runs' (SidekickAppTests run on the default).
+        _settings.Update(d => d.MemoryMode = MemoryMode.ReadWrite);
         // Tool collapse count is 2 by default (2026-09-22): with a geometry the opening calls alone fold, and a fold rewrites the
         // flow from the store — every refresh-counting script would count it. The fixture opts out; the fold's own tests opt in.
         _settings.Update(d => d.ToolCollapseCount = 0);
@@ -7264,17 +7268,16 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("copy work overwrite please"));
         Assert.Equal("forget", ChatScreen.MemoryForgetWord);
         Assert.Equal("edit", ChatScreen.MemoryEditWord);
-        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.ReadWrite), ChatScreen.ParseMemoryArgs("on"));   // 2026-10-03, the user's ask; read-write's alias since 2026-10-04
-        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs(" OFF "));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("on"));   // read-write's alias from 2026-10-04 until 2026-11-20 (the user's call)
+        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs(" OFF "));   // the mode's own name, its alias gone too
+        Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs("OFF"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.ReadOnly), ChatScreen.ParseMemoryArgs("Read-Only"));   // 2026-10-04, the user's ask
         Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.ReadWrite), ChatScreen.ParseMemoryArgs("read-write"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs("off"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("read-only now"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("on off"));
-        Assert.Equal("on", ChatScreen.MemoryOnWord);
-        Assert.Equal("off", ChatScreen.MemoryOffWord);
-        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("on", ChatScreen.MemoryOnNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));   // on, read-write's alias, 2026-10-27
-        Assert.Equal(["on", "off"], ChatScreen.ArgumentItems("/memory", "o", Sources()).Select(i => i.Text));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));   // on, read-write's alias, from 2026-10-27 until 2026-11-20
+        Assert.Equal(["off"], ChatScreen.ArgumentItems("/memory", "o", Sources()).Select(i => i.Text));
         Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote)], ChatScreen.ArgumentItems("/memory", "fo", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "co", Sources()));   // copy retired 2026-10-13
@@ -7335,7 +7338,8 @@ public partial class ChatScreenTests : IDisposable
         PushLine("/memory off");
         PushLine("/memory disabled");
         PushLine("/memory read-only");
-        PushLine("/memory on");
+        PushLine("/memory on");                 // no mode since 2026-11-20: the usage error, the mode kept
+        PushLine("/memory READ-WRITE");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -7344,8 +7348,9 @@ public partial class ChatScreenTests : IDisposable
         int off = output.IndexOf(Saved("off"), StringComparison.Ordinal);
         int unchanged = output.IndexOf("  · " + SettingsMenu.UnchangedNotice, off, StringComparison.Ordinal);
         int readOnly = output.IndexOf(Saved("read-only"), unchanged, StringComparison.Ordinal);
-        int on = output.IndexOf(Saved("read-write"), readOnly, StringComparison.Ordinal);
-        Assert.True(off > 0 && unchanged > off && readOnly > unchanged && on > readOnly, output);
+        int usage = output.IndexOf("  ✗ " + ChatScreen.MemoryUsageError, readOnly, StringComparison.Ordinal);
+        int readWrite = output.IndexOf(Saved("read-write"), usage, StringComparison.Ordinal);
+        Assert.True(off > 0 && unchanged > off && readOnly > unchanged && usage > readOnly && readWrite > usage, output);
         Assert.Equal(1, _memory.Count);
         Assert.Empty(_chat.Requests);
     }
@@ -20982,7 +20987,7 @@ public partial class ChatScreenTests : IDisposable
     {
         var sources = Sources() with { Themes = () => [new("synthwave", "default theme"), new("dracula", "vampire purple")] };
 
-        Assert.Equal(["synthwave", "dracula", ThemeText.ExportWord, ThemeText.EditWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
+        Assert.Equal(["synthwave", "dracula", ThemeText.ExportWord, ThemeText.EditWord, ThemeText.DeleteWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
         Assert.Equal([new CompletionItem("dracula", "vampire purple")], ChatScreen.ArgumentItems("/theme", "dr", sources));
         Assert.Equal(["export synthwave", "export dracula"], Texts(ChatScreen.ArgumentItems("/theme", "export ", sources)));
         Assert.Equal(["export dracula"], Texts(ChatScreen.ArgumentItems("/theme", "EXPORT d", sources)));
@@ -20992,6 +20997,39 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([new CompletionItem(ThemeText.EditWord, ThemeText.EditNote)], ChatScreen.ArgumentItems("/theme", "ed", sources));
         Assert.Equal(["edit synthwave"], Texts(ChatScreen.ArgumentItems("/theme", "edit syn", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/theme", "edit dracula x", sources));
+
+        // /theme delete (2026-11-20): the word with its note, then the user's themes alone, first word only; with no source, nothing.
+        Assert.Equal([new CompletionItem(ThemeText.DeleteWord, ThemeText.DeleteNote)], ChatScreen.ArgumentItems("/theme", "de", sources));
+        Assert.Empty(ChatScreen.ArgumentItems("/theme", "delete ", sources));
+        var custom = sources with { CustomThemes = () => [new("dracula", "vampire purple"), new("delete", "custom theme")] };
+        Assert.Equal(["delete dracula", "delete delete"], Texts(ChatScreen.ArgumentItems("/theme", "delete ", custom)));
+        Assert.Equal([new CompletionItem("delete dracula", "vampire purple")], ChatScreen.ArgumentItems("/theme", "DELETE dr", custom));
+        Assert.Empty(ChatScreen.ArgumentItems("/theme", "delete dracula x", custom));
+    }
+
+    [Fact]
+    public async Task ThemeDelete_OnTheScreen_TheThemeInForce_GoesToTheBinAfterAYes_AndTheScreenRepaintsInTheDefault()
+    {
+        using var theme = new ThemeScope();
+        WriteUserTheme("mine.json", ThemeJson.File("\"name\": \"mine\""));
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "mine"; d.FileDeletesToRecycleBin = true; });
+        ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);   // as Program does at the start
+        var bin = new FakeRecycleBin();
+        _recycleBin = bin;
+        PushLine("/theme delete mine");
+        PickYes();
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        string path = Path.Combine(_settings.ThemesDirectory, "mine.json");
+        Assert.Equal([path], bin.Moved);
+        Assert.False(File.Exists(path));
+        Assert.Contains(ThemeText.DeleteQuestion("mine", Path.Combine("themes", "mine.json"), toBin: true, revealsBuiltIn: false), output);
+        Assert.Contains(ThemeText.DeleteDone("mine", toBin: true), output);
+        Assert.Contains(ThemeText.DeleteInForce("synthwave"), output);   // held, then printed after the repaint
+        Assert.Equal("synthwave", _settings.Current.Theme);
+        Assert.Equal(ShippedThemes.Synthwave, Theme.Current);
     }
 
     [Fact]
@@ -25959,7 +25997,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal([new CompletionItem("high", ReasoningLevel.Describe("high"))], ChatScreen.ArgumentItems("/reasoning", "h", sources));
 
         // /theme (2026-09-23): the names with their notes, in menu order (A to Z since 2026-10-03), then export (2026-10-01) and edit (2026-11-16).
-        Assert.Equal([.. ThemeName.Names, ThemeText.ExportWord, ThemeText.EditWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
+        Assert.Equal([.. ThemeName.Names, ThemeText.ExportWord, ThemeText.EditWord, ThemeText.DeleteWord], Texts(ChatScreen.ArgumentItems("/theme", "", sources)));
         Assert.Equal(["nebula", "netrunner", "nixie", "noir", "nostromo"], Texts(ChatScreen.ArgumentItems("/theme", "n", sources)));   // A to Z since 2026-10-03
         Assert.Equal([new CompletionItem("netrunner", "green phosphor")], ChatScreen.ArgumentItems("/theme", "net", sources));
         Assert.Equal(PerfBarMode.Words, Texts(ChatScreen.ArgumentItems("/perfbar", "", sources)));
@@ -26609,7 +26647,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("🐚 Shell: ask · double-click or right-click to open", ChatScreen.ToolbarGlyphNote(ChatScreen.ShellToolGlyph, shown));
         Assert.Equal(ChatScreen.WebToolGlyph + " Web: off · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.WebToolGlyph, shown));
         Assert.Equal(ChatScreen.SettingsToolGlyph + " Settings · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.SettingsToolGlyph, shown));
-        Assert.Equal(ChatScreen.MemoryToolGlyph + " Memory: read-write · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.MemoryToolGlyph, shown));
+        Assert.Equal(ChatScreen.MemoryToolGlyph + " Memory: read-only · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.MemoryToolGlyph, shown));   // the default since 2026-11-20
         Assert.Equal("⏳ Queue: automatic · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.QueueToolGlyph, shown));   // 2026-10-13: Queue mode
         Assert.Equal("⏳ Queue: manual · " + ToolbarItems.GlyphClickNote, ChatScreen.ToolbarGlyphNote(ChatScreen.QueueToolGlyph, new AppSettingsData { QueueMode = "manual" }));
         Assert.Equal(SlashCommands.QueueWord, ChatScreen.ToolbarWord(ChatScreen.QueueToolGlyph));

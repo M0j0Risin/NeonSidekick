@@ -121,6 +121,35 @@ public sealed partial class WebUiPageTests
         Assert.Contains("tax", _backend.SessionQueries);
     }
 
+    /// <summary>
+    /// A long list's rows keep their height and the list scrolls (2026-11-20, the user's screenshot: with dozens of sessions each title
+    /// showed a sliver of its glyphs, the flex column shrinking every row to its 44 px floor). Thirty rows on the phone's 800 px high page
+    /// (40vh: 320 px), then thirty hits with their snippets: no title or snippet is cut top or bottom, and the list overflows instead.
+    /// </summary>
+    [WindowsFact]
+    public async Task ALongList_KeepsEveryTitleWhole_AndScrolls()
+    {
+        WebSessionRow Row(int i, IReadOnlyList<WebSnippetPart>? snippet = null) =>
+            new(100 + i, "Session number " + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + " about the trip", "Mon 09:00", "5 turns", "qwen", false, snippet);
+        var rows = Enumerable.Range(0, 30).Select(i => Row(i)).ToArray();
+        var hits = Enumerable.Range(0, 30).Select(i => Row(i, [new WebSnippetPart("File the "), new WebSnippetPart("tax", Match: true), new WebSnippetPart(" forms")])).ToArray();
+        if (await SessionsPageAsync(q => q == "tax" ? new WebSessionsView("p", [], hits, true) : SessionsView(rows: rows)) is not { } page)
+        {
+            return;
+        }
+
+        const string Clipped = "[...document.querySelectorAll('#manage-list .session-row .manage-text, #manage-list .session-row .manage-snippet')].filter(t => t.scrollHeight > t.clientHeight + 1).length";
+        const string Scrolls = "(() => { const l = document.getElementById('manage-list'); return l.scrollHeight > l.clientHeight + 1; })()";
+        Assert.Equal(30, (await page.EvalAsync(SessionRows + ".length")).GetInt32());
+        Assert.Equal(0, (await page.EvalAsync(Clipped)).GetInt32());
+        Assert.True((await page.EvalAsync(Scrolls)).GetBoolean());
+
+        await page.EvalAsync("(() => { const f = document.getElementById('manage-filter'); f.value = 'tax'; f.dispatchEvent(new Event('input')); })()");
+        await page.WaitAsync("document.querySelectorAll('#manage-list .manage-snippet').length === 30", "the thirty hits");
+        Assert.Equal(0, (await page.EvalAsync(Clipped)).GetInt32());
+        Assert.True((await page.EvalAsync(Scrolls)).GetBoolean());
+    }
+
     [WindowsFact]
     public async Task TheRows_AreDimmed_WhileThePcIsBusy()
     {

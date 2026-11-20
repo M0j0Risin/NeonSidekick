@@ -33,7 +33,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 |---|---|---|
 | Profile | Switches profile for this run; each has its own settings, persona, memory, skills and sessions. | `neon` |
 | Working directory (cwd) | The folder the file and GitLib tools work in. Enter opens the [folder picker](INTERFACE.md#folder-picker); `/cwd <path>` sets one. | empty (the profile's `files\` folder) |
-| Memory mode | `read-write`: the model saves and recalls memories, and each conversation opens with them. `read-only`: recall only (`/remember` still saves). `off`: none, `/remember` refused. | `read-write` |
+| Memory mode | Each conversation opens with the memories unless `off`. `read-write`: the model also saves them. `read-only`: it never saves one (`/remember` still does). `off`: none, `/remember` refused. | `read-only` |
 | Model avatar | The profile's emoji, leading its replies, `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
 | User avatar | Your emoji, leading your lines in place of `›`. Enter opens the [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
 | Check for updates at start | Asks GitHub for a newer release at each start, sending nothing about you, and shows a line and the 📦 marker. Off, nothing is asked; [`/update`](COMMANDS.md#updating) still works. | on |
@@ -90,9 +90,8 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 | Botchat embedded mode | Under `multi`, bots on another embedded model: `parent-server` shares the running model; `multi-server` runs one more `llama-server` per model (more memory). | `parent-server` |
 | Botchat stop extra servers | Stops the bots' `multi-server` extras when the chat ends (never an advisor's). Off, they run until `/botchat --kill` or you quit. | on |
 | Botchat limited workflows | The installed workflows the bots draw with (a checklist); needs *ComfyUI tools* and a *ComfyUI URL*. None ticked: no pictures. | none |
-| Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` ([Botchat pictures](#botchat-pictures)). | `automatic` |
+| Botchat image mode | `automatic`: the app writes a prompt from each reply and draws it. `autonomous`: the bots get `generate_image` ([Botchat pictures](#botchat-pictures)). | `autonomous` |
 | Botchat rework source | What a rework may start from: the `latest` picture, or any of the last 8 (`chat-history`). Needs an image → image workflow. | `latest` |
-| Botchat image mention mode | Shown as *Image mention mode*. Under `autonomous`: `generate` draws a picture a bot mentions but never drew; `off` ignores it. | `off` |
 | Botchat image async | On: the next bot speaks while a picture renders. Off: each reply waits for its picture. | on |
 | Botchat reading pause (s) | A pause to read each reply while no voice plays (*TTS output* off, or a page-started chat's 🔊 off; 0–30); a line you send ends it. | 5 |
 | Botchat limited tools | The bots' tools, from the Camera, Clock, Image, Questions, Screen, Timers, Web and YouTube groups (a checklist). None ticked: no tools. | none |
@@ -107,7 +106,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 
 * **Workflows:** those ticked in *Botchat limited workflows*. Text → image ones draw new pictures; image → image ones rework the chat's.
 * **`automatic`:** after each reply the model writes an image prompt and the app draws it; bots get no tool. With *Botchat limited skills* ticked, the prompt writer may load a skill first ("use the pony-prompts skill for pictures").
-* **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call written as text still runs; if a call fails, the app draws the picture itself.
+* **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call written as text still runs.
 * **Reworks:** with a picture and an image → image workflow, the prompt writer picks a new picture or a rework.
 * **Async on:** 🖼️ (🎨 for a rework) shows on the status bar while a picture renders. **Async off:** Esc on a reply waiting for its picture cuts that bot short; Esc under the picture's spinner skips it.
 
@@ -121,6 +120,7 @@ A browser front end for this profile, on this computer or (with *Web UI reach* `
 | Web UI port | The TCP port (1024–65535); one in use or reserved keeps it off with a notice. A change signs browsers out, and [Tailscale Serve](INTERFACE.md#https-through-tailscale-serve) needs its command again. | 8765 |
 | Web UI reach | `local` (this computer, and what a proxy on it forwards, such as Tailscale Serve) or `lan` (your home network and Tailscale tailnet). Either way, a browser signs in with `/webui`'s link. | `local` |
 | Web UI HTTPS address | `auto` (or empty) offers Tailscale Serve's address (Windows only; on a Mac, type it), `off` none, or your proxy's `https://host[:port]`. Its link holds the token: type only an address that reaches this computer. | `auto` |
+| Web UI sign in mode | How `/webui browser` and a double-click on `/webui`'s link or QR code sign your default browser in: `one-time-link` (good once, for a minute, so history keeps no token) or `url-with-token` (the usual link, which history may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
 | Web UI commands | Chat tab: lets the page run the slash commands that work from a phone ([Commands from the page](INTERFACE.md#commands-from-the-page)). Off, it only sends messages. | off |
 | Web UI connection details | Chat tab: the page's dropdown shows the `%` and `*` connections' server and database, not just names. The chat shows what the model says either way. | off |
 | Web UI bot check control | Chat tab: the page shows a running bot check live and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off: only the allow question and *Give up*. | on |
@@ -204,7 +204,7 @@ A model the app downloads and runs itself on llama.cpp's `llama-server`, on Wind
 * **Switch:** needs *Embedded servers enabled*; Connect a model's *Download an embedded model* turns it on once your model is ready.
 * **Use:** `/server` and the startup picker list an **Embedded** row per installed model; `/model` picks between them.
 * **Loading:** the status bar shows `🦙 loading <model>`; Esc, Ctrl+C or a double-click on the spinner cancels.
-* **Each row:** the name, quantization, size and state (`installed`, `download`, `partial · 42%`), a fit mark for this GPU alone (`✅` fits, `⚠️` small context only, `✗` won't fit, `🐢` partly on the CPU), then ⚡ a drafter, 👁️ images, 🛠️ tool calls, ⛓️‍💥 uncensored.
+* **Each row:** the name, quantization, size and state (`installed`, `download`, `partial · 42%`), a fit mark for this GPU alone (`✅` fits, `⚠️` small context only, `🚫` won't fit, `🐢` partly on the CPU), then ⚡ a drafter, 👁️ images, 🛠️ tool calls, ⛓️‍💥 uncensored.
 * **Buttons** filter by size (any, `fits` when the GPU is read, up to 8 GB, up to 16 GB), installed or not and drafter, and sort by name or size; uncensored builds show only under **uncensored** (`x`). Keys: [Pane keys](INTERFACE.md#pane-keys).
 
 The catalog, one row per model; the pane lists each build with its size.
@@ -504,7 +504,6 @@ The tools most profiles use, and the pane's own options.
 | Web browser home page | Where the Browser window's home button and a bare `/browser` go: an address (`example.com`, `localhost:3000`), or empty for a blank page. | empty |
 | Web browser privacy | `keep-history` keeps the Browser window's visited pages for its history menu; `clear-history` clears them on close. Cookies and sign-ins stay (`/browser clear all` removes them). | `clear-history` |
 | Web browser open | Where `open_url` links go: `default-browser`, or `browser-window` (the app's Browser window, one page at a time; else the default browser). A YouTube link follows *YouTube open links in* under *YouTube tools*. | `default-browser` |
-| Web browser sign in mode | How `/webui browser` and a double-click on `/webui`'s link or QR code sign your default browser in: `one-time-link` (good once, for a minute, so history keeps no token) or `url-with-token` (the usual link, which history may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
 | Web browser network mode | Where a fetch may reach: `internet` (public addresses), `lan` (the app's computer and the LAN, its adapters' prefixes included) or `both`. | `internet` |
 | Web search method | `metasearch` (built in: asks the engines in *Web metasearch engines*, never opens a bot check, skips an engine that refuses) or `searxng`. A profile keeps its saved method; the old `duckduckgo` reads as `metasearch`. | `metasearch` |
 | Web search max results | Hits per search (1–20). | 20 |

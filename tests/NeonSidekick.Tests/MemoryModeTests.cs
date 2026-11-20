@@ -24,14 +24,14 @@ public class MemoryModeTests : IDisposable
     public void Names_Default_AndTheParse_ArePinned()
     {
         Assert.Equal(["read-write", "read-only", "off"], MemoryMode.Names);
-        Assert.Equal("read-write", MemoryMode.Default);
-        Assert.Equal("read-write", new AppSettingsData().MemoryMode);
+        Assert.Equal("read-only", MemoryMode.Default);   // read-write until 2026-11-20 (the user's call)
+        Assert.Equal("read-only", new AppSettingsData().MemoryMode);
         Assert.True(MemoryMode.TryParse(" Read-Only ", out var mode));
         Assert.Equal(MemoryAccess.ReadOnly, mode);
         Assert.True(MemoryMode.TryParse("off", out mode));
         Assert.Equal(MemoryAccess.Disabled, mode);
-        Assert.False(MemoryMode.TryParse("on", out mode));   // /memory's alias, not a saved value
-        Assert.Equal(MemoryAccess.ReadWrite, mode);
+        Assert.False(MemoryMode.TryParse("on", out mode));   // no mode (/memory on went on 2026-11-20): the default's kind
+        Assert.Equal(MemoryAccess.ReadOnly, mode);
         Assert.False(MemoryMode.TryParse(null, out _));
         Assert.All(MemoryMode.Names, name => Assert.Equal(name, MemoryMode.Name(MemoryMode.TryParse(name, out var m) ? m : throw new InvalidOperationException(name))));
         Assert.Equal("the model reads and saves memories", MemoryMode.Describe("read-write"));
@@ -44,9 +44,10 @@ public class MemoryModeTests : IDisposable
     public void Resolve_EnabledAndSaves_PerMode_AnUnknownValueReadsAsTheDefault()
     {
         Assert.Equal(MemoryAccess.ReadOnly, MemoryMode.Resolve(new AppSettingsData { MemoryMode = "read-only" }));
-        Assert.Equal(MemoryAccess.ReadWrite, MemoryMode.Resolve(new AppSettingsData { MemoryMode = "sometimes" }));
+        Assert.Equal(MemoryAccess.ReadOnly, MemoryMode.Resolve(new AppSettingsData { MemoryMode = "sometimes" }));
         Assert.True(MemoryMode.Enabled(new AppSettingsData()));
-        Assert.True(MemoryMode.Saves(new AppSettingsData()));
+        Assert.False(MemoryMode.Saves(new AppSettingsData()));   // read-only by default since 2026-11-20
+        Assert.True(MemoryMode.Saves(new AppSettingsData { MemoryMode = "read-write" }));
         Assert.True(MemoryMode.Enabled(new AppSettingsData { MemoryMode = "read-only" }));
         Assert.False(MemoryMode.Saves(new AppSettingsData { MemoryMode = "read-only" }));
         Assert.False(MemoryMode.Enabled(new AppSettingsData { MemoryMode = "off" }));

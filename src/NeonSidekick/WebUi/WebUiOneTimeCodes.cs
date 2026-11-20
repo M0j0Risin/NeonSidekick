@@ -4,7 +4,7 @@ using System.Text;
 namespace NeonSidekick.WebUi;
 
 /// <summary>
-/// The Web UI's one-time sign-in codes (later on 2026-10-15, <c>/webui browser</c> and <i>Web browser sign in mode</i> <c>one-time-link</c>): 32
+/// The Web UI's one-time sign-in codes (later on 2026-10-15, <c>/webui browser</c> and <i>Web UI sign in mode</i> <c>one-time-link</c>): 32
 /// random bytes in base64url, each good once and for <see cref="Lifetime"/>, at most <see cref="MaxOutstanding"/> at a time (a ninth drops the
 /// oldest). A code is taken whether or not it is still good, compared in constant time against every one held; none is ever logged. The host
 /// clears them at every start and stop, so a restart leaves only dead codes. Thread-safe (a code is minted on the screen's thread and taken on a

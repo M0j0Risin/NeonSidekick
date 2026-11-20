@@ -2012,6 +2012,26 @@ public class MenuPaneTests : IDisposable
         Assert.Equal(3, MenuPane.CaptionMaxRows);
     }
 
+    /// <summary>
+    /// A caption's lines kept apart and a dim note under them (2026-11-20, the embedded models' legend): each line wrapped by itself, the
+    /// note first to go when the rows run out, a legend that alone overflows ending on the ellipsis; a page with neither reads as before.
+    /// </summary>
+    [Fact]
+    public void CaptionLines_KeepTheCaptionsLines_AndCutTheDimNoteFirst()
+    {
+        var plain = new MenuPage("t", ["a"], "h") { Caption = "Which color  do you\nlike best?" };
+        Assert.Equal(MenuPane.CaptionRows(plain.Caption!, 20, 3).Select(row => (row, false)), MenuPane.CaptionLines(plain, 20, 3));
+        Assert.Empty(MenuPane.CaptionLines(new MenuPage("t", ["a"], "h"), 20, 3));
+
+        var kept = plain with { CaptionKeepLines = true, Caption = "one two\nthree four five", CaptionNote = "a dim note" };
+        Assert.Equal([("one two", false), ("three four five", false), ("a dim note", true)], MenuPane.CaptionLines(kept, 20, 3));
+        Assert.Equal([("one two", false), ("three four", false), ("five", false)], MenuPane.CaptionLines(kept, 10, 3));   // wrapped; the note cut first
+        Assert.Equal([("one two", false), ("three f…", false)], MenuPane.CaptionLines(kept, 8, 2));                      // a legend past the room: the ellipsis
+        Assert.Equal([("one two", false), ("three four five…", false)], MenuPane.CaptionLines(kept with { Caption = "one two\nthree four five\nsix" }, 16, 2));
+        Assert.Equal([("caption", false), ("its note", true)], MenuPane.CaptionLines(new MenuPage("t", ["a"], "h") { Caption = "caption", CaptionNote = "its note" }, 20, 3));
+        Assert.Equal([("only a note", true)], MenuPane.CaptionLines(new MenuPage("t", ["a"], "h") { CaptionNote = "only a note" }, 20, 3));
+    }
+
     /// <summary>A growing caption's room (2026-10-10): the content less the strip, the status, a footer and up to four list rows; never under three.</summary>
     [Fact]
     public void CaptionRoom_LeavesTheListItsRows_AndNeverFallsUnderThree()

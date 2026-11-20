@@ -614,7 +614,7 @@ Out of the box only this computer reaches it. For a phone, set *Web UI reach* to
 #### On the app's computer: `/webui browser`
 
 * `/webui browser` (or Ctrl+W) opens the Web UI signed in: in the Browser window under *Web browser open* `browser-window`, else in your default browser (always, with `--external`).
-* **The link:** the default browser signs in as *Web browser sign in mode* says. The Browser window gets a one-time link (good once, for a minute) while *Web browser privacy* is `keep-history`, else the usual one.
+* **The link:** the default browser signs in as *Web UI sign in mode* says. The Browser window gets a one-time link (good once, for a minute) while *Web browser privacy* is `keep-history`, else the usual one.
 * The transcript and the log say where it opened, never the link. The Browser window keeps no sign-in link in its history or saved links, never shows one to the model, and never hands the Web UI's cookie to the web tools.
 
 #### Away from home
@@ -817,7 +817,7 @@ A bot check (a Cloudflare click, a captcha) runs in the PC's Browser window, sin
 
 ### The page's look
 
-* **The theme:** with *Web UI profile theme* on (the default), the pages take the profile's theme and follow a `/theme` at once; off, they keep their own dark look.
+* **The theme:** with *Web UI profile theme* on (the default), the pages take the profile's theme and follow a `/theme` at once; off, they keep their own look: black, like the app's windows with *Themed external windows* off.
 * **Add to Home Screen** installs the page as an app that opens full screen on Chat. One added from Safari keeps its own cookies: paste the sign-in link (or its token) on its sign-in page.
 * **Reduced motion:** with the phone's reduce-motion on, the spinner and animations stand still. The controls carry labels for a screen reader.
 * **A new version** reloads the page once, its draft kept.

@@ -105,13 +105,16 @@ public sealed class ThemeEditReviewTests
         Assert.Equal("", rest);
         Assert.Null(ThemeText.Subcommand("editor", out rest));
         Assert.Equal("editor", rest);
+        Assert.Null(ThemeText.Subcommand("deleteme", out rest));                    // /theme delete (2026-11-20)
+        Assert.Equal(ThemeText.DeleteWord, ThemeText.Subcommand("DELETE  x", out rest));
+        Assert.Equal("  x", rest);                                                  // the delete's split reads it as x
         Assert.Equal(ThemeText.SubcommandWords.Count, ThemeText.SubcommandNotes.Count);
 
         Assert.All(ThemeText.SubcommandWords, w => Assert.False(ThemeFile.IsValidNewName(w)));
         Assert.All(ThemeText.LoadableSubcommandWords, w => Assert.True(ThemeFile.IsValidName(w)));
         Assert.All(ThemeText.RefusedOnLoad, w => Assert.False(ThemeFile.IsValidName(w)));
         Assert.EndsWith("and not \"export\")", ThemeText.BadName("x"), StringComparison.Ordinal);
-        Assert.EndsWith("and not \"export\" or \"edit\".", ThemeText.ExportBadName("x"), StringComparison.Ordinal);
+        Assert.EndsWith("and not \"export\" or \"edit\" or \"delete\".", ThemeText.ExportBadName("x"), StringComparison.Ordinal);
         Assert.Equal("noir-custom", ThemeText.CopyName("noir"));
     }
 

@@ -59,16 +59,16 @@ public static class ThemeText
     // ── /theme's sub-commands (2026-11-17, the admin-themes-render review's #217: one list for the handler, completion and the name rules) ──
 
     /// <summary><c>/theme</c>'s sub-command words, in completion's order; no new theme may take one (<see cref="ThemeFile.IsValidNewName"/>).</summary>
-    public static readonly IReadOnlyList<string> SubcommandWords = [ExportWord, EditWord];
+    public static readonly IReadOnlyList<string> SubcommandWords = [ExportWord, EditWord, DeleteWord];
 
     /// <summary>The notes beside <see cref="SubcommandWords"/>, in the same order.</summary>
-    public static readonly IReadOnlyList<string> SubcommandNotes = [ExportNote, EditNote];
+    public static readonly IReadOnlyList<string> SubcommandNotes = [ExportNote, EditNote, DeleteNote];
 
     /// <summary>
     /// The words added after themes could already carry them: a file named so before still loads and is picked from the list
-    /// (<see cref="ThemeFile.IsValidName"/>), while typed it is the verb.
+    /// (<see cref="ThemeFile.IsValidName"/>), while typed it is the verb (<c>delete</c> since 2026-11-20).
     /// </summary>
-    public static readonly IReadOnlyList<string> LoadableSubcommandWords = [EditWord];
+    public static readonly IReadOnlyList<string> LoadableSubcommandWords = [EditWord, DeleteWord];
 
     /// <summary>The words <see cref="ThemeFile.IsValidName"/> refuses: <see cref="SubcommandWords"/> less <see cref="LoadableSubcommandWords"/>.</summary>
     public static IReadOnlyList<string> RefusedOnLoad => [.. SubcommandWords.Except(LoadableSubcommandWords, StringComparer.Ordinal)];
@@ -95,6 +95,38 @@ public static class ThemeText
 
     private static string Quoted(IReadOnlyList<string> words) => string.Join(" or ", words.Select(w => "\"" + w + "\""));
     public static string ExportFailed(string message) => $"Could not write the theme: {message}";
+
+    // ── /theme delete (2026-11-20, the user's ask: a theme of their own removed without going to the folder) ──
+
+    /// <summary><c>/theme</c>'s sub-command that deletes one of the user's themes, after a yes.</summary>
+    public const string DeleteWord = "delete";
+
+    /// <summary>The note beside <see cref="DeleteWord"/> in <c>/theme</c>'s argument list.</summary>
+    public const string DeleteNote = "delete one of your themes";
+
+    /// <summary>What <c>/theme delete</c> with no name or more than one says.</summary>
+    public const string DeleteUsage = "/theme delete <name> deletes one of your themes from the themes folder.";
+
+    /// <summary>What <c>/theme delete</c> says of a built-in theme.</summary>
+    public const string DeleteBuiltIn = "Built-in themes can't be deleted; /theme delete takes your own themes.";
+
+    /// <summary>
+    /// The question before the delete: the theme, its file under the home (<paramref name="shown"/>) and where it goes — the bin
+    /// (<see cref="Files.FileText.RecycleBinName"/>) or for good; <paramref name="revealsBuiltIn"/> says a built-in of the name comes back.
+    /// </summary>
+    public static string DeleteQuestion(string name, string shown, bool toBin, bool revealsBuiltIn) =>
+        $"Delete theme {name} ({shown}) " + (toBin ? "to the " + Files.FileText.RecycleBinName : "for good")
+        + (revealsBuiltIn ? $"; the built-in {name} comes back" : "") + "?";
+
+    /// <summary>The delete's done line.</summary>
+    public static string DeleteDone(string name, bool toBin) =>
+        $"Deleted theme {name} (" + (toBin ? "to the " + Files.FileText.RecycleBinName : "deleted for good") + ").";
+
+    /// <summary>The theme put in force after the one in force was deleted: the built-in it replaced, else the default.</summary>
+    public static string DeleteInForce(string name) => $"Theme {name} is in force now.";
+
+    /// <summary>A delete the bin or the disk refused; the file is kept.</summary>
+    public static string DeleteFailed(string message) => $"Could not delete the theme: {message}";
 
     // ── /theme edit (2026-11-16, plan sharded-hugging-puppy #54) ──────────────
 

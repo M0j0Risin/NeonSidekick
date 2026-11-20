@@ -435,72 +435,13 @@ public static partial class BotChat
 
     /// <summary>
     /// Every word a model may use for what it draws (later on 2026-09-25, the user's report: the rule said only "picture", and a bot
-    /// talking of an image or a photo did not take it as its own), shared by <see cref="ImageRule"/> and
-    /// <see cref="PromisedPictureInstruction"/> so the two never drift apart.
+    /// talking of an image or a photo did not take it as its own), for <see cref="ImageRule"/> (shared with the promised-picture
+    /// request until 2026-11-20, when the app stopped drawing pictures a bot only talked about).
     /// </summary>
     private const string PictureWords = "a picture, image, photo, drawing, painting, sketch, illustration, portrait, artwork or anything else to look at";
 
-    // ── A picture a bot only talked about (2026-09-25) ──────────────────────
-
-    /// <summary>
-    /// What a bot's turn did with <c>generate_image</c> (2026-09-25): <c>Tried</c> — it called the tool; <c>Drew</c> — a call's result
-    /// was no <c>Error:</c> (later the same day, the user's report: a call with no prompt answered "give prompt" and counted as a
-    /// drawing, so the promised picture never came). A bot's history is built afresh each turn from text lines, so any call in
-    /// it is the turn's own. Pure.
-    /// </summary>
-    public static (bool Tried, bool Drew) PictureAttempt(IEnumerable<ChatMessage> messages)
-    {
-        ArgumentNullException.ThrowIfNull(messages);
-        var contents = messages.SelectMany(m => m.Contents).ToList();
-        var calls = contents.OfType<FunctionCallContent>().Where(call => string.Equals(call.Name, GenerateImageTool.ToolName, StringComparison.Ordinal)).Select(call => call.CallId).ToHashSet(StringComparer.Ordinal);
-        bool drew = contents.OfType<FunctionResultContent>().Any(result => calls.Contains(result.CallId)
-            && !(result.Result?.ToString() ?? "").StartsWith("Error", StringComparison.Ordinal));
-        return (calls.Count > 0, drew);
-    }
-
-    /// <summary>
-    /// Whether a reply talks about a picture at all (2026-09-25, <c>Botchat image mode</c> <c>autonomous</c>): the cheap sieve
-    /// before <see cref="PromisedPictureInstruction"/>'s side request, so a reply with no picture word costs nothing. Loose on
-    /// purpose — the request decides. Pure.
-    /// </summary>
-    public static bool MentionsPicture(string? reply) => !string.IsNullOrEmpty(reply) && PictureWord().IsMatch(reply);
-
-    [GeneratedRegex(@"\b(?:draw|drew|drawn|sketch|paint|doodle|pic|pics|picture|image|illustrat|render|portrait|photo|snapshot|selfie|snap|art\b|artwork|graphic|cartoon|comic|poster|wallpaper)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
-    private static partial Regex PictureWord();
-
-    /// <summary>
-    /// The answer of <see cref="PromisedPictureInstruction"/>'s request when the line promises no picture (2026-09-25). Pinned: it is prompt text.
-    /// </summary>
-    public const string NoPictureAnswer = "NONE";
-
-    /// <summary>
-    /// The system message of the promised-picture request (2026-09-25, the user's ask: under <c>autonomous</c> a bot often says it
-    /// drew something without calling <c>generate_image</c>, and the reply should be true): decide whether the line says its speaker
-    /// is drawing, sharing or showing a picture — <see cref="NoPictureAnswer"/> when not — and otherwise write the prompt for
-    /// <em>that</em> picture, in <paramref name="workflow"/>'s family style and its sidecar's tips. Pinned: it is prompt text.
-    /// </summary>
-    public static string PromisedPictureInstruction(ComfyWorkflow workflow)
-    {
-        ArgumentNullException.ThrowIfNull(workflow);
-        var text = new StringBuilder("You write prompts for an image generator. Given one line of a group chat, decide whether its speaker says they are drawing, painting, sketching, generating, making, sharing or showing " + PictureWords + " right now. ")
-            .Append(CultureInfo.InvariantCulture, $"If they do not, answer exactly {NoPictureAnswer}. ")
-            .Append("If they do, write a single prompt for the picture they describe — what it shows, its mood — never the chat itself, no speech bubbles, no screens of text. ")
-            .Append("Write it in this style: ").Append(ComfyFamilies.StyleGuide(workflow.Family));
-        if (!string.IsNullOrWhiteSpace(workflow.Tips))
-        {
-            text.Append("\n\nTips for this workflow: ").Append(workflow.Tips.Trim());
-        }
-
-        text.Append(CultureInfo.InvariantCulture, $"\n\nAnswer with the prompt alone, or {NoPictureAnswer}: no preamble, no explanation, no quotes.");
-        return text.ToString();
-    }
-
-    /// <summary>Whether a cleaned promised-picture answer means no picture: empty, or <see cref="NoPictureAnswer"/> (a trailing full stop allowed). Pure.</summary>
-    public static bool IsNoPicture(string prompt) =>
-        prompt.Length == 0 || string.Equals(prompt.TrimEnd('.'), NoPictureAnswer, StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>The <c>--log</c> line of a promised picture's prompt (2026-09-25).</summary>
-    public static string PromisedPictureLogLine(string speaker, string workflow, string prompt) => $"Botchat picture {speaker} talked about but did not draw, on {workflow}: {prompt}";
+    // A picture a bot only talked about (2026-09-25 until 2026-11-20): under autonomous the app drew a picture a bot mentioned, or one
+    // whose generate_image call failed. Gone, the user's call: the bot's own call is the only picture there.
 
     // ── The app's pictures (2026-09-25) ─────────────────────────────────────
 
@@ -637,13 +578,13 @@ public static partial class BotChat
     /// The image-prompt system message with a rework on offer (2026-09-27, the user's ask: after the first picture the prompt
     /// writer chooses a fresh picture or a rework): <paramref name="fresh"/> empty means the rework is the only way; without
     /// <paramref name="rework"/> or a candidate, and with one fresh workflow, it is <see cref="ImagePromptInstruction(ComfyWorkflow)"/>
-    /// (or <see cref="PromisedPictureInstruction(ComfyWorkflow)"/>) as before. Lists since 2026-10-04 (the user's pick: the chat's set
+    /// as before. Lists since 2026-10-04 (the user's pick: the chat's set
     /// may hold several of a kind, and the writer chooses): a kind with several lists them by name, each in its style, and asks for
     /// <see cref="WorkflowAnswer"/> and the name on a line of its own before the prompt (after the <see cref="ReworkAnswer"/> line in a
-    /// rework); with one of each kind the text is what it was, byte for byte. <paramref name="promised"/> is the promised-picture
-    /// request's form, <see cref="NoPictureAnswer"/> kept. Pinned: it is prompt text.
+    /// rework); with one of each kind the text is what it was, byte for byte. The promised-picture form (a <c>promised</c> flag and its
+    /// <c>NONE</c> answer) went on 2026-11-20 with the pictures it wrote for. Pinned: it is prompt text.
     /// </summary>
-    public static string PictureInstruction(bool promised, IReadOnlyList<ComfyWorkflow> fresh, IReadOnlyList<ComfyWorkflow> rework, IReadOnlyList<ReworkPicture> candidates)
+    public static string PictureInstruction(IReadOnlyList<ComfyWorkflow> fresh, IReadOnlyList<ComfyWorkflow> rework, IReadOnlyList<ReworkPicture> candidates)
     {
         ArgumentNullException.ThrowIfNull(fresh);
         ArgumentNullException.ThrowIfNull(rework);
@@ -656,21 +597,16 @@ public static partial class BotChat
 
         if (!reworking && fresh.Count == 1)
         {
-            return promised ? PromisedPictureInstruction(fresh[0]) : ImagePromptInstruction(fresh[0]);
+            return ImagePromptInstruction(fresh[0]);
         }
 
         var text = new StringBuilder("You write prompts for an image generator. Given one line of a group chat, ");
-        if (promised)
-        {
-            text.Append("decide whether its speaker says they are drawing, painting, sketching, generating, making, sharing or showing " + PictureWords + " right now. ")
-                .Append(CultureInfo.InvariantCulture, $"If they do not, answer exactly {NoPictureAnswer}. If they do, ");
-        }
 
         const string NoChat = "never the chat itself, no speech bubbles, no screens of text. ";
         const string Keep = "keep what it shows where the line does not change it, and change what the line calls for";
         if (fresh.Count > 0)
         {
-            text.Append(promised ? "write a single prompt for the picture they describe — what it shows, its mood — " : "write a single prompt for a picture that illustrates it: the scene, the things or ideas it talks about, its mood — ")
+            text.Append("write a single prompt for a picture that illustrates it: the scene, the things or ideas it talks about, its mood — ")
                 .Append(NoChat);
             if (fresh.Count == 1)
             {
@@ -692,7 +628,7 @@ public static partial class BotChat
         else
         {
             text.Append("write a single prompt that reworks ").Append(WhichPicture(candidates))
-                .Append(promised ? " into the picture they describe: " : " so that it illustrates the line: ").Append(Keep).Append(" — ").Append(NoChat);
+                .Append(" so that it illustrates the line: ").Append(Keep).Append(" — ").Append(NoChat);
         }
 
         if (reworking)
@@ -730,11 +666,6 @@ public static partial class BotChat
         if (reworking)
         {
             answers.Add(rework.Count == 1 ? "the " + ReworkAnswer + " line and then the prompt" : "the " + ReworkAnswer + " line, the " + WorkflowAnswer + " line and then the prompt");
-        }
-
-        if (promised)
-        {
-            answers.Add(NoPictureAnswer);
         }
 
         text.Append("\n\nAnswer with ").Append(string.Join(", or ", answers)).Append(": no preamble, no explanation, no quotes.");

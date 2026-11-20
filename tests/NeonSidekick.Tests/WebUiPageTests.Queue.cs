@@ -48,6 +48,8 @@ public sealed partial class WebUiPageTests
         Assert.Equal("queue", await page.TextAsync("document.activeElement.dataset.tab"));   // focus on the tab, the sheet at the bottom
         Assert.Equal("at the pc|from the phone|" + App.BotChat.ResumeLine, await page.TextAsync("[...document.querySelectorAll('#manage-list .manage-text')].map(t => t.textContent).join('|')"));
         Assert.Equal("🖼️ 2", await page.TextAsync("document.querySelector('#manage-list .manage-pictures').textContent"));
+        // Each row keeps its 44 px (2026-11-20, the list's rows no longer shrink: flex none).
+        Assert.True((await page.EvalAsync("Math.min(...[...document.querySelectorAll('#manage-list .manage-row')].map(r => r.getBoundingClientRect().height))")).GetDouble() >= 44);
         Assert.Equal(2, (await page.EvalAsync("document.querySelectorAll('#manage-list .manage-remove').length")).GetInt32());   // none on the chord's line
         Assert.True((await page.EvalAsync("document.querySelector('#manage-list .manage-row.chord') !== null")).GetBoolean());
         Assert.True((await page.EvalAsync("document.querySelector('.manage-send') === null && document.querySelector('.manage-resume') === null")).GetBoolean());

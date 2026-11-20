@@ -142,7 +142,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task MemoryMode_PersistsAndNeedsNoReconnect()
     {
-        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        _settings.Update(d => d.MemoryMode = MemoryMode.ReadWrite);   // the walk counts from read-write (read-only the default since 2026-11-20)
         Down(1);                     // Memory mode is the second row, under Profile
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the picker: the saved mode under the cursor, read-only picked
 
@@ -1066,7 +1066,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ShoppingList,    // 2026-10-11, the list's checklist, above the stores' row
                 SettingsField.UserAvatar,      // 2026-10-12, Chat's Who and where under Model avatar: the user's emoji
                 SettingsField.ReflectionConfirmMode,   // later on 2026-10-12, /skills › Reflection, What it may change's first row
-                SettingsField.BotChatImageMentionMode,   // 2026-10-13, the Botchat tab under the img2img mode
+                // BotChatImageMentionMode (2026-10-13, the Botchat tab under the img2img mode) went on 2026-11-20 (the user's call)
                 SettingsField.WebBrowserBotcheckWindow,   // later on 2026-10-13, /tools › Core › Web under the browser path
                 SettingsField.WebBrowserHomePage,   // later still on 2026-10-13, under the botcheck window: the Browser window's home
                 SettingsField.BrowserPrivacy,       // later still on 2026-10-13, under the home page: keep-history or clear-history
@@ -1086,7 +1086,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.WebUiShoppingControls,   // later on 2026-10-15: the Shopping tab only while on
                 SettingsField.TimerTools,              // later on 2026-10-15: the timer tools' switch (/tools › Core › Timers)
                 SettingsField.FileDeletesToRecycleBin, // later on 2026-10-15: deletes to the Recycle bin (/tools › Files › File, second)
-                SettingsField.WebBrowserSignInMode,    // later on 2026-10-15: how /webui browser signs the default browser in (/tools › Core › Web)
+                SettingsField.WebUiSignInMode,    // later on 2026-10-15: how /webui browser signs the default browser in (/tools › Core › Web; /settings › Client › Web UI as Web UI sign in mode since 2026-11-20)
                 // later still on 2026-10-15, the admin-tools plan: the four admin families together (Admin › Network, Services, Tasks, Directory; Network on Core until 2026-10-16)
                 SettingsField.NetworkTools, SettingsField.NetworkToolsReach, SettingsField.NetworkMaxHostsPerTurn, SettingsField.NetworkMaxPortsPerTurn, SettingsField.NetworkAllowedHosts, SettingsField.NetworkDeniedHosts, SettingsField.NetworkCertificateStores,
                 SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal,
@@ -1487,7 +1487,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.DoesNotContain(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle), f => SettingsMenu.FieldName(f).Contains("safe edits", StringComparison.OrdinalIgnoreCase));   // gone 2026-10-01
         Assert.Equal(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle).Max(f => SettingsMenu.FieldName(f).Length) + 2, SettingsMenu.LabelWidthOf(ToolsMenuTests.TabFields(ToolsText.FileMenuTitle)));
         // The web rows (2026-09-15): the Web tab (titled Browser until later that day; /tools' last from 2026-09-19, third since later on 2026-09-21), in this order, none a reconnect — one toggle, three pickers (the network mode in the LAN switch's slot since 2026-09-18; the search method above the URL it governs, its own section under Metasearch since 2026-11-07), two typed rows that may be empty, a typed count.
-        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserSignInMode, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebMetasearchBraveApiKey, SettingsField.WebSearxngUrl, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
+        Assert.Equal(new[] { SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebMetasearchBraveApiKey, SettingsField.WebSearxngUrl, SettingsField.WebDownloadMaxMegabytes }, ToolsMenuTests.TabFields(ToolsText.WebTabTitle));   // the download cap last (2026-10-01)
         // The shell rows (2026-09-21): the Shell tab (between Git and Web that day, between Files and Ask since later on) — the policy (the group's switch, a picker), the allowed list, the default shell (a picker), then the three typed caps,
         // the languages and their timeout (the tool bridge's toggle and its tool-call cap below them from later that day until 2026-10-23); none a reconnect. The outside-paths police (2026-09-22) sits third, under the list it guards beside.
         // Shell prefer native tools (2026-09-26) sits under the police, the other guard in front of the gate; the forbidden strings (2026-10-03) between them, the police's own list.
@@ -1890,7 +1890,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.False(SettingsMenu.IsTtsField(SettingsField.MemoryMode));
         Assert.False(SettingsMenu.IsVoiceField(SettingsField.MemoryMode));
         Assert.Equal("Memory mode", SettingsMenu.FieldName(SettingsField.MemoryMode));
-        Assert.Equal("read-write", SettingsMenu.FieldValue(SettingsField.MemoryMode, data, _settings.ProfileDirectory));
+        Assert.Equal("read-only", SettingsMenu.FieldValue(SettingsField.MemoryMode, data, _settings.ProfileDirectory));   // the default since 2026-11-20
         Assert.True(SettingsMenu.IsToggle(SettingsField.CopyUserPrompt));
         Assert.False(SettingsMenu.IsLlmField(SettingsField.CopyUserPrompt));
         Assert.False(SettingsMenu.IsTtsField(SettingsField.CopyUserPrompt));
@@ -3537,7 +3537,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\neon\files)", cwd);
         // The rows and the footer, then blank rows to the tallest tab's height (Common since its Ralph loop run, 2026-10-18), then the rule.
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n  MIDI input                   off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     17 of 49\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-only\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n  MIDI input                   off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     17 of 49\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3562,7 +3562,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/neon/files)", cwd);
         // The rows and the footer, then blank rows to the tallest tab's height (Common since its Ralph loop run, 2026-10-18), then the rule.
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-write\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n  MIDI input                   off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     17 of 49\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-only\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n  MIDI input                   off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     17 of 49\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3584,7 +3584,7 @@ public partial class SettingsMenuTests : IDisposable
         AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging             on\n  Session save thinking       off\n  Session retention (days)    forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode         model-written\n  Session show name           all\n" + MenuLayout.Heading("Search tool", 120) + "\n  Session tool                on\n  Session search max results  10 results\n", 120);
         // The Web UI tab (2026-10-14, the user's ask): the switch, the port and the reach under Server; since 2026-10-16 (the user's ask) what the
         // page may do under Guardrails and which tabs it shows under Tabs ("The page" held both until then); the connection details off since then; the bot check control on under them since 2026-10-17; the reach local since 2026-11-08.
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               local\n  Web UI HTTPS address       auto\n" + MenuLayout.Heading("Guardrails", 120) + "\n  Web UI commands            off\n  Web UI connection details  off\n  Web UI bot check control   on\n" + MenuLayout.Heading("Tabs", 120) + "\n  Web UI profile theme       on\n  Web UI chat controls       on\n  Web UI voice               off\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI video controls      off\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               local\n  Web UI HTTPS address       auto\n  Web UI sign in mode        one-time-link\n" + MenuLayout.Heading("Guardrails", 120) + "\n  Web UI commands            off\n  Web UI connection details  off\n  Web UI bot check control   on\n" + MenuLayout.Heading("Tabs", 120) + "\n  Web UI profile theme       on\n  Web UI chat controls       on\n  Web UI voice               off\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI video controls      off\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n  LLM one local model       on\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
@@ -3626,6 +3626,7 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_TheCloseGlyph_BacksOutOfAPage_AndClosesTheList()
     {
         _console.Profile.Width = 240;
+        _settings.Update(d => d.MemoryMode = MemoryMode.ReadWrite);   // the walk counts from read-write (read-only the default since 2026-11-20)
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
         input.PushClick(4, 106);                 // Memory mode (a double-click; right under Working directory since 2026-10-01, the queue's two rows above it from 2026-09-18; the section heading over Profile since 2026-10-04; Avatar under Profile from 2026-10-10, under Memory mode since 2026-10-11; Client's second strip over it later on 2026-10-10)
         input.PushClick(4, 106);
@@ -3648,8 +3649,8 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_ADoubleClickOnARow_OpensItsPage_AndOneOnAChoice_PicksIt()
     {
         _console.Profile.Width = 240;
+        _settings.Update(d => d.MemoryMode = MemoryMode.ReadWrite);   // the walk counts from read-write (read-only the default since 2026-11-20)
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        Assert.Equal("read-write", _settings.Current.MemoryMode);
         input.PushClick(4, 106);                 // Memory mode: strip 100, Client's second strip 101 (later on 2026-10-10), spacer 102, the Who and where heading 103 (2026-10-04), Profile 104, Working directory 105 (Avatar between them from 2026-10-10, under Memory mode since 2026-10-11; New profile mode before it until later on 2026-10-10) (under it since 2026-10-01, the queue's two rows before)
         input.PushClick(4, 106);
         input.PushClick(4, 103);                 // read-only: breadcrumb 100, spacer 101, read-write 102
@@ -3671,8 +3672,8 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_TwoClicksOffThePane_UnderANestedPage_CloseTheWholeMenu()
     {
         _console.Profile.Width = 240;
+        _settings.Update(d => d.MemoryMode = MemoryMode.ReadWrite);   // the walk counts from read-write (read-only the default since 2026-11-20)
         var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
-        Assert.Equal("read-write", _settings.Current.MemoryMode);
         input.PushClick(4, 106);                 // Memory mode (see the double-click test for the rows)
         input.PushClick(4, 106);
         input.PushClick(4, 50);                  // the transcript under the mode page: a first
@@ -3699,6 +3700,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_MidTurn_TheReconnectingRows_AreRefused_AndTheOthersEdit()
     {
+        _settings.Update(d => d.MemoryMode = MemoryMode.ReadWrite);   // the walk counts from read-write (read-only the default since 2026-11-20)
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                       // Profile: refused
         Push(Keys.Down, Keys.Enter);            // Working directory: refused (right under Profile since 2026-10-11; past Avatar from 2026-10-10)
@@ -5590,7 +5592,7 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task Toggle_TheSavedValuePickedAgain_IsUnchanged_AndEscapeKeeps()
     {
-        Assert.Equal("read-write", _settings.Current.MemoryMode);
+        _settings.Update(d => d.MemoryMode = MemoryMode.ReadWrite);   // the walk counts from read-write (read-only the default since 2026-11-20)
         Down(1);
         Push(Keys.Enter, Keys.Enter);           // Memory mode: the page opens on read-write, read-write picked again (a picker since 2026-10-04)
         Push(Keys.Enter, Keys.Escape);          // the page again, ESC
@@ -5732,7 +5734,7 @@ public partial class SettingsMenuTests : IDisposable
         var footer = SettingsMenu.FieldFooter(SettingsField.MemoryMode);
         Assert.DoesNotContain("`", footer.Text);
         Assert.StartsWith("The model's long-term memory. read-write", footer.Text);   // the brief, not the manual's text, since 2026-11-08
-        Assert.Equal("Default: read-write", footer.Last);
+        Assert.Equal("Default: read-only", footer.Last);   // read-write until 2026-11-20
         Assert.Equal("a b c", SettingsMenu.PlainHelp("`a` *b* c"));
     }
 

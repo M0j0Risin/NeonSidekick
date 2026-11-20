@@ -356,12 +356,12 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// What the model may do with long-term memory (2026-10-04, the user's ask: the Memory switch, a bool until then, became three
-    /// modes). One of <see cref="App.MemoryMode.Names"/>: <c>read-write</c> (the default: the model is offered <c>save_memory</c> and
-    /// <c>recall_memory</c> and sees what is remembered on every turn), <c>read-only</c> (<c>recall_memory</c> alone, the save sentences
+    /// modes). One of <see cref="App.MemoryMode.Names"/>: <c>read-write</c> (the default until 2026-11-20: the model is offered <c>save_memory</c> and
+    /// <c>recall_memory</c> and sees what is remembered on every turn), <c>read-only</c> (the default since 2026-11-20, the user's call: <c>recall_memory</c> alone, the save sentences
     /// out of the prompt; <c>/remember</c> and <c>/memory</c> stay the user's) or <c>disabled</c> (neither, no section, and <c>/remember</c>
     /// refused; <c>memory.json</c> untouched, <c>/memory forget</c> erases it). Anything else reads as the default
     /// (<see cref="App.MemoryMode.Resolve"/>). No migration from the old <c>Memory</c> key (the user's call, the earlier renames'):
-    /// a saved <c>false</c> is skipped and read-write stands. The toolbar wears 💾 while it is not disabled (2026-09-22), whose
+    /// a saved <c>false</c> is skipped and the default stands. The toolbar wears 💾 while it is not disabled (2026-09-22), whose
     /// double-click is <c>/memory</c>. No environment variable, like the other switches.
     /// </summary>
     public string MemoryMode { get; set; } = App.MemoryMode.Default;
@@ -1375,12 +1375,12 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// Who draws a <c>/botchat</c> picture (2026-09-25, the user's three words): one of <see cref="App.BotChatImageMode.Names"/> —
-    /// <c>automatic</c> (the default: after every reply the model writes an image prompt from it, in the workflow's family
+    /// <c>automatic</c> (the default until 2026-11-20: after every reply the model writes an image prompt from it, in the workflow's family
     /// style, and a text → image workflow of the chat's set draws it — or an image → image one reworks an earlier picture, the
     /// prompt writer's choice, naming the workflow too when a kind has several (2026-10-04); the bots are offered no tool),
-    /// <c>autonomous</c> (the bots are offered <c>generate_image</c> over that set alone and draw when they choose; the app draws only a picture a bot talked about but did not
-    /// draw — a call that failed counts as not drawn, and a call written out as text runs as a real one — later on 2026-09-25,
-    /// so the reply is true). Only while
+    /// <c>autonomous</c> (the default since 2026-11-20, the user's call: the bots are offered <c>generate_image</c> over that set alone
+    /// and draw when they choose; a call written out as text runs as a real one. From later on 2026-09-25 until 2026-11-20 the app also
+    /// drew a picture a bot talked about but did not draw, or whose call failed). Only while
     /// the chat has pictures (<see cref="BotChatLimitedComfyWorkflows"/>). The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public string BotChatImageMode { get; set; } = App.BotChatImageMode.Default;
@@ -1392,14 +1392,6 @@ public sealed class AppSettingsData
     /// Only while the chat's set has an image → image workflow (<see cref="BotChatLimitedComfyWorkflows"/>). The Botchat tab of <c>/settings</c>. No variable.
     /// </summary>
     public string BotChatImg2ImgMode { get; set; } = App.BotChatImg2ImgMode.Default;
-
-    /// <summary>
-    /// What a <c>/botchat</c> bot's mention of a picture it never drew does (2026-10-13, the user's words and default): one of
-    /// <see cref="App.BotChatImageMentionMode.Names"/> — <c>disabled</c> (the default: ignored) or <c>generate</c> (the app draws it
-    /// for the bot, as <c>autonomous</c> always did until then). Only under <see cref="BotChatImageMode"/> <c>autonomous</c>; a
-    /// <c>generate_image</c> call that failed is drawn either way. The Botchat tab of <c>/settings</c>, under the img2img mode. No variable.
-    /// </summary>
-    public string BotChatImageMentionMode { get; set; } = App.BotChatImageMentionMode.Default;
 
     /// <summary>
     /// Whether the chat waits for the app's <c>/botchat</c> picture (2026-09-25, the user's call, on by default): on, the

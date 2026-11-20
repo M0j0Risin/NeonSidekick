@@ -23,22 +23,25 @@ public enum BotImageMode
 /// </summary>
 public static class BotChatImageMode
 {
-    /// <summary>Automatic: the compiled default (the user's call). Pinned.</summary>
-    public const string Default = "automatic";
+    /// <summary>
+    /// Autonomous: the compiled default since 2026-11-20 (the user's call: the bots draw when they choose rather than the app drawing every
+    /// reply; automatic until then). A saved profile keeps its own value. Pinned.
+    /// </summary>
+    public const string Default = "autonomous";
 
     /// <summary>The modes in menu order.</summary>
     public static readonly string[] Names = { "automatic", "autonomous" };
 
     private const string Category = "Screen";
 
-    /// <summary>Trims and ignores case; false (and <see cref="BotImageMode.Automatic"/>) for anything that is not one of <see cref="Names"/>.</summary>
+    /// <summary>Trims and ignores case; false (and <see cref="BotImageMode.Autonomous"/>, the default's kind since 2026-11-20) for anything that is not one of <see cref="Names"/>.</summary>
     public static bool TryParse(string? text, out BotImageMode mode)
     {
         switch (text?.Trim().ToLowerInvariant())
         {
             case "automatic": mode = BotImageMode.Automatic; return true;
             case "autonomous": mode = BotImageMode.Autonomous; return true;
-            default: mode = BotImageMode.Automatic; return false;
+            default: mode = BotImageMode.Autonomous; return false;
         }
     }
 
@@ -46,7 +49,7 @@ public static class BotChatImageMode
     public static string Describe(string name) => name switch
     {
         "automatic" => "a picture of every reply, its prompt written from the reply; the bots get no tool",
-        "autonomous" => "the bots are offered generate_image and draw when they choose; a picture they only talk about is drawn for them",
+        "autonomous" => "the bots are offered generate_image and draw when they choose",   // nothing drawn for them since 2026-11-20
         _ => "",
     };
 
@@ -61,7 +64,7 @@ public static class BotChatImageMode
 
         DiagnosticLog.Warn(Category,
             $"{nameof(AppSettingsData.BotChatImageMode)}='{effective.BotChatImageMode}' is not one of {string.Join(", ", Names)}. Using {Default}.");
-        return BotImageMode.Automatic;
+        return BotImageMode.Autonomous;
     }
 
     /// <summary>Whether the app draws a picture of every reply.</summary>

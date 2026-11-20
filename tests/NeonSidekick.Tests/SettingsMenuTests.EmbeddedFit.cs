@@ -7,7 +7,8 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The fit marks in the pickers (2026-11-16, plan lucid-roaming-lantern #43): the catalog's rows marked with the legend as the caption, S
+/// The fit marks in the pickers (2026-11-16, plan lucid-roaming-lantern #43): the catalog's rows marked with the legend as the caption (two
+/// lines and a dim note since 2026-11-20, the capability legend over any embedded list), S
 /// stopping at <c>size: fits</c> to keep the ones that fit; with no GPU read no mark, the caption saying why and S skipping the stop;
 /// <c>/server</c>'s embedded rows marked with the legend, the typed filter's caption over it while text is typed; a row's mark pinned.
 /// </summary>
@@ -22,7 +23,7 @@ public partial class SettingsMenuTests
         var state = new EmbeddedModelState(EmbeddedModelStateKind.Absent);
         Assert.Equal(SettingsMenu.EmbeddedModelLabel(e2b, state, 0), SettingsMenu.EmbeddedModelLabel(e2b, state, 0, fit: null));
         Assert.EndsWith("  ✅" + Marks, SettingsMenu.EmbeddedModelLabel(e2b, state, 0, fit: FitMark.Fits), StringComparison.Ordinal);
-        Assert.EndsWith("  ✗ " + Marks, SettingsMenu.EmbeddedModelLabel(e2b, state, 0, fit: FitMark.WontFit), StringComparison.Ordinal);
+        Assert.EndsWith("  🚫" + Marks, SettingsMenu.EmbeddedModelLabel(e2b, state, 0, fit: FitMark.WontFit), StringComparison.Ordinal);   // two cells: no pad
 
         var row = new LlmServer(EmbeddedEndpoint.BaseUrl, EmbeddedEndpoint.ServerName, new ProbeResult(false, ["gemma-4-e2b"], "installed"));
         Assert.EndsWith("installed[/]  🐢" + Marks, SettingsMenu.ServerLabel(row, 0, 0, FitMark.PartlyCpu), StringComparison.Ordinal);
@@ -37,7 +38,7 @@ public partial class SettingsMenuTests
         var small = EmbeddedModelCatalog.Find("gemma-4-e2b")!;
         var (menu, pane, _) = EmbeddedPane(new FakeEmbeddedLlm { Catalog = [big, small], Gpu = TwelveGiB });
         GoTo(SettingsTab.Embedded);
-        Push(Keys.Down, Keys.Enter);            // the catalog: 31B (✗ under Embedded VRAM only, the default), then E2B (✅)
+        Push(Keys.Down, Keys.Enter);            // the catalog: 31B (🚫 under Embedded VRAM only, the default), then E2B (✅)
         Push(Keys.Char('s'), Keys.Home);        // size: fits: E2B alone
         Push(Keys.Enter);                       // its page
         Push(Keys.Enter);                       // Install
@@ -45,9 +46,12 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(small.Id, menu.TakePendingEmbeddedModel()!.Id);
-        Assert.Contains("an estimate for this GPU's 12 GB", Output);
+        // The two legend lines, each on its own row, and the estimate's note under them (2026-11-20).
+        Assert.Contains(EmbeddedLlmText.FitMarksLegend, Output);
+        Assert.Contains(EmbeddedLlmText.CapabilityLegend, Output);
+        Assert.Contains("An estimate for this GPU's 12 GB", Output);
         Assert.Contains(" size: fits · show: all · ", Output);
-        Assert.Contains("  ✗   ⚡", Output);
+        Assert.Contains("  🚫  ⚡", Output);
         pane.Dispose();
     }
 
@@ -63,6 +67,8 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Contains(EmbeddedLlmText.FitNoneCaption(FitNone.NoRead), Output);
+        Assert.Contains(EmbeddedLlmText.CapabilityLegend, Output);   // the columns' legend whatever the marks (2026-11-20)
+        Assert.DoesNotContain(EmbeddedLlmText.FitMarksLegend, Output);
         Assert.Contains(" size: 8GB · show: all · ", Output);
         Assert.DoesNotContain("size: fits", Output);
         Assert.DoesNotContain("✅", Output);
@@ -81,7 +87,9 @@ public partial class SettingsMenuTests
         Push(Keys.Char('s'));                   // size: fits: the 31B goes, LM Studio stays
         Push(Keys.Down, Keys.Enter);            // the second row left: E2B
         Assert.Same(servers[2], await menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
-        Assert.Contains("an estimate for this GPU's 12 GB", Output);
+        Assert.Contains("An estimate for this GPU's 12 GB", Output);
+        Assert.Contains(EmbeddedLlmText.FitMarksLegend, Output);
+        Assert.Contains(EmbeddedLlmText.CapabilityLegend, Output);
         Assert.Contains(" size: fits · ⇉ drafter · ", Output);
 
         _console.Input.PushText("e2b");         // typed: the filter's caption in the legend's place
@@ -92,7 +100,7 @@ public partial class SettingsMenuTests
     }
 
     [Fact]
-    public async Task Server_OnThePane_WithNoMark_ShowsNoLegend()
+    public async Task Server_OnThePane_WithNoMark_ShowsTheCapabilityLegendAlone()
     {
         _console.Profile.Width = 240;
         var (menu, pane) = PaneMenu();
@@ -101,8 +109,10 @@ public partial class SettingsMenuTests
 
         Push(Keys.Char('s'), Keys.Enter);       // the CPU backend: no fits stop, 8GB
         Assert.Same(servers[0], await menu.PickServerAsync(servers, null, SettingsMenu.ServerTitle, CancellationToken.None));
-        Assert.DoesNotContain("an estimate for this GPU", Output);
+        Assert.DoesNotContain("An estimate for this GPU", Output);
         Assert.DoesNotContain("No fit marks", Output);
+        Assert.DoesNotContain(EmbeddedLlmText.FitMarksLegend, Output);
+        Assert.Contains(EmbeddedLlmText.CapabilityLegend, Output);   // an embedded row is listed: its glyphs explained (2026-11-20)
         Assert.Contains(" size: 8GB · ", Output);
         pane.Dispose();
     }
