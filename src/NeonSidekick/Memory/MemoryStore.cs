@@ -53,7 +53,7 @@ public enum MemoryAddOutcome
     /// </summary>
     Disabled,
 
-    /// <summary>The same text was stored disabled and is enabled again (2026-10-13): the user's own add (<c>/remember</c>, the pane's + add).</summary>
+    /// <summary>The same text was stored disabled and is enabled again (2026-10-13): the user's own add (<c>/memory remember</c>, the pane's + remember).</summary>
     Enabled,
 }
 
@@ -103,7 +103,7 @@ public readonly record struct MemoryImportResult(int Added, int Duplicates, int 
 /// leaves the store as it was.</para>
 ///
 /// <para>Every write is synchronous and under one lock: the tool that saves a memory answers the
-/// model "remembered" only once the file is on disk, and the shell's <c>/remember</c> shares the
+/// model "remembered" only once the file is on disk, and the shell's <c>/memory remember</c> shares the
 /// same instance.</para>
 /// </summary>
 public sealed class MemoryStore

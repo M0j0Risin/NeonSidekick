@@ -1,5 +1,6 @@
 using System.Globalization;
 using NeonSidekick.Files;
+using NeonSidekick.UI.Markdown;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -82,44 +83,52 @@ public static class ThemePreview
         var bannerPieces = Gradient(banner, p.GradientStops);
         bannerPieces.Add(P(ThemeStyleSlot.DimText, "  v" + version));
 
-        // The code block: every row one slab of the block's fill, its longest line plus SlabPad.
-        Piece[][] code =
-        [
-            [P(ThemeStyleSlot.CodeComment, "// one stop per letter")],
-            [
-                P(ThemeStyleSlot.CodeKeyword, "static"), P(ThemeStyleSlot.MarkdownCodeBlock, " "), P(ThemeStyleSlot.CodeType, "Color"),
-                P(ThemeStyleSlot.MarkdownCodeBlock, " "), P(ThemeStyleSlot.CodeFunction, "Sample"), P(ThemeStyleSlot.CodePunctuation, "("),
-                P(ThemeStyleSlot.CodeType, "double"), P(ThemeStyleSlot.MarkdownCodeBlock, " t"), P(ThemeStyleSlot.CodePunctuation, ")"),
-                P(ThemeStyleSlot.MarkdownCodeBlock, " "), P(ThemeStyleSlot.CodePunctuation, "=>"), P(ThemeStyleSlot.MarkdownCodeBlock, " stops"),
-                P(ThemeStyleSlot.CodePunctuation, "[("), P(ThemeStyleSlot.CodeKeyword, "int"), P(ThemeStyleSlot.CodePunctuation, ")("),
-                P(ThemeStyleSlot.MarkdownCodeBlock, "t "), P(ThemeStyleSlot.CodePunctuation, "*"), P(ThemeStyleSlot.MarkdownCodeBlock, " "),
-                P(ThemeStyleSlot.CodeNumber, "13"), P(ThemeStyleSlot.CodePunctuation, ")];"),
-            ],
-            Seal(ThemeText.PreviewDiffNew),
-        ];
+        // The code block: every row one slab of the block's fill, its longest line plus SlabPad. Each row lexed as a reply's code is
+        // (2026-11-20: CodeLexer through Theme.CodeSlots, hand-assigned pieces until then), so the preview wears what a reply shows.
+        Piece[][] code = [Lexed(ThemeText.PreviewCodeComment), Lexed(ThemeText.PreviewCodeLine), Last(ThemeText.PreviewDiffNew)];
         int slab = code.Max(row => row.Sum(piece => TextCells.Width(piece.Text))) + SlabPad;
         Piece[] Slab(Piece[] row) => [.. row, P(ThemeStyleSlot.MarkdownCodeBlock, new string(' ', Math.Max(0, slab - row.Sum(piece => TextCells.Width(piece.Text)))))];
 
+        // A row of PowerShell in the styles a reply's code block gives its tokens; what no token covers is the block's plain text.
+        Piece[] Lexed(string text)
+        {
+            var pieces = new List<Piece>();
+            int at = 0;
+            foreach (var token in CodeLexer.Lex(text, CodeLanguages.PowerShell))
+            {
+                if (token.Start > at)
+                {
+                    pieces.Add(P(ThemeStyleSlot.MarkdownCodeBlock, text[at..token.Start]));
+                }
+
+                pieces.Add(P(SlotOf(token.Kind), text.Substring(token.Start, token.Length)));
+                at = token.End;
+            }
+
+            if (at < text.Length)
+            {
+                pieces.Add(P(ThemeStyleSlot.MarkdownCodeBlock, text[at..]));
+            }
+
+            return [.. pieces];
+        }
+
         // The code block's last line as an edit changed it (2026-10-03, the user's ask), drawn as DiffView draws a row: the
         // number and the sign on the slab, the code's own colours on it, the slab to the card's edge.
-        Piece[] Seal(string value) =>
-        [
-            P(ThemeStyleSlot.CodeKeyword, "string"), P(ThemeStyleSlot.MarkdownCodeBlock, " seal "), P(ThemeStyleSlot.CodePunctuation, "="),
-            P(ThemeStyleSlot.MarkdownCodeBlock, " "), P(ThemeStyleSlot.CodeString, value), P(ThemeStyleSlot.CodePunctuation, ";"),
-        ];
+        Piece[] Last(string value) => Lexed(ThemeText.PreviewCodeLastName + value);
         Piece[] DiffRow(char sign, ThemeStyleSlot slot, string value)
         {
             var on = s(slot);
             string lead = ThemeText.PreviewDiffLine.ToString(CultureInfo.InvariantCulture) + " " + sign + " ";
             var row = new List<Piece> { new(DiffView.Indent, Style.Plain), new(lead, on) };
-            row.AddRange(Seal(value).Select(piece => new Piece(piece.Text, new Style(piece.Style.Foreground, on.Background, piece.Style.Decoration))));
+            row.AddRange(Last(value).Select(piece => new Piece(piece.Text, new Style(piece.Style.Foreground, on.Background, piece.Style.Decoration))));
             int used = row.Sum(piece => TextCells.Width(piece.Text));
             row.Add(new Piece(new string(' ', Math.Max(0, inner - used)), new Style(background: on.Background)));
             return [.. row];
         }
 
-        string SealText(string value) => "string seal = " + value + ";\n";
-        var diff = FileDiff.Of(ThemeText.PreviewDiffFile, SealText(ThemeText.PreviewDiffOld), SealText(ThemeText.PreviewDiffNew))!;
+        string LastText(string value) => ThemeText.PreviewCodeLastName + value + "\n";
+        var diff = FileDiff.Of(ThemeText.PreviewDiffFile, LastText(ThemeText.PreviewDiffOld), LastText(ThemeText.PreviewDiffNew))!;
 
         // The diff's summary row as the screen draws it: its fold's, unfolded, when the count folds it (DiffView.Fold's rule).
         int diffRows = DiffView.RowsOf(diff, null).Count(row => row is not null);
@@ -150,7 +159,9 @@ public static class ThemePreview
                 P(ThemeStyleSlot.Assistant, ThemeText.PreviewProse4)),
             L(5, P(ThemeStyleSlot.MarkdownBullet, "  • "), P(ThemeStyleSlot.Assistant, ThemeText.PreviewBullet)),
             L(5, P(ThemeStyleSlot.MarkdownQuoteBar, "  ▌ "), P(ThemeStyleSlot.MarkdownQuote, ThemeText.PreviewQuote)),
-            Empty(),
+            // A reply's rule (2026-11-20, a blank row until then): deep, which the pane rule hides under Gradient rules. Ranked with the
+            // rows every role needs, so the editor's card (18 to 22 rows) keeps it.
+            L(5, P(ThemeStyleSlot.MarkdownRule, new string('─', inner))),
             L(6, P(ThemeStyleSlot.MarkdownCodeLabel, ThemeText.PreviewCodeLabel)),
             L(6, Slab(code[0])),
             L(4, Slab(code[1])),
@@ -161,7 +172,7 @@ public static class ThemePreview
             L(5, DiffRow('-', ThemeStyleSlot.DiffRemoved, ThemeText.PreviewDiffOld)),
             L(5, DiffRow('+', ThemeStyleSlot.DiffAdded, ThemeText.PreviewDiffNew)),
             Empty(),
-            L(7, P(ThemeStyleSlot.Thinking, ThemeText.PreviewThinking)),
+            L(8, P(ThemeStyleSlot.Thinking, ThemeText.PreviewThinking)),   // 7 until 2026-11-20: dim and panelBg show elsewhere
             Empty(),
             L(3, P(ThemeStyleSlot.SystemText, "  " + ThemeText.PreviewNotice(p.Name))),
             L(2, P(ThemeStyleSlot.GoodText, "  " + ThemeText.PreviewGood)),
@@ -174,8 +185,22 @@ public static class ThemePreview
                 P(ThemeStyleSlot.User, "› /theme "), P(ThemeStyleSlot.SelectedText, p.Name),
                 P(ThemeStyleSlot.Spinner, "  " + Theme.SpinnerFrames[0]), P(ThemeStyleSlot.PasteLabel, "  " + ThemeText.PreviewPaste)),
             L(6, P(ThemeStyleSlot.Hint, "  " + ThemeText.PreviewHint), P(ThemeStyleSlot.TrailerMark, "◆"), P(ThemeStyleSlot.Hint, ThemeText.PreviewTrailer)),
-            L(8, P(ThemeStyleSlot.Placeholder, "  " + ThemeText.PreviewPlaceholder)),
+            L(5, P(ThemeStyleSlot.Placeholder, "  " + ThemeText.PreviewPlaceholder)),   // 8 until 2026-11-20: dimmer's one row, kept in a short card
         ];
+    }
+
+    /// <summary>The style a code token of <paramref name="kind"/> wears (<see cref="Theme.CodeSlots"/>); plain text is the block's own.</summary>
+    private static ThemeStyleSlot SlotOf(CodeTokenKind kind)
+    {
+        foreach (var (k, slot) in Theme.CodeSlots)
+        {
+            if (k == kind)
+            {
+                return slot;
+            }
+        }
+
+        return ThemeStyleSlot.MarkdownCodeBlock;
     }
 
     /// <summary>A rule of <paramref name="width"/> cells in <paramref name="stops"/>' colors, as <see cref="Theme.RuleRuns"/> splits it (2026-11-01: one splitter for the screen and the preview).</summary>

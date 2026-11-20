@@ -46,10 +46,12 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(small.Id, menu.TakePendingEmbeddedModel()!.Id);
-        // The two legend lines, each on its own row, and the estimate's note under them (2026-11-20).
+        // The two legend lines, each on its own row, and the estimate's note over them (2026-11-20, the user's call).
         Assert.Contains(EmbeddedLlmText.FitMarksLegend, Output);
         Assert.Contains(EmbeddedLlmText.CapabilityLegend, Output);
         Assert.Contains("An estimate for this GPU's 12 GB", Output);
+        Assert.True(Output.IndexOf("An estimate for this GPU's 12 GB", StringComparison.Ordinal) < Output.IndexOf(EmbeddedLlmText.FitMarksLegend, StringComparison.Ordinal));
+        Assert.True(Output.IndexOf(EmbeddedLlmText.FitMarksLegend, StringComparison.Ordinal) < Output.IndexOf(EmbeddedLlmText.CapabilityLegend, StringComparison.Ordinal));
         Assert.Contains(" size: fits · show: all · ", Output);
         Assert.Contains("  🚫  ⚡", Output);
         pane.Dispose();
@@ -68,6 +70,7 @@ public partial class SettingsMenuTests
 
         Assert.Contains(EmbeddedLlmText.FitNoneCaption(FitNone.NoRead), Output);
         Assert.Contains(EmbeddedLlmText.CapabilityLegend, Output);   // the columns' legend whatever the marks (2026-11-20)
+        Assert.True(Output.IndexOf(EmbeddedLlmText.FitNoneCaption(FitNone.NoRead), StringComparison.Ordinal) < Output.IndexOf(EmbeddedLlmText.CapabilityLegend, StringComparison.Ordinal));   // the reason over it
         Assert.DoesNotContain(EmbeddedLlmText.FitMarksLegend, Output);
         Assert.Contains(" size: 8GB · show: all · ", Output);
         Assert.DoesNotContain("size: fits", Output);
@@ -90,6 +93,7 @@ public partial class SettingsMenuTests
         Assert.Contains("An estimate for this GPU's 12 GB", Output);
         Assert.Contains(EmbeddedLlmText.FitMarksLegend, Output);
         Assert.Contains(EmbeddedLlmText.CapabilityLegend, Output);
+        Assert.True(Output.IndexOf("An estimate for this GPU's 12 GB", StringComparison.Ordinal) < Output.IndexOf(EmbeddedLlmText.FitMarksLegend, StringComparison.Ordinal));   // /server's too
         Assert.Contains(" size: fits · ⇉ drafter · ", Output);
 
         _console.Input.PushText("e2b");         // typed: the filter's caption in the legend's place

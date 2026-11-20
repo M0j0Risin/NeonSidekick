@@ -19,8 +19,8 @@ public enum MemoryAccess
 /// <summary>
 /// The setting <c>Memory mode</c> (2026-10-04, the user's ask and words: the General tab's Memory switch, a bool until then, became
 /// <c>read-write</c> / <c>read-only</c> / <c>disabled</c> (<c>off</c> since 2026-10-13), read-write the default until 2026-11-20 and read-only since; no migration, the earlier renames' call — a saved
-/// <c>"Memory": false</c> is skipped and the default stands). Read-only is about the model alone: <c>/remember</c>, a row removed on
-/// <c>/memory</c> and <c>/memory forget</c> stay the user's hand; disabled refuses <c>/remember</c> as off did. The
+/// <c>"Memory": false</c> is skipped and the default stands). Read-only is about the model alone: <c>/memory remember</c>, a row removed on
+/// <c>/memory</c> and <c>/memory forget</c> stay the user's hand; disabled refuses <c>/memory remember</c> as off did. The
 /// <see cref="BotChatMemoryMode"/> shape: <see cref="Resolve"/> is the one place the saved string becomes the enum, a hand-edited
 /// value falling back to <see cref="Default"/> with a warning once per value.
 /// </summary>

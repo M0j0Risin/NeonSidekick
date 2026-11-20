@@ -124,7 +124,7 @@ internal static class HelpFiles
             new(HelpFileScope.Profile, Llm.OperataFile.FileName, "the operating rules, when they are not the default", "`/sys operata`"),
             new(HelpFileScope.Profile, Llm.VocaliaFile.FileName, "the spoken-reply directive, when it is not the default", "`/sys vocalia`"),
             new(HelpFileScope.Profile, configs, "the profile's own JSON files"),
-            new(HelpFileScope.Profile, configs + Memory.MemoryStore.FileName, "the memories", "`/memory`, `/remember`"),
+            new(HelpFileScope.Profile, configs + Memory.MemoryStore.FileName, "the memories", "`/memory`"),
         ]);
         if (!windows)
         {

@@ -358,7 +358,7 @@ public sealed class AppSettingsData
     /// What the model may do with long-term memory (2026-10-04, the user's ask: the Memory switch, a bool until then, became three
     /// modes). One of <see cref="App.MemoryMode.Names"/>: <c>read-write</c> (the default until 2026-11-20: the model is offered <c>save_memory</c> and
     /// <c>recall_memory</c> and sees what is remembered on every turn), <c>read-only</c> (the default since 2026-11-20, the user's call: <c>recall_memory</c> alone, the save sentences
-    /// out of the prompt; <c>/remember</c> and <c>/memory</c> stay the user's) or <c>disabled</c> (neither, no section, and <c>/remember</c>
+    /// out of the prompt; <c>/memory remember</c> and <c>/memory</c> stay the user's) or <c>disabled</c> (neither, no section, and <c>/memory remember</c>
     /// refused; <c>memory.json</c> untouched, <c>/memory forget</c> erases it). Anything else reads as the default
     /// (<see cref="App.MemoryMode.Resolve"/>). No migration from the old <c>Memory</c> key (the user's call, the earlier renames'):
     /// a saved <c>false</c> is skipped and the default stands. The toolbar wears 💾 while it is not disabled (2026-09-22), whose
@@ -1448,12 +1448,13 @@ public sealed class AppSettingsData
     public List<string>? BotChatLimitedSkills { get; set; }
 
     /// <summary>
-    /// Whether the <c>/botchat</c> bots remember (2026-10-04, the user's ask): on (the default), each bot's prompt lists its
-    /// memories and it is offered <c>save_memory</c> and <c>recall_memory</c>, whose memories <see cref="BotChatMemoryMode"/>
-    /// says. Inside <c>/botchat</c> this is the one switch: it overrides <see cref="Memory"/>, the starting profile's and every
-    /// bot's own. Off, no bot remembers. Read per reply. The Botchat tab of <c>/settings</c>. No variable.
+    /// Whether the <c>/botchat</c> bots remember (2026-10-04, the user's ask): on, each bot's prompt lists its memories and it is
+    /// offered <c>save_memory</c> and <c>recall_memory</c>, whose memories <see cref="BotChatMemoryMode"/> says. Inside <c>/botchat</c>
+    /// this is the one switch: it overrides <see cref="Memory"/>, the starting profile's and every bot's own. Off (the default since
+    /// 2026-11-20, the user's call; on from 2026-10-04), no bot sees or saves a memory. Read per reply. The Botchat tab of
+    /// <c>/settings</c>. No variable.
     /// </summary>
-    public bool BotChatMemory { get; set; } = true;
+    public bool BotChatMemory { get; set; }
 
     /// <summary>
     /// Whose memories the <c>/botchat</c> bots use (2026-10-04, the user's words and default): one of
@@ -3685,7 +3686,8 @@ public sealed class AppSettingsData
     public bool WebUiChatControls { get; set; } = true;
 
     /// <summary>
-    /// Whether the Web UI's Chat tab offers voice (2026-11-13, the webui-voice plan; off by default): on, the page shows 🎤 (tap to talk into the
+    /// Whether the Web UI's Chat tab offers voice (2026-11-13, the webui-voice plan; off by default; shown as <i>Web UI voice controls</i> since
+    /// 2026-11-20): on, the page shows 🎤 (tap to talk into the
     /// app's Whisper, on the HTTPS address) and 🔊 (replies to that page's messages spoken there, from Kokoro). It loads Kokoro, Whisper and Silero
     /// for the page even with <see cref="TtsOutput"/> and <see cref="SttInput"/> off, which stay the PC's switches alone; the page never starts a
     /// download. Needs <see cref="WebUi"/> and the Chat tab (<see cref="WebUiChatControls"/>). A change reconnects both voice sessions. No variable.
@@ -3708,13 +3710,14 @@ public sealed class AppSettingsData
     public bool WebUiConnectionDetails { get; set; }
 
     /// <summary>
-    /// Whether a Web UI page may see and drive the Browser window during a bot check (2026-10-17, the user's call: on by default). On, the
+    /// Whether a Web UI page may see and drive the Browser window during a bot check (2026-10-17, the user's call; off by default since
+    /// 2026-11-20, the user's call, on until then). On, the
     /// page's bot check card shows the window live, and its taps, holds, scrolls and typing go into it; off, the card answers the allow ask and
     /// Give up alone. A signed-in page could otherwise click and type in a window holding the Browser profile's cookies, if only while a check
     /// the user allowed runs. Read when a check's wait opens and at each request, so a change needs no restart. The Chat tab's alone
     /// (<see cref="WebUiChatControls"/>). No variable.
     /// </summary>
-    public bool WebUiBotCheckControl { get; set; } = true;
+    public bool WebUiBotCheckControl { get; set; }
 
     /// <summary>
     /// Whether the Web UI has its Home tab (2026-10-15, the user's call: off by default): on, the tab shows the home bar's tiles, and they

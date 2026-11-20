@@ -85,7 +85,7 @@ public static class WebCommands
     public static readonly IReadOnlySet<SlashCommand> Offered = new HashSet<SlashCommand>
     {
         SlashCommand.Help, SlashCommand.Clear, SlashCommand.New, SlashCommand.Splash, SlashCommand.Rewind, SlashCommand.Undo, SlashCommand.Compact,
-        SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Remember, SlashCommand.Memory,
+        SlashCommand.Model, SlashCommand.Reasoning, SlashCommand.Tts, SlashCommand.Voice, SlashCommand.Memory,
         SlashCommand.Timer, SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Browser, SlashCommand.Prompts,
         SlashCommand.Plan, SlashCommand.CodeAudit, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
         SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Docx,
@@ -168,7 +168,7 @@ public static class WebCommands
             SlashCommand.Overloaded => Refused(ChatScreen.NoArgumentError(word)),
             SlashCommand.Help => text.Length > 0 ? WebCommandVerdict.Run : Pane(word, "/help <words>"),
             SlashCommand.Splash when text.Length > 0 => Pane(word, "/splash"),   // 2026-10-18: view|thumbs|purge are a window or a question on the PC
-            SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Remember or SlashCommand.Timer or SlashCommand.Mark
+            SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Timer or SlashCommand.Mark
                 or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Imagine => WebCommandVerdict.Run,
             // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.
             SlashCommand.MsgClear => WebCommandVerdict.Run,
@@ -193,7 +193,9 @@ public static class WebCommands
             SlashCommand.Avatar => Emojis.AvatarCommand.ParseLine(args).Verb is Emojis.AvatarVerb.Set or Emojis.AvatarVerb.Clear ? WebCommandVerdict.Run : Pane(word, "/avatar <emoji>|clear"),
             SlashCommand.Rename => text.Length > 0 ? WebCommandVerdict.Run : Pane(word, "/rename <name>"),
             SlashCommand.Tts or SlashCommand.Voice => Is(text, "on") || Is(text, "off") ? WebCommandVerdict.Run : Pane(word, word + " on|off"),
-            SlashCommand.Memory => MemoryModes.Any(m => Is(text, m)) ? WebCommandVerdict.Run : Pane(word, "/memory read-write|read-only|off"),
+            // /memory remember <text> (2026-11-20, /remember folded in) runs as /remember did, its usage error too.
+            SlashCommand.Memory => MemoryModes.Any(m => Is(text, m)) || Is(first, ChatScreen.MemoryRememberWord) ? WebCommandVerdict.Run
+                : Pane(word, "/memory read-write|read-only|off|remember <text>"),
             SlashCommand.Cwd => text.Length == 0 ? WebCommandVerdict.Run : Refused(WebUiText.PcOnly(word + " <path>")),
             // 2026-10-27: /ha stills is the PC's (its windows, and a purge from the phone must not delete files without the PC's yes).
             SlashCommand.HomeAssistant => Is(first, "states") ? WebCommandVerdict.List

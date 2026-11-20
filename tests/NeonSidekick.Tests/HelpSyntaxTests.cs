@@ -84,7 +84,8 @@ public class HelpSyntaxTests
         Assert.Empty(HelpSyntax.Forms("/nosuch"));
         Assert.Equal(["/timer [<duration> [<name>]]", "/timer stopwatch [<name>]", "/timer stop <name>|all"], HelpSyntax.Forms("/timer"));
         Assert.Equal(["/settings", "/settings <words>", "/settings changed", "/settings export [<path>]", "/settings import [<zip>]"], HelpSyntax.Forms("/settings"));   // a bare form among others stays
-        Assert.Equal(["/remember <text>"], HelpSyntax.Forms("/remember"));
+        Assert.Contains("/memory remember <text>", HelpSyntax.Forms("/memory"));   // /remember <text> until 2026-11-20
+        Assert.Empty(HelpSyntax.Forms("/remember"));
     }
 
     /// <summary>On the pane a form's words and its placeholders and brackets are drawn in two styles (the user's pick).</summary>

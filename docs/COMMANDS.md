@@ -76,8 +76,8 @@ Elsewhere:
 | `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) into the working folder, never over a file: Markdown with Obsidian properties and a pictures folder, or one HTML page in your theme, with each turn's sources. |
 | `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), forget or add one. |
 | `/memory read-write\|read-only\|off` | Sets *Memory mode*. |
+| `/memory remember <text>` | Adds a memory; refused while *Memory mode* is `off`. |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
-| `/remember <text>` | Adds a memory; refused while *Memory mode* is `off`. |
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 | `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
@@ -308,7 +308,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 | Command | What it does |
 |---|---|
-| `/theme [<name>]` | Switches the color theme (*Theme*); alone, a picker with a live preview. |
+| `/theme [<name>]` | Switches the color theme (*Theme*); alone, a picker with a live preview, which also edits and deletes themes ([Pane keys](INTERFACE.md#pane-keys)). |
 | `/theme export <name> [<new-name>]` | Writes a theme to a file to edit. See [Custom themes](#custom-themes). |
 | `/theme edit [<name>]` | Edits a theme's colors in a pane with a live preview; alone, the theme in force. See [Custom themes](#custom-themes). |
 | `/theme delete <name>` | Deletes one of your themes after a yes, to the Recycle bin when *File deletes to Recycle bin* is on. See [Custom themes](#custom-themes). |
@@ -471,7 +471,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Servers:** this profile's, or each bot's own under *Botchat LLM mode* `multi`. `/botchat --kill` stops the extra embedded servers (*Botchat embedded mode*).
 * **Tools:** pictures ([Botchat pictures](SETTINGS.md#botchat-pictures)), tools, skills and memory, per the Botchat settings. Never advisors; bots on the Claude Code server get no tools.
 * **Joining in:** a typed line joins before the next reply; with *STT input* on, push-to-talk cuts in. Esc stops the voice, then the bot, then the chat; `/botchat --resume` carries on.
-* **From the Web UI:** the chat shows on the page; its voices play there while *Web UI voice* and its 🔊 are on ([Voice](INTERFACE.md#voice)), at the PC with *Web UI voice* off. [⏭️](INTERFACE.md#what-the-page-shows) does what Esc does, Stop ends it and 👥 resumes it; the camera stays off ([Botchat camera](SETTINGS.md#botchat)).
+* **From the Web UI:** the chat shows on the page; its voices play there while *Web UI voice controls* and its 🔊 are on ([Voice](INTERFACE.md#voice)), at the PC with *Web UI voice controls* off. [⏭️](INTERFACE.md#what-the-page-shows) does what Esc does, Stop ends it and 👥 resumes it; the camera stays off ([Botchat camera](SETTINGS.md#botchat)).
 * **Saved** as its own session under *Session logging*.
 
 ### Claude Code from the chat
@@ -679,7 +679,7 @@ Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.jso
 | `primary` | The main accent: headings, borders, keywords. |
 | `secondary` | The counter-accent: your lines, the spinner, table headers, inline code, the selection. |
 | `tertiary` | The third accent: section headings, bullets, the quote bar, function calls. |
-| `deep` | Structure: the pane rule, table borders, the slab under a switched-off toolbar item. |
+| `deep` | Structure: the pane rule, a reply's rules, table borders, the slab under a switched-off toolbar item. |
 | `highlight` | String literals. |
 | `warm` | Numbers. |
 | `tint` | A soft accent: `$variables`. |

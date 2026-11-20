@@ -598,7 +598,7 @@ public sealed partial class WebUiTests : IDisposable
         NeonSidekick.Diagnostics.DiagnosticLog.Emitted += Record;
         try
         {
-            _session.Send(new WebSendRequest { Text = "/remember my secret pin" }, IPAddress.Parse("192.168.1.5"));
+            _session.Send(new WebSendRequest { Text = "/memory remember my secret pin" }, IPAddress.Parse("192.168.1.5"));
             _session.Send(new WebSendRequest { Text = "/settings" }, IPAddress.Parse("192.168.1.5"));
         }
         finally
@@ -606,7 +606,7 @@ public sealed partial class WebUiTests : IDisposable
             NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= Record;
         }
 
-        Assert.Contains(WebUiText.CommandLogLine("/remember", IPAddress.Parse("192.168.1.5"), "run"), lines);
+        Assert.Contains(WebUiText.CommandLogLine("/memory", IPAddress.Parse("192.168.1.5"), "run"), lines);
         Assert.Contains(WebUiText.CommandLogLine("/settings", IPAddress.Parse("192.168.1.5"), "refused"), lines);
         Assert.DoesNotContain(lines, l => l.Contains("secret", StringComparison.Ordinal));
     }
@@ -1266,7 +1266,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.True(App.SettingsMenu.IsToggle(App.SettingsField.WebUiVoice));
         Assert.True(App.SettingsMenu.RefusedMidTurn(App.SettingsField.WebUiVoice));
         Assert.False(App.SettingsMenu.IsWebUiField(App.SettingsField.WebUiVoice));
-        Assert.True(new Settings.AppSettingsData().WebUiBotCheckControl);    // 2026-10-17, the user's call: on
+        Assert.False(new Settings.AppSettingsData().WebUiBotCheckControl);   // off since 2026-11-20, the user's call (on from 2026-10-17)
         Assert.Equal("Web UI", App.SettingsMenu.TabTitles[(int)App.SettingsTab.WebUi]);
         var defaults = new Settings.AppSettingsData();
         Assert.Equal((false, 8765, "local", ""), (defaults.WebUi, defaults.WebUiPort, defaults.WebUiReach, defaults.WebUiToken));

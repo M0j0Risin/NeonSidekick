@@ -15,7 +15,7 @@ public static class MemoryPrompt
 {
     /// <summary>
     /// The directive for a turn that offers no tools (the setting <c>LLM offer tools</c> off): the memory
-    /// exists and the list follows, but nothing to call — <c>/remember</c> is the user's way in. The
+    /// exists and the list follows, but nothing to call — <c>/memory remember</c> is the user's way in. The
     /// first sentence of <see cref="Directive"/>. Pinned.
     /// </summary>
     public const string DirectiveWithoutTool = "You have a long-term memory that lasts across sessions.";

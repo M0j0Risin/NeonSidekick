@@ -1,3 +1,4 @@
+using NeonSidekick.Files;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
 using Spectre.Console;
@@ -109,8 +110,8 @@ public class ThemePreviewTests
         int note = texts.FindIndex(t => t.Contains(ThemeText.PreviewDiffNote, StringComparison.Ordinal));
         Assert.True(note > 0);
         Assert.Contains(DiffView.Elbow + "Added 1 line, removed 1 line", texts[note + 1]);
-        Assert.StartsWith(" " + DiffView.Indent + "3 - string seal = " + ThemeText.PreviewDiffOld + ";", texts[note + 2]);
-        Assert.StartsWith(" " + DiffView.Indent + "3 + string seal = " + ThemeText.PreviewDiffNew + ";", texts[note + 3]);
+        Assert.StartsWith(" " + DiffView.Indent + "3 - $last = " + ThemeText.PreviewDiffOld + " ", texts[note + 2]);   // string seal = …; until 2026-11-20
+        Assert.StartsWith(" " + DiffView.Indent + "3 + $last = " + ThemeText.PreviewDiffNew + " ", texts[note + 3]);
 
         foreach (var (row, slot) in new[] { (rows[note + 2], ThemeStyleSlot.DiffRemoved), (rows[note + 3], ThemeStyleSlot.DiffAdded) })
         {
@@ -146,5 +147,81 @@ public class ThemePreviewTests
         Assert.StartsWith(" " + DiffView.Indent + expected, texts[note + 1]);
         Assert.StartsWith(" " + DiffView.Indent + "3 - ", texts[note + 2]);
         Assert.StartsWith(" " + DiffView.Indent + "3 + ", texts[note + 3]);
+    }
+
+    /// <summary>synthwave's gradient with its 15 roles each a color no other role or stop has, and no style overrides: a role's color seen means that role shows.</summary>
+    private static ThemePalette Distinct()
+    {
+        Color C(int i) => new((byte)(3 + i * 11), (byte)(1 + i), (byte)(2 + i));
+        return ShippedThemes.Synthwave with
+        {
+            Primary = C(0), Secondary = C(1), Tertiary = C(2), Deep = C(3), Highlight = C(4), Warm = C(5), Tint = C(6), Ink = C(7), Dim = C(8),
+            Dimmer = C(9), Bg = C(10), PanelBg = C(11), Good = C(12), Bad = C(13), Warn = C(14), Styles = null,
+        };
+    }
+
+    /// <summary>
+    /// Every editable color shows in the preview (2026-11-20, the user's question from /theme edit: tint never did, dimmer and deep not in
+    /// the editor's card or under Gradient rules): at the whole screen, at the editor's card (22 rows on its 40-row screen, and 30) and an
+    /// 18-row card, at the widest side column and the narrowest, under Gradient rules and Themed background each on and off. A role shows
+    /// when its color is some cell's ink or ground.
+    /// </summary>
+    [Theory]
+    [InlineData(72, 60)]
+    [InlineData(72, 22)]
+    [InlineData(72, 18)]
+    [InlineData(40, 22)]
+    [InlineData(40, 18)]
+    public void EveryRole_ShowsInTheCard(int width, int rows)
+    {
+        var palette = Distinct();
+        var roles = new (string Name, Color Color)[]
+        {
+            ("primary", palette.Primary), ("secondary", palette.Secondary), ("tertiary", palette.Tertiary), ("deep", palette.Deep),
+            ("highlight", palette.Highlight), ("warm", palette.Warm), ("tint", palette.Tint), ("ink", palette.Ink), ("dim", palette.Dim),
+            ("dimmer", palette.Dimmer), ("bg", palette.Bg), ("panelBg", palette.PanelBg), ("good", palette.Good), ("bad", palette.Bad), ("warn", palette.Warn),
+        };
+        using var scope = new ThemeScope();
+        foreach (bool gradient in new[] { true, false })
+        {
+            Theme.UseRuleGradient(gradient);
+            foreach (bool themed in new[] { true, false })
+            {
+                var cells = ThemePreview.Lines(palette, width, rows, Banner, "1.2.3", themedBackground: themed).SelectMany(line => Row(line, width)).ToList();
+                var seen = cells.SelectMany(s => new[] { s.Style.Foreground, s.Style.Background }).ToHashSet();
+                Assert.All(roles, role => Assert.True(seen.Contains(role.Color), $"{role.Name} missing at {width}x{rows}, gradient {gradient}, themed {themed}"));
+            }
+        }
+    }
+
+    /// <summary>The code block is lexed as a reply's PowerShell is (2026-11-20): $variables in tint, the number warm, the string highlight, the keyword primary, the function tertiary.</summary>
+    [Fact]
+    public void TheCodeBlock_WearsTheLexersKinds()
+    {
+        var palette = Distinct();
+        var styles = Theme.StylesOf(palette);
+        var cells = ThemePreview.Lines(palette, 72, 60, Banner, "1.2.3").SelectMany(line => Row(line, 72)).ToList();
+
+        Color Ink(string text) => cells.First(s => s.Text == text).Style.Foreground;
+        Assert.Equal("powershell", ThemeText.PreviewCodeLabel);
+        Assert.Equal(styles(ThemeStyleSlot.CodeVariable).Foreground, Ink("$t"));
+        Assert.Equal(styles(ThemeStyleSlot.CodeVariable).Foreground, Ink("$stops"));
+        Assert.Equal(styles(ThemeStyleSlot.CodeNumber).Foreground, Ink("4"));
+        Assert.Equal(styles(ThemeStyleSlot.CodeString).Foreground, Ink(ThemeText.PreviewDiffNew));
+        Assert.Equal(styles(ThemeStyleSlot.CodeKeyword).Foreground, Ink("function"));
+        Assert.Equal(styles(ThemeStyleSlot.CodeFunction).Foreground, Ink("Pick"));
+        Assert.Equal(styles(ThemeStyleSlot.CodeComment).Foreground, Ink(ThemeText.PreviewCodeComment));
+        Assert.Equal(palette.Tint, styles(ThemeStyleSlot.CodeVariable).Foreground);
+    }
+
+    /// <summary>The edit's note tells the truth about its block (2026-11-20): three rows, and the words WorkingDirectory.Count gives them.</summary>
+    [Fact]
+    public void TheEditsNote_CountsTheBlocksOwnRows()
+    {
+        string block = ThemeText.PreviewCodeComment + "\n" + ThemeText.PreviewCodeLine + "\n" + ThemeText.PreviewCodeLastName + ThemeText.PreviewDiffNew + "\n";
+        WorkingDirectory.Count(block, out int lines, out int words);
+
+        Assert.Equal(ThemeText.PreviewDiffNote, $"edited {ThemeText.PreviewDiffFile} (line {ThemeText.PreviewDiffLine}; now {lines} lines, {words} words)");
+        Assert.True(TextCells.Width(ThemeText.PreviewCodeLine) <= 38);   // whole on the narrowest card
     }
 }

@@ -91,7 +91,8 @@ public sealed class WebCommandsTests
     [InlineData("/avatar 🦊", WebCommandKind.Run)]
     [InlineData("/avatar clear", WebCommandKind.Run)]
     [InlineData("/avatar user clear", WebCommandKind.Run)]
-    [InlineData("/remember the cat is Tom", WebCommandKind.Run)]
+    [InlineData("/memory remember the cat is Tom", WebCommandKind.Run)]   // /remember until 2026-11-20
+    [InlineData("/memory remember", WebCommandKind.Run)]                  // its usage error, said on the page
     [InlineData("/timer 10m tea", WebCommandKind.Run)]
     [InlineData("/rename Trip notes", WebCommandKind.Run)]
     [InlineData("/tts off", WebCommandKind.Run)]

@@ -183,7 +183,7 @@ public interface IWebUiBackend
     /// <summary>The profile's memories for the sheet's 💾 tab (2026-10-16); reads only.</summary>
     WebMemories Memories();
 
-    /// <summary>The page's draft saved as a memory (2026-10-16): <c>/remember</c>'s answer, refused while <i>Memory mode</i> is off.</summary>
+    /// <summary>The page's draft saved as a memory (2026-10-16): <c>/memory remember</c>'s answer, refused while <i>Memory mode</i> is off.</summary>
     WebReply SaveMemory(WebTextBody request, IPAddress? remote);
 
     /// <summary>A memory deleted by its text (2026-10-16; memories have no ids), in any mode; NotFound when it is gone.</summary>

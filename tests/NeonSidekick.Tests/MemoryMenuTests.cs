@@ -303,7 +303,7 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal([MemoryAccess.ReadOnly, MemoryAccess.Disabled, MemoryAccess.ReadWrite], switched);
         Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.ReadWrite)) + "\n", _console.Output);
         Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.ReadOnly)) + "\n", _console.Output);
-        Assert.Contains("\n" + MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys) + "\n", _console.Output);   // no input row: no add
+        Assert.Contains("\n" + MemoryMenu.WithoutRemember(MemoryMenu.SwitchKeys) + "\n", _console.Output);   // no input row: no add
         Assert.Equal(["one"], _store.Snapshot());
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -323,7 +323,7 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal(0, _store.Count);
         Assert.Equal([MemoryAccess.ReadWrite], switched);
         Assert.Contains("\n" + Titled(SwitchTitle(MemoryAccess.Disabled)) + "\n  · (💾 removed: only)\n▸ " + MemoryMenu.EmptyNotice + "\n", _console.Output);
-        Assert.Contains("\n" + MemoryMenu.WithoutAdd(MemoryMenu.EmptySwitchKeys) + "\n", _console.Output);
+        Assert.Contains("\n" + MemoryMenu.WithoutRemember(MemoryMenu.EmptySwitchKeys) + "\n", _console.Output);
         Assert.Equal(flow, pane.FlowRow);   // nothing reached the transcript
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -346,13 +346,13 @@ public class MemoryMenuTests : IDisposable
         var undated = new MemoryEntry { Text = "z" };
 
         Assert.Equal("💾 Memory", MemoryMenu.Title);
-        Assert.Equal(MemoryMenu.Title + "   Enter = choose · a = add · Esc = close", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));   // choose and add since 2026-10-13
+        Assert.Equal(MemoryMenu.Title + "   Enter = choose · r = remember · Esc = close", SettingsMenu.PromptTitle(MemoryMenu.Title, MemoryMenu.Keys));   // choose and add since 2026-10-13
         Assert.Equal("(💾 nothing remembered)", MemoryMenu.EmptyNotice);
-        Assert.Equal("Enter = choose · a = add · m = memory mode · Esc = close", MemoryMenu.SwitchKeys);   // 2026-10-03; one cycling button since later on 2026-10-13
-        Assert.Equal("a = add · m = memory mode · Esc = close", MemoryMenu.EmptySwitchKeys);
-        Assert.Equal("Enter = choose · m = memory mode · Esc = close", MemoryMenu.WithoutAdd(MemoryMenu.SwitchKeys));
-        Assert.Equal(["mode: read-write", "+ add"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
-        Assert.Equal('a', MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true)[^1].Key);
+        Assert.Equal("Enter = choose · r = remember · m = memory mode · Esc = close", MemoryMenu.SwitchKeys);   // 2026-10-03; one cycling button since later on 2026-10-13
+        Assert.Equal("r = remember · m = memory mode · Esc = close", MemoryMenu.EmptySwitchKeys);
+        Assert.Equal("Enter = choose · m = memory mode · Esc = close", MemoryMenu.WithoutRemember(MemoryMenu.SwitchKeys));
+        Assert.Equal(["mode: read-write", "+ remember"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
+        Assert.Equal('r', MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true)[^1].Key);   // 'a' until 2026-11-20
         Assert.Equal("💾 \"x\"", MemoryMenu.ActionTitle("x"));
         Assert.Equal("Enter = choose · Esc = back", MemoryMenu.ActionKeys);
         Assert.Equal("(💾 edited: x)", MemoryMenu.EditedNotice("x"));
@@ -513,20 +513,24 @@ public class MemoryMenuTests : IDisposable
         pane.Dispose();
     }
 
-    /// <summary>The title row's add (a): a new memory typed on the input row, /remember's notice; an empty store opens with it too.</summary>
+    /// <summary>
+    /// The title row's add (r; a until 2026-11-20, the user's call: + remember, as /memory remember): a new memory typed on the input row,
+    /// /memory remember's notice; an empty store opens with it too. a does nothing now.
+    /// </summary>
     [Fact]
     public async Task OnThePane_AddTypesANewMemory_OnAnEmptyStoreToo()
     {
         var (menu, pane) = InputMenu();
-        Push(Keys.Char('a'));
+        Push(Keys.Char('a'));   // nothing: no input row opens, so "likes tea" below goes to r's
+        Push(Keys.Char('r'));
         Type("likes tea");
-        Push(Keys.Enter, Keys.Char('a'));
+        Push(Keys.Enter, Keys.Char('r'));
         Type("likes tea");   // a duplicate: said so, nothing added
         Push(Keys.Enter, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(MemoryMenu.AddButton, _console.Output);
+        Assert.Contains(MemoryMenu.RememberButton, _console.Output);
         Assert.Contains(ChatScreen.RememberedNotice("likes tea"), _console.Output);
         Assert.Contains(ChatScreen.AlreadyRememberedNotice("likes tea"), _console.Output);
         Assert.Equal(["likes tea"], new MemoryStore(_dir).Snapshot());
@@ -534,7 +538,7 @@ public class MemoryMenuTests : IDisposable
     }
 
     /// <summary>
-    /// The pane with its input row but no Memory switch (2026-10-13, the code review): an empty store opens it, + add the way in — it
+    /// The pane with its input row but no Memory switch (2026-10-13, the code review): an empty store opens it, + remember the way in — it
     /// was unreachable, the empty store saying so and closing.
     /// </summary>
     [Fact]
@@ -546,13 +550,13 @@ public class MemoryMenuTests : IDisposable
         var line = new InputLine(pane, keys);
         var menu = new MemoryMenu(new ConsoleWithInput(pane, keys), _store, new TranscriptRenderer(pane), new MenuPane(pane, keys), input: () => line);
         pane.Show();
-        Push(Keys.Char('a'));
+        Push(Keys.Char('r'));
         Type("likes tea");
         Push(Keys.Enter, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(MemoryMenu.AddButton, _console.Output);
+        Assert.Contains(MemoryMenu.RememberButton, _console.Output);
         Assert.Contains(ChatScreen.RememberedNotice("likes tea"), _console.Output);
         Assert.Equal(["likes tea"], new MemoryStore(_dir).Snapshot());
         pane.Dispose();

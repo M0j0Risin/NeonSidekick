@@ -355,6 +355,12 @@ public enum MemoryActionKind
     Edit,
 
     /// <summary>
+    /// <c>remember &lt;text&gt;</c> (2026-11-20, the user's call: one command for memories): the text added straight to the store, no model, as the
+    /// standalone <c>/remember</c> did until then; <see cref="MemoryAction.Text"/> holds it, empty for the usage error.
+    /// </summary>
+    Remember,
+
+    /// <summary>
     /// <c>read-write</c>, <c>read-only</c> or <c>disabled</c> (2026-10-04; <c>on</c> and <c>off</c> since 2026-10-03, kept as aliases of the
     /// first and last): <c>Memory mode</c> set, as the 💾 pane's buttons do; what is remembered stays.
     /// </summary>
@@ -364,8 +370,11 @@ public enum MemoryActionKind
     Invalid,
 }
 
-/// <summary>The parsed <c>/memory</c> argument; <paramref name="Mode"/> is set by <see cref="MemoryActionKind.Mode"/> alone.</summary>
-public readonly record struct MemoryAction(MemoryActionKind Kind, MemoryAccess Mode = MemoryAccess.ReadWrite);
+/// <summary>
+/// The parsed <c>/memory</c> argument; <paramref name="Mode"/> is set by <see cref="MemoryActionKind.Mode"/> alone, <paramref name="Text"/> by
+/// <see cref="MemoryActionKind.Remember"/> alone (as typed after the word, trimmed).
+/// </summary>
+public readonly record struct MemoryAction(MemoryActionKind Kind, MemoryAccess Mode = MemoryAccess.ReadWrite, string Text = "");
 
 /// <summary>
 /// The interactive chat: connect, read a line, dispatch a command or run a turn, repeat. Owns the
@@ -476,7 +485,7 @@ internal sealed partial class ChatScreen
     public const string InterruptOffWithWakeNotice = NoticeGlyphs.Interrupt + "Interrupting off with the wake word.";
     public const string InterruptedNotice = "(" + NoticeGlyphs.Interrupt + "interrupted)";
     public const string InterruptDisabledReason = "switched off after two interruptions heard nothing";
-    public const string RememberUsageError = "/remember takes the text to keep: /remember <text>";
+    public const string RememberUsageError = "/memory remember takes the text to keep: /memory remember <text>";   // /remember's until 2026-11-20
     public const string MemoryOffNotice = NoticeGlyphs.Memory + "Memory mode is off; set it in /settings (the Memory mode row) or with /memory read-write.";
     public const string MemoryFullError = "Memory is full (" + MaxMemoriesText + " entries); /memory forget clears it.";
     public const string MemoryFailedError = "Could not save the memory; the log has the reason.";
@@ -636,6 +645,8 @@ internal sealed partial class ChatScreen
     public const string SettingsZipNote = "a settings zip in Downloads";
 
     public const string MemoryForgetWord = "forget";
+    public const string MemoryRememberWord = "remember";   // 2026-11-20, the user's call: /remember folded into /memory
+    public const string MemoryRememberNote = "add a memory";
     public const string MemoryForgetNote = "forget every memory";
     public const string MemoryEditWord = "edit";   // 2026-09-23, the user's ask: memory.json in the editor, as /profile edit opens profile.json
     public const string MemoryEditNote = "open memory.json in your editor";
@@ -645,7 +656,7 @@ internal sealed partial class ChatScreen
     public const string MemoryReadWriteNote = "the model reads and saves memories";   // 2026-10-04, the user's ask: Memory mode's three words
     public const string MemoryReadOnlyNote = "the model reads memories, never saves one";
     public const string MemoryDisabledNote = "no memory (what is remembered stays)";
-    public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or off sets Memory mode; forget forgets them all; edit opens memory.json in your editor.";
+    public const string MemoryUsageError = "/memory lists the memories; read-write, read-only or off sets Memory mode; remember <text> adds one; forget forgets them all; edit opens memory.json in your editor.";
 
     public const string CopyFailedError = "Could not write to the clipboard; try again.";
     public static readonly string ProfileNameError = "Profile name " + Profiles.NameError + ".";
@@ -1821,6 +1832,8 @@ internal sealed partial class ChatScreen
             HomeCatalog = _homeLive.CatalogAsync,
             // The Tool bar checklist lists the items this system shows (2026-10-22): the screen's, read at each call, since tests set it after the build.
             ToolbarItemHere = id => this.ToolbarItemHere(id),
+            // The /theme list's Del (2026-11-20): the screen's bin under File deletes to Recycle bin, read at each call as tests set it after the build.
+            ThemeBin = () => _effective().FileDeletesToRecycleBin ? _recycleBin : null,
             // The Tool bar page's bar: reads what the row would draw (2026-11-08, the review): 🔒 and 👮 alone draw nothing under the policy off.
             ToolbarDrawn = d => ToolbarParts(d) is not null,
         };
@@ -3923,7 +3936,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The <c>/memory</c> grammar, pure (2026-09-22): nothing ⇒ the pane; <c>forget</c> ⇒ the wipe,
-    /// after its confirmation; <c>edit</c> ⇒ <c>memory.json</c> in the editor (2026-09-23); a mode word ⇒ <c>Memory mode</c>. Every word
+    /// after its confirmation; <c>edit</c> ⇒ <c>memory.json</c> in the editor (2026-09-23); a mode word ⇒ <c>Memory mode</c>;
+    /// <c>remember &lt;text&gt;</c> ⇒ the add (2026-11-20), the text read from the line after the word, its spacing kept. Every word
     /// folds case. Anything else ⇒ invalid, <c>copy &lt;profile&gt; [overwrite]</c> among it since 2026-10-13 (what <c>/memcopy</c> did from
     /// later on 2026-09-22 until then; <c>/profile push|pull memory</c> now).
     /// </summary>
@@ -3933,6 +3947,13 @@ internal sealed partial class ChatScreen
         if (words.Length == 0)
         {
             return new(MemoryActionKind.List);
+        }
+
+        if (words[0].Equals(MemoryRememberWord, StringComparison.OrdinalIgnoreCase))
+        {
+            // The text as typed (2026-11-20): from the line, not the split words, so its inner spacing and case stay.
+            string line = args!.TrimStart();
+            return new(MemoryActionKind.Remember, Text: line[MemoryRememberWord.Length..].Trim());
         }
 
         if (words.Length == 1 && words[0].Equals(MemoryForgetWord, StringComparison.OrdinalIgnoreCase))
@@ -5922,9 +5943,9 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Memory:
             {
-                // The modes, forget and edit (copy and its profiles until 2026-10-13: /profile push|pull memory since).
-                // on (2026-10-27, the completion survey): read-write's documented alias, after it.
-                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
+                // The modes, remember (2026-11-20), forget and edit (copy and its profiles until 2026-10-13: /profile push|pull memory since).
+                // After "remember " the text is free: nothing matches it.
+                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryRememberWord, MemoryRememberNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
             }
 
             case SlashCommand.Sys:
@@ -6826,7 +6847,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// Everything that lives in the profile's directory, built over <see cref="AppSettings.ProfileDirectory"/>:
-    /// the memory store (shared by <c>/remember</c>, <c>/memory</c>, <c>/memory forget</c> and the model's
+    /// the memory store (shared by <c>/memory remember</c>, <c>/memory</c>, <c>/memory forget</c> and the model's
     /// <c>save_memory</c>), its tool and menu, and the persona, operating-rules and voice-directive files. Called once at construction
     /// and again after every switch, so a command always acts on the loaded profile.
     /// </summary>
@@ -8193,7 +8214,7 @@ internal sealed partial class ChatScreen
 
         // The memories last (2026-09-17): the freshest context before the first reply, where a
         // first-turn question finds them — a list far back in the system prompt went unread. The
-        // result is kept current the cwd way, so a save_memory, /remember, /memory, /memory forget or
+        // result is kept current the cwd way, so a save_memory, /memory remember, /memory, /memory forget or
         // /profile pull memory since the first message is in the next request. Memory switched on
         // mid-conversation seeds nothing (as File tools does); the model has the tool.
         var recall = set.Recall;
@@ -8610,7 +8631,7 @@ internal sealed partial class ChatScreen
 
     public static string AlreadyRememberedNotice(string text) => $"({NoticeGlyphs.Memory}already remembered: {text})";
 
-    /// <summary>A <c>/remember</c> (or the pane's + add) of a disabled memory, enabled again (2026-10-13, the code review). Pinned.</summary>
+    /// <summary>A <c>/memory remember</c> (or the pane's + remember) of a disabled memory, enabled again (2026-10-13, the code review). Pinned.</summary>
     public static string RememberEnabledNotice(string text) => $"({NoticeGlyphs.Memory}enabled again: {text})";
 
     /// <summary>The question before a <c>/memory forget</c> (the yes/no pane's title; <see cref="TypedConfirm"/> where menus cannot open, the answer typed — <c>y</c> or <c>yes</c> clears, anything else keeps). Pinned.</summary>
@@ -15188,10 +15209,6 @@ internal sealed partial class ChatScreen
                 await HandleSwitchAsync(command, args, midTurn: false, cancellationToken).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.Remember:
-                Remember(args);
-                return false;
-
             case SlashCommand.Memory:
                 await HandleMemoryAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
@@ -16209,7 +16226,10 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary><c>/remember &lt;text&gt;</c>: straight into the store, no model involved. Off means nothing is saved.</summary>
+    /// <summary>
+    /// <c>/memory remember &lt;text&gt;</c> (the standalone <c>/remember</c> until 2026-11-20): straight into the store, no model involved. Off
+    /// means nothing is saved.
+    /// </summary>
     private void Remember(string args)
     {
         if (string.IsNullOrWhiteSpace(args))
@@ -16218,7 +16238,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // Read-only is about the model (2026-10-04, the user's call): /remember is the user's own hand, so only disabled refuses it.
+        // Read-only is about the model (2026-10-04, the user's call): /memory remember is the user's own hand, so only disabled refuses it.
         if (!MemoryMode.Enabled(_effective()))
         {
             _transcript.Notice(MemoryOffNotice);
@@ -16239,7 +16259,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/remember</c>'s answer to the store's outcome, and whether it is an error (2026-10-16: shared with the Web UI's 💾 ⇪, so their words
+    /// <c>/memory remember</c>'s answer to the store's outcome, and whether it is an error (2026-10-16: shared with the Web UI's 💾 ⇪, so their words
     /// can't drift). Pure.
     /// </summary>
     public static (string Text, bool Error) RememberAnswer(MemoryAddResult result) => result.Outcome switch
@@ -16271,6 +16291,10 @@ internal sealed partial class ChatScreen
 
             case { Kind: MemoryActionKind.Forget }:
                 await ForgetAsync(cancellationToken).ConfigureAwait(false);
+                break;
+
+            case { Kind: MemoryActionKind.Remember } add:
+                Remember(add.Text);   // 2026-11-20: /remember's add, folded in
                 break;
 
             case { Kind: MemoryActionKind.Mode } set:
@@ -17332,7 +17356,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A bot's memory this reply (2026-10-04, the user's ask): null with <c>Botchat memory enabled</c> off — which alone decides,
     /// over every profile's <c>Memory</c> switch, the starter's too. Under <c>Botchat memory mode</c> <c>shared-parent</c>, or for the
-    /// starting profile's bot, the screen's own store (<c>/memory</c>'s, <c>/remember</c>'s); under <c>independent</c>, the bot's own
+    /// starting profile's bot, the screen's own store (<c>/memory</c>'s, <c>/memory remember</c>'s); under <c>independent</c>, the bot's own
     /// profile's <c>memory.json</c>, its store built at its first reply and kept in <paramref name="own"/> for the chat. The tools are
     /// <c>save_memory</c> and <c>recall_memory</c> over that store, less any switched off on <c>/tools</c>.
     /// </summary>

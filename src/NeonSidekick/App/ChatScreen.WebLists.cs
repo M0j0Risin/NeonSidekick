@@ -52,8 +52,8 @@ internal sealed partial class ChatScreen
         new([.. _memory.EntriesSnapshot().Select(e => new WebMemory(e.Text, e.Disabled))], !MemoryMode.Enabled(_effective()), Memory.MemoryStore.MaxTextLength);
 
     /// <summary>
-    /// The page's draft saved as a memory: <c>/remember</c>'s rule and words (refused while <i>Memory mode</i> is off; a turned-off one turned
-    /// on again), an empty draft answered as the page's own empty draft rather than with <c>/remember</c>'s usage line.
+    /// The page's draft saved as a memory: <c>/memory remember</c>'s rule and words (refused while <i>Memory mode</i> is off; a turned-off one turned
+    /// on again), an empty draft answered as the page's own empty draft rather than with <c>/memory remember</c>'s usage line.
     /// </summary>
     private WebReply WebSaveMemory(string text, IPAddress? remote)
     {

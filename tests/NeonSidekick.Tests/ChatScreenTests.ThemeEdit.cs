@@ -291,4 +291,115 @@ public partial class ChatScreenTests
         Assert.Equal(json.Replace("\"primary\": \"" + Theme.ToHex(ShippedThemes.Synthwave.Primary) + "\"", "\"primary\": \"" + Theme.ToHex(lighter) + "\"", StringComparison.Ordinal),
             File.ReadAllText(MineTheme()));
     }
+
+    // ── The /theme list's → edit and Del delete (2026-11-20, the user's ask, plan swirling-forging-peach #9) ─────────────
+
+    /// <summary>A user theme of <paramref name="name"/>, synthwave's colors; its path.</summary>
+    private string PlainTheme(string name)
+    {
+        WriteUserTheme(name + ".json", ThemeJson.File("\"name\": \"" + name + "\""));
+        return Path.Combine(_settings.ThemesDirectory, name + ".json");
+    }
+
+    /// <summary>The theme of <paramref name="name"/> in force, as Program puts the saved one at the start.</summary>
+    private void InForce(string name)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = name; d.FileDeletesToRecycleBin = true; });
+        ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);
+    }
+
+    [Fact]
+    public async Task ThemeList_Right_OnYourTheme_OpensTheEditorOnIt_AndASaveRepaints()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        WriteMine();
+        InForce("mine");
+        var down = Enumerable.Repeat(Keys.Down, DimRow);
+        StepsWhenIdle(Line("/theme"), Keys2([Keys.Right, .. down, Keys.Right, Keys.Char('s')]), Line("/exit"));
+
+        string output = await RunAsync();
+
+        var lighter = HslColor.From(ShippedThemes.Synthwave.Dim).WithLightness(SettingsMenu.EditLightnessStep).ToColor();
+        Assert.Equal(Theme.ToHex(lighter), ColorIn(MineTheme(), "dim"));
+        Assert.Contains("  · " + BeforePath(ThemeText.EditSaved("mine", MineTheme()), MineTheme()), output);
+        Assert.Equal(lighter, Theme.Current.Dim);
+        Assert.Contains(SettingsMenu.ThemeKeepKeys, output);
+        Assert.Contains(ThemeText.EditWord + " · " + ThemeText.DeleteWord, output);   // the title row's buttons
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice, output);
+    }
+
+    [Fact]
+    public async Task ThemeList_Right_OnABuiltIn_AsksForItsCopy_ThenEditsThat()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        InForce("synthwave");
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Right, Keys.Char('y'), Keys.Enter, Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ThemeText.EditBuiltInQuestion("synthwave-custom"), output);
+        Assert.True(File.Exists(Path.Combine(_settings.ThemesDirectory, "synthwave-custom.json")));
+        Assert.Same(ShippedThemes.Synthwave, Theme.Current);
+    }
+
+    [Fact]
+    public async Task ThemeList_Del_OnYourTheme_AsksOnThePane_SendsItToTheBin_AndTheListStaysOpen()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        string mine = PlainTheme("mine");
+        PlainTheme("mine2");
+        InForce("mine2");
+        var bin = new FakeRecycleBin();
+        _recycleBin = bin;
+        // Up from mine2 to mine, Del, Yes; then Del on the row that took its place (mine2, in force): No; Esc.
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Up, Keys.Delete, Keys.Down, Keys.Enter), Keys2(Keys.Delete, Keys.Enter, Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal([mine], bin.Moved);
+        Assert.False(File.Exists(mine));
+        Assert.Contains(ThemeText.DeleteQuestion("mine", Path.Combine("themes", "mine.json"), toBin: true, revealsBuiltIn: false).Split('\n')[0], output);
+        Assert.Contains("  · " + ThemeText.DeleteDone("mine", toBin: true), output);   // held: the transcript keeps a trace
+        Assert.Contains(ThemeText.DeleteQuestion("mine2", Path.Combine("themes", "mine2.json"), toBin: true, revealsBuiltIn: false).Split('\n')[0], output);
+        Assert.True(File.Exists(Path.Combine(_settings.ThemesDirectory, "mine2.json")));   // the no kept it
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice, output);            // a delete happened: no "unchanged" after it
+        Assert.Equal("mine2", Theme.Current.Name);
+    }
+
+    [Fact]
+    public async Task ThemeList_Del_OnABuiltIn_SaysWhy_NothingAsked()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        InForce("synthwave");
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Delete, Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ThemeText.DeleteBuiltInHere, output);   // on the status line, whole beside the preview
+        Assert.Contains("  · " + SettingsMenu.UnchangedNotice, output);
+        Assert.Same(ShippedThemes.Synthwave, Theme.Current);
+    }
+
+    [Fact]
+    public async Task ThemeList_Del_OnTheThemeInForce_PutsTheDefaultInForce()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        string mine = PlainTheme("mine");
+        InForce("mine");
+        var bin = new FakeRecycleBin();
+        _recycleBin = bin;
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Delete, Keys.Down, Keys.Enter, Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal([mine], bin.Moved);
+        Assert.Contains("  · " + ThemeText.DeleteInForce("synthwave"), output);
+        Assert.Equal("synthwave", _settings.Current.Theme);
+        Assert.Equal(ShippedThemes.Synthwave, Theme.Current);
+    }
 }

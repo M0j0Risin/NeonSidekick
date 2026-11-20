@@ -112,6 +112,7 @@ public partial class ChatScreenTests
             return Answered(web, ask, ChatScreen.BotCheckGiveUpChoice);
         });
         BotCheckFixture([], "Gave up.", mode: "automatic");
+        _settings.Update(d => d.WebUiBotCheckControl = true);   // off by default since 2026-11-20: these drive the window
 
         string output = await RunAsync();
 
@@ -147,6 +148,7 @@ public partial class ChatScreenTests
             _browserWindow.EndHeld();   // the page got through: the card closes on its own
         });
         BotCheckFixture([], "Read.", mode: "automatic");
+        _settings.Update(d => d.WebUiBotCheckControl = true);   // off by default since 2026-11-20: these drive the window
 
         string output = await RunAsync();
 
@@ -178,6 +180,7 @@ public partial class ChatScreenTests
             _browserWindow.EndHeld();
         });
         BotCheckFixture([], "Read.", mode: "automatic");
+        _settings.Update(d => d.WebUiBotCheckControl = true);   // off by default since 2026-11-20: these drive the window
 
         await RunAsync();
 
@@ -201,7 +204,7 @@ public partial class ChatScreenTests
             await Answered(web, ask, ChatScreen.BotCheckGiveUpChoice);
         });
         BotCheckFixture([], "Gave up.", mode: "automatic");
-        _settings.Update(d => d.WebUiBotCheckControl = false);
+        _settings.Update(d => d.WebUiBotCheckControl = false);   // the default since 2026-11-20, set so the test reads whatever it becomes
 
         await RunAsync();
 

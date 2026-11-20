@@ -186,9 +186,9 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public bool CaptionKeepLines { get; init; }
 
     /// <summary>
-    /// A dim line after the <see cref="Caption"/>, wrapped the same way (2026-11-20, the user's pick: the fit marks' estimate under their
-    /// legend), as <see cref="MenuFooter.Last"/> gives a footer a line of its own. The first cut when the rows run out
-    /// (<see cref="MenuPane.CaptionLines"/>). Null for none.
+    /// A dim line before the <see cref="Caption"/>, wrapped the same way (2026-11-20, the user's pick: the fit marks' estimate with their
+    /// legend; over it since later that day, the user's call). The first cut when the rows run out (<see cref="MenuPane.CaptionLines"/>).
+    /// Null for none.
     /// </summary>
     public string? CaptionNote { get; init; }
 
@@ -305,6 +305,13 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     /// Backspace alone, so Delete never edits a typed filter. Taken from the tab on a tabbed page. False: Delete is what it was.
     /// </summary>
     public bool Removes { get; init; }
+
+    /// <summary>
+    /// The <see cref="Buttons"/> index → presses (2026-11-20, the user's pick: <c>/theme</c>'s edit, where letters jump): → returns a
+    /// <see cref="MenuPick"/> with that <see cref="MenuPick.Button"/>, as a click on it does. Only on an untabbed page without
+    /// <see cref="Nudges"/> or <see cref="Sides"/>, where → has no other job. Null: → is what it was.
+    /// </summary>
+    public int? RightButton { get; init; }
 
     /// <summary>
     /// The rows are an order in two groups, pinned left and pinned right (2026-10-13, the user's ask: the hint bar's and the tool
@@ -759,10 +766,11 @@ public sealed class MenuPane : INoticeSink
 
     /// <summary>
     /// <paramref name="page"/>'s <see cref="MenuPage.Caption"/> and <see cref="MenuPage.CaptionNote"/> laid out for a row of
-    /// <paramref name="width"/> cells, each row with whether it is drawn dim (2026-11-20, the embedded models' legend): the caption's
-    /// rows first (<see cref="CaptionRows"/>, or each of its lines through it under <see cref="MenuPage.CaptionKeepLines"/>, a line
-    /// past the room joined to the last row and cut with an ellipsis), then the note, dim, in the rows left, so the note is cut
-    /// first. At most <paramref name="maxRows"/>. A page with neither property gets <see cref="CaptionRows"/>' rows. Pure.
+    /// <paramref name="width"/> cells, each row with whether it is drawn dim (2026-11-20, the embedded models' legend): the note first,
+    /// dim, over the caption's rows (later on 2026-11-20, the user's call: the estimate above the legend), the caption's rows
+    /// (<see cref="CaptionRows"/>, or each of its lines through it under <see cref="MenuPage.CaptionKeepLines"/>, a line past the room
+    /// joined to the last row and cut with an ellipsis) still taking the room first, so the note is still the first cut. At most
+    /// <paramref name="maxRows"/>. A page with neither property gets <see cref="CaptionRows"/>' rows. Pure.
     /// </summary>
     public static IReadOnlyList<(string Text, bool Dim)> CaptionLines(MenuPage page, int width, int maxRows)
     {
@@ -799,7 +807,8 @@ public sealed class MenuPane : INoticeSink
 
         if (page.CaptionNote is { } note && maxRows - rows.Count > 0)
         {
-            rows.AddRange(CaptionRows(note, width, maxRows - rows.Count).Select(row => (row, true)));
+            // The rows the caption left, drawn over it (2026-11-20, the user's call).
+            return [.. CaptionRows(note, width, maxRows - rows.Count).Select(row => (row, true)), .. rows];
         }
 
         return rows;
@@ -1226,6 +1235,14 @@ public sealed class MenuPane : INoticeSink
 
                     _status.Clear();   // as a pin does (#37)
                     return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Nudge: nudge);
+                }
+
+                if (page.RightButton is int right && page.Tabs is null && !page.Nudges && !page.Sides && count > 0 && k.Key == ConsoleKey.RightArrow
+                    && k.Modifiers == 0 && page.Buttons is { } pressable && right >= 0 && right < pressable.Count)
+                {
+                    // → presses a button (2026-11-20, /theme's edit).
+                    _status.Clear();
+                    return new MenuPick(page.Tab, _cursor, Button: right, Sub: page.Sub);
                 }
 
                 if (page.Sides && count > 0 && SideOf(k) is { } side)
@@ -1752,7 +1769,7 @@ public sealed class MenuPane : INoticeSink
         int content = _pane.MenuContentRows(Height, _inputRows);
         // A question's caption (2026-10-10, CaptionGrows) takes what the room leaves over a few list rows, not three.
         int captionMax = page.CaptionGrows ? CaptionRoom(content, _stripRows, _statusRows, footer, page.Rows.Count) : CaptionMaxRows;
-        // The caption's rows, a note under them dim (2026-11-20, CaptionLines).
+        // The caption's rows, a note over them dim (2026-11-20, CaptionLines).
         var caption = CaptionLines(page, _listWidth, captionMax);
         var captionLines = Drawn(caption.Select(row => (IRenderable)new Markup(Markup.Escape(row.Text), row.Dim ? Theme.DimText : Theme.Body).Overflow(Overflow.Ellipsis)).ToList(), _sideWidth > 0);
         _captionRows = captionLines.Count;

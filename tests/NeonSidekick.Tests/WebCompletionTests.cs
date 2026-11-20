@@ -97,12 +97,16 @@ public sealed class WebCompletionTests
         {
             "/browser" => new ArgumentList([new("save", "save"), new("list", "the list"), new("unsave", "take one off"), new("clear", "clear")]),
             "/shopping" => new ArgumentList([new("add", "add items"), new("clear", "remove the ticked")]),
+            "/memory" => new ArgumentList([new("read-write", "rw"), new("read-only", "ro"), new("off", "off"), new(ChatScreen.MemoryRememberWord, ChatScreen.MemoryRememberNote), new("forget", "f"), new("edit", "e")]),
             _ => ArgumentList.None,
         });
 
         Assert.Equal(["save", "unsave"], snapshot.Complete("/browser ", 9, 1).Items.Select(i => i.Text));
         Assert.Equal(["add", "clear"], snapshot.Complete("/shopping ", 10, 1).Items.Select(i => i.Text));
         Assert.Empty(snapshot.Complete("/settings ", 10, 1).Items);   // a command the page may not run lists no words
+        // /memory (2026-11-20): the modes and remember (/remember folded in), never forget or edit (a pane at the PC).
+        Assert.Equal(["read-write", "read-only", "off", "remember"], snapshot.Complete("/memory ", 8, 1).Items.Select(i => i.Text));
+        Assert.DoesNotContain("/remember", snapshot.Complete("/rem", 4, 1).Items.Select(i => i.Text));
     }
 
     /// <summary><c>/botchat</c> from the page (2026-11-12): offered, its profiles and switches too; <c>/midi</c>, the PC's device, is not.</summary>

@@ -111,6 +111,12 @@ public static class ThemeText
     public const string DeleteBuiltIn = "Built-in themes can't be deleted; /theme delete takes your own themes.";
 
     /// <summary>
+    /// Del on a built-in in the <c>/theme</c> picker (2026-11-20): the key that does what the user can, not a command they didn't type. On the
+    /// status line beside the preview, so it fits the list's 40 cells there.
+    /// </summary>
+    public const string DeleteBuiltInHere = "Can't delete a built-in; → edits a copy.";
+
+    /// <summary>
     /// The question before the delete: the theme, its file under the home (<paramref name="shown"/>) and where it goes — the bin
     /// (<see cref="Files.FileText.RecycleBinName"/>) or for good; <paramref name="revealsBuiltIn"/> says a built-in of the name comes back.
     /// </summary>
@@ -171,7 +177,7 @@ public static class ThemeText
         "the main accent: headings, borders, keywords",
         "the counter-accent: your lines, the spinner, table headers, inline code, the selection",
         "the third accent: section headings, bullets, the quote bar, function calls",
-        "structure: the pane rule, table borders, the slab under a switched-off toolbar item",
+        "structure: the pane rule, a reply's rules, table borders, the slab under a switched-off toolbar item",
         "string literals",
         "numbers",
         "a soft accent: $variables",
@@ -277,27 +283,36 @@ public static class ThemeText
     public static string PickerBadHex(string text) => $"\"{text}\" is not a color: #RRGGBB or #RGB.";
 
     // ── The pickers' preview (2026-10-02, the user's ask; ThemePreview) ──────
-    // A small mock screen in the highlighted theme, the Theme Atlas's in brief: words that put every role on show.
-    public const string PreviewUser = "› give the banner one color per letter";
-    public const string PreviewHeading = "Letter-perfect gradients";
-    public const string PreviewProse1 = "Each letter takes a ";
-    public const string PreviewProseBold = "stop";
-    public const string PreviewProse2 = " of the ";
+    // A small mock screen in the highlighted theme, the Theme Atlas's in brief: words that put every role on show. One story since
+    // 2026-11-20 (the user's ask: the rows didn't hang together): a banner fading across its letters, every row about it. The prose
+    // row is ordered for the narrowest card (38 cells inside): its bold and its inline code stay whole there.
+    public const string PreviewUser = "› make the banner fade from left to right";
+    public const string PreviewHeading = "A fading banner";
+    public const string PreviewProse1 = "Each ";
+    public const string PreviewProseBold = "letter";
+    public const string PreviewProse2 = " takes a ";
     public const string PreviewProseCode = "gradient";
-    public const string PreviewProse3 = ", the ";
-    public const string PreviewProseItalic = "last";
-    public const string PreviewProse4 = " one too.";
-    public const string PreviewBullet = "stop 0 colors the rule's left end";
-    public const string PreviewQuote = "The rule samples five points.";
-    public const string PreviewCodeLabel = "csharp";
+    public const string PreviewProse3 = " color, ";
+    public const string PreviewProseItalic = "left";
+    public const string PreviewProse4 = " to right.";
+    public const string PreviewBullet = "the first color sits on the left end";
+    public const string PreviewQuote = "The rule under it fades the same way.";
+    // The code block in PowerShell since 2026-11-20 (C# until then): its $variables show tint, the one role C# never lexes. Its
+    // rows are lexed as a reply's are (ThemePreview), the last one the edit's; the middle row's 4 and $t stay whole on the
+    // narrowest card.
+    public const string PreviewCodeLabel = "powershell";
+    public const string PreviewCodeComment = "# one color per letter";
+    public const string PreviewCodeLine = "function Pick($t) { $stops[$t * 4] }";
+    public const string PreviewCodeLastName = "$last = ";
     // A file edit's diff (2026-10-03, the user's ask): the note an edit_file of line 3 writes, then the code block's last line
-    // as it was and as it is. The summary over the rows is FileText.DiffSummary's own.
-    public const string PreviewDiffNote = "edited seal.cs (line 3; now 12 lines, 40 words)";
-    public const string PreviewDiffFile = "seal.cs";
+    // as it was and as it is. The summary over the rows is FileText.DiffSummary's own; the note's counts are the block's own
+    // (WorkingDirectory.Count of its three rows, pinned).
+    public const string PreviewDiffNote = "edited banner.ps1 (line 3; now 3 lines, 15 words)";
+    public const string PreviewDiffFile = "banner.ps1";
     public const int PreviewDiffLine = 3;
-    public const string PreviewDiffOld = "\"crimson\"";
-    public const string PreviewDiffNew = "\"inkwash\"";
-    public const string PreviewThinking ="thinking: the seal should be the only red.";
+    public const string PreviewDiffOld = "\"pink\"";
+    public const string PreviewDiffNew = "\"teal\"";
+    public const string PreviewThinking = "thinking: the last letter should match the rule's end.";
     public const string PreviewGood = "✓ 40 user themes loaded";
     public const string PreviewWarn = "! orphan.json: skipped, it does not set bg";
     public const string PreviewError = "✗ No theme named \"matrix\".";

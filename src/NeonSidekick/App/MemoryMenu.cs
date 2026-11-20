@@ -33,7 +33,7 @@ namespace NeonSidekick.App;
 /// <para>Since 2026-10-13 (the user's ask) Enter or a double-click on a row offers a choice first (<see cref="ActionRows"/>): <b>edit</b>
 /// the text on the input row under the list (<see cref="MemoryStore.Edit"/>), <b>disable</b> it — kept and listed greyed out, but not
 /// offered to the model (<see cref="MemoryEntry.Disabled"/>) — or <b>enable</b> it again, or <b>forget</b> it with the confirmation as
-/// before. The title row's <see cref="AddButton"/> (a) types a new memory there (<see cref="MemoryStore.Add"/>, <c>/remember</c>'s
+/// before. The title row's <see cref="RememberButton"/> (r; a until 2026-11-20) types a new memory there (<see cref="MemoryStore.Add"/>, <c>/memory remember</c>'s
 /// outcomes). Edit and add need the input row (the screen's), so a console without one has the choice without them.</para>
 ///
 /// <para>Delete (2026-10-16, the user's ask: every list that removes a row) goes straight to the forget question, skipping the choice
@@ -44,19 +44,22 @@ internal sealed class MemoryMenu
     // The label and the key hints: the pane shows the label as its title and the keys in its hint
     // row; the prompt host joins them (SettingsMenu.PromptTitle). Pinned.
     public const string Title = ChatScreen.MemoryToolGlyph + " Memory";   // the glyph the toolbar wears for the pane too (2026-09-22)
-    public const string Keys = "Enter = choose · a = add · Esc = close";   // close since 2026-10-07: the pane's top level; choose and add since 2026-10-13
+    public const string Keys = "Enter = choose · r = remember · Esc = close";   // close since 2026-10-07: the pane's top level; choose and add since 2026-10-13
 
     /// <summary>The list's hint on a console without the pane (no title row, so no add). Pinned.</summary>
     public const string PlainKeys = "Enter = choose · Esc = close";
     public const string EmptyNotice = "(" + NoticeGlyphs.Memory + "nothing remembered)";   // the disk since 2026-09-22
 
     /// <summary>The pane's hints with Memory mode's button on the title row (2026-10-03; one cycling button since later on 2026-10-13): the rows, then with nothing remembered. Pinned.</summary>
-    public const string SwitchKeys = "Enter = choose · a = add · m = memory mode · Esc = close";
-    public const string EmptySwitchKeys = "a = add · m = memory mode · Esc = close";
+    public const string SwitchKeys = "Enter = choose · r = remember · m = memory mode · Esc = close";
+    public const string EmptySwitchKeys = "r = remember · m = memory mode · Esc = close";
 
-    /// <summary>The title row's add button (2026-10-13, the user's ask: a new memory from the pane): after Memory mode's. Pinned.</summary>
-    public const string AddButton = "+ add";
-    public const char AddKey = 'a';
+    /// <summary>
+    /// The title row's add button (2026-10-13, the user's ask: a new memory from the pane): after Memory mode's. <c>+ remember</c> on <c>r</c>
+    /// since 2026-11-20 (the user's call, with <c>/memory remember</c>); <c>+ add</c> on <c>a</c> until then. Pinned.
+    /// </summary>
+    public const string RememberButton = "+ remember";
+    public const char RememberKey = 'r';
 
     /// <summary>The choice a row opens (2026-10-13, the user's ask): edit, disable or enable, forget — in <see cref="ActionRows"/>' order.</summary>
     public enum RowAction
@@ -127,12 +130,12 @@ internal sealed class MemoryMenu
     private const int ModeIndex = 0;
     private const int AddIndex = 1;
 
-    /// <summary>The title row's buttons with <paramref name="mode"/> in force: <see cref="ModeButton"/>, then <see cref="AddButton"/> when <paramref name="add"/> (2026-10-13: an input row to type on).</summary>
+    /// <summary>The title row's buttons with <paramref name="mode"/> in force: <see cref="ModeButton"/>, then <see cref="RememberButton"/> when <paramref name="add"/> (2026-10-13: an input row to type on).</summary>
     public static IReadOnlyList<MenuButton> Buttons(MemoryAccess mode, bool add = false) =>
-        [new MenuButton(ModeButton(mode), ModeKey), .. add ? new[] { new MenuButton(AddButton, AddKey) } : []];
+        [new MenuButton(ModeButton(mode), ModeKey), .. add ? new[] { new MenuButton(RememberButton, RememberKey) } : []];
 
     /// <summary>A hint without the add key (2026-10-13): no input row to type a new memory on. Pure.</summary>
-    public static string WithoutAdd(string keys) => keys.Replace("a = add · ", "", StringComparison.Ordinal);
+    public static string WithoutRemember(string keys) => keys.Replace("r = remember · ", "", StringComparison.Ordinal);
 
     /// <summary>How an entry with no saved date shows; the width of a <c>yyyy-MM-dd</c> date.</summary>
     public const string NoDate = "----------";
@@ -217,7 +220,7 @@ internal sealed class MemoryMenu
 
     /// <summary>
     /// Whether the pane has something to offer with nothing remembered: Memory's switch on the title row, or (2026-10-13, the code review)
-    /// + add where the pane has its input row — so an empty store opens it, and forgetting the last memory leaves it open.
+    /// + remember where the pane has its input row — so an empty store opens it, and forgetting the last memory leaves it open.
     /// </summary>
     private bool OpensEmpty => HasSwitch || (_pane.Enabled && Line is not null);
 
@@ -259,8 +262,8 @@ internal sealed class MemoryMenu
                     bool add = Line is not null;
                     string hint = entries.Count > 0 ? SwitchKeys : EmptySwitchKeys;
                     list = entries.Count > 0
-                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? hint : WithoutAdd(hint)) { Footer = (_, row) => Footer(shown, row) }
-                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? hint : WithoutAdd(hint)) { Placeholder = true };
+                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? hint : WithoutRemember(hint)) { Footer = (_, row) => Footer(shown, row) }
+                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? hint : WithoutRemember(hint)) { Placeholder = true };
                     list = list with { Buttons = Buttons(mode, add), Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
                     if (pick is { Button: ModeIndex } pressed)
@@ -277,7 +280,7 @@ internal sealed class MemoryMenu
                     list = entries.Count > 0
                         ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? Keys : PlainKeys) { Footer = (_, row) => Footer(shown, row) }
                         : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? Keys : PlainKeys) { Placeholder = true };
-                    list = list with { Buttons = add ? [new MenuButton(AddButton, AddKey)] : null, Removes = entries.Count > 0 };
+                    list = list with { Buttons = add ? [new MenuButton(RememberButton, RememberKey)] : null, Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
                     if (pick is { Button: >= 0 } adding)
                     {
@@ -297,7 +300,7 @@ internal sealed class MemoryMenu
 
                 if (pick is { Button: var button } && button == AddIndex)
                 {
-                    // A new memory typed on the input row (2026-10-13, the user's ask): /remember's outcomes, the cursor on it.
+                    // A new memory typed on the input row (2026-10-13, the user's ask): /memory remember's outcomes, the cursor on it.
                     cursor = await AddAsync(list, pick.Value.Row, cancellationToken).ConfigureAwait(false) ?? pick.Value.Row;
                     entries = _store.EntriesSnapshot();
                     continue;
@@ -449,7 +452,7 @@ internal sealed class MemoryMenu
     }
 
     /// <summary>
-    /// A new memory typed on the input row under the list (2026-10-13, the user's ask): <c>/remember</c>'s outcomes said on the status line;
+    /// A new memory typed on the input row under the list (2026-10-13, the user's ask): <c>/memory remember</c>'s outcomes said on the status line;
     /// the row it landed on (the list's last), or null when nothing was added.
     /// </summary>
     private async Task<int?> AddAsync(MenuPage list, int row, CancellationToken cancellationToken)

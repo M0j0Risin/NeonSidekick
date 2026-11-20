@@ -15,7 +15,7 @@ namespace NeonSidekick.App;
 ///
 /// <para><b>A page's entry</b> is made at its first voice post or send, under one lock, and goes once the page has had no stream for 10
 /// minutes with nothing running (<see cref="WebVoiceTick"/>, on the session's 1 s tick), at most <see cref="MaxVoicePages"/> kept. All go on a
-/// profile switch, the Web UI stopping and <i>Web UI voice</i> or the Chat tab going off (<see cref="StopWebVoice"/>). A page whose stream
+/// profile switch, the Web UI stopping and <i>Web UI voice controls</i> or the Chat tab going off (<see cref="StopWebVoice"/>). A page whose stream
 /// goes is given <see cref="VoiceGrace"/> to come back with the same run before its listen is cancelled; a new run (a reload) cancels it at once.</para>
 /// </summary>
 internal sealed partial class ChatScreen : IWebVoice
@@ -525,7 +525,7 @@ internal sealed partial class ChatScreen : IWebVoice
 
     /// <summary>
     /// Every page's voice ends (2026-11-13): listens cancelled, speech stopped, held text and entries dropped. On a profile switch, the Web UI
-    /// stopping or restarting, and <i>Web UI voice</i> or the Chat tab going off.
+    /// stopping or restarting, and <i>Web UI voice controls</i> or the Chat tab going off.
     /// </summary>
     private void StopWebVoice()
     {
@@ -565,7 +565,7 @@ internal sealed partial class ChatScreen : IWebVoice
     }
 
     /// <summary>
-    /// <c>/webui on|off</c> or the pane's button flipped the server (2026-11-13, the webui-voice plan): with <i>Web UI voice</i> on, the
+    /// <c>/webui on|off</c> or the pane's button flipped the server (2026-11-13, the webui-voice plan): with <i>Web UI voice controls</i> on, the
     /// voice models follow it, reconnected now when idle, owed to the turn's end mid-reply. Off, the pages' voice stops at once.
     /// </summary>
     private async Task WebVoiceWantedChangedAsync(bool before, CancellationToken cancellationToken)

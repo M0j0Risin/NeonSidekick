@@ -3835,7 +3835,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Remember_SavesTheNormalisedText_AndPrintsTheNotice()
     {
-        PushLine("/remember  my name   is Chris ");
+        PushLine("/memory remember  my name   is Chris ");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -3848,7 +3848,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Remember_ThenForget_MidConversation_RefreshTheOpeningMemoryResult_NoSecondPair()
     {
-        // The seeded list is kept current the cwd way (2026-09-17): what /remember adds and /memory forget
+        // The seeded list is kept current the cwd way (2026-09-17): what /memory remember adds and /memory forget
         // wipes is in the next request's recall_memory result, in place, and nothing is seeded again.
         _settings.Update(d => d.TtsOutput = false);
         _chat.EnqueueText("Hello.").EnqueueText("Chris.").EnqueueText("Nobody.");
@@ -3864,7 +3864,7 @@ public partial class ChatScreenTests : IDisposable
             return Task.CompletedTask;
         };
         PushLine("hi");
-        PushLine("/remember Their name is Chris.");
+        PushLine("/memory remember Their name is Chris.");
         PushLine("who am I?");
         PushLine("/memory forget");
         PickYes();
@@ -3883,8 +3883,8 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Remember_Twice_SaysAlreadyRemembered()
     {
-        PushLine("/remember I like tea");
-        PushLine("/remember i LIKE tea");
+        PushLine("/memory remember I like tea");
+        PushLine("/memory remember i LIKE tea");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -3896,7 +3896,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task Remember_WithoutText_IsAUsageError()
     {
-        PushLine("/remember");
+        PushLine("/memory remember");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -3905,11 +3905,47 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(0, _memory.Count);
     }
 
+    /// <summary>/remember folded into /memory remember (2026-11-20, the user's call): the old word is an unknown command now, nothing saved.</summary>
+    [Fact]
+    public async Task Remember_TheOldCommand_IsUnknown_AndSavesNothing()
+    {
+        PushLine("/remember my name is Chris");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.UnknownCommandError("/remember"), output);
+        Assert.Equal(0, _memory.Count);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>/memory remember under a reply (2026-11-20): quick, as /remember was; bare /memory stays a pane.</summary>
+    [Fact]
+    public async Task MemoryRemember_UnderAReply_SavesAtOnce()
+    {
+        MidTurnFixture(i =>
+        {
+            if (i == 1)
+            {
+                PushLine("/memory remember my name is Chris");
+            }
+        });
+
+        string output = await RunAsync();
+
+        Assert.Contains("(💾 remembered: my name is Chris)", output);
+        Assert.Equal(1, _memory.Count);
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Memory, "remember x"));
+        Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Memory, "REMEMBER"));   // its usage error at once too
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Memory, ""));
+        Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Memory, "forget"));
+    }
+
     [Fact]
     public async Task Remember_WithMemoryOff_SavesNothing_AndSaysSo()
     {
         _settings.Update(d => d.MemoryMode = "off");
-        PushLine("/remember my name is Chris");
+        PushLine("/memory remember my name is Chris");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -3919,12 +3955,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.False(File.Exists(_memory.FilePath));
     }
 
-    /// <summary>Memory mode read-only (2026-10-04, the user's call): about the model alone, so /remember, the user's own hand, still saves.</summary>
+    /// <summary>Memory mode read-only (2026-10-04, the user's call): about the model alone, so /memory remember, the user's own hand, still saves.</summary>
     [Fact]
     public async Task Remember_WithMemoryReadOnly_StillSaves()
     {
         _settings.Update(d => d.MemoryMode = "read-only");
-        PushLine("/remember my name is Chris");
+        PushLine("/memory remember my name is Chris");
         PushLine("/exit");
 
         string output = await RunAsync();
@@ -6880,7 +6916,7 @@ public partial class ChatScreenTests : IDisposable
     {
         _settings.Update(d => d.TtsOutput = false);
         _chat.EnqueueText("Hello.");
-        PushLine("/remember Their name is Chris.");
+        PushLine("/memory remember Their name is Chris.");
         PushLine("/clear");
         PushLine("hi");
         PushLine("/exit");
@@ -7276,9 +7312,15 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.Mode, Mode: MemoryAccess.Disabled), ChatScreen.ParseMemoryArgs("off"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("read-only now"));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("on off"));
-        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));   // on, read-write's alias, from 2026-10-27 until 2026-11-20
+        // remember <text> (2026-11-20): the text as typed after the word, trimmed; alone, empty (the usage error).
+        Assert.Equal(new MemoryAction(MemoryActionKind.Remember, Text: "my  cat"), ChatScreen.ParseMemoryArgs("REMEMBER  my  cat "));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Remember), ChatScreen.ParseMemoryArgs(" remember "));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("rememberx"));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("remember", ChatScreen.MemoryRememberNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));   // on, read-write's alias, from 2026-10-27 until 2026-11-20
         Assert.Equal(["off"], ChatScreen.ArgumentItems("/memory", "o", Sources()).Select(i => i.Text));
-        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("remember", ChatScreen.MemoryRememberNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
+        Assert.Equal([new CompletionItem("remember", ChatScreen.MemoryRememberNote)], ChatScreen.ArgumentItems("/memory", "rem", Sources()));
+        Assert.Empty(ChatScreen.ArgumentItems("/memory", "remember my", Sources()));   // the text after it is free
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote)], ChatScreen.ArgumentItems("/memory", "fo", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "co", Sources()));   // copy retired 2026-10-13
         Assert.Equal([new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "ED", Sources()));
@@ -7287,7 +7329,7 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// /memory edit (2026-09-23, the user's ask): memory.json created when it is not there and handed to
-    /// the editor, then opened as it is; a hand edit is what the next /remember builds on; an editor that
+    /// the editor, then opened as it is; a hand edit is what the next /memory remember builds on; an editor that
     /// fails is the error line. The notices are pinned.
     /// </summary>
     [Fact]
@@ -7305,10 +7347,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(_memory.Snapshot());
         Assert.True(File.Exists(path));
 
-        // The user's editor writes it; the same screen's /remember adds to that, not over it.
+        // The user's editor writes it; the same screen's /memory remember adds to that, not over it.
         File.WriteAllText(path, "{ \"SchemaVersion\": 1, \"Entries\": [ { \"Text\": \"Typed by hand.\" } ] }");
         PushLine("/memory Edit");
-        PushLine("/remember Added after.");
+        PushLine("/memory remember Added after.");
         PushLine("/exit");
         output = await RunAsync();
         Assert.Contains("  · " + ChatScreen.MemoryEditOpenedNotice, output);
@@ -7929,7 +7971,7 @@ public partial class ChatScreenTests : IDisposable
     {
         WorkProfile();
         PushLine("/profile work");
-        PushLine("/remember They drink coffee.");
+        PushLine("/memory remember They drink coffee.");
         PushLine("/sys persona");
         PushLine("/exit");
 
@@ -11501,7 +11543,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains("  · Commands:", output);
         Assert.Contains("  ·   " + HelpRows(Entry("/profile"))[0], output);
-        Assert.Contains("  ·   " + HelpRows(Entry("/reasoning"))[0] + "\n  ·   " + HelpRows(Entry("/remember"))[0], output);   // A to Z, no blank rows since 2026-09-27
+        Assert.Contains("  ·   " + HelpRows(Entry("/reasoning"))[0] + "\n  ·   " + HelpRows(Entry("/rename"))[0], output);   // A to Z, no blank rows since 2026-09-27
         Assert.Contains("  ·   " + HelpRows(Entry("/window"))[0] + "\n  ·   " + HelpRows(Entry("/youtube"))[0], output);
         Assert.Contains("  ·   " + HelpRows(Entry("/youtube"))[^1] + "\n  · " + SlashCommands.KeysLine, output);   // /youtube's forms the last command rows, right above the keys, since 2026-10-05 (/window from 2026-09-27, /exit from 2026-09-16)
         Assert.DoesNotContain(InfoPane.HintText, output);
@@ -12908,7 +12950,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(38, basicEntries.Length);   // /usage 2026-11-07; /commands 2026-10-30; /undo 2026-10-28; /mark and /theme 2026-10-25; /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
+        Assert.Equal(37, basicEntries.Length);   // /remember left 2026-11-20 (into /memory); /usage 2026-11-07; /commands 2026-10-30; /undo 2026-10-28; /mark and /theme 2026-10-25; /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         // Three columns since 2026-10-05 (the user's ask): label, description, forms — each further form on a line of its own.
         Assert.Equal(basicEntries.SelectMany(HelpRows), basic.Select(l => l.TrimEnd()));
@@ -12917,7 +12959,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(
         [
             "/about", "/avatar", "/clear", "/commands", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar",
-            "/profile", "/prompts", "/queue", "/reasoning", "/remember", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme",
+            "/profile", "/prompts", "/queue", "/reasoning", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme",
             "/toolbar", "/tools", "/tree", "/tts", "/undo", "/usage",
         ], basicEntries.Select(e => e.Command));   // /usage since 2026-11-07 (the user's pick: where what the model is sent shows)
         Assert.DoesNotContain(basic, string.IsNullOrWhiteSpace);
@@ -14313,7 +14355,6 @@ public partial class ChatScreenTests : IDisposable
     [InlineData(SlashCommand.Tts, false, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Voice, true, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Copy, false, MidTurnClass.Quick)]
-    [InlineData(SlashCommand.Remember, true, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Explore, false, MidTurnClass.Quick)]
     [InlineData(SlashCommand.Open, true, MidTurnClass.Quick)]   // a window of its own, as /explore (2026-10-09)
     [InlineData(SlashCommand.Terminal, false, MidTurnClass.Quick)]   // 2026-10-03
@@ -26130,7 +26171,6 @@ public partial class ChatScreenTests : IDisposable
         // Free text and the rest: nothing.
         Assert.Empty(ChatScreen.ArgumentItems("/server", "", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/model", "", sources));
-        Assert.Empty(ChatScreen.ArgumentItems("/remember", "", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/compact", "", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/help", "", sources));   // the bare /help's Enter must open the pane, never take a pick
         Assert.Empty(ChatScreen.ArgumentItems("/bogus", "", sources));
@@ -26384,7 +26424,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Command /clear", ChatScreen.CommandLogLine(SlashCommand.Clear, "  /clear  "));
         Assert.Equal("Command /bogus (unknown): now", ChatScreen.CommandLogLine(SlashCommand.Unknown, "/bogus now"));
         Assert.Equal("Command /about (overloaded): me", ChatScreen.CommandLogLine(SlashCommand.Overloaded, "/about me"));
-        Assert.Equal("Command /remember: " + new string('x', 79) + "…", ChatScreen.CommandLogLine(SlashCommand.Remember, "/remember " + new string('x', 100)));
+        Assert.Equal("Command /memory: remember " + new string('x', 70) + "…", ChatScreen.CommandLogLine(SlashCommand.Memory, "/memory remember " + new string('x', 100)));
         Assert.Equal(80, ChatScreen.CommandArgumentChars);
         Assert.Equal("Mid-turn command /compact: Deferred", ChatScreen.MidTurnCommandLogLine("/compact", MidTurnClass.Deferred));
         Assert.Equal("Session 12 restored: 6 turns", ChatScreen.SessionRestoredLogLine(12, 6));

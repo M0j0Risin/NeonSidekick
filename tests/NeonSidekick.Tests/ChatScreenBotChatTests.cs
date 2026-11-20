@@ -24,9 +24,9 @@ public partial class ChatScreenTests
     private void BotChatFixture()
     {
         // No pause between replies (2026-09-26): the manual clock never moves on its own; the pause's own tests set it.
-        // No memory (2026-10-04): Botchat memory enabled is on by default and would add save_memory, recall_memory and the memory
-        // section to every bot's request; the memory tests switch it on.
-        _settings.Update(d => { d.TtsOutput = false; d.BotChatNonTtsDelaySeconds = 0; d.BotChatMemory = false; });
+        // No memory: Botchat memory enabled is off by default since 2026-11-20 (it was set off here from 2026-10-04 while on by default);
+        // the memory tests switch it on.
+        _settings.Update(d => { d.TtsOutput = false; d.BotChatNonTtsDelaySeconds = 0; });
         File.WriteAllText(Path.Combine(_settings.ProfileDirectory, PersonaFile.FileName), "You are Neon. " + NeonMarker);
         Profiles.Create(_dir, "ada", new AppSettingsData { LlmUrl = "http://ada-only-server:9999", LlmModel = "ada-only-model", TtsVoice = "bm_george", ModelAvatar = "" });   // no avatar: the speaker lines here pin ◆ (🤖 the default since later on 2026-10-10)
         File.WriteAllText(Path.Combine(ProfileDir("ada"), PersonaFile.FileName), "You are Ada. " + AdaMarker);

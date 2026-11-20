@@ -43,7 +43,7 @@ internal sealed partial class ChatScreen
     private string? _sentWebProfile;
 
     /// <summary>
-    /// Where a turn speaks: a page's line with <i>Web UI voice</i> on goes to that page while its latest 🔊 is on (the line's own only when
+    /// Where a turn speaks: a page's line with <i>Web UI voice controls</i> on goes to that page while its latest 🔊 is on (the line's own only when
     /// the page has no entry) and Kokoro is loaded, else nowhere; anything else by today's rule (<i>TTS output</i> and speech ready).
     /// <paramref name="needsStream"/> (a bot's turn) also asks for the page's stream to be up: a chat never speaks into a page gone.
     /// </summary>

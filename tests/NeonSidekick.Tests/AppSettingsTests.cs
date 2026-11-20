@@ -55,7 +55,7 @@ public class AppSettingsTests : IDisposable
         BotChatNonTtsDelaySeconds = 12,
         BotChatLimitedTools = ["web_search", "read_file"],
         BotChatLimitedSkills = ["pony-prompts", "haiku"],
-        BotChatMemory = false,
+        BotChatMemory = true,   // off is the default since 2026-11-20
         BotChatMemoryMode = "independent",
         BotChatVision = true,
         MemoryMode = "read-write",   // read-only is the default since 2026-11-20

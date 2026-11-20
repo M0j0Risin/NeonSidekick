@@ -33,7 +33,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 |---|---|---|
 | Profile | Switches profile for this run; each has its own settings, persona, memory, skills and sessions. | `neon` |
 | Working directory (cwd) | The folder the file and GitLib tools work in. Enter opens the [folder picker](INTERFACE.md#folder-picker); `/cwd <path>` sets one. | empty (the profile's `files\` folder) |
-| Memory mode | Each conversation opens with the memories unless `off`. `read-write`: the model also saves them. `read-only`: it never saves one (`/remember` still does). `off`: none, `/remember` refused. | `read-only` |
+| Memory mode | Each conversation opens with the memories unless `off`. `read-write`: the model also saves them. `read-only`: it never saves one (`/memory remember` still does). `off`: none, `/memory remember` refused. | `read-only` |
 | Model avatar | The profile's emoji, leading its replies, `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
 | User avatar | Your emoji, leading your lines in place of `›`. Enter opens the [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
 | Check for updates at start | Asks GitHub for a newer release at each start, sending nothing about you, and shows a line and the 📦 marker. Off, nothing is asked; [`/update`](COMMANDS.md#updating) still works. | on |
@@ -96,7 +96,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 | Botchat reading pause (s) | A pause to read each reply while no voice plays (*TTS output* off, or a page-started chat's 🔊 off; 0–30); a line you send ends it. | 5 |
 | Botchat limited tools | The bots' tools, from the Camera, Clock, Image, Questions, Screen, Timers, Web and YouTube groups (a checklist). None ticked: no tools. | none |
 | Botchat limited skills | The skills the bots may load (a checklist); needs *Agent skills*. None ticked: no skill tool. | none |
-| Botchat memory enabled | Gives every bot `save_memory` and `recall_memory`, overriding every profile's *Memory mode* inside `/botchat`. | on |
+| Botchat memory enabled | Gives every bot `save_memory` and `recall_memory`, overriding every profile's *Memory mode* inside `/botchat`. | off |
 | Botchat memory mode | Whose memories: `shared-parent` (the starting profile's) or `independent` (each bot's own profile's). | `shared-parent` |
 | Botchat vision enabled | Shows each bot the newest 4 pictures since it last spoke. Needs models that read images. | off |
 | Botchat camera | Each bot turn gets a fresh camera picture of you, kept in memory only. Needs models that read images; never for a chat started from the Web UI. | off |
@@ -123,10 +123,10 @@ A browser front end for this profile, on this computer or (with *Web UI reach* `
 | Web UI sign in mode | How `/webui browser` and a double-click on `/webui`'s link or QR code sign your default browser in: `one-time-link` (good once, for a minute, so history keeps no token) or `url-with-token` (the usual link, which history may keep). See [Web UI](INTERFACE.md#web-ui). | `one-time-link` |
 | Web UI commands | Chat tab: lets the page run the slash commands that work from a phone ([Commands from the page](INTERFACE.md#commands-from-the-page)). Off, it only sends messages. | off |
 | Web UI connection details | Chat tab: the page's dropdown shows the `%` and `*` connections' server and database, not just names. The chat shows what the model says either way. | off |
-| Web UI bot check control | Chat tab: the page shows a running bot check live and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off: only the allow question and *Give up*. | on |
+| Web UI bot check control | Chat tab: the page shows a running bot check live and your taps and typing go into it ([A bot check from the page](INTERFACE.md#a-bot-check-from-the-page)). Off: only the allow question and *Give up*. | off |
 | Web UI profile theme | Dresses the pages in the profile's theme, following a `/theme` at once; your lines and review lines take the terminal's colors. Off, they keep their own look. | on |
 | Web UI chat controls | Shows the Chat tab: transcript, message line and the app's questions. Off, the page opens on another [tab](INTERFACE.md#web-ui), with no voice; the PC is unchanged. | on |
-| Web UI voice | Chat tab: 🎤 to speak a message and 🔊 to hear replies on the page ([Voice](INTERFACE.md#voice)). While the Chat tab is on, the PC downloads and loads the voice models for it, even with its own voice off. | off |
+| Web UI voice controls | Chat tab: 🎤 to speak a message and 🔊 to hear replies on the page ([Voice](INTERFACE.md#voice)). While the Chat tab is on, the PC downloads and loads the voice models for it, even with its own voice off. | off |
 | Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask; `/ha` in the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: add, tick, change, place and remove lines, and change the store. `/shopping` at the PC is unchanged. | off |
 | Web UI video controls | Shows the [Video tab](INTERFACE.md#the-video-tab) (macOS 14+ on a Mac): it plays videos started there and keeps the saved list. Off, `webui-window` (either setting) plays in the PC's video window. | off |

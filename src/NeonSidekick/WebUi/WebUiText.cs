@@ -1589,7 +1589,7 @@ public static class WebUiText
     // ── Voice (2026-11-13, the webui-voice plan) ──────────────────────────────
 
     /// <summary>The fix a voice failure names when only the Web UI wants voice: <c>/tts on</c> and <c>/stt on</c> would switch the PC's on too. Pinned.</summary>
-    public const string VoiceRetryFix = "turn Web UI voice off and on at the PC to try again";
+    public const string VoiceRetryFix = "turn Web UI voice controls off and on at the PC to try again";
 
     /// <summary>A page started listening, flashed on the PC's hint row like any page action.</summary>
     public const string ListeningFlash = Glyph + "listening on the Web UI";
@@ -1603,8 +1603,8 @@ public static class WebUiText
     /// <summary>A page's 🎤 while the PC or another page listens. Pinned.</summary>
     public const string VoiceBusy = "The PC or another page is listening; try again when it's done.";
 
-    /// <summary>A voice post with <i>Web UI voice</i> off, or the Chat tab off. Pinned.</summary>
-    public const string VoiceOff = "Voice is off at the PC (/settings › Client › Web UI › Web UI voice).";
+    /// <summary>A voice post with <i>Web UI voice controls</i> off, or the Chat tab off. Pinned.</summary>
+    public const string VoiceOff = "Voice is off at the PC (/settings › Client › Web UI › Web UI voice controls).";
 
     /// <summary>The voice models load at the PC (a connect running). Pinned.</summary>
     public const string VoiceGettingReady = "The PC is getting voice ready; try again in a moment.";

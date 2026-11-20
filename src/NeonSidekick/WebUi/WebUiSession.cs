@@ -356,7 +356,7 @@ public sealed partial class WebUiSession : IWebUiBackend, IDisposable
         }
     }
 
-    /// <summary>The screen's save of the page's draft as a memory (2026-10-16, <c>/remember</c>'s); null: no saves.</summary>
+    /// <summary>The screen's save of the page's draft as a memory (2026-10-16, <c>/memory remember</c>'s); null: no saves.</summary>
     public Func<string, IPAddress?, WebReply>? MemorySave { get; set; }
 
     /// <summary>The screen's delete of a memory by its text (2026-10-16); null: no deletes.</summary>

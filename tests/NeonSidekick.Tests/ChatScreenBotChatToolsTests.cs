@@ -185,7 +185,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// Memory on, shared-parent (the defaults), and the parent's Memory off (Botchat memory enabled alone decides): every bot's
+    /// Memory on (off by default since 2026-11-20), shared-parent (the default), and the parent's Memory off (Botchat memory enabled alone decides): every bot's
     /// prompt lists the starting profile's memories with the save sentences and the memory rule, it is offered save_memory and
     /// recall_memory, and a bot's save lands in the starting profile's memory.json and in the next bot's prompt.
     /// </summary>
@@ -240,7 +240,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task BotChat_MemoryOff_NoBotRemembers_WhateverTheParentsMemory()
     {
-        BotChatFixture();   // Botchat memory enabled off; Memory on
+        BotChatFixture();   // Botchat memory enabled off (the default since 2026-11-20); Memory on
         new MemoryStore(_settings.ProfileDirectory).Add("The user likes pizza.");
         _chat.EnqueueText("Hello from Neon.");
         _chat.EnqueueText("Ada ", "answers.");

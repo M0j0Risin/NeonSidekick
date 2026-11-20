@@ -25,7 +25,7 @@ namespace NeonSidekick.App;
 /// enabled</c> and one workflow of each kind until then). Then skills (2026-09-27) and, on 2026-10-04 (the
 /// user's asks), the main chat's tools (the <c>Botchat limited tools</c>; only the eight groups of <see cref="LimitedGroups"/> since
 /// 2026-10-22, when <c>Botchat tools enabled</c> went) and memory
-/// (<c>Botchat memory enabled</c>, on by default; <see cref="BotChatMemoryMode"/> says whose): each its own switch on the tab.</para>
+/// (<c>Botchat memory enabled</c>, off by default since 2026-11-20; <see cref="BotChatMemoryMode"/> says whose): each its own switch on the tab.</para>
 ///
 /// <para>Who speaks next (2026-09-25, the user's report: a bot asked another by name and a third answered):
 /// a bot named in the last line — the user's lines since the last reply first, then that reply — answers,

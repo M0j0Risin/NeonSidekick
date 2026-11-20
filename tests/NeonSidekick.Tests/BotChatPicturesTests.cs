@@ -300,7 +300,7 @@ public class BotChatPicturesTests
     {
         Assert.Equal(mode, BotChatMemoryMode.Resolve(new AppSettingsData { BotChatMemoryMode = saved }));
         Assert.Equal("shared-parent", new AppSettingsData().BotChatMemoryMode);
-        Assert.True(new AppSettingsData().BotChatMemory);   // on by default (2026-10-04, the user's call)
+        Assert.False(new AppSettingsData().BotChatMemory);   // off by default since 2026-11-20 (the user's call; on from 2026-10-04)
         Assert.All(BotChatMemoryMode.Names, name => Assert.NotEmpty(BotChatMemoryMode.Describe(name)));
     }
 
@@ -441,9 +441,9 @@ public class BotChatPicturesTests
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatLimitedTools));
         Assert.Equal(SettingsMenu.NoLimitedNamesLabel, SettingsMenu.FieldValue(SettingsField.BotChatLimitedTools, data, "."));
         Assert.Equal("web_search, read_file", SettingsMenu.FieldValue(SettingsField.BotChatLimitedTools, new AppSettingsData { BotChatLimitedTools = ["web_search", "read_file"] }, "."));
-        // Memory (2026-10-04): a toggle, on by default, and its mode, shared-parent by default.
+        // Memory (2026-10-04): a toggle, off by default since 2026-11-20, and its mode, shared-parent by default.
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatMemory));
-        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatMemory, data, "."));
+        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatMemory, data, "."));
         Assert.False(SettingsMenu.IsToggle(SettingsField.BotChatMemoryMode));
         Assert.Equal("shared-parent", SettingsMenu.FieldValue(SettingsField.BotChatMemoryMode, data, "."));
         Assert.Equal("independent    " + NeonSidekick.UI.Theme.DimMarkup(BotChatMemoryMode.Describe("independent")), SettingsMenu.BotChatMemoryModeLabel("independent"));

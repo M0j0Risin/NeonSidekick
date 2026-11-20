@@ -261,8 +261,9 @@ public static class HelpCommands
         ]),
         new("/memory",
         [
-            new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **forget** (after a yes); **+ add** (`a`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
+            new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **forget** (after a yes); **+ remember** (`r`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
             new("/memory read-write|read-only|off", "Set *Memory mode*."),
+            new("/memory remember <text>", "Add a memory. Refused while *Memory mode* is `off`."),
             new("/memory forget|edit", "Forget every memory, after a yes (`forget`), or open `memory.json` in your editor (`edit`; invalid JSON is ignored with a warning)."),
         ]),
         new("/midi",
@@ -417,10 +418,6 @@ public static class HelpCommands
         [
             new("/reasoning [none|low|medium|high|xhigh]", "Pick or set the reasoning effort (*LLM reasoning*). Ctrl+R runs it too."),
         ]),
-        new("/remember",
-        [
-            new("/remember <text>", "Add a memory. Refused while *Memory mode* is `off`."),
-        ]),
         new("/rename",
         [
             new("/rename [<name>]", "Rename the current session, as `/sessions title` does: a name is set at once (after the reply, under one); alone, it opens the rename box with the current name, and works while a reply runs. There is nothing to rename before the first reply. Ctrl+N runs it too."),
@@ -531,7 +528,7 @@ public static class HelpCommands
         ]),
         new("/theme",
         [
-            new("/theme [<name>]", "Switch the color theme (*Theme*), built-in or your own. Alone, it lists the themes, previewing the highlighted one beside the list when the window is wide enough; a typed letter jumps to the next theme starting with it, and nothing changes until Enter. During a reply, it runs when the reply ends; Ctrl+Z runs it too."),
+            new("/theme [<name>]", "Switch the color theme (*Theme*), built-in or your own. Alone, it lists the themes, previewing the highlighted one beside the list when the window is wide enough; a typed letter jumps to the next theme starting with it, → edits the highlighted theme and Del deletes one of yours (after a yes), and nothing changes until Enter. During a reply, it runs when the reply ends; Ctrl+Z runs it too."),
             new("/theme export <name> [<new-name>]", "Write a theme to the `themes` folder as a file to edit, under a new name if one is given."),
             new("/theme delete <name>", "Delete one of your themes, after a yes: to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good. A built-in can't be deleted; deleting a file that replaces a built-in brings the built-in back. Deleting the theme in force puts the default in force."),
             new("/theme edit [<name>]", "Edit a theme's colors in a pane, previewed live, with pairs that read poorly listed; alone, the theme in force. Enter opens a hue, saturation and lightness picker or takes a hex value. A built-in offers its `<name>-custom` copy. Saving the theme in force redraws the screen in it."),

@@ -26,7 +26,7 @@ public class SlashCommandsTests
     [InlineData("/COLLAPSE", SlashCommand.Collapse)]
     [InlineData("/tts", SlashCommand.Tts)]
     [InlineData("/stt", SlashCommand.Voice)]
-    [InlineData("/remember", SlashCommand.Remember)]
+    [InlineData("/remember", SlashCommand.Unknown)]   // folded into /memory remember on 2026-11-20
     [InlineData("/memory", SlashCommand.Memory)]
     [InlineData("/MEMORY", SlashCommand.Memory)]
     [InlineData("/msgclear", SlashCommand.MsgClear)]
@@ -208,14 +208,17 @@ public class SlashCommandsTests
     }
 
     [Theory]
-    [InlineData("/remember my name is Chris", "my name is Chris")]
-    [InlineData("/REMEMBER   I live in Leeds  ", "I live in Leeds")]
-    [InlineData("/remember what does /forget do?", "what does /forget do?")]
-    public void Parse_RememberTakesTheRestOfTheLine(string line, string expectedArgs)
+    [InlineData("/memory remember my name is Chris", "my name is Chris")]
+    [InlineData("/MEMORY   REMEMBER   I live in Leeds  ", "I live in Leeds")]
+    [InlineData("/memory remember what does /forget do?", "what does /forget do?")]
+    [InlineData("/memory Remember  my  cat", "my  cat")]   // the text as typed: its inner spacing kept
+    [InlineData("/memory remember", "")]
+    public void Parse_MemoryRememberTakesTheRestOfTheLine(string line, string expectedText)
     {
+        // /remember <text> until 2026-11-20 (the user's call: one command for memories).
         var (command, args) = SlashCommands.Parse(line);
-        Assert.Equal(SlashCommand.Remember, command);
-        Assert.Equal(expectedArgs, args);
+        Assert.Equal(SlashCommand.Memory, command);
+        Assert.Equal(new MemoryAction(MemoryActionKind.Remember, Text: expectedText), ChatScreen.ParseMemoryArgs(args));
     }
 
     [Theory]
@@ -375,7 +378,7 @@ public class SlashCommandsTests
             SlashCommand.Learn,
             SlashCommand.Help,   // /help <words> 2026-10-14: the model looks them up with neon_help
             SlashCommand.Sys,   // /sys persona|operata|vocalia 2026-10-09: /persona, /operata and /vocalia (here since 2026-09-16) folded in
-            SlashCommand.Remember, SlashCommand.Memory, SlashCommand.Profile, SlashCommand.Prompts, SlashCommand.Timer,   // /srvcopy, /cmdcopy and /keycopy here until 2026-10-09 (folded into /profile push|pull); /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
+            SlashCommand.Memory, SlashCommand.Profile, SlashCommand.Prompts, SlashCommand.Timer,   // /srvcopy, /cmdcopy and /keycopy here until 2026-10-09 (folded into /profile push|pull); /memory 2026-09-22 (forget, then copy <profile> [overwrite], the folded /memcopy)
             SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Explore, SlashCommand.Open, SlashCommand.Browse, SlashCommand.Browser, SlashCommand.Terminal, SlashCommand.Shortcut, SlashCommand.Copy, SlashCommand.Session, SlashCommand.Rename, SlashCommand.GitUser,   // /browser [url] 2026-10-13; /shortcut [profile] [--log] 2026-10-07; /vault [path] 2026-09-23; /terminal [folder] 2026-10-03; /rename [name] 2026-10-05
             SlashCommand.Loop, SlashCommand.Plan, SlashCommand.CodeAudit, SlashCommand.BotChat, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Cmd, SlashCommand.Queue, SlashCommand.Skills, SlashCommand.Test, SlashCommand.HomeAssistant, SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Midi, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.YouTube, SlashCommand.Video, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Docx, SlashCommand.Perf, SlashCommand.HomeBar, SlashCommand.Toolbar, SlashCommand.Header, SlashCommand.Rewind, SlashCommand.Undo, SlashCommand.Log, SlashCommand.Process, SlashCommand.Update, SlashCommand.Tools, SlashCommand.Settings, SlashCommand.Find, SlashCommand.WebUi,
             SlashCommand.Splash, SlashCommand.Pasted,   // 2026-10-18: view|thumbs|purge (/splash took nothing until then)
@@ -612,7 +615,7 @@ public class SlashCommandsTests
     public void BasicCommands_AreRealCommands_AndTheTabTitlesArePinned()
     {
         // The basic tab's list (later on 2026-09-27, the user's): a rename or a typo would drop a row silently.
-        Assert.Equal(38, SlashCommands.BasicCommands.Count);   // /usage 2026-11-07 (the user's pick)   // /commands 2026-10-30 (the custom commands plan)   // /undo 2026-10-28 (the checkpoints plan)   // /mark and /theme 2026-10-25   // /prompts 2026-10-13   // /avatar 2026-10-11   // /msgclear 2026-10-10   // /wake gone 2026-10-09 (into /stt)   // /rename 2026-10-05   // /terminal later on 2026-10-03; /about, /explore, /perfbar, /stt, /toolbar, /tts and /wake 2026-10-03; /rewind 2026-09-30, the user's picks
+        Assert.Equal(37, SlashCommands.BasicCommands.Count);   // /remember left 2026-11-20 (folded into /memory)   // /usage 2026-11-07 (the user's pick)   // /commands 2026-10-30 (the custom commands plan)   // /undo 2026-10-28 (the checkpoints plan)   // /mark and /theme 2026-10-25   // /prompts 2026-10-13   // /avatar 2026-10-11   // /msgclear 2026-10-10   // /wake gone 2026-10-09 (into /stt)   // /rename 2026-10-05   // /terminal later on 2026-10-03; /about, /explore, /perfbar, /stt, /toolbar, /tts and /wake 2026-10-03; /rewind 2026-09-30, the user's picks
         Assert.All(SlashCommands.BasicCommands, c => Assert.Contains(SlashCommands.HelpEntries, e => e.Command == c));
         Assert.Equal("Basic", SlashCommands.BasicTabTitle);
         Assert.Equal("Advanced", SlashCommands.AdvancedTabTitle);
@@ -623,13 +626,13 @@ public class SlashCommandsTests
     {
         // One list, A to Z by the command (ordinal), no groups (2026-09-27, the user's call: the Commands tab had grown
         // cramped; nine hand-ordered groups until then — their history is in git).
-        Assert.Equal(91, SlashCommands.HelpEntries.Count);   // /video 2026-11-12 (the video-files plan)   // /midi 2026-11-12 (the MIDI plan)   // /commands 2026-10-30 (the custom commands plan)   // /docx 2026-10-29 (the Office writing plan)   // /undo 2026-10-28 (the checkpoints plan)   // /monitor 2026-10-23 (the monitors plan)   // /pasted later still on 2026-10-18   // /mark later still on 2026-10-18   // /code-audit 2026-10-18   // /ad, /net, /services and /tasks later still on 2026-10-15 (the admin-tools plan)   // /eventlog 2026-10-15   // /webui 2026-10-14   // /prompts 2026-10-13   // /browser 2026-10-13   // /homebar 2026-10-12   // /shopping 2026-10-11   // /avatar later on 2026-10-10   // /advisor 2026-10-10   // /wake and /interrupt gone 2026-10-09 (into /stt)   // /open and /browse 2026-10-09   // /persona, /operata and /vocalia gone 2026-10-09 (into /sys)     // /cmdlist and /police gone 2026-10-09 (into /tools shell)   // /cmd 2026-10-09   // /cmdcopy, /keycopy and /srvcopy gone 2026-10-09 (into /profile push|pull)   // /shortcut later still on 2026-10-07   // /find later on 2026-10-07   // /srvcopy 2026-10-07   // /youtube later still on 2026-10-05   // /rename later on 2026-10-05   // /process 2026-10-05   // /thumbs later still on 2026-10-04, folded into /view --thumbs after it   // /keycheck later on 2026-10-04   // /screen 2026-10-04   // /terminal later on 2026-10-03   // /pdf 2026-10-03   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /toolbar later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perfbar later on 2026-09-29
+        Assert.Equal(90, SlashCommands.HelpEntries.Count);   // /remember left 2026-11-20 (folded into /memory)   // /video 2026-11-12 (the video-files plan)   // /midi 2026-11-12 (the MIDI plan)   // /commands 2026-10-30 (the custom commands plan)   // /docx 2026-10-29 (the Office writing plan)   // /undo 2026-10-28 (the checkpoints plan)   // /monitor 2026-10-23 (the monitors plan)   // /pasted later still on 2026-10-18   // /mark later still on 2026-10-18   // /code-audit 2026-10-18   // /ad, /net, /services and /tasks later still on 2026-10-15 (the admin-tools plan)   // /eventlog 2026-10-15   // /webui 2026-10-14   // /prompts 2026-10-13   // /browser 2026-10-13   // /homebar 2026-10-12   // /shopping 2026-10-11   // /avatar later on 2026-10-10   // /advisor 2026-10-10   // /wake and /interrupt gone 2026-10-09 (into /stt)   // /open and /browse 2026-10-09   // /persona, /operata and /vocalia gone 2026-10-09 (into /sys)     // /cmdlist and /police gone 2026-10-09 (into /tools shell)   // /cmd 2026-10-09   // /cmdcopy, /keycopy and /srvcopy gone 2026-10-09 (into /profile push|pull)   // /shortcut later still on 2026-10-07   // /find later on 2026-10-07   // /srvcopy 2026-10-07   // /youtube later still on 2026-10-05   // /rename later on 2026-10-05   // /process 2026-10-05   // /thumbs later still on 2026-10-04, folded into /view --thumbs after it   // /keycheck later on 2026-10-04   // /screen 2026-10-04   // /terminal later on 2026-10-03   // /pdf 2026-10-03   // /log in every run later on 2026-10-02   // /camera and /docker 2026-10-02   // /header later still on 2026-10-01   // /emptytrash went 2026-10-01   // /toolbar later on 2026-09-30   // /rewind 2026-09-30   // /keycopy, then /sampling, then /test, then /ha, then /print, since 2026-09-28; /perfbar later on 2026-09-29
         Assert.Equal(
         [
             "/about", "/ad", "/advisor", "/avatar", "/botchat", "/browse", "/browser", "/camera", "/claude", "/clear", "/cmd", "/code-audit", "/collapse", "/comfy", "/commands", "/compact", "/copy", "/cwd",
             "/docker", "/docx", "/draft", "/echo", "/eventlog", "/exit", "/expand", "/explore", "/find", "/gituser", "/ha", "/header", "/help", "/homebar", "/imagine", "/keycheck", "/learn", "/log",
             "/loop", "/mark", "/mcp", "/memory", "/midi", "/model", "/monitor", "/msgclear", "/net", "/new", "/open", "/pasted", "/pdf", "/perfbar", "/plan", "/print", "/process", "/profile", "/prompts", "/queue", "/read", "/reasoning",
-            "/remember", "/rename", "/rewind", "/sampling", "/screen", "/server", "/services", "/sessions", "/settings", "/shopping", "/shortcut", "/skills", "/splash", "/stt", "/sys", "/tasks", "/terminal", "/test", "/theme", "/timer", "/toolbar", "/tools",
+            "/rename", "/rewind", "/sampling", "/screen", "/server", "/services", "/sessions", "/settings", "/shopping", "/shortcut", "/skills", "/splash", "/stt", "/sys", "/tasks", "/terminal", "/test", "/theme", "/timer", "/toolbar", "/tools",
             "/tree", "/tts", "/undo", "/update", "/usage", "/vault", "/video", "/view", "/webui", "/window", "/youtube",
         ], SlashCommands.HelpEntries.Select(e => e.Command));
         Assert.Equal(SlashCommands.HelpEntries.Select(e => e.Command).OrderBy(c => c, StringComparer.Ordinal), SlashCommands.HelpEntries.Select(e => e.Command));

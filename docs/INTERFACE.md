@@ -109,7 +109,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | Pane | Keys |
 |---|---|
 | **Conversation** | |
-| `/memory` | Enter: edit, disable/enable, forget (asks) · Delete forgets (asks) · `a` add · `m` *Memory mode* |
+| `/memory` | Enter: edit, disable/enable, forget (asks) · Delete forgets (asks) · `r` remember · `m` *Memory mode* |
 | `/queue` | Enter or Delete removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
 | `/rewind`'s files question | `f` conversation and files · `c` conversation only · Enter chooses · Esc cancels |
@@ -173,6 +173,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes · Delete removes · on **Aisles**, Shift+↑/↓ move an aisle along the walk, Shift+Home/End to either end |
 | **Settings and bars** | |
 | `/settings changed` | Enter edits · `r` back to default |
+| `/theme` | a letter jumps to the next theme with it · → edit (as `/theme edit`) · Delete deletes one of yours (asks) |
 | `/theme edit` | ←/→ lighter or darker (Shift ×5) · Enter opens the color picker · `s` save · `r` the row back · `d` discard · Esc closes, asking when there are changes |
 | `/theme edit`'s color picker | ↑/↓ a bar · ←/→ move it (Shift ×5) · Enter uses the color, or on *Hex value* types one · Esc back, unchanged |
 | The Oracle and PostgreSQL wizards' *Schemas* page | Enter or Space ticks · `a` all · `n` none · Shift+↑/↓, Shift+Home/End move: the first ticked is current (Oracle) or first on the search path · Continue goes on · Esc back |
@@ -307,7 +308,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
   * Voice and camera: `/tts`, `/stt` (and `wake`, `interrupt`), `/camera live`, `watch`, `off`, `use`, `view` and `thumbs`, `/screen view` and `thumbs`
   * Pictures: `/view <path>` (and `--thumbs`), and `view` or `thumbs` after `/comfy`, `/splash`, `/pasted` or `/ha stills`
   * The reply's settings: `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue send`, `/queue mode <word>`, `/queue cancel <word>`
-  * Others: `/update notes` and `cancel`, `/copy`, `/remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/midi list`, `on`, `off` and `forget`, `/commands save <name>` (saves the message the reply answers)
+  * Others: `/update notes` and `cancel`, `/copy`, `/memory remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/midi list`, `on`, `off` and `forget`, `/commands save <name>` (saves the message the reply answers)
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/undo` (`/undo purge` waits instead), `/exit`
 * **Everything else** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
 
@@ -561,7 +562,7 @@ Where YouTube videos play under *YouTube open links in* `youtube-window`, the de
 
 A browser window of the app's own (Windows; macOS 14+ on a Mac, where it is WebKit: [The Browser window on a Mac](MAC.md#the-browser-window-on-a-mac)). When you close it, its cookies go to the web tools.
 
-* **What opens it:** the web tools, for a bot check ([TOOLS.md](TOOLS.md#the-browser-window)), which a Web UI page can also see and drive ([A bot check from the page](#a-bot-check-from-the-page)). `/browser [url]` opens it for you (bare, on *Web browser home page*).
+* **What opens it:** the web tools, for a bot check ([TOOLS.md](TOOLS.md#the-browser-window)), which a Web UI page can also see and drive with *Web UI bot check control* on ([A bot check from the page](#a-bot-check-from-the-page)). `/browser [url]` opens it for you (bare, on *Web browser home page*).
 * **The bar:** back, forward, reload (✕ stops a load), home, a padlock (https) or a warning (http), the address box, Go, and open in your default browser.
 * **The address box:** words that aren't an address search with *Web search method* (DuckDuckGo's site under `metasearch`, which has no results page); `file:`, `javascript:` and local paths are refused.
 * **Keys:** Ctrl+W closes; F5 or Ctrl+R reloads; Alt+← / Alt+→ go back and forward; Ctrl+L, Alt+D or F6 go to the address box (Esc there restores it).
@@ -671,7 +672,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 * **📣 Prompts:** a tap sends a saved prompt as if typed; ✎ puts it on the message line; ⇪ saves the message line as a new one.
 * **🕘 History:** a tap puts an earlier line on the message line. *Clear all* empties the history, stored and at the PC, as `/msgclear` does.
-* **💾 Memory:** ⇪ saves the message line as a memory, as `/remember` does (refused with *Memory mode* off). A tap on a memory edits it or turns it off or on.
+* **💾 Memory:** ⇪ saves the message line as a memory, as `/memory remember` does (refused with *Memory mode* off). A tap on a memory edits it or turns it off or on.
 * A 🗑️ and *Clear all* take two taps. The PC's hint row flashes what the page saved, edited or deleted.
 
 #### Sessions, files and queue
@@ -704,7 +705,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 #### Voice
 
-With *Web UI voice* on, the Chat tab talks both ways. While the tab is on, the PC readies its voice models for the page, whatever *TTS output* and *STT input* say.
+With *Web UI voice controls* on, the Chat tab talks both ways. While the tab is on, the PC readies its voice models for the page, whatever *TTS output* and *STT input* say.
 
 * **🎤** listens until you stop talking; a second tap sends at once, and Cancel (or Esc on a desktop) drops it. It needs the HTTPS address ([HTTPS through Tailscale Serve](#https-through-tailscale-serve)).
 * **What you said** goes where *STT destination* says: sent as a message (never a command), or put in this page's box.
@@ -772,7 +773,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 | Kind | Commands | On the page |
 |---|---|---|
-| Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/remember`, `/timer …`, `/rename <name>`, `/sessions <id>`, `/sessions title <text>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills` or `camera`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
+| Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/timer …`, `/rename <name>`, `/sessions <id>`, `/sessions title <text>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/memory remember <text>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills` or `camera`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions purge\|export`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue clear`, `/sampling`, `/server`, `/usage`, `/midi`, `/settings export\|import` | Refused: they run at the PC only |
@@ -796,7 +797,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 A bot check (a Cloudflare click, a captcha) runs in the PC's Browser window, since its pass is a cookie only that browser can use ([TOOLS.md](TOOLS.md#the-browser-window)). The Chat tab brings it to you:
 
 * **The allow question** (*Web browser botcheck window* `ask`): Deny, Allow once or Allow for this session, on both sides at once; the first answer wins.
-* **The card** shows the window live, with *Give up* (alone with *Web UI bot check control* off; it's on by default).
+* **The card** offers *Give up*; with *Web UI bot check control* on, it also shows the window live to tap and type in.
   * **Tap** to click; **touch and hold** to press and hold, let go to release.
   * 🔍 zooms (fit, 2×, 3×); ▲ ▼ scroll the page.
   * The text box types into the field you tapped; ⏎ ⌫ ⇥ send Enter, Backspace and Tab.
