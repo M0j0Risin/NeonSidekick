@@ -6,7 +6,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The 🗂️ sheet's Queue tab on the screen (2026-11-16, plan lucid-roaming-lantern #42): the view lists the PC's queue and the page's lines;
+/// The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) on the screen (2026-11-16, plan lucid-roaming-lantern #42): the view lists the PC's queue and the page's lines;
 /// a ✕ takes a PC line out (a stale label refused) with the PC's notice, or a page line back to the page's draft; ➤ Send now sends the front
 /// PC line from the idle line (refused when the queue sends itself); a mode set from the page is saved with the settings row's notice; the
 /// page's own lines still go under manual; the queue tag moves with each change.

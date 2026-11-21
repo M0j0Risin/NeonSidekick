@@ -101,7 +101,7 @@ public sealed class WebRateLimit
                 or WebUiHost.LearnCancelPath or WebUiHost.QueueResumePath   // the status row's 🧠 and the held queue's Resume (2026-10-17)
                 or WebUiHost.BotSkipPath   // the status row's ⏭️ (2026-11-12), tapped again and again as 🧠 is
                 or WebUiHost.BotResumePath   // and its 👥 (2026-11-14)
-                or WebUiHost.QueueRemovePath or WebUiHost.QueueSendPath or WebUiHost.QueueModePath or WebUiHost.QueueCancelPath   // the 🗂️ sheet's Queue tab (2026-11-16)
+                or WebUiHost.QueueRemovePath or WebUiHost.QueueSendPath or WebUiHost.QueueModePath or WebUiHost.QueueCancelPath   // the 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16)
                 or WebUiHost.SessionResumePath   // and its Sessions tab's resume
                 or WebUiHost.AttachForgetPath   // a 📎 chip's ✕ (2026-11-16); the upload itself spends Attach past its own checks
                 or WebUiHost.YouTubeSavedPlayPath or WebUiHost.YouTubeSavedRemovePath or WebUiHost.YouTubeSavedClearPath or WebUiHost.YouTubeSavedMovePath

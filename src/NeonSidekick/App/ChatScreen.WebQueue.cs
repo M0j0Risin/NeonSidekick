@@ -7,7 +7,7 @@ using NeonSidekick.WebUi;
 
 namespace NeonSidekick.App;
 
-// ── The 🗂️ sheet's Queue tab (2026-11-16, plan lucid-roaming-lantern #42, the user's ask) ──────────────────────────────────────────
+// ── The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, plan lucid-roaming-lantern #42, the user's ask) ──────────────────────────────────────────
 // The page sees the PC's queue and its own waiting lines, takes one back, sends the front one now and sets the two queue modes. Every
 // handler runs on a Kestrel thread: nothing here prints. Notices go through _webUi.Notice (printed by the screen on its own task), the
 // PC's hint row through _webUi.FlashPc, and the idle read is woken with WebNudge.

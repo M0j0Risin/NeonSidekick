@@ -18,6 +18,9 @@ namespace NeonSidekick.App;
 /// this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>; <see cref="Names"/> is the
 /// default order, which <c>⊡ default</c> puts back with the checks. Later on 2026-10-13 (the user's ask: the home bar's pinning) each
 /// meter is pinned left, center or right (<see cref="Sides"/>), center by default, so a bar never pinned is centred as it always was.
+/// CTX (2026-11-21, the user's ask) sits between NET↑ and PROC: the share of the model's context window in use, the Status bar's usage share,
+/// passed in by the screen as PROC's count is, so no reader samples it either; off by default. A saved order without it gets it after NET↑
+/// (<see cref="ItemOrder.Resolve"/> puts a new id beside its neighbour).
 /// </summary>
 public static class PerfBarItems
 {
@@ -28,10 +31,11 @@ public static class PerfBarItems
     public const string Net = "net";
     public const string NetDown = "netdown";
     public const string NetUp = "netup";
+    public const string Ctx = "ctx";     // 2026-11-21, the user's ask
     public const string Proc = "proc";   // 2026-10-05, the user's ask
 
     /// <summary>Every meter in the bar's order. Pinned.</summary>
-    public static readonly string[] Names = [Cpu, Ram, Gpu, Vram, Net, NetDown, NetUp, Proc];
+    public static readonly string[] Names = [Cpu, Ram, Gpu, Vram, Net, NetDown, NetUp, Ctx, Proc];
 
     /// <summary>
     /// The default meters: what a bare <c>/perfbar</c> (or Ctrl+F until 2026-10-18) shows when nothing was ever picked — the bar as it
@@ -51,6 +55,7 @@ public static class PerfBarItems
         Net => PerfText.NetLabel,
         NetDown => PerfText.NetDownLabel,
         NetUp => PerfText.NetUpLabel,
+        Ctx => PerfText.CtxLabel,
         Proc => PerfText.ProcLabel,
         _ => id,
     };
@@ -65,13 +70,14 @@ public static class PerfBarItems
         Net => PerfText.NetNote,
         NetDown => PerfText.NetDownNote,
         NetUp => PerfText.NetUpNote,
+        Ctx => PerfText.CtxNote,
         Proc => PerfText.ProcNote,
         _ => "",
     };
 
     /// <summary>
     /// The readers <paramref name="on"/>'s meters need (later on 2026-09-30): the sampler runs those alone, and none at all
-    /// with nothing checked. GPU and VRAM are one reader, the network's three another; PROC none (the screen counts it).
+    /// with nothing checked. GPU and VRAM are one reader, the network's three another; PROC and CTX none (the screen supplies them).
     /// </summary>
     public static PerfReads Reads(IReadOnlySet<string> on)
     {

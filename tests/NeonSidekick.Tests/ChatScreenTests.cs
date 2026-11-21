@@ -2965,7 +2965,7 @@ public partial class ChatScreenTests : IDisposable
     private string Titled(string row) => row + new string(' ', _console.Profile.Width - 2 - TextCells.Width(row)) + ScreenPane.CloseGlyph;
 
     /// <summary>The allowed-commands list's title (later still on 2026-09-21): the Tools crumb over the row's name, straight from /tools shell allowed (/cmdlist until 2026-10-09) or the toolbar's lock as from the Shell tab; the policy buttons after it since 2026-10-02.</summary>
-    private string AllowedCommandsTitle => ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + " │ " + SettingsMenu.PolicyButtonTitle(_settings.Current.ShellCommandPolicy) + " ";   // one cycling button since later on 2026-10-13, the policy in force
+    private string AllowedCommandsTitle => ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandAllowed) + " │ " + ToolsMenuTests.PolicyStrip + " ";   // one cycling button from later on 2026-10-13; the three again since 2026-11-21
     /// <summary>The Memory mode row's saved notice for <paramref name="mode"/> (2026-10-04).</summary>
     private string Saved(string mode) => SettingsMenu.SavedNotice(SettingsField.MemoryMode, new AppSettingsData { MemoryMode = mode }, _settings.ProfileDirectory);
 

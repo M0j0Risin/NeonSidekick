@@ -225,7 +225,7 @@ public class ItemOrderTests
     public void ThePerformanceBar_DrawsItsMeters_AndItsRowValue_InTheSavedOrder()
     {
         // A saved order is a full one (the checklist saves every meter); RAM first.
-        List<string> saved = ["ram", "cpu", "gpu", "vram", "net", "netdown", "netup", "proc"];
+        List<string> saved = ["ram", "cpu", "gpu", "vram", "net", "netdown", "netup", "ctx", "proc"];
         var items = new HashSet<string>(["cpu", "ram"], StringComparer.Ordinal);
         var reading = new PerfSnapshot(34, 50, null, null);
         string usual = PerfBar.Render(PerfBarStyle.Text, items, reading, 120)!.Text;
@@ -234,6 +234,8 @@ public class ItemOrderTests
         Assert.True(moved.IndexOf("RAM", StringComparison.Ordinal) < moved.IndexOf("CPU", StringComparison.Ordinal));
 
         Assert.Equal(saved, PerfBarItems.Order(saved));
+        // A profile saved before CTX (2026-11-21): it lands after NET↑, its neighbour, the rest kept.
+        Assert.Equal(saved, PerfBarItems.Order(["ram", "cpu", "gpu", "vram", "net", "netdown", "netup", "proc"]));
         Assert.Equal("RAM, CPU · text", PerfBarItems.Value(["cpu", "ram"], "text", saved));
         Assert.Equal("CPU, RAM · text", PerfBarItems.Value(["cpu", "ram"], "text"));
     }

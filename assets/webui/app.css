@@ -452,6 +452,8 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .compose .voice-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .prompts { display: flex; flex-direction: column; gap: 6px; }
 .prompts-list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
+/* Each row its own height, the list scrolling (2026-11-21): the Queue tab's rows and mode rows, as the 🗂️ sheet's .manage-list > *. */
+.prompts-list > * { flex: none; }
 .prompt-row { display: flex; gap: 6px; align-items: stretch; }
 .prompt-row .prompt-text {
   flex: 1;
@@ -479,8 +481,9 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .prompt-row .row-delete { flex: none; width: 44px; min-height: 44px; padding: 0; }
 .prompt-row .row-delete.armed { width: auto; padding: 0 10px; font-size: 13px; }
 .prompts-note { color: var(--warn); font-size: 14px; }
-/* The 🗂️ sheet (2026-11-16, manage.js): the 📣 sheet's look under its own classes. The Queue tab: a head over each side, a row's text and its
-   🖼️ count beside a two-tap ✕, a chord's line dimmed without one; ➤ Send now and Resume; the two modes' one-tap choices, the one in force on. */
+/* The 🗂️ sheet (2026-11-16, manage.js): the 📣 sheet's look under its own classes. The Queue tab's classes below draw on the 📣 sheet since
+   2026-11-21 (chat.js): a head over each side, a row's text and its 🖼️ count beside a two-tap ✕, a chord's line dimmed without one; ➤ Send now
+   and Resume; the two modes' one-tap choices, the one in force on. */
 .manage { display: flex; flex-direction: column; gap: 6px; }
 .manage-note { color: var(--warn); font-size: 14px; }
 .manage-list { display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
@@ -510,10 +513,18 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .file-row .manage-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-row .manage-meta { color: var(--dim); font-size: 13px; overflow-wrap: anywhere; }
 .manage-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
-.manage-choices { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+/* The two queue modes as radio groups in shared columns (2026-11-21, the user's ask): one grid, a label column then three equal ones, each
+   group a real element spanning it on a subgrid (display: contents can drop a group's role). Three columns as both settings have three
+   words; a fourth word is this rule's repeat(3) and the narrow one's. The checked one: an accent border and ring, its ◉ in the accent; the
+   others dim on no background, so it reads at a glance on any palette. 44 px to tap. */
+.manage-modes { display: grid; grid-template-columns: max-content repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; margin-top: 4px; }
+.manage-choices { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
 .manage-choices .manage-choice-label { color: var(--dim); font-size: 14px; margin-right: 4px; }
-.manage-choices .manage-choice { min-height: 36px; padding: 2px 10px; }
-.manage-choices .manage-choice.on { background: var(--panel-2); color: var(--text); }
+.manage-choices .manage-choice { min-height: 44px; padding: 2px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; background: transparent; color: var(--dim); }
+.manage-choices .manage-choice .manage-mark { color: var(--dim); }
+.manage-choices .manage-choice .manage-choice-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.manage-choices .manage-choice.on { background: var(--panel-2); color: var(--text); border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.manage-choices .manage-choice.on .manage-mark { color: var(--accent); }
 .memory-row .prompt-text { display: flex; align-items: center; padding: 6px 10px; -webkit-line-clamp: unset; line-clamp: unset; overflow-wrap: anywhere; }
 .memory-row.off .prompt-text { color: var(--dim); }
 .memory-row .off-mark { color: var(--dim); white-space: pre; }
@@ -523,6 +534,9 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .memory-row .memory-edit-bar { display: flex; flex-wrap: wrap; gap: 6px; }
 .memory-row .memory-edit-bar button { min-height: 44px; padding: 0 14px; }
 @media (max-width: 420px) {
+  /* A narrow phone: each mode's label on a row of its own over its three buttons, which keep the shared columns. */
+  .manage-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .manage-choices .manage-choice-label { grid-column: 1 / -1; margin-right: 0; }
   .sheet-tab .tab-word, .sheet-action.has-glyph .tab-word { display: none; }
   .sheet-bar .tab-glyph:not(:empty) { margin-right: 0; }
   .strip-bar .sheet-tab { padding: 2px 8px; }

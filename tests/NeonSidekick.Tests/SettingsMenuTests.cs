@@ -1539,15 +1539,22 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("bash       [#9A8BB8]Git Bash, when bash.exe is found — not found[/]", SettingsMenu.ShellLabel("bash", installed: false));
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
-        // The allowed list's policy button (2026-10-02 as three, off first since 2026-10-12; one cycling button on P since later on 2026-10-13):
-        // the policy's own glyph title, never lit, a hand-edited value after a ?; the press steps off → ask → yolo → off.
-        Assert.Equal(["⊘ off", "✓ ask", "⚠  yolo", "? never"], new[] { "off", "ask", " YOLO ", " never " }.Select(p => SettingsMenu.CommandPolicyButtons(p).Single().Title));   // the glyphs since 2026-10-03; two spaces after ⚠, which Windows Terminal draws two cells wide
-        Assert.Equal('p', SettingsMenu.CommandPolicyButtons("ask").Single().Key);
-        Assert.All(new[] { "off", "ask", "yolo" }, p => Assert.False(SettingsMenu.CommandPolicyButtons(p).Single().On));
-        Assert.Equal(["ask", "yolo", "off", "off"], new[] { "off", "ask", "yolo", "never" }.Select(SettingsMenu.NextPolicy));
-        Assert.Equal("Enter = remove · p = policy · Esc = back", SettingsMenu.AllowedCommandsKeys);
-        Assert.Equal("p = policy · Esc = back", SettingsMenu.AllowedCommandsEmptyKeys);
-        Assert.Equal("Yolo declined: Shell command policy: off", SettingsMenu.YoloDeclinedNotice);
+        // The allowed list's policy buttons (2026-10-02 as three, off first since 2026-10-12; one cycling button on P from later on 2026-10-13;
+        // three again since 2026-11-21, the user's ask): one a policy in Names' order, keys o, a and y, the saved one lit, a hand-edited value none.
+        var buttons = SettingsMenu.CommandPolicyButtons("ask");
+        Assert.Equal([SettingsMenu.PolicyOffButton, SettingsMenu.PolicyAskButton, SettingsMenu.PolicyYoloButton], buttons.Select(b => b.Title));
+        Assert.Equal(['o', 'a', 'y'], buttons.Select(b => b.Key));   // the keys are a contract: the hint and the docs name them
+        Assert.Equal(["off", "ask", "yolo"], Shell.CommandPolicy.Names);   // a button's index is its policy's
+        Assert.Equal(["off", "ask", "yolo", null, null], new[] { "off", " ASK ", "yolo", " never ", "" }.Select(p => SettingsMenu.CommandPolicyButtons(p).SingleOrDefault(b => b.On)?.Title switch
+        {
+            SettingsMenu.PolicyOffButton => "off",
+            SettingsMenu.PolicyAskButton => "ask",
+            SettingsMenu.PolicyYoloButton => "yolo",
+            _ => null,
+        }));
+        Assert.Equal("Enter = remove · o / a / y = policy · Esc = back", SettingsMenu.AllowedCommandsKeys);
+        Assert.Equal("o / a / y = policy · Esc = back", SettingsMenu.AllowedCommandsEmptyKeys);
+        Assert.EndsWith(": ask", SettingsMenu.YoloDeclinedNotice("ask"), StringComparison.Ordinal);   // names the policy kept
         // The git rows (2026-09-20): the Git tab (Git (native), the last, since later on 2026-09-21) — the switch, then the two caps alphabetically; typed, none a reconnect.
         Assert.Equal(new[] { SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName }, ToolsMenuTests.TabFields(ToolsText.GitTabTitle));
         // The identity pair (2026-09-21): typed, empty allowed and shown as (not set), no validation.

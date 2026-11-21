@@ -503,7 +503,8 @@ public sealed class AppSettingsData
     /// The performance bar's meters (2026-09-30, the user's ask: <c>Show performance bar</c> a checklist like Show toolbar,
     /// none by default, in place of the one word — <c>ShowPerformanceBar</c>, off or a look, from 2026-09-29 — that was both
     /// the switch and the look; that key is retired, so a profile saved with it shows no bar until a meter is checked): the
-    /// ids of <see cref="App.PerfBarItems.Names"/> — CPU, RAM, GPU, VRAM, and the network's NET, NET↓ and NET↑ — in that order.
+    /// ids of <see cref="App.PerfBarItems.Names"/> — CPU, RAM, GPU, VRAM, the network's NET, NET↓ and NET↑, CTX (the context window
+    /// in use, 2026-11-21) and PROC — in that order.
     /// Null (the default) is <see cref="App.PerfBarItems.Defaults"/>, CPU, RAM, GPU and VRAM (2026-10-02, the user's ask: the
     /// bar shown by default; none until then, so a profile that saved null shows the four from then on); an empty list is
     /// none: no row, nothing sampled. The GPU meters read NVIDIA's NVML where an NVIDIA GPU answers, else

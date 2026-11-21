@@ -127,7 +127,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/settings import [<zip>]` | Adds a settings zip's profiles and files, never overwriting; a path counts from Downloads. Bare, it lists the zips there. |
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
 | `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks` and `monitors` (Windows only), `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `clock` or `help`. |
-| `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also steps *Shell command policy*), or *Shell police* and its forbidden strings. |
+| `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also sets *Shell command policy*), or *Shell police* and its forbidden strings. |
 | `/skills` | Lists the skills, to move, copy, rename, edit, revert, lock, disable or delete, and their settings; the **loaded** tab shows this conversation's. |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | Lists the skills unused for that long, or deletes them after a yes. See [Skill records](SETTINGS.md#skill-records-and-purging-unused-skills). |

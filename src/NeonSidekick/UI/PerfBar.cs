@@ -56,10 +56,12 @@ public static class PerfBar
     /// <paramref name="left"/> pinned left and those in <paramref name="right"/> pinned right (later on 2026-10-13), the rest center.
     /// Too narrow a row (the home bar's order, the user's call): every meter shrinks together, then the row falls back to the text
     /// look; then the right group's meters go, from its inner end, then the left's, from theirs; then the center (the left group, or the
-    /// right, with no center) is cut at the row's left. A meter that goes leaves nothing behind.
+    /// right, with no center) is cut at the row's left. A meter that goes leaves nothing behind. <paramref name="context"/> is CTX's share
+    /// (2026-11-21, the user's ask): the model's context window in use, drawn as a share like CPU's; null while the window is unknown,
+    /// which leaves the meter out as a meter the machine cannot read is.
     /// </summary>
     public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, int cells, int processes = 0, IReadOnlyList<string>? order = null,
-        IReadOnlySet<string>? left = null, IReadOnlySet<string>? right = null)
+        IReadOnlySet<string>? left = null, IReadOnlySet<string>? right = null, double? context = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         if (items.Count == 0)
@@ -69,7 +71,7 @@ public static class PerfBar
 
         var none = new HashSet<string>(StringComparer.Ordinal);
         var sides = ItemOrder.SplitCentered(order ?? PerfBarItems.Names, left ?? none, right ?? none);
-        var groups = new[] { sides.Left, sides.Center!, sides.Right }.Select(g => Meters(items, latest, processes, g)).ToArray();
+        var groups = new[] { sides.Left, sides.Center!, sides.Right }.Select(g => Meters(items, latest, processes, context, g)).ToArray();
         if (style != PerfBarStyle.Text)
         {
             foreach (int width in MeterWidths)
@@ -138,7 +140,7 @@ public static class PerfBar
     /// <summary>The colour a meter's value takes: a count's own, else the load's.</summary>
     private static Style ValueStyle(Meter meter) => new(meter.Count ?? LoadColor(meter.Value));
 
-    private static List<Meter> Meters(IReadOnlySet<string> items, PerfSnapshot latest, int processes, IReadOnlyList<string> order)
+    private static List<Meter> Meters(IReadOnlySet<string> items, PerfSnapshot latest, int processes, double? context, IReadOnlyList<string> order)
     {
         var meters = new List<Meter>(PerfBarItems.Names.Length);
         foreach (string id in order.Where(items.Contains))
@@ -152,6 +154,7 @@ public static class PerfBar
                 case PerfBarItems.Net: Share(PerfText.NetLabel, s => PerfMath.NetPercent(s.NetDown, s.NetUp, s.NetLink)); break;
                 case PerfBarItems.NetDown: Rate(PerfText.NetDownLabel, s => s.NetDown); break;
                 case PerfBarItems.NetUp: Rate(PerfText.NetUpLabel, s => s.NetUp); break;
+                case PerfBarItems.Ctx: Share(PerfText.CtxLabel, _ => context); break;   // 2026-11-21: the screen's figure, no reader's
                 case PerfBarItems.Proc:
                     meters.Add(new Meter(PerfText.ProcLabel, 0, PerfText.Count(processes), processes > 0 ? Theme.Good : Theme.Dim));
                     break;

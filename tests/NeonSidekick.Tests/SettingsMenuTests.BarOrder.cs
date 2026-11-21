@@ -97,7 +97,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["ram", "cpu", "gpu", "vram", "net", "netdown", "netup", "proc"], _settings.Current.PerformanceBarOrder);
+        Assert.Equal(["ram", "cpu", "gpu", "vram", "net", "netdown", "netup", "ctx", "proc"], _settings.Current.PerformanceBarOrder);
         Assert.Equal(["ram", "gpu", "vram"], _settings.Current.PerformanceBarItems);
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
         Assert.Contains(SettingsMenu.PerfBarToggleKeys, Output);
@@ -412,7 +412,7 @@ public partial class SettingsMenuTests
 
         Assert.Equal(["cpu"], _settings.Current.PerformanceBarLeft);
         Assert.Equal(["ram"], _settings.Current.PerformanceBarRight);
-        Assert.Equal(["cpu", "gpu", "vram", "net", "netdown", "netup", "proc", "ram"], _settings.Current.PerformanceBarOrder);
+        Assert.Equal(["cpu", "gpu", "vram", "net", "netdown", "netup", "ctx", "proc", "ram"], _settings.Current.PerformanceBarOrder);
         Assert.Contains(SettingsMenu.PinnedLeftHeading, Output);
         Assert.Contains(SettingsMenu.PinnedCenterHeading, Output);
         Assert.Contains(SettingsMenu.PinnedRightHeading, Output);

@@ -660,7 +660,7 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string AttachLeftOut = "", string AttachPdf = "", string ManageReadFailed = "");
 
 /// <summary>
-/// The 🗂️ sheet's Queue tab (2026-11-16, plan lucid-roaming-lantern #42): the PC's queued lines (<see cref="Pc"/>, the <c>/queue</c> pane's), the
+/// The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, plan lucid-roaming-lantern #42): the PC's queued lines (<see cref="Pc"/>, the <c>/queue</c> pane's), the
 /// pages' own waiting lines (<see cref="Page"/>: the session's and the ones pended at the screen), the saved <i>Queue mode</i> and <i>Queue cancel
 /// mode</i> words as the PC pane's buttons show them, every word of each (<see cref="Modes"/>, <see cref="CancelModes"/>: spelled in one place, the
 /// app's), whether a cancel holds the queue (<i>Resume</i> offered) and whether ➤ <i>Send now</i> is (the mode in force's rule).

@@ -48,7 +48,7 @@ public static partial class HelpSettings
         SettingsField.HintsBar => "Gives the key hints a bar of their own above the Status bar. auto shows it while there is a hint, always keeps it, off puts the hints on the Status bar.",
         SettingsField.StatusBarItems => "Which sections the Status bar under the input line shows, in what order and on which side. Enter opens the checklist.",
         SettingsField.ToolbarItems => "Which icons and items the tool bar shows, in what order and on which side. Enter opens the checklist, where you can also add dividers or hide the bar.",
-        SettingsField.ShowPerformanceBar => "Which meters the performance bar shows (CPU, RAM, GPU and its memory, network, background processes), where, and how they look. Enter opens the checklist.",
+        SettingsField.ShowPerformanceBar => "Which meters the performance bar shows (CPU, RAM, GPU and its memory, network, context in use, background processes), where, and how they look. Enter opens the checklist.",
         SettingsField.ShowHomeBar => "A bar of chips for Home Assistant rooms and devices (and the shopping list) that shows their state and switches them. Enter opens the picker.",
         SettingsField.BarOrder => "The top-to-bottom order of the bars under the input line: Hints, Status, Tool, Performance and Home. Each bar's own row shows or hides it.",
         SettingsField.DraftEditor => "The program /draft opens your draft in (such as code --wait); it must wait until the file is closed. Empty uses your default editor for .txt files.",

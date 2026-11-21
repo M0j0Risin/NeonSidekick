@@ -647,8 +647,8 @@ public static class WebUiText
     /// <summary>A Page line that reached the PC (never by the page's own path): what it is.</summary>
     public const string OpensOnThePage = "That opens on the page itself.";
 
-    /// <summary>The 📣 button's label, and the sheet's (2026-10-16: its three tabs named; in their order since 2026-10-17, History before Memory).</summary>
-    public const string PromptsButton = "Prompts, history and memory";
+    /// <summary>The 📣 button's label, and the sheet's (2026-10-16: its tabs named; in their order since 2026-10-17, History before Memory; Queue first since 2026-11-21).</summary>
+    public const string PromptsButton = "Queue, prompts, history and memory";
 
     /// <summary>The sheet's prompts tab with nothing saved (2026-10-16: the page saves them too).</summary>
     public const string PromptsNone = "No saved prompts yet. ⇪ saves the draft as one.";
@@ -786,15 +786,15 @@ public static class WebUiText
     /// <summary>The audit line.</summary>
     public static string QueueResumedLogLine(IPAddress? remote) => "Web UI resumed the held queue from " + Where(remote) + ".";
 
-    // ── The 🗂️ sheet (2026-11-16, plan lucid-roaming-lantern: #40 sessions, #41 made files, #42 the queue) ──
+    // ── The 🗂️ sheet (2026-11-16, plan lucid-roaming-lantern: #40 sessions, #41 made files, #42 the queue, on the 📣 sheet since 2026-11-21) ──
 
     /// <summary>🗂️'s name, and its sheet's.</summary>
-    public const string ManageButton = "Sessions, files and queue";
+    public const string ManageButton = "Sessions and files";
 
     /// <summary>The sheet's ✕.</summary>
     public const string CloseManage = "Close the sheet";
 
-    /// <summary>The sheet's three tabs, in their order; the Sessions tab wears the PC's Sessions glyph.</summary>
+    /// <summary>The 🗂️ sheet's two tabs, in their order (the Queue tab, the third until 2026-11-21, now the 📣 sheet's first); the Sessions tab wears the PC's Sessions glyph.</summary>
     public const string SessionsTab = "💬 Sessions";
 
     public const string FilesTab = "📄 Files";
@@ -808,7 +808,7 @@ public static class WebUiText
     public const string OpenSessions = "sessions";
 
     /// <summary><c>/queue send|mode|cancel …</c> typed on the page: the tab has them.</summary>
-    public const string UseQueueTab = "The queue's send and modes are on the 🗂️ sheet's Queue tab here.";
+    public const string UseQueueTab = "The queue's send and modes are on the 📣 sheet's Queue tab here.";
 
     // ── The Queue tab (2026-11-16, #42) ──
 

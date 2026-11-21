@@ -23,10 +23,20 @@ public sealed partial class WebUiPageTests
         return await SignedInAsync("/", width);
     }
 
-    private static async Task OpenSheetAsync(HeadlessPage page)
+    // The sheet opened by its button, then on its Prompts tab: a fresh page opens on Queue, the first tab (2026-11-21), and these tests are
+    // the other tabs'. onPrompts false leaves it on the tab it opened on.
+    private static async Task OpenSheetAsync(HeadlessPage page, bool onPrompts = true)
     {
         await page.EvalAsync("document.getElementById('prompts-button').click()");
         await page.WaitAsync(SheetShown, "the sheet");
+        if (!onPrompts)
+        {
+            return;
+        }
+
+        await page.EvalAsync("document.querySelector('.sheet-tab[data-tab=\"prompts\"]').click()");
+        await page.WaitAsync("document.querySelector('#prompts .sheet-tab.on').dataset.tab === 'prompts' && document.querySelector('#prompts-list .prompt-row, #prompts-list .prompts-none') !== null",
+            "the Prompts tab");
     }
 
     [WindowsFact]

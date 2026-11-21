@@ -43,6 +43,12 @@ public static class PerfText
     /// <summary>The upload rate (2026-09-30). Pinned.</summary>
     public const string NetUpLabel = "NET↑";
 
+    /// <summary>
+    /// The share of the model's context window in use (2026-11-21, the user's ask): the Status bar's usage share, drawn as a meter,
+    /// between NET↑ and PROC. Pinned.
+    /// </summary>
+    public const string CtxLabel = "CTX";
+
     /// <summary>The model's background processes still running (2026-10-05, the user's ask): a count, not a share. Pinned.</summary>
     public const string ProcLabel = "PROC";
 
@@ -54,6 +60,7 @@ public static class PerfText
     public const string NetNote = "network use, % of the link";
     public const string NetDownNote = "download rate (bits/s)";
     public const string NetUpNote = "upload rate (bits/s)";
+    public const string CtxNote = "context window in use";
     public const string ProcNote = "background processes";
 
     /// <summary>The <c>Performance bar</c> row's value with no meter checked (App.PerfBarItems.Value).</summary>

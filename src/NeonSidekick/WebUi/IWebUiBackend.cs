@@ -213,7 +213,7 @@ public interface IWebUiBackend
     /// <summary>The queue held after a cancel released from the page's banner (2026-10-17); NotFound without a screen.</summary>
     WebReply ResumeQueue(IPAddress? remote) => new(WebOutcome.NotFound);
 
-    /// <summary>The 🗂️ sheet's Queue tab (2026-11-16): the PC's queue and the pages' lines, with the modes; null without a screen (a 404). Reads only.</summary>
+    /// <summary>The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16): the PC's queue and the pages' lines, with the modes; null without a screen (a 404). Reads only.</summary>
     WebQueueView? Queue() => null;
 
     /// <summary>A line taken back from the Queue tab: a page's by key (into the drafts), a PC one by index and label; Conflict when it is no longer there.</summary>

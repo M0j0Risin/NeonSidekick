@@ -40,6 +40,37 @@ public partial class ChatScreenTests
         Assert.Equal(samples, _perfSource.Samples);
     }
 
+    /// <summary>
+    /// CTX on the screen (2026-11-21, the user's ask): once a reply reports its usage against a known window, the bar shows the share in
+    /// use, the Status bar's own (25 of LM Studio's loaded 100).
+    /// </summary>
+    [Fact]
+    public async Task ShowPerformanceBar_Ctx_ShowsTheContextShare_AfterAReply()
+    {
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 120;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        _settings.Update(d => { d.TtsOutput = false; d.PerformanceBarItems = ["cpu", "ctx"]; d.PerformanceBarLook = "text"; });
+        _perfSource.Next = new PerfSnapshot(34, 62, null, null);
+        LmStudioWindow();
+        ReplyWithUsage(input: 10, output: 15);
+        var input = Scripted();
+        PushLine(input, "hello");
+        bool shown = false;
+        input.OnWait = () =>
+        {
+            input.OnWait = null;
+            _time.Advance(ScreenPane.Tick);
+            _time.Advance(ScreenPane.Tick);
+            shown = Output.Contains("CPU  34% · " + PerfText.CtxLabel + "  25%", StringComparison.Ordinal);
+            PushLine(input, "/exit");
+        };
+
+        await RunAsync();
+
+        Assert.True(shown);
+    }
+
     /// <summary>The bar's groups on the screen (later on 2026-10-13, the user's ask): CPU pinned left starts the row, VRAM pinned right ends it.</summary>
     [Fact]
     public async Task ShowPerformanceBar_DrawsThePinnedGroups_LeftAndRight()

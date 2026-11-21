@@ -380,6 +380,30 @@ public class UsageTextTests
     }
 
     [Fact]
+    public void ContextPercent_IsTheStatusBarsShare_ZeroWithNothing_NullWithoutAWindow()
+    {
+        // The performance bar's CTX (2026-11-21, the user's ask): the busy row's share, from the same figure.
+        var tally = Filled();
+        var idle = StreamMeter.Reading.Idle;
+        Assert.Equal(30, UsageText.ContextPercent(tally, Window, MidTurnUsage.LastKnown, idle));
+        Assert.Equal(30, UsageText.ContextPercent(tally, Window, MidTurnUsage.Estimate, idle));   // idle: no estimate
+
+        var live = new StreamMeter.Reading(true, 500, 40);
+        Assert.Equal(30, UsageText.ContextPercent(tally, Window, MidTurnUsage.LastKnown, live));   // last known: moves at a report
+        Assert.Equal(42, UsageText.ContextPercent(tally, Window, MidTurnUsage.Estimate, live));    // estimate: known plus the chunks
+        Assert.Equal("~" + UsageText.ContextPercent(tally, Window, MidTurnUsage.Estimate, live) + "%",
+            UsageText.BusyHintParts(tally, Window, MidTurnUsage.Estimate, live)!.Percent);
+
+        Assert.Null(UsageText.ContextPercent(tally, null, MidTurnUsage.LastKnown, idle));   // the window unknown: left out
+        Assert.Equal(0, UsageText.ContextPercent(new TokenTally(), Window, MidTurnUsage.LastKnown, idle));   // nothing in use
+
+        // After a connect the figure stays: the history crossed over, and the meter shows no speed.
+        tally.HideFromHint();
+        Assert.Null(UsageText.BusyHintParts(tally, Window, MidTurnUsage.LastKnown, idle));
+        Assert.Equal(UsageText.Percent(tally.LastRequest.Total, Window), UsageText.ContextPercent(tally, Window, MidTurnUsage.LastKnown, idle));
+    }
+
+    [Fact]
     public void BusyHintPart_Estimate_AddsTheStreamedChunks_Marked_AndFallsBackOutsideAStream()
     {
         var tally = Filled();

@@ -518,7 +518,7 @@ The tools most profiles use, and the pane's own options.
 | Setting | What it does | Default |
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list asks first) or `yolo` (everything runs). See [Shell guards](#shell-guards). | `off` |
-| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); the approval's *Allow … always* adds one. The list can remove one or step the policy ([Pane keys](INTERFACE.md#pane-keys)). | empty |
+| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); the approval's *Allow … always* adds one. The list can remove one or set the policy ([Pane keys](INTERFACE.md#pane-keys)). | empty |
 | Shell police | Refuses a command, script or process input naming a path outside the working directory or a [trusted file](TOOLS.md#shell). Turning it off asks first, and stops the forbidden strings and database rules too. | on |
 | Shell police forbidden strings | Strings the police refuses outright, ignoring case and spacing. A new profile starts with a list of harmful actions; `r` restores it, `/profile push policestrings` copies it. | the starter list |
 | Shell prefer native tools | Sends back a lone shell command one of the app's own tools covers, once a turn. | on |

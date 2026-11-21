@@ -176,7 +176,7 @@ internal sealed partial class ChatScreen
             // The queue held after a cancel (2026-10-17): the page's lines from before it wait for the hold to lift, its Resume lifts it.
             CancelHoldNow = () => _queue.Held,
             QueueResume = WebResumeQueue,
-            // The 🗂️ sheet's Queue tab (2026-11-16, #42): ChatScreen.WebQueue.cs, on Kestrel threads, never printing.
+            // The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, #42): ChatScreen.WebQueue.cs, on Kestrel threads, never printing.
             QueueNow = WebQueueNow,
             QueueRemove = WebRemoveQueued,
             QueueSend = WebSendQueued,
@@ -790,7 +790,7 @@ internal sealed partial class ChatScreen
             // The Chat tab's 🎤 and 🔊 (2026-11-13, the webui-voice plan): null when not offered, "" when ready, else why not.
             VoiceListen: WebVoiceListenState(effective),
             VoiceSpeak: WebVoiceSpeakState(effective),
-            // The 🗂️ sheet's Queue tab re-reads when this moves (2026-11-16, #42).
+            // The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) re-reads when this moves (2026-11-16, #42).
             QueueTag: WebQueueTagNow(),
             // Its Files tab re-reads when this moves (2026-11-16, #41), and its Sessions tab when this one does (the review's #78).
             FilesTag: WebFilesTagNow(),

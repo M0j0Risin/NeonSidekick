@@ -6,7 +6,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The 🗂️ sheet's Queue tab over HTTP (2026-11-16, plan lucid-roaming-lantern #42): the view behind the cookie with an ETag (a 404 without a
+/// The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) over HTTP (2026-11-16, plan lucid-roaming-lantern #42): the view behind the cookie with an ETag (a 404 without a
 /// screen), the four changes behind the cookie and the header, a remove's body naming one side only, the modes' words read by the /queue
 /// parsers (any other a 400), a Conflict a 409 with the sentence; the chat page links manage.js, served signed out as the other scripts.
 /// </summary>

@@ -207,7 +207,7 @@ public sealed class WebCommandsTests
     [InlineData("/skills", WebCommandKind.Refused)]
     [InlineData("/youtube", WebCommandKind.Refused)]
     [InlineData("/queue clear", WebCommandKind.Refused)]
-    [InlineData("/queue", WebCommandKind.Page)]   // 2026-11-16 (#42): the 🗂️ sheet's Queue tab
+    [InlineData("/queue", WebCommandKind.Page)]   // 2026-11-16 (#42): the 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21)
     [InlineData("/queue send", WebCommandKind.Refused)]
     [InlineData("/queue mode manual", WebCommandKind.Refused)]
     [InlineData("/queue cancel hold", WebCommandKind.Refused)]

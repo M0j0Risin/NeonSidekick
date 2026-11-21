@@ -343,7 +343,7 @@ internal sealed class ToolsMenu
     /// not a path). Without the pane the list prints (<see cref="AllowedCommandLines"/>). Mid-turn
     /// as at idle: the row is never refused under a reply (<see cref="ShowAsync"/> edits it there too),
     /// so there is no flag to carry. The list's title row switches <c>Shell command policy</c> between off, ask and yolo
-    /// (2026-10-02, <see cref="SettingsMenu.CommandPolicyButtons"/>; off since 2026-10-12), yolo after a yes.
+    /// (2026-10-02, <see cref="SettingsMenu.CommandPolicyButtons"/>; off since 2026-10-12; one button each again since 2026-11-21), yolo after a yes.
     /// </summary>
     public async Task ShowAllowedCommandsAsync(CancellationToken cancellationToken)
     {

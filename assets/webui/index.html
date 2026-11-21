@@ -53,6 +53,7 @@
     <section class="prompts hidden" id="prompts" role="region">
       <div class="strip-bar sheet-bar">
         <div class="sheet-tabs" role="tablist">
+          <button type="button" class="sheet-tab" role="tab" data-tab="queue"><span class="tab-glyph">⏳</span><span class="tab-word">Queue</span></button>
           <button type="button" class="sheet-tab" role="tab" data-tab="prompts"><span class="tab-glyph">📣</span><span class="tab-word">Prompts</span></button>
           <button type="button" class="sheet-tab" role="tab" data-tab="history"><span class="tab-glyph">🕘</span><span class="tab-word">History</span></button>
           <button type="button" class="sheet-tab" role="tab" data-tab="memory"><span class="tab-glyph">💾</span><span class="tab-word">Memory</span></button>
@@ -60,7 +61,7 @@
         <button type="button" class="sheet-action" id="prompts-action"></button>
         <button type="button" id="prompts-close">✕</button>
       </div>
-      <div class="prompts-note hidden" id="prompts-note"></div>
+      <div class="prompts-note hidden" id="prompts-note" role="status" aria-live="polite"></div>
       <input type="search" id="prompts-filter" class="hidden" autocomplete="off">
       <div class="prompts-list" id="prompts-list"></div>
     </section>
@@ -69,7 +70,6 @@
         <div class="manage-tabs" role="tablist">
           <button type="button" class="manage-tab" role="tab" data-tab="sessions"><span class="tab-glyph">💬</span><span class="tab-word">Sessions</span></button>
           <button type="button" class="manage-tab" role="tab" data-tab="files"><span class="tab-glyph">📄</span><span class="tab-word">Files</span></button>
-          <button type="button" class="manage-tab" role="tab" data-tab="queue"><span class="tab-glyph">⏳</span><span class="tab-word">Queue</span></button>
         </div>
         <button type="button" id="manage-close">✕</button>
       </div>
@@ -91,7 +91,7 @@
     </div>
     <div class="draft-chips hidden" id="draft-chips"></div>
     <div class="compose">
-      <button type="button" class="prompts-button" id="prompts-button">📣</button>
+      <button type="button" class="prompts-button" id="prompts-button">⏳</button>
       <button type="button" class="attach-button" id="attach">📎</button>
       <input type="file" class="hidden" id="attach-input" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,image/bmp" multiple>
       <div class="draft-box">

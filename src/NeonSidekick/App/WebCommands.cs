@@ -40,7 +40,7 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
     /// <summary>Bare <c>/sessions</c> from the page (2026-11-16, #40): the 🗂️ sheet's Sessions tab.</summary>
     public static readonly WebCommandVerdict SessionsTab = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenSessions };
 
-    /// <summary>Bare <c>/queue</c> from the page (2026-11-16, #42): the 🗂️ sheet's Queue tab.</summary>
+    /// <summary>Bare <c>/queue</c> from the page (2026-11-16, #42): the 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21).</summary>
     public static readonly WebCommandVerdict QueueTab = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenQueue };
 }
 
@@ -94,7 +94,7 @@ public static class WebCommands
         SlashCommand.Custom,   // 2026-10-30: the user's own commands, a message once expanded
         SlashCommand.Update,   // 2026-11-04, self-update: /update notes alone
         SlashCommand.BotChat,   // 2026-11-12, the user's ask: every form, the chat shown on the page (no webcam from the page)
-        SlashCommand.Queue,   // 2026-11-16 (#42): the bare word opens the 🗂️ sheet's Queue tab
+        SlashCommand.Queue,   // 2026-11-16 (#42): the bare word opens the 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21)
         SlashCommand.Session,   // 2026-11-16 (#40): its Sessions tab; a restore and a title run
     };
 

@@ -143,7 +143,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/youtube`, `/youtube list`, `/browser list` | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | **Tools and safety** | |
 | `/tools shell` | `c` the allowed commands · `p` the police |
-| `/tools shell allowed` | Enter or Delete removes (asks) · `p` steps *Shell command policy* (yolo asks; a no goes on to off) · type to filter |
+| `/tools shell allowed` | Enter or Delete removes (asks) · `o` / `a` / `y` set *Shell command policy* off / ask / yolo (yolo asks; before typing a filter) · type to filter |
 | `/tools shell police` | `s` the forbidden strings |
 | *Shell police forbidden strings* | top row adds · Enter or Delete removes (asks) · `r` restore defaults (asks) |
 | `/tools web` | `m` *Web browser mode* · `o` opens the Browser window (Windows, macOS 14+) |
@@ -393,10 +393,11 @@ Icons under the status bar (*Tool bar*), each shown while checked there. A click
 
 ## The performance bar
 
-Meters updated once a second (*Performance bar*): **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑** and **PROC**. `/perfbar text`, `gauge` or `led` (or `l` on its checklist) picks the look; `/perfbar` hides it.
+Meters updated once a second (*Performance bar*): **CPU**, **RAM**, **GPU**, **VRAM** (**GMEM** on a Mac), **NET**, **NET↓**, **NET↑**, **CTX** and **PROC**. `/perfbar text`, `gauge` or `led` (or `l` on its checklist) picks the look; `/perfbar` hides it.
 
 * Values turn amber from 60 % and red from 85 %. A meter the machine can't read is left out.
 * NET is the share of the link speed, NET↓ and NET↑ bits per second, on the busiest adapter with a gateway. PROC counts the model's background processes running.
+* CTX is the share of the model's context window in use, the same share the Status bar shows. It's left out until the window is known.
 * **On a Mac** RAM is Activity Monitor's *Memory Used*; GMEM is the GPU's share of what macOS lets it use.
 * Meters are pinned left, center (the default) or right. On a narrow row they shrink, then show numbers only, then the side groups give way.
 * A double-click or a right-click on the bar opens `/settings`.
@@ -651,7 +652,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **📎 Attach:** up to 4 pictures or PDFs go with your next message: 20 MB each, 60 MB in all, counting waiting messages'.
 * **Attachments are saved** under *Pasted images folder*, a picture's location data stripped. An iPhone's HEIC photo needs Windows' HEIF extension, or *Most Compatible* in its camera settings (Windows only; [MAC.md](MAC.md#what-works)).
 * **The dropdown** completes the `@ # $ % ^ *` mentions and, with *Web UI commands* on, the commands the page may run. `@` lists files only while *File tools* is on. *Web UI connection details* adds a `%` or `*` connection's server and database.
-* **Queued:** a message goes after the PC's queue. During a reply it waits (in Queued and on the 🗂️ [Queue tab](#sessions-files-and-queue), not in `/queue`) and goes when the reply ends, even under *Queue mode* `manual`. At most 20 wait, 48 KB each.
+* **Queued:** a message goes after the PC's queue. During a reply it waits (in Queued and on the 📣 sheet's [Queue tab](#queue-prompts-history-and-memory), not in `/queue`) and goes when the reply ends, even under *Queue mode* `manual`. At most 20 wait, 48 KB each.
 * **After a cancel** under *Queue cancel mode* `hold`, waiting messages are held under a **Resume** banner; a new message runs first.
 * **Dropped** by `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty`. Their text and attachments go back to the page, except on a profile switch; `/queue clear` leaves them.
 * **Stop** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or a `/loop`, and stops speech (after the reply, only this page's voice); before the reply's first word it takes the message back. It never stops a model loading (Esc or Ctrl+C at the PC) or your editor under `/draft`.
@@ -666,23 +667,23 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **⏭️** shows during a botchat and does what Esc does at the PC: stops the voice, then the bot, then the chat. Over a picture's spinner it skips the picture.
 * **👥** shows after a botchat stops, as at the PC; a tap carries it on as Ctrl+Alt+B does, its voices on this page under 🔊.
 
-#### Prompts, history and memory
+#### Queue, prompts, history and memory
 
-**📣**, at the message box's left (or a bare `/prompts` from the page), opens a sheet with three tabs:
+The button at the message box's left (or a bare `/prompts` or `/queue` from the page) opens a sheet with four tabs. The button shows the glyph of the tab it opens on, ⏳ at first.
 
+* **⏳ Queue:** the PC's waiting messages and the page's. Two taps on ✕ take one back (a page's goes to the draft); *Send now* and *Resume* show when they apply, and both queue modes can be set, the one in force marked.
+* A tap on the ⏳ lines over the message box opens the Queue tab.
 * **📣 Prompts:** a tap sends a saved prompt as if typed; ✎ puts it on the message line; ⇪ saves the message line as a new one.
 * **🕘 History:** a tap puts an earlier line on the message line. *Clear all* empties the history, stored and at the PC, as `/msgclear` does.
 * **💾 Memory:** ⇪ saves the message line as a memory, as `/memory remember` does. A tap on a memory edits it or turns it off or on.
 * A 🗑️ and *Clear all* take two taps. The PC's hint row flashes what the page saved, edited or deleted.
 
-#### Sessions, files and queue
+#### Sessions and files
 
 * **🗂️** at the top opens a sheet on its last tab; Back or Esc closes it. It opens with *Web UI commands* off too.
 * **Sessions:** the newest 50, the one on screen marked; the filter searches titles, and from three letters what was said. Two taps on another resume it, as `/sessions <id>` does; it needs *Web UI commands* and an idle PC.
 * **Files:** what the model made in this conversation with the file tools, newest first; a tap opens it. It lists what `/undo` covers ([not covered](TOOLS.md#undoing-file-changes)), and `/clear` or `/new` empties it.
 * **What opens:** PDFs, pictures and text show in the browser; Office files download for Word or Excel; anything else downloads as is.
-* **Queue:** the PC's waiting messages and the page's. Two taps on ✕ take one back (a page's goes to the draft); *Send now* and *Resume* show when they apply, and both queue modes can be set.
-* A tap on the ⏳ lines over the message box opens the Queue tab.
 
 #### Pictures
 
@@ -777,13 +778,13 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions purge\|export`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue clear`, `/sampling`, `/server`, `/usage`, `/midi`, `/settings export\|import` | Refused: they run at the PC only |
-| Page | bare `/prompts`, `/sessions`, `/queue` | Opens the 📣 sheet on its Prompts tab, or the 🗂️ sheet on its Sessions or Queue tab (📣 and 🗂️ do too, even with *Web UI commands* off) |
+| Page | bare `/prompts`, `/sessions`, `/queue` | Opens the 📣 sheet on its Prompts or Queue tab, or the 🗂️ sheet on its Sessions tab (the sheets' buttons do too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC, and `/update`'s others, since installing happens at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 
 * **A Ralph loop:** its confirm, checkpoint and by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
 * **`/loop`** runs as at the PC (a looped `/read` is refused).
 * **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the Video tab's saved videos (or its setting while the tab is off). Bare `/about` points at ☰ › About.
-* **`/queue send|mode|cancel`** point at the 🗂️ sheet's Queue tab.
+* **`/queue send|mode|cancel`** point at the 📣 sheet's Queue tab.
 * **`/ha camera`** points at the Home tab's camera tiles, for the cameras on the home bar (or at its setting while the tab is off).
 * **What differs:** `/ha` and `/docker` ask before a change (at the PC they don't), though `/ha` runs a read or a *Home Assistant safe services* call unasked. A bare `/docker` lists the containers.
 * `/msgclear` asks on both sides at once. `/rewind` puts the text on the page's draft; its pictures, PDFs and pasted blocks come back on the PC's line only.

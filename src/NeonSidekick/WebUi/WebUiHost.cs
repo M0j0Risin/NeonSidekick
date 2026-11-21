@@ -467,7 +467,7 @@ public sealed class WebUiHost : IWebUiHost
 
                         return;
                     case QueuePath:
-                        // The 🗂️ sheet's Queue tab (2026-11-16, #42): read as it opens and as the state's queue tag moves, so an unchanged one is a 304.
+                        // The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, #42): read as it opens and as the state's queue tag moves, so an unchanged one is a 304.
                         if (_backend.Queue() is { } queue)
                         {
                             await TaggedJsonAsync(context, queue, WebUiJsonContext.Default.WebQueueView).ConfigureAwait(false);
@@ -1107,7 +1107,7 @@ public sealed class WebUiHost : IWebUiHost
     /// <summary>The held queue's Resume (2026-10-17): the lines held after a cancel sent.</summary>
     public const string QueueResumePath = "/api/queue/resume";
 
-    /// <summary>The 🗂️ sheet's Queue tab (2026-11-16, #42): the PC's queue and the pages' lines (GET).</summary>
+    /// <summary>The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, #42): the PC's queue and the pages' lines (GET).</summary>
     public const string QueuePath = "/api/queue";
 
     /// <summary>The Queue tab's ✕: a line taken back.</summary>

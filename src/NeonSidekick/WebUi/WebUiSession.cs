@@ -1065,7 +1065,7 @@ public sealed partial class WebUiSession : IWebUiBackend, IDisposable
 
     public WebReply Stop(IPAddress? remote) => _stop(remote);
 
-    // ── The 🗂️ sheet's Queue tab (2026-11-16, plan lucid-roaming-lantern #42): the screen's hooks, on Kestrel threads, never printing ──
+    // ── The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, plan lucid-roaming-lantern #42): the screen's hooks, on Kestrel threads, never printing ──
 
     /// <summary>The Queue tab's view, built by the screen (its queue, the pages' lines, the modes); null: no queue.</summary>
     public Func<WebQueueView>? QueueNow { get; set; }

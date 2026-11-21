@@ -3847,8 +3847,12 @@ internal sealed partial class SettingsMenu
     /// <summary>The one row of the allowed-commands list while nothing is allowed for good; the bare word since 2026-09-23 (the user's call, the hint on how to add one dropped). Pinned.</summary>
     public const string NoAllowedCommandsRow = "(none)";
 
-    /// <summary>The allowed-commands list's hint: Enter removes, P steps the policy (<see cref="CommandPolicyButtons"/>, 2026-10-02 as O, A and Y; P since later on 2026-10-13). Pinned.</summary>
-    public const string AllowedCommandsKeys = "Enter = remove · p = policy · Esc = back";
+    /// <summary>
+    /// The allowed-commands list's hint: Enter removes, O, A and Y set the policy (<see cref="CommandPolicyButtons"/>, 2026-10-02; P stepped it
+    /// from later on 2026-10-13; O, A and Y again since 2026-11-21, the user's ask). Spaced as the house's <c>a / b</c>, so a typed filter drops
+    /// the piece (<see cref="MenuFilter.WithoutLetterKeys"/>). Pinned.
+    /// </summary>
+    public const string AllowedCommandsKeys = "Enter = remove · o / a / y = policy · Esc = back";
 
     /// <summary>The question before an allowed prefix goes (2026-10-07, every list's remove asks). Pinned.</summary>
     public static string RemovePrefixQuestion(string prefix) => $"Remove \"{prefix}\" from the allowed commands? It will ask again.";
@@ -3863,7 +3867,7 @@ internal sealed partial class SettingsMenu
     public const string ForbiddenStringNote = "a command that holds this is refused, whatever the policy says";
 
     /// <summary>The allowed-commands list's hint while nothing is allowed for good: no prefix to remove, the policy button still there (2026-10-02). Pinned.</summary>
-    public const string AllowedCommandsEmptyKeys = "p = policy · Esc = back";
+    public const string AllowedCommandsEmptyKeys = "o / a / y = policy · Esc = back";
 
     /// <summary>
     /// The allowed-commands list's first title-row button (2026-10-12, the user's ask: the third policy beside ask and yolo, first):
@@ -3885,38 +3889,33 @@ internal sealed partial class SettingsMenu
     /// <summary>The allowed-commands list's last button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it since 2026-10-03, two spaces after it (later that day, the user's ask: Windows Terminal gives ⚠ one cell, as <see cref="UI.TextCells"/> counts it, but draws it from the colour emoji font two cells wide over the space after it, so the second space is the one that shows). Pinned.</summary>
     public const string PolicyYoloButton = "⚠  yolo";
 
-    /// <summary>The key of the allowed-commands list's policy button (later on 2026-10-13; o, a and y for the three before).</summary>
-    public const char PolicyKey = 'p';
+    /// <summary>The keys of the allowed-commands list's three policy buttons (2026-10-02; P for one cycling button from later on 2026-10-13 until 2026-11-21).</summary>
+    public const char PolicyOffKey = 'o';
+    public const char PolicyAskKey = 'a';
+    public const char PolicyYoloKey = 'y';
 
-    private const int PolicyIndex = 0;
-
-    /// <summary>The policy button's title for <paramref name="policy"/>: its own glyph title (<see cref="PolicyOffButton"/>, <see cref="PolicyAskButton"/>, <see cref="PolicyYoloButton"/>), a hand-edited value as <c>? word</c>. Pinned.</summary>
-    public static string PolicyButtonTitle(string? policy) => Shell.CommandPolicy.TryParse(policy, out var mode)
-        ? Shell.CommandPolicy.Name(mode) switch { "off" => PolicyOffButton, "ask" => PolicyAskButton, _ => PolicyYoloButton }
-        : "? " + (policy ?? "").Trim();
-
-    /// <summary>The policy after <paramref name="policy"/>: off, ask, yolo, off again; a hand-edited value goes to off. Pure; pinned.</summary>
-    public static string NextPolicy(string? policy)
+    /// <summary>
+    /// The allowed-commands list's buttons, one a policy in <see cref="Shell.CommandPolicy.Names"/>' order, so a button's index is its
+    /// policy's: from 2026-10-02 a radio group (<see cref="PolicyOffButton"/> first since 2026-10-12, then <see cref="PolicyAskButton"/>
+    /// and <see cref="PolicyYoloButton"/>, the saved one lit); from later on 2026-10-13 one button, key P, stepping through them; a radio
+    /// group again since 2026-11-21 (the user's ask: one button a policy, not one that cycles). A hand-edited value lights none. Pinned.
+    /// </summary>
+    public static IReadOnlyList<MenuButton> CommandPolicyButtons(string policy)
     {
-        if (!Shell.CommandPolicy.TryParse(policy, out var mode))
-        {
-            return Shell.CommandPolicy.Names[0];
-        }
-
-        int at = Array.IndexOf(Shell.CommandPolicy.Names, Shell.CommandPolicy.Name(mode));
-        return Shell.CommandPolicy.Names[(at + 1) % Shell.CommandPolicy.Names.Length];
+        string? saved = Shell.CommandPolicy.TryParse(policy, out var mode) ? Shell.CommandPolicy.Name(mode) : null;
+        return
+        [
+            new(PolicyOffButton, PolicyOffKey, saved == "off"),
+            new(PolicyAskButton, PolicyAskKey, saved == "ask"),
+            new(PolicyYoloButton, PolicyYoloKey, saved == "yolo"),
+        ];
     }
 
     /// <summary>
-    /// The allowed-commands list's button: from 2026-10-02 the policies as a radio group (<see cref="PolicyOffButton"/> first since
-    /// 2026-10-12, then <see cref="PolicyAskButton"/> and <see cref="PolicyYoloButton"/>, the saved one lit); since later on 2026-10-13
-    /// (the user's call, <c>/queue</c>'s shape) one button, key P, showing the policy in force (<see cref="PolicyButtonTitle"/>), never
-    /// lit, a press stepping to the next (<see cref="NextPolicy"/>). Pinned.
+    /// The status line when yolo's press was answered no: the policy stays as it was (2026-11-21, the user's ask: a radio group again; a no
+    /// moved the cycle on to off from later on 2026-10-13). Pinned.
     /// </summary>
-    public static IReadOnlyList<MenuButton> CommandPolicyButtons(string policy) => [new(PolicyButtonTitle(policy), PolicyKey)];
-
-    /// <summary>The status line when the press that came to yolo was answered no (later on 2026-10-13): the cycle moves on to off. Pinned.</summary>
-    public const string YoloDeclinedNotice = "Yolo declined: Shell command policy: off";
+    public static string YoloDeclinedNotice(string kept) => "Yolo declined: Shell command policy: " + kept;
 
     /// <summary>
     /// The yes/no asked before <see cref="PolicyYoloButton"/> saves (2026-10-02, the user's call: a move into <c>yolo</c> asks
@@ -9490,10 +9489,10 @@ internal sealed partial class SettingsMenu
     /// while it is empty. The session's own allows are not here: they live in the process, not the file.
     /// True when anything was removed. Internal since later on 2026-09-21 for <see cref="ToolsMenu.ShowAllowedCommandsAsync"/>,
     /// which opens it straight under the Tools crumb (<c>/tools shell allowed</c>, <c>/cmdlist</c> until 2026-10-09; the toolbar lock). Since 2026-10-02 (the user's ask) its
-    /// title row carries <see cref="CommandPolicyButtons"/>: since later on 2026-10-13 one button stepping <c>Shell command policy</c> off → ask →
-    /// yolo → off, <c>off</c> and <c>ask</c> saved at once, <c>yolo</c> after a yes to <see cref="YoloConfirmQuestion"/> asked on the same pane
-    /// (not <see cref="ConfirmAsync"/>, which closes it), a no moving on to <c>off</c> (<see cref="YoloDeclinedNotice"/>) so the cycle never
-    /// sticks; the save shows on the list's status line. It works on the empty list too. Delete removes the highlighted prefix as Enter does,
+    /// title row carries <see cref="CommandPolicyButtons"/>: since 2026-11-21 (the user's ask) one button a <c>Shell command policy</c>, the saved
+    /// one lit (one button stepping off → ask → yolo from later on 2026-10-13), <c>off</c> and <c>ask</c> saved at once, <c>yolo</c> after a yes to
+    /// <see cref="YoloConfirmQuestion"/> asked on the same pane (not <see cref="ConfirmAsync"/>, which closes it), a no keeping the policy as it
+    /// was (<see cref="YoloDeclinedNotice"/>); the lit one's press does nothing. The save shows on the list's status line. It works on the empty list too. Delete removes the highlighted prefix as Enter does,
     /// after the same yes (2026-10-16, the user's ask, <see cref="MenuPage.Removes"/>), a filtered row too.
     /// </summary>
     internal async Task<bool> EditAllowedCommandsAsync(CancellationToken cancellationToken)
@@ -9528,29 +9527,29 @@ internal sealed partial class SettingsMenu
             }
 
             (int Row, int Button)? picked = pick is { } p ? (p.Row >= 0 && p.Row < shown.Count ? shown[p.Row] : -1, p.Button) : null;
-            if (picked is { Button: PolicyIndex } pressed)
+            // Every button is a policy, its index the policy's in Names (2026-11-21): one left unmapped would fall through to the
+            // remove below and ask to remove the highlighted prefix.
+            if (picked is { Button: >= 0 } pressed && pressed.Button < Shell.CommandPolicy.Names.Length)
             {
                 cursor = pressed.Row;
-                string next = NextPolicy(policy);
-                if (next == "yolo")
+                string chosen = Shell.CommandPolicy.Names[pressed.Button];
+                if (Shell.CommandPolicy.TryParse(policy, out var saved) && Shell.CommandPolicy.Name(saved) == chosen)
+                {
+                    continue;   // the lit one: nothing to change, nothing said
+                }
+
+                if (chosen == "yolo")
                 {
                     var question = new MenuPage(YoloConfirmQuestion, ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
                     if (await PickAsync(question, 0, cancellationToken).ConfigureAwait(false) != 1)
                     {
-                        // A no moves on to off, the next in the cycle (later on 2026-10-13): ask → off is one press and a no, never stuck.
-                        _settings.Update(d => d.ShellCommandPolicy = "off");
-                        Sink.Notice(YoloDeclinedNotice);
-                        if (_overriddenBy(SettingsField.ShellCommandPolicy) is { } overriddenBy)
-                        {
-                            Sink.Warning(OverrideNotice(overriddenBy));
-                        }
-
-                        changed = true;
+                        // A no keeps the policy as it was (2026-11-21, the user's ask): a radio group cannot stick, so no move on to off.
+                        Sink.Notice(YoloDeclinedNotice(policy));
                         continue;
                     }
                 }
 
-                Apply(SettingsField.ShellCommandPolicy, d => d.ShellCommandPolicy = next);
+                Apply(SettingsField.ShellCommandPolicy, d => d.ShellCommandPolicy = chosen);
                 changed = true;
                 continue;
             }

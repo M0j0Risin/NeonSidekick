@@ -377,6 +377,7 @@ function reset() {
   entryQueue.length = 0;
   if (shown && !shown.fromStrip) closeOverlay();
   if (manage()) manage().reset();   // an open 🗂️ tab is the new conversation's
+  if (promptsOpen && sheetTab === 'queue') queueRefresh();   // and an open Queue tab
   floatSoon();
 }
 
@@ -699,7 +700,7 @@ function settleHistory() {
   const st = history.state || {};
   if (!st.overlay && shown) hideOverlay();
   if (!st.drawer && drawerOpen) hideDrawer();
-  if (!st.prompts && promptsOpen) hidePrompts(false);
+  if (!st.prompts && promptsOpenOrOpening()) hidePrompts(false);
   if (!st.manage && manageOpen()) manage().hide(true);
   if (!shown && (st.overlay || (st.drawer && !drawerOpen) || (st.prompts && !promptsOpen) || (st.manage && !manageOpen()))) history.back();
 }
@@ -756,7 +757,8 @@ function applyState(s) {
   queuedEl.replaceChildren();
   for (const line of s.queued || []) queuedEl.appendChild(el('div', null, '⏳ ' + line.replace(/\s+/g, ' ')));
   queuedEl.classList.toggle('hidden', !(s.queued || []).length);
-  if (manage()) manage().state(s);   // an open Queue tab re-reads when the queue tag moved
+  if (manage()) manage().state(s);   // an open Files or Sessions tab re-reads when its tag moved
+  if (promptsOpen && sheetTab === 'queue' && s && s.queueTag !== queueTag) { queueTag = s.queueTag; queueRefresh(); }   // and the Queue tab
   paintVoice();   // 🎤 as the PC's voice stands (2026-11-13)
   updateTitle();
 }
@@ -1029,7 +1031,7 @@ function renderAsks(list) {
     // One footer panel at a time (later on 2026-10-15): the question the PC waits on closes the drawer. Under the overlay the drawer goes at
     // once (it can't be seen) and its entry is stepped over when the overlay closes, so the picture isn't pulled away.
     if (drawerOpen) { if (shown) hideDrawer(); else closeDrawer(); }
-    if (promptsOpen) { if (shown) hidePrompts(false); else closePrompts(false); }
+    if (promptsOpenOrOpening()) { if (shown) hidePrompts(false); else closePrompts(false); }
     if (manageOpen()) { if (shown) manage().hide(false); else manage().close(false); }
     if (navigator.vibrate) {
       try { navigator.vibrate(200); } catch { /* not allowed */ }
@@ -1793,7 +1795,8 @@ async function sendText(text, opts) {
     }
     say(r.message || (leftOut ? words.attachLeftOut : ''));   // an attachment let go meanwhile, or one that didn't upload
     if (r.json && r.json.open === 'prompts') openPrompts('prompts');   // bare /prompts: the page's own sheet, on its Prompts tab
-    else if (r.json && r.json.open && manage() && manage().has(r.json.open)) manage().open(r.json.open);   // bare /queue: the 🗂️ sheet's tab
+    else if (r.json && r.json.open === 'queue') openQueue();   // bare /queue: the same sheet's Queue tab (the 🗂️ sheet's until 2026-11-21)
+    else if (r.json && r.json.open && manage() && manage().has(r.json.open)) manage().open(r.json.open);
     return;
   }
   // A refused command (later on 2026-10-14): the app's reason, and what it offers instead.
@@ -1815,6 +1818,12 @@ async function sendText(text, opts) {
 // the drawer and the usage card replace each other — the sheet and the drawer swap their history entry (replaceState), never back-then-push,
 // whose late pop would take the new entry with it. A tab change keeps the entry. Esc, Back, ✕, a tap on the transcript or a question arriving
 // close it; a picture tapped under it opens the overlay over it.
+// ⏳ Queue first (2026-11-21, the user's ask: it moved here from the 🗂️ sheet, whose third tab it was since 2026-11-16, plan lucid-roaming-lantern
+// #42): the PC's waiting lines and the pages' own, a ✕ that takes one back in two taps (a page's line goes to the draft), ➤ Send now and Resume
+// only when they apply, and the two queue modes, the one in force marked. No filter and no bar action; its messages go to the sheet's note,
+// which its redraws leave alone. It re-reads when the state's queue tag moves, and a never-chosen sheet opens on it, the first tab, so the
+// button reads ⏳ until another is picked. The ⏳ lines under the transcript and bare /queue open it. An open still reading never shows once
+// it's sent away (Esc, Back, a question, a tap on the transcript; the 🗂️ sheet's #132).
 
 const promptsBtn = document.getElementById('prompts-button');
 const promptsEl = document.getElementById('prompts');
@@ -1824,16 +1833,17 @@ const promptsClose = document.getElementById('prompts-close');
 const promptsNote = document.getElementById('prompts-note');
 const promptsFilter = document.getElementById('prompts-filter');
 const promptsList = document.getElementById('prompts-list');
-const SheetTabs = ['prompts', 'history', 'memory'];   // index.html's order: ←/→ step through this and focus promptsTabs at the same index
+const SheetTabs = ['queue', 'prompts', 'history', 'memory'];   // index.html's order: ←/→ step through this and focus promptsTabs at the same index
 let promptsOpen = false;
 let promptsOpening = false;
-let sheetTab = 'prompts';
+let promptsOpenSerial = 0;   // bumped when an open still reading is sent away: it never shows (the 🗂️ sheet's #132)
+let sheetTab = 'queue';   // the first tab until another is chosen (2026-11-21, the user's call)
 try { if (SheetTabs.includes(sessionStorage.getItem('neon.sheetTab'))) sheetTab = sessionStorage.getItem('neon.sheetTab'); } catch { /* private mode */ }
 let promptsActionNow = promptsAction;   // the bar's action button as it stands (each tab's is a fresh one)
 
 // A tab's label as the words give it ('📣 Prompts'), and its glyph alone, the label's first word.
 function tabLabel(tab) {
-  return { prompts: words.promptsTab || '📣 Prompts', history: words.historyTab || '🕘 History', memory: words.memoryTab || '💾 Memory' }[tab];
+  return { queue: words.queueTab || '⏳ Queue', prompts: words.promptsTab || '📣 Prompts', history: words.historyTab || '🕘 History', memory: words.memoryTab || '💾 Memory' }[tab];
 }
 
 function tabGlyph(tab) { return tabLabel(tab).split(' ')[0]; }
@@ -1876,12 +1886,14 @@ function paintTabs() {
   }
 }
 
-// The bar's action: ⇪ save draft on the prompts and memory tabs, a two-tap clear all on the history's.
+// The bar's action: ⇪ save draft on the prompts and memory tabs, a two-tap clear all on the history's, none on the queue's.
 function paintAction() {
   Neon.disarm();
   const fresh = promptsActionNow.cloneNode(false);   // its listeners gone with the old one
   promptsActionNow.replaceWith(fresh);
   promptsActionNow = fresh;
+  fresh.classList.toggle('hidden', sheetTab === 'queue');
+  if (sheetTab === 'queue') return;
   if (sheetTab === 'history') {
     Neon.armTwice(fresh, on => {
       fresh.classList.toggle('armed', on);
@@ -1904,6 +1916,12 @@ function actionLabel(button, text) {
 }
 
 async function readSheet(tab) {
+  if (tab === 'queue') {
+    // {view, fresh} (fresh false: a 304's view the page held already), or null when the read failed.
+    const r = await Neon.get('/api/queue', true);
+    if (r.ok && r.json) { queueLast = r.json; return { view: queueLast, fresh: true }; }
+    return r.ok && queueLast ? { view: queueLast, fresh: false } : null;   // a 304 keeps the view the page holds
+  }
   const path = tab === 'memory' ? '/api/memory' : tab === 'history' ? '/api/history' : '/api/prompts';
   const r = await Neon.get(path, tab === 'history');
   if (tab === 'history') {
@@ -1920,6 +1938,14 @@ function renderSheet(tab, sheet) {
   promptsFilter.value = '';
   promptsFilter.placeholder = words.filter || 'Filter';
   promptsFilter.setAttribute('aria-label', words.filter || 'Filter');
+  if (tab === 'queue') {
+    // No filter; the note left alone, so a ✕'s, Send now's, Resume's or a mode's message outlives the redraw after its post.
+    promptsFilter.classList.add('hidden');
+    promptsFilter.oninput = null;
+    queueDrawn = sheet.view;
+    queueDraw(sheet.view);
+    return;
+  }
   promptsNote.textContent = tab === 'memory' && sheet.modeOff ? (words.memoryModeOff || 'Memory is off.') : '';
   promptsNote.classList.toggle('hidden', !promptsNote.textContent);
   const rows = tab === 'memory' ? memoryRows(sheet) : tab === 'history' ? historyRows(sheet) : promptRows(sheet);
@@ -2046,6 +2072,193 @@ function historyRows(sheet) {
   return [...(sheet.lines || [])].reverse().map(line => sendableRow(line, 0, null));
 }
 
+// ── The Queue tab (2026-11-21; manage.js's from 2026-11-16 until then) ──
+// Every row text is user or model text, set with textContent through el().
+
+let queueLast = null;   // the view last read: a 304 draws it again
+let queueDrawn = null;   // the view last drawn: a 304 bringing it back draws nothing, so an armed ✕ survives (the review's #91)
+let queueTag = null;   // the state's queue tag the open Queue tab was drawn at
+let queueReading = 0;   // a read's serial: an older answer never draws over a newer one (the review's #112)
+
+function queueTagNow() { return state ? state.queueTag : null; }
+
+function queueNote(text) {
+  promptsNote.textContent = text || '';
+  promptsNote.classList.toggle('hidden', !text);
+}
+
+// A ✕: two taps, as a 🗑️ (its own class, so the other tabs' tests never meet it).
+function queueRemoveButton(onConfirm) {
+  const b = el('button', 'manage-remove', '✕');
+  b.type = 'button';
+  Neon.armTwice(b, on => {
+    b.classList.toggle('armed', on);
+    b.textContent = on ? (words.removeRowArmed || 'Take back?') : '✕';
+    const text = on ? (words.removeRowArmed || 'Take back?') : (words.removeRow || 'Take back');
+    b.setAttribute('aria-label', text);
+    b.title = text;
+  }, onConfirm);
+  return b;
+}
+
+function queueRow(text, pictures, remove, chord) {
+  const row = el('div', 'manage-row' + (chord ? ' chord' : ''));
+  const label = el('div', 'manage-text', text.replace(/\s+/g, ' '));
+  label.title = chord ? (words.queueChordLine || '') : text;
+  row.appendChild(label);
+  if (pictures > 0) row.appendChild(el('span', 'manage-pictures', '🖼️ ' + pictures));
+  if (remove) row.appendChild(queueRemoveButton(remove));
+  return row;
+}
+
+async function queueAct(path, body) {
+  const r = await post(path, body);
+  queueNote(r.message || '');
+  await queueRefresh();
+  return r;
+}
+
+// A mode's post in flight (2026-11-21): both groups ignore taps and arrows until it answers, so held arrows can't fire a run of saves.
+let queueChoosing = false;
+
+// A queue mode as a radio group (2026-11-21, the user's ask: the one in force marked plainly, the two modes' buttons in columns): each choice
+// a radio, ◉ on the checked one and ○ on the others (hidden from a screen reader, which hears the name and the state), only the checked one
+// in the Tab order, ←/→ and ↑/↓ moving through and picking, as ARIA radios do. A tap on the checked one posts nothing. The pick re-reads
+// the tab, which redraws every row: focus goes back to the group's new checked radio when it was in the group.
+function queueChoiceRow(label, names, current, path, field) {
+  const row = el('div', 'manage-choices');
+  row.setAttribute('role', 'radiogroup');
+  row.setAttribute('aria-label', label);
+  row.dataset.field = field;
+  const caption = el('span', 'manage-choice-label', label);
+  caption.setAttribute('aria-hidden', 'true');   // the group's own name says it
+  row.appendChild(caption);
+  const buttons = [];
+  const pick = async name => {
+    if (queueChoosing || name === current) return;
+    const focused = row.contains(document.activeElement);
+    queueChoosing = true;
+    try {
+      await queueAct(path, { [field]: name });
+    } finally {
+      queueChoosing = false;
+    }
+    if (!focused) return;
+    const now = promptsList.querySelector('.manage-choices[data-field="' + field + '"] .manage-choice[aria-checked="true"]')
+      || promptsList.querySelector('.manage-choices[data-field="' + field + '"] .manage-choice[tabindex="0"]');
+    if (now) now.focus({ preventScroll: true });
+  };
+  for (const name of names) {
+    const on = name === current;
+    const b = el('button', 'manage-choice' + (on ? ' on' : ''));
+    b.type = 'button';
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+    b.dataset.name = name;
+    b.tabIndex = on ? 0 : -1;
+    const mark = el('span', 'manage-mark', on ? '◉' : '○');
+    mark.setAttribute('aria-hidden', 'true');
+    b.append(mark, el('span', 'manage-choice-name', name));
+    b.addEventListener('click', () => pick(name));
+    buttons.push(b);
+    row.appendChild(b);
+  }
+  if (buttons.length && !names.includes(current)) buttons[0].tabIndex = 0;   // none checked: the first takes Tab
+  row.addEventListener('keydown', ev => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[ev.key];
+    if (!step || !buttons.length) return;
+    ev.preventDefault();
+    if (queueChoosing) return;
+    const at = buttons.indexOf(document.activeElement);
+    const from = at >= 0 ? at : Math.max(0, names.indexOf(current));
+    const next = (from + step + buttons.length) % buttons.length;
+    buttons[next].focus({ preventScroll: true });
+    pick(names[next]);
+  });
+  return row;
+}
+
+function queueDraw(view) {
+  const parts = [];
+  const pc = view.pc || [];
+  const page = view.page || [];
+  if (!pc.length && !page.length) parts.push(el('div', 'manage-none', words.queueNone || 'Nothing waiting.'));
+  if (pc.length) {
+    parts.push(el('div', 'manage-head', words.queueAtPc || 'At the PC'));
+    for (const line of pc) {
+      // A line already sent now waits behind the reply: listed, no ✕ (the review's #114).
+      const removable = line.removable !== false;
+      parts.push(queueRow(line.label, line.pictures || 0, removable ? () => queueAct('/api/queue/remove', { index: line.index, label: line.label }) : null, false));
+    }
+  }
+  if (page.length) {
+    parts.push(el('div', 'manage-head', words.queueFromPage || 'From the pages'));
+    for (const line of page) {
+      const removable = !line.chord && line.key > 0;
+      parts.push(queueRow(line.text, line.pictures || 0, removable ? () => queueAct('/api/queue/remove', { key: line.key }) : null, line.chord));
+    }
+  }
+  const actions = el('div', 'manage-actions');
+  if (view.sendOffered) {
+    const send = el('button', 'manage-send', words.queueSendNow || '➤ Send now');
+    send.type = 'button';
+    send.addEventListener('click', () => queueAct('/api/queue/send', {}));
+    actions.appendChild(send);
+  }
+  if (view.held) {
+    const resume = el('button', 'manage-resume', words.resume || 'Resume');
+    resume.type = 'button';
+    resume.addEventListener('click', () => queueAct('/api/queue/resume', {}));
+    actions.appendChild(resume);
+  }
+  if (actions.childElementCount) parts.push(actions);
+  // The two groups in one grid, so their buttons share columns (app.css's .manage-modes).
+  const modes = el('div', 'manage-modes');
+  modes.append(
+    queueChoiceRow(words.queueModeLabel || 'Queue mode', view.modes || [], view.mode, '/api/queue/mode', 'mode'),
+    queueChoiceRow(words.queueCancelLabel || 'Queue cancel mode', view.cancelModes || [], view.cancelMode, '/api/queue/cancel', 'cancel'));
+  parts.push(modes);
+  promptsList.replaceChildren(...parts);
+}
+
+// A failed read: the tab drawn empty, saying why (the review's #111).
+function queueEmpty(tag) {
+  memoryEditor = null;
+  queueDrawn = null;
+  paintTabs();
+  paintAction();
+  promptsFilter.value = '';
+  promptsFilter.classList.add('hidden');
+  promptsList.replaceChildren();
+  queueTag = tag;
+  queueNote(words.manageReadFailed || '');
+}
+
+// A read's answer shown: drawn unless a 304 brought back the view drawn already, stamped with the tag taken before the read, and read again
+// (once the caller is done) when the state's moved meanwhile (the review's #39).
+function queueLand(got, tag) {
+  if (got.fresh || got.view !== queueDrawn) renderSheet('queue', got);
+  queueTag = tag;
+  if (queueTagNow() !== queueTag) Promise.resolve().then(queueRefresh);
+}
+
+// The open Queue tab read again and drawn (a change made here, a new queue tag, the feed's reset); the rows read last stay on a failed read.
+async function queueRefresh() {
+  if (!promptsOpen || sheetTab !== 'queue') return;
+  const serial = ++queueReading;
+  const tag = queueTagNow();
+  const got = await readSheet('queue');
+  if (!promptsOpen || sheetTab !== 'queue' || serial !== queueReading) return;
+  if (!got) { queueNote(words.manageReadFailed || ''); return; }
+  queueLand(got, tag);
+}
+
+// The ⏳ lines and bare /queue: the sheet on its Queue tab, opened or switched to.
+function openQueue() {
+  if (promptsOpen) { if (sheetTab !== 'queue') selectTab('queue'); return; }
+  openPrompts('queue');
+}
+
 // A change made on the sheet: posted, its sentence said, the tab read again.
 async function sheetChange(path, body) {
   const r = await post(path, body);
@@ -2056,6 +2269,7 @@ async function sheetChange(path, body) {
 
 async function refreshSheet() {
   const tab = sheetTab;
+  if (tab === 'queue') { await queueRefresh(); return; }
   const sheet = await readSheet(tab);
   if (sheet && promptsOpen && tab === sheetTab) renderSheet(tab, sheet);
 }
@@ -2071,6 +2285,8 @@ async function clearHistoryNow() {
 }
 
 function focusSheet() {
+  // On Queue its tab, as the 🗂️ sheet did: its first button is a ✕ that an Enter would arm.
+  if (sheetTab === 'queue') { promptsTabs[SheetTabs.indexOf('queue')].focus({ preventScroll: true }); return; }
   const first = !promptsFilter.classList.contains('hidden') ? promptsFilter : promptsList.querySelector('button') || promptsActionNow;
   if (first) first.focus({ preventScroll: true });
 }
@@ -2079,8 +2295,19 @@ async function selectTab(tab) {
   if (!SheetTabs.includes(tab)) return;
   setSheetTab(tab);
   paintTabs();
+  queueNote('');   // a tab change clears the note (each tab's draw sets its own)
+  const serial = tab === 'queue' ? ++queueReading : 0;
+  const tag = queueTagNow();
   const sheet = await readSheet(tab);
-  if (!sheet || !promptsOpen || tab !== sheetTab) return;
+  if (!promptsOpen || tab !== sheetTab) return;
+  if (tab === 'queue') {
+    if (serial !== queueReading) return;
+    if (sheet) queueLand({ view: sheet.view, fresh: true }, tag);   // another tab's rows are showing: always drawn
+    else queueEmpty(tag);
+    focusSheet();
+    return;
+  }
+  if (!sheet) return;
   renderSheet(tab, sheet);
   focusSheet();
 }
@@ -2089,12 +2316,21 @@ async function openPrompts(tab) {
   if (promptsOpen || promptsOpening) return;
   if (tab) setSheetTab(tab);
   promptsOpening = true;
+  const serial = ++promptsOpenSerial;
   const want = sheetTab;
+  const tag = queueTagNow();
   const sheet = await readSheet(want);
+  if (serial !== promptsOpenSerial) return;   // sent away while it read (Esc, Back, a question, a tap on the transcript): it never shows
   promptsOpening = false;
-  if (!sheet || promptsOpen) return;
+  if (promptsOpen || (!sheet && want !== 'queue')) return;
   closeUsage();
-  renderSheet(want, sheet);
+  if (want === 'queue') {
+    queueNote('');
+    if (sheet) queueLand({ view: sheet.view, fresh: true }, tag);
+    else queueEmpty(tag);   // opened all the same, saying why it's empty (the review's #111)
+  } else {
+    renderSheet(want, sheet);
+  }
   if (manage() && !manageShown()) manage().hide(false);   // one still reading is called off; it has no entry to hand over
   if ((drawerOpen || manageShown()) && !shown) {
     hideDrawer();
@@ -2107,7 +2343,18 @@ async function openPrompts(tab) {
   focusSheet();
 }
 
+// Open or still reading: one still reading counts, so an ask, Esc, Back or a tap sends it away before it shows.
+function promptsOpenOrOpening() { return promptsOpen || promptsOpening; }
+
+// An open still reading is called off: it pushed no history entry yet, so there is none to take back.
+function stopPromptsOpening() {
+  if (!promptsOpening) return;
+  promptsOpening = false;
+  promptsOpenSerial++;
+}
+
 function hidePrompts(toBox) {
+  stopPromptsOpening();
   if (!promptsOpen) return;
   const focused = promptsEl.contains(document.activeElement);
   showPrompts(false);
@@ -2116,6 +2363,7 @@ function hidePrompts(toBox) {
 
 // ✕, Esc, a tap on the transcript, a row's tap or ➤, a question arriving: the sheet goes now, and its own history entry with it.
 function closePrompts(toBox) {
+  stopPromptsOpening();
   if (!promptsOpen) return;
   hidePrompts(toBox);
   if (history.state && history.state.prompts && !history.state.overlay) history.back();
@@ -2134,10 +2382,18 @@ for (const tab of promptsTabs) {
   });
 }
 document.addEventListener('keydown', ev => {
-  if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !promptsOpen || !usageCard.classList.contains('hidden')) return;
+  if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !promptsOpenOrOpening() || !usageCard.classList.contains('hidden')) return;
   ev.preventDefault();
-  if (Neon.armed()) { Neon.disarm(); return; }   // an armed 🗑️ first, then the sheet
+  if (Neon.armed()) { Neon.disarm(); return; }   // an armed 🗑️ or ✕ first, then the sheet
   closePrompts(false);
+});
+
+// The ⏳ lines under the transcript open the Queue tab, by a tap or by Enter or Space (manage.js's until 2026-11-21).
+queuedEl.addEventListener('click', openQueue);
+queuedEl.addEventListener('keydown', ev => {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  ev.preventDefault();
+  openQueue();
 });
 
 // A text for the draft (/rewind, a saved prompt's ✎; /prompts <n> until 2026-10-16, which sends now): ahead of what was there, with an undo.
@@ -2472,7 +2728,7 @@ stripBtn.addEventListener('click', openDrawer);
 stripClose.addEventListener('click', closeDrawer);
 document.querySelector('main').addEventListener('click', ev => {
   if (drawerOpen && !ev.target.closest('.tile')) closeDrawer();
-  if (promptsOpen && !ev.target.closest('.tile')) closePrompts(false);
+  if (promptsOpenOrOpening() && !ev.target.closest('.tile')) closePrompts(false);
   if (manageOpen() && !ev.target.closest('.tile')) manage().close(false);
 });
 stripRow.addEventListener('keydown', ev => {
@@ -2505,9 +2761,9 @@ function applyWords() {
   drawerEl.setAttribute('aria-label', words.stripButton);
   attachBtn.setAttribute('aria-label', words.attachButton || 'Attach a picture or PDF');
   attachBtn.title = words.attachButton || 'Attach a picture or PDF';
-  promptsBtn.setAttribute('aria-label', words.promptsButton || 'Prompts, history and memory');
-  promptsBtn.title = words.promptsButton || 'Prompts, history and memory';
-  promptsEl.setAttribute('aria-label', words.promptsButton || 'Prompts, history and memory');
+  promptsBtn.setAttribute('aria-label', words.promptsButton || 'Queue, prompts, history and memory');
+  promptsBtn.title = words.promptsButton || 'Queue, prompts, history and memory';
+  promptsEl.setAttribute('aria-label', words.promptsButton || 'Queue, prompts, history and memory');
   promptsClose.setAttribute('aria-label', words.closePrompts || 'Close');
   promptsClose.title = words.closePrompts || 'Close';
   paintPromptsButton();

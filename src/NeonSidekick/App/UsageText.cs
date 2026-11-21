@@ -759,21 +759,49 @@ public static class UsageText
     public static UsageParts? BusyHintParts(TokenTally tally, ContextLength? window, MidTurnUsage mode, StreamMeter.Reading live)
     {
         ArgumentNullException.ThrowIfNull(tally);
-        long known = tally.LastRequest.Total;
-        if (mode == MidTurnUsage.Estimate && live is { Streaming: true, Chunks: > 0 })
+        var (inUse, estimated) = InUse(tally, mode, live);
+        if (estimated)
         {
             string? streaming = live.ChunksPerSecond is { } rate ? EstimateMark + Speed(rate, 0)
                 : !tally.HintHidden && tally.LastKnownSpeed is { } last ? Speed(last, 0)
                 : null;
-            return ContextParts(known + live.Chunks, window, EstimateMark, streaming);
+            return ContextParts(inUse, window, EstimateMark, streaming);
         }
 
-        if (known == 0 || tally.HintHidden)
+        if (inUse == 0 || tally.HintHidden)
         {
             return null;
         }
 
-        return ContextParts(known, window, "", tally.LastKnownSpeed is { } speed ? Speed(speed, 0) : null);
+        return ContextParts(inUse, window, "", tally.LastKnownSpeed is { } speed ? Speed(speed, 0) : null);
+    }
+
+    /// <summary>
+    /// The performance bar's CTX share (2026-11-21, the user's ask): the share the Status bar's usage shows, from the same figure, so the two
+    /// never disagree. Idle and under <see cref="MidTurnUsage.LastKnown"/> the last request's; under <see cref="MidTurnUsage.Estimate"/>,
+    /// while a request streams, that plus the chunks streamed. Null while the window is unknown (the meter left out); 0 with nothing in use
+    /// (before the first reply, after <c>/clear</c>). Not hidden by <see cref="TokenTally.HintHidden"/>: after a connect the history and its
+    /// size cross over, the auto-compact judges by the same figure, and the meter shows no speed to mislead. Pure.
+    /// </summary>
+    public static int? ContextPercent(TokenTally tally, ContextLength? window, MidTurnUsage mode, StreamMeter.Reading live)
+    {
+        ArgumentNullException.ThrowIfNull(tally);
+        if (window is not { Tokens: > 0 })
+        {
+            return null;
+        }
+
+        return Percent(InUse(tally, mode, live).Tokens, window) ?? 0;
+    }
+
+    /// <summary>
+    /// The context in use as the busy row counts it: the request streaming now added to the last one's total under
+    /// <see cref="MidTurnUsage.Estimate"/> once it has a chunk (never so while idle: the meter is not streaming), else the last request's.
+    /// </summary>
+    private static (long Tokens, bool Estimated) InUse(TokenTally tally, MidTurnUsage mode, StreamMeter.Reading live)
+    {
+        long known = tally.LastRequest.Total;
+        return mode == MidTurnUsage.Estimate && live is { Streaming: true, Chunks: > 0 } ? (known + live.Chunks, true) : (known, false);
     }
 
     /// <summary>

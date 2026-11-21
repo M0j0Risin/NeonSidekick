@@ -6,7 +6,7 @@ using NeonSidekick.WebUi;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The 🗂️ sheet's Queue tab at the session (2026-11-16, plan lucid-roaming-lantern #42): each line keyed, the keyed list with the screen's
+/// The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) at the session (2026-11-16, plan lucid-roaming-lantern #42): each line keyed, the keyed list with the screen's
 /// pended lines after the session's own, a removal by key from either of the session's lists (held or not) but never a chord's, the
 /// version every change moves, the words, and the screen's hooks (NotFound without them).
 /// </summary>

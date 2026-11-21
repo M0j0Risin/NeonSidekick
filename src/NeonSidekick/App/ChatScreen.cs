@@ -2400,7 +2400,7 @@ internal sealed partial class ChatScreen
     /// null — no row, the sampler stopped — while no meter is checked (<see cref="PerfBarItems"/>, 2026-09-30), else the
     /// latest reading of the checked ones in the look (<see cref="PerfBar.Render"/>), the sampler reading what they need
     /// alone (<see cref="PerfBarItems.Reads"/>). PROC (2026-10-05) is the registry's running count, read here at each tick, so a
-    /// start or an exit shows without the sampler.
+    /// start or an exit shows without the sampler. CTX (2026-11-21) is the context share, <see cref="UsageText.ContextPercent"/>, read here too.
     /// </summary>
     private PerfRow? PerfBarRow(int cells)
     {
@@ -2415,9 +2415,13 @@ internal sealed partial class ChatScreen
 
         var (latest, _) = _perf.Read();
         int processes = items.Contains(PerfBarItems.Proc) ? _processes.Running : 0;
+        // CTX (2026-11-21, the user's ask): the Status bar's usage share, read as its BusyUsage lambda reads it (same thread, same figures).
+        int? context = items.Contains(PerfBarItems.Ctx)
+            ? UsageText.ContextPercent(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(shown.LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read())
+            : null;
         var sides = PerfBarItems.Sides(shown.PerformanceBarOrder, shown.PerformanceBarLeft, shown.PerformanceBarRight);   // the groups, later on 2026-10-13
         return PerfBar.Render(PerfBarMode.Parse(shown.PerformanceBarLook), items, latest, cells, processes, sides.All,
-            sides.Left.ToHashSet(StringComparer.Ordinal), sides.Right.ToHashSet(StringComparer.Ordinal));
+            sides.Left.ToHashSet(StringComparer.Ordinal), sides.Right.ToHashSet(StringComparer.Ordinal), context);
     }
 
     /// <summary>

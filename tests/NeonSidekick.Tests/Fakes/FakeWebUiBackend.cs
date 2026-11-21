@@ -421,7 +421,7 @@ internal sealed class FakeWebUiBackend : IWebUiBackend
         return ResumeReply ?? WebReply.Ok;
     }
 
-    /// <summary>The 🗂️ sheet's Queue tab (2026-11-16): the view to serve (null: a 404), each action as it arrived, <see cref="QueueReply"/> answering them.</summary>
+    /// <summary>The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16): the view to serve (null: a 404), each action as it arrived, <see cref="QueueReply"/> answering them.</summary>
     public WebQueueView? QueueView { get; set; }
 
     public ConcurrentQueue<string> QueueActions { get; } = new();

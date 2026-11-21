@@ -112,7 +112,7 @@ public sealed partial class WebUiPageTests
 
         await page.EvalAsync("document.getElementById('prompts-close').click()");
         await page.WaitAsync(SheetHidden, "closed");
-        await OpenSheetAsync(page);
+        await OpenSheetAsync(page, onPrompts: false);
         await page.WaitAsync("document.querySelector('.sheet-tab.on').dataset.tab === 'memory'", "reopened on the last tab");
 
         // Bare /prompts opens on Prompts, whatever tab was last.
@@ -171,11 +171,12 @@ public sealed partial class WebUiPageTests
     }
 
     /// <summary>
-    /// 📣 shows the glyph of the tab the sheet opens on, through a tap, ←/→, a close, a reload and bare <c>/prompts</c>; the tabs read Prompts,
-    /// History, Memory, and → focuses the tab it selects (index.html's order and the script's agree) (2026-10-17, the user's asks).
+    /// The button shows the glyph of the tab the sheet opens on, through a tap, ←/→, a close, a reload and bare <c>/prompts</c>; the tabs read
+    /// Queue, Prompts, History, Memory, ⏳ first on a fresh page (2026-11-21, the user's call; 📣 Prompts first from 2026-10-17), and → focuses
+    /// the tab it selects (index.html's order and the script's agree) (2026-10-17, the user's asks).
     /// </summary>
     [WindowsFact]
-    public async Task TheButton_ShowsTheCurrentTab_AndTheTabsReadPromptsHistoryMemory()
+    public async Task TheButton_ShowsTheCurrentTab_AndTheTabsReadQueuePromptsHistoryMemory()
     {
         _backend.Reply = new WebReply(WebOutcome.Ok, Open: WebUiText.OpenPrompts);
         if (await PromptsPageAsync(prompts: ["one"]) is not { } page)
@@ -186,9 +187,14 @@ public sealed partial class WebUiPageTests
         static string Glyph(string label) => JsonSerializer.Serialize(label.Split(' ')[0]);
         const string Button = "document.getElementById('prompts-button').textContent";
 
-        Assert.Equal("prompts,history,memory", await page.TextAsync("[...document.querySelectorAll('.sheet-tab')].map(t => t.dataset.tab).join()"));
-        await page.WaitAsync(Button + " === " + Glyph(WebUiText.PromptsTab), "📣 at first");
-        await OpenSheetAsync(page);
+        Assert.Equal("queue,prompts,history,memory", await page.TextAsync("[...document.querySelectorAll('.sheet-tab')].map(t => t.dataset.tab).join()"));
+        await page.WaitAsync(Button + " === " + Glyph(WebUiText.QueueTab), "⏳ at first");
+        await OpenSheetAsync(page, onPrompts: false);
+        await page.WaitAsync("document.querySelector('#prompts .sheet-tab.on').dataset.tab === 'queue'", "a fresh sheet on Queue");
+        await KeyAsync(page, "ArrowLeft", "document.querySelector('.sheet-tab[data-tab=\"queue\"]')");
+        await page.WaitAsync(Button + " === " + Glyph(WebUiText.MemoryTab) + " && document.activeElement.dataset.tab === 'memory'", "← wraps to memory");
+        await KeyAsync(page, "ArrowRight", "document.querySelector('.sheet-tab[data-tab=\"memory\"]')");
+        await page.WaitAsync(Button + " === " + Glyph(WebUiText.QueueTab) + " && document.activeElement.dataset.tab === 'queue'", "→ wraps to queue");
 
         await ClickTabAsync(page, "history");
         await page.WaitAsync(Button + " === " + Glyph(WebUiText.HistoryTab), "🕘 on the history tab");
@@ -241,6 +247,31 @@ public sealed partial class WebUiPageTests
         await OpenSheetAsync(page);
         Assert.True((await page.EvalAsync("document.documentElement.scrollWidth <= innerWidth")).GetBoolean());
         Assert.True((await page.EvalAsync("document.getElementById('prompts-close').getBoundingClientRect().right <= innerWidth")).GetBoolean());
+    }
+
+    /// <summary>
+    /// Just over the line where the tabs' words hide (2026-11-21: four tabs since Queue joined): the bar fits with the words showing, on Prompts
+    /// with ⇪ save draft beside them and on Queue without it.
+    /// </summary>
+    [WindowsTheory]
+    [InlineData(430)]
+    [InlineData(520)]
+    public async Task JustOverTheNarrowLine_TheSheetsBarFits_WithTheWords(int width)
+    {
+        if (await PromptsPageAsync(width: width, prompts: ["one"]) is not { } page)
+        {
+            return;
+        }
+
+        const string Fits = "(() => { const bar = document.querySelector('#prompts .sheet-bar'); const close = document.getElementById('prompts-close').getBoundingClientRect();"
+            + " return document.documentElement.scrollWidth <= innerWidth && bar.scrollWidth <= bar.clientWidth && close.right <= innerWidth"
+            + " && [...document.querySelectorAll('#prompts .sheet-tab')].every(t => t.scrollWidth <= t.clientWidth + 1); })()";
+        await OpenSheetAsync(page);
+        Assert.Equal("inline", await page.TextAsync("getComputedStyle(document.querySelector('#prompts .sheet-tab .tab-word')).display"));   // the words show
+        Assert.True((await page.EvalAsync(Fits)).GetBoolean(), "on Prompts, ⇪ showing");
+        await ClickTabAsync(page, "queue");
+        await page.WaitAsync("document.querySelector('#prompts .sheet-tab.on').dataset.tab === 'queue'", "on Queue");
+        Assert.True((await page.EvalAsync(Fits)).GetBoolean(), "on Queue");
     }
 
     // ── ↑/↓ ──

@@ -86,7 +86,7 @@ public sealed class MessageQueue
 
     /// <summary>
     /// Bumped by every change to the entries or the hold (2026-11-16, #42): the Web UI's state carries it in its queue tag, so the
-    /// 🗂️ sheet's Queue tab re-reads only when something moved.
+    /// 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) re-reads only when something moved.
     /// </summary>
     public long Version
     {

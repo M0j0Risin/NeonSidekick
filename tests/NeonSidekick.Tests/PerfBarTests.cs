@@ -45,8 +45,8 @@ public class PerfBarTests
     [Fact]
     public void TheMeters_ArePinned_TheFourByDefault()
     {
-        Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup", "proc"], PerfBarItems.Names);   // PROC last, 2026-10-05
-        Assert.Equal(["CPU", "RAM", "GPU", OperatingSystem.IsMacOS() ? "GMEM" : "VRAM", "NET", "NET↓", "NET↑", "PROC"], PerfBarItems.Names.Select(PerfBarItems.Title));   // GMEM on a Mac, 2026-10-07
+        Assert.Equal(["cpu", "ram", "gpu", "vram", "net", "netdown", "netup", "ctx", "proc"], PerfBarItems.Names);   // PROC last, 2026-10-05; CTX before it, 2026-11-21
+        Assert.Equal(["CPU", "RAM", "GPU", OperatingSystem.IsMacOS() ? "GMEM" : "VRAM", "NET", "NET↓", "NET↑", "CTX", "PROC"], PerfBarItems.Names.Select(PerfBarItems.Title));   // GMEM on a Mac, 2026-10-07
         Assert.Equal(["cpu", "ram", "gpu", "vram"], PerfBarItems.Defaults);
         Assert.Null(new AppSettingsData().PerformanceBarItems);
         Assert.Equal(PerfBarItems.Defaults, PerfBarItems.Names.Where(PerfBarItems.Resolve(null).Contains));   // null: the four (2026-10-02; none before)
@@ -345,6 +345,32 @@ public class PerfBarTests
         var gauge = PerfBar.Render(PerfBarStyle.Gauge, Only("cpu", "proc"), Reading, 200, processes: 1)!;
         Assert.EndsWith(" 34%" + PerfText.MeterSeparator + "PROC    1", gauge.Text.TrimEnd(), StringComparison.Ordinal);
         Assert.Equal(PerfBar.Render(PerfBarStyle.Gauge, Only("cpu"), Reading, 200)!.Text.Trim(), gauge.Text.Trim()[..^(PerfText.MeterSeparator.Length + 9)]);
+    }
+
+    [Fact]
+    public void Ctx_IsTheContextShare_DrawnInEveryLook_LeftOutWhileTheWindowIsUnknown()
+    {
+        // 2026-11-21, the user's ask: the screen supplies the share, no reader samples it.
+        Assert.Equal(PerfReads.None, PerfBarItems.Reads(Only("ctx")));
+        Assert.Equal(PerfBarItems.NetUp, PerfBarItems.Names[Array.IndexOf(PerfBarItems.Names, PerfBarItems.Ctx) - 1]);
+        Assert.Equal(PerfBarItems.Proc, PerfBarItems.Names[Array.IndexOf(PerfBarItems.Names, PerfBarItems.Ctx) + 1]);
+        Assert.DoesNotContain(PerfBarItems.Ctx, PerfBarItems.Defaults);
+
+        var text = PerfBar.Render(PerfBarStyle.Text, Only("cpu", "ctx", "proc"), Reading, 120, processes: 1, context: 87)!;
+        Assert.Equal(Centered("CPU  34% · " + PerfText.CtxLabel + "  87% · PROC    1", 120), text.Text);
+        Assert.Equal(new Style(Theme.Bad), text.Segments.Single(s => s.Text == " 87%").Style);   // red from 85: a compact is near
+
+        Assert.Equal(Centered(PerfText.CtxLabel + "   0%", 120), PerfBar.Render(PerfBarStyle.Text, Only("ctx"), PerfSnapshot.None, 120, context: 0)!.Text);
+        Assert.Equal(Centered(PerfText.CtxLabel + " 100%", 120), PerfBar.Render(PerfBarStyle.Text, Only("ctx"), PerfSnapshot.None, 120, context: 140)!.Text);   // capped
+        Assert.Equal(Centered("CPU  34%", 120), PerfBar.Render(PerfBarStyle.Text, Only("cpu", "ctx"), Reading, 120)!.Text);   // unknown: left out
+
+        // Drawn as CPU's share is: the same gauge or LEDs for the same figure.
+        foreach (var style in new[] { PerfBarStyle.Gauge, PerfBarStyle.Led })
+        {
+            string cpu = PerfBar.Render(style, Only("cpu"), Reading, 120)!.Text.Trim();
+            string ctx = PerfBar.Render(style, Only("ctx"), PerfSnapshot.None, 120, context: 34)!.Text.Trim();
+            Assert.Equal(cpu["CPU".Length..], ctx[PerfText.CtxLabel.Length..]);
+        }
     }
 
     [Fact]

@@ -78,7 +78,7 @@ public sealed class WebRateLimitTests
     [InlineData("/api/history/clear", WebRateBucket.Act)]
     [InlineData("/api/learn/cancel", WebRateBucket.Act)]   // the status row's 🧠 (2026-10-17)
     [InlineData("/api/queue/resume", WebRateBucket.Act)]   // the held queue's Resume (2026-10-17)
-    [InlineData("/api/queue/remove", WebRateBucket.Act)]   // the 🗂️ sheet's Queue tab (2026-11-16)
+    [InlineData("/api/queue/remove", WebRateBucket.Act)]   // the 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16)
     [InlineData("/api/queue/send", WebRateBucket.Act)]
     [InlineData("/api/queue/mode", WebRateBucket.Act)]
     [InlineData("/api/queue/cancel", WebRateBucket.Act)]

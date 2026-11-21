@@ -1,12 +1,11 @@
 // NeonSidekick's Web UI, the 🗂️ sheet (2026-11-16, plan lucid-roaming-lantern, the user's pick): one sheet with a tab per thing the phone
-// manages at the PC: Sessions (#40), Files (#41) and the Queue (#42). Built like the 📣 sheet in chat.js, with its own
+// manages at the PC: Sessions (#40) and Files (#41); the Queue (#42) was its third tab until 2026-11-21 (the user's ask: the 📣 sheet's first
+// tab now, in chat.js, which the ⏳ lines and bare /queue open). Built like the 📣 sheet in chat.js, with its own
 // tabs (ManageTabs, kept in sessionStorage under neon.manageTab), so the two never restore each other's tab. Loaded after chat.js as a classic
 // deferred script: chat.js's globals (words, post, el, shown, drawerOpen, promptsOpen, usageCard…) are read at call time, and chat.js reaches
 // this sheet through window.NeonManage alone (isOpen, hide, close, open, reset, state, has, paintWords): the history entries, Esc, a tap on the
-// transcript, the send reply's open, the feed's reset and each state's queue tag.
-// Every row text is user or model text, set with textContent through el(). The Queue tab: the PC's waiting lines and the pages' own, a ✕ that
-// takes one back in two taps (a page's line goes to the draft), ➤ Send now and Resume only when they apply, and the two queue modes, the one
-// in force marked. It re-reads when the state's queue tag moves.
+// transcript, the send reply's open, the feed's reset and each state's files and sessions tags.
+// Every row text is user or model text, set with textContent through el(). A stored neon.manageTab of queue falls back to Sessions.
 'use strict';
 
 (() => {
@@ -23,10 +22,9 @@
   let opening = false;
   let tab = ManageTabs[0];
   try { if (ManageTabs.includes(sessionStorage.getItem('neon.manageTab'))) tab = sessionStorage.getItem('neon.manageTab'); } catch { /* private mode */ }
-  let queueTag = null;   // the state's queue tag the open Queue tab was drawn at
   let reading = 0;   // a read's serial, the search's too: an older answer never draws over a newer one (the review's #112)
   let openSerial = 0;   // bumped by hide and close: an open still reading when the sheet was sent away never shows (the review's #132)
-  let drawn = null;   // the view last drawn: a 304 bringing it back draws nothing, so an armed ✕ survives (the review's #91)
+  let drawn = null;   // the view last drawn: a 304 bringing it back draws nothing (the review's #91)
 
   function setTab(t) {
     tab = t;
@@ -34,7 +32,7 @@
   }
 
   function tabLabel(t) {
-    return { sessions: words.sessionsTab || '💬 Sessions', files: words.filesTab || '📄 Files', queue: words.queueTab || '⏳ Queue' }[t] || t;
+    return { sessions: words.sessionsTab || '💬 Sessions', files: words.filesTab || '📄 Files' }[t] || t;
   }
 
   function paintTabs() {
@@ -47,7 +45,7 @@
   }
 
   function paintWords() {
-    const name = words.manageButton || 'Sessions, files and queue';
+    const name = words.manageButton || 'Sessions and files';
     button.setAttribute('aria-label', name);
     button.title = name;
     sheet.setAttribute('aria-label', name);
@@ -74,102 +72,6 @@
   function sayNote(text) {
     note.textContent = text || '';
     note.classList.toggle('hidden', !text);
-  }
-
-  // ── The Queue tab ──
-
-  let lastQueue = null;   // the view last read: a 304 draws it again
-
-  // Each reader answers {view, fresh} (fresh false: a 304's view the page held already), or null when the read failed.
-  async function readQueue() {
-    const r = await Neon.get('/api/queue', true);
-    if (r.ok && r.json) { lastQueue = r.json; return { view: lastQueue, fresh: true }; }
-    return r.ok && lastQueue ? { view: lastQueue, fresh: false } : null;   // a 304 keeps the view the page holds
-  }
-
-  // A ✕: two taps, as the 📣 sheet's 🗑️ (its own class, so the 📣 sheet's tests never meet it).
-  function removeButton(onConfirm) {
-    const b = el('button', 'manage-remove', '✕');
-    b.type = 'button';
-    Neon.armTwice(b, on => {
-      b.classList.toggle('armed', on);
-      b.textContent = on ? (words.removeRowArmed || 'Take back?') : '✕';
-      const text = on ? (words.removeRowArmed || 'Take back?') : (words.removeRow || 'Take back');
-      b.setAttribute('aria-label', text);
-      b.title = text;
-    }, onConfirm);
-    return b;
-  }
-
-  function queueRow(text, pictures, remove, chord) {
-    const row = el('div', 'manage-row' + (chord ? ' chord' : ''));
-    const label = el('div', 'manage-text', text.replace(/\s+/g, ' '));
-    label.title = chord ? (words.queueChordLine || '') : text;
-    row.appendChild(label);
-    if (pictures > 0) row.appendChild(el('span', 'manage-pictures', '🖼️ ' + pictures));
-    if (remove) row.appendChild(removeButton(remove));
-    return row;
-  }
-
-  async function queueAct(path, body) {
-    const r = await post(path, body);
-    sayNote(r.message || '');
-    await refresh();
-    return r;
-  }
-
-  function choiceRow(label, names, current, path, field) {
-    const row = el('div', 'manage-choices');
-    row.setAttribute('role', 'group');
-    row.setAttribute('aria-label', label);
-    row.appendChild(el('span', 'manage-choice-label', label));
-    for (const name of names) {
-      const b = el('button', 'manage-choice' + (name === current ? ' on' : ''), name);
-      b.type = 'button';
-      b.setAttribute('aria-pressed', name === current ? 'true' : 'false');
-      b.addEventListener('click', () => { if (name !== current) queueAct(path, { [field]: name }); });
-      row.appendChild(b);
-    }
-    return row;
-  }
-
-  function drawQueue(view) {
-    const parts = [];
-    const pc = view.pc || [];
-    const page = view.page || [];
-    if (!pc.length && !page.length) parts.push(el('div', 'manage-none', words.queueNone || 'Nothing waiting.'));
-    if (pc.length) {
-      parts.push(el('div', 'manage-head', words.queueAtPc || 'At the PC'));
-      for (const line of pc) {
-        // A line already sent now waits behind the reply: listed, no ✕ (the review's #114).
-        const removable = line.removable !== false;
-        parts.push(queueRow(line.label, line.pictures || 0, removable ? () => queueAct('/api/queue/remove', { index: line.index, label: line.label }) : null, false));
-      }
-    }
-    if (page.length) {
-      parts.push(el('div', 'manage-head', words.queueFromPage || 'From the pages'));
-      for (const line of page) {
-        const removable = !line.chord && line.key > 0;
-        parts.push(queueRow(line.text, line.pictures || 0, removable ? () => queueAct('/api/queue/remove', { key: line.key }) : null, line.chord));
-      }
-    }
-    const actions = el('div', 'manage-actions');
-    if (view.sendOffered) {
-      const send = el('button', 'manage-send', words.queueSendNow || '➤ Send now');
-      send.type = 'button';
-      send.addEventListener('click', () => queueAct('/api/queue/send', {}));
-      actions.appendChild(send);
-    }
-    if (view.held) {
-      const resume = el('button', 'manage-resume', words.resume || 'Resume');
-      resume.type = 'button';
-      resume.addEventListener('click', () => queueAct('/api/queue/resume', {}));
-      actions.appendChild(resume);
-    }
-    if (actions.childElementCount) parts.push(actions);
-    parts.push(choiceRow(words.queueModeLabel || 'Queue mode', view.modes || [], view.mode, '/api/queue/mode', 'mode'));
-    parts.push(choiceRow(words.queueCancelLabel || 'Queue cancel mode', view.cancelModes || [], view.cancelMode, '/api/queue/cancel', 'cancel'));
-    list.replaceChildren(...parts);
   }
 
   // ── The Sessions tab (#40) ──
@@ -315,7 +217,6 @@
   const Tabs = {
     sessions: { read: () => readSessions(filter.value.trim()), draw: drawSessions },
     files: { read: readFiles, draw: drawFiles },
-    queue: { read: readQueue, draw: drawQueue },
   };
 
   async function read(t) {
@@ -335,21 +236,20 @@
   // The state's tags now: each read takes them before it asks, and its tab is stamped with those (the review's #39: a view read before a change
   // was marked current with the change's tag, and never read again).
   function tagsNow() {
-    return { queue: state ? state.queueTag : null, files: state ? state.filesTag : null, sessions: state ? state.sessionsTag : null };
+    return { files: state ? state.filesTag : null, sessions: state ? state.sessionsTag : null };
   }
 
   // A read's answer shown: drawn unless a 304 brought back the view drawn already, the tab stamped with the tags taken before the read, and read
   // again (once the caller is done) when the state's moved meanwhile.
   function land(t, got, tags) {
     if (got.fresh || got.view !== drawn) draw(t, got.view);
-    if (t === 'queue') queueTag = tags.queue;
     if (t === 'files') filesTag = tags.files;
     if (t === 'sessions') sessionsTag = tags.sessions;
     const now = tagsNow();
-    if ((t === 'queue' && now.queue !== queueTag) || (t === 'files' && now.files !== filesTag) || (t === 'sessions' && now.sessions !== sessionsTag)) Promise.resolve().then(refresh);
+    if ((t === 'files' && now.files !== filesTag) || (t === 'sessions' && now.sessions !== sessionsTag)) Promise.resolve().then(refresh);
   }
 
-  // The open tab read again and drawn (a change made here, a new queue tag, the feed's reset); an armed ✕ survives a 304.
+  // The open tab read again and drawn (a new files or sessions tag, the feed's reset).
   async function refresh() {
     if (!open) return;
     const t = tab;
@@ -410,11 +310,11 @@
       paintTabs();
       list.replaceChildren();
       filter.classList.add('hidden');
-      queueTag = tags.queue;
       filesTag = tags.files;
       sessionsTag = tags.sessions;
       sayNote(words.manageReadFailed || '');
     }
+    if (promptsOpening && !promptsOpen) hidePrompts(false);   // a 📣 open still reading is called off; it has no entry to hand over
     if ((drawerOpen || promptsOpen) && !shown) {
       hideDrawer();
       hidePrompts(true);
@@ -463,24 +363,13 @@
       selectTab(ManageTabs[at]).then(() => tabEls[at].focus({ preventScroll: true }));
     });
   }
-  // Esc: an armed ✕ first, then the sheet; not under the overlay or the usage card, as the 📣 sheet's.
+  // Esc: an armed session row first, then the sheet; not under the overlay or the usage card, as the 📣 sheet's.
   document.addEventListener('keydown', ev => {
     if (ev.key !== 'Escape' || ev.defaultPrevented || shown || !(open || opening) || !usageCard.classList.contains('hidden')) return;
     ev.preventDefault();
     if (Neon.armed()) { Neon.disarm(); return; }
     close(true);
   });
-
-  // The ⏳ lines under the transcript open the Queue tab, by a tap or by Enter or Space.
-  const waiting = document.getElementById('queued');
-  if (waiting && ManageTabs.includes('queue')) {
-    waiting.addEventListener('click', () => openSheet('queue'));
-    waiting.addEventListener('keydown', ev => {
-      if (ev.key !== 'Enter' && ev.key !== ' ') return;
-      ev.preventDefault();
-      openSheet('queue');
-    });
-  }
 
   paintWords();
 
@@ -495,9 +384,8 @@
     close: toButton => close(toButton),
     // The feed's reset (a new conversation, a reconnect): an open tab is the new conversation's.
     reset: () => refresh(),
-    // Each state: the open Queue, Files or Sessions tab re-reads when its tag moved.
+    // Each state: the open Files or Sessions tab re-reads when its tag moved.
     state: s => {
-      if (open && tab === 'queue' && s && s.queueTag !== queueTag) { queueTag = s.queueTag; refresh(); }
       if (open && tab === 'files' && s && s.filesTag !== filesTag) { filesTag = s.filesTag; refresh(); }
       if (open && tab === 'sessions' && s && s.sessionsTag !== sessionsTag) { sessionsTag = s.sessionsTag; refresh(); }
       if (open && tab === 'sessions') paintBusy();
