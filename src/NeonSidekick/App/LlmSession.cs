@@ -363,7 +363,7 @@ internal sealed partial class LlmSession : IDisposable
         if (!docker && HasRuns && !(effective.LlmOneLocalModel && TypedOnThisComputer(effective))
             && StopsBefore(effective, KeepsDocker(effective)) is var stops && stops is not { Count: 0 })
         {
-            _clearedAll = (await ClearGpuAsync(effective, embedded, server: null, spareNames: [], settle: embedded && !RunsModel(effective), phase, ConnectText.Connecting, cancellationToken, only: stops, switchedOff: stops is not null).ConfigureAwait(false)).All;
+            _clearedAll = (await ClearGpuAsync(effective, embedded, server: null, spareNames: [], settle: embedded && !RunsModel(effective), phase, ConnectText.Connecting, cancellationToken, only: stops, switchedOff: stops ?? SwitchedOffRuns(effective)).ConfigureAwait(false)).All;
         }
         else if (docker && DockerEndpoint.ContainerOf(effective.LlmUrl) is { } target
             && Runs.Any(run => (effective.DockerServerOneAtATime || !run.Kept) && !DockerEndpoint.ChosenNames(effective).Contains(run.Name, StringComparer.Ordinal)))
@@ -734,13 +734,14 @@ internal sealed partial class LlmSession : IDisposable
     /// 2026-10-02), so "only chosen containers are ever touched" still holds; with <paramref name="only"/> (2026-11-11, the review) only those
     /// names, none spared, and never "all". Spared: <paramref name="spareNames"/>, and for <paramref name="server"/>, a server on this
     /// computer, the container that may <i>be</i> it (publishing its port, or on the <c>host</c> network). <paramref name="settle"/> waits
-    /// the post-stop delay when a model loads next. One of this run's containers, stopped, is logged as left (<paramref name="switchedOff"/>:
-    /// because the settings no longer offer it); any other is kept for <see cref="TakeLeftoverStopped"/> as it stops, so an
+    /// the post-stop delay when a model loads next. One of this run's containers, stopped, is logged as left (one <paramref name="switchedOff"/>
+    /// names: because the settings no longer offer it, 2026-11-21, by name, so a <c>/profile reset --all</c> under <c>LLM one local model</c>,
+    /// whose clear stops every chosen one, no longer says another server was picked); any other is kept for <see cref="TakeLeftoverStopped"/> as it stops, so an
     /// Esc keeps what happened. An engine that answers nothing (Docker Desktop not running: nothing on the GPU) is a debug line and goes unasked
     /// for <see cref="EngineDownWait"/>; a container that won't stop is a warning, and what called goes on. After it the spinner says
     /// <paramref name="resume"/> again, if the clear said anything.
     /// </summary>
-    private async Task<GpuClear> ClearGpuAsync(AppSettingsData effective, bool embedded, Uri? server, IReadOnlyCollection<string> spareNames, bool settle, Action<string>? phase, string? resume, CancellationToken cancellationToken, IReadOnlyList<string>? only = null, bool switchedOff = false)
+    private async Task<GpuClear> ClearGpuAsync(AppSettingsData effective, bool embedded, Uri? server, IReadOnlyCollection<string> spareNames, bool settle, Action<string>? phase, string? resume, CancellationToken cancellationToken, IReadOnlyList<string>? only = null, IReadOnlyCollection<string>? switchedOff = null)
     {
         if (_docker is null)
         {
@@ -847,7 +848,7 @@ internal sealed partial class LlmSession : IDisposable
             if (runs.Any(run => string.Equals(run.Name, name, StringComparison.Ordinal)))
             {
                 ForgetRun(name);
-                DiagnosticLog.Info(Category, switchedOff ? DockerServerText.SwitchedOffLeft([name]) : DockerServerText.Left([name]));
+                DiagnosticLog.Info(Category, switchedOff?.Contains(name, StringComparer.Ordinal) == true ? DockerServerText.SwitchedOffLeft([name]) : DockerServerText.Left([name]));
             }
             else
             {
@@ -1094,7 +1095,7 @@ internal sealed partial class LlmSession : IDisposable
             // Claude Code, the hosted APIs, another machine's.
             if (!effective.LlmOneLocalModel && SwitchedOffRuns(effective) is { Count: > 0 } first)
             {
-                await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase, ConnectText.Connecting, cancellationToken, only: first, switchedOff: true).ConfigureAwait(false);
+                await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase, ConnectText.Connecting, cancellationToken, only: first, switchedOff: first).ConfigureAwait(false);
             }
 
             // With it on (2026-10-26, the user's call), every chosen container stops, the one in use too, unless it may be that server: a
@@ -1164,7 +1165,7 @@ internal sealed partial class LlmSession : IDisposable
         {
             // Its clear spares nothing: the pick's connect then asks the engine nothing more (_clearedAll, taken by that connect).
             // With LLM one local model off (2026-11-10) only this run's containers switched off or unticked stop here.
-            _clearedAll = (await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase: null, resume: null, cancellationToken, only: stops, switchedOff: stops is not null).ConfigureAwait(false)).All;
+            _clearedAll = (await ClearGpuAsync(effective, embedded: false, server: null, spareNames: [], settle: false, phase: null, resume: null, cancellationToken, only: stops, switchedOff: stops ?? SwitchedOffRuns(effective)).ConfigureAwait(false)).All;
         }
         return await WithExtraRowsAsync(effective, _probe.DiscoverAllAsync(LlmEndpoint.KeyOf(effective), extra: null, LlmScanMode.Resolve(effective), cancellationToken), cancellationToken).ConfigureAwait(false);
     }

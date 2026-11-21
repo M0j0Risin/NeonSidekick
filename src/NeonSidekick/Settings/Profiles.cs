@@ -574,6 +574,18 @@ public static class Profiles
         {
             to.EmbeddedLlmServer = from.EmbeddedLlmServer;
         }
+
+        // Its Docker twin (2026-11-21, the user's call, after a reset stopped the SGLang container in use and its model took two minutes to
+        // load again): a kept URL naming a chosen container keeps Docker servers on, the list and the engine's pipe (how the container is
+        // reached), so the reconnect goes straight back to the running container. Not ResetKeptSettings either: they follow the URL. No OS
+        // check (Chosen/Offered ask Here): nothing on a Mac saves a container's URL, and the tests read the same on both.
+        if (Docker.DockerEndpoint.ContainerOf(from.LlmUrl) is { } container && from.DockerServers
+            && Docker.DockerEndpoint.ChosenNames(from).Contains(container, StringComparer.Ordinal))
+        {
+            to.DockerServers = true;
+            to.DockerServerContainers = from.DockerServerContainers?.ToList();   // a copy, not the same list
+            to.DockerEnginePipe = from.DockerEnginePipe;
+        }
     }
 
     /// <summary>

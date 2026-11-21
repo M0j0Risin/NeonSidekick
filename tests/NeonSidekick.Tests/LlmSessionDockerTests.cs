@@ -223,11 +223,32 @@ public sealed class LlmSessionDockerTests
         await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
 
         // The scan would find the old container's port; it is stopped before anything is asked.
-        await session.DiscoverAsync(new AppSettingsData { LlmScanMode = "disabled" }, CancellationToken.None);
+        var infos = await LoggedAsync(NeonSidekick.Diagnostics.DiagnosticLevel.Info,
+            () => session.DiscoverAsync(new AppSettingsData { LlmScanMode = "disabled" }, CancellationToken.None));
 
         Assert.Equal(["switch sglang_a", "clear"], _docker.Calls);
         Assert.Equal(["sglang_a", "vllm_b"], _docker.ClearNames.Single());
         Assert.Null(session.DockerInUse);
+        // No longer offered, so logged as switched off (2026-11-21), though LLM one local model's clear stopped every chosen one.
+        Assert.Contains(DockerServerText.SwitchedOffLeft(["sglang_a"]), infos);
+        Assert.DoesNotContain(DockerServerText.Left(["sglang_a"]), infos);
+    }
+
+    [WindowsFact]
+    public async Task OneLocalModel_ASwitchOff_ToABlankUrl_LogsTheStopAsSwitchedOff()
+    {
+        // 2026-11-21, the user's call: a /profile reset --all of the loaded profile (no URL, Docker servers off) logged its container's stop
+        // as "another server was picked": under LLM one local model the clear stops every chosen one, and the switched-off ones say so.
+        using var session = Session();
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+
+        var infos = await LoggedAsync(NeonSidekick.Diagnostics.DiagnosticLevel.Info,
+            async () => Assert.False(await session.ConnectAsync(new AppSettingsData { LlmScanMode = "disabled" }, NoPhase, CancellationToken.None)));   // nothing to connect to
+
+        Assert.False(_docker.IsRunning("sglang_a"));
+        Assert.Empty(session.DockerRunning);
+        Assert.Contains(DockerServerText.SwitchedOffLeft(["sglang_a"]), infos);
+        Assert.DoesNotContain(DockerServerText.Left(["sglang_a"]), infos);
     }
 
     [Fact]

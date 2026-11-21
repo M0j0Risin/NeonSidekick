@@ -272,9 +272,10 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task ProfileReset_OfTheLoadedProfile_TurnsDockerServersOff_AndStopsItsContainer()
+    public async Task ProfileReset_OfTheLoadedProfile_KeepsTheContainerInUse()
     {
-        // A reset of the loaded profile is its own settings changing (no switch): Docker servers back to off stops its container.
+        // 2026-11-21, the user's call: a plain reset keeps a chosen container's URL, Docker servers and the list with it, so the
+        // container in use keeps running and the reconnect goes straight back to it (it stopped, and its model loaded two minutes again).
         if (!OperatingSystem.IsWindows())
         {
             return;
@@ -284,6 +285,31 @@ public partial class ChatScreenTests
         PushLine("/server docker:sglang_a");
         _console.Input.PushKey(Keys.Escape);   // keep the reasoning
         PushLine("/profile reset");
+        PickYes();
+        PushLine("/exit");
+
+        await RunAsync();
+
+        Assert.True(_settings.Current.DockerServers);
+        Assert.True(docker.IsRunning("sglang_a"));
+        Assert.Equal(["sglang_a"], _session.DockerRunning);
+        Assert.DoesNotContain(docker.Calls.Skip(1), call => call.StartsWith("clear", StringComparison.Ordinal));   // the launch's clear alone, none sparing either
+    }
+
+    [Fact]
+    public async Task ProfileResetAll_OfTheLoadedProfile_StopsItsContainer()
+    {
+        // A reset --all of the loaded profile is its own settings changing (no switch): no URL is kept and Docker servers go back to off,
+        // so its container stops.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var docker = UseDockerServers();
+        PushLine("/server docker:sglang_a");
+        _console.Input.PushKey(Keys.Escape);   // keep the reasoning
+        PushLine("/profile reset --all");
         PickYes();
         PushLine("/exit");
 

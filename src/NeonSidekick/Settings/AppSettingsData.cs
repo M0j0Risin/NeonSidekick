@@ -2645,6 +2645,7 @@ public sealed class AppSettingsData
     /// the default. Variable: <c>NEONSIDEKICK_DOCKER_PIPE</c>. On a Mac (2026-10-11, row <c>Docker engine socket</c>) the same field
     /// holds the engine's Unix socket: a path or <c>unix:///path</c> (<see cref="Docker.DockerSocket.Normalize"/>); blank or any pipe
     /// form, the default included, means find it (<see cref="Docker.DockerSocket.Resolve"/>), so no migration was needed.
+    /// A plain <c>/profile reset</c> keeps it while the URL is a chosen container's (2026-11-21).
     /// </summary>
     public string DockerEnginePipe { get; set; } = Docker.DockerPipe.DefaultName;
 
@@ -2787,13 +2788,15 @@ public sealed class AppSettingsData
     /// while one is in use, the reconnect stops it and every other this run started (2026-11-11, the review of the one-local-model
     /// change), and its saved URL then counts as blank. Picking another server stops the one in use only under
     /// <see cref="LlmOneLocalModel"/>'s rules or, for another container, <see cref="DockerServerOneAtATime"/>'s. A reconnect row. No variable.
+    /// A plain <c>/profile reset</c> keeps it while the URL is a chosen container's (2026-11-21).
     /// </summary>
     public bool DockerServers { get; set; }
 
     /// <summary>
     /// The containers offered as servers (2026-10-02): their names, in the order the picker lists them. Starting one stops
     /// every other one of these first (with <see cref="DockerServerOneAtATime"/> on, 2026-11-10); a container not named here is never touched. Null or empty offers none. Picked from
-    /// the engine's containers on the Docker tab of <c>/settings</c>. No variable.
+    /// the engine's containers on the Docker tab of <c>/settings</c>. No variable. A plain <c>/profile reset</c> keeps it while the URL
+    /// is a chosen container's (2026-11-21).
     /// </summary>
     public List<string>? DockerServerContainers { get; set; }
 

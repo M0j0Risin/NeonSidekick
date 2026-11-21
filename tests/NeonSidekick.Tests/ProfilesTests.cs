@@ -480,6 +480,47 @@ public class ProfilesTests : IDisposable
     }
 
     [Fact]
+    public void Reset_KeepsDockerServers_WithAContainersUrl()
+    {
+        // 2026-11-21, the user's call: a reset kept the container's URL and took the switch and the list away, so the reconnect stopped
+        // the container in use. Each clause of the rule fails once below, and --all keeps nothing.
+        static AppSettingsData Seed(string url, bool on = true, string listed = "sglang_a") => new()
+        {
+            LlmUrl = url, DockerServers = on, DockerServerContainers = [listed, "vllm_b"], DockerEnginePipe = "other_engine",
+        };
+        string sentinel = NeonSidekick.Docker.DockerEndpoint.BaseUrl("sglang_a").ToString();
+        var defaults = new AppSettingsData();
+        foreach (var (name, seed) in new[] { ("sentinel", Seed(sentinel)), ("typed", Seed("docker:sglang_a")) })
+        {
+            Profiles.Create(_dir, name, seed);
+            Profiles.Reset(_dir, name);
+            var kept = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, name));
+            Assert.True(kept.DockerServers, name);
+            Assert.Equal(["sglang_a", "vllm_b"], kept.DockerServerContainers);
+            Assert.Equal("other_engine", kept.DockerEnginePipe);
+        }
+
+        foreach (var (name, seed) in new[]
+        {
+            ("other", Seed("http://llm:1234/v1")),        // another URL
+            ("unlisted", Seed(sentinel, listed: "sglang_c")),   // the container isn't on the list
+            ("off", Seed(sentinel, on: false)),            // the switch off
+        })
+        {
+            Profiles.Create(_dir, name, seed);
+            Profiles.Reset(_dir, name);
+            var kept = Profiles.ReadProfileFile(Profiles.ProfileFile(_dir, name));
+            Assert.Equal(defaults.DockerServers, kept.DockerServers);
+            Assert.Equal(defaults.DockerServerContainers, kept.DockerServerContainers);
+            Assert.Equal(defaults.DockerEnginePipe, kept.DockerEnginePipe);
+        }
+
+        Profiles.Create(_dir, "all", Seed(sentinel));
+        Profiles.Reset(_dir, "all", all: true);
+        Assert.Equal(JsonSerializer.Serialize(defaults, SettingsJsonContext.Default.AppSettingsData), File.ReadAllText(Profiles.ProfileFile(_dir, "all")));
+    }
+
+    [Fact]
     public void Reset_ACorruptFile_GoesToTheDefaultsWhole()
     {
         Directory.CreateDirectory(Profiles.Directory(_dir, "work"));
