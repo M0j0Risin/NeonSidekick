@@ -15,8 +15,9 @@ internal sealed partial class SettingsMenu
     /// tab ran the Claude Code server, <c>/claude</c> and the Anthropic API together with nothing saying whose row was whose, and
     /// the rest wanted the same look): Anthropic's Claude Code (the executable both read), Claude Code server, <c>/claude</c>
     /// command and Anthropic API; Embedded, Docker, OpenAI, TTS, STT, Sessions and Advisors in runs of their own, a few rows moved
-    /// to sit under theirs (<see cref="TabFields"/>). Chat's Tool bars (2026-10-12, the user's ask) holds the bar rows under
-    /// Screen. Web UI's three runs (2026-10-16, the user's ask): Server, then Guardrails and Tabs, "The page" split into what the
+    /// to sit under theirs (<see cref="TabFields"/>). Chat's Tool bars (2026-10-12, the user's ask) held the bar rows under
+    /// Screen until 2026-11-21, when they became the Toolbars tab (the user's ask and headings): Bars over the five bars, Order over
+    /// Toolbar order. Web UI's three runs (2026-10-16, the user's ask): Server, then Guardrails and Tabs, "The page" split into what the
     /// page may do and which tabs it shows. Common's Plan mode (2026-10-17, the user's ask): the gap review's two rows,
     /// <c>LLM plan gap passes</c> and <c>LLM plan gap clean passes</c>, between Tools and limits and Context (four since 2026-10-21, the
     /// first renamed <c>LLM plan gap max passes</c> and <c>LLM plan gap stop tone</c> last). Plan mode, Ralph loop and Code audit left
@@ -32,7 +33,6 @@ internal sealed partial class SettingsMenu
                 (SettingsField.QueueMode, "Input line"),
                 (SettingsField.TranscriptMarkdown, "Transcript"),
                 (SettingsField.Theme, "Screen"),
-                (SettingsField.HintsBar, "Tool bars"),   // the Hints bar its first row since 2026-10-14 (the Hint bar since later on 2026-10-12)
                 (SettingsField.DraftEditor, "Outside apps"),
             ],
             [SettingsTab.Common] =
@@ -92,8 +92,7 @@ internal sealed partial class SettingsMenu
             [SettingsTab.Sessions] =
             [
                 (SettingsField.SessionLogging, "Saving"),
-                (SettingsField.SessionNamingMode, "Titles"),
-                (SettingsField.SessionTool, "Search tool"),
+                (SettingsField.SessionNamingMode, "Titles"),   // Search tool after it until 2026-11-21, when its rows went to /tools › Core › Sessions
             ],
             [SettingsTab.BotChat] =
             [
@@ -110,6 +109,11 @@ internal sealed partial class SettingsMenu
                 (SettingsField.WebUi, "Server"),
                 (SettingsField.WebUiCommands, "Guardrails"),
                 (SettingsField.WebUiProfileTheme, "Tabs"),
+            ],
+            [SettingsTab.Toolbars] =
+            [
+                (SettingsField.HintsBar, "Bars"),   // Chat's Tool bars until 2026-11-21
+                (SettingsField.BarOrder, "Order"),
             ],
             [SettingsTab.Advisors] =
             [
@@ -161,6 +165,7 @@ internal sealed partial class SettingsMenu
         [(SettingsField.MonitorTools, "Monitors")],
         [(SettingsField.DuckDbTools, "Access"), (SettingsField.DuckDbDatabasesOffered, "Databases"), (SettingsField.DuckDbQueryMaxRows, "Queries"), (SettingsField.DuckDbDatabasesProfile, "Files")],
         [(SettingsField.VideoTools, "Playing")],
+        [(SettingsField.SessionTool, "Sessions")],   // 2026-11-21, one heading, as Clock's and Timers'
     ];
 
     /// <summary>
@@ -259,21 +264,6 @@ internal sealed partial class SettingsMenu
         string rest = name[(tabTitle.Length + 1)..];
         return char.ToUpperInvariant(rest[0]) + rest[1..];
     }
-
-    /// <summary>
-    /// A row's name on the pane where its section says the rest (2026-10-12, the user's names: <c>Toolbar order</c> is
-    /// <c>Order</c> under Tool bars), else <paramref name="name"/>, what the row would be called there otherwise. The full
-    /// <see cref="FieldName"/> stays everywhere else — notices, <c>neon_help</c>, SETTINGS.md — where a bare "Order" would say
-    /// nothing, as <see cref="RowName"/>'s short names do. Pure.
-    /// </summary>
-    public static string PaneName(SettingsField field, string name) => field switch
-    {
-        SettingsField.BarOrder => BarOrderPaneName,
-        _ => name,
-    };
-
-    /// <summary><c>Toolbar order</c>'s name on the pane (2026-10-12). Pinned.</summary>
-    public const string BarOrderPaneName = "Order";
 
     /// <summary>
     /// The <c>/settings</c> tabs whose rows keep their whole names though every one carries the tab's title (2026-10-10, the user's

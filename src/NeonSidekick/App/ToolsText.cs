@@ -33,14 +33,16 @@ public static class ToolsText
     /// <c>/tools &lt;group&gt;</c>'s words (2026-10-03, the user's ask: the toolbar's tool switches): each opens its group's
     /// switch straight — <c>shell</c> the <c>Shell command policy</c> picker (its allowed-commands and police buttons since
     /// 2026-10-09, and <see cref="ShellSubWords"/> after it), the others their on/off page. In the toolbar's order; each is also
-    /// its toolbar item's id but <see cref="ShoppingSwitchWord"/>, <see cref="TimersSwitchWord"/>, <see cref="ClockSwitchWord"/> and <see cref="HelpSwitchWord"/>, last. <c>ask</c> first since 2026-10-09 (the user's ask: 🙋, <c>Ask user</c>, before the lock). Pinned.
+    /// its toolbar item's id but <see cref="ShoppingSwitchWord"/>, <see cref="TimersSwitchWord"/>, <see cref="ClockSwitchWord"/>, <see cref="HelpSwitchWord"/>,
+    /// <see cref="MonitorsSwitchWord"/> and <see cref="SessionsSwitchWord"/>, last (<c>sessions</c> is 💾's id too, but 💾 opens <c>/sessions</c> and is no switch:
+    /// <see cref="ToolbarSwitchField"/>). <c>ask</c> first since 2026-10-09 (the user's ask: 🙋, <c>Ask user</c>, before the lock). Pinned.
     /// </summary>
     public static readonly string[] SwitchWords =
     [
         ToolbarItems.Ask, ToolbarItems.Shell, ToolbarItems.Files, ToolbarItems.Image, ToolbarItems.Web, ToolbarItems.Advisors, ToolbarItems.Docker, ToolbarItems.EventLog,
         ToolbarItems.Network, ToolbarItems.Services, ToolbarItems.Tasks, ToolbarItems.Directory, ToolbarItems.Obsidian,
         ToolbarItems.Sql, ToolbarItems.Oracle, ToolbarItems.MySql, ToolbarItems.Sqlite, ToolbarItems.DuckDb, ToolbarItems.Postgres, ToolbarItems.Unc, ToolbarItems.Ha, ToolbarItems.Comfy,
-        ToolbarItems.Camera, ToolbarItems.Print, ShoppingSwitchWord, TimersSwitchWord, ClockSwitchWord, HelpSwitchWord, MonitorsSwitchWord,
+        ToolbarItems.Camera, ToolbarItems.Print, ShoppingSwitchWord, TimersSwitchWord, ClockSwitchWord, HelpSwitchWord, MonitorsSwitchWord, SessionsSwitchWord,
     ];
 
     /// <summary>
@@ -57,6 +59,12 @@ public static class ToolsText
 
     /// <summary><c>/tools help</c>'s word (2026-10-18): the Help tools switch; no toolbar item, as <see cref="TimersSwitchWord"/>. Pinned.</summary>
     public const string HelpSwitchWord = "help";
+
+    /// <summary>
+    /// <c>/tools sessions</c>' word (2026-11-21, the user's ask: the Sessions menu on Core, switched as Clock is): the Session tools switch. The
+    /// same word as 💾's id (<see cref="ToolbarItems.Sessions"/>), which opens <c>/sessions</c> and is no switch (<see cref="ToolbarSwitchField"/>). Pinned.
+    /// </summary>
+    public const string SessionsSwitchWord = "sessions";
 
     /// <summary>
     /// <see cref="SwitchWords"/> as <c>/tools</c> takes them on a system (2026-10-22, the user's ask): off Windows less the words of the
@@ -107,8 +115,16 @@ public static class ToolsText
         ClockSwitchWord => SettingsField.ClockTools,   // 2026-10-18, the clock tools' switch
         HelpSwitchWord => SettingsField.HelpTools,   // 2026-10-18, neon_help's switch
         MonitorsSwitchWord => SettingsField.MonitorTools,   // 2026-10-23, the monitors plan
+        SessionsSwitchWord => SettingsField.SessionTool,   // 2026-11-21, the Sessions menu on Core
         _ => null,
     };
+
+    /// <summary>
+    /// The switch a toolbar item stands for (2026-11-21): <see cref="SwitchField"/> of its id, but none for 💾 (<see cref="ToolbarItems.Sessions"/>),
+    /// whose id is also <see cref="SessionsSwitchWord"/> while the item opens <c>/sessions</c>, so it never dims with Session tools, nor reads on or
+    /// off, nor names the switch in <c>neon_help</c>. The toolbar's and the help's toolbar answers read this; <c>/tools</c>' words read <see cref="SwitchField"/>. Pure.
+    /// </summary>
+    public static SettingsField? ToolbarSwitchField(string id) => id == ToolbarItems.Sessions ? null : SwitchField(id);
 
     /// <summary>The typed line that opens <paramref name="word"/>'s switch: <c>/tools web</c>. The toolbar item's double-click and its checklist note. Pinned.</summary>
     public static string SwitchLine(string word) => SlashCommands.ToolsWord + " " + word;
@@ -202,6 +218,12 @@ public static class ToolsText
     /// <summary>The clock tools' menu and group (2026-10-18, the user's ask): on Core after Shell, before Timers; the Offered group's heading too, "Clock" as it was. Pinned.</summary>
     public const string ClockMenuTitle = "Clock";
 
+    /// <summary>
+    /// The session tools' menu and group (2026-11-21, the user's ask): on Core between Timers and Ask, the switch and the search cap off
+    /// <c>/settings</c> › Client › Sessions; the Offered group's heading too, "Sessions" as it was. Pinned.
+    /// </summary>
+    public const string SessionsMenuTitle = "Sessions";
+
     /// <summary>The monitors' menu and group (2026-10-23, the monitors plan): on Home after Shopping; Windows only (<see cref="WindowsOnlyMenus"/>), so a Mac's Home keeps HomeAssistant and Shopping. Pinned.</summary>
     public const string MonitorsMenuTitle = "Monitors";
 
@@ -284,7 +306,7 @@ public static class ToolsText
     /// <summary>The print tools' tab and group (2026-09-28), after UNC, before Camera, since 2026-10-03 (the user's order; after Claude, before Obsidian, from later on 2026-10-01; after Home Assistant until then); Devices' last, after Screen, since 2026-10-16 (the user's order).</summary>
     public const string PrintTabTitle = "Print";
 
-    /// <summary>The tab that holds the Ask, Web, Shell and Options menus (2026-10-10, the user's ask): after Offered, before Files, each a tab of its own until then (Options the strip's last). "Standard" until later that day (the user's call). Web, Shell, Timers, Ask, Options since 2026-10-16 (the user's order; Network to Admin); Web, Shell, Clock, Timers, Ask, Help, Options since 2026-10-18 (the user's asks: the standing groups' switches). Pinned.</summary>
+    /// <summary>The tab that holds the Ask, Web, Shell and Options menus (2026-10-10, the user's ask): after Offered, before Files, each a tab of its own until then (Options the strip's last). "Standard" until later that day (the user's call). Web, Shell, Timers, Ask, Options since 2026-10-16 (the user's order; Network to Admin); Web, Shell, Clock, Timers, Ask, Help, Options since 2026-10-18 (the user's asks: the standing groups' switches); Sessions between Timers and Ask since 2026-11-21 (the user's ask). Pinned.</summary>
     public const string CoreTabTitle = "Core";
 
     /// <summary>The tab that holds the database menus (2026-10-09, the user's call): SQL, MySQL, SQLite, Postgres and Oracle, each a tab of its own until then; DuckDB after SQLite since 2026-10-25. SQL, MySQL, PostgreSQL, Oracle, SQLite, DuckDB since 2026-10-29 (the user's order).</summary>
@@ -305,7 +327,7 @@ public static class ToolsText
     /// The settings menus in <see cref="SettingsMenu.ToolsTabFields"/>' order, each list's title (2026-10-09): every one was a tab of its own
     /// until then, and the constants above stay its name — the Offered tab's group heading and <c>/usage</c>' group too. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle, MonitorsMenuTitle, DuckDbTabTitle, VideoMenuTitle];
+    public static readonly IReadOnlyList<string> MenuTitles = [AskTabTitle, WebTabTitle, ShellTabTitle, FileMenuTitle, ImageMenuTitle, UncTabTitle, PrintTabTitle, CameraTabTitle, ScreenTabTitle, ObsidianTabTitle, SqlTabTitle, MySqlTabTitle, SqliteTabTitle, PostgresTabTitle, OracleTabTitle, DockerTabTitle, HomeAssistantTabTitle, ComfyTabTitle, YouTubeTabTitle, GitTabTitle, OptionsTabTitle, ShoppingMenuTitle, EventLogTabTitle, TimersMenuTitle, NetworkMenuTitle, ServicesMenuTitle, TasksMenuTitle, DirectoryMenuTitle, ClockMenuTitle, HelpMenuTitle, MonitorsMenuTitle, DuckDbTabTitle, VideoMenuTitle, SessionsMenuTitle];
 
     /// <summary>The tabs in strip order — Offered, Ask, Web, Shell, Files, UNC, Print, Camera, Screen (2026-10-04), Obsidian, SQL, MySQL, Oracle, ClaudeCLI, Docker, HA, ComfyUI, GitLib, Options, the user's order since 2026-10-03 (ClaudeCLI "Claude" until 2026-10-04); before it (Camera after Ask since 2026-10-02; Docker after UNC since 2026-10-02; Home Assistant second to last, before Options, since later on 2026-10-01, the user's ask, and Print after Claude with it; Home Assistant after Claude from 2026-09-28 and Print after it later that day; Oracle after SQL, MySQL after Oracle and UNC after MySQL since 2026-09-30): Offered, Web, Files, Shell, Ask, Claude, Obsidian, ComfyUI, SQL, Oracle, Git (native), Options — the user's order since 2026-09-27 (Ask, Git (native), Obsidian, SQL, ComfyUI, Claude before); Options last since later on 2026-09-22 (the user's ask; second, after Offered, before); alphabetical before 2026-09-21; the last ten index <see cref="SettingsMenu.ToolsTabFields"/> one down until 2026-10-09.
     /// Since then (the user's call) the five database tabs are menus on one Database tab, where SQL stood, and Print, Camera, Screen,
@@ -323,7 +345,8 @@ public static class ToolsText
     /// Admin Network, EventLog, Services, Tasks, Directory, and Devices Camera, Screen, Print. Since 2026-10-17 (the user's order) Obsidian is
     /// Apps' last menu, after YouTube (Files' last until then): Files File, Image, UNC, GitLib; Apps Docker, ComfyUI, YouTube, Obsidian. Since
     /// 2026-10-23 (the monitors plan) Home is HomeAssistant, Shopping, Monitors (Monitors Windows only); later that day (the user's ask)
-    /// Monitors is on Devices between Screen and Print (Camera, Screen, Monitors, Print), Home back to HomeAssistant, Shopping.</summary>
+    /// Monitors is on Devices between Screen and Print (Camera, Screen, Monitors, Print), Home back to HomeAssistant, Shopping. Since
+    /// 2026-11-21 (the user's ask) Core is Web, Shell, Clock, Timers, Sessions, Ask, Help, Options.</summary>
     public static readonly IReadOnlyList<string> TabTitles = [OfferedTabTitle, CoreTabTitle, FilesTabTitle, AppsTabTitle, AdminTabTitle, DatabaseTabTitle, DevicesTabTitle, HomeTabTitle];
 
     /// <summary>
@@ -331,7 +354,7 @@ public static class ToolsText
     /// one for a plain tab, its rows the tab's; more for a group tab — <see cref="CoreTabTitle"/> (later on 2026-10-10), <see cref="FilesTabTitle"/>, <see cref="AppsTabTitle"/> (2026-10-10),
     /// <see cref="DatabaseTabTitle"/>, <see cref="DevicesTabTitle"/> and <see cref="HomeTabTitle"/> (2026-10-11) — whose menus are sub-tabs on a second strip (<see cref="ToolsMenu"/>). Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 0, 29, 20], [3, 4, 32, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 13, 14, 12, 31], [7, 8, 30, 6], [16, 21]];
+    public static readonly IReadOnlyList<IReadOnlyList<int>> TabMenus = [[1, 2, 28, 23, 33, 0, 29, 20], [3, 4, 32, 5, 19], [15, 17, 18, 9], [24, 22, 25, 26, 27], [10, 11, 13, 14, 12, 31], [7, 8, 30, 6], [16, 21]];
 
     /// <summary>
     /// The menus whose family only Windows has (2026-10-22, the user's ask): Services and Tasks — a Mac has no Service Control Manager or

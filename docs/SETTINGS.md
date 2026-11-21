@@ -9,7 +9,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 
 - [Panes](#panes)
 - [App settings (`/settings`)](#app-settings-settings):
-  - [Client](#client): [Chat](#chat), [Sessions](#sessions), [Botchat](#botchat), [Web UI](#web-ui)
+  - [Client](#client): [Chat](#chat), [Sessions](#sessions), [Botchat](#botchat), [Web UI](#web-ui), [Toolbars](#toolbars)
   - [Servers](#servers): [Common](#common), [Http](#http), [Embedded](#embedded), [Docker](#docker), [Anthropic](#anthropic), [OpenAI](#openai)
   - [Advisors](#advisors) · [Automation](#automation) · [Voice](#voice): [TTS](#tts), [STT](#stt)
 - [Skills settings (`/skills`)](#skills-settings-skills): Offered, Reflection, Options, and managing skills
@@ -51,6 +51,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Copy user prompt | `/copy` puts your prompt above the reply. | on |
 | User line style | Your sent line, here and on the Web UI's Chat tab: `quiet` (plain), `slab` (on a faint fill) or `bold` (in the user color). | `bold` |
 | Reply footer | A dim line under each reply: time, tokens, speed, tool calls, model, and a tool's time from 2 s (not counting time you spent answering; PC only). | off |
+| Web footer | A dim 📚 line under a reply listing the pages and files it read and its searches, as links; also on the Web UI and in loaded sessions. | off |
 | Theme | One of sixty-eight built-in themes, dark and light, or your own ([Custom themes](COMMANDS.md#custom-themes)). A change redraws the latest turns in it (`/sessions` has the rest); a light one wants *Themed background* on, or a light terminal. | `synthwave` |
 | Themed background | The terminal takes the theme's background, text and cursor colors while the app runs. | on |
 | Themed external windows | The [app's own windows](INTERFACE.md#the-apps-windows) wear the theme; off, they stay black. | on |
@@ -59,12 +60,6 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Show header | The banner at startup and after `/clear`, `/splash`, `/theme` and a profile switch. `/header` flips it. | on |
 | Working directory in header | Shows the working directory at the right of the banner's title line. | off |
 | Menus max height | How much of the window a pane may take: `half`, `three-quarters` or `full`. Longer lists scroll. | `full` |
-| Hints bar | `auto` (its own bar over the status bar while there is a hint, held until the next send), `always`, or `off` (hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
-| Status bar | The status bar's sections, order and sides. Enter opens the [checklist](INTERFACE.md#bar-checklists); see [The status bar](INTERFACE.md#the-status-bar). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | Settings, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (17 of 49), with three dividers |
-| Performance bar | Its meters and places: Enter (or `/perfbar edit`) opens the checklist. **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look ([The performance bar](INTERFACE.md#the-performance-bar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | CPU, RAM, GPU, VRAM, `led` |
-| Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on their own row. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar); [**bar:**](INTERFACE.md#bar-checklists) hides or shows it. | off |
-| Toolbar order | The order of the five bars under the input line (**Order** on the pane). Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
 | Draft editor | The program `/draft` opens (`code --wait`, `notepad`…); it must wait for the file to close. | empty (the system's editor for `.txt` files) |
 | Image viewer | Where a double-clicked picture opens: empty for the [picture viewer](INTERFACE.md#the-picture-viewer), `system` for the system's app, or a command given the path (`mspaint`). | empty (the picture viewer) |
 
@@ -77,8 +72,6 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Session retention (days) | Deletes older sessions at startup (0–3650; 0 keeps them forever), with their file checkpoints, so those turns can't be undone. | 0 (forever) |
 | Session naming mode | `model-written` asks the model for a title after the first turn; `first-line` uses your first line. | `model-written` |
 | Session show name | Titles shown above the input row: `all`, `model-written` (written by the model or you) or `none`. | `all` |
-| Session tool | Offers `session_manager`, to search, list and read earlier sessions (never restore or purge). | on |
-| Session search max results | Sessions one search or list returns (1–20). | 10 |
 
 #### Botchat
 
@@ -98,8 +91,8 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 | Botchat limited skills | The skills the bots may load (a checklist); needs *Agent skills*. None ticked: no skill tool. | none |
 | Botchat memory enabled | Gives every bot `save_memory` and `recall_memory`, overriding every profile's *Memory mode* inside `/botchat`. | off |
 | Botchat memory mode | Whose memories: `shared-parent` (the starting profile's) or `independent` (each bot's own profile's). | `shared-parent` |
-| Botchat vision enabled | Shows each bot the newest 4 pictures since it last spoke. Needs models that read images. | off |
-| Botchat camera | Each bot turn gets a fresh camera picture of you, kept in memory only. Needs models that read images; never for a chat started from the Web UI. | off |
+| Botchat vision enabled | Shows each bot the newest 4 pictures since it last spoke. Needs models that read images; skipped when the app knows the model can't read pictures. | on |
+| Botchat camera | Each bot turn gets a fresh camera picture of you, kept in memory only. Needs models that read images, and it stays off when the app knows the model can't; never for a chat started from the Web UI. | off |
 | Botchat recent context | Tells every bot the last 10 messages from before `/botchat`, so the topic can point at them. | off |
 
 ##### Botchat pictures
@@ -130,6 +123,19 @@ A browser front end for this profile, on this computer or (with *Web UI reach* `
 | Web UI home controls | Shows the [Home tab](INTERFACE.md#the-home-tab) and lets it act. Unlocking, opening a garage, gate or door, and disarming still ask; `/ha` in the chat follows *Web UI commands*. | off |
 | Web UI shopping controls | Shows the Shopping tab: add, tick, change, place and remove lines, and change the store. `/shopping` at the PC is unchanged. | off |
 | Web UI video controls | Shows the [Video tab](INTERFACE.md#the-video-tab) (macOS 14+ on a Mac): it plays videos started there and keeps the saved list. Off, `webui-window` (either setting) plays in the PC's video window. | off |
+
+#### Toolbars
+
+The bars under the input line, under **Bars**, and their order, under **Order**.
+
+| Setting | What it does | Default |
+|---|---|---|
+| Hints bar | `auto` (its own bar over the status bar while there is a hint, held until the next send), `always`, or `off` (hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
+| Status bar | The status bar's sections, order and sides. Enter opens the [checklist](INTERFACE.md#bar-checklists); see [The status bar](INTERFACE.md#the-status-bar). | `default`: every section but Working directory; Model and Working directory pinned right |
+| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | Settings, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (17 of 49), with three dividers |
+| Performance bar | Its meters and places: Enter (or `/perfbar edit`) opens the checklist. **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look ([The performance bar](INTERFACE.md#the-performance-bar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | CPU, RAM, GPU, VRAM, `led` |
+| Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on their own row. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar); [**bar:**](INTERFACE.md#bar-checklists) hides or shows it. | off |
+| Toolbar order | The order of the five bars under the input line. Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
 
 ### Servers
 
@@ -573,6 +579,13 @@ The tools most profiles use, and the pane's own options.
 |---|---|---|
 | Timer tools | Offers `start_timer`, `stop_timer` and `list_timers`. Off, the prompt drops the timer sentence; `/timer` and running timers keep working. `/tools timers` opens its on/off page. | off |
 | Timer tone | What a timer rings at each repeat until silenced or stopped, mid-reply too: `silent`, `chime`, `bell`, `beep` or `alarm`. For `/timer`'s and the model's timers, even with *Timer tools* off; never a stopwatch or on the Web UI. The picker plays each. | silent |
+
+#### Sessions
+
+| Setting | What it does | Default |
+|---|---|---|
+| Session tools | Offers `session_manager`, to search, list and read earlier sessions (never restore or purge). `/tools sessions` opens its on/off page. | on |
+| Session search max results | Sessions one search or list returns (1–20). | 10 |
 
 #### Ask
 

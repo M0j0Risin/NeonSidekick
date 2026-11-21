@@ -575,7 +575,7 @@ public sealed class Assistant
 
     /// <summary>
     /// The sentence the default rules gain while <c>session_manager</c> is offered (the setting
-    /// <c>Session tool</c> on, 2026-09-18): appended by <see cref="DefaultRules"/> after the ask
+    /// <c>Session tools</c> on, 2026-09-18): appended by <see cref="DefaultRules"/> after the ask
     /// sentence (last until <see cref="McpRule"/>, 2026-09-20); a custom <c>operata.md</c> stands verbatim. Pinned.
     /// </summary>
     public const string SessionRule =
@@ -870,7 +870,7 @@ public sealed class Assistant
     /// nothing could load one. With <paramref name="markdown"/> true (the transcript styles the reply:
     /// the setting <c>Transcript markdown</c> on, the pane on, the turn not spoken) the default rules
     /// open with <see cref="MarkdownRule"/> in place of <see cref="PlainTextRule"/>. With <paramref name="sessions"/>
-    /// true (<c>session_manager</c> offered: the setting <c>Session tool</c> on) they close with <see cref="SessionRule"/>.
+    /// true (<c>session_manager</c> offered: the setting <c>Session tools</c> on) they close with <see cref="SessionRule"/>.
     /// Since 2026-09-19 a tool switched off by name on <c>/tools</c> leaves the rules that name it alone (a call
     /// answers <c>Error: unknown tool</c>), with two exceptions where the prompt would otherwise lie: <paramref name="download"/>
     /// false drops <see cref="DownloadRule"/>, and <paramref name="recall"/> false (<c>recall_memory</c> off while memory

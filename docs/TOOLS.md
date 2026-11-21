@@ -9,14 +9,14 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 ## Contents
 
 - [Where tools are offered](#where-tools-are-offered)
-- [Core](#core): [Web](#web), [Shell](#shell), [Clock](#clock), [Timers](#timers), [Ask](#ask), [Help](#help)
+- [Core](#core): [Web](#web), [Shell](#shell), [Clock](#clock), [Timers](#timers), [Sessions](#sessions), [Ask](#ask), [Help](#help)
 - [Files](#files): [File](#file), [Image](#image), [Video](#video), [UNC shares and outside folders](#unc-shares-and-outside-folders), [GitLib](#gitlib)
 - [Apps](#apps): [Docker](#docker), [ComfyUI](#comfyui), [YouTube](#youtube), [Obsidian](#obsidian)
 - [Admin](#admin): [Network](#network), [Event logs](#event-logs), [Services](#services), [Scheduled tasks](#scheduled-tasks), [Active Directory](#active-directory)
 - [Databases](#databases): [How the database tools work](#how-the-database-tools-work), [SQL Server](#sql-server), [MySQL and MariaDB](#mysql-and-mariadb), [PostgreSQL](#postgresql), [Oracle](#oracle), [SQLite](#sqlite), [DuckDB](#duckdb)
 - [Devices](#devices): [Camera](#camera), [Screen](#screen), [Monitors](#monitors), [Printing](#printing)
 - [Home](#home): [Home Assistant](#home-assistant), [Shopping list](#shopping-list)
-- [Set elsewhere](#set-elsewhere): [Memory](#memory), [Skills](#skills), [Sessions](#sessions), [Advisors](#advisors), [Plan](#plan), [Ralph loop](#ralph-loop)
+- [Set elsewhere](#set-elsewhere): [Memory](#memory), [Skills](#skills), [Advisors](#advisors), [Plan](#plan), [Ralph loop](#ralph-loop)
 - [MCP servers](#mcp-servers)
 - [Known issues](#known-issues)
 
@@ -104,6 +104,14 @@ Under *Timer tools* (off by default); not offered headless. A timer going off ri
 | `start_timer` | `name?, hours?, minutes?, seconds?` | Starts a named countdown that alerts you when it ends; several can run at once. |
 | `stop_timer` | `name` | Stops a running timer or stopwatch, or silences one that has gone off. |
 | `list_timers` | — | Every running timer and its time left, and every stopwatch and its time so far. |
+
+### Sessions
+
+Under *Session tools*.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `session_manager` | `action, query?, id?, max_results?, from_turn?, to_turn?` | `search`, `list` or `read` this profile's earlier conversations (not the current one). Never restores or deletes one. |
 
 ### Ask
 
@@ -1147,14 +1155,6 @@ Under *Agent skills*.
 * **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`, as does each item of `patch_file`'s and `unc_patch`'s `edits`. An empty `""` is allowed; a pruned stub copied from the history is not.
 * **A cut result isn't written back:** a write, command or MCP tool whose arguments hold a cut result's marker is refused; reads and searches pass it. A cut `read_file` no longer counts as read, so `write_file` without a mode won't replace that file.
 * **A skill's files by full path:** the file tools refuse a path inside a skill folder and name `load_skill` instead.
-
-### Sessions
-
-Under *Session tool*.
-
-| Tool | Arguments | What it does |
-|---|---|---|
-| `session_manager` | `action, query?, id?, max_results?, from_turn?, to_turn?` | `search`, `list` or `read` this profile's earlier conversations (not the current one). Never restores or deletes one. |
 
 ### Advisors
 

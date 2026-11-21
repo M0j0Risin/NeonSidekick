@@ -263,7 +263,7 @@ public static class ToolbarItems
         ShoppingList => ChatScreen.ShoppingToolLine,
         Path => "/cwd browse",
         Model => SlashCommands.ServerWord,
-        _ => ToolsText.SwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
+        _ => ToolsText.ToolbarSwitchField(id) is null ? "" : ToolsText.SwitchLine(id),
     };
 
     /// <summary>The tail of the model name's note (<see cref="ModelNote"/>): what the second click does. Pinned.</summary>

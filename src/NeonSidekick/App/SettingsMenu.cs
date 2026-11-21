@@ -229,10 +229,10 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Sessions.SessionShowName.Names"/>: which session names the rule above the input row shows (<see cref="Settings.AppSettingsData.SessionShowName"/>). The Sessions tab's fifth row, under the naming mode (2026-09-18; fourth until 2026-10-10); no reconnect (read at each draw).</summary>
     SessionShowName,
 
-    /// <summary>A toggle: whether <c>session_manager</c> is offered to the model (<see cref="Settings.AppSettingsData.SessionTool"/>). The Sessions tab's sixth row, first of the Search tool run (2026-10-10; fifth from 2026-09-18, the user's order; last that morning, fourth until the show-name row); no reconnect (read at each turn).</summary>
+    /// <summary>A toggle: whether <c>session_manager</c> is offered to the model (<see cref="Settings.AppSettingsData.SessionTool"/>). <i>Session tools</i>, the first row of <c>/tools</c> › Core › Sessions since 2026-11-21 (the user's ask and name; <i>Session tool</i> on <c>/settings</c>' Sessions tab until then, its sixth row, first of the Search tool run, 2026-10-10; fifth from 2026-09-18, the user's order; last that morning, fourth until the show-name row); no reconnect (read at each turn).</summary>
     SessionTool,
 
-    /// <summary>Typed: how many sessions a <c>session_manager</c> search or list without <c>max_results</c> returns, 1 to 20 (<see cref="Settings.AppSettingsData.SessionSearchMaxResults"/>). The Sessions tab's last row (2026-09-18; fourth that morning); no reconnect (read at each call).</summary>
+    /// <summary>Typed: how many sessions a <c>session_manager</c> search or list without <c>max_results</c> returns, 1 to 20 (<see cref="Settings.AppSettingsData.SessionSearchMaxResults"/>). <c>/tools</c> › Core › Sessions' second row since 2026-11-21 (the user's ask; the Sessions tab's last row from 2026-09-18 until then, fourth that morning); no reconnect (read at each call).</summary>
     SessionSearchMaxResults,
 
     /// <summary>A toggle: whether <c>$</c> and part of a name lists the tools the next turn offers on the chat line (<see cref="Settings.AppSettingsData.ToolsDollarMention"/>). The Options tab of <c>/tools</c>' one row (2026-09-19); no reconnect (read at each keystroke).</summary>
@@ -304,7 +304,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Files.FileBrowserMode.Names"/>: what the <c>/cwd browse</c> tree and <c>/tree</c> (2026-09-23) list (<see cref="Settings.AppSettingsData.FileBrowserMode"/>). The Files tab's row under the @-mention folder mode (2026-09-21); no reconnect (read when the pane opens).</summary>
     FileBrowserMode,
 
-    /// <summary>What the toolbar under the hint row shows (<see cref="Settings.AppSettingsData.ToolbarItems"/>): a toggle until 2026-09-29, a checklist since (the user's ask). The Chat tab's row after Show working directory (2026-09-21); no reconnect (read at each pane draw).</summary>
+    /// <summary>What the toolbar under the hint row shows (<see cref="Settings.AppSettingsData.ToolbarItems"/>): a toggle until 2026-09-29, a checklist since (the user's ask). The Toolbars tab's third row, after Status bar (the Chat tab's after Show working directory from 2026-09-21 until 2026-11-21); no reconnect (read at each pane draw).</summary>
     ToolbarItems,
 
     /// <summary>A toggle: whether a command line, a script or text to a background process may name a path outside the working directory (<see cref="Settings.AppSettingsData.ShellPolice"/>). The Shell tab's third row (2026-09-22), under the list it guards beside; no reconnect (read at each call and each turn). Last in the enum, as every newcomer: the flat no-pane list's row numbers are pinned.</summary>
@@ -550,36 +550,37 @@ public enum SettingsField
     /// <summary>
     /// A checklist: the performance bar's meters (<see cref="Settings.AppSettingsData.PerformanceBarItems"/>, 2026-09-30, the
     /// user's ask; a picker of <c>off</c> or a look from 2026-09-29); the look
-    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>) shown in its value, set by <c>/perfbar</c> (on the page's title row until 2026-10-12). The Chat tab's row after Show toolbar; no reconnect (the
+    /// (<see cref="Settings.AppSettingsData.PerformanceBarLook"/>) shown in its value, set by <c>/perfbar</c> (on the page's title row until 2026-10-12). The Toolbars tab's row after Tool bar (the Chat tab's until 2026-11-21); no reconnect (the
     /// pane reads it at every tick).
     /// </summary>
     ShowPerformanceBar,
 
     /// <summary>
     /// The home bar's items (<see cref="Settings.AppSettingsData.HomeBarItems"/>, 2026-10-12, the user's ask): a picker of Home
-    /// Assistant's rooms and devices, with the bar's order changed on its first tab (<see cref="EditHomeBarAsync"/>). The Chat
-    /// tab's row after Show performance bar; no reconnect (the pane reads it at every tick).
+    /// Assistant's rooms and devices, with the bar's order changed on its first tab (<see cref="EditHomeBarAsync"/>). The Toolbars
+    /// tab's row after Performance bar (the Chat tab's until 2026-11-21); no reconnect (the pane reads it at every tick).
     /// </summary>
     ShowHomeBar,
 
     /// <summary>
     /// The order of the rows under the pane's lower rule (<see cref="Settings.AppSettingsData.BarOrder"/>, 2026-10-12, the user's
     /// ask): the hint bar, the toolbar, the performance bar and the home bar moved with the move keys (<see cref="EditBarOrderAsync"/>).
-    /// <c>Toolbar order</c>, the user's name. The Chat tab's row after Show home bar; no reconnect (the pane reads it at every tick).
+    /// <c>Toolbar order</c>, the user's name, and so on the pane too since 2026-11-21 (<c>Order</c> under Tool bars until then). The Toolbars
+    /// tab's one row under Order, after Home bar (the Chat tab's until 2026-11-21); no reconnect (the pane reads it at every tick).
     /// </summary>
     BarOrder,
 
     /// <summary>
     /// The Status bar's sections and their order (<see cref="Settings.AppSettingsData.StatusBarItems"/>, <see cref="Settings.AppSettingsData.StatusBarOrder"/>;
     /// 2026-10-12, the user's ask; <c>Hint bar</c> until 2026-10-14): a checklist with the move keys (<see cref="EditStatusBarAsync"/>).
-    /// The second row under Tool bars, after Hints bar; no reconnect (read at each pane draw).
+    /// The second row under Bars, after Hints bar (under Chat's Tool bars until 2026-11-21); no reconnect (read at each pane draw).
     /// </summary>
     StatusBarItems,
 
     /// <summary>
     /// Picked: <c>auto</c>, <c>always</c> or <c>off</c> (<see cref="Settings.AppSettingsData.HintsBar"/>, 2026-10-14, the user's ask:
-    /// the keys' hints on a bar of their own; <see cref="UI.HintsBarMode"/>). The first row under Tool bars, as the bar is first by
-    /// default; no reconnect (the pane reads it at every tick).
+    /// the keys' hints on a bar of their own; <see cref="UI.HintsBarMode"/>). The Toolbars tab's first row, under Bars (under Chat's Tool bars
+    /// until 2026-11-21), as the bar is first by default; no reconnect (the pane reads it at every tick).
     /// </summary>
     HintsBar,
 
@@ -1403,9 +1404,15 @@ public enum SettingsField
     /// <summary>
     /// A toggle: whether a confirming pass of a gap review or a code audit looks hardest at what the last change touched
     /// (<see cref="Settings.AppSettingsData.ConfirmFocusByChange"/>, 2026-11-18, Phase 3 item 3). Under <see cref="PlanGapCleanPasses"/>, one row for
-    /// both; read when a review or an audit starts. Last in the enum, as every newcomer.
+    /// both; read when a review or an audit starts.
     /// </summary>
     ConfirmFocusByChange,
+
+    /// <summary>
+    /// Toggle: the dim 📚 sources line under a reply (<see cref="Settings.AppSettingsData.WebFooter"/>, 2026-11-21, the user's ask). The Chat
+    /// tab's Transcript run right under <see cref="ReplyFooter"/>; read at each turn's end and each replay. Last in the enum, as every newcomer.
+    /// </summary>
+    WebFooter,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -1426,6 +1433,13 @@ public enum SettingsTab
 
     /// <summary>The Web UI's rows (2026-10-14, the user's ask: a Web UI tab under Client, after Botchat) in three runs since 2026-10-16 (the user's ask): Server (the switch, the port and the reach), Guardrails (commands, connection details) and Tabs (the theme and each tab's switch).</summary>
     WebUi,
+
+    /// <summary>
+    /// The bars under the input line (2026-11-21, the user's ask: off the Chat tab, which had grown long, onto a tab of its own last
+    /// under Client, after Web UI): Hints bar, Status bar, Tool bar, Performance bar and Home bar under Bars, then Toolbar order under
+    /// Order (the user's headings), the Chat tab's Tool bars run as it was.
+    /// </summary>
+    Toolbars,
 
     /// <summary>
     /// The LLM rows every server reads, whatever its kind: the URL and model, the reasoning, the tools and limits, the context, the
@@ -1827,7 +1841,7 @@ internal sealed partial class SettingsMenu
     private static readonly SettingsField[] Fields = Enum.GetValues<SettingsField>();
 
     /// <summary>The leaf tabs' titles, one per <see cref="SettingsTab"/>, each a sub-tab of <see cref="StripTitles"/>' groups (five since 2026-09-19: Ask, Files and Web are <c>/tools</c>' tabs, <see cref="ToolsText.TabTitles"/>, and Skills is <c>/skills</c>' Options tab, <see cref="SkillsText.OptionsTabTitle"/>). Pinned.</summary>
-    public static readonly IReadOnlyList<string> TabTitles = [ChatTabTitle, "Sessions", "Botchat", WebUiTabTitle, CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, AdvisorsTabTitle, AutomationTabTitle, "TTS", "STT"];
+    public static readonly IReadOnlyList<string> TabTitles = [ChatTabTitle, "Sessions", "Botchat", WebUiTabTitle, ToolbarsTabTitle, CommonTabTitle, HttpTabTitle, EmbeddedTabTitle, DockerTabTitle, AnthropicTabTitle, OpenAITabTitle, AdvisorsTabTitle, AutomationTabTitle, "TTS", "STT"];
 
     /// <summary>The title of the tab of the chat's own rows: the profile, the input line, the transcript, the screen, the outside apps (2026-10-10, the user's pick; "General" until then). Pinned.</summary>
     public const string ChatTabTitle = "Chat";
@@ -1841,6 +1855,9 @@ internal sealed partial class SettingsMenu
     /// <summary>The title of the Web UI's tab, under Client after Botchat (2026-10-14, the user's name). Pinned.</summary>
     public const string WebUiTabTitle = "Web UI";
 
+    /// <summary>The title of the bars' tab, last under Client after Web UI (2026-11-21, the user's name). Pinned.</summary>
+    public const string ToolbarsTabTitle = "Toolbars";
+
     /// <summary>The title of the tab of LLM rows only an OpenAI-compatible HTTP server reads (2026-10-10, the user's pick and casing). Pinned.</summary>
     public const string HttpTabTitle = "Http";
 
@@ -1849,7 +1866,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The rows of each tab on the pane, indexed by <see cref="SettingsTab"/>, in the order shown
-    /// (Chat, Sessions, Botchat, Web UI, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, Automation, TTS, STT — Automation's three runs off
+    /// (Chat, Sessions, Botchat, Web UI, Toolbars, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, Automation, TTS, STT — Toolbars last under
+    /// Client, Chat's Tool bars run off it, 2026-11-21, the user's ask; Chat, Sessions, Botchat, Web UI, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, Automation, TTS, STT — Automation's three runs off
     /// Common between Advisors and Voice, 2026-10-21, the user's ask; Chat, Sessions, Botchat, Web UI, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, TTS, STT — Web UI under Client after Botchat,
     /// 2026-10-14, the user's ask; Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, Advisors, TTS, STT — Advisors before Voice, the user's order,
     /// later still on 2026-10-10; Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat, and Sessions
@@ -1868,7 +1886,8 @@ internal sealed partial class SettingsMenu
     /// and the working directory in it, the toolbar, the performance bar, the menus' max height), and the outside apps last (the draft
     /// editor, the image viewer and the themed-viewer switch). Since 2026-10-12 (the user's ask) the bars have a run of their own,
     /// Tool bars, under the screen's: the toolbar, the performance bar, the home bar and their order, the menus' max height staying
-    /// the screen's last row. Each dependent row stays right under the one it hangs on; LLM
+    /// the screen's last row; since 2026-11-21 (the user's ask) that run is the Toolbars tab (<see cref="SettingsTab.Toolbars"/>), Bars
+    /// and Order, and Chat ends its screen run with the menus' max height again. Each dependent row stays right under the one it hangs on; LLM
     /// was spelled out too, in five runs (2026-10-01, the user's call, as General's that day), and since 2026-10-10 is two tabs (the
     /// user's call): Common keeps the runs every server reads — the connection (the URL, the model, <see cref="SettingsField.LlmOneLocalModel"/> since 2026-11-10), how it answers (the reasoning
     /// level, the thinking's show), tools and limits (<see cref="SettingsField.LlmOfferTools"/>, the round-trip cap, the two timeouts),
@@ -1879,7 +1898,8 @@ internal sealed partial class SettingsMenu
     /// and its Hugging Face switch; TTS is spelled out (the user's order, 2026-09-16): the switch, the
     /// source, the server's URL, the preview toggle (no reconnect), then the voice preset (2026-09-27, just above the voice), the voices, the mix and the speed; STT was the <see cref="IsVoiceField"/>
     /// fields in enum order, <see cref="SettingsField.SttDestination"/> (2026-10-02, no reconnect, so not a voice field) under the first, the switch; Sessions (2026-09-18, last that morning, second since) is the
-    /// logging switch, the retention days, the naming mode, the show-name picker under it (later that day), the tool switch and the search cap (the user's order, 2026-09-18).
+    /// logging switch, the retention days, the naming mode, the show-name picker under it (later that day), the tool switch and the search cap (the user's order, 2026-09-18);
+    /// since 2026-11-21 (the user's ask) the last two are <c>/tools</c> › Core › Sessions (<see cref="ToolsTabFields"/>), the tool switch named Session tools.
     /// Since later on 2026-10-10 every tab is headed (<see cref="TabSections"/>, the user's ask) and four moved a row to sit under its
     /// heading (the user's call): Anthropic leads with <see cref="SettingsField.ClaudeCodeExecutable"/>, the one row the Claude Code server
     /// and <c>/claude</c> both read, above the server's switch; STT is spelled out — listening (the switch, the destination, the
@@ -1892,15 +1912,15 @@ internal sealed partial class SettingsMenu
     [
         [SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.ModelAvatar, SettingsField.UserAvatar,
          SettingsField.CheckForUpdatesAtStart, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker, SettingsField.MidiInput,
-         SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.ReplyFooter,
+         SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.ReplyFooter, SettingsField.WebFooter,
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.GradientRules, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
-         SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
-         SettingsField.SessionNamingMode, SettingsField.SessionShowName,
-         SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
+         SettingsField.SessionNamingMode, SettingsField.SessionShowName],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiSignInMode, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiVoice, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
+        // Toolbars (2026-11-21, the user's ask): Chat's Tool bars run as it was, Bars then Order.
+        [SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder],
         [SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmOneLocalModel,
          SettingsField.LlmReasoning, SettingsField.LlmShowThinking,
          SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds,
@@ -2011,6 +2031,8 @@ internal sealed partial class SettingsMenu
         [SettingsField.DuckDbTools, SettingsField.DuckDbMode, SettingsField.DuckDbStatementsAllowed, SettingsField.DuckDbDatabasesOffered, SettingsField.DuckDbSandboxFiles, SettingsField.DuckDbAddDatabase, SettingsField.DuckDbPercentMention, SettingsField.DuckDbQueryMaxRows, SettingsField.DuckDbQueryTimeoutSeconds, SettingsField.DuckDbDatabasesProfile, SettingsField.DuckDbDatabasesGlobal],
         // Video (2026-11-12, the video-files plan): on Files after Image, the video tools' switch and where a file plays.
         [SettingsField.VideoTools, SettingsField.VideoFilesPlayIn],
+        // Sessions (2026-11-21, the user's ask): on Core between Timers and Ask, the switch and the search cap off /settings' Sessions tab.
+        [SettingsField.SessionTool, SettingsField.SessionSearchMaxResults],
     ];
 
     /// <summary>
@@ -2284,7 +2306,7 @@ internal sealed partial class SettingsMenu
     public static int LabelWidthOf(IReadOnlyList<SettingsField> fields, string? tabTitle = null)
     {
         ArgumentNullException.ThrowIfNull(fields);
-        return fields.Max(f => PaneName(f, tabTitle is null ? FieldName(f) : RowName(f, tabTitle)).Length) + LabelGap;
+        return fields.Max(f => (tabTitle is null ? FieldName(f) : RowName(f, tabTitle)).Length) + LabelGap;
     }
 
     /// <summary>The first row's label: the loaded profile's name, padded like every other row, its directory dim in parentheses after it. Pinned.</summary>
@@ -2425,7 +2447,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
             or SettingsField.AgentSkills or SettingsField.GlobalSkills or SettingsField.ExternalSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
-            or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.MidiInput or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules or SettingsField.ReplyFooter or SettingsField.CheckForUpdatesAtStart
+            or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.MidiInput or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules or SettingsField.ReplyFooter or SettingsField.WebFooter or SettingsField.CheckForUpdatesAtStart
             or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellPolice or SettingsField.ShellPreferNative
@@ -2871,13 +2893,14 @@ internal sealed partial class SettingsMenu
         SettingsField.ToolbarItems => "Tool bar",   // the user's names (2026-10-12): "Show toolbar", "Show performance bar" and "Show home bar" until then, this one "Toolbar" for a few hours
         SettingsField.ShowPerformanceBar => "Performance bar",
         SettingsField.ShowHomeBar => "Home bar",
-        SettingsField.BarOrder => "Toolbar order",   // "Order" on the pane, under Tool bars (PaneName)
+        SettingsField.BarOrder => "Toolbar order",   // "Order" on the pane under Tool bars until 2026-11-21; in full under the Toolbars tab's Order
         SettingsField.Theme => "Theme",
         SettingsField.ThemedExternalWindows => "Themed external windows",   // the user's name, under "Themed background" (2026-10-03; "Themed image viewer" beside "Image viewer" from later on 2026-09-27)
         SettingsField.ThemedBackground => "Themed background",   // the user's name, under "Theme" (2026-10-03)
         SettingsField.GradientRules => "Gradient rules",   // under "Themed external windows" (2026-11-01, the looks pass)
         SettingsField.CheckForUpdatesAtStart => "Check for updates at start",
         SettingsField.ReplyFooter => "Reply footer",   // under "User line style" (2026-11-01, feature idea #4)
+        SettingsField.WebFooter => "Web footer",   // under "Reply footer" (2026-11-21, the user's name)
         SettingsField.QueueMode => "Queue mode",   // "Queue messages", a toggle, until 2026-10-09 (the user's call)
         SettingsField.QueueCancelMode => "Queue cancel mode",
         SettingsField.SessionLogging => "Session logging",
@@ -2885,7 +2908,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SessionShowName => "Session show name",
         SettingsField.SessionRetentionDays => "Session retention (days)",
         SettingsField.SessionSearchMaxResults => "Session search max results",
-        SettingsField.SessionTool => "Session tool",
+        SettingsField.SessionTool => "Session tools",   // "Session tool" until 2026-11-21 (the user's name, as Clock tools and Timer tools)
         _ => field.ToString(),
     };
 
@@ -3314,6 +3337,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ThemedBackground => OnOff(data.ThemedBackground),
             SettingsField.GradientRules => OnOff(data.GradientRules),
             SettingsField.ReplyFooter => OnOff(data.ReplyFooter),
+            SettingsField.WebFooter => OnOff(data.WebFooter),
             SettingsField.CheckForUpdatesAtStart => OnOff(data.CheckForUpdatesAtStart),
             SettingsField.Theme => data.Theme,
             SettingsField.QueueMode => data.QueueMode,
@@ -4885,7 +4909,7 @@ internal sealed partial class SettingsMenu
                 rows.Add(SectionRule.Markup(heading));
             }
 
-            rows.Add(f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : LiveLabel(f, saved, width, located, PaneName(f, shortTab is null ? FieldName(f) : RowName(f, shortTab))));
+            rows.Add(f == SettingsField.Profile ? ProfileLabel(profile ?? _settings.ProfileName, _settings.ProfileDirectory, width) : LiveLabel(f, saved, width, located, shortTab is null ? FieldName(f) : RowName(f, shortTab)));
         }
 
         // The strip's badge (2026-10-07): the rows here whose value is not the default, as each such row reads in the secondary accent.
@@ -8574,6 +8598,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ThemedBackground => data.ThemedBackground,
             SettingsField.GradientRules => data.GradientRules,
             SettingsField.ReplyFooter => data.ReplyFooter,
+            SettingsField.WebFooter => data.WebFooter,
             SettingsField.CheckForUpdatesAtStart => data.CheckForUpdatesAtStart,
             SettingsField.SessionLogging => data.SessionLogging,
             SettingsField.SessionTool => data.SessionTool,
@@ -8719,6 +8744,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.ThemedBackground: data.ThemedBackground = on; break;
             case SettingsField.GradientRules: data.GradientRules = on; break;
             case SettingsField.ReplyFooter: data.ReplyFooter = on; break;
+            case SettingsField.WebFooter: data.WebFooter = on; break;
             case SettingsField.CheckForUpdatesAtStart: data.CheckForUpdatesAtStart = on; break;
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
@@ -8872,6 +8898,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ThemedBackground => on ? "theme the terminal's background" : "keep the terminal profile's background",
         SettingsField.GradientRules => on ? "shade the rules along the theme's gradient" : "keep the rules flat",
         SettingsField.ReplyFooter => on ? "a dim line under each reply: time, tokens, speed, tool calls, model" : "no line under replies",
+        SettingsField.WebFooter => on ? "a dim 📚 line under a reply: the pages, files and searches it used" : "no sources line under replies",
         SettingsField.CheckForUpdatesAtStart => on ? "asks GitHub for a new version at every launch" : "no request at start; /update still works by hand",
         SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; stored sessions can still be restored or purged",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
@@ -9887,7 +9914,7 @@ internal sealed partial class SettingsMenu
         {
             var saved = _settings.Current;
             var order = PaneBars.Order(saved.BarOrder);
-            var page = new MenuPage(Crumb(BarOrderPaneName), order.Select(id => PaneBars.Label(id, PaneBars.Shown(id, saved))).ToList(), BarOrderKeys);
+            var page = new MenuPage(Crumb(FieldName(SettingsField.BarOrder)), order.Select(id => PaneBars.Label(id, PaneBars.Shown(id, saved))).ToList(), BarOrderKeys);
             var picked = await PickOrderedChecklistAsync(page, cursor, cancellationToken, BarOrderButtons).ConfigureAwait(false);
             if (picked is not { } pick)
             {

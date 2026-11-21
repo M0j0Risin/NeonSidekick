@@ -10598,7 +10598,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
         // Windows' words pinned on every system, and the message built from this system's (2026-10-22: a Mac leaves out services and tasks).
-        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, duckdb, postgres, unc, ha, comfy, camera, print, shopping, timers, clock, help, monitors, or nothing for the pane.", "/tools takes one of " + string.Join(", ", ToolsText.SwitchWordsFor(windows: true)) + ", or nothing for the pane.");
+        Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, duckdb, postgres, unc, ha, comfy, camera, print, shopping, timers, clock, help, monitors, sessions, or nothing for the pane.", "/tools takes one of " + string.Join(", ", ToolsText.SwitchWordsFor(windows: true)) + ", or nothing for the pane.");
         Assert.Equal("/tools takes one of " + string.Join(", ", ToolsText.SwitchWordsHere) + ", or nothing for the pane.", ToolsText.SwitchUsageError);
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Tools, hasArgs: true));   // as /police: the rows are never refused under a reply
         Assert.Equal(SettingsField.HomeAssistantTools, ToolsText.SwitchField(" HA "));
@@ -10635,7 +10635,7 @@ public partial class ChatScreenTests : IDisposable
         (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["usage", "memory"]), new AppSettingsData { MemoryMode = "off" });
         Assert.Equal("📊 💾", strip);
         Assert.Equal([1], off);
-        Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask" or "timers" or "clock" or "help")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default; timers on (later on 2026-10-15), the clock and help on (2026-10-18)
+        Assert.All(ToolsText.SwitchWords.Where(w => w is not ("shell" or "ask" or "timers" or "clock" or "help" or "sessions")), word => Assert.True(ChatScreen.ToolbarItemOff(word, new AppSettingsData())));   // every group off by default; timers on (later on 2026-10-15), the clock and help on (2026-10-18); sessions 💾's id, never a switch (2026-11-21)
         // 🙋 (2026-10-09, the user's ask): Ask user is on by default, on the slab while it is off.
         Assert.False(ChatScreen.ToolbarItemOff("ask", new AppSettingsData()));
         Assert.True(ChatScreen.ToolbarItemOff("ask", new AppSettingsData { AskUser = false }));
@@ -11515,9 +11515,9 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The list in the pane under the rule, its tab strip and its own hint; the toggle and the save on its status line.
         const string strip = SettingsMenu.Title + " │ Client · Servers · Advisors · Automation · Voice ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
-        Assert.Contains(rule + "\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat", "Web UI"], 0, 240)[0]) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);   // the Client group's second strip (later on 2026-10-10)
+        Assert.Contains(rule + "\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat", "Web UI", "Toolbars"], 0, 240)[0]) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);   // the Client group's second strip (later on 2026-10-10)
         AssertPaneEnds(output, rule + "\n" + SettingsMenu.SettingsTabKeys);   // on the Hints bar (2026-10-14)
-        Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat", "Web UI"], 0, 240)[0]) + "\n  · Memory mode: read-only\n", output);
+        Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat", "Web UI", "Toolbars"], 0, 240)[0]) + "\n  · Memory mode: read-only\n", output);
         string servers = Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI"], 0, 240)[0]);   // the Servers group's second strip (2026-10-10)
         Assert.Contains("\n" + Titled(strip) + "\n" + servers + "\n  · 🖥️ LLM model: qwen3\n", output);
         // The typed edit ran in the pane: the edit keys in the hint row, no › line in the transcript.
@@ -11921,7 +11921,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         const string strip = SettingsMenu.Title + " │ Client · Servers · Advisors · Automation · Voice ";   // the Client group since later on 2026-10-10; six since 2026-09-25 (Botchat); five tabs since 2026-09-19 (Ask, Files and Web are /tools', Skills is /skills' Options tab)
-        Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat", "Web UI"], 0, 240)[0]) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);   // the Client group's second strip (later on 2026-10-10)
+        Assert.Contains("\n" + Titled(strip) + "\n" + Markup.Remove(InfoPane.SubStripRows(SettingsMenu.Title, ["Chat", "Sessions", "Botchat", "Web UI", "Toolbars"], 0, 240)[0]) + "\n \n" + HeadingRow("── Who and where") + "\n▸ Profile", output);   // the Client group's second strip (later on 2026-10-10)
         Assert.DoesNotContain("› /settings", output);
         Assert.Contains("› hi!", output);
         Assert.Equal("hi!", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
@@ -12574,7 +12574,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ChatScreen.ProcessToolGlyph + " Process", ProcessMenu.Title);
         Assert.Equal(NeonSidekick.Viewer.ViewerText.StripButton, ChatScreen.ComfyViewToolGlyph);   // the picture strip's button, one source
         Assert.Equal(NeonSidekick.Docker.DockerText.Glyph, ChatScreen.DockerToolGlyph);
-        Assert.All(ToolsText.SwitchWords.Where(w => w is not (ToolsText.ShoppingSwitchWord or ToolsText.TimersSwitchWord or ToolsText.ClockSwitchWord or ToolsText.HelpSwitchWord or ToolsText.MonitorsSwitchWord)), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
+        Assert.All(ToolsText.SwitchWords.Where(w => w is not (ToolsText.ShoppingSwitchWord or ToolsText.TimersSwitchWord or ToolsText.ClockSwitchWord or ToolsText.HelpSwitchWord or ToolsText.MonitorsSwitchWord or ToolsText.SessionsSwitchWord)), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // 💾 opens /sessions (2026-11-21)   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
         Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
         Assert.False(ChatScreen.TogglesWindow("/tools web") || ChatScreen.TogglesWindow("/log file") || ChatScreen.TogglesWindow(null));
         Assert.Null(ChatScreen.ToolbarWord("📂"));
@@ -25476,11 +25476,11 @@ public partial class ChatScreenTests : IDisposable
     private SessionStore OpenSessions() => new(_settings.ProfileDirectory, _time);
 
     /// <summary>A stored session with one text turn, its history the two messages, as a run before this one would have left it.</summary>
-    private long SeedSession(string user = "How do I wire the Vosk model?", string reply = "Pass the folder to the detector.", int toolCalls = 0)
+    private long SeedSession(string user = "How do I wire the Vosk model?", string reply = "Pass the folder to the detector.", int toolCalls = 0, IReadOnlyList<NeonSidekick.Web.WebSource>? sources = null)
     {
         using var store = OpenSessions();
         long id = store.Begin(SessionText.FirstLineTitle(user), "llama")!.Value;
-        store.AppendTurn(id, user, reply, toolCalls, [], [], 0, 3, 4, false);
+        store.AppendTurn(id, user, reply, toolCalls, [], [], 0, 3, 4, false, sources);
         var history = new ConversationHistory("");
         history.AddUser(user);
         history.AddAssistant(reply);

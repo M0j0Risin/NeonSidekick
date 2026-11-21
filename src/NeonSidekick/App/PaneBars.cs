@@ -10,7 +10,7 @@ namespace NeonSidekick.App;
 /// the four rows under the pane's lower rule in the user's order, saved in <see cref="AppSettingsData.BarOrder"/>. Null is
 /// <see cref="Names"/>' order, the one the pane always had, and what the page's <c>⊡ default</c> puts back. Only the order:
 /// each bar's own row (<c>Toolbar</c>, <c>Performance bar</c>, <c>Home bar</c>; <c>Show …</c> until 2026-10-12, and all four under
-/// Tool bars since, this one <c>Order</c> on the pane) shows or hides it, and one that
+/// Tool bars since, this one <c>Order</c> on the pane; on the Toolbars tab since 2026-11-21, this one in full under Order) shows or hides it, and one that
 /// is off keeps its place for when it comes back. A short window still drops the home bar first, then the performance bar, then
 /// the toolbar, wherever they sit. <see cref="Order"/> is <see cref="ItemOrder.Resolve"/>, so an unknown word is dropped without a
 /// warning and a missing id goes back beside its neighbour. Since 2026-10-14 (the user's ask) the hint bar is two: the Hints bar,

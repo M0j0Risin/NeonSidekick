@@ -63,7 +63,7 @@ namespace NeonSidekick.App;
 /// <param name="WebTools">How many web tools the next turn offers (<see cref="ChatScreen.WebToolsFor"/>, the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.WebRule"/> while any is.</param>
 /// <param name="Download">Whether <c>download_file</c> is among them: the rules add <see cref="Assistant.DownloadRule"/> (with the file tools).</param>
 /// <param name="Ask">The caps of the <c>ask_user</c> the next turn offers (the setting <c>Ask user</c> on, the pane on, the tool not switched off), else null: the rules carry <see cref="Assistant.AskRule"/> under them.</param>
-/// <param name="SessionsEnabled">The setting <c>Session tool</c>.</param>
+/// <param name="SessionsEnabled">The setting <c>Session tools</c>.</param>
 /// <param name="SessionTools">How many session tools the next turn offers; the rules carry <see cref="Assistant.SessionRule"/> while any is.</param>
 /// <param name="SqliteWrite">Whether <c>sqlite_execute</c> is among the SQLite tools offered (2026-10-05, <see cref="ChatScreen.SqliteToolsFor"/>): the rules add <see cref="Assistant.SqliteWriteRule"/>.</param>
 /// <param name="ServerWrites">The server families whose <c>_execute</c> tool is offered (2026-10-05, <see cref="ChatScreen.ServerWritesOf"/>): each family's rule is followed by its write sentence.</param>
@@ -398,8 +398,8 @@ public static class SystemPromptSummary
     /// <summary>The Project notes row's reason while the toggle on <c>/skills</c>' Options tab is off (later on 2026-09-19; its Project tab until 2026-10-01). Pinned.</summary>
     public const string ProjectFileOffSuffix = "Project file is off on the Options tab of /skills";
 
-    /// <summary>The tail of the Sessions group while the setting <c>Session tool</c> is off (2026-09-18). Pinned.</summary>
-    public const string SessionsOffSuffix = "session tool is off";
+    /// <summary>The tail of the Sessions group while the setting <c>Session tools</c> is off (2026-09-18; "session tool is off" until 2026-11-21, as <see cref="ClockOffSuffix"/> reads since). Pinned.</summary>
+    public const string SessionsOffSuffix = "Session tools is off";
 
     /// <summary>The tail of the Git group while the setting <c>GitLib tools</c> is off (2026-09-20; renamed 2026-09-21 and again 2026-09-30). Pinned.</summary>
     public const string GitOffSuffix = "gitlib tools is off";
@@ -872,7 +872,7 @@ public static class SystemPromptSummary
     /// tell the order the turn offers them, the list's until then); the memory group is marked when memory is off,
     /// the web group when the web tools are, the files group when the file tools are, the questions
     /// group when the setting <c>Ask user</c> is (else when there is no pane), the sessions group when
-    /// the setting <c>Session tool</c> is, every group when the setting <c>LLM offer tools</c> is (the group's
+    /// the setting <c>Session tools</c> is, every group when the setting <c>LLM offer tools</c> is (the group's
     /// own reason first). Since 2026-09-19 a tool switched off by name (<paramref name="disabled"/>,
     /// <c>/tools</c>) is noted on its row (<see cref="ToolGroup.ToolNotes"/>) and the group's name counts
     /// what is left — <c>Files (12 of 14)</c>; <paramref name="skillInstalled"/> false notes <c>load_skill</c>
@@ -1180,9 +1180,9 @@ public static class SystemPromptSummary
 
         if (sessions is not null)
         {
-            // The session tool (2026-09-18): after the skills, offered while the setting Session tool says so.
+            // The session tool (2026-09-18): after the skills, offered while the setting Session tools says so.
             string sessionsNote = !sessionsEnabled ? NotOffered(SessionsOffSuffix) : standing;
-            groups.Add(Group("Sessions", sessions, sessionsNote, sessionsEnabled && toolsEnabled, SettingsField.SessionTool, disabled));
+            groups.Add(Group(ToolsText.SessionsMenuTitle, sessions, sessionsNote, sessionsEnabled && toolsEnabled, SettingsField.SessionTool, disabled));
         }
 
         if (mcp is not null)

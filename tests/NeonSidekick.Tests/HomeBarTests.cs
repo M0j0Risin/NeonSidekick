@@ -112,6 +112,19 @@ public sealed class HomeBarTests
         Assert.Equal(1, at);
     }
 
+    /// <summary>What the picker lists (2026-11-21, the user's ask): the shown items, else a hide's kept ones marked hidden; never picked is not hidden.</summary>
+    [Fact]
+    public void Kept_IsTheShownItems_OrTheHiddenOnes_AndNeverPickedIsNotHidden()
+    {
+        Assert.Equal("area:den|False", Unpack(HomeBarItems.Kept(["area:den"], ["entity:switch.kettle"])));
+        Assert.Equal("entity:switch.kettle|True", Unpack(HomeBarItems.Kept([], ["entity:switch.kettle"])));
+        Assert.Equal("entity:switch.kettle|True", Unpack(HomeBarItems.Kept(null, ["entity:switch.kettle", "not a reference"])));
+        Assert.Equal("|False", Unpack(HomeBarItems.Kept(null, null)));
+        Assert.Equal("|False", Unpack(HomeBarItems.Kept([], [])));   // everything removed while hidden
+
+        static string Unpack((IReadOnlyList<string> List, bool Hidden) kept) => string.Join(",", kept.List) + "|" + kept.Hidden;
+    }
+
     [Fact]
     public void Toggle_HidesKeepingTheItems_ShowsThemAgain_AndAsksForThePickerTheFirstTime()
     {

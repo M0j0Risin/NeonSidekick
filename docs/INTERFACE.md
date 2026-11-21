@@ -41,7 +41,7 @@ From top to bottom:
 * **Message jumps:** Ctrl+↑/↓ goes to the previous or next message (Option+↑/↓ on a Mac, [MAC.md](MAC.md#keys--mouse)).
 * **Scrolled up**, a row under the transcript counts the rows written since you left the bottom and names the top message; a double-click goes back down.
 * **Links and paths:** Ctrl+click opens a link in your browser, or a path in `/browse`; hovering shows where it goes. A Mac's chord differs ([MAC.md](MAC.md#keys--mouse)).
-* **Sources:** under a reply that read a page or saved a file, 📚 lists the first five (📥 for a file), each title with its site, then how many more and how many searches. Each title is a link, opened as above.
+* **Sources:** with [Web footer](SETTINGS.md#chat) on, under a reply that read a page or saved a file, 📚 lists the first five (📥 for a file), each title with its site, then how many more and how many searches. Each title is a link, opened as above.
 * **The picture strip**, while there are ComfyUI pictures: 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and 🎞️ to bring a closed picture strip back.
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
@@ -433,7 +433,7 @@ Chips for Home Assistant rooms and devices, the shopping list and this PC's moni
 The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar edit`) checklists, and the home bar's **On the bar**, share these keys:
 
 * Space or Enter checks or unchecks; Delete unchecks (on the home bar, takes off). None checked hides the toolbar or the performance bar.
-* **bar:** on the title row hides the bar and keeps its items, as `/toolbar`, `/perfbar` and `/homebar` do; again brings them back. Its key is `h` on the Tool bar and Performance bar pages.
+* **bar:** on the title row hides the bar and keeps its items, as `/toolbar`, `/perfbar` and `/homebar` do; again brings them back. While hidden, the page still lists them, dim, and changes keep it hidden. Its key is `h` on the Tool bar and Performance bar pages.
 * On the home bar picker, **bar:** is at the end of the tab strip and has no key, because the tabs filter as you type.
 * The Tool bar's **bar:** reads hidden whenever nothing checked is drawn: 🔒 and 👮 with *Shell command policy* off, or 🧩 and 📅 on a Mac.
 * `a`, `n` and `d` pick all, none or the default; `d` also puts back the default order, sides and dividers.

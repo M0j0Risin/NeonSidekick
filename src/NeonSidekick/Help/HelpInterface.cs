@@ -134,7 +134,7 @@ internal static class HelpInterface
             sb.Append("\n  ").Append(PoliceLine);
         }
 
-        if (ToolsText.SwitchField(id) is { } field && HelpLocation.Of(field, windows) is { } row)
+        if (ToolsText.ToolbarSwitchField(id) is { } field && HelpLocation.Of(field, windows) is { } row)
         {
             sb.Append("\n  Setting: ").Append(row.Label).Append(" at ").Append(row.Path).Append(": ").Append(HelpText.FirstSentence(HelpSettings.Describe(field)));
         }
@@ -158,7 +158,7 @@ internal static class HelpInterface
         ToolbarItems.Queue => DarkQueue,
         ToolbarItems.EventLog => DarkEventLogs,
         ToolbarItems.Directory => DarkDirectory,
-        _ => ToolsText.SwitchField(id) is { } field ? "while " + SettingsMenu.FieldName(field) + " is off" : null,
+        _ => ToolsText.ToolbarSwitchField(id) is { } field ? "while " + SettingsMenu.FieldName(field) + " is off" : null,
     };
 
     /// <summary>Every bar and every item of this system, a line each (<c>kind: interface</c>, no query).</summary>

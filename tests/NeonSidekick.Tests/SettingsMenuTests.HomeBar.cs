@@ -7,7 +7,7 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// The home bar's picker (2026-10-12, <c>/settings › Client › Chat › Show home bar</c>): its tabs, adding from Rooms and Lights,
+/// The home bar's picker (2026-10-12, <c>/settings › Client › Chat › Show home bar</c>; Client › Toolbars › Home bar since 2026-11-21): its tabs, adding from Rooms and Lights,
 /// the bar's order changed with the move keys and Delete, and the notice without Home Assistant.
 /// </summary>
 public partial class SettingsMenuTests
@@ -27,10 +27,10 @@ public partial class SettingsMenuTests
         ]);
 
     [Fact]
-    public void ShowHomeBar_IsTheChatTabsRowAfterThePerformanceBar_OffByDefault()
+    public void ShowHomeBar_IsTheToolbarsTabsRowAfterThePerformanceBar_OffByDefault()
     {
-        var chat = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
-        Assert.Equal(chat.IndexOf(SettingsField.ShowPerformanceBar) + 1, chat.IndexOf(SettingsField.ShowHomeBar));
+        var bars = SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList();   // the Chat tab's until 2026-11-21
+        Assert.Equal(bars.IndexOf(SettingsField.ShowPerformanceBar) + 1, bars.IndexOf(SettingsField.ShowHomeBar));
         Assert.Equal("Home bar", SettingsMenu.FieldName(SettingsField.ShowHomeBar));   // "Show home bar" until 2026-10-12, the user's name
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ShowHomeBar, new AppSettingsData(), "C:\\p"));
         Assert.Equal("2 · den, kettle", SettingsMenu.FieldValue(SettingsField.ShowHomeBar, new AppSettingsData { HomeBarItems = ["area:den", "entity:switch.kettle"] }, "C:\\p"));
@@ -46,7 +46,8 @@ public partial class SettingsMenuTests
 
     /// <summary>
     /// The picker's <c>bar:</c> button (2026-11-07, the user's ask; click-only, the user's pick): a click hides the bar as <c>/homebar</c> does,
-    /// the items kept in the last list, and a second shows them again; <c>h</c> on the bar's tab touches nothing.
+    /// the items kept in the last list, and a second shows them again; <c>h</c> on the bar's tab touches nothing. Since 2026-11-21 (the user's
+    /// ask) the hidden bar's chips stay listed on its tab, not the empty bar's line.
     /// </summary>
     [Fact]
     public async Task ThePicker_TheBarButton_AClickHides_AndShowsAgain_AndHIsNoKeyForIt()
@@ -74,6 +75,10 @@ public partial class SettingsMenuTests
         Assert.Equal(["area:den", "entity:switch.kettle"], _settings.Current.HomeBarLastItems);
         Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
         Assert.Contains("  · Home bar: " + HomeBarText.NoItems, Output);
+        string hiddenPage = Output[Output.LastIndexOf(SettingsMenu.ShowBarButton(false), StringComparison.Ordinal)..];
+        Assert.Contains("Den", hiddenPage);
+        Assert.Contains("Kettle", hiddenPage);
+        Assert.DoesNotContain(HomeBarText.EmptyBar, hiddenPage);
 
         input.PushClick(ShowBarColumn(Output, shown: false), 100);   // shown again
         input.Push(Keys.Escape);
@@ -104,7 +109,8 @@ public partial class SettingsMenuTests
 
     /// <summary>
     /// The picker's <c>bar:</c> keeps the cursor on a tab other than On the bar (2026-11-08, the review: it went to the top on every tab):
-    /// on Rooms, two rows down, a click on <c>bar:</c> and Enter toggle the third room, not the first.
+    /// on Rooms, two rows down, a click on <c>bar:</c> and Enter toggle the third room, not the first. Since 2026-11-21 (the user's ask) that
+    /// tick while hidden joins the kept items and the bar stays hidden.
     /// </summary>
     [Fact]
     public async Task ThePicker_TheBarButton_OnTheRoomsTab_KeepsTheCursorRow()
@@ -134,8 +140,109 @@ public partial class SettingsMenuTests
         input.Push(Keys.Enter, Keys.Escape);            // the third room on
         Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
 
-        Assert.Equal(["area:hall"], _settings.Current.HomeBarItems);
-        Assert.Equal(["entity:switch.kettle"], _settings.Current.HomeBarLastItems);
+        Assert.Empty(_settings.Current.HomeBarItems!);
+        Assert.Equal(["entity:switch.kettle", "area:hall"], _settings.Current.HomeBarLastItems);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Hidden, the bar's tab edits the kept items (2026-11-21, the user's ask): a Shift+↓ move, a Delete and + Add divider change them, the
+    /// bar stays hidden, and <b>bar:</b> then shows exactly the edited list.
+    /// </summary>
+    [Fact]
+    public async Task ThePicker_WhileHidden_TheMoveKeysDeleteAndADivider_EditTheKeptItems_AndBarShowsThem()
+    {
+        _console.Profile.Width = 240;
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = [];
+            d.HomeBarLastItems = ["area:den", "entity:switch.kettle", "entity:light.den_lamp"];
+        });
+        var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        var shiftDown = new ConsoleKeyInfo('\0', ConsoleKey.DownArrow, shift: true, alt: false, control: false);
+        var delete = new ConsoleKeyInfo('\0', ConsoleKey.Delete, shift: false, alt: false, control: false);
+        input.Push(
+            shiftDown,              // den below the kettle
+            delete,                 // and off; the cursor on the lamp
+            Keys.Down, Keys.Enter,  // + Add divider, at the center's end
+            Keys.Escape);
+
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Empty(_settings.Current.HomeBarItems!);
+        Assert.Equal(["entity:switch.kettle", "entity:light.den_lamp", "divider:1"], _settings.Current.HomeBarLastItems);
+        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
+
+        input.PushClick(ShowBarColumn(Output, shown: false), 100);
+        input.Push(Keys.Escape);
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+        Assert.Equal(["entity:switch.kettle", "entity:light.den_lamp", "divider:1"], _settings.Current.HomeBarItems);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Hidden, the other tabs mark the kept items (2026-11-21): Rooms ticks the kept room, and unticking it, the last one, leaves the empty
+    /// bar's line; <b>bar:</b> then has nothing to show and saves nothing.
+    /// </summary>
+    [Fact]
+    public async Task ThePicker_WhileHidden_RoomsMarksAKeptRoom_UntickingTheLast_LeavesNothingToShow()
+    {
+        _console.Profile.Width = 240;
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = [];
+            d.HomeBarLastItems = ["area:den"];
+        });
+        var (menu, pane, input) = ClickablePaneMenu(cursorTop: 100);
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        input.Push(Keys.Right);
+        input.Push(Keys.Char(' '), Keys.Left, Keys.Escape);   // Rooms: Den off; back to On the bar
+
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Contains("[x] Den", Output);
+        Assert.Empty(_settings.Current.HomeBarItems!);
+        Assert.Empty(_settings.Current.HomeBarLastItems!);
+        Assert.Contains(HomeBarText.EmptyBar, Output[Output.LastIndexOf("[ ] Den", StringComparison.Ordinal)..]);
+
+        input.PushClick(ShowBarColumn(Output, shown: false), 100);
+        input.Push(Keys.Escape);
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+        Assert.Contains("  · " + HomeBarText.NothingToShow, Output);
+        Assert.Empty(_settings.Current.HomeBarItems!);
+        Assert.Empty(_settings.Current.HomeBarLastItems!);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Shown after a hide (the kept items then equal the shown ones), removing every chip empties the kept items too (2026-11-21): the empty
+    /// bar's line, not a hidden list of the old chips, and the Web UI's Home tab shows none.
+    /// </summary>
+    [Fact]
+    public async Task ThePicker_RemovingTheLastChipWhileShown_EmptiesTheKeptItemsToo()
+    {
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = ["area:den"];
+            d.HomeBarLastItems = ["area:den"];   // as a show leaves it
+        });
+        var (menu, pane) = PaneMenu();
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        Push(new ConsoleKeyInfo('\0', ConsoleKey.Delete, shift: false, alt: false, control: false), Keys.Escape);
+
+        Assert.True(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Empty(_settings.Current.HomeBarItems!);
+        Assert.Empty(_settings.Current.HomeBarLastItems!);
+        Assert.Contains(HomeBarText.EmptyBar, Output);
+        Assert.Empty(NeonSidekick.WebUi.WebHomeView.Items(_settings.Current));
         pane.Dispose();
     }
 

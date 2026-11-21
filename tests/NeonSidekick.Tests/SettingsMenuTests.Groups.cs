@@ -19,7 +19,7 @@ public partial class SettingsMenuTests
         Assert.Equal(["Client", "Servers", "Advisors", "Automation", "Voice"], SettingsMenu.StripTitles);   // Client since later on 2026-10-10 (the user's pick); Advisors before Voice later still (the user's order); Automation between them since 2026-10-21 (the user's ask)
         Assert.Equal(
             [
-                [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat, SettingsTab.WebUi],   // Web UI since 2026-10-14
+                [SettingsTab.Chat, SettingsTab.Sessions, SettingsTab.BotChat, SettingsTab.WebUi, SettingsTab.Toolbars],   // Web UI since 2026-10-14; Toolbars since 2026-11-21
                 [SettingsTab.Common, SettingsTab.Http, SettingsTab.Embedded, SettingsTab.Docker, SettingsTab.Anthropic, SettingsTab.OpenAI],
                 [SettingsTab.Advisors],
                 [SettingsTab.Automation],   // 2026-10-21: plan mode's gap review, the Ralph loop and code audits, off Common
@@ -36,6 +36,10 @@ public partial class SettingsMenuTests
         Assert.Equal(SettingsMenu.Title, SettingsMenu.GroupCrumb(SettingsTab.Automation));
         Assert.Equal((0, 1), SettingsMenu.PlaceOf(SettingsTab.Sessions));   // Chat, Sessions, Botchat: the user's order
         Assert.Equal((0, 2), SettingsMenu.PlaceOf(SettingsTab.BotChat));
+        Assert.Equal((0, 4), SettingsMenu.PlaceOf(SettingsTab.Toolbars));   // Client's last, after Web UI (2026-11-21, the user's ask)
+        Assert.Equal(SettingsMenu.Title + " › Client", SettingsMenu.GroupCrumb(SettingsTab.Toolbars));
+        Assert.Equal(SettingsMenu.ToolbarsTabTitle, SettingsMenu.TabTitles[(int)SettingsTab.Toolbars]);
+        Assert.Equal("Toolbars", SettingsMenu.ToolbarsTabTitle);
         Assert.Equal((2, 0), SettingsMenu.PlaceOf(SettingsTab.Advisors));
         Assert.Equal(SettingsTab.Docker, SettingsMenu.TabAt(1, 3));
         Assert.Equal(SettingsTab.Advisors, SettingsMenu.TabAt(2, -1));   // a plain tab's sub (none) is its one tab

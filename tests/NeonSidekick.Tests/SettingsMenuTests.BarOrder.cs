@@ -22,7 +22,8 @@ public partial class SettingsMenuTests
     public async Task OnThePane_ShowToolbar_TheMoveKeysOrderIt_ThePathStaysLast_DeleteUnchecks_DefaultPutsItBack()
     {
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(ShiftDown);                        // Settings a place down
         Push(ShiftEnd);                         // then to the bottom: above the path
@@ -41,7 +42,8 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Char('d'));                   // the default checks and order
         Push(Keys.Char('d'));                   // again: nothing to save
@@ -66,7 +68,8 @@ public partial class SettingsMenuTests
         menu.ToolbarItemHere = id => ToolbarItems.IsHere(id, windows: false);
         bool mac(string id) => ItemOrder.IsDivider(id) || ToolbarItems.IsHere(id, windows: false);
         int network = ItemOrder.Only(ToolbarItems.Sides(null, null), mac).Left.ToList().IndexOf(ToolbarItems.Network);
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push([.. Enumerable.Repeat(Keys.Down, network)]);
         Push(ShiftDown);                        // Network a place down: past Directory, the next row here
@@ -89,7 +92,8 @@ public partial class SettingsMenuTests
     {
         _settings.Update(d => d.PerformanceBarLook = "gauge");   // /perfbar's since 2026-10-12, the page's look buttons gone
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(ShiftDown);                        // CPU after RAM
         Push(DeleteKey);                        // CPU unchecked (the cursor followed it)
@@ -105,7 +109,8 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Char('d'));                   // the default meters and order; the look stays
         Push(Keys.Escape, Keys.Escape);
@@ -119,19 +124,20 @@ public partial class SettingsMenuTests
     }
 
     /// <summary>
-    /// Toolbar order (2026-10-12, the user's ask): the Chat tab's row after Show home bar; its page lists the bars in their
+    /// Toolbar order (2026-10-12, the user's ask): the Toolbars tab's row after Home bar (the Chat tab's until 2026-11-21); its page lists the bars in their
     /// order (five since 2026-10-14, the Hints bar first), a bar that is off marked so; the move keys save at once; Enter, Space and Delete save nothing; default (D, the
     /// title row's one button — the user's ask: a way back on the page) puts the order back, and again saves nothing.
     /// </summary>
     [Fact]
     public async Task OnThePane_ToolbarOrder_AfterShowHomeBar_TheMoveKeysOrderTheBars_DefaultPutsThemBack()
     {
-        var fields = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
+        var fields = SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList();
         Assert.Equal(fields.IndexOf(SettingsField.ShowHomeBar) + 1, fields.IndexOf(SettingsField.BarOrder));
         Assert.Equal("Toolbar order", SettingsMenu.FieldName(SettingsField.BarOrder));
         _settings.Update(d => d.HomeBarItems = null);   // no home bar: its row says off
 
         var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Toolbars);
         Down(fields.IndexOf(SettingsField.BarOrder));
         Push(Keys.Enter);
         Push(Keys.Down);                        // past the Hints bar to the Status bar
@@ -150,6 +156,7 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Toolbars);
         Down(fields.IndexOf(SettingsField.BarOrder));
         Push(Keys.Enter);
         Push(Keys.Char('d'));                   // the default order
@@ -164,32 +171,37 @@ public partial class SettingsMenuTests
     }
 
     /// <summary>
-    /// The Tool bars section (2026-10-12, the user's ask): under Screen's rows, the bars by their new names — Hints bar and Status bar
-    /// (2026-10-14; Hint bar from later on 2026-10-12), Tool bar ("Toolbar" until later that day), Performance bar, Home bar and Order, the last <c>Toolbar order</c> everywhere but
-    /// here — and Order's page under that name.
+    /// The Toolbars tab (2026-11-21, the user's ask; Chat's Tool bars section from 2026-10-12 until then): Bars over the bars by their
+    /// names — Hints bar and Status bar (2026-10-14; Hint bar from later on 2026-10-12), Tool bar ("Toolbar" until later that day),
+    /// Performance bar, Home bar — then Order over Toolbar order, in full on the pane too ("Order" under Tool bars until 2026-11-21), and
+    /// its page under that name; Chat's screen run ends with Menus max height again.
     /// </summary>
     [Fact]
-    public async Task OnThePane_TheToolBarsSection_HoldsTheBarRows_OrderShortOnThePane()
+    public async Task OnTheToolbarsTab_TheBarsSection_HoldsTheBarRows_OrderInFull()
     {
-        var fields = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
-        Assert.Equal(fields.IndexOf(SettingsField.MenuMaxHeight) + 1, fields.IndexOf(SettingsField.HintsBar));
+        var fields = SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList();
         Assert.Equal(
             [SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder],
-            fields.Skip(fields.IndexOf(SettingsField.HintsBar)).Take(6));
+            fields);
+        var chat = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
+        Assert.Equal(chat.IndexOf(SettingsField.MenuMaxHeight) + 1, chat.IndexOf(SettingsField.DraftEditor));
+        Assert.DoesNotContain(chat, fields.Contains);
 
         var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Toolbars);
         Down(fields.IndexOf(SettingsField.BarOrder));
         Push(Keys.Enter, Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 120) + "\n  Hints bar                    " + HintsBarMode.Default + "\n  Status bar                   " + StatusBarItems.DefaultValue + "\n  Tool bar                     ", Output);
-        Assert.Contains("\n  Performance bar              ", Output);
-        Assert.Contains("\n  Home bar                     ", Output);
-        Assert.Contains("\n▸ Order                        " + PaneBars.DefaultValue + "\n" + MenuLayout.Heading("Outside apps", 120), Output);
-        Assert.Contains(GroupBreadcrumb(SettingsTab.Chat, SettingsMenu.BarOrderPaneName) + " ", Output);   // its page under the same name (the default button after it)
+        // The tab pads to its own widest label, Performance bar (15), and the gap.
+        Assert.Contains(MenuLayout.Heading("Bars", 120) + "\n  " + "Hints bar".PadRight(17) + HintsBarMode.Default + "\n  " + "Status bar".PadRight(17) + StatusBarItems.DefaultValue + "\n  " + "Tool bar".PadRight(17), Output);
+        Assert.Contains("\n  " + "Performance bar".PadRight(17), Output);
+        Assert.Contains("\n  " + "Home bar".PadRight(17), Output);
+        Assert.Contains(MenuLayout.Heading("Order", 120) + "\n▸ " + "Toolbar order".PadRight(17) + PaneBars.DefaultValue + "\n", Output);
+        Assert.Contains(GroupBreadcrumb(SettingsTab.Toolbars, "Toolbar order") + " ", Output);   // its page under the same name (the default button after it)
+        Assert.DoesNotContain(MenuLayout.Heading("Tool bars", 120), Output);
         Assert.DoesNotContain("Show toolbar", Output);
-        Assert.DoesNotContain("Toolbar order", Output);   // the pane's own words: nothing saved, no notice
         pane.Dispose();
     }
 
@@ -200,8 +212,9 @@ public partial class SettingsMenuTests
     [Fact]
     public async Task OnThePane_HintsBar_PicksItsMode_OffMarksItOnTheOrderPage()
     {
-        var fields = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
+        var fields = SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList();
         var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Toolbars);
         Down(fields.IndexOf(SettingsField.HintsBar));
         Push(Keys.Enter, Keys.Down, Keys.Enter);   // auto under the cursor: always
         Push(Keys.Escape);
@@ -213,6 +226,7 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Toolbars);
         Down(fields.IndexOf(SettingsField.HintsBar));
         Push(Keys.Enter, Keys.Down, Keys.Enter);   // always under the cursor: off
         Down(fields.IndexOf(SettingsField.BarOrder) - fields.IndexOf(SettingsField.HintsBar));
@@ -225,6 +239,7 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Toolbars);
         Down(fields.IndexOf(SettingsField.HintsBar));
         Push(Keys.Enter, Keys.Up, Keys.Up, Keys.Enter, Keys.Escape);   // off under the cursor: auto
 
@@ -245,7 +260,8 @@ public partial class SettingsMenuTests
     public async Task OnThePane_StatusBar_ChecksAndMovesItsSections_DefaultPutsThemBack()
     {
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);                       // the checklist, on Status (the left group's first; its heading above is no stop)
         Push(ShiftEnd);                         // Status to the bottom of its group, the cursor with it
         Push(Keys.Char(' '));                   // and off
@@ -261,13 +277,14 @@ public partial class SettingsMenuTests
         Assert.Contains(SettingsMenu.PinnedLeftHeading, Output);
         Assert.Contains(SettingsMenu.PinnedRightHeading, Output);
         Assert.Contains(SettingsMenu.StatusBarToggleKeys, Output);
-        Assert.Contains(GroupBreadcrumb(SettingsTab.Chat, "Status bar") + " ", Output);
+        Assert.Contains(GroupBreadcrumb(SettingsTab.Toolbars, "Status bar") + " ", Output);
         Assert.Contains("  · Status bar: Queued, Timers, Reading, Usage | Model", Output);
         pane.Dispose();
 
         // Shift+→ pins the cursor's section right, at the right group's start; Shift+← back to the left group's end (2026-10-13).
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);                       // on Spinner
         Push(Keys.Down);                        // Queued
         Push(ShiftRight);
@@ -281,7 +298,8 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);                       // on Spinner
         Push(Keys.Down);                        // Timers
         Push(ShiftEnd, ShiftDown);              // the left group's bottom, then over the gap: the right group's first
@@ -294,7 +312,8 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);
         Push(Keys.Char('d'));                   // the default sections, the row's own order
         Push(Keys.Char('d'));                   // again: nothing to save
@@ -317,7 +336,8 @@ public partial class SettingsMenuTests
     public async Task OnThePane_StatusBar_TheSpinnerStaysOn_ButMoves()
     {
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter, Keys.Down);            // on Spinner, after Status
         Push(Keys.Char(' '), Keys.Enter, DeleteKey);   // off, thrice: it stays
         Push(Keys.Char('n'));                   // select none: every section but the spinner
@@ -366,7 +386,8 @@ public partial class SettingsMenuTests
     public async Task OnThePane_ToolBar_ShiftRightPinsAGlyphRight_DefaultPutsTheSidesBack()
     {
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);                       // on Settings, the left group's first
         Push(ShiftRight);
         Push(Keys.Escape, Keys.Escape);
@@ -379,7 +400,8 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Char('d'));
         Push(Keys.Escape, Keys.Escape);
@@ -401,7 +423,8 @@ public partial class SettingsMenuTests
     {
         var shiftLeft = new ConsoleKeyInfo('\0', ConsoleKey.LeftArrow, shift: true, alt: false, control: false);
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);                       // on CPU, the center's first
         Push(ShiftRight);                       // CPU pinned right
         Push(shiftLeft, shiftLeft);             // back to the center's end, then to the left
@@ -420,7 +443,8 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Char('d'));
         Push(Keys.Escape, Keys.Escape);
@@ -441,7 +465,8 @@ public partial class SettingsMenuTests
     public async Task OnThePane_ToolBar_AddsMovesAndDeletesDividers()
     {
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);                       // on Settings
         Push(Keys.Char('+'));                   // a divider after Settings, the cursor on it
         Push(Keys.Escape, Keys.Escape);
@@ -454,7 +479,8 @@ public partial class SettingsMenuTests
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter, Keys.Down);            // the new divider
         Push(Keys.Char(' '), Keys.Enter);       // nothing: a divider has no check
         Push(DeleteKey);                        // out

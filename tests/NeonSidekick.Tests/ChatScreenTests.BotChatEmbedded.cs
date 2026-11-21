@@ -30,6 +30,40 @@ public partial class ChatScreenTests
         return embedded;
     }
 
+    /// <summary>
+    /// The vision guard (2026-11-21, the user's pick with Botchat vision enabled on by default): on the embedded model with Embedded vision off,
+    /// the app knows the model reads no pictures, so the bots get text alone (one notice) and the camera is never taken (its own notice).
+    /// </summary>
+    [Fact]
+    public async Task BotChat_OnTheEmbeddedModelWithoutVision_TheBotsSeeTextAlone_AndTheCameraStaysOff()
+    {
+        BotChatFixture();
+        UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        _cameraSystem = new FakeCameraSystem();
+        _settings.Update(d => { d.LlmUrl = "embedded"; d.LlmModel = "gemma-4-e2b"; d.EmbeddedVision = false; d.BotChatCamera = true; });
+        Assert.True(_settings.Current.BotChatVision);   // on by default since 2026-11-21
+        _chat.EnqueueText("Hello from Neon.");
+        _chat.EnqueueText("Hello from Ada.");
+        _chat.EnqueueText("Neon ", "again");
+        EscDuringRequest(3);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal(1, output.Split(BotChat.VisionUnseenNotice).Length - 1);   // once a chat
+        Assert.Equal(1, output.Split(Camera.CameraText.BotChatBlind).Length - 1);
+        Assert.DoesNotContain(Camera.CameraText.BotChatOn, output);
+        Assert.Equal(0, _cameraSystem.Opens);   // the light never came on
+        Assert.All(_chat.Requests, request =>
+        {
+            Assert.Empty(request[^1].Contents.OfType<Microsoft.Extensions.AI.DataContent>());
+            Assert.DoesNotContain(BotChat.CameraCaption(1, 1), request[^1].Text, StringComparison.Ordinal);
+            Assert.DoesNotContain(BotChat.CameraRule, request.Single(m => m.Role == Microsoft.Extensions.AI.ChatRole.System).Text, StringComparison.Ordinal);
+        });
+    }
+
     [Fact]
     public async Task BotChat_Multi_ParentServer_NothingRunning_TheFirstEmbeddedBotStarts_TheNextSharesWithAWarning()
     {

@@ -223,6 +223,12 @@ public static class CameraText
     /// </summary>
     public const string BotChatNotFromWeb = "📷 Botchat camera stays off for a chat started from the Web UI.";
 
+    /// <summary>
+    /// The notice at a botchat's start with <c>Botchat camera</c> on when every bot is on the main link and the app knows its model reads
+    /// no pictures (2026-11-21, with <c>Botchat vision enabled</c> on by default): the camera is never taken, so its light stays off.
+    /// </summary>
+    public const string BotChatBlind = "📷 Botchat camera stays off: the model in use reads no pictures.";
+
     // ── Watch mode ──────────────────────────────────────────────────────────
 
     public static string WatchOn(int seconds, int threshold, bool unprompted) =>

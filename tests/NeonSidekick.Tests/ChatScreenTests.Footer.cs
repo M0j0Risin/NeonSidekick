@@ -41,7 +41,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task ReplyFooter_On_TimeTokensAndTools_UnderTheReply_AndASlowToolsTimeOnItsLine()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WebTools = true; d.ReplyFooter = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.WebTools = true; d.ReplyFooter = true; d.WebFooter = true; });
         SlowFetch(TimeSpan.FromSeconds(3));
         LinesWhenIdle("read it", "/exit");
 
@@ -54,7 +54,7 @@ public partial class ChatScreenTests
     [Fact]
     public async Task ReplyFooter_AFastTool_ShowsNoTime_AndTheFooterStill()
     {
-        _settings.Update(d => { d.TtsOutput = false; d.WebTools = true; d.ReplyFooter = true; });
+        _settings.Update(d => { d.TtsOutput = false; d.WebTools = true; d.ReplyFooter = true; d.WebFooter = true; });
         SlowFetch(TimeSpan.FromSeconds(1.5));
         LinesWhenIdle("read it", "/exit");
 
@@ -62,6 +62,40 @@ public partial class ChatScreenTests
 
         Assert.DoesNotContain(" · 1.5s", output);
         Assert.Matches(@"Read it\.\n📚 [^\n]+\n1\.5s · 832 tok", output);
+    }
+
+    /// <summary>Web footer off (the default since 2026-11-21, the user's ask): a page read leaves no 📚 line, at the PC or on the page; the reply footer still drawn.</summary>
+    [Fact]
+    public async Task WebFooter_IsOffByDefault_APageReadLeavesNoSourcesLine_TheReplyFooterStill()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebTools = true; d.ReplyFooter = true; });
+        SlowFetch(TimeSpan.FromSeconds(3));
+        LinesWhenIdle("read it", "/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("📚", output);
+        Assert.Matches(@"Read it\.\n3\.0s · 832 tok", output);
+        Assert.DoesNotContain(Web.Feed.Snapshot(m => m), e => e.Kind == "sources");
+    }
+
+    /// <summary>A stored turn's sources (2026-11-21): a loaded session draws no 📚 line with Web footer off, and draws it, at the PC and on the page, with it on.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WebFooter_ARestoredTurnsSources_FollowTheSetting(bool on)
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.WebFooter = on; });
+        long id = SeedSession(sources: [new NeonSidekick.Web.WebSource(NeonSidekick.Web.WebSourceKind.Page, "https://example.com/vosk", "Vosk models")]);
+        PushLine("/sessions " + id);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("Pass the folder to the detector.", output);
+        Assert.Equal(on, output.Contains("📚", StringComparison.Ordinal));
+        Assert.Equal(on, output.Contains("Vosk models", StringComparison.Ordinal));
+        Assert.Equal(on, Web.Feed.Snapshot(m => m).Any(e => e.Kind == "sources"));
     }
 
     /// <summary>A pane inside a tool (the bot check's ask) answered 30 s later: neither the tool's time nor the footer's counts that wait.</summary>

@@ -121,9 +121,10 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task BotChat_VisionOff_TheDefault_NoRequestCarriesAPicture()
+    public async Task BotChat_VisionOff_NoRequestCarriesAPicture()
     {
         BotPicturesFixture();
+        _settings.Update(d => d.BotChatVision = false);   // the default until 2026-11-21
         _chat.EnqueueText(DogReply);
         _chat.EnqueueText("a dog surfing a wave");
         _chat.EnqueueText("Ada ", "answers.");
@@ -170,7 +171,7 @@ public partial class ChatScreenTests
     public async Task BotChat_VisionOff_Autonomous_ABotsOwnPicture_IsNotShownToItsModel_ButIsDrawn()
     {
         BotPicturesFixture(mode: "autonomous", width: 512, height: 4);
-        _settings.Update(d => d.ImageThumbnailSize = "tiny");
+        _settings.Update(d => { d.ImageThumbnailSize = "tiny"; d.BotChatVision = false; });   // on by default since 2026-11-21
         _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
         _chat.EnqueueText("Here is my dog.");
         _chat.EnqueueText("Ada ", "answers.");

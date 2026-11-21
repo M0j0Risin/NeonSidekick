@@ -416,6 +416,12 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void ReplayTurn(string userText, string replyText, int toolCalls, bool styled, TurnPictures? pictures = null, UI.ThumbnailBox? box = null, IReadOnlyList<Web.WebSource>? sources = null, bool log = true)
     {
+        // The 📚 line behind Web footer (2026-11-21, the user's ask), so a cancelled turn that read pages opens no reply for it either.
+        if (!_effective().WebFooter)
+        {
+            sources = null;
+        }
+
         // Every turn's pictures: drawn with a box, offered to the Web UI's page alone without (later on 2026-10-14).
         var drawn = pictures is { Any: true } turn ? turn : null;
         ReplayThumbnails(drawn?.Imagined, box, sandbox: true, log);

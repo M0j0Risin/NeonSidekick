@@ -32,7 +32,7 @@ internal static class HelpToolCatalog
     public const string WebGroup = "Web";
     public const string MemoryGroup = "Memory";
     public const string SkillsGroup = "Skills";
-    public const string SessionsGroup = "Sessions";
+    public const string SessionsGroup = ToolsText.SessionsMenuTitle;   // its /tools menu since 2026-11-21
     public const string QuestionsGroup = "Questions";
     public const string PlanGroup = "Plan";
     public const string AuditGroup = "Code audit";

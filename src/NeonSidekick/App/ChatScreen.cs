@@ -2271,7 +2271,7 @@ internal sealed partial class ChatScreen
             return QueueMode.TryParse(shown.QueueMode, out var queueing) && queueing == Queueing.Disabled;
         }
 
-        return ToolsText.SwitchField(id) switch
+        return ToolsText.ToolbarSwitchField(id) switch   // 💾 never a switch (2026-11-21)
         {
             null => false,
             SettingsField.ShellCommandPolicy => ToolbarPolicy(shown) == Shell.CommandPolicyMode.Off,
@@ -2317,7 +2317,7 @@ internal sealed partial class ChatScreen
             ToolbarItems.Midi => shown.MidiInput ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-11-12
             ToolbarItems.Skills => shown.AgentSkills ? ToolbarItems.OnWord : ToolbarItems.OffWord,   // 2026-10-16
             ToolbarItems.Tools => noToolsOffered ? ToolbarItems.NoneOfferedState : null,   // 2026-10-16: its name alone while a tool is offered
-            _ when ToolsText.SwitchField(id) is not null => ToolbarItemOff(id, shown, eventLogsHere: eventLogsHere, directoryHere: directoryHere) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
+            _ when ToolsText.ToolbarSwitchField(id) is not null => ToolbarItemOff(id, shown, eventLogsHere: eventLogsHere, directoryHere: directoryHere) ? ToolbarItems.OffWord : ToolbarItems.OnWord,
             _ => null,
         };
         return ToolbarItems.Note(glyph, id, state);
@@ -6936,7 +6936,7 @@ internal sealed partial class ChatScreen
     public static string MessageHistoryDroppedLogLine(int count) =>
         $"Keep message history is off: dropped {HistoryMessages(count)} from {SessionStore.FileName}.";
 
-    /// <summary>The session tool (<c>session_manager</c>, 2026-09-18), offered while the setting <c>Session tool</c> is on; the conversation on screen (<paramref name="current"/>) is left out of its answers. Shared with headless.</summary>
+    /// <summary>The session tool (<c>session_manager</c>, 2026-09-18), offered while the setting <c>Session tools</c> is on; the conversation on screen (<paramref name="current"/>) is left out of its answers. Shared with headless.</summary>
     public static IReadOnlyList<AIFunction> SessionTools(SessionStore store, Func<AppSettingsData> effective, Func<long?> current, TimeProvider time) => new AIFunction[]
     {
         new SessionManagerTool(store, effective, current, time),
@@ -16856,6 +16856,8 @@ internal sealed partial class ChatScreen
         // The bots see the user (2026-10-02, Botchat camera): the camera held for the chat, a fresh picture per turn.
         // Never from the Web UI (2026-11-12, the user's call): the person may be away from the PC, so a page-started chat (FromWebNow holds
         // for the whole dispatch) leaves the webcam off; the bots' instructions follow the lease, so they are never told of a picture.
+        // Nor when every bot is on the main link and the app knows its model reads no pictures (2026-11-21, with Botchat vision enabled
+        // on by default): the light stays off; a bot on a link of its own may see, so the camera is taken for it.
         CameraLease? botCamera = null;
         if (effective.BotChatCamera)
         {
@@ -16863,11 +16865,18 @@ internal sealed partial class ChatScreen
             {
                 _transcript.Notice(CameraText.BotChatNotFromWeb);
             }
+            else if ((links.Count == 0 ? OnMainLink(null) : links.All(OnMainLink)) && !ModelSeesPictures())
+            {
+                _transcript.Notice(CameraText.BotChatBlind);
+            }
             else
             {
                 botCamera = AcquireBotCamera();
             }
         }
+
+        // Said once a chat, the first time a bot is spared the pictures (BotChat.VisionUnseenNotice).
+        bool visionUnseenSaid = false;
         // The bots whose own server failed them (2026-10-10, the advisors' lesson: a failed advisor drops its link and the panel goes on),
         // by cast index: never picked again, nor named to the others; their links go with the rest at the chat's end.
         var away = new HashSet<int>();
@@ -16940,8 +16949,20 @@ internal sealed partial class ChatScreen
                 // The user's camera picture first (Botchat camera, 2026-10-02): it takes the last of the picture slots, so the
                 // chat's own pictures are picked with one fewer and their caption names exactly the ones attached (later that
                 // day, the user's report: four named, three sent, and the camera's picture read as the fourth bot's).
+                // The guard (2026-11-21, the user's pick with Botchat vision enabled on by default): a bot on the main link whose model the
+                // app knows reads no pictures (ModelSeesPictures) gets text alone and no camera picture, as with the setting off; a bot on a
+                // link of its own is not judged, its server unknown.
+                bool onMain = OnMainLink(links.Count > 0 ? links[next] : null);
+                bool spared = onMain && !ModelSeesPictures();
+                bool sees = effective.BotChatVision && !spared;
+                if (spared && effective.BotChatVision && !visionUnseenSaid)
+                {
+                    visionUnseenSaid = true;
+                    _transcript.Notice(BotChat.VisionUnseenNotice);
+                }
+
                 ImageAttachment? cameraPicture = null;
-                if (botCamera is not null)
+                if (botCamera is not null && !spared)
                 {
                     cameraPicture = await BotCameraPictureAsync(botCamera, cancellationToken).ConfigureAwait(false);
                     if (cameraPicture is null && botCamera.Released)
@@ -16950,7 +16971,7 @@ internal sealed partial class ChatScreen
                     }
                 }
 
-                var (turnPictures, captions) = BotChat.TurnPictures(bot.Name, _botPictureLog, picturesSeen.GetValueOrDefault(bot.Name), effective.BotChatVision, cameraPicture);
+                var (turnPictures, captions) = BotChat.TurnPictures(bot.Name, _botPictureLog, picturesSeen.GetValueOrDefault(bot.Name), sees, cameraPicture);
                 seenImages = turnPictures;
                 sentText += captions;
                 picturesSeen[bot.Name] = _botPictureLog?.Count ?? 0;
@@ -16963,7 +16984,7 @@ internal sealed partial class ChatScreen
                 bool memorySave = memory?.Tools.Any(t => t is SaveMemoryTool) == true;
                 var history = new ConversationHistory(BotChat.SystemPrompt(bot.Persona, bot.Name, others, topic, speaking, bot.VoiceDirective, markdown, pronouns, images: imageTool is not null, skills: skills, camera: cameraPicture is not null, tools: general?.Rules, memories: memory?.Store.Snapshot(), memorySave: memorySave, recent: recent));
                 history.Replace(prior);
-                _botOnMainLink = OnMainLink(links.Count > 0 ? links[next] : null);
+                _botOnMainLink = onMain;
                 if ((links.Count > 0 && links[next] is { } own ? _session.CreateAssistant(history, own) : _session.CreateAssistant(history)) is not { } assistant)
                 {
                     _transcript.Error(NoAssistantError);
@@ -17004,7 +17025,7 @@ internal sealed partial class ChatScreen
                 // Vision off, the bots see text alone (2026-10-10, the user's call): a bot's own generate_image, view_image,
                 // camera_capture, screen_capture and image_edit pictures reach the transcript (and generate_image's the strip and the
                 // picture log) as ever, but not its model — a text-only server would fail the turn.
-                assistant.ToolPicturesUnseen = BotChat.UnseenToolPictures(effective.BotChatVision);
+                assistant.ToolPicturesUnseen = BotChat.UnseenToolPictures(sees);   // spared by the guard too (2026-11-21)
 
                 DiagnosticLog.Info(AppCategory, BotChat.TurnLogLine(replies + 1, bot.Name));
                 int turnId = ladder.BeginBot();
@@ -18993,7 +19014,8 @@ internal sealed partial class ChatScreen
                 assistant.History.RemoveLastTurn();
             }
 
-            _transcript.EndAssistant(ReplyFooter(bot is null, outcome, (failed || sawError) && reply.Length == 0 && trace.ToolCalls == 0, turnStarted, trace), trace.Sources);
+            _transcript.EndAssistant(ReplyFooter(bot is null, outcome, (failed || sawError) && reply.Length == 0 && trace.ToolCalls == 0, turnStarted, trace),
+                _effective().WebFooter ? trace.Sources : null);   // the 📚 line behind Web footer (2026-11-21, the user's ask)
             // A reflection that ended during the reply reports here, under it, never inside it.
             DrainLearn();
             // A reply that ran to its end with no usage report is counted as unreported; a cut or

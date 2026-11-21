@@ -5,7 +5,7 @@ using Spectre.Console;
 
 namespace NeonSidekick.App;
 
-// ── The home bar's picker: /settings › Client › Chat › Home bar and /homebar edit (2026-10-12) ──
+// ── The home bar's picker: /settings › Client › Toolbars › Home bar (Chat's until 2026-11-21) and /homebar edit (2026-10-12) ──
 
 internal sealed partial class SettingsMenu
 {
@@ -56,7 +56,9 @@ internal sealed partial class SettingsMenu
     /// Space or Enter puts an item on the bar's end or takes it off, and typing filters by name, id, area or label. Every change
     /// saves at once and the bar under the pane follows. Read from <see cref="HomeCatalog"/> once a visit. <paramref name="own"/>
     /// (<c>/homebar edit</c>): the pane is this picker's and closes as it ends. Since 2026-11-07 (the user's ask) the strip ends with
-    /// <see cref="ShowBarButton"/>, a click that hides or shows the bar as <c>/homebar</c> alone does. True when anything changed.
+    /// <see cref="ShowBarButton"/>, a click that hides or shows the bar as <c>/homebar</c> alone does. Since 2026-11-21 (the user's ask, the
+    /// perf bar's shape) a hidden bar's kept items stay listed, dim, on every tab (<see cref="HomeBarItems.Kept"/>), and an edit then changes
+    /// the kept items, the bar staying hidden until <b>bar:</b> or <c>/homebar</c>. True when anything changed.
     /// </summary>
     public async Task<bool> EditHomeBarAsync(bool own, CancellationToken cancellationToken)
     {
@@ -104,9 +106,10 @@ internal sealed partial class SettingsMenu
             while (true)
             {
                 var saved = _settings.Current;
-                var sides = HomeBarItems.Sides(saved.HomeBarItems, saved.HomeBarLeft, saved.HomeBarRight);
+                var (listed, hidden) = HomeBarItems.Kept(saved.HomeBarItems, saved.HomeBarLastItems);
+                var sides = HomeBarItems.Sides(listed, saved.HomeBarLeft, saved.HomeBarRight);
                 var items = sides.All;
-                var built = HomePickerTabs(catalog, sides, filter, saved.HomeBarAliases, saved.HomeBarGlyphs, home, monitors);
+                var built = HomePickerTabs(catalog, sides, filter, saved.HomeBarAliases, saved.HomeBarGlyphs, home, monitors, hidden);
                 var page = MenuPage.Tabbed(Crumb(FieldName(SettingsField.ShowHomeBar)), built.Select(b => b.Tab).ToList(), tab, built[Math.Clamp(tab, 0, built.Count - 1)].Tab.Hint ?? "")
                     // The show/hide button (2026-11-07, the user's ask) at the strip's end: click-only (the user's pick), since a key would beat the
                     // filtering tabs' first letter and the pane keeps a page's buttons across its tabs.
@@ -141,12 +144,8 @@ internal sealed partial class SettingsMenu
                         continue;
                     }
 
+                    // The cursor stays (2026-11-21): the On the bar rows are the same either way now, only dimmed while hidden.
                     Apply(SettingsField.ShowHomeBar, next.SaveTo);
-                    if (tab == 0)
-                    {
-                        cursor = 0;   // the On the bar rows change; another tab's stay put (2026-11-08, the review)
-                    }
-
                     changed = true;
                     continue;
                 }
@@ -161,7 +160,7 @@ internal sealed partial class SettingsMenu
                         if (!pick.Remove && pick.Move == 0 && pick.Side == 0)
                         {
                             var (added, landed) = HomeBarItems.AddDivider(sides);
-                            SaveHomeSides(added);
+                            SaveHomeSides(added, hidden);
                             cursor = SidedRowOf(added, landed);
                             changed = true;
                         }
@@ -212,7 +211,7 @@ internal sealed partial class SettingsMenu
                     {
                         // Off the bar, its side with it (later on 2026-10-13): added again, it lands in the center.
                         var without = HomeBarItems.Without(sides, row);
-                        SaveHomeSides(without);
+                        SaveHomeSides(without, hidden);
                         cursor = without.All.Count == 0 ? 0 : SidedRowOf(without, Math.Min(index, without.All.Count - 1));
                         changed = true;
                         continue;
@@ -234,7 +233,7 @@ internal sealed partial class SettingsMenu
 
                     if (!moved.SameAs(sides))
                     {
-                        SaveHomeSides(moved);
+                        SaveHomeSides(moved, hidden);
                         changed = true;
                     }
 
@@ -247,7 +246,7 @@ internal sealed partial class SettingsMenu
                     continue;
                 }
 
-                SaveHomeSides(HomeBarItems.Flip(sides, reference));
+                SaveHomeSides(HomeBarItems.Flip(sides, reference), hidden);
                 changed = true;
             }
         }
@@ -260,9 +259,27 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    // The bar's groups and order saved together (later on 2026-10-13): the whole order, then each side.
-    private void SaveHomeSides(ItemOrder.Sided sides) =>
-        Apply(SettingsField.ShowHomeBar, d => (d.HomeBarItems, d.HomeBarLeft, d.HomeBarRight) = HomeBarItems.SaveSides(sides));
+    // The bar's groups and order saved together (later on 2026-10-13): the whole order, then each side. Hidden (2026-11-21, the user's ask)
+    // the order goes to the kept items and the bar stays hidden; shown, an edit that empties the bar empties the kept items too, so a stale
+    // kept list never reads as a hidden bar (nor shows on the Web UI's Home tab).
+    private void SaveHomeSides(ItemOrder.Sided sides, bool hidden) =>
+        Apply(SettingsField.ShowHomeBar, d =>
+        {
+            var (all, left, right) = HomeBarItems.SaveSides(sides);
+            (d.HomeBarLeft, d.HomeBarRight) = (left, right);
+            if (hidden)
+            {
+                d.HomeBarLastItems = all;
+                d.HomeBarItems = [];
+                return;
+            }
+
+            d.HomeBarItems = all;
+            if (all.Count == 0)
+            {
+                d.HomeBarLastItems = [];
+            }
+        });
 
     // The group of the item at index of sides.All: 0 left, 1 center, 2 right.
     private static int GroupOf(ItemOrder.Sided sides, int index) =>
@@ -380,20 +397,21 @@ internal sealed partial class SettingsMenu
     /// The picker's tabs over <paramref name="catalog"/> for the bar's items in their groups (<paramref name="sides"/>), the kinds' tabs under
     /// <paramref name="filter"/>; an item with an alias (<paramref name="aliases"/>) shows it, quoted on the kinds' and rooms' tabs
     /// and matched by the filter; one with an emoji of its own (<paramref name="glyphs"/>) shows it on the bar's tab. Shopping last
-    /// (later on 2026-10-12), and the bar's tab and it alone without <paramref name="home"/> (no Home Assistant). Pure over its data.
+    /// (later on 2026-10-12), and the bar's tab and it alone without <paramref name="home"/> (no Home Assistant). <paramref name="hidden"/>: the
+    /// bar is hidden and <paramref name="sides"/> are its kept items (2026-11-21), drawn dim on the bar's tab. Pure over its data.
     /// </summary>
-    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, ItemOrder.Sided sides, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true, IReadOnlyList<string>? monitors = null)
+    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, ItemOrder.Sided sides, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true, IReadOnlyList<string>? monitors = null, bool hidden = false)
     {
         var items = sides.All;
         bool monitorsHere = monitors is not null;
         if (!home)
         {
             return monitorsHere
-                ? [BarTab(catalog, sides, aliases, glyphs, monitorsHere), MonitorsTab(items, filter, glyphs, monitors!), ShoppingTab(items, filter, glyphs)]
-                : [BarTab(catalog, sides, aliases, glyphs, monitorsHere), ShoppingTab(items, filter, glyphs)];
+                ? [BarTab(catalog, sides, aliases, glyphs, monitorsHere, hidden), MonitorsTab(items, filter, glyphs, monitors!), ShoppingTab(items, filter, glyphs)]
+                : [BarTab(catalog, sides, aliases, glyphs, monitorsHere, hidden), ShoppingTab(items, filter, glyphs)];
         }
 
-        var tabs = new List<HomeTab> { BarTab(catalog, sides, aliases, glyphs, monitorsHere), RoomsTab(catalog, items, filter, aliases) };
+        var tabs = new List<HomeTab> { BarTab(catalog, sides, aliases, glyphs, monitorsHere, hidden), RoomsTab(catalog, items, filter, aliases) };
         var named = HomeDomainTabs.SelectMany(t => t.Domains).ToHashSet(StringComparer.Ordinal);
         foreach (var (title, domains) in HomeDomainTabs)
         {
@@ -435,8 +453,9 @@ internal sealed partial class SettingsMenu
 
     // The bar's tab (later on 2026-10-13, the user's ask: pinned left, center or right): the groups as the sided checklists draw them — a
     // heading each with its count (SidedRows' rows, so SidedRowOf finds an item's row), the items numbered across all three — then
-    // + Add divider; with nothing on the bar, its one dim line instead of the headings.
-    private static HomeTab BarTab(HaCatalog catalog, ItemOrder.Sided sides, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool monitorsHere = true)
+    // + Add divider; with nothing on the bar, its one dim line instead of the headings. Hidden (2026-11-21, the user's ask): the kept items,
+    // each row dim and the tab's title dim and italic (/tools' look for a switched-off menu); keys and Enter's page as when shown.
+    private static HomeTab BarTab(HaCatalog catalog, ItemOrder.Sided sides, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool monitorsHere = true, bool hidden = false)
     {
         var rows = new List<string>();
         var refs = new List<string?>();
@@ -449,7 +468,8 @@ internal sealed partial class SettingsMenu
             refs.Add(null);
             foreach (string item in group)
             {
-                rows.Add(BarRow(catalog, item, number++, aliases, glyphs, monitorsHere));
+                string row = BarRow(catalog, item, number++, aliases, glyphs, monitorsHere);
+                rows.Add(hidden ? Theme.DimMarkup(Markup.Remove(row)) : row);
                 refs.Add(item);
             }
         }
@@ -462,7 +482,7 @@ internal sealed partial class SettingsMenu
 
         rows.Add(Markup.Escape(HomeBarText.AddDividerRow));
         refs.Add(AddDividerRef);
-        return new HomeTab(new MenuTab(HomeBarText.BarTab, rows) { Moves = true, Sides = true, Headings = headings.Count > 0 ? headings : null, Hint = HomeBarText.BarHint }, refs);
+        return new HomeTab(new MenuTab(HomeBarText.BarTab, rows) { Moves = true, Sides = true, Headings = headings.Count > 0 ? headings : null, Hint = HomeBarText.BarHint, Off = hidden }, refs);
     }
 
     // One item's row on the bar's tab: its number, its glyph and its name as the chip has them, and where it is, dim.

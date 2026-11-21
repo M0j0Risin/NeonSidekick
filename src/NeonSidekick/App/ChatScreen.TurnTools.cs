@@ -416,7 +416,7 @@ internal sealed partial class ChatScreen
             _ => tools,
         };
         tools = skillTools.Count > 0 ? [.. tools, .. skillTools] : tools;
-        // The session tool after the skills (2026-09-18): the setting Session tool, a per-group offer.
+        // The session tool after the skills (2026-09-18): the setting Session tools, a per-group offer.
         bool sessions = inputs.SessionsEnabled && sessionTools is { Count: > 0 };
         tools = sessions ? [.. tools, .. sessionTools!] : tools;
         // The MCP servers' tools after the session tool (2026-09-20): the setting MCP servers, a per-group offer over what is connected.

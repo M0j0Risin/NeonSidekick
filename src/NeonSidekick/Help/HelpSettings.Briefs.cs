@@ -37,6 +37,7 @@ public static partial class HelpSettings
         SettingsField.CopyUserPrompt => "/copy includes your prompt above the reply. Off, it copies the reply alone.",
         SettingsField.UserLineStyle => "The look of your sent lines in the transcript and the Web UI: quiet (only the › in your color), slab (the line on a faint fill) or bold (all of it bold).",
         SettingsField.ReplyFooter => "Adds a dim line under each reply with its time, tokens, speed, tool calls and model.",
+        SettingsField.WebFooter => "Adds a dim 📚 line under a reply listing the pages and files it read and its searches.",
         SettingsField.Theme => "The app's color theme: one of the sixty-eight built-in themes, dark and light, or your own from the home folder's themes folder.",
         SettingsField.ThemedBackground => "Paints the terminal's background in the theme's color while the app runs, and puts yours back when it exits. Off keeps your terminal's own background.",
         SettingsField.ThemedExternalWindows => "The app's own windows (the picture viewer, the log windows, the video and Browser windows…) take the theme's colors and a matching title bar. Off, they stay black.",
@@ -45,12 +46,6 @@ public static partial class HelpSettings
         SettingsField.ShowHeader => "Shows the banner (title, version and rule) at startup and after /clear, /theme or a profile switch. Off, the screen starts with the transcript.",
         SettingsField.ShowWorkingDirectory => "Shows the working directory at the right of the banner's title line.",
         SettingsField.MenuMaxHeight => "The most of the window a menu or info pane may take: half, three-quarters or full. A longer list scrolls inside it.",
-        SettingsField.HintsBar => "Gives the key hints a bar of their own above the Status bar. auto shows it while there is a hint, always keeps it, off puts the hints on the Status bar.",
-        SettingsField.StatusBarItems => "Which sections the Status bar under the input line shows, in what order and on which side. Enter opens the checklist.",
-        SettingsField.ToolbarItems => "Which icons and items the tool bar shows, in what order and on which side. Enter opens the checklist, where you can also add dividers or hide the bar.",
-        SettingsField.ShowPerformanceBar => "Which meters the performance bar shows (CPU, RAM, GPU and its memory, network, context in use, background processes), where, and how they look. Enter opens the checklist.",
-        SettingsField.ShowHomeBar => "A bar of chips for Home Assistant rooms and devices (and the shopping list) that shows their state and switches them. Enter opens the picker.",
-        SettingsField.BarOrder => "The top-to-bottom order of the bars under the input line: Hints, Status, Tool, Performance and Home. Each bar's own row shows or hides it.",
         SettingsField.DraftEditor => "The program /draft opens your draft in (such as code --wait); it must wait until the file is closed. Empty uses your default editor for .txt files.",
         SettingsField.ImageEditor => "Where a picture you double-click, or the model opens, is shown. Empty: the built-in viewer. system: your system's app for the file type. Anything else: a command.",
 
@@ -60,8 +55,6 @@ public static partial class HelpSettings
         SettingsField.SessionRetentionDays => "Deletes sessions at startup once their last turn is older than this many days (0–3650; 0 = keep forever).",
         SettingsField.SessionNamingMode => "A session's title: model-written asks the model for a short name after the first turn; first-line uses the first line you sent.",
         SettingsField.SessionShowName => "Which session titles show above the input row: all, model-written (only names the model wrote or you typed) or none.",
-        SettingsField.SessionTool => "Offers the model session_manager, to search, list and read this profile's earlier sessions. It can never restore or delete them.",
-        SettingsField.SessionSearchMaxResults => "The most sessions one session_manager search or list returns (1–20).",
 
         // /settings › Client › Botchat
         SettingsField.BotChatLlmMode => "Whose LLM the bots use. single: this profile's server, model and reasoning for every bot. multi: each bot uses its own profile's.",
@@ -76,8 +69,8 @@ public static partial class HelpSettings
         SettingsField.BotChatLimitedSkills => "The skills the bots may load. With none ticked, the bots get no skill tool. Needs Agent skills.",
         SettingsField.BotChatMemory => "Gives every bot long-term memory, whatever each profile's Memory mode says. Botchat memory mode says whose memories they use.",
         SettingsField.BotChatMemoryMode => "Whose memories the bots use: shared-parent, the starting profile's for every bot; independent, each bot its own profile's.",
-        SettingsField.BotChatVision => "Shows each bot the chat's newest pictures on its turn. Only for models that read images: a text-only server fails the turn.",
-        SettingsField.BotChatCamera => "Lets the bots see you: the camera stays on for the chat and each bot's turn gets a fresh photo. Needs a model that reads images. Never for a chat started from the Web UI.",
+        SettingsField.BotChatVision => "Shows each bot the chat's newest pictures on its turn. Only for models that read images: a text-only server fails the turn; skipped when the app knows the model can't.",
+        SettingsField.BotChatCamera => "Lets the bots see you: each bot's turn gets a fresh photo. Needs a model that reads images; off when the app knows the model can't, and for a chat started from the Web UI.",
         SettingsField.BotChatRecentContext => "Gives every bot the last 10 messages of this chat from when /botchat began, so the topic can build on them. Off, the bots know the topic alone.",
 
         // /settings › Client › Web UI
@@ -95,6 +88,14 @@ public static partial class HelpSettings
         SettingsField.WebUiHomeControls => "Shows the Web UI's Home tab, which controls Home Assistant devices, rooms and scenes. Unlocking and opening doors still ask first.",
         SettingsField.WebUiShoppingControls => "Shows the Web UI's Shopping tab, to see and change the shopping list from your phone.",
         SettingsField.WebUiYouTubeControls => "Shows the Web UI's Video tab, which plays videos and keeps the saved list. A video started there plays there.",
+
+        // /settings › Client › Toolbars
+        SettingsField.HintsBar => "Gives the key hints a bar of their own above the Status bar. auto shows it while there is a hint, always keeps it, off puts the hints on the Status bar.",
+        SettingsField.StatusBarItems => "Which sections the Status bar under the input line shows, in what order and on which side. Enter opens the checklist.",
+        SettingsField.ToolbarItems => "Which icons and items the tool bar shows, in what order and on which side. Enter opens the checklist, where you can also add dividers or hide the bar.",
+        SettingsField.ShowPerformanceBar => "Which meters the performance bar shows (CPU, RAM, GPU and its memory, network, context in use, background processes), where, and how they look. Enter opens the checklist.",
+        SettingsField.ShowHomeBar => "A bar of chips for Home Assistant rooms and devices (and the shopping list) that shows their state and switches them. Enter opens the picker.",
+        SettingsField.BarOrder => "The top-to-bottom order of the bars under the input line: Hints, Status, Tool, Performance and Home. Each bar's own row shows or hides it.",
 
         // /settings › Servers › Common
         SettingsField.LlmUrl => "The LLM server: an OpenAI-compatible base URL, embedded for the built-in model, or docker:<container>. Empty scans for a server and lets you pick one at startup.",
@@ -252,10 +253,12 @@ public static partial class HelpSettings
         SettingsField.ShellCodeLanguages => "The languages execute_code may run: powershell, python, node. A language is offered only while its interpreter is found.",
         SettingsField.ShellCodeTimeoutSeconds => "The time an execute_code script without its own timeout may run before it is killed (1–3600 s).",
 
-        // /tools › Core › Clock, Timers, Ask, Help
+        // /tools › Core › Clock, Timers, Sessions, Ask, Help
         SettingsField.ClockTools => "Gives the model the clock tools (the current time, date math) and starts each conversation with the time.",
         SettingsField.TimerTools => "Gives the model tools to start, stop and list timers. /timer and running timers work either way.",
         SettingsField.TimerTone => "The tone a timer rings with: silent, chime, bell, beep or alarm. It rings again until you silence or stop the timer. This PC only.",
+        SettingsField.SessionTool => "Offers the model session_manager, to search, list and read this profile's earlier sessions. It can never restore or delete them.",
+        SettingsField.SessionSearchMaxResults => "The most sessions one session_manager search or list returns (1–20).",
         SettingsField.AskUser => "Lets the model ask you multiple-choice questions (ask_user).",
         SettingsField.AskMaxQuestions => "The most questions one ask_user call may ask (1–10).",
         SettingsField.AskMaxChoices => "The most options one question may offer (2–15).",

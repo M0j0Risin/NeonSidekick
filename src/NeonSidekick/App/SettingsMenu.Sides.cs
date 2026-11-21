@@ -1,5 +1,6 @@
 using NeonSidekick.Settings;
 using NeonSidekick.UI;
+using Spectre.Console;
 
 namespace NeonSidekick.App;
 
@@ -108,6 +109,9 @@ internal sealed partial class SettingsMenu
     /// <paramref name="FlipShown"/> (2026-11-07, the user's ask) put <see cref="ShowBarButton"/> on the title row: whether the bar shows, and
     /// the bare command's toggle; null on the Status bar, whose spinner is always on, so it can't be hidden. Since 2026-11-08 (the review)
     /// <paramref name="Shown"/> gets the menu, as <paramref name="Here"/> does: the Tool bar's reads <see cref="ToolbarDrawsFor"/>.
+    /// <paramref name="Kept"/> and <paramref name="SaveKept"/> (2026-11-21, the user's ask, the home bar's shape) read and write the items a
+    /// hide keeps: while the shown items are none and the kept ones some, the page checks the kept ones, dim, and its check edits save to
+    /// them, the bar staying hidden. Null on the Status bar.
     /// </summary>
     private sealed record SidedChecklist(
         SettingsField Field,
@@ -127,7 +131,9 @@ internal sealed partial class SettingsMenu
         bool Look = false,
         Func<SettingsMenu, string, bool>? Here = null,
         Func<SettingsMenu, AppSettingsData, bool>? Shown = null,
-        Action<AppSettingsData>? FlipShown = null);
+        Action<AppSettingsData>? FlipShown = null,
+        Func<AppSettingsData, IReadOnlySet<string>>? Kept = null,
+        Action<AppSettingsData, IReadOnlySet<string>>? SaveKept = null);
 
     /// <summary>
     /// Which Tool bar items show here (2026-10-22, the user's ask): <see cref="App.ToolbarItems.IsHere(string)"/> unless the screen hands its
@@ -179,7 +185,10 @@ internal sealed partial class SettingsMenu
         Shown: (menu, d) => menu.ToolbarDrawsFor(d),   // what the row draws (2026-11-08, the review), not what is checked
         // /toolbar's own toggle (2026-11-07): never null for no word. Checked items that draw nothing read hidden, and a press still hides
         // them into the last items, as /toolbar does (the user's pick, 2026-11-08).
-        FlipShown: d => App.ToolbarItems.Toggle("", d.ToolbarItems, d.ToolbarLastItems)!.Value.SaveTo(d));
+        FlipShown: d => App.ToolbarItems.Toggle("", d.ToolbarItems, d.ToolbarLastItems)!.Value.SaveTo(d),
+        // The items a hide keeps (2026-11-21): null reads as the defaults, which is what a show brings back.
+        Kept: d => App.ToolbarItems.Resolve(d.ToolbarLastItems),
+        SaveKept: (d, on) => d.ToolbarLastItems = App.ToolbarItems.Save(on));
 
     /// <summary>The Status bar's checklist (<see cref="EditStatusBarAsync"/>; the Hint bar's until 2026-10-14).</summary>
     private static readonly SidedChecklist StatusBarChecklist = new(
@@ -220,13 +229,19 @@ internal sealed partial class SettingsMenu
         Look: true,
         Shown: (_, d) => PerfBarItems.Resolve(d.PerformanceBarItems).Count > 0,
         // /perfbar's own toggle (2026-11-07): never null for no word; the look comes back as it was.
-        FlipShown: d => PerfBarMode.Toggle("", d.PerformanceBarItems, d.PerformanceBarLastItems, d.PerformanceBarLook)!.SaveTo(d));
+        FlipShown: d => PerfBarMode.Toggle("", d.PerformanceBarItems, d.PerformanceBarLastItems, d.PerformanceBarLook)!.SaveTo(d),
+        // The meters a hide keeps (2026-11-21): null reads as the defaults, which is what a show brings back.
+        Kept: d => PerfBarItems.Resolve(d.PerformanceBarLastItems),
+        SaveKept: (d, on) => d.PerformanceBarLastItems = PerfBarItems.Save(on));
 
     /// <summary>
     /// A checklist in two groups (or three, the performance bar's) under the settings list (2026-10-13): Enter or Space flips the cursor's item and saves at once, the
     /// move keys and Shift+←/→ (<see cref="MenuPage.Sides"/>) reorder it and save, Delete unchecks it, the title row's select all,
     /// select none and default, the tool bar's divider or the performance bar's look, and since 2026-11-07 (the user's ask) the show/hide
-    /// button last (<see cref="ShowBarButton"/>, <c>h</c>); re-shown until ESC, the bar redrawing under it. True when anything changed.
+    /// button last (<see cref="ShowBarButton"/>, <c>h</c>); re-shown until ESC, the bar redrawing under it. Since 2026-11-21 (the user's ask)
+    /// a hidden bar's page checks its kept items (<see cref="SidedChecklist.Kept"/>), each row dim, and a check edit or <c>d</c> changes them
+    /// with the bar left hidden; shown, an edit that leaves nothing checked empties the kept items too, so a later show brings the defaults.
+    /// True when anything changed.
     /// </summary>
     private async Task<bool> EditSidedChecklistAsync(SidedChecklist list, CancellationToken cancellationToken)
     {
@@ -235,7 +250,10 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var saved = _settings.Current;
-            var on = list.On(saved);
+            var shownOn = list.On(saved);
+            // Hidden (2026-11-21): none shown, some kept; the kept ones are the checks, and the check edits save to them.
+            bool hidden = list.Kept is { } kept && list.SaveKept is not null && shownOn.Count == 0 && kept(saved).Count > 0;
+            var on = hidden ? list.Kept!(saved) : shownOn;
             var whole = list.Sides(saved);
             // The items this system shows (2026-10-22, the Tool bar's on a Mac): the rows, indexes and moves are theirs; every save of sides
             // puts the others back where they were (Back), so a hidden item keeps its place and its side. A divider always shows.
@@ -243,7 +261,7 @@ internal sealed partial class SettingsMenu
             var sides = here is null ? whole : ItemOrder.Only(whole, here);
             ItemOrder.Sided Back(ItemOrder.Sided edited) => here is null ? edited : ItemOrder.Reinsert(whole, edited, here);
             var all = sides.All;
-            var (rows, headings) = SidedRows(sides, id => list.Label(id, on.Contains(id)));
+            var (rows, headings) = SidedRows(sides, id => hidden ? Theme.DimMarkup(Markup.Remove(list.Label(id, on.Contains(id)))) : list.Label(id, on.Contains(id)));
             var page = new MenuPage(Crumb(FieldName(list.Field)), rows, list.Hint) { SpaceToggles = true, Headings = headings };
             IReadOnlyList<MenuButton> buttons = list.Dividers ? DividerChecklistButtons
                 : list.Look ? [.. DefaultChecklistButtons, new(PerfBarMode.LookButton(PerfBarMode.Parse(saved.PerformanceBarLook)), PerfBarMode.LookKey)]
@@ -269,9 +287,24 @@ internal sealed partial class SettingsMenu
             int at = SidedItemAt(sides, pick.Row);
             if (pick.Button == DefaultsIndex)
             {
-                if (!list.IsDefault(saved))
+                // Hidden (2026-11-21): judged on the kept checks, and the reset's checks go to the kept items, the bar left hidden.
+                var judged = saved;
+                if (hidden)
                 {
-                    Apply(list.Field, list.Reset);
+                    judged = AppSettings.Copy(saved);
+                    list.SaveOn(judged, on);
+                }
+
+                if (!list.IsDefault(judged))
+                {
+                    Apply(list.Field, hidden
+                        ? d =>
+                        {
+                            list.Reset(d);
+                            list.SaveKept!(d, list.On(d));
+                            list.SaveOn(d, new HashSet<string>(StringComparer.Ordinal));
+                        }
+                        : list.Reset);
                     changed = true;
                 }
 
@@ -355,7 +388,20 @@ internal sealed partial class SettingsMenu
                 continue;   // select all with every item on, none with none, Delete on an unchecked row: nothing to save
             }
 
-            Apply(list.Field, d => list.SaveOn(d, next));
+            Apply(list.Field, d =>
+            {
+                if (hidden)
+                {
+                    list.SaveKept!(d, next);   // the bar stays hidden (2026-11-21)
+                    return;
+                }
+
+                list.SaveOn(d, next);
+                if (next.Count == 0)
+                {
+                    list.SaveKept?.Invoke(d, next);   // none checked: no stale kept list to read as hidden (2026-11-21)
+                }
+            });
             changed = true;
         }
     }

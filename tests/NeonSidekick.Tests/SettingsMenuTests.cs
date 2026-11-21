@@ -186,6 +186,27 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("no line under replies", SettingsMenu.ToggleDescribe(SettingsField.ReplyFooter, false));
     }
 
+    /// <summary>Web footer (2026-11-21, the user's ask): the 📚 line opt-in, off by default, a toggle right under Reply footer, saved by a flip.</summary>
+    [Fact]
+    public async Task Toggle_WebFooter_IsOffByDefault_AndPersists()
+    {
+        Assert.False(_settings.Current.WebFooter);
+        var (menu, pane) = PaneMenu();
+        var chat = SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList();
+        Assert.Equal(chat.IndexOf(SettingsField.ReplyFooter) + 1, chat.IndexOf(SettingsField.WebFooter));
+        Assert.Equal("Web footer", SettingsMenu.FieldName(SettingsField.WebFooter));
+        Down(chat.IndexOf(SettingsField.WebFooter));
+        Push(Keys.Enter, Keys.Up, Keys.Enter, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+        pane.Dispose();
+
+        Assert.True(_settings.Current.WebFooter);
+        Assert.True(SettingsMenu.IsToggle(SettingsField.WebFooter));
+        Assert.Equal("a dim 📚 line under a reply: the pages, files and searches it used", SettingsMenu.ToggleDescribe(SettingsField.WebFooter, true));
+        Assert.Equal("no sources line under replies", SettingsMenu.ToggleDescribe(SettingsField.WebFooter, false));
+    }
+
     /// <summary>
     /// Gradient rules (2026-11-01): the flip is saved and put in force at once (plan review D44), with no settings change to hand back, so a
     /// pane closed under a reply needs no later pass for the rules to redraw.
@@ -1127,6 +1148,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.EmbeddedIdleUnloadMinutes,   // 2026-11-16, plan lucid-roaming-lantern #44
                 SettingsField.CodeAuditLowKeepsStreak,   // 2026-11-17, phase 3 of the gap and audit improvements
                 SettingsField.ConfirmFocusByChange,   // 2026-11-18, Phase 3 item 3 of the gap and audit improvements
+                SettingsField.WebFooter,   // 2026-11-21, the 📚 line made a setting
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1220,7 +1242,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("32768", SettingsMenu.EditableValue(SettingsField.LlmContextLength, new AppSettingsData { LlmContextLength = 32_768 }));
         Assert.Equal(SettingsField.LlmContextLength, SettingsMenu.TabFields[(int)SettingsTab.Common][SettingsMenu.TabFields[(int)SettingsTab.Common].ToList().IndexOf(SettingsField.LlmTurnTimeoutSeconds) + 1]);   // the context run's first row, under the turn timeout again since 2026-10-21 (the plan, Ralph and audit rows on Automation); under the code audit's last row before (its stop tone since 2026-10-21; its pass tool calls from 2026-10-18; the plan gap ask user before, earlier that day), the plan gap clean passes before it (2026-10-17), the plan gap passes before it (the tools run's last since 2026-10-14, the user's ask), the turn timeout before it since 2026-10-01 (the user's call); [^16] before: the reasoning estimate since 2026-09-29; the mid-turn usage picker, the four compact rows, the turn cap, the tools, the tool-compact picker, the cap, the fun verbs, show thinking, preserve thinking, sampling and sampling from Hugging Face follow it
         // The pane's tabs (five since 2026-09-19: Ask, Files and Web are /tools' tabs, Skills is /skills' Options tab): General, Sessions, LLM in their own order, TTS / STT the enum order of their session's fields; every field on exactly one tab of the three panes.
-        Assert.Equal(["Chat", "Sessions", "Botchat", "Web UI", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "Advisors", "Automation", "TTS", "STT"], SettingsMenu.TabTitles);   // Automation between Advisors and Voice since 2026-10-21 (the user's ask); Advisors before Voice later still on 2026-10-10 (the user's order); Chat (General until then), Sessions and Botchat first, under Client, since later on 2026-10-10 (the user's call); Common and Http for LLM since 2026-10-10 (the user's call); LLM second since 2026-10-04 (the user's order); Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
+        Assert.Equal(["Chat", "Sessions", "Botchat", "Web UI", "Toolbars", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "Advisors", "Automation", "TTS", "STT"], SettingsMenu.TabTitles);   // Toolbars after Web UI since 2026-11-21; Automation between Advisors and Voice since 2026-10-21 (the user's ask); Advisors before Voice later still on 2026-10-10 (the user's order); Chat (General until then), Sessions and Botchat first, under Client, since later on 2026-10-10 (the user's call); Common and Http for LLM since 2026-10-10 (the user's call); LLM second since 2026-10-04 (the user's order); Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // Sessions right after General (2026-09-18); Web last until 2026-09-19, Skills third until later that day
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.GlobalSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionMode, SettingsField.ReflectionConfirmMode, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills], SettingsMenu.SkillsTabFields[1]);   // the confirm mode heads What it may change since 2026-10-12, Reflection mode above it since 2026-10-16   // the Reflection tab: the sessions switch under the window rows since 2026-10-10 (What it reads), the cooldown and its mode after
@@ -1297,7 +1319,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReflectionReasoningLabel("xhigh"));
         Assert.Equal("automatic reflection enabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
         Assert.Equal("automatic reflection disabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
-        Assert.Equal(4, (int)SettingsTab.Common);   // after the Client group's four since 2026-10-14 (Web UI); its three since later on 2026-10-10; second since 2026-10-04 (the user's order); sixth from 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
+        Assert.Equal(5, (int)SettingsTab.Common);   // after the Client group's five since 2026-11-21 (Toolbars); its four since 2026-10-14 (Web UI); its three since later on 2026-10-10; second since 2026-10-04 (the user's order); sixth from 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
         Assert.True(SettingsMenu.IsToggle(SettingsField.AgentSkills) && SettingsMenu.IsToggle(SettingsField.ExternalSkills));
         Assert.True(SettingsMenu.IsToggle(SettingsField.SkillHashMention));
         Assert.Equal("#-mention enabled", SettingsMenu.FieldName(SettingsField.SkillHashMention));
@@ -1319,11 +1341,11 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("unprotected", SettingsMenu.FieldValue(SettingsField.SkillCompactMode, new AppSettingsData { SkillCompactMode = "unprotected" }, _settings.ProfileDirectory));
         Assert.Equal("protected   [#9A8BB8]loaded skills are kept through a prune, during a reply too[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
-        Assert.Equal(14, SettingsMenu.TabFields.Count);   // Automation since 2026-10-21; Web UI since 2026-10-14; the LLM tab two (Common and Http) and Advisors since 2026-10-10; Claude and OpenAI since 2026-10-03; Docker since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded LLM since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
-        Assert.Equal(33, SettingsMenu.ToolsTabFields.Count);   // Video 2026-11-12; DuckDB 2026-10-25; Monitors 2026-10-23; Clock and Help 2026-10-18; Network, Services, Tasks and Directory later still on 2026-10-15; Timers later on 2026-10-15; EventLog 2026-10-15; Shopping 2026-10-11; ClaudeCode gone later on 2026-10-10; Image 2026-10-10; YouTube 2026-10-05; Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
+        Assert.Equal(15, SettingsMenu.TabFields.Count);   // Toolbars since 2026-11-21; Automation since 2026-10-21; Web UI since 2026-10-14; the LLM tab two (Common and Http) and Advisors since 2026-10-10; Claude and OpenAI since 2026-10-03; Docker since 2026-10-02; the Claude (API) tab went to /tools' Claude tab on 2026-09-29; Embedded LLM since 2026-09-29; Claude (API) since later on 2026-09-27; Claude on 2026-09-27 until later that day (to /tools); Botchat since 2026-09-25; 9 until 2026-09-19, when Ask, Files and Web moved to /tools (ToolsTabFields) and, later that day, Skills to /skills (SkillsTabFields)
+        Assert.Equal(34, SettingsMenu.ToolsTabFields.Count);   // Sessions 2026-11-21; Video 2026-11-12; DuckDB 2026-10-25; Monitors 2026-10-23; Clock and Help 2026-10-18; Network, Services, Tasks and Directory later still on 2026-10-15; Timers later on 2026-10-15; EventLog 2026-10-15; Shopping 2026-10-11; ClaudeCode gone later on 2026-10-10; Image 2026-10-10; YouTube 2026-10-05; Screen, SQLite and Postgres 2026-10-04; Camera and Docker 2026-10-02; UNC later still on 2026-09-30; MySQL and Oracle since 2026-09-30; Print since later on 2026-09-28; Home Assistant since 2026-09-28; Claude since 2026-09-27; Images since 2026-09-24; SQL since 2026-09-23; Obsidian since 2026-09-22 and Options last later that day (first since later on 2026-09-19); Git between Files and Web since 2026-09-20; Shell between Git and Web since 2026-09-21
         Assert.Equal(2, SettingsMenu.SkillsTabFields.Count);   // Options and Reflection, since later on 2026-09-19 (one list of 11, then 14, before)
         Assert.Equal(19, SettingsMenu.SkillsTabFields.Sum(t => t.Count));   // 18 until Reflection mode came on 2026-10-16; 17 until Global skills came on 2026-10-13; 16 until Reflection confirm mode came on 2026-10-12; 15 until Reflection downloaded skills (then Reflection installed skills) came on 2026-10-02; 14 until Project file came off the Project tab on 2026-10-01; 13 until Reflection edit supporting files came on 2026-09-27; 12 until Reflection yield to turns came on 2026-09-24; 13 until Allow skill delete went on 2026-09-23; 14 until Reflection verbose went later still on 2026-09-19
-        Assert.Equal(new[] { SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.ModelAvatar, SettingsField.UserAvatar, SettingsField.CheckForUpdatesAtStart, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker, SettingsField.MidiInput, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.ReplyFooter, SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.GradientRules, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight, SettingsField.HintsBar, SettingsField.StatusBarItems, SettingsField.ToolbarItems, SettingsField.ShowPerformanceBar, SettingsField.ShowHomeBar, SettingsField.BarOrder, SettingsField.DraftEditor, SettingsField.ImageEditor }, SettingsMenu.TabFields[(int)SettingsTab.Chat]);   // Reply footer under User line style, later on 2026-11-01; Gradient rules under Themed external windows, 2026-11-01; the four bars a run of their own after Menus max height, Tool bars, later on 2026-10-12; Toolbar order under Show home bar and Show home bar under Show performance bar, 2026-10-12; Themed external windows under Themed background (the last row before), later on 2026-10-03; Themed background under Theme, 2026-10-03; five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep message history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
+        Assert.Equal(new[] { SettingsField.Profile, SettingsField.WorkingDirectory, SettingsField.MemoryMode, SettingsField.ModelAvatar, SettingsField.UserAvatar, SettingsField.CheckForUpdatesAtStart, SettingsField.QueueMode, SettingsField.QueueCancelMode, SettingsField.KeepMessageHistory, SettingsField.CommandTypoIntercept, SettingsField.HideExitAutocomplete, SettingsField.EmojiPicker, SettingsField.MidiInput, SettingsField.TranscriptMarkdown, SettingsField.PastePreviewLines, SettingsField.ShowImageThumbnails, SettingsField.ImageThumbnailSize, SettingsField.CopyUserPrompt, SettingsField.UserLineStyle, SettingsField.ReplyFooter, SettingsField.WebFooter, SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.GradientRules, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight, SettingsField.DraftEditor, SettingsField.ImageEditor }, SettingsMenu.TabFields[(int)SettingsTab.Chat]);   // Web footer under Reply footer and the Tool bars run the Toolbars tab, 2026-11-21; Reply footer under User line style, later on 2026-11-01; Gradient rules under Themed external windows, 2026-11-01; the four bars a run of their own after Menus max height, Tool bars, later on 2026-10-12; Toolbar order under Show home bar and Show home bar under Show performance bar, 2026-10-12; Themed external windows under Themed background (the last row before), later on 2026-10-03; Themed background under Theme, 2026-10-03; five runs since 2026-10-01 (the user's call): who and where, the input line, the transcript, the screen, the outside apps; before that: Menus max height under Theme, 2026-10-01; Image editor under Draft editor, later on 2026-09-24; Keep message history under the typo intercept, 2026-09-25; Theme under Show toolbar and Themed image viewer last, later on 2026-09-27; Show performance bar under Show toolbar, 2026-09-29
         // Show performance bar (2026-09-29): a picker of five looks, off by default, no reconnect; the four in led by default since 2026-10-02 (the user's ask).
         Assert.False(SettingsMenu.IsToggle(SettingsField.ShowPerformanceBar));
         Assert.Equal("Performance bar", SettingsMenu.FieldName(SettingsField.ShowPerformanceBar));   // "Show performance bar" until 2026-10-12, the user's name
@@ -1785,7 +1807,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("chat", SettingsMenu.FieldValue(SettingsField.SttDestination, data, _settings.ProfileDirectory));
         Assert.Equal("draft", SettingsMenu.FieldValue(SettingsField.SttDestination, new AppSettingsData { SttDestination = "draft" }, _settings.ProfileDirectory));
         // The Ask tab (2026-09-15; /tools' first settings tab since 2026-09-19): the question tool's switch and its two caps, none a reconnect.
-        Assert.Equal(["Chat", "Sessions", "Botchat", "Web UI", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "Advisors", "Automation", "TTS", "STT"], SettingsMenu.TabTitles);   // Automation between Advisors and Voice since 2026-10-21 (the user's ask); Advisors before Voice later still on 2026-10-10 (the user's order); Chat (General until then), Sessions and Botchat first, under Client, since later on 2026-10-10 (the user's call); Common and Http for LLM since 2026-10-10 (the user's call); LLM second since 2026-10-04 (the user's order); Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
+        Assert.Equal(["Chat", "Sessions", "Botchat", "Web UI", "Toolbars", "Common", "Http", "Embedded", "Docker", "Anthropic", "OpenAI", "Advisors", "Automation", "TTS", "STT"], SettingsMenu.TabTitles);   // Toolbars after Web UI since 2026-11-21; Automation between Advisors and Voice since 2026-10-21 (the user's ask); Advisors before Voice later still on 2026-10-10 (the user's order); Chat (General until then), Sessions and Botchat first, under Client, since later on 2026-10-10 (the user's call); Common and Http for LLM since 2026-10-10 (the user's call); LLM second since 2026-10-04 (the user's order); Claude and OpenAI after Docker since 2026-10-03 (the user's place); the user's order since later on 2026-09-29 (Embedded second, Sessions after STT); Embedded LLM since 2026-09-29; Claude (API) before Botchat since later on 2026-09-27; Claude last since 2026-09-27; Botchat last from 2026-09-25;   // five since 2026-09-19
         // The Options tab of /skills (2026-09-19; the Skills tab of /settings from 2026-09-16 until then): the skills switch, the external-folder switch and the compact-mode picker, then (2026-09-17) the #-mention switch, the delete switch, then the auto-learn switch and the reflection rows; none a reconnect.
         Assert.Equal([SettingsField.AgentSkills, SettingsField.GlobalSkills, SettingsField.ExternalSkills, SettingsField.ProjectFile, SettingsField.SkillCompactMode, SettingsField.SkillHashMention], SettingsMenu.SkillsTabFields[0]);   // the Options tab; the reflection rows on their own tab since later on 2026-09-19
         Assert.Equal([SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionCooldownMode, SettingsField.ReflectionYieldsToTurns, SettingsField.ReflectionMode, SettingsField.ReflectionConfirmMode, SettingsField.ReflectionEditsSupportingFiles, SettingsField.ReflectionInstalledSkills], SettingsMenu.SkillsTabFields[1]);   // the confirm mode heads What it may change since 2026-10-12, Reflection mode above it since 2026-10-16   // the Reflection tab: the sessions switch under the window rows since 2026-10-10 (What it reads), the cooldown and its mode after
@@ -1823,7 +1845,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("xhigh   [#9A8BB8]maximum thinking, slowest[/]", SettingsMenu.ReflectionReasoningLabel("xhigh"));
         Assert.Equal("automatic reflection enabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, true));
         Assert.Equal("automatic reflection disabled", SettingsMenu.ToggleDescribe(SettingsField.ReflectionAutoLearn, false));
-        Assert.Equal(4, (int)SettingsTab.Common);   // after the Client group's four since 2026-10-14 (Web UI); its three since later on 2026-10-10; second since 2026-10-04 (the user's order); sixth from 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
+        Assert.Equal(5, (int)SettingsTab.Common);   // after the Client group's five since 2026-11-21 (Toolbars); its four since 2026-10-14 (Web UI); its three since later on 2026-10-10; second since 2026-10-04 (the user's order); sixth from 2026-10-03 (Claude and OpenAI before it); fourth since 2026-10-02 (Docker before it); third since 2026-09-19 (Skills sat between from 2026-09-18 until then; the Options tab of /skills now)
         Assert.True(SettingsMenu.IsToggle(SettingsField.AgentSkills) && SettingsMenu.IsToggle(SettingsField.ExternalSkills));
         Assert.True(SettingsMenu.IsToggle(SettingsField.SkillHashMention));
         Assert.Equal("#-mention enabled", SettingsMenu.FieldName(SettingsField.SkillHashMention));
@@ -3545,7 +3567,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"\profiles\neon\files)", cwd);
         // The rows and the footer, then blank rows to the tallest tab's height (Common since its Ralph loop run, 2026-10-18), then the rule.
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-only\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n  MIDI input                   off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     17 of 49\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-only\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n  MIDI input                   off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n  Web footer                   off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3570,7 +3592,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.StartsWith("(", cwd);
         Assert.EndsWith(@"/profiles/neon/files)", cwd);
         // The rows and the footer, then blank rows to the tallest tab's height (Common since its Ralph loop run, 2026-10-18), then the rule.
-        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-only\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n  MIDI input                   off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Tool bars", 240) + "\n  Hints bar                    auto\n  Status bar                   default\n  Tool bar                     17 of 49\n  Performance bar              CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar                     off\n  Order                        default\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Head(SettingsTab.Chat) + "\n \n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (" + _settings.ProfileDirectory + ")\n  Working directory (cwd)      " + cwd + "\n  Memory mode                  read-only\n  Model avatar                 🤖 robot\n  User avatar                  🙊 speak-no-evil monkey\n" + "  Check for updates at start   on\n" + MenuLayout.Heading("Input line", 240) + "\n  Queue mode                   automatic\n  Queue cancel mode            empty\n  Keep message history         on\n  Command typo intercept       on\n  Show /exit in autocomplete   off\n  Emoji picker                 on\n  MIDI input                   off\n" + MenuLayout.Heading("Transcript", 240) + "\n  Transcript markdown          on\n  Paste preview lines          25 lines\n  Show image thumbnails        on\n  Image thumbnail size         small\n  Copy user prompt             on\n  User line style              bold\n  Reply footer                 off\n  Web footer                   off\n" + MenuLayout.Heading("Screen", 240) + "\n  Theme                        synthwave\n  Themed background            on\n  Themed external windows      on\n  Gradient rules               on\n  Welcome splash               image\n  Show header                  on\n  Working directory in header  off\n  Menus max height             full\n" + MenuLayout.Heading("Outside apps", 240) + "\n  Draft editor                 (default .txt editor)\n  Image viewer                 (built-in viewer)\n" + MenuLayout.Footer(SettingsField.Profile, 240)) + "(?: *\\n)*" + System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + SettingsMenu.SettingsTabKeys + "\n")), Output);
         Assert.DoesNotContain("File /tree max entries", Output);   // the Files tab's since 2026-09-15
         Assert.DoesNotContain("LLM URL", Output);
         Assert.False(pane.OverlayOpen);
@@ -3583,16 +3605,18 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_EveryTab_ShowsItsRowsInOrder()
     {
         var (menu, pane) = PaneMenu();
-        Push(Enumerable.Repeat(Keys.Right, 13).Append(Keys.Escape).ToArray());   // every tab, the arrows walking the Client group's tabs first since later on 2026-10-10 (thirteen to reach STT since the Automation tab, 2026-10-21; twelve since the Web UI tab, 2026-10-14; eleven until then; Advisors before Voice since later still); the Servers and Voice groups' tabs in turn since 2026-10-10 (Common and Http for LLM later that day); until then LLM, Embedded (Tab; LLM second since 2026-10-04), then Docker, Anthropic, OpenAI (2026-10-03), TTS, STT, Sessions; until 2026-10-04 Embedded, Docker (Tab), then Claude, OpenAI, LLM, TTS, STT, Sessions (Docker since 2026-10-02) (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
+        Push(Enumerable.Repeat(Keys.Right, 14).Append(Keys.Escape).ToArray());   // every tab, the arrows walking the Client group's tabs first since later on 2026-10-10 (fourteen to reach STT since the Toolbars tab, 2026-11-21; thirteen since the Automation tab, 2026-10-21; twelve since the Web UI tab, 2026-10-14; eleven until then; Advisors before Voice since later still); the Servers and Voice groups' tabs in turn since 2026-10-10 (Common and Http for LLM later that day); until then LLM, Embedded (Tab; LLM second since 2026-10-04), then Docker, Anthropic, OpenAI (2026-10-03), TTS, STT, Sessions; until 2026-10-04 Embedded, Docker (Tab), then Claude, OpenAI, LLM, TTS, STT, Sessions (Docker since 2026-10-02) (the user's order, 2026-09-29; the three tool tabs left for /tools on 2026-09-19, the Skills tab for /skills later that day)
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         // Each tab under the strip, padded to its own column (26, 26, 32, 19, 26; Common 32 until its plan, Ralph and audit rows went to Automation, 2026-10-21), the whole tab in view, nothing of another tab on it.
         // Every tab headed since later on 2026-10-10 (the user's ask), Sessions' save thinking up in the Saving run.
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging             on\n  Session save thinking       off\n  Session retention (days)    forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode         model-written\n  Session show name           all\n" + MenuLayout.Heading("Search tool", 120) + "\n  Session tool                on\n  Session search max results  10 results\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging           on\n  Session save thinking     off\n  Session retention (days)  forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode       model-written\n  Session show name         all\n", 120);   // padded to 26 since its Search tool rows went to /tools › Core › Sessions (2026-11-21; 28 until then)
         // The Web UI tab (2026-10-14, the user's ask): the switch, the port and the reach under Server; since 2026-10-16 (the user's ask) what the
         // page may do under Guardrails and which tabs it shows under Tabs ("The page" held both until then); the connection details off since then; the bot check control on under them since 2026-10-17; the reach local since 2026-11-08.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               local\n  Web UI HTTPS address       auto\n  Web UI sign in mode        one-time-link\n" + MenuLayout.Heading("Guardrails", 120) + "\n  Web UI commands            off\n  Web UI connection details  off\n  Web UI bot check control   off\n" + MenuLayout.Heading("Tabs", 120) + "\n  Web UI profile theme       on\n  Web UI chat controls       on\n  Web UI voice controls      off\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI video controls      off\n", 120);
+        // The Toolbars tab (2026-11-21, the user's ask and headings): Chat's Tool bars run as it was, Bars then Order, padded to Performance bar (15) and the gap.
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Bars", 120) + "\n▸ Hints bar        auto\n  Status bar       default\n  Tool bar         17 of 49\n  Performance bar  CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar         off\n" + MenuLayout.Heading("Order", 120) + "\n  Toolbar order    default\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n  LLM one local model       on\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
@@ -4763,22 +4787,23 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(30, _settings.Current.SessionRetentionDays);
         // The seven rows padded to the tab's own column (28) in the user's order (the show-name picker under the naming mode, the tool above the search cap; save thinking last
         // from 2026-09-28, under the logging switch since 2026-10-10), in three runs since 2026-10-10, then the picker's page, then the notices on the status line.
-        AssertTabEnds("\n" + Head(SettingsTab.Sessions) + "\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging             on\n  Session save thinking       off\n  Session retention (days)    forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode         model-written\n  Session show name           all\n" + MenuLayout.Heading("Search tool", 120) + "\n  Session tool                on\n  Session search max results  10 results\n", 120);
+        AssertTabEnds("\n" + Head(SettingsTab.Sessions) + "\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging           on\n  Session save thinking     off\n  Session retention (days)  forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode       model-written\n  Session show name         all\n", 120);   // padded to 26 since its Search tool rows went to /tools › Core › Sessions (2026-11-21; 28 until then)
         AssertPickerEnds("\n" + Titled(GroupBreadcrumb(SettingsTab.Sessions, "Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n", 120);
         Assert.Contains("\n  · Session retention (days): 30 days\n", Output);
-        Assert.Contains("\n▸ Session retention (days)    30 days\n", Output);
+        Assert.Contains("\n▸ Session retention (days)  30 days\n", Output);
         Assert.Contains("\n  · Session naming mode: first-line\n", Output);
-        Assert.Contains("\n▸ Session naming mode         first-line\n", Output);
+        Assert.Contains("\n▸ Session naming mode       first-line\n", Output);
         AssertPickerEnds("\n" + Titled(GroupBreadcrumb(SettingsTab.Sessions, "Session show name")) + "\n \n▸ all            every session name shows on the line above the input row\n  model-written  only a model-written or typed name shows; the first line never does\n  none           no name shows above the input row\n", 120);
         Assert.Contains("\n  · Session show name: none\n", Output);
-        Assert.Contains("\n▸ Session show name           none\n", Output);
+        Assert.Contains("\n▸ Session show name         none\n", Output);
         Assert.False(SettingsMenu.IsToggle(SettingsField.SessionShowName));
         Assert.Equal(SettingsTab.Sessions, (SettingsTab)1);   // under Client after Chat since later on 2026-10-10 (the user's order); ninth from the LLM tab's split, 2026-10-10; eighth until then; seventh until Claude and OpenAI, 2026-10-03; fifth until Docker, 2026-10-02
-        Assert.Equal(SettingsTab.WebUi, (SettingsTab)3);         // the Client group's last, after Botchat (2026-10-14, the user's ask)
-        Assert.Equal(SettingsTab.Common, (SettingsTab)4);        // after the Client group since later on 2026-10-10; second from 2026-10-04, the user's order (LLM until 2026-10-10)
-        Assert.Equal(SettingsTab.Http, (SettingsTab)5);        // right after Common, 2026-10-10
-        Assert.Equal(SettingsTab.Embedded, (SettingsTab)6);   // after Http since 2026-10-10; third from 2026-10-04 until Http, 2026-10-10; second from 2026-09-29 (the user's order) until LLM, 2026-10-04
-        Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);
+        Assert.Equal(SettingsTab.WebUi, (SettingsTab)3);         // after Botchat (2026-10-14, the user's ask); the Client group's last until Toolbars
+        Assert.Equal(SettingsTab.Toolbars, (SettingsTab)4);      // the Client group's last, after Web UI (2026-11-21, the user's ask)
+        Assert.Equal(SettingsTab.Common, (SettingsTab)5);        // after the Client group since later on 2026-10-10 (fifth since Toolbars, 2026-11-21); second from 2026-10-04, the user's order (LLM until 2026-10-10)
+        Assert.Equal(SettingsTab.Http, (SettingsTab)6);        // right after Common, 2026-10-10
+        Assert.Equal(SettingsTab.Embedded, (SettingsTab)7);   // after Http since 2026-10-10; third from 2026-10-04 until Http, 2026-10-10; second from 2026-09-29 (the user's order) until LLM, 2026-10-04
+        Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);   // the tool switch and the search cap on /tools › Core › Sessions since 2026-11-21
         // Save thinking (2026-09-28): a toggle off by default; the Sessions tab's last row until 2026-10-10, under the logging switch since.
         Assert.True(SettingsMenu.IsToggle(SettingsField.SessionSaveThinking));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.SessionSaveThinking, new AppSettingsData(), ""));
@@ -4971,7 +4996,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         Assert.Null(_settings.Current.ToolbarItems);
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);                       // the checklist, on Settings
         Push(Keys.Char(' '));                   // Settings off (a default since 2026-10-05; on until then)
         Down(ToolbarItems.DefaultOrder.Length - 2);   // the default order's divider rows too (2026-10-13)
@@ -5001,7 +5027,8 @@ public partial class SettingsMenuTests : IDisposable
     public async Task OnThePane_ShowToolbar_SelectAll_AndSelectNone_ByKey_AndByClick()
     {
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Char('a'));                   // every item
         Push(Keys.Char('A'));                   // again: nothing to save
@@ -5018,7 +5045,8 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Char('n'));                   // none: no toolbar
         Push(Keys.Escape, Keys.Escape);
@@ -5038,7 +5066,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Char('d'));                   // the defaults
         Push(Keys.Char('D'));                   // again: nothing to save
@@ -5062,9 +5091,10 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public async Task OnThePane_ShowPerformanceBar_ChecksMeters_TheLookButtonSteps()
     {
-        _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLook = "text"; });   // from no bar (the four show by default since 2026-10-02)
+        _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLastItems = []; d.PerformanceBarLook = "text"; });   // from no bar (the four show by default since 2026-10-02); nothing kept, or the page reads hidden (2026-11-21)
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Enter);            // RAM
         Push(Keys.Up, Keys.Enter);              // CPU
@@ -5088,7 +5118,8 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Char('n'));                   // none: no bar
         Push(Keys.Escape, Keys.Escape);
@@ -5113,7 +5144,8 @@ public partial class SettingsMenuTests : IDisposable
             d.PerformanceBarLook = "gauge";
         });
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Char('d'));                   // the defaults
         Push(Keys.Char('D'));                   // again: nothing to save
@@ -5134,7 +5166,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Names]);   // every item on, as the default was until later on 2026-09-29
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         for (int i = 0; i < ToolbarItems.DefaultOrder.Length; i++)
         {
@@ -5360,7 +5393,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _settings.Update(d => { d.ToolbarItems = ["cmdlist", "police"]; d.ShellCommandPolicy = "off"; });
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Char(SettingsMenu.ShowBarKey));
         Push(Keys.Escape, Keys.Escape);
@@ -5380,7 +5414,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _settings.Update(d => { d.ToolbarItems = ["cmdlist", "police"]; d.ShellCommandPolicy = "ask"; });
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Escape, Keys.Escape);
 
@@ -5398,7 +5433,8 @@ public partial class SettingsMenuTests : IDisposable
         _settings.Update(d => d.ToolbarItems = ["services", "tasks"]);
         var (menu, pane) = PaneMenu();
         menu.ToolbarItemHere = id => ToolbarItems.IsHere(id, windows: false);
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Escape, Keys.Escape);
 
@@ -5418,7 +5454,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _settings.Update(d => d.ToolbarItems = ["usage", "memory"]);
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Char(SettingsMenu.ShowBarKey));   // hidden
         Push(Keys.Escape, Keys.Escape);
@@ -5433,7 +5470,8 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Push(Keys.Char(SettingsMenu.ShowBarKey));   // shown again
         Push(Keys.Escape, Keys.Escape);
@@ -5447,14 +5485,15 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>
     /// The Performance bar page's <c>bar:</c> button (2026-11-07): as the Tool bar's, the look untouched; from a bar hidden with no last list
-    /// it shows the default meters, as <c>/perfbar</c> does.
+    /// it shows the default meters, as <c>/perfbar</c> does. Since 2026-11-21 the hidden page still draws the kept meters checked.
     /// </summary>
     [Fact]
     public async Task OnThePane_ShowPerformanceBar_TheBarButton_HidesKeepingTheMeters_AndShowsThemAgain()
     {
         _settings.Update(d => { d.PerformanceBarItems = ["cpu", "ram"]; d.PerformanceBarLook = "gauge"; });
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Char(SettingsMenu.ShowBarKey));
         Push(Keys.Escape, Keys.Escape);
@@ -5466,10 +5505,14 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("gauge", _settings.Current.PerformanceBarLook);
         Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
         Assert.Contains("  · Performance bar: " + NeonSidekick.Perf.PerfText.NoMeters, Output);
+        string hiddenPage = Output[Output.LastIndexOf(SettingsMenu.ShowBarButton(false), StringComparison.Ordinal)..];
+        Assert.Contains("[x] " + PerfBarItems.Title(PerfBarItems.Cpu), hiddenPage);
+        Assert.Contains("[x] " + PerfBarItems.Title(PerfBarItems.Ram), hiddenPage);
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Char(SettingsMenu.ShowBarKey));
         Push(Keys.Escape, Keys.Escape);
@@ -5482,7 +5525,8 @@ public partial class SettingsMenuTests : IDisposable
 
         _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLastItems = null; });
         (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ShowPerformanceBar));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ShowPerformanceBar));
         Push(Keys.Enter);
         Push(Keys.Char(SettingsMenu.ShowBarKey));
         Push(Keys.Escape, Keys.Escape);
@@ -5493,13 +5537,168 @@ public partial class SettingsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>Opens the Toolbars tab's <paramref name="field"/> page (2026-11-21, the hidden-bar tests).</summary>
+    private (SettingsMenu Menu, ScreenPane Pane) OpenBarPage(SettingsField field)
+    {
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(field));
+        Push(Keys.Enter);
+        return (menu, pane);
+    }
+
+    /// <summary>
+    /// Hidden, the Performance bar page keeps the kept meters checked (2026-11-21, the user's ask, the home bar's shape): Space on GPU adds it
+    /// to them, the bar staying hidden, and <c>h</c> shows all three.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowPerformanceBar_WhileHidden_ACheckJoinsTheKeptMeters_AndHShowsThem()
+    {
+        _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLastItems = ["cpu", "ram"]; });
+        var (menu, pane) = OpenBarPage(SettingsField.ShowPerformanceBar);
+        Push(Keys.Down, Keys.Down, Keys.Char(' '));   // GPU
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("[x] " + PerfBarItems.Title(PerfBarItems.Cpu), Output);   // kept, checked (dim)
+        Assert.Empty(_settings.Current.PerformanceBarItems!);
+        Assert.Equal(["cpu", "ram", "gpu"], _settings.Current.PerformanceBarLastItems);
+        pane.Dispose();
+
+        (menu, pane) = OpenBarPage(SettingsField.ShowPerformanceBar);
+        Push(Keys.Char(SettingsMenu.ShowBarKey), Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Equal(["cpu", "ram", "gpu"], _settings.Current.PerformanceBarItems);
+        pane.Dispose();
+    }
+
+    /// <summary>Hidden, select none empties the kept meters (2026-11-21): the rows go unchecked, and the next check shows the bar with it.</summary>
+    [Fact]
+    public async Task OnThePane_ShowPerformanceBar_WhileHidden_NoneEmptiesTheKept_ThenACheckShowsTheBar()
+    {
+        _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLastItems = ["cpu", "ram"]; });
+        var (menu, pane) = OpenBarPage(SettingsField.ShowPerformanceBar);
+        Push(Keys.Char(SettingsMenu.SelectNoneKey));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_settings.Current.PerformanceBarItems!);
+        Assert.Empty(_settings.Current.PerformanceBarLastItems!);
+        pane.Dispose();
+
+        (menu, pane) = OpenBarPage(SettingsField.ShowPerformanceBar);
+        Push(Keys.Char(' '), Keys.Escape, Keys.Escape);   // CPU
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Equal(["cpu"], _settings.Current.PerformanceBarItems);
+        Assert.Empty(_settings.Current.PerformanceBarLastItems!);
+        pane.Dispose();
+    }
+
+    /// <summary>Hidden, <c>d</c> sets the kept meters, order and sides to the defaults and leaves the bar hidden; again, it saves nothing (2026-11-21).</summary>
+    [Fact]
+    public async Task OnThePane_ShowPerformanceBar_WhileHidden_DefaultsResetTheKept_AndLeaveTheBarHidden()
+    {
+        _settings.Update(d => { d.PerformanceBarItems = []; d.PerformanceBarLastItems = ["net"]; d.PerformanceBarLeft = ["cpu"]; });
+        var (menu, pane) = OpenBarPage(SettingsField.ShowPerformanceBar);
+        Push(Keys.Char(SettingsMenu.DefaultsKey));
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_settings.Current.PerformanceBarItems!);
+        Assert.Equal(PerfBarItems.Defaults, _settings.Current.PerformanceBarLastItems);
+        Assert.Null(_settings.Current.PerformanceBarLeft);
+        Assert.Null(_settings.Current.PerformanceBarOrder);
+        pane.Dispose();
+
+        (menu, pane) = OpenBarPage(SettingsField.ShowPerformanceBar);
+        Push(Keys.Char(SettingsMenu.DefaultsKey), Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Empty(_settings.Current.PerformanceBarItems!);   // still hidden: the kept list was the defaults already
+        Assert.Equal(PerfBarItems.Defaults, _settings.Current.PerformanceBarLastItems);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// A tool bar hidden with no kept list (2026-11-21) reads hidden with the default items checked, as <c>h</c> then brings them back.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_HiddenWithNoKeptList_ChecksTheDefaults_AndHShowsThem()
+    {
+        _settings.Update(d => { d.ToolbarItems = []; d.ToolbarLastItems = null; });
+        var (menu, pane) = OpenBarPage(SettingsField.ToolbarItems);
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string row = Spectre.Console.Markup.Remove(ToolbarItems.Label(ToolbarItems.Settings, true));
+        string title = ToolbarItems.Title(ToolbarItems.Settings);
+        Assert.Contains(row[..(row.IndexOf(title, StringComparison.Ordinal) + title.Length)], Output);
+        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
+        pane.Dispose();
+
+        (menu, pane) = OpenBarPage(SettingsField.ToolbarItems);
+        Push(Keys.Char(SettingsMenu.ShowBarKey), Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Equal(ToolbarItems.Resolve(null), ToolbarItems.Resolve(_settings.Current.ToolbarItems));
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Hidden, the Tool bar page's Delete, Space and + divider edit the kept items (2026-11-21), the bar staying hidden; <c>h</c> shows the
+    /// edited set.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_WhileHidden_DeleteSpaceAndADivider_EditTheKeptItems()
+    {
+        _settings.Update(d => { d.ToolbarItems = []; d.ToolbarLastItems = ["settings", "usage"]; });
+        var (menu, pane) = OpenBarPage(SettingsField.ToolbarItems);
+        var delete = new ConsoleKeyInfo('\0', ConsoleKey.Delete, shift: false, alt: false, control: false);
+        Push(delete);                                   // settings (the first row) off
+        Push(Keys.Down, Keys.Char(' '));                // profile on
+        Push(Keys.Char(SettingsMenu.DividerKey));       // a divider after it
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_settings.Current.ToolbarItems!);
+        Assert.Equal(["profile", "usage"], _settings.Current.ToolbarLastItems);
+        Assert.NotNull(_settings.Current.ToolbarOrder);   // the divider made the order its own
+        pane.Dispose();
+
+        (menu, pane) = OpenBarPage(SettingsField.ToolbarItems);
+        Push(Keys.Char(SettingsMenu.ShowBarKey), Keys.Escape, Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None);
+        Assert.Equal(["profile", "usage"], _settings.Current.ToolbarItems);
+        Assert.NotNull(_settings.Current.ToolbarOrder);
+        pane.Dispose();
+    }
+
+    /// <summary>Shown, unchecking the only checked item empties the kept items too (2026-11-21): no stale list to read as hidden.</summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_UncheckingTheLastItemWhileShown_EmptiesTheKeptItemsToo()
+    {
+        _settings.Update(d => { d.ToolbarItems = ["settings"]; d.ToolbarLastItems = ["settings"]; });   // settings, the first row
+        var (menu, pane) = OpenBarPage(SettingsField.ToolbarItems);
+        Push(Keys.Char(' '), Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Empty(_settings.Current.ToolbarItems!);
+        Assert.Empty(_settings.Current.ToolbarLastItems!);
+        pane.Dispose();
+    }
+
     /// <summary>The Status bar page has no <c>bar:</c> button (2026-11-07): its spinner is always on, so the bar never hides; <c>h</c> does nothing.</summary>
     [Fact]
     public async Task OnThePane_StatusBarItems_HasNoBarButton()
     {
         var before = _settings.Current.StatusBarItems;
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.StatusBarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);
         Push(Keys.Char(SettingsMenu.ShowBarKey));
         Push(Keys.Escape, Keys.Escape);
@@ -5521,7 +5720,8 @@ public partial class SettingsMenuTests : IDisposable
     {
         _settings.Update(d => d.ToolbarItems = [.. ToolbarItems.Defaults.Where(id => id != ToolbarItems.Path)]);   // from the defaults since 2026-11-07: a hand copy fell behind them
         var (menu, pane) = PaneMenu();
-        Down(SettingsMenu.TabFields[(int)SettingsTab.Chat].ToList().IndexOf(SettingsField.ToolbarItems));
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
         Push(Keys.Enter);
         Down(ToolbarItems.DefaultOrder.Length - 2);
         Push(Keys.Char(' '));                   // the path back (the last but the model's name since 2026-10-12): the defaults
@@ -5697,7 +5897,9 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public void Sections_RowNames_AndTheFooter_ArePinned()
     {
-        Assert.Equal(["Who and where", "Input line", "Transcript", "Screen", "Tool bars", "Outside apps"], SettingsMenu.TabSections[SettingsTab.Chat].Select(s => s.Title));
+        Assert.Equal(["Who and where", "Input line", "Transcript", "Screen", "Outside apps"], SettingsMenu.TabSections[SettingsTab.Chat].Select(s => s.Title));   // Tool bars the Toolbars tab since 2026-11-21
+        Assert.Equal(["Bars", "Order"], SettingsMenu.TabSections[SettingsTab.Toolbars].Select(s => s.Title));   // 2026-11-21, the user's headings
+        Assert.Equal([SettingsField.HintsBar, SettingsField.BarOrder], SettingsMenu.TabSections[SettingsTab.Toolbars].Select(s => s.First));
         Assert.Equal(["Connection", "How it answers", "Tools and limits", "Context", "Pictures and verbs"], SettingsMenu.TabSections[SettingsTab.Common].Select(s => s.Title));   // Plan mode, Ralph loop and Code audit on Automation since 2026-10-21
         Assert.Equal(["Plan mode", "Ralph loop", "Code audit"], SettingsMenu.TabSections[SettingsTab.Automation].Select(s => s.Title));
         Assert.Equal(SettingsField.PlanGapPasses, SettingsMenu.TabSections[SettingsTab.Automation][0].First);   // Plan mode over the tab's first row   // the LLM tab's runs, on Common since 2026-10-10; Plan mode since 2026-10-17; Ralph loop since 2026-10-18
@@ -5712,7 +5914,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(["Connection", "Requests"], SettingsMenu.TabSections[SettingsTab.OpenAI].Select(s => s.Title));
         Assert.Equal(["Text-to-speech", "Voices"], SettingsMenu.TabSections[SettingsTab.Tts].Select(s => s.Title));
         Assert.Equal(["Speech-to-text", "Wake word", "Interruptions"], SettingsMenu.TabSections[SettingsTab.Stt].Select(s => s.Title));
-        Assert.Equal(["Saving", "Titles", "Search tool"], SettingsMenu.TabSections[SettingsTab.Sessions].Select(s => s.Title));
+        Assert.Equal(["Saving", "Titles"], SettingsMenu.TabSections[SettingsTab.Sessions].Select(s => s.Title));   // Search tool /tools › Core › Sessions since 2026-11-21
         Assert.Equal(["Server", "Guardrails", "Tabs"], SettingsMenu.TabSections[SettingsTab.WebUi].Select(s => s.Title));   // 2026-10-16, the user's ask
         Assert.Equal(["The panel", "Each call", "Threads and servers"], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.Title));
         Assert.Equal(Enum.GetValues<SettingsTab>(), SettingsMenu.TabSections.Keys.Order());   // every tab headed
@@ -5723,10 +5925,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Null(general[0]);
         Assert.Equal(SettingsField.Profile, general[1]);
         Assert.Equal(SettingsMenu.TabFields[(int)SettingsTab.Chat], general.OfType<SettingsField>());
-        Assert.Equal(6, general.Count(r => r is null));   // Tool bars the sixth since later on 2026-10-12
-        // The pane's short name (2026-10-12, the user's): Toolbar order is Order under Tool bars; every other row as it was named.
-        Assert.Equal("Order", SettingsMenu.PaneName(SettingsField.BarOrder, SettingsMenu.FieldName(SettingsField.BarOrder)));
-        Assert.Equal("Home bar", SettingsMenu.PaneName(SettingsField.ShowHomeBar, SettingsMenu.FieldName(SettingsField.ShowHomeBar)));
+        Assert.Equal(5, general.Count(r => r is null));   // five since Tool bars became the Toolbars tab, 2026-11-21 (the sixth from later on 2026-10-12)
         Assert.Equal(SettingsMenu.TabFields[(int)SettingsTab.Tts].Count + 2, SettingsMenu.TabRows((int)SettingsTab.Tts).Count);   // two headings there (none until later on 2026-10-10)
         Assert.Equal(SettingsMenu.TabFields[(int)SettingsTab.Tts], SettingsMenu.TabRows((int)SettingsTab.Tts).OfType<SettingsField>());
         Assert.Equal(1, SettingsMenu.RowOf((int)SettingsTab.Chat, SettingsField.Profile));

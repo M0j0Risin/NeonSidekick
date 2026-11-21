@@ -769,7 +769,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Skills (2) — not offered: agent skills is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: false), "Skills").Title);
         Assert.Equal("Skills (2) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true), "Skills").Title);
 
-        // The sessions group (2026-09-18): after the skills, before the questions, marked when the setting Session tool is off (its own reason first); nothing when no list is given.
+        // The sessions group (2026-09-18): after the skills, before the questions, marked when the setting Session tools is off (its own reason first); nothing when no list is given.
         using var store = new NeonSidekick.Sessions.SessionStore(Path.Combine(_dir, "sessions"));
         var sessions = ChatScreen.SessionTools(store, () => new AppSettingsData(), () => null, TimeProvider.System);
         var withSessions = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true);
@@ -777,7 +777,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal([SessionManagerTool.ToolName], G(withSessions, "Sessions").Tools.Select(t => t.Name));
         Assert.All(withSessions, g => Assert.True(g.Offered));
         var sessionsOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: false);
-        Assert.Equal("Sessions (1) — not offered: session tool is off", G(sessionsOff, "Sessions").Title);
+        Assert.Equal("Sessions (1) — not offered: Session tools is off", G(sessionsOff, "Sessions").Title);
         Assert.False(G(sessionsOff, "Sessions").Offered);
         Assert.True(G(sessionsOff, "Skills").Offered && G(sessionsOff, "Questions").Offered);
         Assert.Equal("Sessions (1) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true), "Sessions").Title);
@@ -894,7 +894,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Skills (2) — not offered: agent skills is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: false), "Skills").Title);
         Assert.Equal("Skills (2) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true), "Skills").Title);
 
-        // The sessions group (2026-09-18): after the skills, before the questions, marked when the setting Session tool is off (its own reason first); nothing when no list is given.
+        // The sessions group (2026-09-18): after the skills, before the questions, marked when the setting Session tools is off (its own reason first); nothing when no list is given.
         using var store = new NeonSidekick.Sessions.SessionStore(Path.Combine(_dir, "sessions"));
         var sessions = ChatScreen.SessionTools(store, () => new AppSettingsData(), () => null, TimeProvider.System);
         var withSessions = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true);
@@ -902,7 +902,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal([SessionManagerTool.ToolName], G(withSessions, "Sessions").Tools.Select(t => t.Name));
         Assert.All(withSessions, g => Assert.True(g.Offered));
         var sessionsOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: false);
-        Assert.Equal("Sessions (1) — not offered: session tool is off", G(sessionsOff, "Sessions").Title);
+        Assert.Equal("Sessions (1) — not offered: Session tools is off", G(sessionsOff, "Sessions").Title);
         Assert.False(G(sessionsOff, "Sessions").Offered);
         Assert.True(G(sessionsOff, "Skills").Offered && G(sessionsOff, "Questions").Offered);
         Assert.Equal("Sessions (1) — not offered: LLM offer tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true, sessions, sessionsEnabled: true), "Sessions").Title);

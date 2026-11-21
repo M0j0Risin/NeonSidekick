@@ -73,6 +73,34 @@ public partial class ChatScreenTests
         Assert.Equal("Clock tools", ToolsText.DescribeSwitch(ToolsText.ClockSwitchWord));
     }
 
+    /// <summary>
+    /// <c>/tools sessions</c> (2026-11-21, the user's ask: the Sessions menu on Core, switched as Clock is): the Session tools switch, printed
+    /// without the pane; 💾, whose id is the same word, stays the <c>/sessions</c> button, never dimmed, with no on/off and no switch in its help.
+    /// </summary>
+    [Fact]
+    public async Task ToolsSessions_WithoutThePane_PrintsTheSwitch_AndTheToolbarsDiskStaysNoSwitch()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.SessionTool = false; });
+        PushLine("/tools sessions");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · Session tools: off\n", output);
+        Assert.Equal(SettingsField.SessionTool, ToolsText.SwitchField("Sessions"));
+        Assert.Equal("Session tools", ToolsText.DescribeSwitch(ToolsText.SessionsSwitchWord));
+        Assert.Equal(ToolbarItems.Sessions, ToolsText.SessionsSwitchWord);
+        Assert.Null(ToolsText.ToolbarSwitchField(ToolbarItems.Sessions));
+        Assert.All(ToolbarItems.Names.Where(id => id != ToolbarItems.Sessions), id => Assert.Equal(ToolsText.SwitchField(id), ToolsText.ToolbarSwitchField(id)));
+        var off = new AppSettingsData { SessionTool = false };
+        Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Sessions, off));
+        Assert.Equal("/sessions", ToolbarItems.Describe(ToolbarItems.Sessions));   // its double-click
+        Assert.Equal(ToolbarItems.Note(ToolbarItems.Glyph(ToolbarItems.Sessions), ToolbarItems.Sessions, null), ChatScreen.ToolbarGlyphNote(ToolbarItems.Glyph(ToolbarItems.Sessions), off));   // no on/off
+        string help = NeonSidekick.Help.HelpInterface.Item(ToolbarItems.Sessions, OperatingSystem.IsWindows());
+        Assert.DoesNotContain("Setting:", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("Dark background:", help, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Turn_HelpToolsOff_OffersNoNeonHelp_AndItsRuleGoes_TheClockStays()
     {

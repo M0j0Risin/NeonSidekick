@@ -57,7 +57,7 @@ public class AppSettingsTests : IDisposable
         BotChatLimitedSkills = ["pony-prompts", "haiku"],
         BotChatMemory = true,   // off is the default since 2026-11-20
         BotChatMemoryMode = "independent",
-        BotChatVision = true,
+        BotChatVision = false,   // on is the default since 2026-11-21
         MemoryMode = "read-write",   // read-only is the default since 2026-11-20
         PastePreviewLines = 7,
         QueueCancelMode = "drain",

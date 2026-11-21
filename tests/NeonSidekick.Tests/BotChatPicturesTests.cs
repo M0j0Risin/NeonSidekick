@@ -388,7 +388,7 @@ public class BotChatPicturesTests
     }
 
     [Fact]
-    public void TheBotchatTab_IsThirdUnderClient_ItsRowsDefaultingToSingle_ParentServer_KillOn_NoWorkflows_Autonomous_Latest_Async_AFiveSecondPause_NoTools_NoSkills_MemoryShared_AndNoVision()
+    public void TheBotchatTab_IsThirdUnderClient_ItsRowsDefaultingToSingle_ParentServer_KillOn_NoWorkflows_Autonomous_Latest_Async_AFiveSecondPause_NoTools_NoSkills_MemoryShared_AndVision()
     {
         var data = new AppSettingsData();
 
@@ -448,9 +448,9 @@ public class BotChatPicturesTests
         Assert.Equal("shared-parent", SettingsMenu.FieldValue(SettingsField.BotChatMemoryMode, data, "."));
         Assert.Equal("independent    " + NeonSidekick.UI.Theme.DimMarkup(BotChatMemoryMode.Describe("independent")), SettingsMenu.BotChatMemoryModeLabel("independent"));
         Assert.Equal("the bots remember nothing", SettingsMenu.ToggleDescribe(SettingsField.BotChatMemory, false));
-        // Vision (2026-09-27): a toggle, off by default.
+        // Vision (2026-09-27): a toggle, on by default since 2026-11-21 (the user's call; off until then).
         Assert.True(SettingsMenu.IsToggle(SettingsField.BotChatVision));
-        Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.BotChatVision, data, "."));
+        Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.BotChatVision, data, "."));
     }
 
     [Theory]

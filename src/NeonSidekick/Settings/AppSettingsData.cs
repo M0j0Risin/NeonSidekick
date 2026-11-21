@@ -154,6 +154,14 @@ public sealed class AppSettingsData
     public bool ReplyFooter { get; set; }
 
     /// <summary>
+    /// The dim 📚 line under a reply (2026-11-21, the user's ask: opt-in, drawn always since the web-tools plan's §2 on 2026-11-15): the pages
+    /// and files the turn read and its searches, as links, at the PC and on the Web UI's page, live and in a loaded or rewound session. Off by
+    /// default. Off, the sources are still stored with the turn (<c>turn_sources</c>), so switching it on shows them for earlier turns too; the
+    /// session export keeps its list either way. No variable.
+    /// </summary>
+    public bool WebFooter { get; set; }
+
+    /// <summary>
     /// Asks GitHub for a new version at every launch (2026-11-04, self-update), on a background task that never delays startup: a line and a marker on the lower rule when one is out. Sends a generic User-Agent and no user data. Off, the app makes no
     /// request at start and no "new version" line or marker appears; <c>/update</c> still works by hand. The profile loaded at start decides the check; an "is out" marker follows the current profile's value. On by default. No variable.
     /// </summary>
@@ -1471,14 +1479,17 @@ public sealed class AppSettingsData
     /// it last spoke — the app's pictures, and the other bots' own <c>generate_image</c> pictures (not the ones it drew
     /// itself, seen as it drew them) — the newest <see cref="App.BotChat.MaxVisionPictures"/>, with a caption saying whose.
     /// Only for models that read images: a text-only server fails the turn (in <c>multi</c> mode every bot's own model
-    /// counts). Not kept for <c>/botchat --resume</c> or the stored session. Off (the default), the bots see text alone: since
+    /// counts). Not kept for <c>/botchat --resume</c> or the stored session. On by default since 2026-11-21 (the user's call; off until
+    /// then); where the app knows the model reads no pictures (a bot on the main link while the image codecs are missing or the embedded
+    /// server runs without vision) its bots get text alone all the same, with one notice (<see cref="App.BotChat.VisionUnseenNotice"/>).
+    /// Off, the bots see text alone: since
     /// 2026-10-10 (the user's calls) a bot's own <c>generate_image</c>, <c>view_image</c>, <c>camera_capture</c>, <c>screen_capture</c>
     /// and <c>image_edit</c> pictures too,
     /// which it saw in the tool's result until then (<see cref="App.BotChat.UnseenToolPictures"/>; the result tells it so,
     /// <see cref="Llm.Assistant.PicturesUnseenNote"/>), so a text-only server never fails a bot's turn over one.
     /// Read per reply. The Botchat tab of <c>/settings</c>, its last row. No variable.
     /// </summary>
-    public bool BotChatVision { get; set; }
+    public bool BotChatVision { get; set; } = true;
 
     /// <summary>
     /// Whether the <c>/botchat</c> bots see the user (2026-10-02, the user's ask: bots that react to what is going on): on, the

@@ -169,6 +169,23 @@ public static class HomeBarItems
     // An order with a center group, an empty one when it had none.
     private static ItemOrder.Sided Centered(ItemOrder.Sided sides) => sides.HasCenter ? sides : sides with { Center = [] };
 
+    /// <summary>
+    /// What the picker lists (2026-11-21, the user's ask: the perf bar's checklist keeps its rows while hidden, so should the home bar's):
+    /// the shown items, or, with none shown and some kept by a hide (<paramref name="last"/>), the kept ones with <c>Hidden</c> set, so the
+    /// picker lists them dim and its edits change them without showing the bar. Never picked (both empty) is not hidden. Pure.
+    /// </summary>
+    public static (IReadOnlyList<string> List, bool Hidden) Kept(IReadOnlyList<string>? items, IReadOnlyList<string>? last)
+    {
+        var shown = Resolve(items);
+        if (shown.Count > 0)
+        {
+            return (shown, false);
+        }
+
+        var kept = Resolve(last);
+        return kept.Count > 0 ? (kept, true) : (shown, false);
+    }
+
     /// <summary>The items <paramref name="saved"/> names, in its order, each once; malformed ones and nulls skipped. Pure.</summary>
     public static IReadOnlyList<string> Resolve(IReadOnlyList<string>? saved)
     {

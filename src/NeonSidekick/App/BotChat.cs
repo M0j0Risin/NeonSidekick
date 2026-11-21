@@ -1022,6 +1022,13 @@ public static partial class BotChat
     public static string UnnamedWorkflowLogLine(string speaker, string workflow) =>
         $"The botchat image prompt for {speaker}'s reply named no workflow of the chat's set; using the first, {workflow}.";
 
+    /// <summary>
+    /// Once per chat, the first time a bot on the main link is spared the chat's pictures (2026-11-21, the user's pick with
+    /// <c>Botchat vision enabled</c> on by default): the app knows the model reads none (no image codecs, or the embedded server without
+    /// vision), so that bot's turn goes as with the setting off. Pinned.
+    /// </summary>
+    public const string VisionUnseenNotice = "(botchat: the model in use reads no pictures, so the bots see text alone)";
+
     /// <summary>When the model wrote no image prompt for a reply (2026-09-25). Pinned.</summary>
     public const string NoPromptNotice = "(botchat: no image prompt came back for that reply; no picture)";
 
