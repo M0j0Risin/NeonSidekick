@@ -126,6 +126,15 @@ public sealed record MenuButton(string Title, char? Key, bool On = false)
     /// without <see cref="MenuPage.TabButtons"/>, whose strip would lose the tabs' badges, so it is never drawn or clicked there.
     /// </summary>
     public int? Tab { get; init; }
+
+    /// <summary>
+    /// A named key that presses this button (2026-11-20, the memory-remember review's #19, #20, #37: <c>/theme</c>'s → edit, a page's
+    /// <c>RightButton</c> until then): typed unmodified on a stop row of a page that is no <see cref="MenuPage.Placeholder"/>, it returns the
+    /// button's pick as <see cref="Key"/> does, a tabbed page's by the same rule (<see cref="MenuButton.Tab"/>, <see cref="MenuPage.TabButtons"/>).
+    /// A page that sets one gives that key to the button over its own job: the cursor's move, a nudge, a side, a tab step, a grid's move. A
+    /// held key's queued presses go with it, so they never reach the next page. Null: none.
+    /// </summary>
+    public ConsoleKey? NamedKey { get; init; }
 }
 
 /// <summary>
@@ -305,13 +314,6 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     /// Backspace alone, so Delete never edits a typed filter. Taken from the tab on a tabbed page. False: Delete is what it was.
     /// </summary>
     public bool Removes { get; init; }
-
-    /// <summary>
-    /// The <see cref="Buttons"/> index → presses (2026-11-20, the user's pick: <c>/theme</c>'s edit, where letters jump): → returns a
-    /// <see cref="MenuPick"/> with that <see cref="MenuPick.Button"/>, as a click on it does. Only on an untabbed page without
-    /// <see cref="Nudges"/> or <see cref="Sides"/>, where → has no other job. Null: → is what it was.
-    /// </summary>
-    public int? RightButton { get; init; }
 
     /// <summary>
     /// The rows are an order in two groups, pinned left and pinned right (2026-10-13, the user's ask: the hint bar's and the tool
@@ -611,6 +613,9 @@ public sealed class MenuPane : INoticeSink
     private MenuPage? _page;
     private int _cursor;
     private int _first;
+
+    // The viewport of a page another one took over (2026-11-20, #26): its title, tab, sub-tab and first row, until it comes back or the pane closes.
+    private (string Title, int Tab, int Sub, int First)? _stash;
     private int _shown;
     // Whether the last draw put the more row under the shown rows (2026-10-14: a click on it pages).
     private bool _moreShown;
@@ -930,6 +935,13 @@ public sealed class MenuPane : INoticeSink
             return null;
         }
 
+        if (_page is not null && _stash is null && !string.Equals(_page.Title, page.Title, StringComparison.Ordinal))
+        {
+            // A question or another page over a list (2026-11-20, the memory-remember review's #26): the list's viewport kept, given back when its
+            // page comes back. Written only while empty, so a run of pages in between (→ edit's copy question, the editor's two pages) keeps the list's.
+            _stash = (_page.Title, _page.Tab, _page.Sub, _first);
+        }
+
         if (_page is null || _page.Tab != page.Tab || _page.Sub != page.Sub)
         {
             // Another tab (a host that moved on) starts at the top of its list; the same one re-shown keeps its viewport.
@@ -943,6 +955,14 @@ public sealed class MenuPane : INoticeSink
             // no longer holds them still. Not the rows' own text, nor their count (the second review): many hosts build them anew on every draw,
             // and a live row changing, or one added by another device, after a click mustn't bring a heading in under the pointer.
             _clickedRow = -1;
+        }
+
+        if (_stash is { } kept && string.Equals(kept.Title, page.Title, StringComparison.Ordinal) && kept.Tab == page.Tab && kept.Sub == page.Sub)
+        {
+            // The stashed page back (a tabbed host's remove question asked from another tab too): its viewport, the cursor kept in view by Viewport.
+            _first = kept.First;
+            _clickedRow = -1;
+            _stash = null;
         }
 
         _page = page;
@@ -1198,6 +1218,19 @@ public sealed class MenuPane : INoticeSink
                     return new MenuPick(page.Tab, _cursor, Sub: page.Sub);
                 }
 
+                if (count > 0 && k.Modifiers == 0 && !page.Placeholder && page.IsStop(_cursor) && page.Buttons is { Count: > 0 } named
+                    && NamedButton(page, named, k.Key) is int namedPress)
+                {
+                    // A button's named key (2026-11-20, MenuButton.NamedKey: /theme's → edit), ahead of every other job the key has here. A held
+                    // key's presses already queued go with it, so none reaches the next page (the editor's colour nudges, after →).
+                    while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && q.Key == k.Key && q.Modifiers == 0) is not null)
+                    {
+                    }
+
+                    _status.Clear();
+                    return new MenuPick(page.Tab, _cursor, Button: namedPress, Sub: page.Sub);
+                }
+
                 if (page.SpaceFlips && k.KeyChar == ' ')
                 {
                     // The character, not ConsoleKey.Spacebar: a scripted key carries the one without the other.
@@ -1235,14 +1268,6 @@ public sealed class MenuPane : INoticeSink
 
                     _status.Clear();   // as a pin does (#37)
                     return new MenuPick(page.Tab, _cursor, Sub: page.Sub, Nudge: nudge);
-                }
-
-                if (page.RightButton is int right && page.Tabs is null && !page.Nudges && !page.Sides && count > 0 && k.Key == ConsoleKey.RightArrow
-                    && k.Modifiers == 0 && page.Buttons is { } pressable && right >= 0 && right < pressable.Count)
-                {
-                    // → presses a button (2026-11-20, /theme's edit).
-                    _status.Clear();
-                    return new MenuPick(page.Tab, _cursor, Button: right, Sub: page.Sub);
                 }
 
                 if (page.Sides && count > 0 && SideOf(k) is { } side)
@@ -1526,7 +1551,33 @@ public sealed class MenuPane : INoticeSink
     /// any of them (a tabbed one's by its tab too), else only one tied to the tab on show (<see cref="MenuButton.Tab"/>). Null for none.
     /// </summary>
     private static int? KeyedButton(MenuPage page, IReadOnlyList<MenuButton> buttons, char key) =>
-        ButtonFor(buttons, key, page.Tabs is null ? null : page.Tab) is int i && (page.Tabs is null || page.TabButtons || buttons[i].Tab is not null) ? i : null;
+        ButtonFor(buttons, key, page.Tabs is null ? null : page.Tab) is int i && KeysOn(page, buttons[i]) ? i : null;
+
+    /// <summary>The button <paramref name="key"/> presses as its <see cref="MenuButton.NamedKey"/> on <paramref name="page"/>, by <see cref="KeyedButton"/>'s rule. Null for none.</summary>
+    private static int? NamedButton(MenuPage page, IReadOnlyList<MenuButton> buttons, ConsoleKey key) =>
+        NamedButtonFor(buttons, key, page.Tabs is null ? null : page.Tab) is int i && KeysOn(page, buttons[i]) ? i : null;
+
+    /// <summary>Whether <paramref name="button"/>'s keys work on <paramref name="page"/>: any on a one-list page or one with <see cref="MenuPage.TabButtons"/>, else only one tied to a tab.</summary>
+    private static bool KeysOn(MenuPage page, MenuButton button) => page.Tabs is null || page.TabButtons || button.Tab is not null;
+
+    /// <summary>
+    /// The first button whose <see cref="MenuButton.NamedKey"/> is <paramref name="key"/> on tab <paramref name="tab"/>, a button tied to another
+    /// tab passed over as <see cref="ButtonFor(IReadOnlyList{MenuButton}, char, int?)"/> does (2026-11-20); null <paramref name="tab"/> (a one-list
+    /// page) passes none over. Null for none. Pure.
+    /// </summary>
+    public static int? NamedButtonFor(IReadOnlyList<MenuButton> buttons, ConsoleKey key, int? tab)
+    {
+        ArgumentNullException.ThrowIfNull(buttons);
+        for (int i = 0; i < buttons.Count; i++)
+        {
+            if (buttons[i].NamedKey == key && (tab is null || buttons[i].Tab is null || buttons[i].Tab == tab))
+            {
+                return i;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// <see cref="ButtonFor(IReadOnlyList{MenuButton}, char)"/> on tab <paramref name="tab"/> of a tabbed page: a button tied to another tab is
@@ -1597,6 +1648,7 @@ public sealed class MenuPane : INoticeSink
 
         _open = false;
         _page = null;
+        _stash = null;
         _status.Clear();
         _first = 0;
         _clickedRow = -1;
@@ -1900,11 +1952,12 @@ public sealed class MenuPane : INoticeSink
 
     /// <summary>
     /// <paramref name="lines"/> as drawn, one entry per row, so the count is the rows they take. Rendered here once, across the window, and drawn
-    /// as rendered (2026-11-07, the code review: they were rendered once to count and again to draw). Under a side column, whose page draws
-    /// only each one's first row, they stay as they are, one row each.
+    /// as rendered (2026-11-07, the code review: they were rendered once to count and again to draw). Under a side column (<paramref name="sided"/>),
+    /// across the list's width: they wrap there as they do elsewhere (2026-11-20, the memory-remember review's #40: one row each until then, cut
+    /// at the list's width), the side column's page drawing each row beside its line.
     /// </summary>
     private List<IRenderable> Drawn(List<IRenderable> lines, bool sided) =>
-        sided || lines.Count == 0 ? lines : [.. ScreenPane.RenderLines(new Rows(lines), _pane, Width).Select(row => (IRenderable)new SegmentLines(row))];
+        lines.Count == 0 ? lines : [.. ScreenPane.RenderLines(new Rows(lines), _pane, sided ? _listWidth : Width).Select(row => (IRenderable)new SegmentLines(row))];
 
     /// <summary>
     /// What this draw has on show (2026-11-07): the list's rows across the list's width, so never the side column, or a grid's cells across

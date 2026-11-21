@@ -316,24 +316,25 @@ public static class Theme
     /// </summary>
     internal const double DiffSlabShare = 0.22;   // internal for ThemeChecks (2026-11-16)
 
-    /// <summary>The style of a <see cref="CodeTokenKind"/>; plain text is <see cref="MarkdownCodeBlock"/>.</summary>
-    public static Style CodeStyle(CodeTokenKind kind) => kind switch
+    /// <summary>The style of a <see cref="CodeTokenKind"/> in the theme in force; plain text is <see cref="MarkdownCodeBlock"/>.</summary>
+    public static Style CodeStyle(CodeTokenKind kind) => s_current[CodeSlotOf(kind)];
+
+    /// <summary>
+    /// The style slot a <see cref="CodeTokenKind"/> wears (<see cref="CodeSlots"/>, 2026-11-20, the memory-remember review's #10: the one
+    /// map <see cref="CodeStyle"/> and the theme preview read); plain text is <see cref="ThemeStyleSlot.MarkdownCodeBlock"/>.
+    /// </summary>
+    public static ThemeStyleSlot CodeSlotOf(CodeTokenKind kind)
     {
-        CodeTokenKind.Keyword => CodeKeyword,
-        CodeTokenKind.Type => CodeType,
-        CodeTokenKind.String => CodeString,
-        CodeTokenKind.Number => CodeNumber,
-        CodeTokenKind.Comment => CodeComment,
-        CodeTokenKind.Punctuation => CodePunctuation,
-        CodeTokenKind.Function => CodeFunction,
-        CodeTokenKind.Variable => CodeVariable,
-        CodeTokenKind.Attribute => CodeAttribute,
-        CodeTokenKind.Tag => CodeTag,
-        CodeTokenKind.Heading => CodeHeading,
-        CodeTokenKind.Inserted => CodeInserted,
-        CodeTokenKind.Deleted => CodeDeleted,
-        _ => MarkdownCodeBlock,
-    };
+        foreach (var (k, slot) in CodeSlots)
+        {
+            if (k == kind)
+            {
+                return slot;
+            }
+        }
+
+        return ThemeStyleSlot.MarkdownCodeBlock;
+    }
 
     /// <summary>A table in a reply: the pane's rule colour, fitted to its content — never expanded to the window.</summary>
     public static Table MarkdownTable()

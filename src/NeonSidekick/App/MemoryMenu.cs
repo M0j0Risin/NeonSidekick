@@ -126,13 +126,13 @@ internal sealed class MemoryMenu
         return next;
     }
 
-    /// <summary>The mode button's index among <see cref="Buttons(MemoryAccess, bool)"/>, and the add button's after it.</summary>
+    /// <summary>The mode button's index among <see cref="Buttons(MemoryAccess, bool)"/>, and the remember button's after it.</summary>
     private const int ModeIndex = 0;
-    private const int AddIndex = 1;
+    private const int RememberIndex = 1;
 
-    /// <summary>The title row's buttons with <paramref name="mode"/> in force: <see cref="ModeButton"/>, then <see cref="RememberButton"/> when <paramref name="add"/> (2026-10-13: an input row to type on).</summary>
-    public static IReadOnlyList<MenuButton> Buttons(MemoryAccess mode, bool add = false) =>
-        [new MenuButton(ModeButton(mode), ModeKey), .. add ? new[] { new MenuButton(RememberButton, RememberKey) } : []];
+    /// <summary>The title row's buttons with <paramref name="mode"/> in force: <see cref="ModeButton"/>, then <see cref="RememberButton"/> when <paramref name="remember"/> (2026-10-13: an input row to type on).</summary>
+    public static IReadOnlyList<MenuButton> Buttons(MemoryAccess mode, bool remember = false) =>
+        [new MenuButton(ModeButton(mode), ModeKey), .. remember ? new[] { new MenuButton(RememberButton, RememberKey) } : []];
 
     /// <summary>A hint without the add key (2026-10-13): no input row to type a new memory on. Pure.</summary>
     public static string WithoutRemember(string keys) => keys.Replace("r = remember · ", "", StringComparison.Ordinal);
@@ -259,12 +259,12 @@ internal sealed class MemoryMenu
                 {
                     // The buttons on the title row (2026-10-03): the list, or one dim row with nothing remembered.
                     var mode = _memoryMode!();
-                    bool add = Line is not null;
+                    bool remember = Line is not null;
                     string hint = entries.Count > 0 ? SwitchKeys : EmptySwitchKeys;
                     list = entries.Count > 0
-                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? hint : WithoutRemember(hint)) { Footer = (_, row) => Footer(shown, row) }
-                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? hint : WithoutRemember(hint)) { Placeholder = true };
-                    list = list with { Buttons = Buttons(mode, add), Removes = entries.Count > 0 };
+                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), remember ? hint : WithoutRemember(hint)) { Footer = (_, row) => Footer(shown, row) }
+                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], remember ? hint : WithoutRemember(hint)) { Placeholder = true };
+                    list = list with { Buttons = Buttons(mode, remember), Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
                     if (pick is { Button: ModeIndex } pressed)
                     {
@@ -275,16 +275,16 @@ internal sealed class MemoryMenu
                 }
                 else if (_pane.Enabled)
                 {
-                    // The add button alone on the title row (2026-10-13) where Memory's switch is not wired.
-                    bool add = Line is not null;
+                    // The remember button alone on the title row (2026-10-13) where Memory's switch is not wired.
+                    bool remember = Line is not null;
                     list = entries.Count > 0
-                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), add ? Keys : PlainKeys) { Footer = (_, row) => Footer(shown, row) }
-                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], add ? Keys : PlainKeys) { Placeholder = true };
-                    list = list with { Buttons = add ? [new MenuButton(RememberButton, RememberKey)] : null, Removes = entries.Count > 0 };
+                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), remember ? Keys : PlainKeys) { Footer = (_, row) => Footer(shown, row) }
+                        : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], remember ? Keys : PlainKeys) { Placeholder = true };
+                    list = list with { Buttons = remember ? [new MenuButton(RememberButton, RememberKey)] : null, Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
-                    if (pick is { Button: >= 0 } adding)
+                    if (pick is { Button: >= 0 } pressed)
                     {
-                        pick = adding with { Button = AddIndex };
+                        pick = pressed with { Button = RememberIndex };
                     }
                 }
                 else
@@ -298,10 +298,10 @@ internal sealed class MemoryMenu
                     return;
                 }
 
-                if (pick is { Button: var button } && button == AddIndex)
+                if (pick is { Button: var button } && button == RememberIndex)
                 {
                     // A new memory typed on the input row (2026-10-13, the user's ask): /memory remember's outcomes, the cursor on it.
-                    cursor = await AddAsync(list, pick.Value.Row, cancellationToken).ConfigureAwait(false) ?? pick.Value.Row;
+                    cursor = await RememberAsync(list, pick.Value.Row, cancellationToken).ConfigureAwait(false) ?? pick.Value.Row;
                     entries = _store.EntriesSnapshot();
                     continue;
                 }
@@ -452,10 +452,11 @@ internal sealed class MemoryMenu
     }
 
     /// <summary>
-    /// A new memory typed on the input row under the list (2026-10-13, the user's ask): <c>/memory remember</c>'s outcomes said on the status line;
-    /// the row it landed on (the list's last), or null when nothing was added.
+    /// A new memory typed on the input row under the list (2026-10-13, the user's ask): <c>/memory remember</c>'s outcomes said on the status line,
+    /// in its words (<see cref="ChatScreen.RememberAnswer"/>, 2026-11-20, review #33); the row it landed on (the list's last, or the one turned on
+    /// again), or null when nothing was added. Nothing typed says nothing. Every <i>Memory mode</i> takes it: the mode governs the model.
     /// </summary>
-    private async Task<int?> AddAsync(MenuPage list, int row, CancellationToken cancellationToken)
+    private async Task<int?> RememberAsync(MenuPage list, int row, CancellationToken cancellationToken)
     {
         if (Line is null || await ReadTextAsync(list, row, "", cancellationToken).ConfigureAwait(false) is not { } typed)
         {
@@ -463,26 +464,27 @@ internal sealed class MemoryMenu
         }
 
         var result = _store.Add(typed, enableDisabled: true);   // the user's own add enables a disabled one again (2026-10-13)
-        switch (result.Outcome)
+        if (result.Outcome == MemoryAddOutcome.Empty)
         {
-            case MemoryAddOutcome.Added:
-                Sink.Notice(ChatScreen.RememberedNotice(result.Text));
-                return _store.EntriesSnapshot().Count - 1;
-            case MemoryAddOutcome.Enabled:
-                Sink.Notice(ChatScreen.RememberEnabledNotice(result.Text));
-                return _store.EntriesSnapshot().ToList().FindIndex(e => string.Equals(e.Text, result.Text, StringComparison.Ordinal));
-            case MemoryAddOutcome.Duplicate:
-                Sink.Notice(ChatScreen.AlreadyRememberedNotice(result.Text));
-                return null;
-            case MemoryAddOutcome.Full:
-                Sink.Error(ChatScreen.MemoryFullError);
-                return null;
-            case MemoryAddOutcome.Failed:
-                Sink.Error(ChatScreen.MemoryFailedError);
-                return null;
-            default:
-                return null;   // nothing typed
+            return null;   // nothing typed
         }
+
+        var (answer, error) = ChatScreen.RememberAnswer(result);
+        if (error)
+        {
+            Sink.Error(answer);
+        }
+        else
+        {
+            Sink.Notice(answer);
+        }
+
+        return result.Outcome switch
+        {
+            MemoryAddOutcome.Added => _store.EntriesSnapshot().Count - 1,
+            MemoryAddOutcome.Enabled => _store.EntriesSnapshot().ToList().FindIndex(e => string.Equals(e.Text, result.Text, StringComparison.Ordinal)),
+            _ => null,
+        };
     }
 
     /// <summary>

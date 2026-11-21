@@ -150,7 +150,7 @@ public static class EmbeddedLlmText
         DrafterGlyph + " drafter · " + VisionGlyph + " vision · " + ToolsGlyph + " tools · " + UncensoredGlyph + " uncensored";
 
     /// <summary>
-    /// What the fit marks' estimate is for, the dim line under the legend (2026-11-20, the user's pick; the legend's tail until then):
+    /// What the fit marks' estimate is for, the dim line above the legend (2026-11-20, the user's pick; the legend's tail until then):
     /// <paramref name="fixedContext"/> (a set <c>Embedded context size</c>) adds that the marks are for a fitted context, a large set one
     /// needing more. Pinned.
     /// </summary>

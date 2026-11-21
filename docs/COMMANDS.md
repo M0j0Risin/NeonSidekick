@@ -76,7 +76,7 @@ Elsewhere:
 | `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) into the working folder, never over a file: Markdown with Obsidian properties and a pictures folder, or one HTML page in your theme, with each turn's sources. |
 | `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), forget or add one. |
 | `/memory read-write\|read-only\|off` | Sets *Memory mode*. |
-| `/memory remember <text>` | Adds a memory; refused while *Memory mode* is `off`. |
+| `/memory remember <text>` | Adds a memory, whatever *Memory mode* says. |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |

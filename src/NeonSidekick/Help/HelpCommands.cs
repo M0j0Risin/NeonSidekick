@@ -263,7 +263,7 @@ public static class HelpCommands
         [
             new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **forget** (after a yes); **+ remember** (`r`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
             new("/memory read-write|read-only|off", "Set *Memory mode*."),
-            new("/memory remember <text>", "Add a memory. Refused while *Memory mode* is `off`."),
+            new("/memory remember <text>", "Add a memory, whatever *Memory mode* says."),
             new("/memory forget|edit", "Forget every memory, after a yes (`forget`), or open `memory.json` in your editor (`edit`; invalid JSON is ignored with a warning)."),
         ]),
         new("/midi",
@@ -528,7 +528,7 @@ public static class HelpCommands
         ]),
         new("/theme",
         [
-            new("/theme [<name>]", "Switch the color theme (*Theme*), built-in or your own. Alone, it lists the themes, previewing the highlighted one beside the list when the window is wide enough; a typed letter jumps to the next theme starting with it, → edits the highlighted theme and Del deletes one of yours (after a yes), and nothing changes until Enter. During a reply, it runs when the reply ends; Ctrl+Z runs it too."),
+            new("/theme [<name>]", "Switch the color theme (*Theme*), built-in or your own. Alone, it lists the themes, previewing the highlighted one beside the list when the window is wide enough. On the pane, a typed letter jumps to the next theme starting with it, → edits the highlighted theme (the list comes back after) and Del deletes one of yours (after a yes). The theme changes on Enter, or, when a Del took the one in force, as the list closes. During a reply, it runs when the reply ends; Ctrl+Z runs it too."),
             new("/theme export <name> [<new-name>]", "Write a theme to the `themes` folder as a file to edit, under a new name if one is given."),
             new("/theme delete <name>", "Delete one of your themes, after a yes: to the Recycle bin while *File deletes to Recycle bin* is on (a drive with no bin deletes for good), else for good. A built-in can't be deleted; deleting a file that replaces a built-in brings the built-in back. Deleting the theme in force puts the default in force."),
             new("/theme edit [<name>]", "Edit a theme's colors in a pane, previewed live, with pairs that read poorly listed; alone, the theme in force. Enter opens a hue, saturation and lightness picker or takes a hex value. A built-in offers its `<name>-custom` copy. Saving the theme in force redraws the screen in it."),

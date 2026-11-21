@@ -486,7 +486,6 @@ internal sealed partial class ChatScreen
     public const string InterruptedNotice = "(" + NoticeGlyphs.Interrupt + "interrupted)";
     public const string InterruptDisabledReason = "switched off after two interruptions heard nothing";
     public const string RememberUsageError = "/memory remember takes the text to keep: /memory remember <text>";   // /remember's until 2026-11-20
-    public const string MemoryOffNotice = NoticeGlyphs.Memory + "Memory mode is off; set it in /settings (the Memory mode row) or with /memory read-write.";
     public const string MemoryFullError = "Memory is full (" + MaxMemoriesText + " entries); /memory forget clears it.";
     public const string MemoryFailedError = "Could not save the memory; the log has the reason.";
     public const string NothingToForgetNotice = "(" + NoticeGlyphs.Memory + "nothing to forget)";
@@ -3937,7 +3936,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The <c>/memory</c> grammar, pure (2026-09-22): nothing ⇒ the pane; <c>forget</c> ⇒ the wipe,
     /// after its confirmation; <c>edit</c> ⇒ <c>memory.json</c> in the editor (2026-09-23); a mode word ⇒ <c>Memory mode</c>;
-    /// <c>remember &lt;text&gt;</c> ⇒ the add (2026-11-20), the text read from the line after the word, its spacing kept. Every word
+    /// <c>remember &lt;text&gt;</c> ⇒ the add (2026-11-20), the text the line's after the word, its spacing kept (the store tidies it). Every word
     /// folds case. Anything else ⇒ invalid, <c>copy &lt;profile&gt; [overwrite]</c> among it since 2026-10-13 (what <c>/memcopy</c> did from
     /// later on 2026-09-22 until then; <c>/profile push|pull memory</c> now).
     /// </summary>
@@ -3951,9 +3950,9 @@ internal sealed partial class ChatScreen
 
         if (words[0].Equals(MemoryRememberWord, StringComparison.OrdinalIgnoreCase))
         {
-            // The text as typed (2026-11-20): from the line, not the split words, so its inner spacing and case stay.
-            string line = args!.TrimStart();
-            return new(MemoryActionKind.Remember, Text: line[MemoryRememberWord.Length..].Trim());
+            // The text as typed (2026-11-20): the one word cut's rest (review #12, #50), not the split words, so its inner spacing and case stay.
+            SlashCommands.FirstWord(args ?? "", out string rest);
+            return new(MemoryActionKind.Remember, Text: rest);
         }
 
         if (words.Length == 1 && words[0].Equals(MemoryForgetWord, StringComparison.OrdinalIgnoreCase))
@@ -15130,16 +15129,32 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Theme:
-                // /theme delete (2026-11-20, the user's ask): the screen's, for its yes (a typed y without menus) and its bin.
-                if (ThemeText.Subcommand(args.Trim(), out string deleteRest) == ThemeText.DeleteWord
-                    ? await _menu.DeleteThemeAsync(deleteRest, ConfirmAsync, _effective().FileDeletesToRecycleBin ? _recycleBin : null, cancellationToken).ConfigureAwait(false)
-                    : await _menu.PickThemeAsync(args, cancellationToken).ConfigureAwait(false))
+                try
                 {
-                    RestartInTheme();
+                    // /theme delete (2026-11-20, the user's ask): the screen's, for its yes (a typed y without menus); the bin rule in one place (ThemeBin).
+                    if (ThemeText.Subcommand(args.Trim(), out string deleteRest) == ThemeText.DeleteWord
+                        ? await _menu.DeleteThemeAsync(deleteRest, ConfirmAsync, _menu.ThemeBin(), cancellationToken).ConfigureAwait(false)
+                        : await _menu.PickThemeAsync(args, cancellationToken).ConfigureAwait(false))
+                    {
+                        RestartInTheme();
+                    }
+
+                    _menu.TakeRepaintOwed();   // the bool decided; a stale flag must never repaint a later /theme's throw
+                }
+                catch (Exception) when (_menu.TakeRepaintOwed())
+                {
+                    // A throw after the list changed the theme in force (2026-11-20, the memory-remember review's #68): put in force now, the repaint
+                    // handed to the idle line as a run's hand-over is, never drawn from inside a failure.
+                    ApplyTheme();
+                    _themeRepaintPending = true;
+                    throw;
+                }
+                finally
+                {
+                    // The editor's lines after any repaint (2026-11-17, the admin-themes-render review's #18, #34), on every path.
+                    _menu.PrintHeld();
                 }
 
-                // The editor's lines after any repaint (2026-11-17, the admin-themes-render review's #18, #34), on every path.
-                _menu.PrintHeld();
                 return false;
 
             case SlashCommand.Avatar:
@@ -16227,32 +16242,26 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>/memory remember &lt;text&gt;</c> (the standalone <c>/remember</c> until 2026-11-20): straight into the store, no model involved. Off
-    /// means nothing is saved.
+    /// <c>/memory remember &lt;text&gt;</c> (the standalone <c>/remember</c> until 2026-11-20): straight into the store, no model involved, its
+    /// lines to <paramref name="sink"/> (the idle line's flow, or the transcript under a reply). Every <i>Memory mode</i> saves it (2026-11-20, the
+    /// memory-remember review's #58, the user's pick): the mode governs the model; the user's own hand always adds, as the 💾 pane's did.
     /// </summary>
-    private void Remember(string args)
+    private void Remember(INoticeSink sink, string text)
     {
-        if (string.IsNullOrWhiteSpace(args))
+        if (string.IsNullOrWhiteSpace(text))
         {
-            _transcript.Error(RememberUsageError);
+            sink.Error(RememberUsageError);
             return;
         }
 
-        // Read-only is about the model (2026-10-04, the user's call): /memory remember is the user's own hand, so only disabled refuses it.
-        if (!MemoryMode.Enabled(_effective()))
-        {
-            _transcript.Notice(MemoryOffNotice);
-            return;
-        }
-
-        var (text, error) = RememberAnswer(_memory.Add(args, enableDisabled: true));   // the user's own add enables a disabled one again (2026-10-13)
+        var (answer, error) = RememberAnswer(_memory.Add(text, enableDisabled: true));   // the user's own add enables a disabled one again (2026-10-13)
         if (error)
         {
-            _transcript.Error(text);
+            sink.Error(answer);
         }
         else
         {
-            _transcript.Notice(text);
+            sink.Notice(answer);
         }
 
         DrainDiagnostics();
@@ -16276,7 +16285,8 @@ internal sealed partial class ChatScreen
     /// <c>/memory</c> (2026-09-22, the user's ask, twice): bare, the list pane; <c>forget</c>, the
     /// wipe the standalone <c>/forget</c> did, confirmation and all (<c>copy &lt;profile&gt;
     /// [overwrite]</c>, the standalone <c>/memcopy</c>'s copy, until 2026-10-13); <c>edit</c>
-    /// (2026-09-23), <c>memory.json</c> in the editor; anything else <see cref="MemoryUsageError"/>. The one method both dispatches call — the idle line's
+    /// (2026-09-23), <c>memory.json</c> in the editor; <c>remember &lt;text&gt;</c> (2026-11-20) the add; a mode word <i>Memory mode</i>;
+    /// anything else <see cref="MemoryUsageError"/>. The one method both dispatches call — the idle line's
     /// and the mid-turn pane phase's — so every word behaves the same under a reply; the error goes
     /// through <see cref="_flow"/> for that reason.
     /// </summary>
@@ -16294,7 +16304,7 @@ internal sealed partial class ChatScreen
                 break;
 
             case { Kind: MemoryActionKind.Remember } add:
-                Remember(add.Text);   // 2026-11-20: /remember's add, folded in
+                Remember(_flow, add.Text);   // 2026-11-20: /remember's add, folded in
                 break;
 
             case { Kind: MemoryActionKind.Mode } set:

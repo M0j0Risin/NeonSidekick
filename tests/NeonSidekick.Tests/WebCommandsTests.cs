@@ -98,6 +98,7 @@ public sealed class WebCommandsTests
     [InlineData("/tts off", WebCommandKind.Run)]
     [InlineData("/stt on", WebCommandKind.Run)]
     [InlineData("/memory read-only", WebCommandKind.Run)]
+    [InlineData("/memory disabled", WebCommandKind.Run)]   // off's retired word, as at the PC (2026-11-20, review #6)
     [InlineData("/cwd", WebCommandKind.Run)]
     [InlineData("/model qwen3", WebCommandKind.Run)]
     [InlineData("/reasoning high", WebCommandKind.Run)]

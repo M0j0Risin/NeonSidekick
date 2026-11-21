@@ -19,7 +19,7 @@ public static partial class HelpSettings
         // /settings › Client › Chat
         SettingsField.Profile => "Switches to another profile for this run. Each profile has its own settings, persona, memory, skills and sessions.",
         SettingsField.WorkingDirectory => "The folder the file and git tools work in. Empty uses the profile's own files folder. Enter opens a folder picker.",
-        SettingsField.MemoryMode => "The model's long-term memory. read-write: it saves and recalls. read-only: it recalls only (your /memory remember still saves). off: no memory at all.",
+        SettingsField.MemoryMode => "The model's long-term memory. read-write: it saves and recalls. read-only: it recalls only. off: none. Your /memory remember saves in every mode.",
         SettingsField.ModelAvatar => "The profile's emoji, shown at the start of each reply, on its /botchat lines and in the window title. Enter opens the emoji picker.",
         SettingsField.UserAvatar => "Your emoji, shown at the start of each of your lines in the transcript in place of ›. Enter opens the emoji picker; clearing it brings back ›.",
         SettingsField.CheckForUpdatesAtStart => "Checks GitHub for a new version at each launch and shows a notice when one is out. It sends no user data. Off, /update still works by hand.",

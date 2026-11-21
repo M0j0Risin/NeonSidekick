@@ -351,8 +351,8 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal("Enter = choose · r = remember · m = memory mode · Esc = close", MemoryMenu.SwitchKeys);   // 2026-10-03; one cycling button since later on 2026-10-13
         Assert.Equal("r = remember · m = memory mode · Esc = close", MemoryMenu.EmptySwitchKeys);
         Assert.Equal("Enter = choose · m = memory mode · Esc = close", MemoryMenu.WithoutRemember(MemoryMenu.SwitchKeys));
-        Assert.Equal(["mode: read-write", "+ remember"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true).Select(b => b.Title));
-        Assert.Equal('r', MemoryMenu.Buttons(MemoryAccess.ReadWrite, add: true)[^1].Key);   // 'a' until 2026-11-20
+        Assert.Equal(["mode: read-write", "+ remember"], MemoryMenu.Buttons(MemoryAccess.ReadWrite, remember: true).Select(b => b.Title));
+        Assert.Equal('r', MemoryMenu.Buttons(MemoryAccess.ReadWrite, remember: true)[^1].Key);   // 'a' until 2026-11-20
         Assert.Equal("💾 \"x\"", MemoryMenu.ActionTitle("x"));
         Assert.Equal("Enter = choose · Esc = back", MemoryMenu.ActionKeys);
         Assert.Equal("(💾 edited: x)", MemoryMenu.EditedNotice("x"));
@@ -364,7 +364,7 @@ public class MemoryMenuTests : IDisposable
         Assert.Equal(["mode: read-write"], MemoryMenu.Buttons(MemoryAccess.ReadWrite).Select(b => b.Title));
         Assert.Equal(["mode: read-only"], MemoryMenu.Buttons(MemoryAccess.ReadOnly).Select(b => b.Title));
         Assert.Equal(["mode: off"], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Title));
-        Assert.All(MemoryMenu.Buttons(MemoryAccess.ReadOnly, add: true), b => Assert.False(b.On));   // never lit, as /queue's
+        Assert.All(MemoryMenu.Buttons(MemoryAccess.ReadOnly, remember: true), b => Assert.False(b.On));   // never lit, as /queue's
         Assert.Equal(['m'], MemoryMenu.Buttons(MemoryAccess.Disabled).Select(b => b.Key!.Value));
         Assert.Equal([MemoryAccess.ReadOnly, MemoryAccess.Disabled, MemoryAccess.ReadWrite], new[] { MemoryAccess.ReadWrite, MemoryAccess.ReadOnly, MemoryAccess.Disabled }.Select(MemoryMenu.NextMode));
         Assert.Equal("(💾 removed: x)", MemoryMenu.RemovedNotice("x"));
@@ -378,14 +378,16 @@ public class MemoryMenuTests : IDisposable
     // ── Edit, disable, add (2026-10-13, the user's ask) ─────────────────────
 
     /// <summary>The menu over a pane with an input row (the screen's), Memory mode's switch wired at read-write.</summary>
-    /// <summary>The pane with its input row; <paramref name="meanwhile"/> runs once, after the list's snapshot and before its first pick (a page's change).</summary>
-    private (MemoryMenu Menu, ScreenPane Pane) InputMenu(Action? meanwhile = null)
+    /// <summary>
+    /// The pane with its input row; <paramref name="meanwhile"/> runs once, after the list's snapshot and before its first pick (a page's change);
+    /// Memory mode's switch starts at <paramref name="mode"/>.
+    /// </summary>
+    private (MemoryMenu Menu, ScreenPane Pane) InputMenu(Action? meanwhile = null, MemoryAccess mode = MemoryAccess.ReadWrite)
     {
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var line = new InputLine(pane, keys);
-        var mode = MemoryAccess.ReadWrite;
         var menu = new MemoryMenu(new ConsoleWithInput(pane, keys), _store, new TranscriptRenderer(pane), new MenuPane(pane, keys), () => mode, value => { mode = value; return true; }, () =>
         {
             Interlocked.Exchange(ref meanwhile, null)?.Invoke();
@@ -533,6 +535,23 @@ public class MemoryMenuTests : IDisposable
         Assert.Contains(MemoryMenu.RememberButton, _console.Output);
         Assert.Contains(ChatScreen.RememberedNotice("likes tea"), _console.Output);
         Assert.Contains(ChatScreen.AlreadyRememberedNotice("likes tea"), _console.Output);
+        Assert.Equal(["likes tea"], new MemoryStore(_dir).Snapshot());
+        pane.Dispose();
+    }
+
+    /// <summary>Memory mode off (2026-11-20, the memory-remember review's #58): + remember still adds, as /memory remember and the page's ⇪ do.</summary>
+    [Fact]
+    public async Task OnThePane_RememberAdds_WithMemoryOff()
+    {
+        var (menu, pane) = InputMenu(mode: MemoryAccess.Disabled);
+        Push(Keys.Char('r'));
+        Type("likes tea");
+        Push(Keys.Enter, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(MemoryMenu.RememberButton, _console.Output);
+        Assert.Contains(ChatScreen.RememberedNotice("likes tea"), _console.Output);
         Assert.Equal(["likes tea"], new MemoryStore(_dir).Snapshot());
         pane.Dispose();
     }

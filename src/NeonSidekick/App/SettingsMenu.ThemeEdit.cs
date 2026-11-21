@@ -62,6 +62,12 @@ internal sealed partial class SettingsMenu
 
         public void Error(string text) => _lines.Add((2, text));
 
+        /// <summary>The lines held so far (2026-11-20: the <c>/theme</c> list's Esc says unchanged only when it held none).</summary>
+        public int Count => _lines.Count;
+
+        /// <summary>The errors held after the first <paramref name="count"/> lines (2026-11-20: an editor visit's failures, for the list's status line).</summary>
+        public IEnumerable<string> ErrorsSince(int count) => _lines.Skip(count).Where(line => line.Kind == 2).Select(line => line.Text);
+
         /// <summary>The held lines to <paramref name="sink"/>, in the order said, then forgotten.</summary>
         public void PrintTo(INoticeSink sink)
         {
@@ -106,11 +112,22 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
+        return await EditPaletteAsync(palette, scan, closeWhenDone: true, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The editor on <paramref name="palette"/> (a built-in through its copy), <paramref name="scan"/> the caller's so warnings print once (#2,
+    /// #142); true when it saved the theme in force. <paramref name="closeWhenDone"/> (2026-11-20, the memory-remember review's #3, #72): the
+    /// pane closed after, as <c>/theme edit</c> leaves it; false for the <c>/theme</c> list, which comes back, and then an unchanged exit (Esc,
+    /// discard, the file gone, a No to the copy) holds nothing, so "unchanged" never leads a later pick's lines. Its other lines are held.
+    /// </summary>
+    private async Task<bool> EditPaletteAsync(ThemePalette palette, ThemeScan scan, bool closeWhenDone, CancellationToken cancellationToken)
+    {
         (bool InForce, string Notice) outcome;
         try
         {
             var opened = palette.IsBuiltIn
-                ? await CopyToEditAsync(palette, scan, cancellationToken).ConfigureAwait(false)
+                ? await CopyToEditAsync(palette, scan, holdUnchanged: closeWhenDone, cancellationToken).ConfigureAwait(false)
                 : Open(palette);
             if (opened is null)
             {
@@ -121,25 +138,41 @@ internal sealed partial class SettingsMenu
         }
         finally
         {
-            _pane.Close();
+            if (closeWhenDone)
+            {
+                _pane.Close();
+            }
         }
 
-        _held.Notice(outcome.Notice);
+        if (closeWhenDone || !string.Equals(outcome.Notice, UnchangedNotice, StringComparison.Ordinal))
+        {
+            _held.Notice(outcome.Notice);
+        }
+
         return outcome.InForce;
     }
 
     /// <summary>
     /// A built-in's copy to edit: the one made before, or one made now on a yes, read as it stands; null on a no (<see cref="UnchangedNotice"/>
-    /// held), a failed export or an unreadable file (the error held). <paramref name="scan"/> is the command's own, so warnings print once (#59, #142).
+    /// held while <paramref name="holdUnchanged"/>: the <c>/theme</c> list's No holds nothing, 2026-11-20), a failed export or an unreadable file
+    /// (the error held). <paramref name="scan"/> is the command's own, so warnings print once (#59, #142).
     /// </summary>
-    private async Task<OpenedTheme?> CopyToEditAsync(ThemePalette builtIn, ThemeScan scan, CancellationToken cancellationToken)
+    private async Task<OpenedTheme?> CopyToEditAsync(ThemePalette builtIn, ThemeScan scan, bool holdUnchanged, CancellationToken cancellationToken)
     {
+        void No()
+        {
+            if (holdUnchanged)
+            {
+                _held.Notice(UnchangedNotice);
+            }
+        }
+
         string copyName = ThemeText.CopyName(builtIn.Name);
         if (ThemeName.TryParse(copyName, scan.Themes, out var existing) && !existing.IsBuiltIn)
         {
             if (!await ConfirmAsync(ThemeText.EditCopyQuestion(builtIn.Name, copyName), cancellationToken, close: false).ConfigureAwait(false))
             {
-                _held.Notice(UnchangedNotice);
+                No();
                 return null;
             }
 
@@ -148,7 +181,7 @@ internal sealed partial class SettingsMenu
 
         if (!await ConfirmAsync(ThemeText.EditBuiltInQuestion(copyName), cancellationToken, close: false).ConfigureAwait(false))
         {
-            _held.Notice(UnchangedNotice);
+            No();
             return null;
         }
 

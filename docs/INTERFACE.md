@@ -173,7 +173,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes · Delete removes · on **Aisles**, Shift+↑/↓ move an aisle along the walk, Shift+Home/End to either end |
 | **Settings and bars** | |
 | `/settings changed` | Enter edits · `r` back to default |
-| `/theme` | a letter jumps to the next theme with it · → edit (as `/theme edit`) · Delete deletes one of yours (asks) |
+| `/theme` | a letter jumps to the next theme with it · → edit (as `/theme edit`), then back to the list · Delete deletes one of yours (asks) |
 | `/theme edit` | ←/→ lighter or darker (Shift ×5) · Enter opens the color picker · `s` save · `r` the row back · `d` discard · Esc closes, asking when there are changes |
 | `/theme edit`'s color picker | ↑/↓ a bar · ←/→ move it (Shift ×5) · Enter uses the color, or on *Hex value* types one · Esc back, unchanged |
 | The Oracle and PostgreSQL wizards' *Schemas* page | Enter or Space ticks · `a` all · `n` none · Shift+↑/↓, Shift+Home/End move: the first ticked is current (Oracle) or first on the search path · Continue goes on · Esc back |
@@ -672,7 +672,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 
 * **📣 Prompts:** a tap sends a saved prompt as if typed; ✎ puts it on the message line; ⇪ saves the message line as a new one.
 * **🕘 History:** a tap puts an earlier line on the message line. *Clear all* empties the history, stored and at the PC, as `/msgclear` does.
-* **💾 Memory:** ⇪ saves the message line as a memory, as `/memory remember` does (refused with *Memory mode* off). A tap on a memory edits it or turns it off or on.
+* **💾 Memory:** ⇪ saves the message line as a memory, as `/memory remember` does. A tap on a memory edits it or turns it off or on.
 * A 🗑️ and *Clear all* take two taps. The PC's hint row flashes what the page saved, edited or deleted.
 
 #### Sessions, files and queue
@@ -797,7 +797,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 A bot check (a Cloudflare click, a captcha) runs in the PC's Browser window, since its pass is a cookie only that browser can use ([TOOLS.md](TOOLS.md#the-browser-window)). The Chat tab brings it to you:
 
 * **The allow question** (*Web browser botcheck window* `ask`): Deny, Allow once or Allow for this session, on both sides at once; the first answer wins.
-* **The card** offers *Give up*; with *Web UI bot check control* on, it also shows the window live to tap and type in.
+* **The card** offers *Give up*; with *Web UI bot check control* on, it also shows the window live:
   * **Tap** to click; **touch and hold** to press and hold, let go to release.
   * 🔍 zooms (fit, 2×, 3×); ▲ ▼ scroll the page.
   * The text box types into the field you tapped; ⏎ ⌫ ⇥ send Enter, Backspace and Tab.

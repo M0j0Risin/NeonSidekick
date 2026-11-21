@@ -112,9 +112,9 @@ public static class ThemeText
 
     /// <summary>
     /// Del on a built-in in the <c>/theme</c> picker (2026-11-20): the key that does what the user can, not a command they didn't type. On the
-    /// status line beside the preview, so it fits the list's 40 cells there.
+    /// status line beside the preview, one row at the narrowest list: 36 cells (<see cref="MenuPane.SideMinListWidth"/>) less the status mark.
     /// </summary>
-    public const string DeleteBuiltInHere = "Can't delete a built-in; → edits a copy.";
+    public const string DeleteBuiltInHere = "Built-ins stay; → edits a copy.";
 
     /// <summary>
     /// The question before the delete: the theme, its file under the home (<paramref name="shown"/>) and where it goes — the bin
@@ -130,6 +130,20 @@ public static class ThemeText
 
     /// <summary>The theme put in force after the one in force was deleted: the built-in it replaced, else the default.</summary>
     public static string DeleteInForce(string name) => $"Theme {name} is in force now.";
+
+    /// <summary>
+    /// The <c>/theme</c> list's status line after a Del took the theme in force (2026-11-20, the memory-remember review's #4, #49): the pane is
+    /// still in the old theme, so the fallback is said as what comes (Enter picks the row instead). One row beside the preview for a name of
+    /// up to 11 letters, as <see cref="DeleteBuiltInHere"/>.
+    /// </summary>
+    public static string DeleteFallsBack(string name) => $"On Esc, {name} takes over.";
+
+    /// <summary>
+    /// A delete that found the themes folder changed (2026-11-20, #38): a row whose file went or changed since the list was read (nothing
+    /// asked, the list read again), or a file gone while the question stood. Nothing was deleted. One row beside the preview, as
+    /// <see cref="DeleteBuiltInHere"/>.
+    /// </summary>
+    public const string ThemesChanged = "Themes changed; nothing deleted.";
 
     /// <summary>A delete the bin or the disk refused; the file is kept.</summary>
     public static string DeleteFailed(string message) => $"Could not delete the theme: {message}";
@@ -285,8 +299,9 @@ public static class ThemeText
     // ── The pickers' preview (2026-10-02, the user's ask; ThemePreview) ──────
     // A small mock screen in the highlighted theme, the Theme Atlas's in brief: words that put every role on show. One story since
     // 2026-11-20 (the user's ask: the rows didn't hang together): a banner fading across its letters, every row about it. The prose
-    // row is ordered for the narrowest card (38 cells inside): its bold and its inline code stay whole there.
-    public const string PreviewUser = "› make the banner fade from left to right";
+    // row is ordered for the narrowest card (38 cells inside): its bold and its inline code stay whole there. Every other story row fits
+    // those 38 cells whole, its mark included (2026-11-20, the memory-remember review's #64, #65).
+    public const string PreviewUser = "› make the banner fade left to right";
     public const string PreviewHeading = "A fading banner";
     public const string PreviewProse1 = "Each ";
     public const string PreviewProseBold = "letter";
@@ -295,15 +310,15 @@ public static class ThemeText
     public const string PreviewProse3 = " color, ";
     public const string PreviewProseItalic = "left";
     public const string PreviewProse4 = " to right.";
-    public const string PreviewBullet = "the first color sits on the left end";
-    public const string PreviewQuote = "The rule under it fades the same way.";
-    // The code block in PowerShell since 2026-11-20 (C# until then): its $variables show tint, the one role C# never lexes. Its
-    // rows are lexed as a reply's are (ThemePreview), the last one the edit's; the middle row's 4 and $t stay whole on the
-    // narrowest card.
+    public const string PreviewBullet = "the first color sits on the left";
+    public const string PreviewQuote = "The rule fades the same way.";
+    // The code block in PowerShell since 2026-11-20 (C# until then): its $variables show tint, the one role C# never lexes, and its
+    // [string] the type color (secondary). Its rows are lexed as one block as a reply's are (ThemePreview), the last one the edit's;
+    // the middle row's 4 and $t stay whole on the narrowest card. The language comes from the label (CodeLanguages.Find).
     public const string PreviewCodeLabel = "powershell";
     public const string PreviewCodeComment = "# one color per letter";
     public const string PreviewCodeLine = "function Pick($t) { $stops[$t * 4] }";
-    public const string PreviewCodeLastName = "$last = ";
+    public const string PreviewCodeLastName = "[string]$last = ";
     // A file edit's diff (2026-10-03, the user's ask): the note an edit_file of line 3 writes, then the code block's last line
     // as it was and as it is. The summary over the rows is FileText.DiffSummary's own; the note's counts are the block's own
     // (WorkingDirectory.Count of its three rows, pinned).
@@ -312,7 +327,7 @@ public static class ThemeText
     public const int PreviewDiffLine = 3;
     public const string PreviewDiffOld = "\"pink\"";
     public const string PreviewDiffNew = "\"teal\"";
-    public const string PreviewThinking = "thinking: the last letter should match the rule's end.";
+    public const string PreviewThinking = "thinking: end the banner on teal.";
     public const string PreviewGood = "✓ 40 user themes loaded";
     public const string PreviewWarn = "! orphan.json: skipped, it does not set bg";
     public const string PreviewError = "✗ No theme named \"matrix\".";

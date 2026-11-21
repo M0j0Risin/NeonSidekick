@@ -83,39 +83,19 @@ public static class ThemePreview
         var bannerPieces = Gradient(banner, p.GradientStops);
         bannerPieces.Add(P(ThemeStyleSlot.DimText, "  v" + version));
 
-        // The code block: every row one slab of the block's fill, its longest line plus SlabPad. Each row lexed as a reply's code is
-        // (2026-11-20: CodeLexer through Theme.CodeSlots, hand-assigned pieces until then), so the preview wears what a reply shows.
-        Piece[][] code = [Lexed(ThemeText.PreviewCodeComment), Lexed(ThemeText.PreviewCodeLine), Last(ThemeText.PreviewDiffNew)];
+        // The code block: every row one slab of the block's fill, its longest line plus SlabPad. The three rows lexed as one block, as a
+        // reply's code is (2026-11-20: CodeLexer.LexLines through Theme.CodeSlotOf, the memory-remember review's #10, #30, #31; hand-assigned
+        // pieces until then), so the preview wears what a reply shows. The language is the label's (#67): a label no lexer reads is a bug.
+        var language = CodeLanguages.Find(ThemeText.PreviewCodeLabel)
+            ?? throw new System.Diagnostics.UnreachableException("The preview's code label names no lexer: " + ThemeText.PreviewCodeLabel);
+        Piece[] Lexed(IReadOnlyList<(string Text, CodeTokenKind Kind)> runs) => [.. runs.Select(run => P(Theme.CodeSlotOf(run.Kind), run.Text))];
+        Piece[][] code = [.. CodeLexer.LexLines([ThemeText.PreviewCodeComment, ThemeText.PreviewCodeLine, ThemeText.PreviewCodeLastName + ThemeText.PreviewDiffNew], language).Select(Lexed)];
         int slab = code.Max(row => row.Sum(piece => TextCells.Width(piece.Text))) + SlabPad;
         Piece[] Slab(Piece[] row) => [.. row, P(ThemeStyleSlot.MarkdownCodeBlock, new string(' ', Math.Max(0, slab - row.Sum(piece => TextCells.Width(piece.Text)))))];
 
-        // A row of PowerShell in the styles a reply's code block gives its tokens; what no token covers is the block's plain text.
-        Piece[] Lexed(string text)
-        {
-            var pieces = new List<Piece>();
-            int at = 0;
-            foreach (var token in CodeLexer.Lex(text, CodeLanguages.PowerShell))
-            {
-                if (token.Start > at)
-                {
-                    pieces.Add(P(ThemeStyleSlot.MarkdownCodeBlock, text[at..token.Start]));
-                }
-
-                pieces.Add(P(SlotOf(token.Kind), text.Substring(token.Start, token.Length)));
-                at = token.End;
-            }
-
-            if (at < text.Length)
-            {
-                pieces.Add(P(ThemeStyleSlot.MarkdownCodeBlock, text[at..]));
-            }
-
-            return [.. pieces];
-        }
-
         // The code block's last line as an edit changed it (2026-10-03, the user's ask), drawn as DiffView draws a row: the
         // number and the sign on the slab, the code's own colours on it, the slab to the card's edge.
-        Piece[] Last(string value) => Lexed(ThemeText.PreviewCodeLastName + value);
+        Piece[] Last(string value) => Lexed(CodeLexer.LexLines([ThemeText.PreviewCodeLastName + value], language)[0]);
         Piece[] DiffRow(char sign, ThemeStyleSlot slot, string value)
         {
             var on = s(slot);
@@ -157,20 +137,23 @@ public static class ThemePreview
                 P(ThemeStyleSlot.Assistant, ThemeText.PreviewProse2), P(ThemeStyleSlot.MarkdownCode, ThemeText.PreviewProseCode),
                 P(ThemeStyleSlot.Assistant, ThemeText.PreviewProse3), P(ThemeStyleSlot.MarkdownItalic, ThemeText.PreviewProseItalic),
                 P(ThemeStyleSlot.Assistant, ThemeText.PreviewProse4)),
-            L(5, P(ThemeStyleSlot.MarkdownBullet, "  • "), P(ThemeStyleSlot.Assistant, ThemeText.PreviewBullet)),
+            // The bullet gives way before the code (2026-11-20, the memory-remember review's #29, #41): tertiary shows on the quote bar too.
+            L(6, P(ThemeStyleSlot.MarkdownBullet, "  • "), P(ThemeStyleSlot.Assistant, ThemeText.PreviewBullet)),
             L(5, P(ThemeStyleSlot.MarkdownQuoteBar, "  ▌ "), P(ThemeStyleSlot.MarkdownQuote, ThemeText.PreviewQuote)),
-            // A reply's rule (2026-11-20, a blank row until then): deep, which the pane rule hides under Gradient rules. Ranked with the
-            // rows every role needs, so the editor's card (18 to 22 rows) keeps it.
-            L(5, P(ThemeStyleSlot.MarkdownRule, new string('─', inner))),
-            L(6, P(ThemeStyleSlot.MarkdownCodeLabel, ThemeText.PreviewCodeLabel)),
-            L(6, Slab(code[0])),
+            // A reply's rule (2026-11-20, a blank row until then): deep, which the pane rule hides under Gradient rules. Rank 4 with the
+            // placeholder, so a card shorter than the editor's 18 rows drops its role's one row last.
+            L(4, P(ThemeStyleSlot.MarkdownRule, new string('─', inner))),
+            // The code label and its three rows at the role rows' rank (2026-11-20, #29, #41): an 18-row card shows the whole block.
+            L(5, P(ThemeStyleSlot.MarkdownCodeLabel, ThemeText.PreviewCodeLabel)),
+            L(5, Slab(code[0])),
             L(4, Slab(code[1])),
-            L(6, Slab(code[2])),
+            L(5, Slab(code[2])),
             Empty(),
             L(7, P(ThemeStyleSlot.DimText, TranscriptRenderer.ToolGlyph + ThemeText.PreviewDiffNote)),
             L(6, P(ThemeStyleSlot.DimText, diffSummary)),
-            L(5, DiffRow('-', ThemeStyleSlot.DiffRemoved, ThemeText.PreviewDiffOld)),
-            L(5, DiffRow('+', ThemeStyleSlot.DiffAdded, ThemeText.PreviewDiffNew)),
+            // The diff's slabs give way before the code (2026-11-20, #29, #41): their roles are blends, shown whole in a 22-row card.
+            L(6, DiffRow('-', ThemeStyleSlot.DiffRemoved, ThemeText.PreviewDiffOld)),
+            L(6, DiffRow('+', ThemeStyleSlot.DiffAdded, ThemeText.PreviewDiffNew)),
             Empty(),
             L(8, P(ThemeStyleSlot.Thinking, ThemeText.PreviewThinking)),   // 7 until 2026-11-20: dim and panelBg show elsewhere
             Empty(),
@@ -185,22 +168,8 @@ public static class ThemePreview
                 P(ThemeStyleSlot.User, "› /theme "), P(ThemeStyleSlot.SelectedText, p.Name),
                 P(ThemeStyleSlot.Spinner, "  " + Theme.SpinnerFrames[0]), P(ThemeStyleSlot.PasteLabel, "  " + ThemeText.PreviewPaste)),
             L(6, P(ThemeStyleSlot.Hint, "  " + ThemeText.PreviewHint), P(ThemeStyleSlot.TrailerMark, "◆"), P(ThemeStyleSlot.Hint, ThemeText.PreviewTrailer)),
-            L(5, P(ThemeStyleSlot.Placeholder, "  " + ThemeText.PreviewPlaceholder)),   // 8 until 2026-11-20: dimmer's one row, kept in a short card
+            L(4, P(ThemeStyleSlot.Placeholder, "  " + ThemeText.PreviewPlaceholder)),   // 8 until 2026-11-20 (5 that day, then 4, #41): dimmer's one row, kept in a short card
         ];
-    }
-
-    /// <summary>The style a code token of <paramref name="kind"/> wears (<see cref="Theme.CodeSlots"/>); plain text is the block's own.</summary>
-    private static ThemeStyleSlot SlotOf(CodeTokenKind kind)
-    {
-        foreach (var (k, slot) in Theme.CodeSlots)
-        {
-            if (k == kind)
-            {
-                return slot;
-            }
-        }
-
-        return ThemeStyleSlot.MarkdownCodeBlock;
     }
 
     /// <summary>A rule of <paramref name="width"/> cells in <paramref name="stops"/>' colors, as <see cref="Theme.RuleRuns"/> splits it (2026-11-01: one splitter for the screen and the preview).</summary>

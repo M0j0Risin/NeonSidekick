@@ -733,8 +733,8 @@ public sealed record WebPrompts(IReadOnlyList<WebPrompt> Items);
 public sealed record WebPrompt(int Number, string Text, string Id);
 
 /// <summary>
-/// The sheet's 💾 tab (2026-10-16): the profile's memories in the PC pane's order, and whether <i>Memory mode</i> is off (the tab says so,
-/// and a save is refused). <see cref="MaxChars"/> (2026-10-18) is the longest text a memory keeps, the editor's cap (0: none known).
+/// The sheet's 💾 tab (2026-10-16): the profile's memories in the PC pane's order, and whether <i>Memory mode</i> is off (the tab says so;
+/// a save still saves, 2026-11-20). <see cref="MaxChars"/> (2026-10-18) is the longest text a memory keeps, the editor's cap (0: none known).
 /// </summary>
 public sealed record WebMemories(IReadOnlyList<WebMemory> Items, bool ModeOff, int MaxChars = 0);
 

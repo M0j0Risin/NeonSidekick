@@ -122,6 +122,35 @@ public class CodeLexerTests
         Is(CodeTokenKind.Comment, code, ps, "<# block\ncomment #>");
     }
 
+    /// <summary>PowerShell's type accelerators (2026-11-20, the memory-remember review's #45): Type in any case; a dashed cmdlet and a $variable named like one stay theirs.</summary>
+    [Fact]
+    public void PowerShell_TypeAccelerators_AreTypes()
+    {
+        const string code = "[string]$string = [INT]5 | Select-Object";
+        var ps = CodeLanguages.PowerShell;
+
+        Is(CodeTokenKind.Type, code, ps, "string");
+        Is(CodeTokenKind.Type, code, ps, "INT");
+        Is(CodeTokenKind.Variable, code, ps, "$string");
+        Is(CodeTokenKind.Function, code, ps, "Select-Object");
+    }
+
+    /// <summary>LexLines (2026-11-20): one list of runs per line, a token across a break split at it, a blank line empty, the runs the text exactly.</summary>
+    [Fact]
+    public void LexLines_GivesOneListPerLine_SplittingATokenAtABreak()
+    {
+        string[] lines = ["<# a", "b #>", "", "$x = 1"];
+        var runs = CodeLexer.LexLines(lines, CodeLanguages.PowerShell);
+
+        Assert.Equal(lines.Length, runs.Count);
+        Assert.Equal(lines, runs.Select(line => string.Concat(line.Select(run => run.Text))));
+        Assert.Equal([("<# a", CodeTokenKind.Comment)], runs[0]);
+        Assert.Equal([("b #>", CodeTokenKind.Comment)], runs[1]);
+        Assert.Empty(runs[2]);
+        Assert.Equal(CodeTokenKind.Variable, runs[3][0].Kind);
+        Assert.Empty(CodeLexer.LexLines([], CodeLanguages.PowerShell));
+    }
+
     [Fact]
     public void Json_KeysAreAttributes_ValuesAreStrings()
     {

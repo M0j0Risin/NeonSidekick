@@ -1571,8 +1571,8 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public const string ThemeKeepKeys = "Enter = choose · → = edit · Del = delete · a–z = jump · Esc = keep";   // → and Del since 2026-11-20, the user's picks
 
-    /// <summary>The bare <c>/theme</c> list without the pane (2026-11-20): no buttons there, so the keys it had before.</summary>
-    public const string ThemePlainKeepKeys = "Enter = choose · a–z = jump · Esc = keep";
+    /// <summary>The bare <c>/theme</c> list without the pane (2026-11-20): no buttons there, and the plain prompt has no letter jump (#44, #53).</summary>
+    public const string ThemePlainKeepKeys = "Enter = choose · Esc = keep";
     public const string ThemePickKeys = "Enter = choose · a–z = jump · Esc = back";
 
     /// <summary>The yes/no pane's hint (<see cref="ConfirmAsync"/>). Pinned.</summary>
@@ -5309,7 +5309,7 @@ internal sealed partial class SettingsMenu
                     Filter = text,
                     Placeholder = shown.Count == 0,
                     Caption = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) ?? legend,
-                    // The legend's lines kept apart and its note under it; the typed filter's caption takes over both.
+                    // The legend's lines kept apart and its note over them (MenuPane.CaptionLines, 2026-11-20); the typed filter's caption takes over both.
                     CaptionKeepLines = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) is null,
                     CaptionNote = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) is null ? legendNote : null,
                     Footer = (_, row) => row < shown.Count ? ServerFooter(servers[shown[row]]) : null,
@@ -9101,8 +9101,8 @@ internal sealed partial class SettingsMenu
     /// The pickers' fit marks (2026-11-16, plan lucid-roaming-lantern #43), read once at an open: the GPU's memory and the backend a start
     /// would use, under the settings now (<see cref="NeonSidekick.EmbeddedLlm.EmbeddedFit"/>). The mark of a model, whether the size button
     /// may stop at fits, and the caption with its dim note (2026-11-20, the user's layout): the fit marks' legend and the capability columns'
-    /// on two lines (<see cref="MenuPage.CaptionKeepLines"/>) over what the estimate is for, or the capability legend over why no mark is
-    /// given; all empty with no embedded service.
+    /// on two lines (<see cref="MenuPage.CaptionKeepLines"/>) under what the estimate is for, or the capability legend under why no mark is
+    /// given (the note drawn above the legend since 2026-11-20); all empty with no embedded service.
     /// </summary>
     private (Func<NeonSidekick.EmbeddedLlm.EmbeddedModel, NeonSidekick.EmbeddedLlm.FitMark?>? Fit, bool CanFit, string? Caption, string? Note) FitMarks()
     {
@@ -10393,48 +10393,57 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        if (!_pane.Enabled)
-        {
-            // A console without the pane: the plain list, its keys alone (no buttons there).
-            var plain = new MenuPage(ThemeTitle, ThemeRows(scan.Themes), ThemePlainKeepKeys) { JumpNames = ThemeNames(scan.Themes) };
-            int? chosen = await PickOnceAsync(plain, ThemeCursor(Theme.Current.Name, scan.Themes), cancellationToken).ConfigureAwait(false);
-            return chosen is { } at ? SaveTheme(scan.Themes[at]) : Unchanged();
-        }
-
         return await ThemeListAsync(scan, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>The bare <c>/theme</c> list's buttons (2026-11-20, the user's ask): edit on →, delete on Del; clicked, the same on the cursor's row.</summary>
+    /// <summary>
+    /// The bare <c>/theme</c> list's buttons (2026-11-20, the user's ask): edit on → (its <see cref="MenuButton.NamedKey"/>), delete on Del (the
+    /// page's remove) or <see cref="ThemeDeleteButton"/>; clicked, the same on the cursor's row.
+    /// </summary>
     private const int ThemeEditButton = 0;
+    private const int ThemeDeleteButton = 1;
 
     /// <summary>
-    /// The bare <c>/theme</c> list on the pane (2026-11-20, the user's ask: edit or delete the highlighted theme from it): Enter puts the row in
-    /// force; → or <c>edit</c> hands the pane to <see cref="EditThemeAsync"/> on it, as <c>/theme edit &lt;name&gt;</c> (a built-in asks its copy
-    /// first); Del or <c>delete</c> asks <see cref="DeleteThemeAsync"/>'s question on the pane, its lines on the status line, and the list stays
-    /// open, rebuilt from a fresh scan, the cursor on the row that took its place (a built-in that came back, else the same index); on a built-in
-    /// it says <see cref="ThemeText.DeleteBuiltInHere"/>, nothing asked. A deleted file's lines are held too, printed after the pane closes. Esc
-    /// is <see cref="UnchangedNotice"/> only when nothing was deleted. True when the theme in force changed, a delete's fallback included. The
-    /// pane closes before a pick's or Esc's line, so it reaches the transcript, as <see cref="PickOnceAsync"/> leaves it.
+    /// The bare <c>/theme</c> list (2026-11-20, the user's ask: edit or delete the highlighted theme from it), one loop on either console
+    /// (the memory-remember review's #9, #36): without the pane, the plain prompt's Enter and Esc alone. Enter puts the row in force. → or
+    /// <c>edit</c> hands the pane to <see cref="EditPaletteAsync"/> on the row, as <c>/theme edit &lt;name&gt;</c> (a built-in asks its copy
+    /// first), and the list comes back after (#3, #72), from a fresh scan, the cursor on the theme edited or its copy, the editor's failures on
+    /// the status line. Del or <c>delete</c> asks <see cref="DeleteThemeFileAsync"/>'s question on the pane, its lines on the status line, and
+    /// the list stays open, rebuilt from a fresh scan, the cursor on the row that took its place (a built-in that came back, else the same
+    /// index); a row whose file changed or went since the list was read (#38) is rebuilt instead, nothing asked; a built-in says
+    /// <see cref="ThemeText.DeleteBuiltInHere"/>. Deleting the theme in force (#4, #17, #49, #68, #70) waits for the list to close: its
+    /// fallback is pending, the cursor on it; Enter on any row drops it, and Esc or a throw puts it in force, quietly (<see cref="SaveTheme"/>).
+    /// A deleted file's lines, an editor's save and its failures are held, printed after the pane closes and any repaint; Esc is
+    /// <see cref="UnchangedNotice"/> only when nothing was held. True when the theme in force changed: a fallback, or an editor's save of the
+    /// theme in force (which writes the file only, so the screen's repaint puts it on screen); <see cref="TakeRepaintOwed"/> says so on a throw.
+    /// The pane closes before a pick's or Esc's line, so it reaches the transcript.
     /// </summary>
     private async Task<bool> ThemeListAsync(ThemeScan scan, CancellationToken cancellationToken)
     {
         int cursor = ThemeCursor(Theme.Current.Name, scan.Themes);
-        bool deleted = false, changed = false;
+        int heldAtOpen = _held.Count;
+        bool changed = false;
         ThemePalette? chosen = null;
+        ThemePalette? pending = null;   // the deleted theme in force's fallback, put in force as the list closes
+        MenuPage? page = null;          // built once per scan (#35)
+        void Changed()
+        {
+            changed = true;
+            _repaintOwed = true;
+        }
+
         try
         {
             while (true)
             {
                 var themes = scan.Themes;
-                var page = new MenuPage(ThemeTitle, ThemeRows(themes), ThemeKeepKeys)
+                page ??= new MenuPage(ThemeTitle, ThemeRows(themes), _pane.Enabled ? ThemeKeepKeys : ThemePlainKeepKeys)
                 {
                     Side = ThemeSide(themes),
                     JumpNames = ThemeNames(themes),
-                    Buttons = [new MenuButton(ThemeText.EditWord, null), new MenuButton(ThemeText.DeleteWord, null)],
-                    RightButton = ThemeEditButton,
-                    Removes = true,
+                    Buttons = [new MenuButton(ThemeText.EditWord, null) { NamedKey = ConsoleKey.RightArrow }, new MenuButton(ThemeText.DeleteWord, null)],
                 };
-                if (await _pane.PickAsync(page, Math.Clamp(cursor, 0, Math.Max(0, themes.Count - 1)), cancellationToken).ConfigureAwait(false) is not { } pick)
+                if (await PickListAsync(page, Math.Clamp(cursor, 0, Math.Max(0, themes.Count - 1)), cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
                     break;
                 }
@@ -10448,28 +10457,80 @@ internal sealed partial class SettingsMenu
                 var theme = themes[pick.Row];
                 if (pick.Button == ThemeEditButton)
                 {
-                    // The editor takes the pane over, its copy question asked on it, and closes it when done (EditThemeAsync).
-                    return await EditThemeAsync(theme.Name, cancellationToken).ConfigureAwait(false) | changed;
+                    // The editor takes the pane over, its copy question asked on it, and hands it back (#3, #72); its save and failures are held.
+                    int before = _held.Count;
+                    if (await EditPaletteAsync(theme, scan, closeWhenDone: false, cancellationToken).ConfigureAwait(false))
+                    {
+                        Changed();
+                    }
+
+                    scan = ScanThemes(report: false);
+                    page = null;
+                    string copy = ThemeText.CopyName(theme.Name);
+                    int row = theme.IsBuiltIn && ThemeRow(copy, scan.Themes) is int made and >= 0 ? made : ThemeRow(theme.Name, scan.Themes);
+                    cursor = row >= 0 ? row : Math.Min(pick.Row, scan.Themes.Count - 1);
+                    _pane.ClearStatus();   // the editor's last line (Esc leaves it), never the list's
+                    foreach (string failed in _held.ErrorsSince(before))
+                    {
+                        _pane.Error(failed);
+                    }
+
+                    continue;
                 }
 
-                if (pick.Remove || pick.Button > ThemeEditButton)
+                if (pick.Remove || pick.Button == ThemeDeleteButton)
                 {
-                    if (theme.SourcePath is null)
+                    if (theme.IsBuiltIn)
                     {
                         _pane.Notice(ThemeText.DeleteBuiltInHere);
                         continue;
                     }
 
-                    changed |= await DeleteThemeAsync(theme.Name, (question, ct) => ConfirmAsync(question, ct, close: false), ThemeBin(), cancellationToken, sink: _pane, scan: scan).ConfigureAwait(false);
-                    if (File.Exists(theme.SourcePath))
+                    // The row as the folder has it now (#38): by its file, compared by look (every scan makes new instances).
+                    var fresh = ScanThemes(report: false);
+                    var now = fresh.Themes.FirstOrDefault(t => string.Equals(t.SourcePath, theme.SourcePath, StringComparison.Ordinal));
+                    if (now is null || !now.Equals(theme))
+                    {
+                        scan = fresh;
+                        page = null;
+                        cursor = RowAfter(theme, pick.Row, scan);
+                        _pane.Notice(ThemeText.ThemesChanged);
+                        continue;
+                    }
+
+                    var said = new StatusAndHeld(_pane, _held);
+                    var (outcome, recycled) = await DeleteThemeFileAsync(theme, (question, ct) => ConfirmAsync(question, ct, close: false), ThemeBin(), said, cancellationToken).ConfigureAwait(false);
+                    if (outcome == ThemeDeleteOutcome.Gone)
+                    {
+                        scan = ScanThemes(report: false);
+                        page = null;
+                        cursor = RowAfter(theme, pick.Row, scan);
+                        _pane.Notice(ThemeText.ThemesChanged);
+                        continue;
+                    }
+
+                    if (outcome != ThemeDeleteOutcome.Deleted)
                     {
                         continue;   // a no, or a refusal: the list as it was
                     }
 
-                    deleted = true;
-                    scan = ScanThemes(report: false);
-                    int back = scan.Themes.ToList().FindIndex(t => string.Equals(t.Name, theme.Name, StringComparison.OrdinalIgnoreCase));
-                    cursor = back >= 0 ? back : Math.Min(pick.Row, scan.Themes.Count - 1);
+                    _pane.Notice(ThemeText.DeleteDone(theme.Name, recycled));
+                    _held.Notice(ThemeText.DeleteDone(theme.Name, recycled));
+                    bool inForce = DeletedInForce(theme) || (pending is not null && string.Equals(pending.SourcePath, theme.SourcePath, StringComparison.Ordinal));
+                    scan = ScanThemes(report: false);   // #21: one scan after a delete, the fallback's and the rebuild's
+                    page = null;
+                    if (inForce)
+                    {
+                        // The pane and the screen stay in the deleted theme until the list closes, so the two never disagree (#4, #49).
+                        pending = ThemeFallback(theme, scan);
+                        _pane.Notice(ThemeText.DeleteFallsBack(pending.Name));
+                        cursor = ThemeCursor(pending.Name, scan.Themes);   // #70
+                    }
+                    else
+                    {
+                        cursor = RowAfter(theme, pick.Row, scan);
+                    }
+
                     continue;
                 }
 
@@ -10480,11 +10541,61 @@ internal sealed partial class SettingsMenu
         finally
         {
             _pane.Close();
+            if (chosen is null && pending is not null)
+            {
+                // Esc, or a throw (#68): the fallback in force as the list closes, so profile.json never names a deleted theme. Quiet (#27), so no
+                // "already" line lands ahead of the held ones; the in-force line held here, true by the time it prints.
+                _held.Notice(ThemeText.DeleteInForce(pending.Name));
+                if (SaveTheme(pending, quiet: true))
+                {
+                    Changed();
+                }
+            }
         }
 
-        return chosen is not null ? SaveTheme(chosen) | changed
-            : deleted ? changed
-            : Unchanged();
+        if (chosen is not null)
+        {
+            // Enter drops a pending fallback (#17): the theme in force is still the deleted one, so the fallback picked is a change, no "already".
+            return SaveTheme(chosen) | changed;
+        }
+
+        return _held.Count > heldAtOpen ? changed : Unchanged();
+    }
+
+    /// <summary>The row after a delete or a fresh scan: <paramref name="theme"/>'s name again (a built-in that came back), else the same index clamped.</summary>
+    private static int RowAfter(ThemePalette theme, int row, ThemeScan scan) =>
+        ThemeRow(theme.Name, scan.Themes) is int back and >= 0 ? back : Math.Max(0, Math.Min(row, scan.Themes.Count - 1));
+
+    /// <summary>
+    /// Set when the <c>/theme</c> list's change to the theme in force is owed a repaint (2026-11-20, the memory-remember review's #68, #7: a
+    /// fallback put in force, an editor's save of the theme in force). The screen takes it on every path; on a throw it hands the repaint over.
+    /// </summary>
+    private bool _repaintOwed;
+
+    /// <summary>Whether a <c>/theme</c> change is owed a repaint, the flag cleared (2026-11-20).</summary>
+    public bool TakeRepaintOwed()
+    {
+        bool owed = _repaintOwed;
+        _repaintOwed = false;
+        return owed;
+    }
+
+    /// <summary>The list's lines from a delete or the editor (2026-11-20, #28): a notice on the status line alone, a warning or an error held as well.</summary>
+    private sealed class StatusAndHeld(INoticeSink status, INoticeSink held) : INoticeSink
+    {
+        public void Notice(string text) => status.Notice(text);
+
+        public void Warning(string text)
+        {
+            status.Warning(text);
+            held.Warning(text);
+        }
+
+        public void Error(string text)
+        {
+            status.Error(text);
+            held.Error(text);
+        }
     }
 
     /// <summary>
@@ -10588,60 +10699,95 @@ internal sealed partial class SettingsMenu
         return Encoding.UTF8.GetBytes(ThemeFile.Export(palette, newName));
     }
 
+    /// <summary>What a theme file's delete came to (<see cref="DeleteThemeFileAsync"/>, 2026-11-20).</summary>
+    private enum ThemeDeleteOutcome
+    {
+        /// <summary>The file went, to the bin or for good.</summary>
+        Deleted,
+
+        /// <summary>The user said no (<see cref="ChatScreen.KeptNotice"/> said).</summary>
+        Kept,
+
+        /// <summary>The bin or the disk refused (the error said); the file is kept.</summary>
+        Failed,
+
+        /// <summary>The file went while the question stood (#38): nothing deleted, nothing said.</summary>
+        Gone,
+    }
+
     /// <summary>
     /// <c>/theme delete &lt;name&gt;</c> (2026-11-20, the user's ask): one of the user's themes (a file under the themes folder) deleted after
     /// a yes through <paramref name="confirm"/> (the screen's, which falls back to a typed <c>y</c>), to <paramref name="bin"/> when given
-    /// (<i>File deletes to Recycle bin</i>; probed first, so the question says where it goes, as the purges do), else for good. A built-in
-    /// is refused, an unknown name gets <see cref="ThemeNameError"/>, no name or two <see cref="ThemeText.DeleteUsage"/>; a no is
-    /// <see cref="ChatScreen.KeptNotice"/>. The bin's refusal keeps the file (never deleted directly behind it); a drive with no bin deletes
-    /// for good. When the theme in force went, the scan names it again: the built-in its file replaced, else the default, saved and put in
-    /// force. Returns whether the theme in force changed. Its lines are held (<see cref="PrintHeld"/>), printed after the repaint. With
-    /// <paramref name="sink"/> (2026-11-20, the <c>/theme</c> list's Del, the pane open) the lines go there instead, and a delete's done and in-force
-    /// lines are held as well, so the transcript keeps a trace; <paramref name="scan"/> is the caller's, so a broken file's warnings aren't said again.
+    /// (<i>File deletes to Recycle bin</i>), else for good (<see cref="DeleteThemeFileAsync"/>). A built-in is refused, an unknown name gets
+    /// <see cref="ThemeNameError"/>, no name or two <see cref="ThemeText.DeleteUsage"/>. When the theme in force went, the scan names it
+    /// again (<see cref="ThemeFallback"/>), saved and put in force, quietly (#27: a look-alike says no "already" ahead of the held lines).
+    /// Returns whether the theme in force changed. Its lines are held (<see cref="PrintHeld"/>), printed after the repaint.
     /// </summary>
-    public async Task<bool> DeleteThemeAsync(string rest, Func<string, CancellationToken, Task<bool>> confirm, IRecycleBin? bin, CancellationToken cancellationToken, INoticeSink? sink = null, ThemeScan? scan = null)
+    public async Task<bool> DeleteThemeAsync(string rest, Func<string, CancellationToken, Task<bool>> confirm, IRecycleBin? bin, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(rest);
         ArgumentNullException.ThrowIfNull(confirm);
-        INoticeSink said = sink ?? _held;
-        void Done(string text)
-        {
-            said.Notice(text);
-            if (sink is not null)
-            {
-                _held.Notice(text);
-            }
-        }
-
         string[] words = rest.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (words.Length != 1)
         {
-            said.Error(ThemeText.DeleteUsage);
+            _held.Error(ThemeText.DeleteUsage);
             return false;
         }
 
-        scan ??= ScanThemes();
+        var scan = ScanThemes();
         if (!ThemeName.TryParse(words[0], scan.Themes, out var palette))
         {
-            said.Error(ThemeNameError(words[0], scan.Names));
+            _held.Error(ThemeNameError(words[0], scan.Names));
             return false;
         }
 
-        if (palette.SourcePath is not { } path)
+        if (palette.IsBuiltIn)
         {
-            said.Error(ThemeText.DeleteBuiltIn);
+            _held.Error(ThemeText.DeleteBuiltIn);
             return false;
         }
 
-        // Where it goes, judged before the question (the purges' rule, 2026-10-20): a drive with no bin deletes for good, a bin that can
-        // never take from the folder refuses here, nothing asked.
+        var (outcome, recycled) = await DeleteThemeFileAsync(palette, confirm, bin, _held, cancellationToken).ConfigureAwait(false);
+        if (outcome == ThemeDeleteOutcome.Gone)
+        {
+            _held.Notice(ThemeText.ThemesChanged);
+            return false;
+        }
+
+        if (outcome != ThemeDeleteOutcome.Deleted)
+        {
+            return false;
+        }
+
+        _held.Notice(ThemeText.DeleteDone(palette.Name, recycled));
+        if (!DeletedInForce(palette))
+        {
+            return false;
+        }
+
+        var next = ThemeFallback(palette, ScanThemes(report: false));
+        _held.Notice(ThemeText.DeleteInForce(next.Name));
+        return SaveTheme(next, quiet: true);
+    }
+
+    /// <summary>
+    /// The delete itself (2026-11-20, split from <see cref="DeleteThemeAsync"/> for the list's Del, the memory-remember review's #8, #22, #59):
+    /// <paramref name="palette"/>, a user theme, its bin judged before the question (the purges' rule, 2026-10-20: a drive with no bin deletes
+    /// for good, a bin that can never take from the folder refuses, nothing asked), the question through <paramref name="confirm"/>, then the
+    /// move or the delete. A no says <see cref="ChatScreen.KeptNotice"/> to <paramref name="said"/> and a refusal its error; the bin's refusal
+    /// keeps the file (never deleted directly behind it). A file that went while the question stood is <see cref="ThemeDeleteOutcome.Gone"/>
+    /// (#38: <c>File.Delete</c> of a missing file doesn't throw). A delete says nothing: the callers word it.
+    /// </summary>
+    private async Task<(ThemeDeleteOutcome Outcome, bool Recycled)> DeleteThemeFileAsync(ThemePalette palette, Func<string, CancellationToken, Task<bool>> confirm, IRecycleBin? bin, INoticeSink said, CancellationToken cancellationToken)
+    {
+        string path = palette.SourcePath!;
         bool toBin = bin is not null;
         if (bin?.Probe(Path.GetDirectoryName(path)!) is { } probe)
         {
             if (probe.Outcome == RecycleOutcome.Failed)
             {
                 said.Error(ThemeText.DeleteFailed(probe.Message));
-                return false;
+                return (ThemeDeleteOutcome.Failed, false);
             }
 
             toBin = false;
@@ -10652,7 +10798,12 @@ internal sealed partial class SettingsMenu
         if (!await confirm(ThemeText.DeleteQuestion(palette.Name, shown, toBin, revealsBuiltIn), cancellationToken).ConfigureAwait(false))
         {
             said.Notice(ChatScreen.KeptNotice);
-            return false;
+            return (ThemeDeleteOutcome.Kept, false);
+        }
+
+        if (!File.Exists(path))
+        {
+            return (ThemeDeleteOutcome.Gone, false);
         }
 
         bool recycled = false;
@@ -10665,7 +10816,7 @@ internal sealed partial class SettingsMenu
                     break;
                 case { Outcome: RecycleOutcome.Failed } refused:
                     said.Error(ThemeText.DeleteFailed(refused.Message));
-                    return false;
+                    return (ThemeDeleteOutcome.Failed, false);
                 default:
                     // Not to the bin, or the bin found none on that drive after all: for good, and the line says so.
                     File.Delete(path);
@@ -10675,24 +10826,21 @@ internal sealed partial class SettingsMenu
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             said.Error(ThemeText.DeleteFailed(ex.Message));
-            return false;
+            return (ThemeDeleteOutcome.Failed, false);
         }
 
-        Done(ThemeText.DeleteDone(palette.Name, recycled));
-        bool inForce = string.Equals(Theme.Current.SourcePath, path, StringComparison.Ordinal)
-            || string.Equals(_settings.Current.Theme, palette.Name, StringComparison.OrdinalIgnoreCase);
-        if (!inForce)
-        {
-            return false;
-        }
-
-        // The theme in force went: the same name again (the built-in the file replaced), else the default as the scan has it.
-        var after = ScanThemes(report: false);
-        var next = ThemeName.TryParse(palette.Name, after.Themes, out var same) ? same
-            : ThemeName.TryParse(ThemeLibrary.Default.Name, after.Themes, out var fallback) ? fallback : ThemeLibrary.Default;
-        Done(ThemeText.DeleteInForce(next.Name));
-        return SaveTheme(next);
+        return (ThemeDeleteOutcome.Deleted, recycled);
     }
+
+    /// <summary>Whether <paramref name="deleted"/> was the theme in force: its file the one in force, or its name the saved one (2026-11-20, both deletes' test).</summary>
+    private bool DeletedInForce(ThemePalette deleted) =>
+        string.Equals(Theme.Current.SourcePath, deleted.SourcePath, StringComparison.Ordinal)
+        || string.Equals(_settings.Current.Theme, deleted.Name, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The theme in force after <paramref name="deleted"/> went: its name again in <paramref name="after"/> (the built-in its file replaced), else the default as the scan has it.</summary>
+    private static ThemePalette ThemeFallback(ThemePalette deleted, ThemeScan after) =>
+        ThemeName.TryParse(deleted.Name, after.Themes, out var same) ? same
+        : ThemeName.TryParse(ThemeLibrary.Default.Name, after.Themes, out var fallback) ? fallback : ThemeLibrary.Default;
 
     /// <summary>
     /// The themes as of now, the built-ins and the user's, each file's problem said as a warning; <paramref name="report"/> false (2026-11-17,
@@ -10709,8 +10857,11 @@ internal sealed partial class SettingsMenu
         return scan;
     }
 
-    /// <summary>Saves <paramref name="palette"/>'s name (when the saved one differs) and puts it in force; true when the theme in force changed, else <see cref="ThemeAlreadyNotice"/>.</summary>
-    private bool SaveTheme(ThemePalette palette)
+    /// <summary>
+    /// Saves <paramref name="palette"/>'s name (when the saved one differs) and puts it in force; true when the theme in force changed (by
+    /// look), else <see cref="ThemeAlreadyNotice"/> unless <paramref name="quiet"/> (2026-11-20, a delete's fallback: #27).
+    /// </summary>
+    private bool SaveTheme(ThemePalette palette, bool quiet = false)
     {
         bool changed = !Theme.Current.Equals(palette);   // by look: a user theme is a new instance at every scan
         if (!string.Equals(_settings.Current.Theme, palette.Name, StringComparison.Ordinal))
@@ -10719,7 +10870,7 @@ internal sealed partial class SettingsMenu
         }
 
         Theme.Use(palette);
-        if (!changed)
+        if (!changed && !quiet)
         {
             Sink.Notice(ThemeAlreadyNotice(palette.Name));
         }
@@ -10744,9 +10895,22 @@ internal sealed partial class SettingsMenu
     /// <summary>The row of <paramref name="name"/> among <paramref name="themes"/>; an unknown one reads as the default's (<see cref="ThemeName.Default"/>, no longer the first row since the list is A to Z, 2026-10-03), else the first.</summary>
     private static int ThemeCursor(string name, IReadOnlyList<ThemePalette> themes)
     {
-        int Row(string wanted) => themes.ToList().FindIndex(t => string.Equals(t.Name, wanted, StringComparison.OrdinalIgnoreCase));
-        int row = Row(name.Trim());
-        return row >= 0 ? row : Math.Max(0, Row(ThemeName.Default));
+        int row = ThemeRow(name.Trim(), themes);
+        return row >= 0 ? row : Math.Max(0, ThemeRow(ThemeName.Default, themes));
+    }
+
+    /// <summary>The row of <paramref name="name"/> among <paramref name="themes"/> (any case), −1 when it is none (2026-11-20, #32: <see cref="ThemeCursor"/>'s own until then).</summary>
+    private static int ThemeRow(string name, IReadOnlyList<ThemePalette> themes)
+    {
+        for (int i = 0; i < themes.Count; i++)
+        {
+            if (string.Equals(themes[i].Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>The row of <paramref name="level"/> in <see cref="Llm.ReasoningLevel.Levels"/>, or -1 when it is not one.</summary>

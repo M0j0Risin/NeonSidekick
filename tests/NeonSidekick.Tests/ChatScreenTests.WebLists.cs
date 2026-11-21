@@ -45,7 +45,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task ThePagesMemories_AreSavedAsRememberSavesThem_AndDeletedInAnyMode()
+    public async Task ThePagesMemories_AreSavedAsRememberSavesThem_SavedAndDeletedInAnyMode()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MemoryMode = "read-write"; });
         var replies = new List<WebReply>();
@@ -60,7 +60,7 @@ public partial class ChatScreenTests
                 replies.Add(Web.SaveMemory(new WebTextBody { Text = "Uses Obsidian." }, IPAddress.Loopback));
                 on = Web.Memories();
                 _settings.Update(d => d.MemoryMode = "off");
-                replies.Add(Web.SaveMemory(new WebTextBody { Text = "Refused while off." }, IPAddress.Loopback));
+                replies.Add(Web.SaveMemory(new WebTextBody { Text = "Saved while off." }, IPAddress.Loopback));
                 off = Web.Memories();
                 replies.Add(Web.DeleteMemory(new WebTextBody { Text = "Likes tea." }, IPAddress.Loopback));   // deletes work in any mode
                 replies.Add(Web.DeleteMemory(new WebTextBody { Text = "Likes tea." }, IPAddress.Loopback));
@@ -72,13 +72,13 @@ public partial class ChatScreenTests
         Assert.Equal(
             [(WebOutcome.Ok, ChatScreen.RememberedNotice("Likes tea.")), (WebOutcome.Ok, ChatScreen.AlreadyRememberedNotice("Likes tea.")),
              (WebOutcome.Refused, WebUiText.DraftEmpty), (WebOutcome.Ok, ChatScreen.RememberedNotice("Uses Obsidian.")),
-             (WebOutcome.Refused, ChatScreen.MemoryOffNotice), (WebOutcome.Ok, MemoryMenu.RemovedNotice("Likes tea.")),
+             (WebOutcome.Ok, ChatScreen.RememberedNotice("Saved while off.")), (WebOutcome.Ok, MemoryMenu.RemovedNotice("Likes tea.")),
              (WebOutcome.NotFound, WebUiText.MemoryGone)],
             replies.Select(r => (r.Outcome, r.Message)));
         Assert.Equal([new WebMemory("Likes tea.", false), new WebMemory("Uses Obsidian.", false)], on!.Items);
         Assert.False(on.ModeOff);
         Assert.True(off!.ModeOff);
-        Assert.Equal(["Uses Obsidian."], new MemoryStore(_settings.ProfileDirectory).Snapshot());
+        Assert.Equal(["Uses Obsidian.", "Saved while off."], new MemoryStore(_settings.ProfileDirectory).Snapshot());
     }
 
     [Fact]

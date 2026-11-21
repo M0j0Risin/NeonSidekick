@@ -286,41 +286,14 @@ public sealed class DiffView : IRenderable, IFoldLayout
             return result;
         }
 
-        string text = string.Join('\n', lines);
-        var current = new List<(string, Style)>();
-        foreach (var token in CodeLexer.Lex(text, language))
+        foreach (var runs in CodeLexer.LexLines(lines, language))
         {
-            var code = Theme.CodeStyle(token.Kind);
-            var style = new Style(foreground: code.Foreground, decoration: code.Decoration);
-            int start = token.Start;
-            while (start < token.End)
-            {
-                int newline = text.IndexOf('\n', start, token.End - start);
-                int stop = newline < 0 ? token.End : newline;
-                if (stop > start)
-                {
-                    current.Add((text[start..stop], style));
-                }
-
-                if (newline < 0)
-                {
-                    break;
-                }
-
-                result.Add(current);
-                current = [];
-                start = newline + 1;
-            }
-        }
-
-        result.Add(current);
-
-        // A lexer that dropped trailing blank lines' breaks leaves the list short: blank rows for them.
-        while (result.Count < lines.Count)
-        {
-            result.Add([]);
+            result.Add([.. runs.Select(run => (run.Text, Ink(Theme.CodeStyle(run.Kind))))]);
         }
 
         return result;
+
+        // The code's own ink on the slab: its background dropped (the slab is the row's).
+        static Style Ink(Style code) => new(foreground: code.Foreground, decoration: code.Decoration);
     }
 }

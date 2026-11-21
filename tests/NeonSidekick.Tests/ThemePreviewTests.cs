@@ -1,6 +1,7 @@
 using NeonSidekick.Files;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
+using NeonSidekick.UI.Markdown;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using Spectre.Console.Testing;
@@ -81,7 +82,7 @@ public class ThemePreviewTests
         Assert.Equal(4, lines.Count);
         Assert.StartsWith(" " + Banner, lines[0]);
         Assert.Equal(" " + new string('─', 38) + " ", lines[1]);
-        Assert.Equal(" " + ThemeText.PreviewUser[..38] + " ", lines[2]);   // cut at the card's 38 inner cells, the margin after
+        Assert.Equal(" " + ThemeText.PreviewUser.PadRight(38) + " ", lines[2]);   // whole in the card's 38 inner cells (cut there until 2026-11-20), the margin after
         Assert.DoesNotContain(lines, string.IsNullOrWhiteSpace);
     }
 
@@ -110,8 +111,8 @@ public class ThemePreviewTests
         int note = texts.FindIndex(t => t.Contains(ThemeText.PreviewDiffNote, StringComparison.Ordinal));
         Assert.True(note > 0);
         Assert.Contains(DiffView.Elbow + "Added 1 line, removed 1 line", texts[note + 1]);
-        Assert.StartsWith(" " + DiffView.Indent + "3 - $last = " + ThemeText.PreviewDiffOld + " ", texts[note + 2]);   // string seal = …; until 2026-11-20
-        Assert.StartsWith(" " + DiffView.Indent + "3 + $last = " + ThemeText.PreviewDiffNew + " ", texts[note + 3]);
+        Assert.StartsWith(" " + DiffView.Indent + "3 - [string]$last = " + ThemeText.PreviewDiffOld + " ", texts[note + 2]);   // string seal = …; until 2026-11-20
+        Assert.StartsWith(" " + DiffView.Indent + "3 + [string]$last = " + ThemeText.PreviewDiffNew + " ", texts[note + 3]);
 
         foreach (var (row, slot) in new[] { (rows[note + 2], ThemeStyleSlot.DiffRemoved), (rows[note + 3], ThemeStyleSlot.DiffAdded) })
         {
@@ -204,6 +205,9 @@ public class ThemePreviewTests
 
         Color Ink(string text) => cells.First(s => s.Text == text).Style.Foreground;
         Assert.Equal("powershell", ThemeText.PreviewCodeLabel);
+        Assert.Same(CodeLanguages.PowerShell, CodeLanguages.Find(ThemeText.PreviewCodeLabel));   // the label is the lexer's (#67)
+        Assert.Equal(styles(ThemeStyleSlot.CodeType).Foreground, Ink("string"));   // [string]: secondary, the type color (#45)
+        Assert.Equal(palette.Secondary, styles(ThemeStyleSlot.CodeType).Foreground);
         Assert.Equal(styles(ThemeStyleSlot.CodeVariable).Foreground, Ink("$t"));
         Assert.Equal(styles(ThemeStyleSlot.CodeVariable).Foreground, Ink("$stops"));
         Assert.Equal(styles(ThemeStyleSlot.CodeNumber).Foreground, Ink("4"));
@@ -212,6 +216,36 @@ public class ThemePreviewTests
         Assert.Equal(styles(ThemeStyleSlot.CodeFunction).Foreground, Ink("Pick"));
         Assert.Equal(styles(ThemeStyleSlot.CodeComment).Foreground, Ink(ThemeText.PreviewCodeComment));
         Assert.Equal(palette.Tint, styles(ThemeStyleSlot.CodeVariable).Foreground);
+    }
+
+    /// <summary>
+    /// Every story row fits the narrowest card's 38 inner cells whole, its mark with it (2026-11-20, the memory-remember review's #64, #65); the
+    /// prose row keeps its tuned cut, and the app's own lines (the diff note, notices, menu, hint, placeholder) aren't held to it.
+    /// </summary>
+    [Fact]
+    public void EveryStoryRow_FitsTheNarrowestCard()
+    {
+        string[] rows =
+        [
+            ThemeText.PreviewUser, ThemeText.PreviewHeading, "  • " + ThemeText.PreviewBullet, "  ▌ " + ThemeText.PreviewQuote,
+            ThemeText.PreviewCodeComment, ThemeText.PreviewCodeLine, ThemeText.PreviewCodeLastName + ThemeText.PreviewDiffNew, ThemeText.PreviewThinking,
+        ];
+
+        Assert.All(rows, row => Assert.True(TextCells.Width(row) <= 38, row));
+    }
+
+    /// <summary>An 18-row card, the editor's smallest, shows the whole code block: its label and three rows (2026-11-20, #29, #41).</summary>
+    [Theory]
+    [InlineData(72)]
+    [InlineData(40)]
+    public void AnEighteenRowCard_ShowsTheWholeCodeBlock(int width)
+    {
+        var texts = ThemePreview.Lines(ShippedThemes.Synthwave, width, 18, Banner, "1.2.3").Select(line => Text(Row(line, width))).ToList();
+
+        Assert.Contains(texts, t => t.Trim() == ThemeText.PreviewCodeLabel);
+        Assert.Contains(texts, t => t.Contains(ThemeText.PreviewCodeComment, StringComparison.Ordinal));
+        Assert.Contains(texts, t => t.Contains(ThemeText.PreviewCodeLine, StringComparison.Ordinal));
+        Assert.Contains(texts, t => t.TrimStart().StartsWith(ThemeText.PreviewCodeLastName + ThemeText.PreviewDiffNew, StringComparison.Ordinal));
     }
 
     /// <summary>The edit's note tells the truth about its block (2026-11-20): three rows, and the words WorkingDirectory.Count gives them.</summary>

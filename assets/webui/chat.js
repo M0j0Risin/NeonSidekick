@@ -1810,7 +1810,7 @@ async function sendText(text, opts) {
 // meets the page's command rules; 2026-10-16, the user's ask), its ✎ puts it on the draft (ahead of what's there, with Undo; the tap's until
 // then, ➤ sending), its 🗑️ deletes it; ⇪ saves the draft as one. 🕘 History: the message history, newest first, a row and its ➤ as a
 // prompt's; clear all empties it. 💾 Memory: the profile's memories, a turned-off one marked, each with its 🗑️; ⇪ saves the draft as one
-// (refused while Memory mode is off, which the tab says). A 🗑️ or clear all is two taps, the
+// (in every Memory mode; the tab says when it's off). A 🗑️ or clear all is two taps, the
 // picture 🗑️'s way: the first arms it for 3 s, the second acts; Esc disarms first. ⇪ keeps the draft. One footer panel at a time: the sheet,
 // the drawer and the usage card replace each other — the sheet and the drawer swap their history entry (replaceState), never back-then-push,
 // whose late pop would take the new entry with it. A tab change keeps the entry. Esc, Back, ✕, a tap on the transcript or a question arriving

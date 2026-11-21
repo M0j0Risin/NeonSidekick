@@ -14,6 +14,57 @@ public static class CodeLexer
 {
     private const string PunctuationChars = "{}[]()<>=+-*/%&|^!~?:;,.@#\\";
 
+    /// <summary>
+    /// <paramref name="lines"/> lexed as one text (a block comment colours every line it spans) and cut back into exactly one list of
+    /// (text, kind) runs per line, a token crossing a line break split at it; a blank line is an empty list (2026-11-20, the memory-remember
+    /// review's #10, #30, #31: the one walk a reply's code block, a diff and the theme preview share, each drawing the runs its own way).
+    /// </summary>
+    public static IReadOnlyList<IReadOnlyList<(string Text, CodeTokenKind Kind)>> LexLines(IReadOnlyList<string> lines, CodeLanguage language)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        ArgumentNullException.ThrowIfNull(language);
+        var result = new List<IReadOnlyList<(string Text, CodeTokenKind Kind)>>(lines.Count);
+        if (lines.Count == 0)
+        {
+            return result;
+        }
+
+        string text = string.Join('\n', lines);
+        var current = new List<(string Text, CodeTokenKind Kind)>();
+        foreach (var token in Lex(text, language))
+        {
+            int start = token.Start;
+            while (start < token.End)
+            {
+                int newline = text.IndexOf('\n', start, token.End - start);
+                int stop = newline < 0 ? token.End : newline;
+                if (stop > start)
+                {
+                    current.Add((text[start..stop], token.Kind));
+                }
+
+                if (newline < 0)
+                {
+                    break;
+                }
+
+                result.Add(current);
+                current = [];
+                start = newline + 1;
+            }
+        }
+
+        result.Add(current);
+
+        // A lexer that dropped trailing blank lines' breaks leaves the list short: blank rows for them (DiffView's guard until 2026-11-20).
+        while (result.Count < lines.Count)
+        {
+            result.Add([]);
+        }
+
+        return result;
+    }
+
     public static IReadOnlyList<CodeToken> Lex(string code, CodeLanguage language)
     {
         ArgumentNullException.ThrowIfNull(code);

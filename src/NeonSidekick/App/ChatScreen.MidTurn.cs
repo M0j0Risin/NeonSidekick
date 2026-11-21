@@ -174,7 +174,7 @@ internal sealed partial class ChatScreen
     /// <c>/forget</c> was a pane too, and <c>/memcopy</c> was refused until the word folded in),
     /// <c>/msgclear</c>'s (2026-09-25) confirmation (<c>/emptytrash</c>'s too until 2026-10-01) and the <c>/reasoning</c>
     /// picker and <c>/queue</c> (2026-09-18) are <see cref="MidTurnClass.Pane"/> (<c>/expand</c> and <c>/collapse</c>, 2026-09-22 — <c>/tools expand|collapse</c> until later that day — quick like <c>/queue clear</c>), as were <c>/cmdlist</c> (2026-09-21: the <c>Shell allowed commands</c> row, which <c>/tools</c> edits under a reply too) and <c>/police</c> (2026-09-22, its <c>Shell police</c> row the same way) until they became <c>/tools shell allowed|police</c> (2026-10-09), panes with <c>/tools</c>; the four speech switches, <c>/reasoning</c>
-    /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/memory remember</c> (<c>/remember</c> until 2026-11-20), <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c>, <c>/comfy view</c> (2026-09-27, the string form of this policy) and an unknown
+    /// with a level, <c>/queue</c> with a word (<c>clear</c>, 2026-09-21: the drop on the turn task, or the usage error), <c>/copy</c>, <c>/memory remember</c> (<c>/remember</c> until 2026-11-20; quick only in the string form, which reads the word: here every <c>/memory</c> is a pane), <c>/explore</c>, <c>/log</c> (2026-09-22: an editor launch like <c>/explore</c>'s), <c>/timer</c>, <c>/comfy view</c> (2026-09-27, the string form of this policy) and an unknown
     /// command are <see cref="MidTurnClass.Quick"/>; <c>/clear</c>, <c>/new</c>, <c>/splash</c> (2026-09-19), <c>/rewind</c> (2026-09-30: it rewrites the history the turn appends to, so the reply stops and the picker opens at the idle line) and <c>/exit</c> cancel; the rest
     /// (<c>/profile</c>, <c>/theme</c> (2026-09-23, the user's call: a theme change waits for the reply to end, like its <c>Theme</c> row on the settings pane — it cancelled the reply as <c>/splash</c> does until later that day), <c>/server</c>, <c>/model</c>, <c>/compact</c>, <c>/cwd</c>, <c>/tree</c>, <c>/vault</c> (2026-09-22, as <c>/tree</c>),
     /// <c>/learn</c>, <c>/window</c>, <c>/cmdcopy</c> (2026-09-21), <c>/gituser</c> (2026-09-21), <c>/read</c> — the turn owns the transcript and the speaker —, <c>/draft</c> (2026-09-19: it would send a message the turn cannot take), <c>/loop</c> (2026-09-21, the same reason), <c>/botchat</c> (2026-09-24, the same again), <c>/plan</c> (2026-09-26: it sends a message too, and flips the tools the running turn was prepared with), the three prompt files) are refused; <c>/skills</c> is a pane (2026-09-16 as <c>/skills</c>, <c>/skill list</c> then the bare <c>/skill</c> on 2026-09-18, the plural again since 2026-09-19; <c>/skill</c> with a name was refused until later on 2026-09-18, when the name form went — an argument was <see cref="SlashCommand.Overloaded"/>, quick like an unknown command, until <c>/skills edit &lt;name&gt;</c> came on 2026-09-21: an editor launch, refused like <c>/profile edit</c>; since it went on 2026-09-23 <c>/skills</c> took none, an argument was <see cref="SlashCommand.Overloaded"/> again, and the bare word is the pane; <c>/skills add</c> is refused since 2026-09-26 — an install writes the roots a running <c>load_skill</c> reads, and its panes would sit over the reply). Pure.
@@ -282,9 +282,9 @@ internal sealed partial class ChatScreen
             CustomCommandsVerb.Save => MidTurnClass.Quick,
             _ => MidTurnClass.Deferred,
         },
-        // /webui (later on 2026-10-15, the user's ask): the pane over the reply, its buttons acting at once; copy at once; on, off and reset still wait.
         // /memory remember (2026-11-20, /remember folded in): the add at once, as /remember was; every other /memory stays a pane.
         SlashCommand.Memory when ParseMemoryArgs(args).Kind == MemoryActionKind.Remember => MidTurnClass.Quick,
+        // /webui (later on 2026-10-15, the user's ask): the pane over the reply, its buttons acting at once; copy at once; on, off and reset still wait.
         SlashCommand.WebUi when args.Trim().Length == 0 => MidTurnClass.Pane,
         SlashCommand.WebUi when string.Equals(args.Trim(), "copy", StringComparison.OrdinalIgnoreCase) => MidTurnClass.Quick,
         SlashCommand.WebUi when WebUiBrowserArgs(args) is not null => MidTurnClass.Quick,   // later on 2026-10-15: /webui browser opens at once
@@ -878,8 +878,8 @@ internal sealed partial class ChatScreen
             case SlashCommand.Copy:
                 HandleCopy(args);
                 break;
-            case SlashCommand.Memory:
-                Remember(ParseMemoryArgs(args).Text);   // only /memory remember is quick (MidTurnPolicy)
+            case SlashCommand.Memory when ParseMemoryArgs(args) is { Kind: MemoryActionKind.Remember } add:
+                Remember(_transcript, add.Text);   // only /memory remember is quick (MidTurnPolicy); any other /memory reaching here does nothing (review #5)
                 break;
             case SlashCommand.Explore:
                 HandleExplore(args);

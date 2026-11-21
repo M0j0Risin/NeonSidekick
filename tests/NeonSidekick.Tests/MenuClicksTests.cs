@@ -142,16 +142,25 @@ public class MenuClicksTests : IDisposable
         menu.Close();
     }
 
-    /// <summary>A page with a side column draws only a status's first row, so it counts one however long it is.</summary>
+    /// <summary>
+    /// A page with a side column wraps a status at the list's width (2026-11-20, the memory-remember review's #40: it drew only the first row
+    /// until then, cut), so it counts the rows it takes and a click below it still lands.
+    /// </summary>
     [Fact]
-    public async Task AStatusOnASideColumnPage_CountsOne()
+    public async Task AStatusOnASideColumnPage_CountsTheRowsItWrapsTo()
     {
         _console.Profile.Width = 100;
+        string warning = Long + " " + Long + " " + Long;
+        var probe = new TestConsole();
+        probe.Profile.Width = 36;   // the list's width beside the side column at 100
+        probe.Write(new Markup(MenuPane.StatusMarkup(MenuPane.NoticeKind.Warning, warning)));
+        int statusRows = probe.Lines.Count;
+        Assert.True(statusRows > 1);
         var (pane, input, keys) = Rig();
         using var _ = pane;
         var menu = new MenuPane(pane, keys);
-        menu.Warning(Long + " " + Long + " " + Long);   // the title 100, the status 101, the rows from 102
-        input.PushClick(3, 103);                         // "two"
+        menu.Warning(warning);                          // the title 100, the status from 101, the rows after it
+        input.PushClick(3, 101 + statusRows + 1);       // "two"
         input.Push(Keys.Enter);
 
         Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Sided("one", "two", "three"), 0, CancellationToken.None));

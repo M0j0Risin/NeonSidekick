@@ -296,41 +296,23 @@ public sealed class MarkdownView : IRenderable
 
     /// <summary>
     /// The block lexed as one text (a block comment colours every line it spans) and cut back into
-    /// one <see cref="Paragraph"/> per line, a token crossing a line break split at it.
+    /// one <see cref="Paragraph"/> per line, a token crossing a line break split at it (<see cref="CodeLexer.LexLines"/>).
     /// </summary>
     private static List<IRenderable> HighlightedCode(IReadOnlyList<string> source, CodeLanguage language)
     {
-        string text = string.Join('\n', source.Select(Untab));
         var lines = new List<IRenderable>(source.Count);
-        var line = new Paragraph();
-        bool blank = true;
-        foreach (var token in CodeLexer.Lex(text, language))
+        foreach (var runs in CodeLexer.LexLines(source.Select(Untab).ToList(), language))
         {
-            var style = Theme.CodeStyle(token.Kind);
-            int start = token.Start;
-            while (start < token.End)
+            var line = new Paragraph();
+            foreach (var (text, kind) in runs)
             {
-                int newline = text.IndexOf('\n', start, token.End - start);
-                int stop = newline < 0 ? token.End : newline;
-                if (stop > start)
-                {
-                    line.Append(text[start..stop], style);
-                    blank = false;
-                }
-
-                if (newline < 0)
-                {
-                    break;
-                }
-
-                lines.Add(blank ? line.Append(" ", Theme.MarkdownCodeBlock) : line);
-                line = new Paragraph();
-                blank = true;
-                start = newline + 1;
+                line.Append(text, Theme.CodeStyle(kind));
             }
+
+            // A blank line must keep its row (Rows skips a child that renders nothing).
+            lines.Add(runs.Count == 0 ? line.Append(" ", Theme.MarkdownCodeBlock) : line);
         }
 
-        lines.Add(blank ? line.Append(" ", Theme.MarkdownCodeBlock) : line);
         return lines;
     }
 

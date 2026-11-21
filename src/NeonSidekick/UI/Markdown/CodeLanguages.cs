@@ -90,6 +90,8 @@ public static class CodeLanguages
         "powershell",
         "begin break catch class continue data do dynamicparam else elseif end enum exit filter finally for foreach function hidden " +
         "if in param process return static switch throw trap try until using while",
+        // Its type accelerators (2026-11-20, the memory-remember review's #45): [string] and its kin as Type, as C#'s keywords' types are.
+        "array bool byte char datetime decimal double guid hashtable int long object psobject pscustomobject regex scriptblock string timespan uri void xml",
         ignoreCase: true)
     {
         LineComments = ["#"],

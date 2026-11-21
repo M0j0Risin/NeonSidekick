@@ -2969,7 +2969,7 @@ public partial class ChatScreenTests : IDisposable
     /// <summary>The Memory mode row's saved notice for <paramref name="mode"/> (2026-10-04).</summary>
     private string Saved(string mode) => SettingsMenu.SavedNotice(SettingsField.MemoryMode, new AppSettingsData { MemoryMode = mode }, _settings.ProfileDirectory);
 
-    private static string MemoryPaneTitle(MemoryAccess mode) => MemoryMenu.Title + " │ " + string.Join(" · ", MemoryMenu.Buttons(mode, add: true).Select(b => b.Title)) + " ";   // the add button after them since 2026-10-13   // Memory mode's buttons on the title row (2026-10-03; three since 2026-10-04)
+    private static string MemoryPaneTitle(MemoryAccess mode) => MemoryMenu.Title + " │ " + string.Join(" · ", MemoryMenu.Buttons(mode, remember: true).Select(b => b.Title)) + " ";   // the add button after them since 2026-10-13   // Memory mode's buttons on the title row (2026-10-03; three since 2026-10-04)
     private static readonly string PoliceTitle = ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellPolice) + " │ " + SettingsMenu.PoliceStringsTitle(0) + " ";   // /police, the officer (2026-09-22); the strings button since 2026-10-03, its count since 2026-10-04
 
     /// <summary>
@@ -3941,8 +3941,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Memory, "forget"));
     }
 
+    /// <summary>Memory mode off (2026-11-20, the memory-remember review's #58, the user's pick): the mode governs the model, so the user's own add still saves.</summary>
     [Fact]
-    public async Task Remember_WithMemoryOff_SavesNothing_AndSaysSo()
+    public async Task Remember_WithMemoryOff_StillSaves()
     {
         _settings.Update(d => d.MemoryMode = "off");
         PushLine("/memory remember my name is Chris");
@@ -3950,9 +3951,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.MemoryOffNotice, output);
-        Assert.Equal(0, _memory.Count);
-        Assert.False(File.Exists(_memory.FilePath));
+        Assert.Contains("  · (💾 remembered: my name is Chris)", output);
+        Assert.Equal(1, _memory.Count);
     }
 
     /// <summary>Memory mode read-only (2026-10-04, the user's call): about the model alone, so /memory remember, the user's own hand, still saves.</summary>
@@ -7448,7 +7448,6 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public void MemoryLabels_ArePinned()
     {
-        Assert.Equal("💾 Memory mode is off; set it in /settings (the Memory mode row) or with /memory read-write.", ChatScreen.MemoryOffNotice);
         Assert.Equal("Memory is full (200 entries); /memory forget clears it.", ChatScreen.MemoryFullError);
         Assert.Equal("(💾 nothing to forget)", ChatScreen.NothingToForgetNotice);
         Assert.Equal("(💾 remembered: x)", ChatScreen.RememberedNotice("x"));

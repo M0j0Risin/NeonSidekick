@@ -33,7 +33,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 |---|---|---|
 | Profile | Switches profile for this run; each has its own settings, persona, memory, skills and sessions. | `neon` |
 | Working directory (cwd) | The folder the file and GitLib tools work in. Enter opens the [folder picker](INTERFACE.md#folder-picker); `/cwd <path>` sets one. | empty (the profile's `files\` folder) |
-| Memory mode | Each conversation opens with the memories unless `off`. `read-write`: the model also saves them. `read-only`: it never saves one (`/memory remember` still does). `off`: none, `/memory remember` refused. | `read-only` |
+| Memory mode | Each conversation opens with the memories unless `off`. `read-write`: the model also saves them. `read-only`: it never saves one. `off`: none. `/memory remember` saves in every mode. | `read-only` |
 | Model avatar | The profile's emoji, leading its replies, `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
 | User avatar | Your emoji, leading your lines in place of `›`. Enter opens the [picker](INTERFACE.md#the-avatar-picker); 🚫 goes back to `›`. | 🙊 |
 | Check for updates at start | Asks GitHub for a newer release at each start, sending nothing about you, and shows a line and the 📦 marker. Off, nothing is asked; [`/update`](COMMANDS.md#updating) still works. | on |

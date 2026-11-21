@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using NeonSidekick.App;
+using NeonSidekick.Files;
 using NeonSidekick.Llm;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -316,7 +317,7 @@ public partial class ChatScreenTests
         WriteMine();
         InForce("mine");
         var down = Enumerable.Repeat(Keys.Down, DimRow);
-        StepsWhenIdle(Line("/theme"), Keys2([Keys.Right, .. down, Keys.Right, Keys.Char('s')]), Line("/exit"));
+        StepsWhenIdle(Line("/theme"), Keys2([Keys.Right, .. down, Keys.Right, Keys.Char('s'), Keys.Escape]), Line("/exit"));   // Esc: the list came back
 
         string output = await RunAsync();
 
@@ -335,7 +336,7 @@ public partial class ChatScreenTests
         using var theme = new ThemeScope();
         EditorPane();
         InForce("synthwave");
-        StepsWhenIdle(Line("/theme"), Keys2(Keys.Right, Keys.Char('y'), Keys.Enter, Keys.Escape), Line("/exit"));
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Right, Keys.Char('y'), Keys.Enter, Keys.Escape, Keys.Escape), Line("/exit"));   // the editor's Esc, then the list's
 
         string output = await RunAsync();
 
@@ -401,5 +402,162 @@ public partial class ChatScreenTests
         Assert.Contains("  · " + ThemeText.DeleteInForce("synthwave"), output);
         Assert.Equal("synthwave", _settings.Current.Theme);
         Assert.Equal(ShippedThemes.Synthwave, Theme.Current);
+
+        // The fallback waits for the list to close (2026-11-20, the memory-remember review's #4, #49): said on the status line before the
+        // repaint's saved line, and put in force quietly (#27).
+        int fallsBack = output.IndexOf(ThemeText.DeleteFallsBack("synthwave"), StringComparison.Ordinal);
+        Assert.InRange(fallsBack, 0, output.IndexOf(SettingsMenu.SavedNotice(SettingsField.Theme, _settings.Current, _settings.ProfileDirectory), StringComparison.Ordinal));
+        Assert.DoesNotContain(SettingsMenu.ThemeAlreadyNotice("synthwave"), output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice, output);
+    }
+
+    /// <summary>Enter on the fallback after the theme in force went (#17, #70): the cursor is on it, and the pick is a change, no "already".</summary>
+    [Fact]
+    public async Task ThemeList_Del_OnTheThemeInForce_ThenEnter_PicksTheFallback_NoAlready()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        PlainTheme("mine");
+        InForce("mine");
+        _recycleBin = new FakeRecycleBin();
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Delete, Keys.Down, Keys.Enter, Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal("synthwave", _settings.Current.Theme);
+        Assert.Equal(ShippedThemes.Synthwave, Theme.Current);
+        Assert.DoesNotContain(SettingsMenu.ThemeAlreadyNotice("synthwave"), output);
+        Assert.Contains(SettingsMenu.SavedNotice(SettingsField.Theme, _settings.Current, _settings.ProfileDirectory), output);   // repainted
+    }
+
+    /// <summary>→, Esc in the editor, then Enter on another theme (#3, #72): no "unchanged" from the visit, only the pick.</summary>
+    [Fact]
+    public async Task ThemeList_Right_ThenEscInTheEditor_ThenEnterOnAnother_SaysNoUnchanged()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        WriteMine();
+        InForce("mine");
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Right, Keys.Escape, Keys.Up, Keys.Enter), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.NotEqual("mine", Theme.Current.Name);
+        Assert.NotEqual("mine", _settings.Current.Theme);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice, output);
+    }
+
+    /// <summary>→, Esc in the editor, Esc on the list: one "unchanged", the list's.</summary>
+    [Fact]
+    public async Task ThemeList_Right_ThenEscTwice_SaysUnchangedOnce()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        WriteMine();
+        InForce("mine");
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Right, Keys.Escape, Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Equal(1, Count(output, "  · " + SettingsMenu.UnchangedNotice));
+        Assert.Equal("mine", Theme.Current.Name);
+    }
+
+    /// <summary>→ on a built-in, then No to the copy: the list is back on that built-in's row, so Enter picks it again.</summary>
+    [Fact]
+    public async Task ThemeList_Right_OnABuiltIn_ThenNo_ComesBackOnItsRow()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        InForce("synthwave");
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Right, Keys.Enter, Keys.Enter), Line("/exit"));   // →, No (the first row), Enter on the list
+
+        string output = await RunAsync();
+
+        Assert.False(File.Exists(Path.Combine(_settings.ThemesDirectory, "synthwave-custom.json")));
+        Assert.Contains(SettingsMenu.ThemeAlreadyNotice("synthwave"), output);   // the cursor stayed on synthwave
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice, output);    // the No holds nothing in the list
+    }
+
+    /// <summary>→ on a built-in, yes, Esc in the editor: the copy is said, the cursor on its row, and no "unchanged" follows.</summary>
+    [Fact]
+    public async Task ThemeList_Right_OnABuiltIn_MakesTheCopy_AndTheCursorLandsOnIt()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        InForce("synthwave");
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Right, Keys.Char('y'), Keys.Enter, Keys.Escape, Keys.Enter), Line("/exit"));   // y moves to Yes
+
+        string output = await RunAsync();
+
+        string copy = Path.Combine(_settings.ThemesDirectory, "synthwave-custom.json");
+        Assert.True(File.Exists(copy));
+        Assert.Contains("  · " + BeforePath(ThemeText.EditCopied("synthwave", "synthwave-custom", copy), copy).TrimEnd('(', ' '), output);   // "(path" wraps whole
+        Assert.Equal("synthwave-custom", _settings.Current.Theme);   // Enter landed on the copy's row
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice, output);
+    }
+
+    /// <summary>A row whose file went after the list was read (#38): nothing asked, the list read again, and the line says why.</summary>
+    [Fact]
+    public async Task ThemeList_Del_OnARowWhoseFileWent_SaysTheFolderChanged_NothingAsked()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        string mine = PlainTheme("mine");
+        PlainTheme("mine2");
+        InForce("mine2");
+        var bin = new FakeRecycleBin();
+        _recycleBin = bin;
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Up), input =>
+        {
+            File.Delete(mine);
+            input.Push(Keys.Delete, Keys.Escape);
+        }, Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ThemeText.ThemesChanged, output);
+        Assert.DoesNotContain(ThemeText.DeleteQuestion("mine", Path.Combine("themes", "mine.json"), toBin: true, revealsBuiltIn: false).Split('\n')[0], output);
+        Assert.Empty(bin.Moved);
+        Assert.Equal("mine2", Theme.Current.Name);
+    }
+
+    /// <summary>A file that went while the question stood (#38): no done line, the bin never called, the folder's change said.</summary>
+    [Fact]
+    public async Task ThemeList_Del_AFileGoneWhileAsked_SaysTheFolderChanged_AndDeletesNothing()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        string mine = PlainTheme("mine");
+        PlainTheme("mine2");
+        InForce("mine2");
+        var bin = new FakeRecycleBin { OnProbe = _ => File.Delete(mine) };   // the probe runs just before the question
+        _recycleBin = bin;
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Up, Keys.Delete, Keys.Down, Keys.Enter, Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(ThemeText.ThemesChanged, output);
+        Assert.DoesNotContain(ThemeText.DeleteDone("mine", toBin: true), output);
+        Assert.Empty(bin.Moved);
+    }
+
+    /// <summary>A bin that refuses (#28): the file kept, the error on the status line and held, so the transcript keeps it and Esc says no "unchanged".</summary>
+    [Fact]
+    public async Task ThemeList_Del_ABinThatRefuses_KeepsTheFile_AndTheErrorIsHeld()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        string mine = PlainTheme("mine");
+        PlainTheme("mine2");
+        InForce("mine2");
+        _recycleBin = new FakeRecycleBin { Answer = new RecycleResult(RecycleOutcome.Failed, "locked") };
+        StepsWhenIdle(Line("/theme"), Keys2(Keys.Up, Keys.Delete, Keys.Down, Keys.Enter, Keys.Escape), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.True(File.Exists(mine));
+        Assert.Contains(ThemeText.DeleteFailed("locked"), output);
+        Assert.DoesNotContain("  · " + SettingsMenu.UnchangedNotice, output);
     }
 }

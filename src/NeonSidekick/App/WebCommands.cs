@@ -194,7 +194,8 @@ public static class WebCommands
             SlashCommand.Rename => text.Length > 0 ? WebCommandVerdict.Run : Pane(word, "/rename <name>"),
             SlashCommand.Tts or SlashCommand.Voice => Is(text, "on") || Is(text, "off") ? WebCommandVerdict.Run : Pane(word, word + " on|off"),
             // /memory remember <text> (2026-11-20, /remember folded in) runs as /remember did, its usage error too.
-            SlashCommand.Memory => MemoryModes.Any(m => Is(text, m)) || Is(first, ChatScreen.MemoryRememberWord) ? WebCommandVerdict.Run
+            // The screen's own grammar (2026-11-20, review #6): a mode word, disabled among them, as at the PC.
+            SlashCommand.Memory => ChatScreen.ParseMemoryArgs(text).Kind is MemoryActionKind.Mode or MemoryActionKind.Remember ? WebCommandVerdict.Run
                 : Pane(word, "/memory read-write|read-only|off|remember <text>"),
             SlashCommand.Cwd => text.Length == 0 ? WebCommandVerdict.Run : Refused(WebUiText.PcOnly(word + " <path>")),
             // 2026-10-27: /ha stills is the PC's (its windows, and a purge from the phone must not delete files without the PC's yes).
@@ -282,9 +283,6 @@ public static class WebCommands
 
     /// <summary><c>/learn</c>'s word for its stored sessions' form.</summary>
     public const string LearnSessionsWord = "sessions";
-
-    /// <summary>The words <c>/memory</c> takes for a mode (<c>on</c>, read-write's alias, went on 2026-11-20: the page shows the pane for it, as for any unknown word).</summary>
-    public static readonly IReadOnlyList<string> MemoryModes = ["read-write", "read-only", "off"];
 
     private static WebCommandVerdict Refused(string reason) => new(WebCommandKind.Refused, reason);
 

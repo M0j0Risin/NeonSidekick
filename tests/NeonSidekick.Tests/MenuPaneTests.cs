@@ -1233,6 +1233,36 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// A status line beside the side column wraps at the list's width (2026-11-20, the memory-remember review's #40: cut there until then), the
+    /// editor's save failure among them: every word shows, and a click on a list row still lands on it under the taller status.
+    /// </summary>
+    [Fact]
+    public async Task AStatusLine_BesideTheSideColumn_Wraps_AndClicksStillLand()
+    {
+        _console.Profile.Width = 100;
+        _console.Profile.Height = 30;
+        string error = ThemeText.EditFailed("Access to the path '" + Path.Combine("themes", "mine.json") + "' is denied by the system.");
+        var probe = new TestConsole();
+        probe.Profile.Width = 36;
+        probe.Write(new Markup(MenuPane.StatusMarkup(MenuPane.NoticeKind.Error, error)));
+        int statusRows = probe.Lines.Count;
+        Assert.True(statusRows > 1);
+
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var menu = new MenuPane(pane, keys);
+        menu.Error(error);
+        input.PushClick(3, 100 + 1 + statusRows + 2);   // "three": the title row, the status's rows, then one, two
+        input.Push(Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 2), await menu.PickAsync(Sided("one", "two", "three"), 0, CancellationToken.None));
+        Assert.All(error.Split(' '), word => Assert.Contains(word, Output));
+        Assert.DoesNotContain("…", Output);
+        menu.Close();
+    }
+
     [Fact]
     public async Task AClickOnTheSideColumn_DoesNothing_OneOnTheList_StillMoves()
     {
@@ -2033,21 +2063,101 @@ public class MenuPaneTests : IDisposable
         Assert.Equal([("only a note", true)], MenuPane.CaptionLines(new MenuPage("t", ["a"], "h") { CaptionNote = "only a note" }, 20, 3));
     }
 
-    /// <summary>→ on a <see cref="MenuPage.RightButton"/> page presses that button (2026-11-20, /theme's edit); without one, or on a tabbed page, it is what it was.</summary>
+    /// <summary>
+    /// A button's named key presses it (2026-11-20, MenuButton.NamedKey, the memory-remember review's #19, #20, #37: /theme's → edit): on a stop row,
+    /// never on a placeholder page or one with no stop; a tabbed page's by the letter key's rule (a button tied to the tab, or TabButtons), else
+    /// → steps the tabs as ever. Delete stays the remove.
+    /// </summary>
     [Fact]
-    public async Task RightButton_PressesItsButton_OnlyWhereSet()
+    public async Task ANamedKey_PressesItsButton_OnlyWhereItMay()
     {
         using var pane = Pane();
         pane.Show();
         var menu = new MenuPane(pane, _keys);
-        var page = Page("a", "b") with { Buttons = [new MenuButton("edit", null), new MenuButton("delete", null)], RightButton = 0 };
+        MenuButton[] buttons = [new MenuButton("edit", null) { NamedKey = ConsoleKey.RightArrow }, new MenuButton("delete", null)];
+        var page = Page("a", "b") with { Buttons = buttons };
 
         Push(Keys.Down, Keys.Right);
         Assert.Equal(new MenuPick(0, 1, Button: 0), await menu.PickAsync(page, 0, CancellationToken.None));
         Push(Keys.Right, Keys.Enter);
-        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(page with { RightButton = null }, 0, CancellationToken.None));   // → nothing, then Enter
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(page with { Buttons = [new MenuButton("edit", null), buttons[1]] }, 0, CancellationToken.None));   // → nothing, then Enter
         Push(Keys.Delete);
         Assert.Equal(new MenuPick(0, 0, Remove: true), await menu.PickAsync(page with { Removes = true }, 0, CancellationToken.None));
+        Push(Keys.Right, Keys.Escape);
+        Assert.Null(await menu.PickAsync(page with { Placeholder = true }, 0, CancellationToken.None));   // a placeholder: no press
+        Push(Keys.Right, Keys.Escape);
+        Assert.Null(await menu.PickAsync(Page(SectionRule.Markup("Only"), "", "") with { Headings = new HashSet<int> { 0 }, Buttons = buttons }, 0, CancellationToken.None));   // no stop
+
+        // A tabbed page: → steps the tabs unless the button is tied to the tab on show.
+        Push(Keys.Right, Keys.Enter);
+        Assert.Equal(new MenuPick(1, 0), await menu.PickAsync(Tabbed(0) with { Buttons = buttons }, 0, CancellationToken.None));
+        Push(Keys.Right);
+        Assert.Equal(new MenuPick(0, 0, Button: 0), await menu.PickAsync(Tabbed(0) with { Buttons = [buttons[0] with { Tab = 0 }] }, 0, CancellationToken.None));
+        Push(Keys.Right, Keys.Enter);
+        Assert.Equal(new MenuPick(2, 0), await menu.PickAsync(Tabbed(1) with { Buttons = [buttons[0] with { Tab = 0 }] }, 0, CancellationToken.None));   // another tab's
+        Assert.Equal(0, MenuPane.NamedButtonFor(buttons, ConsoleKey.RightArrow, null));
+        Assert.Null(MenuPane.NamedButtonFor(buttons, ConsoleKey.LeftArrow, null));
+        menu.Close();
+    }
+
+    /// <summary>A held named key (2026-11-20): its queued presses go with the first, so none reaches the next page; another key queued stays.</summary>
+    [Fact]
+    public async Task ANamedKey_TakesItsQueuedPresses_AndLeavesTheNextKey()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var page = Page("a", "b") with { Buttons = [new MenuButton("edit", null) { NamedKey = ConsoleKey.RightArrow }] };
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Enter);
+
+        Assert.Equal(new MenuPick(0, 0, Button: 0), await menu.PickAsync(page, 0, CancellationToken.None));
+        Assert.Equal(new MenuPick(0, 1), await menu.PickAsync(Page("a", "b"), 0, CancellationToken.None));   // → → gone; Down and Enter left
+        menu.Close();
+    }
+
+    /// <summary>A question over a list (2026-11-20, the memory-remember review's #26): the list comes back on the rows it showed, not scrolled anew.</summary>
+    [Fact]
+    public async Task AList_AfterAQuestion_GetsItsViewportBack()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var rows = Enumerable.Range(1, 10).Select(i => "row " + i).ToArray();
+        var question = new MenuPage("Delete row 10?", ["no", "yes"], "Enter = pick");
+
+        Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 9), await menu.PickAsync(Page(rows), 9, CancellationToken.None));   // rows 6 to 10 on show
+        Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(question, 0, CancellationToken.None));
+        Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 5), await menu.PickAsync(Page(rows), 5, CancellationToken.None));
+
+        // Rows 6 to 10 again, the cursor on row 6 at the top: without the stash it read rows 2 to 6, row 6 at the bottom.
+        Assert.Contains("\n▸ row 6\n  row 7\n  row 8\n  row 9\n  row 10\n  " + MenuPane.MoreHint(5, 5, 10) + "\n", Output);
+        Assert.DoesNotContain("\n  row 2\n  row 3\n  row 4\n  row 5\n▸ row 6\n", Output);
+        menu.Close();
+    }
+
+    /// <summary>Two other pages in turn over a list (→ edit's question, then the editor's page): the list's viewport is the one given back.</summary>
+    [Fact]
+    public async Task AList_AfterTwoOtherPages_GetsItsOwnViewportBack()
+    {
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        var rows = Enumerable.Range(1, 10).Select(i => "row " + i).ToArray();
+        var other = Enumerable.Range(1, 10).Select(i => "cell " + i).ToArray();
+
+        Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 9), await menu.PickAsync(Page(rows), 9, CancellationToken.None));
+        Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(new MenuPage("Copy it?", ["no", "yes"], "Enter = pick"), 0, CancellationToken.None));
+        Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 0), await menu.PickAsync(new MenuPage("Editor", other, "Enter = pick"), 0, CancellationToken.None));
+        Push(Keys.Enter);
+        Assert.Equal(new MenuPick(0, 5), await menu.PickAsync(Page(rows), 5, CancellationToken.None));
+
+        Assert.Contains("\n▸ row 6\n  row 7\n  row 8\n  row 9\n  row 10\n  " + MenuPane.MoreHint(5, 5, 10) + "\n", Output);
         menu.Close();
     }
 

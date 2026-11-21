@@ -166,6 +166,79 @@ public partial class SettingsMenuTests
         Assert.Contains(ThemeText.DeleteInForce("noir"), Held());
     }
 
+    /// <summary>A typed delete of an in-force file named like the default (#27): the fallback put in force quietly, no "already" line.</summary>
+    [Fact]
+    public async Task ThemeDelete_AnInForceFileNamedSynthwave_SaysNoAlready()
+    {
+        using var theme = new ThemeScope();
+        UserTheme("synthwave");
+        _settings.Update(d => d.Theme = "synthwave");
+        ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);
+        Assert.False(Theme.Current.IsBuiltIn);
+
+        await _menu.DeleteThemeAsync("synthwave", Answer(true, []), null, CancellationToken.None);
+
+        string held = Held();
+        Assert.Contains(ThemeText.DeleteDone("synthwave", toBin: false), held);
+        Assert.Contains(ThemeText.DeleteInForce("synthwave"), held);
+        Assert.DoesNotContain(SettingsMenu.ThemeAlreadyNotice("synthwave"), held);
+        Assert.Same(ShippedThemes.Synthwave, Theme.Current);
+    }
+
+    /// <summary>
+    /// The <c>/theme</c> list cancelled after a Del took the theme in force (2026-11-20, #68): a cancel reads as Esc, so the fallback is in
+    /// force, the list says it changed, a repaint is owed, and no "unchanged" line follows.
+    /// </summary>
+    [Fact]
+    public async Task ThemeList_CancelledAfterAnInForceDelete_PutsTheFallbackInForce()
+    {
+        using var theme = new ThemeScope();
+        UserTheme("zz1");
+        _settings.Update(d => d.Theme = "zz1");
+        ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);
+        var (menu, _) = PaneMenu();
+        using var cancel = new CancellationTokenSource();
+        menu.ThemeBin = () => new FakeRecycleBin { AnswerFor = _ => { cancel.Cancel(); return new RecycleResult(RecycleOutcome.Recycled); } };
+        Push(Keys.Delete, Keys.Down, Keys.Enter);
+
+        Assert.True(await menu.PickThemeAsync("", cancel.Token));
+
+        Assert.Equal("synthwave", _settings.Current.Theme);
+        Assert.Equal(ShippedThemes.Synthwave, Theme.Current);
+        Assert.True(menu.TakeRepaintOwed());
+        menu.PrintHeld();
+        Assert.Contains(ThemeText.DeleteInForce("synthwave"), _console.Output);
+        Assert.DoesNotContain(SettingsMenu.UnchangedNotice, _console.Output);
+    }
+
+    /// <summary>
+    /// A throw out of the <c>/theme</c> list after a Del took the theme in force (#68): the list's finally still puts the fallback in force and
+    /// saves it, so profile.json never names the deleted theme, and the screen is told a repaint is owed (taken once).
+    /// </summary>
+    [Fact]
+    public async Task ThemeList_AThrowAfterAnInForceDelete_StillPutsTheFallbackInForce()
+    {
+        using var theme = new ThemeScope();
+        UserTheme("zz1");
+        UserTheme("zz2");
+        _settings.Update(d => d.Theme = "zz1");
+        ThemeName.Apply(_settings.Current, _settings.ThemesDirectory);
+        var (menu, _) = PaneMenu();
+        int moves = 0;
+        var bin = new FakeRecycleBin { AnswerFor = _ => moves++ == 0 ? new RecycleResult(RecycleOutcome.Recycled) : throw new InvalidOperationException("bin broke") };
+        menu.ThemeBin = () => bin;
+        // zz1 (in force) deleted, the cursor on the fallback; z jumps to zz2, the last row; its delete throws.
+        Push(Keys.Delete, Keys.Down, Keys.Enter, Keys.Char('z'), Keys.Delete, Keys.Down, Keys.Enter);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => menu.PickThemeAsync("", CancellationToken.None));
+
+        Assert.Equal(2, bin.Moved.Count);
+        Assert.Equal("synthwave", _settings.Current.Theme);
+        Assert.Equal(ShippedThemes.Synthwave, Theme.Current);
+        Assert.True(menu.TakeRepaintOwed());
+        Assert.False(menu.TakeRepaintOwed());
+    }
+
     [Fact]
     public async Task ThemeDelete_AThemeNamedDelete_StillLoads_AndOnlyTheFirstWordIsTheVerb()
     {

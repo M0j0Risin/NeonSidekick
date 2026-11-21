@@ -700,7 +700,7 @@ public static class WebUiText
     public const string MemoryOff = "off";
 
     /// <summary>The memory tab's line while <i>Memory mode</i> is off.</summary>
-    public const string MemoryModeOff = "Memory is off: the model doesn't see these, and saving is refused (/memory read-write turns it on).";
+    public const string MemoryModeOff = "Memory is off: the model doesn't see these (/memory read-write turns it on).";
 
     /// <summary>A delete of a saved prompt that is gone already.</summary>
     public const string PromptGone = "That prompt is no longer saved.";
