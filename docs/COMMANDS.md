@@ -104,7 +104,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 |---|---|
 | `/profile [<name>]` | Switches profiles for this run: a picker, or the one named. See [Profiles](#profiles). |
 | `/profile add\|delete <name>`, `/profile rename <name> <new-name>` | Creates a profile (from this one's settings, memories and saved prompts), deletes one, or renames one. |
-| `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars (and *Embedded servers enabled* with an embedded URL, *Docker servers enabled* with a container's) unless `--all`. |
+| `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars (and *Embedded servers enabled* with an embedded URL, *Docker servers enabled* with a chosen container's) unless `--all`. |
 | `/profile push\|pull <name>` | Copies every setting but the working directory; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the six API keys; one the source lacks is cleared in the target, one set only by a variable isn't copied. |
 | `/profile push\|pull servers <name>` | Replaces the target's server settings (server, model, reasoning, sampling, one local model, the Embedded, Docker, Anthropic and OpenAI tabs but the keys). |

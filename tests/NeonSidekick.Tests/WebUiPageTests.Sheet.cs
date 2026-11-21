@@ -409,4 +409,29 @@ public sealed partial class WebUiPageTests
         Assert.True((await page.EvalAsync(
             "(() => { const d = " + Draft + ".getBoundingClientRect(), x = document.getElementById('clear-draft').getBoundingClientRect(); return x.right <= d.left + " + Draft + ".clientLeft + " + Draft + ".clientWidth + 0.5; })()")).GetBoolean());
     }
+
+    /// <summary>
+    /// A failed read on Prompts, History or Memory (the ctx-reset review's #1, 2026-11-21): the tab drawn empty, saying why, never the tab
+    /// before's rows (a Queue ✕ still live) under its name; focus kept in the sheet.
+    /// </summary>
+    [WindowsTheory]
+    [InlineData("prompts", "/api/prompts")]
+    [InlineData("history", "/api/history")]
+    [InlineData("memory", "/api/memory")]
+    public async Task AFailedReadOnATab_DrawsItEmpty_NeverTheTabBeforesRows(string tab, string path)
+    {
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await OpenQueueAsync(page);
+        await page.EvalAsync(QueueRemoves + "[0].focus()");
+        await page.EvalAsync("(() => { const real = Neon.get; Neon.get = (p, e) => p === " + JsonSerializer.Serialize(path) + " ? Promise.resolve({ ok: false, status: 500, json: null }) : real(p, e); })()");
+        await ClickTabAsync(page, tab);
+        await page.WaitAsync("document.querySelector('#prompts .sheet-tab.on').dataset.tab === " + JsonSerializer.Serialize(tab)
+            + " && document.getElementById('prompts-note').textContent === " + JsonSerializer.Serialize(WebUiText.ManageReadFailed), "the failure said");
+        Assert.Equal(0, (await page.EvalAsync("document.getElementById('prompts-list').childElementCount")).GetInt32());
+        Assert.True((await page.EvalAsync("document.getElementById('prompts').contains(document.activeElement)")).GetBoolean(), "focus in the sheet");
+    }
 }

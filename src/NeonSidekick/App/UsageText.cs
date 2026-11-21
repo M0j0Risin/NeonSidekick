@@ -777,9 +777,9 @@ public static class UsageText
     }
 
     /// <summary>
-    /// The performance bar's CTX share (2026-11-21, the user's ask): the share the Status bar's usage shows, from the same figure, so the two
-    /// never disagree. Idle and under <see cref="MidTurnUsage.LastKnown"/> the last request's; under <see cref="MidTurnUsage.Estimate"/>,
-    /// while a request streams, that plus the chunks streamed. Null while the window is unknown (the meter left out); 0 with nothing in use
+    /// The performance bar's CTX share (2026-11-21, the user's ask): counted as the Status bar's usage counts it, from the same figure (shown
+    /// where the Status bar hides its usage, as after a connect; a review). Idle and under <see cref="MidTurnUsage.LastKnown"/> the last request's; under <see cref="MidTurnUsage.Estimate"/>,
+    /// while a request streams, that plus the chunks streamed. Null while the window is unknown (the meter shows –); 0 with nothing in use
     /// (before the first reply, after <c>/clear</c>). Not hidden by <see cref="TokenTally.HintHidden"/>: after a connect the history and its
     /// size cross over, the auto-compact judges by the same figure, and the meter shows no speed to mislead. Pure.
     /// </summary>

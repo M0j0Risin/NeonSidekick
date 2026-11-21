@@ -254,10 +254,12 @@ public sealed partial class WebUiPageTests
 
     /// <summary>
     /// The checked choice reads at a glance (2026-11-21): the accent ring is on it alone; and the two groups' buttons share columns, each 44 px
-    /// tall, on a phone (the labels over their rows) and on a desktop, no row wider than the list.
+    /// tall, on a phone (the labels over their rows, to 520 px) and on a desktop, no row wider than the list and no choice's word cut.
     /// </summary>
     [WindowsTheory]
     [InlineData(390)]
+    [InlineData(430)]
+    [InlineData(480)]
     [InlineData(1024)]
     public async Task TheModes_MarkTheCheckedOne_AndLineUpInColumns(int width)
     {
@@ -276,7 +278,9 @@ public sealed partial class WebUiPageTests
         Assert.Equal("true,true,true", lines);
         Assert.True((await page.EvalAsync("Math.min(...[...document.querySelectorAll('#prompts-list .manage-choice')].map(b => b.getBoundingClientRect().height))")).GetDouble() >= 44);
         Assert.True((await page.EvalAsync("(() => { const list = document.getElementById('prompts-list'); return list.scrollWidth <= list.clientWidth && document.documentElement.scrollWidth <= innerWidth; })()")).GetBoolean(), "no row wider than the list");
-        if (width <= 420)
+        // Every choice's word whole, just over the narrow line too (a review, 2026-11-21: "automatic" cut below ~486 px).
+        Assert.Equal("", await page.TextAsync("[...document.querySelectorAll('#prompts-list .manage-choice-name')].filter(n => n.scrollWidth > n.clientWidth + 1).map(n => n.textContent).join()"));
+        if (width <= 520)
         {
             // The label on a row of its own, over its buttons.
             Assert.True((await page.EvalAsync("(() => { const l = " + ModeGroup + ".querySelector('.manage-choice-label').getBoundingClientRect(); const b = " + ModeGroup + ".querySelector('.manage-choice').getBoundingClientRect(); return l.bottom <= b.top + 1; })()")).GetBoolean());
@@ -298,5 +302,200 @@ public sealed partial class WebUiPageTests
         Assert.Equal(WebUiText.ManageReadFailed, await page.TextAsync("document.getElementById('prompts-note').textContent"));
         await ClickTabAsync(page, "prompts");
         await page.WaitAsync(Rows + ".length === 1 && document.getElementById('prompts-note').textContent === ''", "Prompts read, the note cleared");
+    }
+
+    // ── Races (the ctx-reset review, 2026-11-21) ──
+
+    /// <summary>
+    /// Neon.get wrapped for the race tests: <c>window.__hold = path</c> holds that path's next read (fetched at once, answered at
+    /// <c>window.__release()</c>, so a held answer is the view as it was), <c>window.__fail = path</c> fails every read of it, and
+    /// <c>window.__reads</c> counts the Queue reads asked for, <c>window.__statuses</c> their statuses as they arrive.
+    /// </summary>
+    private const string ReadsWrapped = "(() => { const real = Neon.get; window.__release = null; window.__hold = null; window.__fail = null; window.__reads = 0; window.__statuses = [];"
+        + " Neon.get = (p, e) => { if (p === window.__fail) return Promise.resolve({ ok: false, status: 500, json: null }); if (p === '/api/queue') window.__reads++;"
+        + " const got = real(p, e).then(r => { if (p === '/api/queue') window.__statuses.push(r.status); return r; });"
+        + " if (window.__hold === p) { window.__hold = null; return new Promise(r => { window.__release = () => got.then(r); }); } return got; }; })()";
+
+    private const string NoteSays = "document.getElementById('prompts-note').textContent === ";
+
+    /// <summary>
+    /// A switch to Queue superseded by a state push whose own read fails (#8): the tab is drawn empty, saying why, never with the Prompts
+    /// rows it came from still showing (and live) under Queue's name.
+    /// </summary>
+    [WindowsFact]
+    public async Task ASwitchToQueue_SupersededByAFailedRefresh_DrawsTheTabEmpty_NotThePromptsRows()
+    {
+        _backend.PromptList.Add("one");
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await OpenQueueAsync(page);
+        await ClickTabAsync(page, "prompts");
+        await page.WaitAsync(Rows + ".length === 1", "the Prompts rows");
+        await page.EvalAsync(ReadsWrapped);
+        await page.EvalAsync("window.__hold = '/api/queue'");
+        await ClickTabAsync(page, "queue");
+        await page.WaitAsync("window.__release !== null && " + OnQueue, "the switch's read held");
+        await page.EvalAsync("window.__fail = '/api/queue'");
+        Publish("state", Json(State() with { QueueTag = "moved" }));   // the refresh it starts fails
+        await page.WaitAsync(NoteSays + JsonSerializer.Serialize(WebUiText.ManageReadFailed), "the refresh's failure said");
+        await page.EvalAsync("window.__release(); window.__released = true");
+        await page.WaitAsync("window.__released === true", "released");
+        await Task.Delay(300);
+        Assert.True((await page.EvalAsync(OnQueue + " && " + Rows + ".length === 0 && " + QueueRows + ".length === 0")).GetBoolean(), "drawn empty");
+    }
+
+    /// <summary>
+    /// The same race with a refresh the PC answers 304 (#8): the Queue rows it held are drawn, since the list shows another tab's; and a state
+    /// push with the tag unchanged never starts a second read (the switch stamps the tag before it reads).
+    /// </summary>
+    [WindowsFact]
+    public async Task ASwitchToQueue_AfterAnotherTab_DrawsA304sRows_AndAnUnchangedTagStartsNoRefresh()
+    {
+        _backend.PromptList.Add("one");
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await OpenQueueAsync(page);
+        await ClickTabAsync(page, "prompts");
+        await page.WaitAsync(Rows + ".length === 1", "the Prompts rows");
+        await page.EvalAsync(ReadsWrapped);
+
+        // The tag moved while Prompts showed, then a push with it unchanged mid-switch: one read (the tag held was the last Queue draw's).
+        Publish("state", Json(State() with { QueueTag = "t2" }));
+        await page.WaitAsync("queueTagNow() === 't2'", "the tag moved on Prompts");
+        await page.EvalAsync("window.__hold = '/api/queue'");
+        await ClickTabAsync(page, "queue");
+        await page.WaitAsync("window.__release !== null", "held");
+        Publish("state", Json(State() with { QueueTag = "t2", Busy = true }));
+        await page.WaitAsync("state.busy === true", "the push arrived");
+        await Task.Delay(300);
+        await page.EvalAsync("window.__release()");
+        await page.WaitAsync(QueueRows + ".length > 0 && " + Rows + ".length === 0", "the Queue rows");
+        await Task.Delay(300);
+        Assert.Equal(1, (await page.EvalAsync("window.__reads")).GetInt32());
+
+        // A real move with a 304: the refresh's held view is drawn over the Prompts rows.
+        await ClickTabAsync(page, "prompts");
+        await page.WaitAsync(Rows + ".length === 1", "the Prompts rows again");
+        await page.EvalAsync("window.__hold = '/api/queue'");
+        await ClickTabAsync(page, "queue");
+        await page.WaitAsync("window.__release !== null && window.__reads === 2", "held again");
+        Publish("state", Json(State() with { QueueTag = "t3" }));
+        await page.WaitAsync("window.__reads === 3 && window.__statuses.length === 3 && window.__statuses[2] === 304", "the refresh's 304");
+        await page.WaitAsync(QueueRows + ".length > 0 && " + Rows + ".length === 0", "the Queue rows drawn by the 304");
+        await page.EvalAsync("window.__release()");
+    }
+
+    /// <summary>A close orphans a refresh in flight (#22): reopened at once, the sheet shows the new view, never the stale read's.</summary>
+    [WindowsFact]
+    public async Task AQuickCloseAndReopen_NeverDrawsAStaleRefresh()
+    {
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await OpenQueueAsync(page);
+        await page.EvalAsync(ReadsWrapped);
+        await page.EvalAsync("window.__hold = '/api/queue'");
+        _backend.QueueView = new WebQueueView([new WebQueuePcLine(0, "the stale one", 0)], [], "automatic", "empty", false, false, QueueMode.Names, QueueCancelMode.Names);
+        Publish("state", Json(State() with { QueueTag = "moved" }));
+        await page.WaitAsync("window.__release !== null && window.__statuses.length === 1 && window.__statuses[0] === 200", "the refresh read the stale view, held");
+        await KeyAsync(page, "Escape", "document.body");
+        await page.WaitAsync(SheetHidden, "closed");
+
+        _backend.QueueView = new WebQueueView([new WebQueuePcLine(0, "the new one", 0)], [], "automatic", "empty", false, false, QueueMode.Names, QueueCancelMode.Names);
+        await page.EvalAsync("document.getElementById('prompts-button').click()");
+        await page.WaitAsync(SheetShown + " && " + OnQueue + " && [...document.querySelectorAll('#prompts-list .manage-text')].map(t => t.textContent).join('|') === 'the new one'", "the new view");
+        await page.EvalAsync("window.__release(); window.__released = true");
+        await page.WaitAsync("window.__released === true", "released");
+        await Task.Delay(300);
+        Assert.Equal("the new one", await page.TextAsync("[...document.querySelectorAll('#prompts-list .manage-text')].map(t => t.textContent).join('|')"));
+    }
+
+    /// <summary>A ✕'s answer that lands after a switch to another tab (#9): said on the page's line, not on that tab's note.</summary>
+    [WindowsFact]
+    public async Task AnXsAnswer_AfterASwitch_IsSaidOnThePagesLine()
+    {
+        _backend.PromptList.Add("one");
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await OpenQueueAsync(page);
+        await page.EvalAsync("(() => { const real = window.fetch; window.__held = []; window.fetch = (u, o) => String(u).includes('/api/queue/remove') ? new Promise(r => window.__held.push(() => real(u, o).then(r))) : real(u, o); })()");
+        await page.EvalAsync(QueueRemoves + "[0].click(); " + QueueRemoves + "[0].click()");
+        await page.WaitAsync("window.__held.length === 1", "the remove's post held");
+        await ClickTabAsync(page, "prompts");
+        await page.WaitAsync(Rows + ".length === 1", "on Prompts");
+        _backend.QueueReply = new WebReply(WebOutcome.Ok, "Taken back.");
+        await page.EvalAsync("window.__held.forEach(f => f())");
+        await page.WaitAsync("document.getElementById('message').textContent === 'Taken back.'", "said on the page's line");
+        Assert.Equal("", await page.TextAsync("document.getElementById('prompts-note').textContent"));
+        Assert.Equal(1, (await page.EvalAsync(Rows + ".length")).GetInt32());   // the refresh never drew Queue over it
+    }
+
+    /// <summary>
+    /// Focus survives the Queue redraw (#14, #19): on a ✕ after a removal's redraw, on the group's checked radio after a redraw a state push
+    /// started; and after a failed mode post (a 304 re-read, nothing redrawn) back on the checked radio, not the one the arrow reached.
+    /// </summary>
+    [WindowsFact]
+    public async Task FocusSurvivesTheQueueRedraw_OnAnX_AndOnARadioGroup_AndAFailedPickGoesBack()
+    {
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await OpenQueueAsync(page);
+        _backend.QueueView = new WebQueueView([], [new WebQueueLine(4, "from the phone", false), new WebQueueLine(5, App.BotChat.ResumeLine, true)],
+            "automatic", "empty", false, false, QueueMode.Names, QueueCancelMode.Names);
+        await page.EvalAsync(QueueRemoves + "[0].focus(); " + QueueRemoves + "[0].click(); " + QueueRemoves + "[0].click()");
+        await UntilAsync(() => _backend.QueueActions.Contains("remove 0 at the pc"), "the PC line's remove");
+        await page.WaitAsync("[...document.querySelectorAll('#prompts-list .manage-text')].length === 2 && document.activeElement.classList.contains('manage-remove')", "focus on the ✕ left");
+
+        await page.EvalAsync(ModeGroup + ".querySelector('[data-name=\"automatic\"]').focus({ preventScroll: true })");
+        _backend.QueueView = new WebQueueView([], [new WebQueueLine(4, "from the phone", false)], "automatic", "empty", false, false, QueueMode.Names, QueueCancelMode.Names);
+        Publish("state", Json(State() with { QueueTag = "moved" }));
+        await page.WaitAsync("[...document.querySelectorAll('#prompts-list .manage-text')].length === 1", "the push's redraw");
+        Assert.Equal("automatic", await page.TextAsync(ModeGroup + ".contains(document.activeElement) && document.activeElement.dataset.name"));
+
+        await page.EvalAsync("(() => { const real = window.fetch; window.fetch = (u, o) => String(u).includes('/api/queue/mode') ? Promise.resolve(new Response('', { status: 500 })) : real(u, o); })()");
+        await KeyAsync(page, "ArrowRight", "document.activeElement");
+        await Task.Delay(500);
+        Assert.Equal("automatic", await page.TextAsync(ModeGroup + ".contains(document.activeElement) && document.activeElement.dataset.name"));
+    }
+
+    /// <summary>An open called off, or one whose read fails, leaves the remembered tab and the button's glyph (#21).</summary>
+    [WindowsFact]
+    public async Task AnOpenCalledOffOrFailed_LeavesTheRememberedTab()
+    {
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("typeof openPrompts === 'function'", "chat.js");
+        string glyph = await page.TextAsync("document.getElementById('prompts-button').textContent");
+        await page.EvalAsync(ReadsWrapped);
+        await page.EvalAsync("window.__hold = '/api/memory'; setTimeout(() => openPrompts('memory'), 0)");
+        await page.WaitAsync("window.__release !== null && promptsOpenOrOpening()", "opening on Memory");
+        await KeyAsync(page, "Escape", "document.body");
+        await page.WaitAsync("!promptsOpenOrOpening()", "called off");
+        await page.EvalAsync("window.__release()");
+        await Task.Delay(300);
+        Assert.Equal("queue", await page.TextAsync("sheetTab"));
+        Assert.Equal(glyph, await page.TextAsync("document.getElementById('prompts-button').textContent"));
+
+        await page.EvalAsync("window.__fail = '/api/history'; openPrompts('history')");
+        await Task.Delay(300);
+        Assert.True((await page.EvalAsync(SheetHidden + " && sheetTab === 'queue'")).GetBoolean());
+        Assert.Equal(glyph, await page.TextAsync("document.getElementById('prompts-button').textContent"));
     }
 }

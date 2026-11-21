@@ -1864,7 +1864,8 @@ function showPrompts(on) {
   const was = nearBottom();
   promptsOpen = on;
   promptsEl.classList.toggle('hidden', !on);
-  if (!on) { Neon.disarm(); closeMemoryEditor(false); }
+  // A close orphans every Queue read still in flight (a review, 2026-11-21): a quick reopen never meets an older read's rows.
+  if (!on) { Neon.disarm(); closeMemoryEditor(false); queueReading++; }
   keepBottom(was);
   floatSoon();
 }
@@ -1933,6 +1934,7 @@ async function readSheet(tab) {
 
 function renderSheet(tab, sheet) {
   memoryEditor = null;   // the list is drawn afresh, an open editor with it
+  queueDrawn = null;   // no Queue rows showing unless the Queue branch draws them (a review, 2026-11-21): a 304 then always draws
   paintTabs();
   paintAction();
   promptsFilter.value = '';
@@ -2111,9 +2113,12 @@ function queueRow(text, pictures, remove, chord) {
   return row;
 }
 
+// A ✕'s, Send now's, Resume's or a mode's post: its sentence on the Queue tab's note while that tab shows, else on the page's line (a
+// review, 2026-11-21: it landed on whichever tab was open; an empty one never clears the line, which Neon.say('') would).
 async function queueAct(path, body) {
   const r = await post(path, body);
-  queueNote(r.message || '');
+  if (promptsOpen && sheetTab === 'queue') queueNote(r.message || '');
+  else if (r.message) say(r.message);
   await queueRefresh();
   return r;
 }
@@ -2218,20 +2223,53 @@ function queueDraw(view) {
     queueChoiceRow(words.queueModeLabel || 'Queue mode', view.modes || [], view.mode, '/api/queue/mode', 'mode'),
     queueChoiceRow(words.queueCancelLabel || 'Queue cancel mode', view.cancelModes || [], view.cancelMode, '/api/queue/cancel', 'cancel'));
   parts.push(modes);
+  const mark = queueFocusMark();
   promptsList.replaceChildren(...parts);
+  if (mark) queueFocusBack(mark);
 }
 
-// A failed read: the tab drawn empty, saying why (the review's #111).
-function queueEmpty(tag) {
+// Where focus sat in the Queue list before a redraw (a review, 2026-11-21: a ✕'s or a mode's redraw, or one a state push started, dropped
+// it on the page's body): a radio group by its field, a ✕ by its place among the ✕s, another button by its class.
+function queueFocusMark() {
+  const at = document.activeElement;
+  if (!at || !promptsList.contains(at)) return null;
+  const group = at.closest('.manage-choices');
+  if (group) return { field: group.dataset.field };
+  if (at.classList.contains('manage-remove')) return { remove: [...promptsList.querySelectorAll('.manage-remove')].indexOf(at) };
+  return { cls: at.className.split(' ')[0] };
+}
+
+// Focus put back after the redraw: the group's checked radio (or the one in the Tab order), the ✕ at the same place or the last one before
+// it, the button of the same class; the Queue tab when none is left. Never scrolls the list under the finger.
+function queueFocusBack(mark) {
+  let to = null;
+  if (mark.field) {
+    const group = '.manage-choices[data-field="' + mark.field + '"] ';
+    to = promptsList.querySelector(group + '.manage-choice[aria-checked="true"]') || promptsList.querySelector(group + '.manage-choice[tabindex="0"]');
+  } else if (mark.remove !== undefined) {
+    const removes = promptsList.querySelectorAll('.manage-remove');
+    to = removes.length ? removes[Math.min(Math.max(mark.remove, 0), removes.length - 1)] : null;
+  } else if (mark.cls) {
+    to = promptsList.querySelector('button.' + mark.cls);
+  }
+  (to || promptsTabs[SheetTabs.indexOf('queue')]).focus({ preventScroll: true });
+}
+
+// A failed read: the tab drawn empty, saying why (the review's #111); any tab's since 2026-11-21 (a review: a failed read on Prompts,
+// History or Memory left the tab before's rows, a Queue ✕ or History's armed clear all still live, under the new tab's name).
+function sheetEmpty(tag) {
+  const focused = promptsList.contains(document.activeElement);
   memoryEditor = null;
   queueDrawn = null;
   paintTabs();
   paintAction();
   promptsFilter.value = '';
   promptsFilter.classList.add('hidden');
+  promptsFilter.oninput = null;
   promptsList.replaceChildren();
-  queueTag = tag;
+  if (sheetTab === 'queue') queueTag = tag;
   queueNote(words.manageReadFailed || '');
+  if (focused) focusSheet();   // its button went with the rows
 }
 
 // A read's answer shown: drawn unless a 304 brought back the view drawn already, stamped with the tag taken before the read, and read again
@@ -2242,22 +2280,20 @@ function queueLand(got, tag) {
   if (queueTagNow() !== queueTag) Promise.resolve().then(queueRefresh);
 }
 
-// The open Queue tab read again and drawn (a change made here, a new queue tag, the feed's reset); the rows read last stay on a failed read.
+// The open Queue tab read again and drawn (a change made here, a new queue tag, the feed's reset); the Queue rows read last stay on a
+// failed read, but another tab's never do (a review, 2026-11-21: one superseding a switch to Queue left them, live): the tab drawn empty.
 async function queueRefresh() {
   if (!promptsOpen || sheetTab !== 'queue') return;
   const serial = ++queueReading;
   const tag = queueTagNow();
   const got = await readSheet('queue');
   if (!promptsOpen || sheetTab !== 'queue' || serial !== queueReading) return;
-  if (!got) { queueNote(words.manageReadFailed || ''); return; }
+  if (!got) { if (queueDrawn === null) sheetEmpty(tag); else queueNote(words.manageReadFailed || ''); return; }
   queueLand(got, tag);
 }
 
-// The ⏳ lines and bare /queue: the sheet on its Queue tab, opened or switched to.
-function openQueue() {
-  if (promptsOpen) { if (sheetTab !== 'queue') selectTab('queue'); return; }
-  openPrompts('queue');
-}
+// The ⏳ lines and bare /queue: the sheet on its Queue tab, opened, switched to, or an open still reading sent there (openPrompts).
+function openQueue() { openPrompts('queue'); }
 
 // A change made on the sheet: posted, its sentence said, the tab read again.
 async function sheetChange(path, body) {
@@ -2298,36 +2334,49 @@ async function selectTab(tab) {
   queueNote('');   // a tab change clears the note (each tab's draw sets its own)
   const serial = tab === 'queue' ? ++queueReading : 0;
   const tag = queueTagNow();
+  // Stamped now (a review, 2026-11-21): the tag held was the last Queue draw's, so any state while this read ran started a refresh that
+  // superseded it; now only a real move does, and that refresh draws (or empties) the tab itself.
+  if (tab === 'queue') queueTag = tag;
   const sheet = await readSheet(tab);
   if (!promptsOpen || tab !== sheetTab) return;
   if (tab === 'queue') {
-    if (serial !== queueReading) return;
+    if (serial !== queueReading) { focusSheet(); return; }
     if (sheet) queueLand({ view: sheet.view, fresh: true }, tag);   // another tab's rows are showing: always drawn
-    else queueEmpty(tag);
+    else sheetEmpty(tag);
     focusSheet();
     return;
   }
-  if (!sheet) return;
-  renderSheet(tab, sheet);
+  if (sheet) renderSheet(tab, sheet);
+  else sheetEmpty(queueTagNow());   // never the tab before's rows under this one's name (a review, 2026-11-21)
   focusSheet();
 }
 
+let promptsWant = null;   // the tab an open still reading lands on
+
+// The sheet on tab (its remembered one when none): switched to when open, an open still reading sent there instead, and the tab
+// remembered only once the open lands, so one called off or failed leaves the button's glyph (a review, 2026-11-21: bare /prompts did
+// nothing on the open sheet, a ⏳ tap mid-open landed on the other tab, and a called-off open still moved the glyph).
 async function openPrompts(tab) {
-  if (promptsOpen || promptsOpening) return;
-  if (tab) setSheetTab(tab);
+  if (promptsOpen) { if (tab && tab !== sheetTab) selectTab(tab); return; }
+  if (promptsOpening) {
+    if (!tab || tab === promptsWant) return;
+    stopPromptsOpening();   // the one reading never shows; this one opens on the tab asked for
+  }
   promptsOpening = true;
   const serial = ++promptsOpenSerial;
-  const want = sheetTab;
+  const want = tab || sheetTab;
+  promptsWant = want;
   const tag = queueTagNow();
   const sheet = await readSheet(want);
   if (serial !== promptsOpenSerial) return;   // sent away while it read (Esc, Back, a question, a tap on the transcript): it never shows
   promptsOpening = false;
   if (promptsOpen || (!sheet && want !== 'queue')) return;
+  setSheetTab(want);   // before the draw, which paints the tabs and the action from it
   closeUsage();
   if (want === 'queue') {
     queueNote('');
     if (sheet) queueLand({ view: sheet.view, fresh: true }, tag);
-    else queueEmpty(tag);   // opened all the same, saying why it's empty (the review's #111)
+    else sheetEmpty(tag);   // opened all the same, saying why it's empty (the review's #111)
   } else {
     renderSheet(want, sheet);
   }
@@ -2681,6 +2730,7 @@ function openDrawer() {
   if (!strip || drawerOpen) return;
   closeUsage();
   if (manage() && !manageShown()) manage().hide(false);   // one still reading is called off
+  stopPromptsOpening();   // and the 📣 sheet's too (a review, 2026-11-21: it showed over the drawer and took its entry)
   if (promptsOpen || manageShown()) {
     hidePrompts(true);
     if (manage()) manage().hide(false);

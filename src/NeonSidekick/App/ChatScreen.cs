@@ -2415,7 +2415,8 @@ internal sealed partial class ChatScreen
 
         var (latest, _) = _perf.Read();
         int processes = items.Contains(PerfBarItems.Proc) ? _processes.Running : 0;
-        // CTX (2026-11-21, the user's ask): the Status bar's usage share, read as its BusyUsage lambda reads it (same thread, same figures).
+        // CTX (2026-11-21, the user's ask): counted as the Status bar counts it, from the same figures on the same thread; unlike BusyUsage it
+        // stays through a connect and a /botchat turn (the main chat's figure; a bot's assistant has no meter).
         int? context = items.Contains(PerfBarItems.Ctx)
             ? UsageText.ContextPercent(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(shown.LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read())
             : null;
@@ -5426,7 +5427,7 @@ internal sealed partial class ChatScreen
         new(PushWord, "copy this profile's settings, or one section, into another: /profile push [section] <name>"),
         new("reload", "read this profile's profile.json back from disk: /profile reload"),
         new("rename", "rename a profile: /profile rename <name> <new-name>"),
-        new("reset", "reset a profile to the defaults, keeping URLs, paths and keys: /profile reset [name] [--all]"),
+        new("reset", "reset a profile to the defaults, keeping URLs, paths, keys and avatars: /profile reset [name] [--all]"),
     ];
 
     /// <summary>The note on <c>overwrite</c> after a list section's name (2026-10-09; <c>/cmdcopy</c>'s overwrite note until then). Pinned.</summary>
@@ -12043,20 +12044,23 @@ internal sealed partial class ChatScreen
     /// rules and voice directive stay, and the line no longer lists them); <c>y</c> or <c>yes</c>
     /// resets, anything else keeps. Pinned.
     /// </summary>
-    /// <remarks>2026-09-27: a plain reset says what it keeps (<see cref="Profiles.ResetKeptSettings"/>); <c>--all</c> asks the old line.</remarks>
+    /// <remarks>
+    /// 2026-09-27: a plain reset says what it keeps (<see cref="Profiles.ResetKeptSettings"/>); <c>--all</c> asks the old line. 2026-11-21 (a
+    /// review): and the server in use, the embedded or Docker switch a kept URL keeps on (<see cref="Profiles.KeepOnReset"/>).
+    /// </remarks>
     public static string ResetProfilePrompt(string name, bool all = false) =>
-        $"{NoticeGlyphs.Profile}Reset profile \"{name}\" to the default settings{(all ? "" : " (keeping its avatar, URLs, paths and keys)")}?";
+        $"{NoticeGlyphs.Profile}Reset profile \"{name}\" to the default settings{(all ? "" : " (keeping its avatar, URLs, paths, keys and the server in use)")}?";
 
     /// <summary>
     /// The notice after a reset, the user's wording (2026-09-20): <c>; conversation cleared</c> when it
     /// was the loaded profile (the reset is a switch in all but the name). Pinned.
     /// </summary>
     public static string ProfileResetNotice(string name, bool loaded, bool all = false) =>
-        $"({NoticeGlyphs.Profile}reset profile \"{name}\" to the defaults{(all ? "" : "; avatar, URLs, paths and keys kept")}{(loaded ? "; conversation cleared" : "")})";
+        $"({NoticeGlyphs.Profile}reset profile \"{name}\" to the defaults{(all ? "" : "; avatar, URLs, paths, keys and the server in use kept")}{(loaded ? "; conversation cleared" : "")})";
 
     /// <summary><c>/profile reset --all</c> (2026-09-27): the flag, and its note on the argument list. Pinned.</summary>
     public const string ResetAllFlag = "--all";
-    public const string ResetAllNote = "reset the avatar, URLs, paths and keys too";
+    public const string ResetAllNote = "reset the avatar, URLs, paths, keys and the server in use too";
 
     public static string ProfileResetFailedError(string detail) => $"Could not reset the profile: {detail}";
 

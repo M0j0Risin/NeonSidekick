@@ -667,7 +667,10 @@ public static class WebUiText
 
     // ── The sheet's tabs, its ⇪ and its 🗑️ (2026-10-16, the user's ask) ──
 
-    /// <summary>The sheet's three tabs.</summary>
+    /// <summary>The sheet's first tab (the 🗂️ sheet's third until 2026-11-21); the other three follow.</summary>
+    public const string QueueTab = "⏳ Queue";
+
+    /// <summary>The sheet's other three tabs, after <see cref="QueueTab"/>.</summary>
     public const string PromptsTab = "📣 Prompts";
 
     public const string MemoryTab = "💾 Memory";
@@ -794,12 +797,10 @@ public static class WebUiText
     /// <summary>The sheet's ✕.</summary>
     public const string CloseManage = "Close the sheet";
 
-    /// <summary>The 🗂️ sheet's two tabs, in their order (the Queue tab, the third until 2026-11-21, now the 📣 sheet's first); the Sessions tab wears the PC's Sessions glyph.</summary>
+    /// <summary>The 🗂️ sheet's two tabs, in their order (the Queue tab, the third until 2026-11-21, now the 📣 sheet's first, <see cref="QueueTab"/>); the Sessions tab wears the PC's Sessions glyph.</summary>
     public const string SessionsTab = "💬 Sessions";
 
     public const string FilesTab = "📄 Files";
-
-    public const string QueueTab = "⏳ Queue";
 
     /// <summary>What the page opens for bare <c>/queue</c>, and the Queue tab's name in the sheet's list.</summary>
     public const string OpenQueue = "queue";
@@ -807,8 +808,11 @@ public static class WebUiText
     /// <summary>What the page opens for bare <c>/sessions</c>, and the Sessions tab's name in the sheet's list.</summary>
     public const string OpenSessions = "sessions";
 
-    /// <summary><c>/queue send|mode|cancel …</c> typed on the page: the tab has them.</summary>
-    public const string UseQueueTab = "The queue's send and modes are on the 📣 sheet's Queue tab here.";
+    /// <summary>
+    /// <c>/queue send|mode|cancel …</c> typed on the page: the tab has them, named by its own label (a review, 2026-11-21: "the 📣 sheet", while
+    /// the button shows ⏳).
+    /// </summary>
+    public const string UseQueueTab = "The queue's send and modes are on the " + QueueTab + " tab here: bare /queue opens it.";
 
     // ── The Queue tab (2026-11-16, #42) ──
 

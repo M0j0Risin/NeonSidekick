@@ -57,8 +57,8 @@ public static class PerfBar
     /// Too narrow a row (the home bar's order, the user's call): every meter shrinks together, then the row falls back to the text
     /// look; then the right group's meters go, from its inner end, then the left's, from theirs; then the center (the left group, or the
     /// right, with no center) is cut at the row's left. A meter that goes leaves nothing behind. <paramref name="context"/> is CTX's share
-    /// (2026-11-21, the user's ask): the model's context window in use, drawn as a share like CPU's; null while the window is unknown,
-    /// which leaves the meter out as a meter the machine cannot read is.
+    /// (2026-11-21, the user's ask): the model's context window in use, drawn as a share like CPU's, its value past 100 as the Status bar
+    /// writes it; null while the window is unknown, which draws CTX as a dim dash (<see cref="PerfText.CtxUnknown"/>, a review), not left out.
     /// </summary>
     public static PerfRow? Render(PerfBarStyle style, IReadOnlySet<string> items, PerfSnapshot latest, int cells, int processes = 0, IReadOnlyList<string>? order = null,
         IReadOnlySet<string>? left = null, IReadOnlySet<string>? right = null, double? context = null)
@@ -154,7 +154,13 @@ public static class PerfBar
                 case PerfBarItems.Net: Share(PerfText.NetLabel, s => PerfMath.NetPercent(s.NetDown, s.NetUp, s.NetLink)); break;
                 case PerfBarItems.NetDown: Rate(PerfText.NetDownLabel, s => s.NetDown); break;
                 case PerfBarItems.NetUp: Rate(PerfText.NetUpLabel, s => s.NetUp); break;
-                case PerfBarItems.Ctx: Share(PerfText.CtxLabel, _ => context); break;   // 2026-11-21: the screen's figure, no reader's
+                case PerfBarItems.Ctx:
+                    // 2026-11-21: the screen's figure, no reader's. Its value past 100 as the Status bar shows it (the gauge clamps), and a
+                    // dim dash while the window is unknown, written alone as a count is, so a bar of CTX alone is never a blank row (a review).
+                    meters.Add(context is { } share
+                        ? new Meter(PerfText.CtxLabel, PerfMath.Clamp(share), PerfText.Share(share))
+                        : new Meter(PerfText.CtxLabel, 0, PerfText.CtxUnknown, Theme.Dim));
+                    break;
                 case PerfBarItems.Proc:
                     meters.Add(new Meter(PerfText.ProcLabel, 0, PerfText.Count(processes), processes > 0 ? Theme.Good : Theme.Dim));
                     break;

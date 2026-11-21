@@ -91,13 +91,13 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     /// <summary>The menu over a pane with geometry: every list is a level of the pane, the notices its status line.</summary>
-    private (ToolsMenu Menu, ScreenPane Pane, SettingsMenu Settings) PaneMenu(Func<string, CancellationToken, Task<string?>>? browseVault = null, Func<NeonSidekick.Sql.SqlNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testSql = null, Func<NeonSidekick.Comfy.ComfyClient?>? comfy = null, Func<NeonSidekick.Oracle.OracleNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testOracle = null, Func<NeonSidekick.MySql.MySqlNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testMySql = null, Func<NeonSidekick.Unc.UncNamedShare, CancellationToken, Task<NeonSidekick.Unc.UncResult<int>>>? testUnc = null)
+    private (ToolsMenu Menu, ScreenPane Pane, SettingsMenu Settings) PaneMenu(Func<string, CancellationToken, Task<string?>>? browseVault = null, Func<NeonSidekick.Sql.SqlNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testSql = null, Func<NeonSidekick.Comfy.ComfyClient?>? comfy = null, Func<NeonSidekick.Oracle.OracleNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testOracle = null, Func<NeonSidekick.MySql.MySqlNamedConnection, CancellationToken, Task<NeonSidekick.Sql.SqlRun>>? testMySql = null, Func<NeonSidekick.Unc.UncNamedShare, CancellationToken, Task<NeonSidekick.Unc.UncResult<int>>>? testUnc = null, Func<SettingsField, string?>? overriddenBy = null)
     {
         _console.Profile.Height = 40;
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
         var menuPane = new MenuPane(pane, keys);
-        var settings = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, _ => null, new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, menuPane, _ => FakeBrowserPath, browseVault: browseVault, testSqlConnection: testSql, comfyClient: comfy, testOracleConnection: testOracle, testMySqlConnection: testMySql, testUncShare: testUnc);
+        var settings = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, overriddenBy ?? (_ => null), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, menuPane, _ => FakeBrowserPath, browseVault: browseVault, testSqlConnection: testSql, comfyClient: comfy, testOracleConnection: testOracle, testMySqlConnection: testMySql, testUncShare: testUnc);
         var menu = new ToolsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane);
         pane.Show();
         return (menu, pane, settings);
@@ -2581,20 +2581,67 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
-    /// <summary>A hand-edited policy lights no button (2026-11-21; it showed after a ? from later on 2026-10-13), and a press sets the one picked.</summary>
-    [Fact]
-    public async Task ShowAllowedCommands_AHandEditedPolicy_LightsNone_APressSetsOne()
+    /// <summary>
+    /// A hand-edited policy lights off, the one in force for it (a review, 2026-11-21; none until then, and a ? from later on 2026-10-13), and
+    /// a press saves its own word: the lit off over "never" or a blank, the lit ask over " ASK ", or another button.
+    /// </summary>
+    [Theory]
+    [InlineData("never", SettingsMenu.PolicyOffKey, "off")]
+    [InlineData("", SettingsMenu.PolicyOffKey, "off")]
+    [InlineData(" ASK ", SettingsMenu.PolicyAskKey, "ask")]
+    [InlineData("never", SettingsMenu.PolicyAskKey, "ask")]
+    public async Task ShowAllowedCommands_AHandEditedPolicy_LightsTheOneInForce_APressSavesItsWord(string handEdited, char key, string saved)
     {
-        _settings.Update(d => d.ShellCommandPolicy = "never");
+        _settings.Update(d => d.ShellCommandPolicy = handEdited);
         var (menu, pane, _) = PaneMenu();
-        Push(Keys.Char(SettingsMenu.PolicyAskKey), Keys.Escape);
+        Push(Keys.Char(key), Keys.Escape);
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Equal(saved, _settings.Current.ShellCommandPolicy);
+        Assert.Contains(" │ " + PolicyStrip + " ", Output);
+        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, Output);
+        Assert.Contains("  · Shell command policy: " + saved + "\n", Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// While a flag or variable overrides the policy (a review, 2026-11-21): the lit button's press saves nothing but says what overrides it,
+    /// and a declined yolo names the policy kept as parsed, then the same reminder.
+    /// </summary>
+    [Theory]
+    [InlineData(EnvironmentOverrides.CommandPolicyVariable)]
+    [InlineData(SidekickOptions.YoloFlag)]
+    public async Task ShowAllowedCommands_UnderAnOverride_TheLitPress_Warns(string by)
+    {
+        var (menu, pane, _) = PaneMenu(overriddenBy: f => f == SettingsField.ShellCommandPolicy ? by : null);
+        Push(Keys.Char(SettingsMenu.PolicyAskKey), Keys.Escape);   // the lit ask: nothing saved; close
 
         await menu.ShowAllowedCommandsAsync(CancellationToken.None);
 
         Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
-        Assert.Contains(" │ " + PolicyStrip + " ", Output);
-        Assert.DoesNotContain(SettingsMenu.YoloConfirmQuestion, Output);
-        Assert.Contains("  · Shell command policy: ask\n", Output);
+        Assert.DoesNotContain("Shell command policy: ask\n", Output);   // no save
+        Assert.Contains(SettingsMenu.OverrideNotice(by), Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>A declined yolo under an override (a review, 2026-11-21): the policy kept, named as parsed (not " Ask " as typed), then the reminder.</summary>
+    [Theory]
+    [InlineData(EnvironmentOverrides.CommandPolicyVariable)]
+    [InlineData(SidekickOptions.YoloFlag)]
+    public async Task ShowAllowedCommands_UnderAnOverride_ADeclinedYolo_NamesTheParsedPolicy_AndWarns(string by)
+    {
+        _settings.Update(d => d.ShellCommandPolicy = " Ask ");
+        var (menu, pane, _) = PaneMenu(overriddenBy: f => f == SettingsField.ShellCommandPolicy ? by : null);
+        Push(Keys.Char(SettingsMenu.PolicyYoloKey), Keys.Escape, Keys.Escape);   // yolo, no; close
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Equal(" Ask ", _settings.Current.ShellCommandPolicy);
+        Assert.Contains("  · " + SettingsMenu.YoloDeclinedNotice("ask") + "\n", Output);
+        Assert.Contains(SettingsMenu.OverrideNotice(by), Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

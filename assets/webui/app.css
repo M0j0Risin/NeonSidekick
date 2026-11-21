@@ -518,7 +518,8 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
    words; a fourth word is this rule's repeat(3) and the narrow one's. The checked one: an accent border and ring, its ◉ in the accent; the
    others dim on no background, so it reads at a glance on any palette. 44 px to tap. */
 .manage-modes { display: grid; grid-template-columns: max-content repeat(3, minmax(0, 1fr)); gap: 6px; align-items: center; margin-top: 4px; }
-.manage-choices { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; align-items: center; }
+/* inherit first (a review, 2026-11-21): a browser without subgrid drops that line and keeps the parent's tracks, so each group still lines up. */
+.manage-choices { grid-column: 1 / -1; display: grid; grid-template-columns: inherit; grid-template-columns: subgrid; align-items: center; }
 .manage-choices .manage-choice-label { color: var(--dim); font-size: 14px; margin-right: 4px; }
 .manage-choices .manage-choice { min-height: 44px; padding: 2px 8px; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; background: transparent; color: var(--dim); }
 .manage-choices .manage-choice .manage-mark { color: var(--dim); }
@@ -533,10 +534,13 @@ footer.bottom .inner { max-width: 900px; margin: 0 auto; display: flex; flex-dir
 .memory-row .memory-edit-text { width: 100%; font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; resize: vertical; }
 .memory-row .memory-edit-bar { display: flex; flex-wrap: wrap; gap: 6px; }
 .memory-row .memory-edit-bar button { min-height: 44px; padding: 0 14px; }
-@media (max-width: 420px) {
-  /* A narrow phone: each mode's label on a row of its own over its three buttons, which keep the shared columns. */
+@media (max-width: 520px) {
+  /* A phone: each mode's label on a row of its own over its three buttons, which keep the shared columns (from 520 px since a review,
+     2026-11-21: beside the label, "automatic" was cut below ~486 px). */
   .manage-modes { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .manage-choices .manage-choice-label { grid-column: 1 / -1; margin-right: 0; }
+}
+@media (max-width: 420px) {
   .sheet-tab .tab-word, .sheet-action.has-glyph .tab-word { display: none; }
   .sheet-bar .tab-glyph:not(:empty) { margin-right: 0; }
   .strip-bar .sheet-tab { padding: 2px 8px; }

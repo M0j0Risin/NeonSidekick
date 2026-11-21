@@ -185,4 +185,67 @@ public sealed partial class WebUiPageTests
         Assert.True((await page.EvalAsync("document.getElementById('draft').getBoundingClientRect().width >= 120")).GetBoolean());
         Assert.True((await page.EvalAsync("document.getElementById('stop').getBoundingClientRect().right <= innerWidth")).GetBoolean());
     }
+
+    // ── openPrompts' tab in every state (the ctx-reset review, 2026-11-21) ──
+
+    /// <summary>Bare <c>/prompts</c> with the sheet open on Queue switches it to Prompts (#12; it did nothing), the entry kept.</summary>
+    [WindowsFact]
+    public async Task BarePrompts_WithTheSheetOpenOnQueue_SwitchesToPrompts()
+    {
+        _backend.PromptList.Add("one");
+        if (await QueuePageAsync(QueueView()) is not { } page)
+        {
+            return;
+        }
+
+        await OpenQueueAsync(page);
+        _backend.Reply = new WebReply(WebOutcome.Ok, Open: WebUiText.OpenPrompts);
+        await page.EvalAsync("document.getElementById('draft').value = '/prompts'; document.getElementById('send').click()");
+        await page.WaitAsync("document.querySelector('#prompts .sheet-tab.on').dataset.tab === 'prompts' && " + Rows + ".length === 1 && history.state.prompts === true", "switched to Prompts");
+    }
+
+    /// <summary>The drawer opened while the sheet still reads (#20): the sheet never shows over it, and the entry stays the drawer's.</summary>
+    [WindowsFact]
+    public async Task TheDrawer_OpenedWhileTheSheetReads_CallsTheSheetOff()
+    {
+        StripIds(1);
+        if (await PromptsPageAsync(strip: Strip(null, 1), prompts: ["one"]) is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("!document.getElementById('strip-button').classList.contains('hidden') && typeof openPrompts === 'function'", "🎞️");
+        await page.EvalAsync("(() => { const real = Neon.get; window.__release = null; Neon.get = (p, e) => window.__release === null && p === '/api/queue' ? new Promise(r => { window.__release = () => real(p, e).then(r); }) : real(p, e); })()");
+        await page.EvalAsync("setTimeout(() => document.getElementById('prompts-button').click(), 0)");
+        await page.WaitAsync("window.__release !== null && promptsOpenOrOpening()", "the sheet opening");
+        await page.EvalAsync("document.getElementById('strip-button').click()");
+        await page.WaitAsync("!document.getElementById('strip').classList.contains('hidden') && !promptsOpenOrOpening()", "the drawer, the open called off");
+        await page.EvalAsync("window.__release(); window.__released = true");
+        await page.WaitAsync("window.__released === true", "released");
+        await Task.Delay(300);
+        Assert.True((await page.EvalAsync(SheetHidden + " && !document.getElementById('strip').classList.contains('hidden') && history.state.drawer === true")).GetBoolean());
+    }
+
+    /// <summary>A ⏳ tap while the sheet opens on Prompts (#2): it opens on Queue, never the Prompts read's rows under a lit Queue tab.</summary>
+    [WindowsFact]
+    public async Task TheWaitingLines_TappedWhileTheSheetOpensOnPrompts_OpenItOnQueue()
+    {
+        _backend.PromptList.Add("one");
+        if (await QueuePageAsync(QueueView(), State() with { Queued = ["from the phone"] }) is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("!document.getElementById('queued').classList.contains('hidden') && typeof openPrompts === 'function'", "the ⏳ line");
+        await page.EvalAsync("setSheetTab('prompts')");
+        await page.EvalAsync("(() => { const real = Neon.get; window.__release = null; Neon.get = (p, e) => window.__release === null && p === '/api/prompts' ? new Promise(r => { window.__release = () => real(p, e).then(r); }) : real(p, e); })()");
+        await page.EvalAsync("setTimeout(() => document.getElementById('prompts-button').click(), 0)");
+        await page.WaitAsync("window.__release !== null && promptsOpenOrOpening()", "opening on Prompts");
+        await page.EvalAsync("document.getElementById('queued').click()");
+        await page.WaitAsync(SheetShown + " && document.querySelector('#prompts .sheet-tab.on').dataset.tab === 'queue' && document.querySelectorAll('#prompts-list .manage-row').length > 0", "open on Queue");
+        await page.EvalAsync("window.__release(); window.__released = true");
+        await page.WaitAsync("window.__released === true", "released");
+        await Task.Delay(300);
+        Assert.True((await page.EvalAsync("document.querySelector('#prompts .sheet-tab.on').dataset.tab === 'queue' && " + Rows + ".length === 0 && history.state.prompts === true")).GetBoolean());
+    }
 }

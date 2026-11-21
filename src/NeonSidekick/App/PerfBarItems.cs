@@ -18,7 +18,7 @@ namespace NeonSidekick.App;
 /// this checklist): <see cref="Order"/> over <see cref="Settings.AppSettingsData.PerformanceBarOrder"/>; <see cref="Names"/> is the
 /// default order, which <c>⊡ default</c> puts back with the checks. Later on 2026-10-13 (the user's ask: the home bar's pinning) each
 /// meter is pinned left, center or right (<see cref="Sides"/>), center by default, so a bar never pinned is centred as it always was.
-/// CTX (2026-11-21, the user's ask) sits between NET↑ and PROC: the share of the model's context window in use, the Status bar's usage share,
+/// CTX (2026-11-21, the user's ask) sits between NET↑ and PROC: the share of the model's context window in use, counted as the Status bar counts it,
 /// passed in by the screen as PROC's count is, so no reader samples it either; off by default. A saved order without it gets it after NET↑
 /// (<see cref="ItemOrder.Resolve"/> puts a new id beside its neighbour).
 /// </summary>

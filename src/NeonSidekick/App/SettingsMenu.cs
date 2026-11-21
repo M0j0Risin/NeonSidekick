@@ -3898,16 +3898,18 @@ internal sealed partial class SettingsMenu
     /// The allowed-commands list's buttons, one a policy in <see cref="Shell.CommandPolicy.Names"/>' order, so a button's index is its
     /// policy's: from 2026-10-02 a radio group (<see cref="PolicyOffButton"/> first since 2026-10-12, then <see cref="PolicyAskButton"/>
     /// and <see cref="PolicyYoloButton"/>, the saved one lit); from later on 2026-10-13 one button, key P, stepping through them; a radio
-    /// group again since 2026-11-21 (the user's ask: one button a policy, not one that cycles). A hand-edited value lights none. Pinned.
+    /// group again since 2026-11-21 (the user's ask: one button a policy, not one that cycles). A hand-edited value lights off, the policy
+    /// <see cref="Shell.CommandPolicy.Resolve"/> enforces for it (a review, 2026-11-21: it lit none, so nothing said the shell tools were off). Pinned.
     /// </summary>
     public static IReadOnlyList<MenuButton> CommandPolicyButtons(string policy)
     {
-        string? saved = Shell.CommandPolicy.TryParse(policy, out var mode) ? Shell.CommandPolicy.Name(mode) : null;
+        Shell.CommandPolicy.TryParse(policy, out var mode);   // Off on a miss, as Resolve
+        string lit = Shell.CommandPolicy.Name(mode);
         return
         [
-            new(PolicyOffButton, PolicyOffKey, saved == "off"),
-            new(PolicyAskButton, PolicyAskKey, saved == "ask"),
-            new(PolicyYoloButton, PolicyYoloKey, saved == "yolo"),
+            new(PolicyOffButton, PolicyOffKey, lit == "off"),
+            new(PolicyAskButton, PolicyAskKey, lit == "ask"),
+            new(PolicyYoloButton, PolicyYoloKey, lit == "yolo"),
         ];
     }
 
@@ -9492,7 +9494,8 @@ internal sealed partial class SettingsMenu
     /// title row carries <see cref="CommandPolicyButtons"/>: since 2026-11-21 (the user's ask) one button a <c>Shell command policy</c>, the saved
     /// one lit (one button stepping off → ask → yolo from later on 2026-10-13), <c>off</c> and <c>ask</c> saved at once, <c>yolo</c> after a yes to
     /// <see cref="YoloConfirmQuestion"/> asked on the same pane (not <see cref="ConfirmAsync"/>, which closes it), a no keeping the policy as it
-    /// was (<see cref="YoloDeclinedNotice"/>); the lit one's press does nothing. The save shows on the list's status line. It works on the empty list too. Delete removes the highlighted prefix as Enter does,
+    /// was (<see cref="YoloDeclinedNotice"/>); the lit one's press changes nothing (it warns while a flag or variable overrides the policy,
+    /// and over a hand-edited word saves its own, 2026-11-21, a review). The save shows on the list's status line. It works on the empty list too. Delete removes the highlighted prefix as Enter does,
     /// after the same yes (2026-10-16, the user's ask, <see cref="MenuPage.Removes"/>), a filtered row too.
     /// </summary>
     internal async Task<bool> EditAllowedCommandsAsync(CancellationToken cancellationToken)
@@ -9533,9 +9536,12 @@ internal sealed partial class SettingsMenu
             {
                 cursor = pressed.Row;
                 string chosen = Shell.CommandPolicy.Names[pressed.Button];
-                if (Shell.CommandPolicy.TryParse(policy, out var saved) && Shell.CommandPolicy.Name(saved) == chosen)
+                if (string.Equals(policy?.Trim(), chosen, StringComparison.Ordinal))
                 {
-                    continue;   // the lit one: nothing to change, nothing said
+                    // The lit one saved as its own word: nothing to change; the reminder alone while a flag or variable overrides it (a
+                    // review, 2026-11-21: the press was silent). A lit one over a hand-edited word (" ASK ", "never") saves the word below.
+                    WarnIfOverridden(SettingsField.ShellCommandPolicy);
+                    continue;
                 }
 
                 if (chosen == "yolo")
@@ -9544,7 +9550,10 @@ internal sealed partial class SettingsMenu
                     if (await PickAsync(question, 0, cancellationToken).ConfigureAwait(false) != 1)
                     {
                         // A no keeps the policy as it was (2026-11-21, the user's ask): a radio group cannot stick, so no move on to off.
-                        Sink.Notice(YoloDeclinedNotice(policy));
+                        // Named as parsed (a review: the saved word as typed, padded or blank), with the override's reminder.
+                        Shell.CommandPolicy.TryParse(policy, out var kept);
+                        Sink.Notice(YoloDeclinedNotice(Shell.CommandPolicy.Name(kept)));
+                        WarnIfOverridden(SettingsField.ShellCommandPolicy);
                         continue;
                     }
                 }
@@ -11123,6 +11132,12 @@ internal sealed partial class SettingsMenu
     {
         _settings.Update(mutate);
         Sink.Notice(SavedNotice(field, _settings.Current, _settings.ProfileDirectory, field == SettingsField.WebBrowserPath ? _locateBrowser("") : null));
+        WarnIfOverridden(field);
+    }
+
+    /// <summary>The override reminder, when the saved value of <paramref name="field"/> will not be the one in force (a save's, and the policy buttons' lit press and declined yolo, 2026-11-21).</summary>
+    private void WarnIfOverridden(SettingsField field)
+    {
         if (_overriddenBy(field) is { } overriddenBy && OverrideHolds(field, _settings.Current))
         {
             Sink.Warning(OverrideNotice(overriddenBy));

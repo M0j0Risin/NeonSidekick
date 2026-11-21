@@ -237,7 +237,7 @@ The catalog, one row per model; the pane lists each build with its size.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Embedded servers enabled | Offers the embedded models. Off, `/server` lists none and a running one stops; installed models stay on disk. Connect a model turns it on for the model you pick. | off |
+| Embedded servers enabled | Offers the embedded models; off, `/server` lists none, a running one stops and installed models stay on disk. Connect a model turns it on, and a plain `/profile reset` keeps it with an embedded URL. | off |
 | Embedded models | The catalog. Enter on an installed model offers *Use now* and *Remove* (asks, then deletes its folder); on any other, *Install*. | — |
 | Embedded download mode | `parallel` fetches each file over 8 connections (about twice as fast); `single` uses one. | `parallel` |
 | Embedded idle unload (min) | Unloads the embedded model after this many idle minutes (0–1440; 0 is off); the next message reloads it. One parked behind another server waits for `/server`; [not in headless runs](HEADLESS.md#flags-in-headless-runs). | `off` |
@@ -264,7 +264,7 @@ Your own LLM containers (vLLM, SGLang, anything serving an OpenAI-compatible API
 
 | Setting | What it does | Default |
 |---|---|---|
-| Docker servers enabled | Offers the chosen containers in `/server`. Off: this run's containers stop at the reconnect. | off |
+| Docker servers enabled | Offers the chosen containers in `/server`. Off: this run's containers stop at the reconnect. A plain `/profile reset` keeps it, the list and the pipe while the URL is a chosen container's. | off |
 | Docker server containers | A checklist of the engine's LLM servers: containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. | empty |
 | Docker server match words | Words in an image or command that mark an LLM server. `r` restores the defaults; empty lists every container. | `aphrodite`, `koboldcpp`, `llama-server`, `llama.cpp`, `lmdeploy`, `localai`, `nvcr.io/nim`, `ollama`, `sglang`, `text-generation`, `trtllm`, `vllm` |
 | Docker server stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |

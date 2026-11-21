@@ -7532,10 +7532,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("🪪 Delete profile \"x\" and everything in it (settings, memories, persona, operating rules, voice directive, MCP servers, sessions)?", ChatScreen.DeleteProfilePrompt("x"));
         // 2026-09-20, the user's wording: a reset takes the settings alone back, the notice names nothing else.
         // 2026-09-27: a plain reset keeps the URLs, paths and keys and says so; --all is the old wording.
-        Assert.Equal("🪪 Reset profile \"x\" to the default settings (keeping its avatar, URLs, paths and keys)?", ChatScreen.ResetProfilePrompt("x"));   // the avatar 2026-10-10
+        Assert.Equal("🪪 Reset profile \"x\" to the default settings (keeping its avatar, URLs, paths, keys and the server in use)?", ChatScreen.ResetProfilePrompt("x"));   // the avatar 2026-10-10
         Assert.Equal("🪪 Reset profile \"x\" to the default settings?", ChatScreen.ResetProfilePrompt("x", all: true));
-        Assert.Equal("(🪪 reset profile \"x\" to the defaults; avatar, URLs, paths and keys kept; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true));
-        Assert.Equal("(🪪 reset profile \"x\" to the defaults; avatar, URLs, paths and keys kept)", ChatScreen.ProfileResetNotice("x", loaded: false));
+        Assert.Equal("(🪪 reset profile \"x\" to the defaults; avatar, URLs, paths, keys and the server in use kept; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true));
+        Assert.Equal("(🪪 reset profile \"x\" to the defaults; avatar, URLs, paths, keys and the server in use kept)", ChatScreen.ProfileResetNotice("x", loaded: false));
         Assert.Equal("(🪪 reset profile \"x\" to the defaults; conversation cleared)", ChatScreen.ProfileResetNotice("x", loaded: true, all: true));
         Assert.Equal("(🪪 reset profile \"x\" to the defaults)", ChatScreen.ProfileResetNotice("x", loaded: false, all: true));
         Assert.Equal("--all", ChatScreen.ResetAllFlag);

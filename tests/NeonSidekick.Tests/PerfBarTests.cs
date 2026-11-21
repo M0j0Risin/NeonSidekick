@@ -348,7 +348,7 @@ public class PerfBarTests
     }
 
     [Fact]
-    public void Ctx_IsTheContextShare_DrawnInEveryLook_LeftOutWhileTheWindowIsUnknown()
+    public void Ctx_IsTheContextShare_DrawnInEveryLook_ADashWhileTheWindowIsUnknown()
     {
         // 2026-11-21, the user's ask: the screen supplies the share, no reader samples it.
         Assert.Equal(PerfReads.None, PerfBarItems.Reads(Only("ctx")));
@@ -361,8 +361,21 @@ public class PerfBarTests
         Assert.Equal(new Style(Theme.Bad), text.Segments.Single(s => s.Text == " 87%").Style);   // red from 85: a compact is near
 
         Assert.Equal(Centered(PerfText.CtxLabel + "   0%", 120), PerfBar.Render(PerfBarStyle.Text, Only("ctx"), PerfSnapshot.None, 120, context: 0)!.Text);
-        Assert.Equal(Centered(PerfText.CtxLabel + " 100%", 120), PerfBar.Render(PerfBarStyle.Text, Only("ctx"), PerfSnapshot.None, 120, context: 140)!.Text);   // capped
-        Assert.Equal(Centered("CPU  34%", 120), PerfBar.Render(PerfBarStyle.Text, Only("cpu", "ctx"), Reading, 120)!.Text);   // unknown: left out
+        // Past 100 (a server-side trim) as the Status bar shows it (a review, 2026-11-21); the gauge and the colour stay at the cap.
+        var over = PerfBar.Render(PerfBarStyle.Text, Only("ctx"), PerfSnapshot.None, 120, context: 140)!;
+        Assert.Equal(Centered(PerfText.CtxLabel + " 140%", 120), over.Text);
+        Assert.Equal(new Style(Theme.Bad), over.Segments.Single(s => s.Text == "140%").Style);
+        Assert.Equal(PerfBar.Render(PerfBarStyle.Gauge, Only("ctx"), PerfSnapshot.None, 120, context: 100)!.Text.Replace("100%", "140%", StringComparison.Ordinal),
+            PerfBar.Render(PerfBarStyle.Gauge, Only("ctx"), PerfSnapshot.None, 120, context: 140)!.Text);
+
+        // Unknown (the user's pick, 2026-11-21): a dim dash written alone, as PROC's count is, in every look; CTX alone is never a blank row.
+        Assert.Equal(Centered("CPU  34% · " + PerfText.CtxLabel + "    –", 120), PerfBar.Render(PerfBarStyle.Text, Only("cpu", "ctx"), Reading, 120)!.Text);
+        foreach (var style in new[] { PerfBarStyle.Text, PerfBarStyle.Gauge, PerfBarStyle.Led })
+        {
+            var alone = PerfBar.Render(style, Only("ctx"), PerfSnapshot.None, 120)!;
+            Assert.Equal(PerfText.CtxLabel + " " + PerfText.CtxUnknown, alone.Text.Trim());
+            Assert.Equal(new Style(Theme.Dim), alone.Segments.Single(s => s.Text == PerfText.CtxUnknown).Style);
+        }
 
         // Drawn as CPU's share is: the same gauge or LEDs for the same figure.
         foreach (var style in new[] { PerfBarStyle.Gauge, PerfBarStyle.Led })
@@ -747,5 +760,17 @@ public class PerfBarTests
     public void TheValue_IsFourCellsWide(double value, string shown)
     {
         Assert.Equal(shown, PerfText.Percent(value));
+    }
+
+    /// <summary>CTX's value (2026-11-21, a review): past 100 as the Status bar shows it, still four cells, capped at 999.</summary>
+    [Theory]
+    [InlineData(34.0, " 34%")]
+    [InlineData(99.5, "100%")]
+    [InlineData(128.0, "128%")]
+    [InlineData(5000.0, "999%")]
+    [InlineData(-3.0, "  0%")]
+    public void TheContextShare_GoesPast100_InFourCells(double value, string shown)
+    {
+        Assert.Equal(shown, PerfText.Share(value));
     }
 }

@@ -1540,12 +1540,13 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
         Assert.Equal("Shell allowed commands: git push removed", SettingsMenu.PrefixRemovedNotice("git push"));
         // The allowed list's policy buttons (2026-10-02 as three, off first since 2026-10-12; one cycling button on P from later on 2026-10-13;
-        // three again since 2026-11-21, the user's ask): one a policy in Names' order, keys o, a and y, the saved one lit, a hand-edited value none.
+        // three again since 2026-11-21, the user's ask): one a policy in Names' order, keys o, a and y, the saved one lit, a hand-edited value off
+        // (the one in force for it; none until a review the same day).
         var buttons = SettingsMenu.CommandPolicyButtons("ask");
         Assert.Equal([SettingsMenu.PolicyOffButton, SettingsMenu.PolicyAskButton, SettingsMenu.PolicyYoloButton], buttons.Select(b => b.Title));
         Assert.Equal(['o', 'a', 'y'], buttons.Select(b => b.Key));   // the keys are a contract: the hint and the docs name them
         Assert.Equal(["off", "ask", "yolo"], Shell.CommandPolicy.Names);   // a button's index is its policy's
-        Assert.Equal(["off", "ask", "yolo", null, null], new[] { "off", " ASK ", "yolo", " never ", "" }.Select(p => SettingsMenu.CommandPolicyButtons(p).SingleOrDefault(b => b.On)?.Title switch
+        Assert.Equal(["off", "ask", "yolo", "off", "off"], new[] { "off", " ASK ", "yolo", " never ", "" }.Select(p => SettingsMenu.CommandPolicyButtons(p).SingleOrDefault(b => b.On)?.Title switch
         {
             SettingsMenu.PolicyOffButton => "off",
             SettingsMenu.PolicyAskButton => "ask",

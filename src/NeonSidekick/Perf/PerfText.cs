@@ -44,8 +44,8 @@ public static class PerfText
     public const string NetUpLabel = "NET↑";
 
     /// <summary>
-    /// The share of the model's context window in use (2026-11-21, the user's ask): the Status bar's usage share, drawn as a meter,
-    /// between NET↑ and PROC. Pinned.
+    /// The share of the model's context window in use (2026-11-21, the user's ask), counted as the Status bar counts it, drawn as a meter
+    /// between NET↑ and PROC (<see cref="CtxUnknown"/> while the window is unknown). Pinned.
     /// </summary>
     public const string CtxLabel = "CTX";
 
@@ -114,4 +114,14 @@ public static class PerfText
     /// <summary>A meter's value, four cells wide: <c>  7%</c>, <c> 34%</c>, <c>100%</c>.</summary>
     public static string Percent(double value) =>
         string.Create(CultureInfo.InvariantCulture, $"{Math.Round(PerfMath.Clamp(value), MidpointRounding.AwayFromZero):0}%").PadLeft(4);
+
+    /// <summary>
+    /// CTX's value (2026-11-21, a review): written as <see cref="Percent"/> but past 100 as the Status bar writes it (<c>128%</c>, after a
+    /// server-side trim), capped at 999 so it stays four cells; its gauge still clamps. Pinned.
+    /// </summary>
+    public static string Share(double value) =>
+        string.Create(CultureInfo.InvariantCulture, $"{Math.Round(Math.Clamp(value, 0, 999), MidpointRounding.AwayFromZero):0}%").PadLeft(4);
+
+    /// <summary>CTX's value while the model's context window is unknown (2026-11-21, the user's pick): a dim dash, four cells as a count's.</summary>
+    public const string CtxUnknown = "   –";
 }

@@ -42,10 +42,13 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// CTX on the screen (2026-11-21, the user's ask): once a reply reports its usage against a known window, the bar shows the share in
-    /// use, the Status bar's own (25 of LM Studio's loaded 100).
+    /// use, counted as the Status bar counts it (25 of LM Studio's loaded 100); past 100 after a server-side trim, as the Status bar shows it
+    /// (140, a review, 2026-11-21).
     /// </summary>
-    [Fact]
-    public async Task ShowPerformanceBar_Ctx_ShowsTheContextShare_AfterAReply()
+    [Theory]
+    [InlineData(10, 15, "  25%")]
+    [InlineData(100, 40, " 140%")]
+    public async Task ShowPerformanceBar_Ctx_ShowsTheContextShare_AfterAReply(int inputTokens, int outputTokens, string share)
     {
         _console.Profile.Height = 40;
         _console.Profile.Width = 120;
@@ -53,7 +56,7 @@ public partial class ChatScreenTests
         _settings.Update(d => { d.TtsOutput = false; d.PerformanceBarItems = ["cpu", "ctx"]; d.PerformanceBarLook = "text"; });
         _perfSource.Next = new PerfSnapshot(34, 62, null, null);
         LmStudioWindow();
-        ReplyWithUsage(input: 10, output: 15);
+        ReplyWithUsage(input: inputTokens, output: outputTokens);
         var input = Scripted();
         PushLine(input, "hello");
         bool shown = false;
@@ -62,7 +65,7 @@ public partial class ChatScreenTests
             input.OnWait = null;
             _time.Advance(ScreenPane.Tick);
             _time.Advance(ScreenPane.Tick);
-            shown = Output.Contains("CPU  34% · " + PerfText.CtxLabel + "  25%", StringComparison.Ordinal);
+            shown = Output.Contains("CPU  34% · " + PerfText.CtxLabel + share, StringComparison.Ordinal);
             PushLine(input, "/exit");
         };
 
