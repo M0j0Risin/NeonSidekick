@@ -40,7 +40,8 @@ namespace NeonSidekick.Llm;
 /// <para>The tagged form (2026-09-30, the user's report: <c>&lt;tool_call&gt; &lt;function=generate_image&gt; &lt;parameter=prompt&gt;
 /// score_9, … &lt;/parameter&gt; &lt;parameter=seed&gt; 5566778899 &lt;/parameter&gt; … &lt;/function&gt; &lt;/tool_call&gt;</c> reached a
 /// <c>/botchat</c> line): a Qwen-style model writes its calls in that markup, which the server turns into real calls only when the
-/// request carries tools — and <see cref="Assistant.LastRoundAnswers"/>' last round trip carries none. A <c>&lt;tool_call&gt;</c> block
+/// request carries tools — and <see cref="Assistant.LastRoundAnswers"/>' last round trip carries none (vLLM may parse them even
+/// then, 2026-11-21: <see cref="Assistant.DropNativeCalls"/>). A <c>&lt;tool_call&gt;</c> block
 /// (its body <c>&lt;function=NAME&gt;</c> with <c>&lt;parameter=KEY&gt;VALUE&lt;/parameter&gt;</c> pairs, or the Hermes JSON object
 /// <c>{"name": …, "arguments": …}</c>), or a bare <c>&lt;function=NAME&gt;…&lt;/function&gt;</c>, is a call wherever it starts, to its
 /// close tag (<see cref="TaggedCall"/>). Any name: markup is never prose, so the offered names' guard the other forms need is not

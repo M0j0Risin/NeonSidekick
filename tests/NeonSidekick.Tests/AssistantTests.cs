@@ -1118,6 +1118,75 @@ public class AssistantTests
         Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
     }
 
+    /// <summary>
+    /// A native call in the round asked without the tools (2026-11-21, the user's /botchat log: vLLM parsed a Qwen bot's markup into a
+    /// real generate_image call though the request carried no tools; it ran and the turn ended "Stopped after 3 tool iterations"): it is
+    /// dropped and not run, the words end the turn, and the history keeps no call without its result.
+    /// </summary>
+    [Fact]
+    public async Task LastRoundAnswers_On_ANativeCallInTheLastRound_IsDroppedAndNotRun()
+    {
+        var echo = new EchoTool();
+        var (client, history, assistant) = Build(new AIFunction[] { echo });
+        assistant.MaxToolIterations = 2;
+        assistant.LastRoundAnswers = true;
+        client.Enqueue(FakeChatClient.Call("c0", "echo", new Dictionary<string, object?> { ["text"] = "one" }));
+        client.Enqueue(FakeChatClient.Text("My line."), FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "two" }));
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Null(client.Options[1]!.Tools);
+        Assert.Equal(["one"], echo.Received);
+        Assert.Single(events.OfType<TurnEvent.ToolCall>());
+        Assert.Equal("My line.", string.Concat(Deltas(events)));
+        Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
+        Assert.DoesNotContain(history.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>(), c => c.CallId == "c1");
+        Assert.Equal("My line.", history.Messages[^1].Text);
+    }
+
+    /// <summary>
+    /// A last round that is a native call alone (2026-11-22, the user's ask): not run, no error, the turn ends with no words and the
+    /// history keeps neither the call nor an empty message. Botchat passes an empty reply on to the next bot.
+    /// </summary>
+    [Fact]
+    public async Task LastRoundAnswers_On_ALastRoundThatIsANativeCallAlone_EndsTheTurnWithNoWords_AndNoError()
+    {
+        var echo = new EchoTool();
+        var (client, history, assistant) = Build(new AIFunction[] { echo });
+        assistant.MaxToolIterations = 2;
+        assistant.LastRoundAnswers = true;
+        client.Enqueue(FakeChatClient.Call("c0", "echo", new Dictionary<string, object?> { ["text"] = "one" }));
+        client.Enqueue(FakeChatClient.Call("c1", "echo", new Dictionary<string, object?> { ["text"] = "two" }));
+
+        var events = await Run(assistant, "go");
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Null(client.Options[1]!.Tools);
+        Assert.Equal(["one"], echo.Received);
+        Assert.Single(events.OfType<TurnEvent.ToolCall>());
+        Assert.Equal("", string.Concat(Deltas(events)));
+        Assert.DoesNotContain(events, e => e is TurnEvent.Notice { IsError: true });
+        Assert.DoesNotContain(history.Messages.SelectMany(m => m.Contents).OfType<FunctionCallContent>(), c => c.CallId == "c1");
+        Assert.DoesNotContain(history.Messages, m => m.Contents.Count == 0);
+        Assert.IsType<FunctionResultContent>(Assert.Single(history.Messages[^1].Contents));
+    }
+
+    /// <summary>A last round that is nothing but a native call leaves no empty message behind.</summary>
+    [Fact]
+    public void DropNativeCalls_TakesTheCalls_AndAMessageLeftEmpty()
+    {
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.Assistant, [new TextContent("words"), new FunctionCallContent("a", "echo")]),
+            new(ChatRole.Assistant, [new FunctionCallContent("b", "echo")]),
+        };
+
+        Assert.True(Assistant.DropNativeCalls(messages));
+        Assert.Equal("words", Assert.Single(messages).Text);
+        Assert.False(Assistant.DropNativeCalls(messages));
+    }
+
     /// <summary>The same markup in a round that offers the tools runs as a real call.</summary>
     [Fact]
     public async Task TextToolCalls_On_ATaggedCall_Runs()

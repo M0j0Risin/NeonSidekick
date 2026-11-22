@@ -1018,7 +1018,8 @@ public sealed class Assistant
     /// Whether the last round trip <see cref="MaxToolIterations"/> allows is asked without the tools, so the model must answer in
     /// words (2026-09-30, the user's report: a <c>/botchat</c> bot a few turns in spent all three of its round trips on
     /// <c>generate_image</c> and the chat showed "Stopped after 3 tool iterations without a final answer" in place of its line).
-    /// A call the model still writes out as text in that round is kept out of the reply (<see cref="TextToolCalls"/>) but not run.
+    /// A call the model still writes out as text in that round is kept out of the reply (<see cref="TextToolCalls"/>) but not run,
+    /// and so is one the server parses into a real call anyway (2026-11-21, vLLM on a Qwen bot: <see cref="DropNativeCalls"/>).
     /// Off by default and on for botchat alone: the main chat's cap keeps its meaning, the loop's guard against a runaway.
     /// </summary>
     public bool LastRoundAnswers { get; set; }
@@ -2440,6 +2441,14 @@ public sealed class Assistant
                     notRunNote: answerRound ? LastRoundTextCallsNote : TakenOutTextCallsNote);
             }
 
+            // A native call in the round asked without the tools (2026-11-21, the user's /botchat log: vLLM's tool parser turned a Qwen
+            // bot's <tool_call> markup into a real call though the request carried no tools; it ran, a fourth picture, and the turn
+            // ended "Stopped after 3 tool iterations" over the bot's words) is dropped as a written one is: not run, the words kept.
+            if (answerRound && DropNativeCalls(response.Messages))
+            {
+                DiagnosticLog.Info(Category, LastRoundNativeCallsNote);
+            }
+
             foreach (var message in response.Messages)
             {
                 _history.AddMessage(message);
@@ -3231,6 +3240,41 @@ public sealed class Assistant
 
     /// <summary>The <c>--log</c> line when the model wrote a tool call as text in the round that asked for words (2026-09-30).</summary>
     internal const string LastRoundTextCallsNote = "The model wrote a tool call out as text in the round that asked for an answer; it was dropped from the reply and not run.";
+
+    /// <summary>The <c>--log</c> line when the server parsed a tool call in the round that asked for words (2026-11-21, <see cref="DropNativeCalls"/>).</summary>
+    internal const string LastRoundNativeCallsNote = "The server returned a tool call in the round that asked for an answer, though no tools were offered; it was dropped and not run.";
+
+    /// <summary>
+    /// Takes every <see cref="FunctionCallContent"/> out of <paramref name="messages"/>, and a message left with nothing, so the
+    /// history keeps no call without its result (2026-11-21, <see cref="LastRoundAnswers"/>). Whether any was taken.
+    /// </summary>
+    internal static bool DropNativeCalls(IList<ChatMessage> messages)
+    {
+        bool dropped = false;
+        for (int i = messages.Count - 1; i >= 0; i--)
+        {
+            var contents = messages[i].Contents;
+            int before = contents.Count;
+            for (int j = contents.Count - 1; j >= 0; j--)
+            {
+                if (contents[j] is FunctionCallContent)
+                {
+                    contents.RemoveAt(j);
+                }
+            }
+
+            if (contents.Count < before)
+            {
+                dropped = true;
+                if (contents.Count == 0)
+                {
+                    messages.RemoveAt(i);
+                }
+            }
+        }
+
+        return dropped;
+    }
 
     /// <summary>The <c>--log</c> line when the model wrote out a call to a tool only taken out (<see cref="WrittenCallsTakenOut"/>, 2026-09-30).</summary>
     internal const string TakenOutTextCallsNote = "The model wrote out, as text, a call to a tool it is not offered; it was dropped from the reply and not run.";

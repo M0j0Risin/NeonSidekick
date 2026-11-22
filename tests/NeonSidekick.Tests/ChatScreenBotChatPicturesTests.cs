@@ -139,6 +139,31 @@ public partial class ChatScreenTests
         Assert.DoesNotContain("(Attached, oldest first", _chat.Requests[2][^1].Text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A bot whose last round, asked without the tools, comes back a native call alone (2026-11-21, vLLM on a Qwen bot; 2026-11-22, the
+    /// user's ask for this case): the call isn't run, no "Stopped after" error, no line for that bot, and the chat goes on to the next one.
+    /// </summary>
+    [Fact]
+    public async Task BotChat_ALastRoundThatIsANativeCallAlone_IsNotRun_AndTheNextBotAnswers()
+    {
+        BotPicturesFixture(mode: "autonomous");
+        _chat.Enqueue(FakeChatClient.Call("g1", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a dog surfing", ["seed"] = 7, ["verbatim"] = true }));
+        _chat.Enqueue(FakeChatClient.Call("g2", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a cat surfing", ["seed"] = 8, ["verbatim"] = true }));
+        _chat.Enqueue(FakeChatClient.Call("g3", GenerateImageTool.ToolName, new Dictionary<string, object?> { ["prompt"] = "a third", ["seed"] = 9, ["verbatim"] = true }));
+        _chat.EnqueueText("Ada ", "answers.");
+        EscDuringRequest(5);
+        PushLine("/botchat");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("tool iterations", output, StringComparison.Ordinal);
+        Assert.True(_chat.Requests.Count >= 4, _chat.Requests.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Null(_chat.Options[2]?.Tools);   // the third round trip was the last, asked without the tools
+        Assert.Contains("Ada answers.", output, StringComparison.Ordinal);
+        Assert.DoesNotContain(_chat.Requests[3].SelectMany(m => m.Contents).OfType<FunctionCallContent>(), c => c.CallId == "g3");
+    }
+
     /// <summary>Autonomous, vision on (2026-09-27): a bot's own generate_image picture reaches the other bot next turn, not itself again.</summary>
     [Fact]
     public async Task BotChat_Vision_Autonomous_ABotsOwnPicture_ReachesTheOther_NotItself()
