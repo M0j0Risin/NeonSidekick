@@ -109,7 +109,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | Pane | Keys |
 |---|---|
 | **Conversation** | |
-| `/memory` | Enter: edit, disable/enable, this folder only / everywhere, forget (asks) · Delete forgets (asks) · `r` remember · `m` *Memory mode* |
+| `/memory` | Enter: edit, disable/enable, folder / everywhere, forget (asks) · Delete forgets (asks) · `r` remember · `m` *Memory mode* |
 | `/queue` | Enter or Delete removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
 | `/rewind`'s files question | `f` conversation and files · `c` conversation only · Enter chooses · Esc cancels |
@@ -675,7 +675,7 @@ The button at the message box's left (or a bare `/prompts` or `/queue` from the 
 * A tap on the ⏳ lines over the message box opens the Queue tab.
 * **📣 Prompts:** a tap sends a saved prompt as if typed; ✎ puts it on the message line; ⇪ saves the message line as a new one.
 * **🕘 History:** a tap puts an earlier line on the message line. *Clear all* empties the history, stored and at the PC, as `/msgclear` does.
-* **💾 Memory:** ⇪ saves the message line as a memory, as `/memory remember` does. A tap on a memory edits it or turns it off or on. A memory for one folder is marked "this folder" or "one folder".
+* **💾 Memory:** ⇪ saves the message line as a memory, as `/memory remember` does. A tap on a memory edits it or turns it off or on. A memory for one folder is marked "this folder" or "another folder".
 * A 🗑️ and *Clear all* take two taps. The PC's hint row flashes what the page saved, edited or deleted.
 
 #### Sessions and files

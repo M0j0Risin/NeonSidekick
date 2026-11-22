@@ -658,7 +658,7 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string FilesNone = "", string FilesTrimmed = "", string FilesHint = "",
     string AttachButton = "", string AttachRemove = "", string AttachWaiting = "", string AttachTooBig = "", string AttachRoom = "", string AttachStopped = "",
     string AttachLeftOut = "", string AttachPdf = "", string ManageReadFailed = "",
-    string MemoryHere = "", string MemoryElsewhere = "");
+    string MemoryHere = "", string MemoryElsewhere = "", string SessionsNoneHere = "");
 
 /// <summary>
 /// The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, plan lucid-roaming-lantern #42): the PC's queued lines (<see cref="Pc"/>, the <c>/queue</c> pane's), the
@@ -739,9 +739,11 @@ public sealed record WebPrompt(int Number, string Text, string Id);
 /// </summary>
 public sealed record WebMemories(IReadOnlyList<WebMemory> Items, bool ModeOff, int MaxChars = 0);
 
-/// <summary>A memory: its text, and whether it is turned off (kept, but the model doesn't see it).</summary>
-/// <summary>One memory on the page. <paramref name="Scoped"/> and <paramref name="Here"/> (2026-11-21, feature idea #6): saved for one folder, and that folder
-/// the PC's current one; never the path, which the page never sees.</summary>
+/// <summary>
+/// One memory on the page: its text, and whether it is turned off (kept, but the model doesn't see it). <paramref name="Scoped"/> and
+/// <paramref name="Here"/> (2026-11-21, feature idea #6): saved for one folder, and that folder the PC's current one; never the path, which the
+/// page never sees.
+/// </summary>
 public sealed record WebMemory(string Text, bool Off, bool Scoped = false, bool Here = false);
 
 /// <summary>The profile's message history for the page (2026-10-16): its lines oldest first, the PC's drafts set aside and paste tokens left out.</summary>

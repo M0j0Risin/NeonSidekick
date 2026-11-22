@@ -52,7 +52,7 @@ public sealed class SessionFolderTests : IDisposable
             store.AppendTurn(id, "hi", "hello", 0, [], [], 0, 1, 2, false);
         }
 
-        Raw("ALTER TABLE sessions DROP COLUMN cwd; ALTER TABLE turns DROP COLUMN model; ALTER TABLE turns DROP COLUMN output_ms; ALTER TABLE turns DROP COLUMN timed_output;");
+        Raw("ALTER TABLE sessions DROP COLUMN cwd; ALTER TABLE turns DROP COLUMN model; ALTER TABLE turns DROP COLUMN output_ms; ALTER TABLE turns DROP COLUMN timed_output; ALTER TABLE turns DROP COLUMN cwd;");
         return id;
     }
 
@@ -66,7 +66,7 @@ public sealed class SessionFolderTests : IDisposable
         Assert.Null(old.Cwd);
         Assert.Equal(SessionStore.SchemaVersion, store.SchemaStored());
         Assert.Equal(3, SessionStore.SchemaVersion);
-        foreach (var (table, column) in new[] { ("sessions", "cwd"), ("turns", "model"), ("turns", "output_ms"), ("turns", "timed_output") })
+        foreach (var (table, column) in new[] { ("sessions", "cwd"), ("turns", "model"), ("turns", "output_ms"), ("turns", "timed_output"), ("turns", "cwd") })
         {
             Assert.True(store.HasColumn(table, column), column);
         }
@@ -105,11 +105,11 @@ public sealed class SessionFolderTests : IDisposable
     }
 
     [Fact]
-    public void AColumnAddThatFails_LeavesSessionsWorking_WithoutTheFolder_AndSaysSo()
+    public void AColumnAddThatFails_LeavesSessionsWorking_WithoutTheFolder_AndSaysSoOnce_AsAWarning()
     {
         OlderFile();
         var errors = new List<DiagnosticEvent>();
-        Action<DiagnosticEvent> capture = e => { if (e.Category == "Sessions" && e.Level == DiagnosticLevel.Error) { errors.Add(e); } };
+        Action<DiagnosticEvent> capture = e => { if (e.Category == "Sessions" && e.Level >= DiagnosticLevel.Warning) { errors.Add(e); } };
         DiagnosticLog.Emitted += capture;
         try
         {
@@ -127,7 +127,80 @@ public sealed class SessionFolderTests : IDisposable
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.StartsWith("Could not add the folder and model columns in sessions.db: ", Assert.Single(errors).Message);
+        var warned = Assert.Single(errors);   // once, though the busy file was tried twice (#102)
+        Assert.Equal(DiagnosticLevel.Warning, warned.Level);
+        Assert.StartsWith("Could not add the folder and model columns in sessions.db: ", warned.Message);
+        Assert.StartsWith(SessionStore.ColumnsFailedWarning(""), warned.Message);
+    }
+
+    /// <summary>Another copy adding the columns between the check and the add (2026-11-22, the review's #105): its adds are as good as ours.</summary>
+    [Fact]
+    public void AnotherCopyAddingTheColumnsFirst_IsASuccess_NotAFailure()
+    {
+        OlderFile();
+        var warnings = new List<DiagnosticEvent>();
+        Action<DiagnosticEvent> capture = e => { if (e.Category == "Sessions" && e.Level >= DiagnosticLevel.Warning) { warnings.Add(e); } };
+        DiagnosticLog.Emitted += capture;
+        try
+        {
+            bool raced = false;
+            using var store = new SessionStore(_dir, _time)
+            {
+                BeforeColumnAdds = () =>
+                {
+                    if (raced)
+                    {
+                        return;
+                    }
+
+                    raced = true;
+                    Raw("ALTER TABLE sessions ADD COLUMN cwd TEXT; ALTER TABLE turns ADD COLUMN model TEXT; ALTER TABLE turns ADD COLUMN output_ms INTEGER; ALTER TABLE turns ADD COLUMN timed_output INTEGER; ALTER TABLE turns ADD COLUMN cwd TEXT;");
+                    throw new SqliteException("duplicate column name: cwd", 1);
+                },
+            };
+            long id = store.Begin("new", "m", _dir)!.Value;
+            Assert.Equal(_dir, store.Summary(id)!.Cwd);
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Empty(warnings);
+    }
+
+    /// <summary>A rewind takes the folder back with the turns (2026-11-22, the review's #41): the last kept turn's.</summary>
+    [Fact]
+    public void ATruncate_TakesTheFolderBack_ToTheLastKeptTurns()
+    {
+        string first = Path.Combine(_dir, "a");
+        string second = Path.Combine(_dir, "b");
+        using var store = new SessionStore(_dir, _time);
+        long id = store.Begin("t", "llama", first)!.Value;
+        store.AppendTurn(id, "one", "r", 0, [], [], 0, 0, 0, false, cwd: first);
+        store.AppendTurn(id, "two", "r", 0, [], [], 0, 0, 0, false, cwd: second);
+        Assert.Equal(second, store.Summary(id)!.Cwd);
+        Assert.Equal(second, RawScalar("SELECT cwd FROM turns WHERE ordinal = 2"));
+
+        store.TruncateTurns(id, 1);
+
+        Assert.Equal(first, store.Summary(id)!.Cwd);
+    }
+
+    /// <summary>A session whose turns were saved before they kept a folder keeps its own through a truncate (#41).</summary>
+    [Fact]
+    public void ATruncate_OntoTurnsWithoutAFolder_KeepsTheSessions()
+    {
+        string folder = Path.Combine(_dir, "a");
+        using var store = new SessionStore(_dir, _time);
+        long id = store.Begin("t", "llama", folder)!.Value;
+        store.AppendTurn(id, "one", "r", 0, [], [], 0, 0, 0, false);
+        store.AppendTurn(id, "two", "r", 0, [], [], 0, 0, 0, false);
+
+        store.TruncateTurns(id, 1);
+
+        Assert.Equal(folder, store.Summary(id)!.Cwd);
+        Assert.Equal(1, store.Summary(id)!.Turns);
     }
 
     [Theory]

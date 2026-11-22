@@ -142,7 +142,7 @@ internal static class HelpFiles
             new(HelpFileScope.Profile, configs + Midi.MidiBindings.FileName, "the MIDI bindings: each learned button and the command it runs", "`/midi`"),
             new(HelpFileScope.Profile, configs + Prompts.SavedPrompts.FileName, "the saved prompts", "`/prompts`"),
             new(HelpFileScope.Profile, configs + Viewer.BrowserHistory.FileName, "the Browser window's visits, kept while *Web browser privacy* says `keep-history`"),
-            new(HelpFileScope.Profile, configs + Mcp.McpTokenStore.FileName, "the MCP sign-ins, encrypted for this Windows user or Keychain and left out of the settings zip", "`/mcp`"),
+            new(HelpFileScope.Profile, configs + Mcp.McpTokenStore.FileName, "the MCP sign-ins, encrypted for this Windows user or Keychain and left out of the settings zip; one that won't parse is moved to `mcp-tokens.json.bad`", "`/mcp`"),
             new(HelpFileScope.Profile, configs + Viewer.BrowserLinks.FileName, "the Browser window's saved links", "`/browser`"),
             new(HelpFileScope.Profile, configs + Emojis.EmojiPrefs.FileName, "the avatar picker's recent picks and last skin tone", "`/avatar`"),
             new(HelpFileScope.Profile, Join(Sessions.SessionStore.FolderName, Sessions.SessionStore.FileName), "the stored sessions and the input line's history", "`/sessions`"),

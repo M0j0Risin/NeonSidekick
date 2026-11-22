@@ -27,7 +27,7 @@ public sealed class McpTool : AIFunction
     private readonly string _name;
     private readonly string _description;
     private readonly Func<McpTool, CallToolRequestParams, CancellationToken, ValueTask<McpCallOutcome>>? _caller;
-    private readonly Func<string, bool>? _readOffered;
+    private readonly Func<McpTool, McpRenderContext>? _renderContext;
 
     /// <param name="server">The configured server's name (unsanitised; the prefix is <paramref name="name"/>'s).</param>
     /// <param name="client">The client at build time: the call goes through it only when there is no <paramref name="caller"/>.</param>
@@ -38,7 +38,7 @@ public sealed class McpTool : AIFunction
     /// Whether <c>mcp_read</c> is offered for a server this turn (2026-11-21, feature idea #33), asked at each call: a result's resource
     /// links and cut notes point to it only then (<see cref="McpRenderContext.ReadOffered"/>). Null: never.
     /// </param>
-    public McpTool(string server, McpClient client, McpClientTool inner, string name, Func<McpTool, CallToolRequestParams, CancellationToken, ValueTask<McpCallOutcome>>? caller = null, Func<string, bool>? readOffered = null)
+    public McpTool(string server, McpClient client, McpClientTool inner, string name, Func<McpTool, CallToolRequestParams, CancellationToken, ValueTask<McpCallOutcome>>? caller = null, Func<McpTool, McpRenderContext>? renderContext = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(server);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -47,7 +47,7 @@ public sealed class McpTool : AIFunction
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _name = name;
         _caller = caller;
-        _readOffered = readOffered;
+        _renderContext = renderContext;
         string described = McpText.OneLine(inner.Description);
         _description = described.Length > 0 ? described : McpText.NoDescription;
     }
@@ -136,7 +136,7 @@ public sealed class McpTool : AIFunction
     }
 
     /// <summary>This tool's context for its result: its own name labels the pictures, and <c>mcp_read</c> is named when offered for its server.</summary>
-    private McpRenderContext RenderContext() => new(_name, _readOffered?.Invoke(ServerName) == true);
+    private McpRenderContext RenderContext() => _renderContext?.Invoke(this) ?? McpRenderContext.Plain(_name);
 
     /// <summary>
     /// The call's arguments as JSON elements: a <see cref="JsonElement"/> from the wire is cloned as it is;
@@ -204,9 +204,11 @@ public sealed class McpTool : AIFunction
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(context);
         var sb = new StringBuilder();
-        var pictures = new McpPictures(context.Label);
+        var pictures = McpPictures.For(context);
         bool texted = false;
         bool error = result.IsError == true;
+        // One budget for every embedded text (2026-11-22, the review's #56): twenty embedded documents never come to twenty windows.
+        int budget = Files.WorkingDirectory.MaxReadChars;
         foreach (var block in result.Content ?? [])
         {
             string piece;
@@ -231,7 +233,9 @@ public sealed class McpTool : AIFunction
                     piece = pictures.Add(image.Data, () => image.DecodedData);
                     break;
                 case EmbeddedResourceBlock embedded:
-                    piece = Embedded(embedded.Resource, pictures, context.ReadOffered);
+                    piece = Embedded(embedded.Resource, pictures, context.ReadOffered, ref budget);
+                    // Text came first (2026-11-22, the review's #130): a later text block's own "Error:" stays as the server wrote it.
+                    texted |= embedded.Resource is TextResourceContents;
                     break;
                 case ResourceLinkBlock link:
                     piece = McpText.ResourceLink(link.Name, link.Uri ?? "", link.Description, context.ReadOffered);
@@ -253,14 +257,20 @@ public sealed class McpTool : AIFunction
         return new McpRendered(error ? McpText.ErrorPrefix + rendered : rendered, pictures.Taken);
     }
 
-    /// <summary>An embedded resource as its piece of the result: its text fenced and cut as <c>mcp_read</c> pages it, a picture, or named only.</summary>
-    private static string Embedded(ResourceContents? resource, McpPictures pictures, bool readOffered)
+    /// <summary>
+    /// An embedded resource as its piece of the result: its text fenced and cut as <c>mcp_read</c> pages it, out of the result's one
+    /// <paramref name="budget"/> (a text past it is named, #56), a picture, or named only.
+    /// </summary>
+    private static string Embedded(ResourceContents? resource, McpPictures pictures, bool readOffered, ref int budget)
     {
         switch (resource)
         {
+            case TextResourceContents text when budget <= 0:
+                return McpText.ResourceLeftOut(text.Uri ?? "", (text.Text ?? "").Length, readOffered);
             case TextResourceContents text:
                 string body = text.Text ?? "";
-                var (shown, consumed) = Llm.Tools.UntrustedText.ScrubPrefix(body, 0, Files.WorkingDirectory.MaxReadChars);
+                var (shown, consumed) = Llm.Tools.UntrustedText.ScrubPrefix(body, 0, budget);
+                budget -= consumed;
                 string piece = McpText.ResourceHeader(text.Uri ?? "", text.MimeType) + "\n" + Llm.Tools.UntrustedText.Quote(shown);
                 return consumed < body.Length ? piece + "\n" + McpText.ResourceCut(consumed, body.Length, readOffered) : piece;
             case BlobResourceContents blob when McpPictures.IsPicture(blob.MimeType):

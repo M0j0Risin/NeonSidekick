@@ -324,8 +324,15 @@ public sealed class MadeFiles
     }
 
     /// <summary>
-    /// A restored session's own list: each entry tied back to the restored message with its ordinal; one past the row's <paramref name="turns"/>
-    /// belonged to a cut turn (a rewind truncates the turns, not the saved history) and goes; one with none stays with no turn. Fresh tokens.
+    /// A stored list as a session of <paramref name="turns"/> turns keeps it (2026-11-22, the review's #69, shared with <see cref="Restore"/>): an
+    /// entry past the turns belonged to a cut turn (a rewind truncates the turns, not the saved history) and goes; one with no turn stays.
+    /// </summary>
+    public static IReadOnlyList<StoredMadeFile>? Kept(IEnumerable<StoredMadeFile>? stored, int turns) =>
+        stored?.Where(file => file.Ordinal is not { } ordinal || ordinal <= turns).ToList();
+
+    /// <summary>
+    /// A restored session's own list (<see cref="Kept"/>): each entry tied back to the restored message with its ordinal; one with none stays
+    /// with no turn. Fresh tokens.
     /// </summary>
     public void Restore(IEnumerable<StoredMadeFile>? stored, IEnumerable<ChatMessage> restored, int turns)
     {
@@ -343,13 +350,8 @@ public sealed class MadeFiles
         {
             _entries.Clear();
             _trimmed = false;
-            foreach (var file in stored ?? [])
+            foreach (var file in Kept(stored, turns) ?? [])
             {
-                if (file.Ordinal is { } ordinal && ordinal > turns)
-                {
-                    continue;
-                }
-
                 Add(file.Path, file.Ordinal is { } at && byOrdinal.TryGetValue(at, out long key) ? key : null);
             }
         }

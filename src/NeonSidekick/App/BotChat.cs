@@ -357,17 +357,15 @@ public static partial class BotChat
     /// The tools whose pictures a bot's model is not shown (2026-10-10, <see cref="Assistant.ToolPicturesUnseen"/>): with
     /// <c>Botchat vision enabled</c> off, <c>generate_image</c>, so the bot that drew a picture sees text alone as the others do,
     /// and — later that day, the user's asks — <c>view_image</c> and <c>camera_capture</c>, then <c>screen_capture</c> and
-    /// <c>image_edit</c> (its <c>view</c>), which a bot gets from the main chat's tools; none with it on. Pure.
+    /// <c>image_edit</c> (its <c>view</c>), which a bot gets from the main chat's tools; none with it on. Pure. No MCP tool or <c>mcp_read</c>
+    /// is listed (2026-11-22, the review's #145): a bot never gets them (<c>ChatScreen.BotLimitedToolNames</c>); add them here if that changes.
     /// </summary>
     public static IReadOnlySet<string> UnseenToolPictures(bool vision) =>
         vision ? NoneUnseen : PicturesUnseen;
 
     private static readonly IReadOnlySet<string> NoneUnseen = new HashSet<string>(StringComparer.Ordinal);
-    private static readonly IReadOnlySet<string> PicturesUnseen = new HashSet<string>(StringComparer.Ordinal)
-    {
-        GenerateImageTool.ToolName, ViewImageTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, ImageEditTool.ToolName,
-        RenderPictureTool.ToolName, RenderChartTool.ToolName, RenderCollageTool.ToolName,   // the drawn pictures (2026-11-16, #9)
-    };
+    // The drawn pictures too (2026-11-16, #9); one list with the refusal's widening since 2026-11-22.
+    private static readonly IReadOnlySet<string> PicturesUnseen = Llm.Assistant.PictureTools;
 
     /// <summary>
     /// The group-chat rules after the persona (2026-09-24): who else is in the room, speak only as yourself,

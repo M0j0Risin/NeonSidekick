@@ -384,7 +384,7 @@ public static class SessionHistory
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Pdf.PdfText.PageNotKept(pdfPage.File, pdfPage.Page) });
                     break;
                 case DataContent data when data.HasTopLevelMediaType("image"):
-                    stored.Parts.Add(new StoredPart { Kind = StoredPart.ImageKind, Bytes = Convert.ToBase64String(data.Data.Span), MediaType = data.MediaType, Path = ConversationHistory.PicturePath(data), Mcp = McpLabel(data) is not null });
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.ImageKind, Bytes = Convert.ToBase64String(data.Data.Span), MediaType = data.MediaType, Path = McpLabel(data) ?? ConversationHistory.PicturePath(data), Mcp = McpLabel(data) is not null });
                     break;
                 case FunctionCallContent call:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.CallKind, CallId = call.CallId, Name = call.Name, Arguments = Assistant.SerializeArguments(call.Arguments) });
@@ -420,14 +420,18 @@ public static class SessionHistory
                     break;
                 case StoredPart.ImageKind when part.Bytes is not null && !string.IsNullOrEmpty(part.MediaType):
                     var picture = new DataContent(Convert.FromBase64String(part.Bytes), part.MediaType);
-                    if (!string.IsNullOrWhiteSpace(part.Path))
-                    {
-                        picture.AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.PathKey] = part.Path };
-                    }
-
                     if (part.Mcp)
                     {
-                        (picture.AdditionalProperties ??= [])[ConversationHistory.McpKey] = part.Path ?? "";
+                        // An MCP picture's stored Path is its label (2026-11-22, the review's #47, #101): back under McpKey alone, never as a
+                        // path, a blank one named generically. Rows saved by 7269eeb1 have the same shape.
+                        picture.AdditionalProperties = new AdditionalPropertiesDictionary
+                        {
+                            [ConversationHistory.McpKey] = string.IsNullOrWhiteSpace(part.Path) ? Mcp.McpText.UnnamedPicture : part.Path,
+                        };
+                    }
+                    else if (!string.IsNullOrWhiteSpace(part.Path))
+                    {
+                        picture.AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.PathKey] = part.Path };
                     }
 
                     contents.Add(picture);

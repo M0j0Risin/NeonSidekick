@@ -544,10 +544,12 @@ internal sealed partial class ChatScreen
         sources = new List<DataContent>(pictures.Count);
         foreach (var picture in pictures)
         {
-            string name = ConversationHistory.PicturePath(picture) ?? ImageFile.ClipboardName(images.Count + 1);
+            // An MCP picture has no file (2026-11-22, the review's #47): its label comes back as its source, its path stays empty.
+            string? mcp = ConversationHistory.McpLabel(picture);
+            string name = (mcp is null ? ConversationHistory.PicturePath(picture) : null) ?? ImageFile.ClipboardName(images.Count + 1);
             if (ImageFile.TryLoad(picture.Data.ToArray(), name, out var image, out _) && image is not null)
             {
-                images.Add(image with { Path = name });
+                images.Add(mcp is null ? image with { Path = name } : image with { Path = "", McpSource = mcp });
                 sources.Add(picture);
             }
         }

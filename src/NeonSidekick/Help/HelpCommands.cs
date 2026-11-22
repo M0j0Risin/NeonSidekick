@@ -261,7 +261,7 @@ public static class HelpCommands
         ]),
         new("/memory",
         [
-            new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **This folder only** or **Everywhere** (a memory for one folder is marked; another folder's shows dim), **forget** (after a yes); **+ remember** (`r`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
+            new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **folder** or **everywhere** (a memory for one folder is marked; another folder's shows dim), **forget** (after a yes); **+ remember** (`r`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
             new("/memory read-write|read-only|off", "Set *Memory mode*."),
             new("/memory remember [--here] <text>", "Add a memory, whatever *Memory mode* says. `--here`, before the text, offers it only while working in this folder."),
             new("/memory forget|edit", "Forget every memory, after a yes (`forget`), or open `memory.json` in your editor (`edit`; invalid JSON is ignored with a warning)."),
@@ -457,7 +457,7 @@ public static class HelpCommands
         new("/sessions",
         [
             new("/sessions [<id>]", "List the stored sessions on a pane, or restore one by its id (`#12` works too); a session that worked in another folder offers to switch to it. Ctrl+Y runs it too."),
-            new("/sessions here", "List only the sessions of the working folder in force; sessions saved before this version have no folder. Works while a reply runs."),
+            new("/sessions here", "List only the sessions of the working folder in force; a session saved without a folder isn't listed. Works while a reply runs."),
             new("/sessions purge <id>|all", "Delete one stored session, or every one."),
             new("/sessions purge older <age>", "Delete the sessions older than an age: a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`)."),
             new("/sessions title [<text>]", "Rename the current session; alone, it opens a box with the current name (as a double-click on the name above the input row does). Works while a reply runs."),

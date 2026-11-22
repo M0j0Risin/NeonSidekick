@@ -3,7 +3,7 @@
 Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command line. Back to the [README](../README.md).
 
 * **For this launch only:** options are never saved, and a flag outranks its environment variable and the saved setting.
-* **Two spellings:** `--option value` or `--option=value`; use the `=` form for a value that starts with `-`.
+* **Two spellings:** `--option value` or `--option=value`; use the `=` form for a value that starts with `-`. `--prompt` and `--prompt-file` take one that starts with a single `-` either way.
 * **See also:** [HEADLESS.md](HEADLESS.md) for scripted runs, and [ENVIRONMENT.md](ENVIRONMENT.md) for the variables.
 
 | Option | What it does |

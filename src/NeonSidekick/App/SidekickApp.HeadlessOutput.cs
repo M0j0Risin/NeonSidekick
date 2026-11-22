@@ -10,12 +10,24 @@ namespace NeonSidekick.App;
 
 public sealed partial class SidekickApp
 {
-    /// <summary>One of the headless run's two writers and whether its cursor is at a line's start.</summary>
+    /// <summary>
+    /// One of the headless run's two writers and whether its cursor is at a line's start. The writer is synchronized and the flag read and set
+    /// whole (2026-11-22, the review's #86): a diagnostic's line comes from the log's thread (<see cref="HeadlessSyncLine"/>, under
+    /// <see cref="Gate"/>) while the run's own lines are written.
+    /// </summary>
     private sealed class HeadlessWriter(TextWriter writer)
     {
-        public TextWriter Writer { get; } = writer;
+        private volatile bool _atLineStart = true;
 
-        public bool AtLineStart { get; set; } = true;
+        public TextWriter Writer { get; } = TextWriter.Synchronized(writer);
+
+        public object Gate { get; } = new();
+
+        public bool AtLineStart
+        {
+            get => _atLineStart;
+            set => _atLineStart = value;
+        }
     }
 
     /// <summary>stdout: the replies, and in the normal mode everything else too.</summary>
@@ -41,8 +53,8 @@ public sealed partial class SidekickApp
     /// <summary>What the run's failures were, for the summary and exit 4.</summary>
     private HeadlessFailures _headlessFailures = new();
 
-    /// <summary>What the input line was, for a failure's entry: its command word, or <see cref="HeadlessText.AMessage"/>.</summary>
-    private string _headlessLineWord = HeadlessText.AMessage;
+    /// <summary>What the input line was, for a failure's entry: its command word, or <see cref="HeadlessText.AMessage"/>. Read on the log's thread too.</summary>
+    private volatile string _headlessLineWord = HeadlessText.AMessage;
 
     /// <summary>The longest why a failure's entry keeps, in cells.</summary>
     private const int FailureWhyCells = 100;
@@ -78,6 +90,9 @@ public sealed partial class SidekickApp
     /// <summary>A failure the run names itself (a loop that stopped, a review, <c>/compact</c>), as the input line's entry.</summary>
     private void HeadlessFail(string what, string why) => _headlessFailures.Add(what, ShortWhy(why));
 
+    /// <summary>How a Ralph loop ended, as the line's entry in place of anything a pass noted on it (2026-11-22, the review's #97).</summary>
+    private void HeadlessFailInstead(string what, string why) => _headlessFailures.Replace(what, ShortWhy(why));
+
     private static string ShortWhy(string why)
     {
         string first = why.Split('\n', 2)[0].Trim();
@@ -97,11 +112,14 @@ public sealed partial class SidekickApp
         return rest.StartsWith(Tag, StringComparison.Ordinal) ? rest[Tag.Length..] : null;
     }
 
-    /// <summary>Whether a line is the app's own (a bracketed tag after the reply prefix or not) rather than an answer.</summary>
-    private static bool HeadlessTagged(string line)
+    /// <summary>
+    /// Whether a line is the app's own (one of <see cref="HeadlessText.Tags"/>, after the reply prefix or not) rather than an answer: since
+    /// 2026-11-22 (the review's #29) never any leading <c>[</c>, so an answer that starts with a Markdown link stays on stdout.
+    /// </summary>
+    internal static bool HeadlessTagged(string line)
     {
         string rest = line.StartsWith(HeadlessReplyPrefix, StringComparison.Ordinal) ? line[HeadlessReplyPrefix.Length..] : line;
-        return rest.StartsWith('[');
+        return HeadlessText.Tags.Any(tag => rest.StartsWith(tag, StringComparison.Ordinal));
     }
 
     private static string Unprefixed(string line) =>
@@ -284,18 +302,22 @@ public sealed partial class SidekickApp
         }
     }
 
-    /// <summary>One line written at once, on a line of its own (the advisor's view, a Docker step, a diagnostic).</summary>
+    /// <summary>One line written at once, on a line of its own (the advisor's view, a Docker step, a diagnostic), under the writer's lock (#86).</summary>
     private void HeadlessSyncLine(string line)
     {
         NoteHeadlessError(line);
-        if (!_infoOut.AtLineStart)
+        var info = _infoOut;
+        lock (info.Gate)
         {
-            _infoOut.Writer.WriteLine();
-        }
+            if (!info.AtLineStart)
+            {
+                info.Writer.WriteLine();
+            }
 
-        _infoOut.Writer.WriteLine(line);
-        _infoOut.Writer.Flush();
-        _infoOut.AtLineStart = true;
+            info.Writer.WriteLine(line);
+            info.Writer.Flush();
+            info.AtLineStart = true;
+        }
     }
 
     /// <summary>

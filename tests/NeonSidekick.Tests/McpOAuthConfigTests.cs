@@ -36,7 +36,8 @@ public sealed class McpOAuthConfigTests : IDisposable
             "port": { "url": "https://b/mcp", "oauth": { "redirectPort": 70000 } },
             "half": { "url": "https://b/mcp", "oauth": { "redirectPort": 12.5 } },
             "shape": { "url": "https://c/mcp", "oauth": "yes" },
-            "scopes": { "url": "https://d/mcp", "oauth": { "scopes": "read" } }
+            "scopes": { "url": "https://d/mcp", "oauth": { "scopes": "read" } },
+            "secret": { "url": "https://e/mcp", "oauth": { "clientSecret": "s" } }
             """);
         var ok = Assert.Single(load.Servers).Value;
         Assert.Equal(9000, ok.RedirectPort);
@@ -47,6 +48,33 @@ public sealed class McpOAuthConfigTests : IDisposable
         Assert.Equal(McpText.BadRedirectPort, load.Problems.Single(p => p.Name == "half").Reason);
         Assert.Equal(McpText.BadOAuth, load.Problems.Single(p => p.Name == "shape").Reason);
         Assert.Equal(McpText.BadOAuth, load.Problems.Single(p => p.Name == "scopes").Reason);
+        Assert.Equal(McpText.OAuthSecretNeedsId, load.Problems.Single(p => p.Name == "secret").Reason);   // #79
+    }
+
+    /// <summary>An oauth block beside the server's own key (2026-11-22, the review's #53): loaded, the header kept, said once across reads.</summary>
+    [Fact]
+    public void AnOAuthBlock_BesideAKeyHeader_IsIgnored_SaidOnce()
+    {
+        var warnings = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> heard = e => { if (e.Level == NeonSidekick.Diagnostics.DiagnosticLevel.Warning && e.Message.Contains("oauth block is ignored", StringComparison.Ordinal)) { lock (warnings) { warnings.Add(e.Message); } } };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += heard;
+        try
+        {
+            string servers = "\"keyed-" + Guid.NewGuid().ToString("N") + "\": { \"url\": \"https://a/mcp\", \"headers\": { \"Authorization\": \"Bearer x\" }, \"oauth\": { \"clientId\": \"id\" } }";
+            var first = Load(servers, seal: true);   // the read that logs
+            Load(servers + " ", seal: true);   // the file changed: read again
+
+            var config = Assert.Single(first.Servers).Value;
+            Assert.Empty(first.Problems);
+            Assert.True(config.HasAuthorizationHeader);   // the header kept (sealed in place by the read)
+            Assert.False(config.SignInPossible);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= heard;
+        }
+
+        Assert.Single(warnings);
     }
 
     [Fact]
@@ -54,7 +82,11 @@ public sealed class McpOAuthConfigTests : IDisposable
     {
         Assert.False(new McpServerConfig { Url = "https://a", Headers = new() { ["authorization"] = "Bearer x" } }.SignInPossible);
         Assert.False(new McpServerConfig { Url = "https://a", Headers = new() { ["AUTHORIZATION"] = "Bearer x" } }.SignInPossible);
-        Assert.True(new McpServerConfig { Url = "https://a", Headers = new() { ["X-Key"] = "x" } }.SignInPossible);
+        // A key of its own in any header or in the address (2026-11-22, the review's #111): its 401 is the key's, never a sign-in.
+        Assert.False(new McpServerConfig { Url = "https://a", Headers = new() { ["X-Key"] = "x" } }.SignInPossible);
+        Assert.False(new McpServerConfig { Url = "https://a", Headers = new() { ["X-Api-Key"] = "x" } }.SignInPossible);
+        Assert.False(new McpServerConfig { Url = "https://a/mcp?api_key=abc123" }.SignInPossible);
+        Assert.True(new McpServerConfig { Url = "https://a", Headers = new() { ["X-Trace"] = "1" } }.SignInPossible);
         Assert.False(new McpServerConfig { Command = "x" }.SignInPossible);
         Assert.Equal(8766, new McpServerConfig { Url = "https://a" }.RedirectPort);
         Assert.Equal(new Uri("http://127.0.0.1:8766/callback"), McpOAuth.RedirectUri(McpOAuth.DefaultRedirectPort));

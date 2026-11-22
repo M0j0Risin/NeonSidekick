@@ -465,7 +465,16 @@ public static class McpRows
             yield break;
         }
 
-        int width = NameWidth(connected.SelectMany(s => s.Tools).Select(t => t.Name));
+        IEnumerable<string> names = connected.SelectMany(s => s.Tools).Select(t => t.Name);
+        int width = NameWidth(facts.ResourceServers.Count > 0 ? names.Append(McpReadTool.ToolName) : names);
+        // The built-in mcp_read first, as the pane lists it (2026-11-22, the review's #90).
+        if (facts.ResourceServers.Count > 0)
+        {
+            bool on = !facts.Disabled.Contains(McpReadTool.ToolName);
+            yield return SystemPromptSummary.GroupName(McpText.BuiltInSection, on ? 1 : 0, 1);
+            yield return "  " + McpReadTool.ToolName.PadRight(width) + ToolsText.State(on).PadRight(StateWidth) + "".PadRight(AskWidth) + McpText.ReadRowDescription;
+        }
+
         foreach (var server in connected)
         {
             int left = server.Tools.Count(t => !facts.Disabled.Contains(t.Name));

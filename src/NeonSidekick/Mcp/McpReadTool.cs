@@ -26,6 +26,9 @@ public interface IMcpResources
     Task<McpResourceAnswer> ListResourcesAsync(string server, int max, CancellationToken cancellationToken);
 
     Task<McpResourceAnswer> ReadResourceAsync(string server, string uri, CancellationToken cancellationToken);
+
+    /// <summary>The context a read's pictures take (2026-11-22, the review's #60, #131): the conversation's counter, whether they're seen.</summary>
+    McpRenderContext ReadContext() => McpRenderContext.Plain(McpReadTool.ToolName);
 }
 
 /// <summary>
@@ -34,8 +37,10 @@ public interface IMcpResources
 /// resource read. A text part is paged as <c>web_fetch</c> pages a page (<see cref="WorkingDirectory.MaxReadChars"/> characters of scrubbed
 /// text, the next <c>start</c> where the window stopped, since an escape is longer than its character); several text parts are joined in
 /// order, each led by its own <c>uri · type</c> line, and <c>start</c> pages the join, while a single part has no lead line, so an embedded
-/// block's cut note (<see cref="McpTool.Render(CallToolResult, McpRenderContext)"/>) names the same character. A picture blob is a picture
-/// (<see cref="McpPictures"/>), any other blob is named. Offered while a connected server declares resources; a read asks only under that
+/// block's cut note (<see cref="McpTool.Render(CallToolResult, McpRenderContext)"/>) names the same character. When the uri names one of
+/// several parts, that part alone is paged and the others are named (2026-11-22, the review's #118), so a cut note's start lands there too.
+/// A picture blob is a picture (<see cref="McpPictures"/>), any other blob is named; both on the first page alone (#74), a later page saying
+/// they came with it. Offered while a connected server declares resources; a read asks only under that
 /// server's <c>"ask": "always"</c>. Its description names the servers, so it's built for each turn's list.
 /// </summary>
 public sealed class McpReadTool : AIFunction
@@ -54,7 +59,7 @@ public sealed class McpReadTool : AIFunction
           "properties": {
             "server": { "type": "string", "description": "The MCP server, as named in this tool's description." },
             "uri": { "type": "string", "description": "The resource to read: a uri from the list, a resource link in a tool's result, or a template with its {…} filled in. Leave it out to list the server's resources." },
-            "start": { "type": "integer", "description": "Where to continue a long resource, in characters: the number the previous result's header or cut note named. Leave it out to start at the top." }
+            "start": { "type": "integer", "description": "With uri only: where to continue a long resource, in characters, the number the previous result's header or cut note named. Leave it out to start at the top." }
           },
           "required": ["server"],
           "additionalProperties": false
@@ -95,12 +100,18 @@ public sealed class McpReadTool : AIFunction
             return McpText.BadStart(start.Value);
         }
 
+        // A start pages one resource's read (2026-11-22, the review's #89): never a list.
+        if (start is not null && uri.Length == 0)
+        {
+            return McpText.StartNeedsUri;
+        }
+
         var offered = _resources.ResourceServers;
         string? name = offered.FirstOrDefault(s => string.Equals(s, server, StringComparison.Ordinal))
             ?? offered.FirstOrDefault(s => string.Equals(s, server, StringComparison.OrdinalIgnoreCase));
         if (name is null)
         {
-            return McpText.ErrorPrefix + McpText.NoResourcesError(server.Length == 0 ? "(no server)" : UntrustedText.Name(server), offered);
+            return McpText.ErrorPrefix + McpText.NoResourcesError(server.Length == 0 ? McpText.NoServerNamed : UntrustedText.Name(server), offered);
         }
 
         try
@@ -112,11 +123,12 @@ public sealed class McpReadTool : AIFunction
             }
 
             var read = await _resources.ReadResourceAsync(name, uri, cancellationToken).ConfigureAwait(false);
-            return read.Refusal is { } no ? no.Render() : Read(read.Read!, uri, start ?? 0).ToolResult();
+            return read.Refusal is { } no ? no.Render() : Read(read.Read!, uri, start ?? 0, _resources.ReadContext()).ToolResult();
         }
-        catch (ModelContextProtocol.McpException ex)
+        catch (Exception ex) when (ex is ModelContextProtocol.McpException or HttpRequestException or IOException or TimeoutException)
         {
-            // The server's own error (no such resource, a bad template value): its words, fenced.
+            // The server's own error (no such resource, a bad template value), or the way there failing (2026-11-22, the review's #61): its
+            // words, fenced.
             return UntrustedText.WithNote(McpText.ErrorPrefix + McpText.ReadFailed(name, UntrustedText.Fenced(ex.Message)));
         }
     }
@@ -180,19 +192,39 @@ public sealed class McpReadTool : AIFunction
     /// A read as the model sees it: the text parts joined and paged from <paramref name="start"/>, the pictures, and a line for any other
     /// blob. Pure but for the picture decode.
     /// </summary>
-    public static McpRendered Read(ReadResourceResult result, string uri, int start)
+    public static McpRendered Read(ReadResourceResult result, string uri, int start, McpRenderContext? context = null)
     {
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(uri);
         var contents = result.Contents ?? [];
         var texts = contents.OfType<TextResourceContents>().ToList();
-        var pictures = new McpPictures(ToolName);
-        var notes = new List<string>();
-        foreach (var blob in contents.OfType<BlobResourceContents>())
+        var blobs = contents.OfType<BlobResourceContents>().ToList();
+        // The uri names one of several parts (#118): that part is paged, the others named.
+        var others = new List<TextResourceContents>();
+        if (texts.Count > 1 && texts.Count(t => string.Equals(t.Uri, uri, StringComparison.Ordinal)) == 1)
         {
-            notes.Add(McpPictures.IsPicture(blob.MimeType)
-                ? pictures.Add(blob.Blob, () => blob.DecodedData)
-                : McpText.ResourceNotRead(blob.Uri ?? "", blob.MimeType, McpPictures.DecodedLength(blob.Blob)));
+            others = texts.Where(t => !string.Equals(t.Uri, uri, StringComparison.Ordinal)).ToList();
+            texts = texts.Where(t => string.Equals(t.Uri, uri, StringComparison.Ordinal)).ToList();
+        }
+
+        var pictures = McpPictures.For(context ?? McpRenderContext.Plain(ToolName));
+        var notes = new List<string>();
+        if (start == 0)
+        {
+            foreach (var blob in blobs)
+            {
+                notes.Add(McpPictures.IsPicture(blob.MimeType)
+                    ? pictures.Add(blob.Blob, () => blob.DecodedData)
+                    : McpText.ResourceNotRead(blob.Uri ?? "", blob.MimeType, McpPictures.DecodedLength(blob.Blob)));
+            }
+
+            notes.AddRange(others.Select(o => McpText.OtherPart(o.Uri ?? "", o.MimeType, (o.Text ?? "").Length)));
+        }
+        else if (blobs.Count > 0 || others.Count > 0)
+        {
+            // A later page never attaches the pictures again (2026-11-22, the review's #74, #32): one line says they came with the first.
+            int shown = blobs.Count(b => McpPictures.IsPicture(b.MimeType));
+            notes.Add(McpText.CameWithFirstPage(shown, blobs.Count - shown + others.Count));
         }
 
         var sb = new StringBuilder();
@@ -202,16 +234,29 @@ public sealed class McpReadTool : AIFunction
                 ? texts[0].Text ?? ""
                 : string.Join("\n\n", texts.Select(t => (t.Uri ?? "") + " · " + (string.IsNullOrWhiteSpace(t.MimeType) ? "text" : t.MimeType) + "\n" + (t.Text ?? "")));
             int total = joined.Length;
-            if (start >= total && total > 0)
-            {
-                return new McpRendered(McpText.StartPastEnd(start, total), []);
-            }
-
-            var (window, consumed) = UntrustedText.ScrubPrefix(joined, Math.Min(start, total), WorkingDirectory.MaxReadChars);
-            int end = Math.Min(start, total) + consumed;
             string mime = texts.Count == 1 ? texts[0].MimeType ?? "" : "";
-            sb.Append(McpText.ReadHeader(uri, mime, Math.Min(start, total) + 1, end, total, end < total ? end : null))
-                .Append('\n').Append(UntrustedText.Quote(window));
+            if (total == 0)
+            {
+                // An empty text (2026-11-22, the review's #54): said so, never "characters 1–0 of 0".
+                sb.Append(McpText.ReadHeader(uri, mime, 0, 0, 0, null)).Append('\n').Append(McpText.ResourceEmpty);
+            }
+            else if (start >= total)
+            {
+                // Past the end: still what else the resource held (#32), never its pictures again.
+                if (notes.Count == 0)
+                {
+                    return new McpRendered(McpText.StartPastEnd(start, total), []);
+                }
+
+                sb.Append(McpText.StartPastEnd(start, total));
+            }
+            else
+            {
+                var (window, consumed) = UntrustedText.ScrubPrefix(joined, start, WorkingDirectory.MaxReadChars);
+                int end = start + consumed;
+                sb.Append(McpText.ReadHeader(uri, mime, start + 1, end, total, end < total ? end : null))
+                    .Append('\n').Append(UntrustedText.Quote(window));
+            }
         }
         else if (contents.Count == 0)
         {

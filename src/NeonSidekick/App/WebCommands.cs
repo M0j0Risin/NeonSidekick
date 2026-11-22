@@ -40,6 +40,9 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
     /// <summary>Bare <c>/sessions</c> from the page (2026-11-16, #40): the 🗂️ sheet's Sessions tab.</summary>
     public static readonly WebCommandVerdict SessionsTab = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenSessions };
 
+    /// <summary><c>/sessions here</c> from the page (2026-11-22, the review's #52): the Sessions tab with this folder's rows alone.</summary>
+    public static readonly WebCommandVerdict SessionsTabHere = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenSessionsHere };
+
     /// <summary>Bare <c>/queue</c> from the page (2026-11-16, #42): the 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21).</summary>
     public static readonly WebCommandVerdict QueueTab = new(WebCommandKind.Page, WebUiText.OpensOnThePage) { Open = WebUiText.OpenQueue };
 }
@@ -215,7 +218,8 @@ public static class WebCommands
             // Classed by the PC's own parser, so the page and the PC never read a line two ways.
             SlashCommand.Session => ChatScreen.ParseSessionArgs(args).Kind switch
             {
-                SessionActionKind.Pane or SessionActionKind.Here => WebCommandVerdict.SessionsTab,   // here (2026-11-21): the sheet marks this folder's rows
+                SessionActionKind.Pane => WebCommandVerdict.SessionsTab,
+                SessionActionKind.Here => WebCommandVerdict.SessionsTabHere,   // this folder's rows alone (2026-11-22, the review's #52)
                 SessionActionKind.Restore or SessionActionKind.Title => WebCommandVerdict.Run,
                 SessionActionKind.TitlePane => Pane(word, "/rename <name>"),
                 SessionActionKind.Purge or SessionActionKind.PurgeOlder or SessionActionKind.PurgeAll or SessionActionKind.Export => Refused(WebUiText.PcOnly(word + " " + first)),

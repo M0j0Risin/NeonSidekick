@@ -371,7 +371,8 @@ public static class SettingsArchive
             {
                 Add(file, relative, c, seen);
             }
-            else if (configs && !IsJunk(file.Name) && !Is(file.Name, Viewer.BrowserHistory.FileName) && !Is(file.Name, Mcp.McpTokenStore.FileName))
+            else if (configs && !IsJunk(file.Name) && !Is(file.Name, Viewer.BrowserHistory.FileName) && !Is(file.Name, Mcp.McpTokenStore.FileName)
+                && !Is(file.Name, Mcp.McpTokenStore.FileName + Mcp.McpTokenStore.BadSuffix))   // sealed tokens, moved aside (2026-11-22, the review's #19): never listed
             {
                 c.LeftOut.Add(relative);
             }

@@ -130,7 +130,9 @@ public class McpReadToolTests : IAsyncDisposable
     {
         var image = McpTool.Render(new CallToolResult { Content = [Image()] }, McpRenderContext.Plain("pw__shot")).Pictures[0];
         var part = ConversationHistory.ImagePart(image);
-        Assert.Equal("pw__shot #1", ConversationHistory.PicturePath(part));
+        // The label lives under McpKey alone (2026-11-22, the review's #47): never a path a rewind or an export would take for a file.
+        Assert.Null(ConversationHistory.PicturePath(part));
+        Assert.Equal("pw__shot #1", ConversationHistory.McpLabel(part));
         string left = PictureBudget.LeftOutFor(part);
         Assert.Equal(McpText.PictureTakenOut("pw__shot #1"), left);
         Assert.DoesNotContain("view_image", left, StringComparison.Ordinal);
@@ -151,6 +153,15 @@ public class McpReadToolTests : IAsyncDisposable
         var restored = Sessions.SessionHistory.FromJsonWhole(kept, out _);
         var part = Assert.IsType<DataContent>(Assert.Single(Assert.Single(restored).Contents));
         Assert.Equal("pw__shot #1", part.AdditionalProperties![ConversationHistory.McpKey]);
+        Assert.Null(ConversationHistory.PicturePath(part));   // #47: restored with no path
+
+        // A row with no label (#101) comes back named generically, never as an empty name.
+        var blank = Sessions.SessionHistory.Restore(new Sessions.StoredMessage
+        {
+            Role = "user",
+            Parts = [new Sessions.StoredPart { Kind = Sessions.StoredPart.ImageKind, Bytes = McpPipeServer.PngBase64, MediaType = "image/png", Mcp = true }],
+        });
+        Assert.Equal(McpText.UnnamedPicture, ConversationHistory.McpLabel(Assert.Single(blank!.Contents)));
 
         // Saved again with the setting off, the restored picture is left out as it should be.
         Assert.Contains(System.Text.Json.JsonEncodedText.Encode(McpText.PictureNotKept("pw__shot #1")).ToString(), Sessions.SessionHistory.ToJson(restored), StringComparison.Ordinal);
@@ -164,13 +175,15 @@ public class McpReadToolTests : IAsyncDisposable
 
         public ReadResourceResult Answer { get; set; } = new();
 
+        public Exception? Fails { get; set; }
+
         public Task<McpResourceAnswer> ListResourcesAsync(string server, int max, CancellationToken cancellationToken) =>
             Task.FromResult(new McpResourceAnswer(new McpResourceList(
                 [new Resource { Uri = "docs://a", Name = "A ⟫", MimeType = "text/plain", Size = 1200, Description = "First." }],
                 [new ResourceTemplate { UriTemplate = "docs://{id}", Name = "by id" }], More: false), null, null));
 
         public Task<McpResourceAnswer> ReadResourceAsync(string server, string uri, CancellationToken cancellationToken) =>
-            Task.FromResult(new McpResourceAnswer(null, Answer, null));
+            Fails is { } fails ? Task.FromException<McpResourceAnswer>(fails) : Task.FromResult(new McpResourceAnswer(null, Answer, null));
     }
 
     private static Task<object?> Invoke(IMcpResources resources, Dictionary<string, object?> arguments) =>
@@ -218,11 +231,134 @@ public class McpReadToolTests : IAsyncDisposable
                 ],
             },
         };
-        var result = Assert.IsType<ToolImageResult>(await Invoke(stub, new() { ["server"] = "docs", ["uri"] = "docs://a" }));
+        var result = Assert.IsType<ToolImageResult>(await Invoke(stub, new() { ["server"] = "docs", ["uri"] = "docs://all" }));
         Assert.Contains(UntrustedText.Quote("docs://a · text/plain\none\n\ndocs://b · text\ntwo"), result.Text, StringComparison.Ordinal);
         Assert.Contains(McpText.PictureAttached(1, 4, 3), result.Text, StringComparison.Ordinal);
         Assert.Contains("(resource ⟪docs://x.bin⟫, application/octet-stream, 3 bytes, not read", result.Text, StringComparison.Ordinal);
         Assert.Equal("mcp_read #1", Assert.Single(result.Images).McpSource);
+    }
+
+    // ── The review's section 5 (2026-11-22) ─────────────────────────────────
+
+    [Fact]
+    public async Task TheUriNamingOneOfSeveralParts_PagesThatPartAlone_AndNamesTheOthers()
+    {
+        var stub = new StubResources
+        {
+            Answer = new ReadResourceResult
+            {
+                Contents =
+                [
+                    new TextResourceContents { Uri = "docs://a", MimeType = "text/plain", Text = "one" },
+                    new TextResourceContents { Uri = "docs://b", Text = "two" },
+                ],
+            },
+        };
+        string read = Assert.IsType<string>(await Invoke(stub, new() { ["server"] = "docs", ["uri"] = "docs://a" }));
+        Assert.StartsWith(McpText.ReadHeader("docs://a", "text/plain", 1, 3, 3, null) + "\n" + UntrustedText.Quote("one"), read, StringComparison.Ordinal);
+        Assert.Contains(McpText.OtherPart("docs://b", null, 3), read, StringComparison.Ordinal);
+        Assert.DoesNotContain("two", read, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ALaterPage_NeverAttachesThePicturesAgain_AndPastTheEndStillSaysWhatCame()
+    {
+        string body = new string('y', WorkingDirectory.MaxReadChars + 10);
+        var stub = new StubResources
+        {
+            Answer = new ReadResourceResult
+            {
+                Contents =
+                [
+                    new TextResourceContents { Uri = "docs://a", MimeType = "text/plain", Text = body },
+                    new BlobResourceContents { Uri = "docs://p.png", MimeType = "image/png", Blob = Png },
+                    new BlobResourceContents { Uri = "docs://x.zip", MimeType = "application/zip", Blob = Encoding.ASCII.GetBytes("AAAA") },
+                ],
+            },
+        };
+        var first = Assert.IsType<ToolImageResult>(await Invoke(stub, new() { ["server"] = "docs", ["uri"] = "docs://a" }));
+        Assert.Single(first.Images);
+        Assert.Contains("docs://x.zip", first.Text, StringComparison.Ordinal);
+
+        string second = Assert.IsType<string>(await Invoke(stub, new() { ["server"] = "docs", ["uri"] = "docs://a", ["start"] = WorkingDirectory.MaxReadChars }));
+        Assert.Contains(McpText.CameWithFirstPage(1, 1), second, StringComparison.Ordinal);
+        Assert.DoesNotContain("docs://x.zip", second, StringComparison.Ordinal);
+
+        string past = Assert.IsType<string>(await Invoke(stub, new() { ["server"] = "docs", ["uri"] = "docs://a", ["start"] = body.Length }));
+        Assert.StartsWith(McpText.StartPastEnd(body.Length, body.Length), past, StringComparison.Ordinal);
+        Assert.Contains(McpText.CameWithFirstPage(1, 1), past, StringComparison.Ordinal);
+        Assert.Equal("(its 1 picture and 1 other part came with the first page, start 0)", McpText.CameWithFirstPage(1, 1));
+    }
+
+    [Fact]
+    public async Task AnEmptyText_SaysItsEmpty_AStartWithoutAUri_IsRefused_AndAWayThereThatFails_IsTheServersReadFailure()
+    {
+        var empty = new StubResources { Answer = new ReadResourceResult { Contents = [new TextResourceContents { Uri = "docs://a", MimeType = "text/plain", Text = "" }] } };
+        string read = Assert.IsType<string>(await Invoke(empty, new() { ["server"] = "docs", ["uri"] = "docs://a" }));
+        Assert.StartsWith(McpText.ReadHeader("docs://a", "text/plain", 0, 0, 0, null) + "\n" + McpText.ResourceEmpty, read, StringComparison.Ordinal);
+        Assert.DoesNotContain("1–0", read, StringComparison.Ordinal);
+
+        Assert.Equal(McpText.StartNeedsUri, await Invoke(empty, new() { ["server"] = "docs", ["start"] = 5 }));
+
+        var failing = new StubResources { Fails = new HttpRequestException("connection reset") };
+        string failed = Assert.IsType<string>(await Invoke(failing, new() { ["server"] = "docs", ["uri"] = "docs://a" }));
+        Assert.StartsWith(McpText.ErrorPrefix + McpText.ReadFailed("docs", UntrustedText.Fenced("connection reset")), failed, StringComparison.Ordinal);
+        failing.Fails = new TimeoutException("slow");
+        Assert.StartsWith(McpText.ErrorPrefix + "docs could not read it: ", Assert.IsType<string>(await Invoke(failing, new() { ["server"] = "docs", ["uri"] = "docs://a" })), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EmbeddedTexts_ShareOneBudget_ALaterOneIsNamed_ALinksNameStaysOnOneLine()
+    {
+        string body = new string('x', WorkingDirectory.MaxReadChars);
+        EmbeddedResourceBlock Block(int n) => new() { Resource = new TextResourceContents { Uri = "notes://" + n.ToString(System.Globalization.CultureInfo.InvariantCulture), Text = body } };
+        var link = new ResourceLinkBlock { Uri = "x://doc", Name = "line\nbreak" };
+        string text = McpTool.Render(new CallToolResult { Content = [Block(1), Block(2), Block(3), link] }, new McpRenderContext("t", ReadOffered: true)).Text;
+        Assert.Contains(UntrustedText.Quote(body), text, StringComparison.Ordinal);
+        Assert.Contains(McpText.ResourceLeftOut("notes://2", body.Length, readOffered: true), text, StringComparison.Ordinal);
+        Assert.Contains(McpText.ResourceLeftOut("notes://3", body.Length, readOffered: true), text, StringComparison.Ordinal);
+        Assert.True(text.Length < body.Length * 2);
+        Assert.Contains("(a link to resource ⟪line break⟫ ⟪x://doc⟫", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnErrorResult_OpeningWithAnEmbeddedText_KeepsALaterTextsOwnError()
+    {
+        var embedded = new EmbeddedResourceBlock { Resource = new TextResourceContents { Uri = "notes://a", Text = "context" } };
+        string text = McpTool.Render(new CallToolResult { IsError = true, Content = [embedded, new TextContentBlock { Text = "Error: the second" }] }, McpRenderContext.Plain("t")).Text;
+        Assert.Contains("⟪Error: the second⟫", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Paging_StopsAtARepeatedCursor_AnEmptyPage_AndTenPages()
+    {
+        int calls = 0;
+        var (items, more) = await McpSession.PagesAsync<int>(_ => { calls++; return Task.FromResult<(IList<int>?, string?)>(([1], "same")); }, 100);
+        Assert.Equal((2, 2, true), (calls, items.Count, more));
+
+        calls = 0;
+        (items, more) = await McpSession.PagesAsync<int>(_ => { calls++; return Task.FromResult<(IList<int>?, string?)>(([], "c" + calls.ToString(System.Globalization.CultureInfo.InvariantCulture))); }, 100);
+        Assert.Equal((1, 0, true), (calls, items.Count, more));
+
+        calls = 0;
+        (items, more) = await McpSession.PagesAsync<int>(_ => { calls++; return Task.FromResult<(IList<int>?, string?)>(([1], "c" + calls.ToString(System.Globalization.CultureInfo.InvariantCulture))); }, 100);
+        Assert.Equal((McpSession.MaxListPages, true), (calls, more));
+
+        calls = 0;
+        (items, more) = await McpSession.PagesAsync<int>(cursor => { calls++; return Task.FromResult<(IList<int>?, string?)>(([1, 2], cursor is null ? "next" : null)); }, 100);
+        Assert.Equal((2, 4, false), (calls, items.Count, more));
+    }
+
+    [Fact]
+    public async Task ATemplateListThatFails_KeepsTheResources_AndLogsIt()
+    {
+        _servers.Resources("docs", ("pipe://docs/a", "a", "alpha"));
+        _servers.TemplatesFail.Add("docs");
+        await using var session = await ConnectedAsync("""{ "mcpServers": { "docs": { "command": "d" } } }""");
+        var listed = await session.ListResourcesAsync("docs", 10, CancellationToken.None);
+        Assert.Null(listed.Refusal);
+        Assert.Equal("pipe://docs/a", Assert.Single(listed.Listing!.Resources).Uri);
+        Assert.Empty(listed.Listing.Templates);
     }
 
     [Fact]
@@ -305,6 +441,11 @@ public class McpReadToolTests : IAsyncDisposable
 
         await session.ListResourcesAsync("docs", 10, CancellationToken.None);
         Assert.Equal(McpText.ResourcesListMethod, approver.Asks[^1].ServerTool);
+
+        // One allow key for both methods (2026-11-22, the review's #116), and mcp_read counted among the tools that ask (#38).
+        Assert.All(approver.Asks, a => Assert.Equal(McpReadTool.ToolName, a.AllowTool));
+        Assert.Single(approver.Asks.Select(a => McpSession.McpAllowKey(a.Server, a.AllowTool ?? a.ServerTool, a.Fingerprint, a.Definition)).Distinct());
+        Assert.Contains(McpReadTool.ToolName, session.AskingNames());
     }
 
     [Fact]
@@ -315,6 +456,7 @@ public class McpReadToolTests : IAsyncDisposable
         await using var session = await ConnectedAsync("""{ "mcpServers": { "docs": { "command": "d" } } }""", approver);
         Assert.Null((await session.ReadResourceAsync("docs", "pipe://docs/a", CancellationToken.None)).Refusal);
         Assert.Empty(approver.Asks);
+        Assert.DoesNotContain(McpReadTool.ToolName, session.AskingNames());
     }
 
     [Fact]
@@ -355,5 +497,51 @@ public class McpReadToolTests : IAsyncDisposable
         var read = new McpReadTool(new StubResources(), ["docs"]);
         Assert.Empty(ChatScreen.UnseenMcpPictures(sees: true, [read]));
         Assert.Equal([McpReadTool.ToolName], ChatScreen.UnseenMcpPictures(sees: false, [read, new GetCurrentTimeTool(TimeProvider.System)]));
+    }
+
+    // ── Picture labels across a conversation (2026-11-22, the review's #60, #131, #141) ──
+
+    [Fact]
+    public void OneCounter_NumbersEveryToolsPictures_AndAnUnseenOne_SaysItWentToTheUser()
+    {
+        var counter = new McpPictureCounter();
+        var shot = McpTool.Render(new CallToolResult { Content = [Image()] }, McpRenderContext.Plain("pw__shot") with { Pictures = counter });
+        var read = McpReadTool.Read(new ReadResourceResult { Contents = [new BlobResourceContents { Uri = "x://p.png", MimeType = "image/png", Blob = Png }] }, "x://p.png", 0,
+            McpRenderContext.Plain(McpReadTool.ToolName) with { Pictures = counter });
+        Assert.Equal("pw__shot #1", Assert.Single(shot.Pictures).McpSource);
+        Assert.Equal("mcp_read #2", Assert.Single(read.Pictures).McpSource);
+        Assert.Contains(McpText.PictureAttached(2, 4, 3), read.Text, StringComparison.Ordinal);
+
+        var unseen = McpTool.Render(new CallToolResult { Content = [Image()] }, McpRenderContext.Plain("t") with { PicturesSeen = false });
+        Assert.Contains(McpText.PictureShownToUser(1, 4, 3), unseen.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("in the next message", unseen.Text, StringComparison.Ordinal);
+        Assert.Single(unseen.Pictures);   // still the user's
+
+        Assert.Equal(7, McpPictureCounter.Highest(["pw__shot #2", "mcp_read #7", "no number", "x #"]));
+        counter.Reset(7);
+        Assert.Equal(8, counter.Next());
+    }
+
+    [Fact]
+    public async Task AResumedSession_NumbersPastItsOwnPictures()
+    {
+        _servers.Resources("docs", ("pipe://docs/p.png", "p", null));
+        await using var session = await ConnectedAsync("""{ "mcpServers": { "docs": { "command": "d" } } }""");
+        var old = new DataContent(new byte[] { 1 }, "image/png") { AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.McpKey] = "pw__shot #2" } };
+        session.ResetPictures([new ChatMessage(ChatRole.User, [old])]);
+
+        var read = new McpReadTool(session, session.ResourceServers);
+        var result = Assert.IsType<ToolImageResult>(await read.InvokeAsync(new AIFunctionArguments { ["server"] = "docs", ["uri"] = "pipe://docs/p.png" }));
+        Assert.Equal("mcp_read #3", Assert.Single(result.Images).McpSource);
+    }
+
+    [Fact]
+    public void ACarrier_NamesAnMcpPicture_ByItsLabel()
+    {
+        var history = new ConversationHistory("system");
+        history.AddToolImages([new ImageAttachment("", [1], ImageFile.Png, 1, 1) { McpSource = "pw__shot #1" }], "pw__shot");
+        Assert.Equal(ConversationHistory.ImageCarrierText(["pw__shot #1"], "pw__shot"), history.Messages[^1].Contents.OfType<TextContent>().First().Text);
+        Assert.Equal("pw__shot-1.png", McpText.PictureFileName("pw__shot #1", ".png"));
+        Assert.Equal("a-b_c-2.jpg", McpText.PictureFileName("a/b_c #2", ".jpg"));
     }
 }

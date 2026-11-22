@@ -70,19 +70,19 @@ Elsewhere:
 | `/commands` | Lists your custom commands, to use, move, copy, rename, edit or delete; **new command…** starts one. |
 | `/commands new <name> [--global]` | Writes the template into the profile's `commands` folder (or the global one) and opens it in your editor. |
 | `/commands save <name> [--global]` | Saves the last message you typed (during a reply, the one it answers) as `/<name>`. A custom command's or the app's own message is refused. |
-| `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). A session from another folder offers to switch to it. |
-| `/sessions here` | Lists only this folder's sessions, marked `this folder` on the full list. Sessions saved before this version have no folder. |
+| `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). A session from another folder offers to switch to it, which becomes this profile's working folder. |
+| `/sessions here` | Lists only this folder's sessions, marked `this folder` on the full list. A session saved without a folder isn't listed. |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, all, or those older than an age (`30` days, `12h`, `1d 6h`), with their file checkpoints: those turns can't be undone. |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
 | `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) into the working folder, never over a file: Markdown with Obsidian properties and a pictures folder, or one HTML page in your theme, with each turn's sources. |
 | `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), keep to this folder or widen, forget or add one. A memory for one folder is marked; another folder's shows dim. |
 | `/memory read-write\|read-only\|off` | Sets *Memory mode*. |
-| `/memory remember [--here] <text>` | Adds a memory, whatever *Memory mode* says. `--here`, before the text, offers it only while working in this folder. |
+| `/memory remember [--here] <text>` | Adds a memory, whatever *Memory mode* says. `--here`, before the text, offers it only while working in this folder; on a memory that's turned off it brings it back for this folder only, and one kept everywhere stays everywhere. |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 | `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
-| `/usage models` | The Models tab: each model's turns, sessions, tool calls a turn, error and cancel rates, output a turn and tok/s, from the saved sessions. |
+| `/usage models` | The Models tab: each model's turns, sessions, tool calls a turn, tool-call error and cancel rates, output a turn and tok/s, from the saved sessions. |
 | `/usage prompt\|tools\|skills` | The Prompt tab (the system message, less the skills block), the Tools tab (each tool offered) or the Skills tab (the skills block: its directive, then each skill with its scope and file). |
 
 ### Models and servers

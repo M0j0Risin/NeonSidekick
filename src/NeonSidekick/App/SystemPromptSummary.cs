@@ -149,7 +149,8 @@ public sealed record SystemPromptFacts(
     bool DuckDbEnabled = false,
     int DuckDbTools = 0,
     bool DuckDbWrite = false,
-    IReadOnlyList<Mcp.McpServerNote>? McpNotes = null)
+    IReadOnlyList<Mcp.McpServerNote>? McpNotes = null,
+    bool MemoryHere = false)
 {
     /// <summary>
     /// These facts with the group <paramref name="group"/> switches turned off (2026-11-02, the review: the <c>/usage</c> Context tab's
@@ -569,7 +570,7 @@ public static class SystemPromptSummary
         if (facts.Memory && facts.ToolsEnabled && facts.Recall)
         {
             // The list rides the opening call (2026-09-17): the section is the directive alone, the facts are under Also sent.
-            sections.Add(new(MemoryLabel, $"{facts.MemoryModeName}, directive (the list rides the opening {RecallMemoryTool.ToolName} call)", MemoryPrompt.Section(facts.Memories, tools: true, save: facts.MemorySave)));
+            sections.Add(new(MemoryLabel, $"{facts.MemoryModeName}, directive (the list rides the opening {RecallMemoryTool.ToolName} call)", MemoryPrompt.Section(facts.Memories, tools: true, save: facts.MemorySave, here: facts.MemoryHere)));
         }
         else if (facts.Memory && facts.ToolsEnabled)
         {

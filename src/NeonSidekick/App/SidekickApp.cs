@@ -68,8 +68,10 @@ public sealed partial class SidekickApp
 
     /// <summary>
     /// The exit code of a headless run in which a message or a command failed (2026-11-21, feature idea #41): a turn that failed after its
-    /// retries, a message with no server to send it to, a command's <c>[error]</c> line, a loop or a review that stopped short, a call to a server
-    /// that needs a sign-in. It beats <see cref="HeadlessRefusedExitCode"/>; a run of commands alone with no server still exits 0.
+    /// retries, a message with no server to send it to, a command's <c>[error]</c> line, a Ralph loop that ended short of done (its limit and
+    /// stalls too, never a stop the user made) or crashed, a gap review or code audit whose pass failed (never a canceled pass, its limit or a
+    /// stall), a call to a server that needs a sign-in, a session that wasn't saved (2026-11-22, the review's one rule). It beats
+    /// <see cref="HeadlessRefusedExitCode"/>; a run of commands alone with no server still exits 0.
     /// </summary>
     public const int HeadlessFailedExitCode = 4;
 
@@ -945,19 +947,34 @@ public sealed partial class SidekickApp
     private async Task<int> RunHeadlessAsync(CancellationToken cancellationToken)
     {
         StartHeadlessOutput();
-        // The one-shot prompt, its piped context and --session (2026-11-21, feature ideas #42 and #44): read before anything connects, a
-        // problem exit 2; the session's folder taken into the flags' layer here, before the working directory is built.
-        var start = await HeadlessStartAsync(cancellationToken).ConfigureAwait(false);
-        if (start.Exit is { } startExit)
-        {
-            await FlushHeadlessAsync().ConfigureAwait(false);
-            return startExit;
-        }
-
+        // The log goes through the headless writer before the start reads anything (2026-11-22, the review's #67): a bad --session's line or the
+        // store's would otherwise land raw on stdout, among the replies.
         bool previousEcho = DiagnosticLog.EchoToConsole;
         DiagnosticLog.EchoToConsole = false;
         Action<DiagnosticEvent> forward = OnHeadlessDiagnostic;
         DiagnosticLog.Emitted += forward;
+        // The one-shot prompt, its piped context and --session (2026-11-21, feature ideas #42 and #44): read before anything connects, a
+        // problem exit 2; the session's folder taken into the flags' layer here, before the working directory is built.
+        HeadlessStartState start;
+        try
+        {
+            start = await HeadlessStartAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            DiagnosticLog.Emitted -= forward;
+            DiagnosticLog.EchoToConsole = previousEcho;
+            throw;
+        }
+
+        if (start.Exit is { } startExit)
+        {
+            await FlushHeadlessAsync().ConfigureAwait(false);
+            DiagnosticLog.Emitted -= forward;
+            DiagnosticLog.EchoToConsole = previousEcho;
+            return startExit;
+        }
+
         LogStartup();
         _headlessAllowances = new HeadlessAllowances(_options.AllowList);
         EncryptStoredSecrets();
@@ -972,6 +989,9 @@ public sealed partial class SidekickApp
         // Its calls that ask (2026-11-19, feature idea #28): refused unless --allow names them, each refusal counted toward exit 3.
         mcp.Approver = _headlessAllowances.Mcp;
         mcp.ReadToolOffered = () => ChatScreen.McpReadOffered(EffectiveSettings);
+        mcp.PicturesSeen = () => session.SeesPictures;   // the marker says whether the model is shown them (2026-11-22, the review's #131)
+        // A call to a server that wants a sign-in fails the run (2026-11-22, the review's #1): headless can't sign in, so it exits 4.
+        mcp.SignInNeededCall = server => _headlessFailures.AddSignIn(server);
         var memory = BuildMemoryStore();
         // No timers headless: nothing could deliver the alert (the same rule as speech and voice); PrepareTurn drops the prompt's timer sentence with them (2026-09-20).
         var clockTools = ChatScreen.ClockTools(_time);
@@ -1354,7 +1374,9 @@ public sealed partial class SidekickApp
             if (start.Resume is { } resume)
             {
                 session.History.Restore(resume.Messages);
-                sessionId = resume.Id;
+                mcp.ResetPictures(resume.Messages);   // its MCP pictures' numbers go on past its own (2026-11-22, the review's #60)
+                // With Session logging off the row is read, never written (2026-11-22, the review's #37): no turn, /rewind, /undo or plan save touches it.
+                sessionId = EffectiveSettings.SessionLogging ? resume.Id : null;
                 claudeSessionId = resume.Stored.ClaudeSessionId;
                 claudeServerSessionId = resume.Stored.ClaudeServerSessionId;
                 advisorThreads.Restore(resume.Stored.AdvisorThreads);
@@ -1367,7 +1389,7 @@ public sealed partial class SidekickApp
                 }
 
                 resumedMark = resume.Stored.Mark;
-                resumedMadeFiles = resume.Stored.MadeFiles;
+                resumedMadeFiles = Files.MadeFiles.Kept(resume.Stored.MadeFiles, resume.Turns);   // as the screen's restore (#69)
             }
 
             // The conversation forgotten (/clear, /new, /splash, and a /test run's clean slate since 2026-09-30): the history, the
@@ -1403,15 +1425,11 @@ public sealed partial class SidekickApp
                 HeadlessRalphDrop(planState, files);
             }
 
-            // A Ralph pass's fresh conversation (2026-10-18): the history, the usage, the row, the Claude ids, the advisors' threads and the
-            // files seen; never plan mode, an audit, the advisors' links or the plan being carried out. Then its line queued in the slot.
-            void QueueRalphPass()
+            // A fresh conversation (2026-10-18, one reset since 2026-11-22, the review's #144: /plan approve --fresh kept the resumed row's mark
+            // and made files): the history, the usage, the row, the Claude ids, the advisors' threads and the files seen; never plan mode, an
+            // audit, the advisors' links or the plan being carried out.
+            void FreshConversation()
             {
-                if (planState.TakeNext() is not { } next)
-                {
-                    return;
-                }
-
                 assistant?.History.Clear();
                 undoNotes.Clear();   // review P5-02, as above
                 session.Usage.ResetConversation();
@@ -1422,6 +1440,17 @@ public sealed partial class SidekickApp
                 claudeServerSessionId = null;
                 advisorThreads.Clear();
                 files.ForgetSeen();
+            }
+
+            // A Ralph pass's fresh conversation, then its line queued in the slot.
+            void QueueRalphPass()
+            {
+                if (planState.TakeNext() is not { } next)
+                {
+                    return;
+                }
+
+                FreshConversation();
                 gapTurn = next.Text;
                 gapEcho = next.Echo;
                 gapImages = next.Images;
@@ -1432,10 +1461,23 @@ public sealed partial class SidekickApp
             bool oneShot = start.Prompt is not null;
             bool promptPending = oneShot;
             bool promptUsed = false;
-            string? pipedLeft = start.Piped is { Length: > 0 } piped ? piped : null;
+            PipedText? pipedLeft = start.Piped is { TotalChars: > 0 } piped ? piped : null;
             string promptWord = "";
             bool messageLine = false;
             bool lineIsPrompt = false;
+            // Whether the app wrote the line's text itself (the /help words, a /plan or /code-audit message): the pipe never joins it (#28).
+            bool appWrote = false;
+            // A session row's writes that failed (2026-11-22, the review's #125): a rise is the run's failure, said once.
+            int savesSeen = sessions.SaveFailures;
+            void NoteSaveFailures()
+            {
+                if (sessions.SaveFailures != savesSeen)
+                {
+                    savesSeen = sessions.SaveFailures;
+                    _headlessFailures.AddRunWide(HeadlessText.TheSession, ShortWhy(HeadlessText.NotSaved(sessions.LastSaveFailure)));
+                }
+            }
+
             (SlashCommand Command, string Args) LineParse(string typed, Func<string, bool>? isCustom = null) =>
                 messageLine ? (SlashCommand.None, "") : isCustom is null ? SlashCommands.Parse(typed) : SlashCommands.Parse(typed, isCustom);
 
@@ -1450,6 +1492,8 @@ public sealed partial class SidekickApp
 
                 messageLine = false;
                 lineIsPrompt = false;
+                appWrote = false;
+                NoteSaveFailures();
                 while (processes.TryTakeAlert(out var alert))
                 {
                     await HeadlessNoticeLineAsync("[notice] " + Shell.ShellText.AlertLine(alert)).ConfigureAwait(false);
@@ -1608,6 +1652,8 @@ public sealed partial class SidekickApp
 
                     var (cut, _) = ConversationRewind.Apply(session.History, picked, sessionId is null ? null : sessions, sessionId);
                     undoNotes.Prune(session.History.Messages);
+                    // The made files of the turns that went go with them, as the screen's rewind (2026-11-22, the review's #69).
+                    resumedMadeFiles = Files.MadeFiles.Kept(resumedMadeFiles, session.History.Messages.Select(ConversationHistory.TurnOrdinal).Max() ?? 0);
                     claudeServerSessionId = null;
                     if (cut.HadClaude)
                     {
@@ -2045,6 +2091,7 @@ public sealed partial class SidekickApp
                     {
                         text = Help.HelpText.AskPrompt(helpWords);
                         turnMark = Llm.TurnMark.App;
+                        appWrote = true;
                     }
                     else
                     {
@@ -2060,6 +2107,7 @@ public sealed partial class SidekickApp
 
                 if (assistant is null)
                 {
+                    pipedLeft = null;   // no turn to take it, and the line was no command (2026-11-22, the review's #11)
                     await HeadlessLineAsync(HeadlessReplyPrefix + HeadlessNoAssistantReply).ConfigureAwait(false);
                     continue;
                 }
@@ -2085,8 +2133,7 @@ public sealed partial class SidekickApp
                 if (command == SlashCommand.Plan)
                 {
                     // /plan headless (2026-09-26): the screen's words, the approval typed; a line that starts a turn comes back as its text.
-                    Assistant live = assistant;
-                    if (await HeadlessPlanAsync(plan, planState, files, args, () => { live.History.Clear(); session.Usage.ResetConversation(); sessionId = null; }, () => HeadlessPlanMeter(session), cancellationToken).ConfigureAwait(false) is not { } planned)
+                    if (await HeadlessPlanAsync(plan, planState, files, args, FreshConversation, () => HeadlessPlanMeter(session), cancellationToken).ConfigureAwait(false) is not { } planned)
                     {
                         if (sessionId is { } planSession)
                         {
@@ -2099,6 +2146,7 @@ public sealed partial class SidekickApp
                     }
 
                     text = planned;
+                    appWrote = true;
                     planState.RevisionShown = plan.Revision;
                     // A fresh approve's reference pictures (2026-10-18): the new conversation has nothing of the planning.
                     turnImages = planState.TakeImages();
@@ -2113,13 +2161,8 @@ public sealed partial class SidekickApp
                     }
 
                     text = audited;
+                    appWrote = true;
                     planState.RevisionShown = plan.Revision;
-                }
-
-                // /plan chat (2026-10-17): the first message's text becomes the requirement, labeled as the opening, before the turn is built.
-                if (plan.Active)
-                {
-                    plan.NoteMessage(text);
                 }
 
                 // As the screen does before a message: the last reply's context past the LLM auto compact (%) share compacts first.
@@ -2138,6 +2181,35 @@ public sealed partial class SidekickApp
                             await HeadlessNoticeLineAsync("[notice] " + detail).ConfigureAwait(false);
                         }
                     }
+                }
+
+                // The piped context joins the prompt's line whenever it reaches the model as text (2026-11-22, the review's #28): any line the app
+                // didn't write itself, an unknown /word or a path included. After compaction, so the cut weighs what the window has left (#127), and
+                // before /plan chat notes the requirement (#46). The row, its title and the checkpoint keep the prompt alone (#106).
+                if (lineIsPrompt && !appWrote && !customSent)
+                {
+                    text = line.TrimEnd();   // the prompt as given, its indentation kept; the trimmed copy was for the commands (#143)
+                }
+
+                string rowText = text;
+                if (pipedLeft is not null && lineIsPrompt && !appWrote)
+                {
+                    long? room = session.ContextLength?.Tokens is > 0 and { } window
+                        ? Math.Max(0L, window - ConversationCompactor.Estimate(assistant.History.Messages, assistant.History.Messages.Count).Total)
+                        : null;
+                    var (withPiped, cutNotice) = HeadlessWithPiped(text, pipedLeft, room);
+                    text = withPiped;
+                    pipedLeft = null;
+                    if (cutNotice is not null)
+                    {
+                        await HeadlessNoticeLineAsync("[notice] " + cutNotice).ConfigureAwait(false);
+                    }
+                }
+
+                // /plan chat (2026-10-17): the first message's text becomes the requirement, labeled as the opening, before the turn is built.
+                if (plan.Active)
+                {
+                    plan.NoteMessage(text);
                 }
 
                 // Per turn, as the screen does: a memory saved in this turn is in the next one's prompt; a fresh network scan budget too (2026-10-15).
@@ -2189,19 +2261,9 @@ public sealed partial class SidekickApp
                 assistant.TurnMark = passTurn ? Llm.TurnMark.App : turnMark;
                 // An audit's views as its pass turn is sent (2026-11-17): a turn dropped for a retry forgets what it read.
                 var viewedMark = audit.InPass ? audit.ViewedMark() : null;
-                if (pipedLeft is not null && lineIsPrompt && (messageLine || customSent || !line.TrimStart().StartsWith('/')))
-                {
-                    var (withPiped, cutNotice) = HeadlessWithPiped(text, pipedLeft, session.ContextLength?.Tokens);
-                    text = withPiped;
-                    pipedLeft = null;
-                    if (cutNotice is not null)
-                    {
-                        await HeadlessNoticeLineAsync("[notice] " + cutNotice).ConfigureAwait(false);
-                    }
-                }
-
                 // What failed before this turn (2026-11-21, #41): a pass the app runs again takes back what its failed turn noted.
                 _turnFailMark = _headlessFailures.Mark();
+                session.Usage.BeginTurn();   // the row's figures are this turn's, every request of it (2026-11-22, the review's #21, #22)
                 HeadlessTurn turn;
                 try
                 {
@@ -2273,7 +2335,7 @@ public sealed partial class SidekickApp
                 {
                     bool firstRow = sessionId is null;
                     // A custom command's session is titled with the typed line (2026-10-30), as the screen's.
-                    sessionId ??= sessions.Begin(inPass?.Title ?? Sessions.SessionText.FirstLineTitle(customTitle ?? text), session.Endpoint?.ModelId ?? "", files.Root);
+                    sessionId ??= sessions.Begin(inPass?.Title ?? Sessions.SessionText.FirstLineTitle(customTitle ?? rowText), session.Endpoint?.ModelId ?? "", files.Root);
                     if (firstRow && inPass is not null && sessionId is { } titled)
                     {
                         sessions.SetTitle(titled, inPass.Title, Sessions.TitleSource.User);
@@ -2281,9 +2343,9 @@ public sealed partial class SidekickApp
 
                     if (sessionId is { } id)
                     {
-                        var usage = session.Usage.LastRequest;
-                        ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, inPass?.Line ?? text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled, turn.Trace.Sources,
-                            model: session.Endpoint?.ModelId, usage: usage, cwd: files.Root));
+                        var usage = session.Usage.LastReply;
+                        ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, inPass?.Line ?? rowText, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled, turn.Trace.Sources,
+                            model: session.Endpoint?.ModelId ?? (EffectiveSettings.LlmModel is { Length: > 0 } configured ? configured : null), usage: usage, cwd: files.Root));   // #140
                         SaveHeadlessHistory(id, assistant.History.Messages);
                     }
                 }
@@ -2292,7 +2354,7 @@ public sealed partial class SidekickApp
                 if (sealedJournal is not null && _checkpoints is { } checkpointStore)
                 {
                     string checkpointSession = EffectiveSettings.SessionLogging && sessionId is { } logged ? logged.ToString(CultureInfo.InvariantCulture) : Files.CheckpointStore.NoSession;
-                    CheckpointTurns.Commit(checkpointStore, assistant.History, sealedJournal, text, checkpointSession, EffectiveSettings, _time.GetUtcNow());
+                    CheckpointTurns.Commit(checkpointStore, assistant.History, sealedJournal, rowText, checkpointSession, EffectiveSettings, _time.GetUtcNow());
                 }
 
                 // A Ralph pass judged after its row is written (2026-10-18), then the next pass in the slot (or the loop ended).
@@ -2331,6 +2393,7 @@ public sealed partial class SidekickApp
             }
 
             await HeadlessMcpNoticesAsync(mcp).ConfigureAwait(false);   // the last turn's, when the input ended
+            NoteSaveFailures();
             var refused = gate.Refusals;
             if (refused.Count > 0)
             {
@@ -2853,7 +2916,7 @@ public sealed partial class SidekickApp
         }
 
         plan.StopClosing();
-        EndHeadlessGapReview(plan, files, loop, reason, path, body, advisorAsked, lines);
+        EndHeadlessGapReview(plan, files, loop, reason, path, body, advisorAsked, lines, turn.Cancelled);
         return null;
 
         static string? ReadBody(WorkingDirectory files, string? path) =>
@@ -2868,9 +2931,10 @@ public sealed partial class SidekickApp
     /// A headless review over (2026-10-17), the screen's <c>EndGapReview</c>: the summary of its passes, the <c>review:</c> line for a review that
     /// ended on its own, then the stop's line, naming <c>/plan approve</c> where the screen would put the plan back on the pane.
     /// </summary>
-    private void EndHeadlessGapReview(Plans.PlanSession plan, WorkingDirectory files, Plans.PlanGapLoop loop, Plans.PlanGapStop reason, string? path, string? body, bool advisorAsked, List<string> lines)
+    private void EndHeadlessGapReview(Plans.PlanSession plan, WorkingDirectory files, Plans.PlanGapLoop loop, Plans.PlanGapStop reason, string? path, string? body, bool advisorAsked, List<string> lines, bool cancelled = false)
     {
-        if (reason == Plans.PlanGapStop.Stopped)
+        // A pass that failed fails the run; one cancelled (Ctrl+C) doesn't (2026-11-22, the review's #45), as a Ralph stop you made doesn't.
+        if (reason == Plans.PlanGapStop.Stopped && !cancelled)
         {
             HeadlessFail("/plan gaps", HeadlessText.Stopped(Plans.PlanText.GapStopNotice(reason, loop.Pass, loop.Closed)));
         }
@@ -3210,6 +3274,14 @@ public sealed partial class SidekickApp
                         }
 
                         await HeadlessNoticeLineAsync("[notice] " + (compacted.ThisTurn ? CompactionText.TurnNotice(compacted.Result, compacted.Percent) : CompactionText.Notice(compacted.Result, compacted.Percent))).ConfigureAwait(false);
+                        break;
+                    case TurnEvent.PicturesRefused:
+                        // The model refused pictures (2026-11-22, the review's #39): none for the rest of the run, said once.
+                        if (session.NotePicturesRefused() is { } refusedNotice)
+                        {
+                            await HeadlessNoticeLineAsync("[notice] " + refusedNotice).ConfigureAwait(false);
+                        }
+
                         break;
                     case TurnEvent.ServerLimit limit:
                         // A smaller window the server named (2026-11-09): kept for this server and model (D4), which here is the rest of the
@@ -3784,7 +3856,8 @@ public sealed partial class SidekickApp
     {
         foreach (var (text, error) in mcp.TakeNotices())
         {
-            await HeadlessNoticeLineAsync((error ? "[error] " : "[notice] ") + text).ConfigureAwait(false);
+            // A server not back is a warning (2026-11-22, the review's #24): the turn was answered without it, so it fails nothing.
+            await HeadlessNoticeLineAsync((error ? "[warning] " : "[notice] ") + text).ConfigureAwait(false);
         }
     }
 

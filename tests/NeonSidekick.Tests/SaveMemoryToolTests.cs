@@ -113,7 +113,8 @@ public class SaveMemoryToolTests : IDisposable
     {
         Assert.Equal("remembered: x", SaveMemoryTool.Describe(new(MemoryAddOutcome.Added, "x")));
         Assert.Equal("already remembered: x", SaveMemoryTool.Describe(new(MemoryAddOutcome.Duplicate, "x")));
-        Assert.Equal("memory is full (200 entries); the user can clear it with /memory forget", SaveMemoryTool.Describe(new(MemoryAddOutcome.Full, "x")));
+        Assert.Equal("memory is full (200 entries apply in a folder); the user can clear it with /memory forget", SaveMemoryTool.Describe(new(MemoryAddOutcome.Full, "x")));
+        Assert.Equal("memory is full (the memory file holds 1,000 entries); the user can clear it with /memory forget", SaveMemoryTool.Describe(new(MemoryAddOutcome.Full, "x", FileFull: true)));
         Assert.Equal("nothing to remember: the text was empty", SaveMemoryTool.Describe(new(MemoryAddOutcome.Empty, "")));
         Assert.Equal("could not save the memory (the file could not be written); tell the user", SaveMemoryTool.Describe(new(MemoryAddOutcome.Failed, "x")));
     }

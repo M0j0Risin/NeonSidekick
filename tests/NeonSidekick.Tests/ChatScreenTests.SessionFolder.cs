@@ -12,6 +12,10 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests
 {
+    /// <summary>The resume's folder check, faked (2026-11-22, the review's #142); null is <see cref="Directory.Exists(string?)"/>.</summary>
+    private Func<string, bool>? _folderExists;
+    private TimeSpan? _folderCheckWait;
+
     private long SeedSessionIn(string folder)
     {
         using var store = OpenSessions();
@@ -46,6 +50,7 @@ public partial class ChatScreenTests
 
         Assert.Contains("Pass the folder to the detector.", output);
         Assert.Contains(SessionText.SwitchFolderQuestion(elsewhere), output);
+        Assert.Contains("working folder", SessionText.SwitchFolderQuestion(elsewhere));   // what a yes changes (#108)
         Assert.Equal(switched ? elsewhere : "", _settings.Current.WorkingDirectory);
         Assert.Empty(_chat.Requests);
     }
@@ -114,7 +119,10 @@ public partial class ChatScreenTests
     public void SessionsHere_OpensOverAReply_AndIsTheSessionsTabFromThePage()
     {
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Session, "here"));
-        Assert.Same(WebCommandVerdict.SessionsTab, WebCommands.Check(SlashCommand.Session, "here", "/sessions here", new WebCommandSettings(Commands: true, FileTools: true, ObsidianTools: true)));
+        var here = WebCommands.Check(SlashCommand.Session, "here", "/sessions here", new WebCommandSettings(Commands: true, FileTools: true, ObsidianTools: true));
+        Assert.Same(WebCommandVerdict.SessionsTabHere, here);   // this folder's rows alone (#52)
+        Assert.Equal(NeonSidekick.WebUi.WebUiText.OpenSessionsHere, here.Open);
+        Assert.Same(WebCommandVerdict.SessionsTab, WebCommands.Check(SlashCommand.Session, "", "/sessions", new WebCommandSettings(Commands: true, FileTools: true, ObsidianTools: true)));
         Assert.Contains(ChatScreen.SessionVerbs, v => v.Text == SessionText.HereWord && v.Note == SessionText.HereNote);
     }
 }
@@ -174,5 +182,67 @@ public partial class ChatScreenTests
         Assert.Contains(UsageText.ModelsModelHeading, output);
         Assert.Contains("qwen3-scorecard", output);
         Assert.DoesNotContain(UsageText.NothingCounted, output);
+    }
+}
+
+/// <summary>The resume's folder offer, held back (2026-11-22, the review's #142, #78 and #82): a check that doesn't answer, a folder of the other system.</summary>
+public partial class ChatScreenTests
+{
+    [Fact]
+    public async Task Resume_WhoseFolderCheckHangs_SaysItCantBeReached_AndAsksNothing()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string elsewhere = Path.Combine(_dir, "elsewhere");
+        Directory.CreateDirectory(elsewhere);
+        long id = SeedSessionIn(elsewhere);
+        using var release = new ManualResetEventSlim();
+        _folderExists = _ => { release.Wait(TimeSpan.FromSeconds(30)); return true; };
+        _folderCheckWait = TimeSpan.FromMilliseconds(50);
+        PushLine("/sessions " + id);
+        PushLine("/exit");
+
+        string output;
+        try
+        {
+            output = await RunAsync();
+        }
+        finally
+        {
+            release.Set();
+        }
+
+        Assert.Contains(SessionText.FolderUnreachable(elsewhere), output);
+        Assert.DoesNotContain(SessionText.SwitchFolderQuestion(elsewhere), output);
+        Assert.Equal("", _settings.Current.WorkingDirectory);
+    }
+
+    [WindowsFact]
+    public async Task Resume_OfAMacFolder_OnWindows_IsGone_NeverTriedAsAPathHere()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        long id = SeedSessionIn("/Users/x/Repo");
+        _folderExists = _ => throw new InvalidOperationException("never tried");
+        PushLine("/sessions " + id);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SessionText.FolderGone("/Users/x/Repo"), output);
+        Assert.DoesNotContain(SessionText.SwitchFolderQuestion("/Users/x/Repo"), output);
+    }
+
+    [UnixFact]
+    public async Task Resume_OfAWindowsFolder_OnAMac_IsGone_NeverTriedAsAPathHere()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        long id = SeedSessionIn(@"C:\Repo\X");
+        _folderExists = _ => throw new InvalidOperationException("never tried");
+        PushLine("/sessions " + id);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SessionText.FolderGone(@"C:\Repo\X"), output);
+        Assert.DoesNotContain(SessionText.SwitchFolderQuestion(@"C:\Repo\X"), output);
     }
 }

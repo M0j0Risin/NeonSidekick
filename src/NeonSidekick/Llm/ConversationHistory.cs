@@ -108,12 +108,9 @@ public sealed class ConversationHistory
         {
             part.AdditionalProperties = new AdditionalPropertiesDictionary { [PathKey] = image.Path };
         }
-        else if (image.McpSource is { Length: > 0 } label)
-        {
-            // An MCP picture has no file (2026-11-21): its label is its name, so a budget that takes it out still names it.
-            part.AdditionalProperties = new AdditionalPropertiesDictionary { [PathKey] = label };
-        }
 
+        // An MCP picture has no file (2026-11-21): its label lives under McpKey alone (2026-11-22, the review's #47), never as a path a
+        // rewind, an export or the pictures list would take for a file name; the budget names it from McpKey.
         if (image.McpSource is { Length: > 0 } source)
         {
             (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[McpKey] = source;
@@ -230,6 +227,10 @@ public sealed class ConversationHistory
     /// <summary>The screenshot's path when <paramref name="content"/> is a screenshot's part (<see cref="ScreenKey"/>); null otherwise.</summary>
     public static string? ScreenPath(AIContent content) =>
         content is DataContent && content.AdditionalProperties?.TryGetValue(ScreenKey, out var path) == true ? path as string ?? "" : null;
+
+    /// <summary>An MCP picture's label (<see cref="McpKey"/>); null for any other part.</summary>
+    public static string? McpLabel(AIContent content) =>
+        content.AdditionalProperties?.TryGetValue(McpKey, out var label) == true && label is string { Length: > 0 } text ? text : null;
 
     /// <summary>A picture part's path or name (<see cref="PathKey"/>); null when it carries none.</summary>
     public static string? PicturePath(AIContent content) =>
@@ -602,7 +603,11 @@ public sealed class ConversationHistory
             return;
         }
 
-        var contents = new List<AIContent>(images.Count + 1) { new TextContent(ImageCarrierText(images.Select(i => i.Path).ToList(), source)) };
+        // An MCP picture by its label (2026-11-22, the review's #141): it has no path.
+        var contents = new List<AIContent>(images.Count + 1)
+        {
+            new TextContent(ImageCarrierText(images.Select(i => i.Path.Length == 0 && i.McpSource is { Length: > 0 } label ? label : i.Path).ToList(), source)),
+        };
         foreach (var image in images)
         {
             contents.Add(ImagePart(image));
@@ -629,6 +634,12 @@ public sealed class ConversationHistory
     /// request the server dropped as it was sent keeps half the pictures that request carried.
     /// </summary>
     public PictureTrim TakePicturesOut(int keepPictures, long keepBytes) => Swap(PictureBudget.TakeOut(_messages, keepPictures, keepBytes));
+
+    /// <summary>
+    /// Every picture out of the transcript, the newest message's included (2026-11-22, the review's #39): a model that refused pictures
+    /// gets each as its name.
+    /// </summary>
+    public PictureTrim TakeEveryPictureOut() => Swap(PictureBudget.TakeOut(_messages, 0, 0, newestToo: true));
 
     private PictureTrim Swap(PictureTrim trim)
     {

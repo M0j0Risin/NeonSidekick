@@ -126,6 +126,7 @@ public partial class ChatScreenTests
         var record = store.Load(summary.Id)!;
         Assert.Equal(new[] { "neon: One.", "ada: Two." }, record.Turns.Take(2).Select(t => t.ReplyText));
         Assert.Contains("ada: Two.", record.HistoryJson, StringComparison.Ordinal);
+        Assert.Null(summary.Cwd);   // a bot chat isn't the folder's work: no folder, no switch offered on a resume (2026-11-22, the review's #40)
     }
 
     /// <summary>

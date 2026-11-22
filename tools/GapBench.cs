@@ -1448,7 +1448,7 @@ static class Scorer
         score.Log = LogFacts.Read(ReadText(Path.Combine(folder, "run.log")));
         (score.Focuses, score.FocusesFromSummary) = FocusReader.Read(score.Log, stdout);
 
-        if (ReadText(Path.Combine(folder, "stderr.txt")).Trim().Length > 0)
+        if (!StderrCheck.Quiet(ReadText(Path.Combine(folder, "stderr.txt"))))
         {
             score.Flags.Add("stderr.txt isn't empty");
         }
@@ -3291,6 +3291,18 @@ static class Checker
 
 // ── --self-test ─────────────────────────────────────────────────────────────
 
+/// <summary>
+/// What a run's stderr may hold and still read as quiet (2026-11-22, the review's #55): the closing <c>[notice] session #N</c> line a headless
+/// run with sessions on always writes there. Anything else is a flag.
+/// </summary>
+static class StderrCheck
+{
+    public static readonly Regex SessionLine = new(@"^\[notice\] session #\d+$", RegexOptions.CultureInvariant);
+
+    public static bool Quiet(string stderr) =>
+        stderr.Split('\n').Select(l => l.Trim()).All(l => l.Length == 0 || SessionLine.IsMatch(l));
+}
+
 static class SelfTest
 {
     private static int _failed;
@@ -3311,8 +3323,18 @@ static class SelfTest
         OneCleanRun();
         AuditRun();
         NoRunsHeader();
+        StderrRun();
         Console.WriteLine(_failed == 0 ? "--self-test: OK" : $"--self-test: {_failed} check(s) failed");
         return _failed == 0 ? 0 : 1;
+    }
+
+    /// <summary>The session line alone leaves stderr quiet; anything else flags it (#55).</summary>
+    private static void StderrRun()
+    {
+        Expect(StderrCheck.Quiet(""), "stderr: empty is quiet");
+        Expect(StderrCheck.Quiet("[notice] " + HeadlessText.SessionLine(12) + "\r\n"), "stderr: the session line alone is quiet");
+        Expect(!StderrCheck.Quiet("[notice] " + HeadlessText.SessionLine(12) + "\n[error] the server went away"), "stderr: another line flags it");
+        Expect(!StderrCheck.Quiet("[notice] session #12 of 3"), "stderr: a longer line flags it");
     }
 
     /// <summary>A bench with no finished run (2026-11-19): one line in the header, not four empty ones.</summary>

@@ -79,9 +79,21 @@ public sealed class McpServerConfig
     [JsonIgnore]
     public bool HasAuthorizationHeader => Headers?.Keys.Any(k => k.Equals("Authorization", StringComparison.OrdinalIgnoreCase)) == true;
 
-    /// <summary>Whether a sign-in can serve this server: a <c>url</c> server without its own Authorization header.</summary>
+    /// <summary>
+    /// Whether a sign-in can serve this server: a <c>url</c> server with no key of its own (2026-11-22, the review's #111): no Authorization
+    /// header, no other header named for a secret (<c>X-Api-Key</c>, <c>X-Key</c>), and no key in its address (<c>?api_key=</c>). Such a
+    /// server's 401 reads as plain failed, its key the problem, never a sign-in.
+    /// </summary>
     [JsonIgnore]
-    public bool SignInPossible => IsHttp && !HasAuthorizationHeader;
+    public bool SignInPossible => IsHttp && !HasAuthorizationHeader && !HasKeyHeader && !HasKeyInUrl;
+
+    /// <summary>A header other than Authorization whose name or value says it carries a key (<see cref="McpSecrets.IsSecret"/>).</summary>
+    [JsonIgnore]
+    public bool HasKeyHeader => Headers?.Any(h => McpSecrets.IsSecret(h.Key, h.Value)) == true;
+
+    /// <summary>An address that carries a key: a password or a key in its query (<see cref="Llm.Tools.ToolRedaction.Text"/> would redact it).</summary>
+    [JsonIgnore]
+    public bool HasKeyInUrl => Url is { Length: > 0 } url && Llm.Tools.ToolRedaction.Text(url.Trim()) != url.Trim();
 
     /// <summary>The loopback port the sign-in listens on: the entry's <c>redirectPort</c>, else <see cref="McpOAuth.DefaultRedirectPort"/>.</summary>
     [JsonIgnore]
@@ -145,6 +157,11 @@ public sealed class McpServerConfig
                 if (oauth.RedirectPort is { } port && port is < 1 or > 65535)
                 {
                     return McpText.BadRedirectPort;
+                }
+
+                if (!string.IsNullOrWhiteSpace(oauth.ClientSecret) && string.IsNullOrWhiteSpace(oauth.ClientId))
+                {
+                    return McpText.OAuthSecretNeedsId;   // #79
                 }
             }
 

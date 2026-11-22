@@ -40,6 +40,9 @@ public sealed class McpOAuthStub : HttpMessageHandler
     /// <summary>Makes <c>/authorize</c> answer with <c>error=access_denied</c>.</summary>
     public bool DenyAuthorization { get; set; }
 
+    /// <summary>The <c>error_description</c> a denial carries, if any.</summary>
+    public string? DenialDescription { get; set; }
+
     /// <summary>Makes every refresh fail (<c>invalid_grant</c>).</summary>
     public bool RejectRefresh { get; set; }
 
@@ -164,7 +167,8 @@ public sealed class McpOAuthStub : HttpMessageHandler
             string target;
             if (DenyAuthorization)
             {
-                target = redirect + "?error=access_denied&state=" + Uri.EscapeDataString(state);
+                target = redirect + "?error=access_denied&state=" + Uri.EscapeDataString(state)
+                    + (DenialDescription is { } description ? "&error_description=" + Uri.EscapeDataString(description) : "");
             }
             else
             {

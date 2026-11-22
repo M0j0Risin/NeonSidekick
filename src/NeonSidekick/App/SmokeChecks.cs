@@ -309,7 +309,23 @@ public static partial class SmokeChecks
         }
     }
 
+    /// <summary>
+    /// <c>mcp:oauth</c>'s runs (2026-11-22, the review's #114): the port is picked free and released, and the sign-in binds it later, so another
+    /// process can take it between; a run that ends on a busy port is tried again with a new one, twice. Any other failure is the check's.
+    /// </summary>
     private static async Task<SmokeCheck> ProbeMcpOAuthAsync(string name)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            var (check, portBusy) = await ProbeMcpOAuthOnceAsync(name).ConfigureAwait(false);
+            if (!portBusy || attempt == 3)
+            {
+                return check;
+            }
+        }
+    }
+
+    private static async Task<(SmokeCheck Check, bool PortBusy)> ProbeMcpOAuthOnceAsync(string name)
     {
         using var stub = new Mcp.McpOAuthStub();
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -342,20 +358,27 @@ public static partial class SmokeChecks
                 await first.ConnectAllAsync(effective, null, budget.Token).ConfigureAwait(false);
                 if (first.Servers.FirstOrDefault() is not { NeedsSignIn: true } || stub.Registrations != 0)
                 {
-                    return new SmokeCheck(name, false, $"a start without a sign-in read {first.Servers.FirstOrDefault()?.State}, {stub.Registrations} registrations");
+                    return (new SmokeCheck(name, false, $"a start without a sign-in read {first.Servers.FirstOrDefault()?.State}, {stub.Registrations} registrations"), false);
                 }
 
                 var signedIn = await first.SignInAsync("smoke", effective, budget.Token).ConfigureAwait(false);
                 if (signedIn is not { State: McpState.Connected } || signedIn.Tools.Count != 1)
                 {
-                    return new SmokeCheck(name, false, $"the sign-in ended {signedIn?.State}: {signedIn?.Detail}");
+                    return (new SmokeCheck(name, false, $"the sign-in ended {signedIn?.State}: {signedIn?.Detail}"), Mcp.McpText.IsSignInPortBusy(signedIn?.Detail));
                 }
             }
 
-            string stored = File.ReadAllText(Mcp.McpTokenStore.PathFor(settings.ProfileDirectory));
+            // The file first (#128): a missing one is said so, never a FileNotFoundException's words.
+            string tokens = Mcp.McpTokenStore.PathFor(settings.ProfileDirectory);
+            if (!File.Exists(tokens))
+            {
+                return (new SmokeCheck(name, false, "the tokens weren't written"), false);
+            }
+
+            string stored = File.ReadAllText(tokens);
             if (stub.Secrets.Any(stored.Contains) || !stored.Contains("\"sealed\"", StringComparison.Ordinal))
             {
-                return new SmokeCheck(name, false, "the token file holds a token in plain text");
+                return (new SmokeCheck(name, false, "the token file holds a token in plain text"), false);
             }
 
             await using (var second = Session())
@@ -363,11 +386,11 @@ public static partial class SmokeChecks
                 await second.ConnectAllAsync(effective, null, budget.Token).ConfigureAwait(false);
                 if (second.Servers.FirstOrDefault() is not { State: McpState.Connected } || opened != 1 || stub.Registrations != 1)
                 {
-                    return new SmokeCheck(name, false, $"the second start read {second.Servers.FirstOrDefault()?.State}, {opened} browsers, {stub.Registrations} registrations");
+                    return (new SmokeCheck(name, false, $"the second start read {second.Servers.FirstOrDefault()?.State}, {opened} browsers, {stub.Registrations} registrations"), false);
                 }
             }
 
-            return new SmokeCheck(name, true, $"signed in through the loopback listener on port {port}: registered once, PKCE code exchanged, tokens sealed; a second start reused them");
+            return (new SmokeCheck(name, true, $"signed in through the loopback listener on port {port.ToString(System.Globalization.CultureInfo.InvariantCulture)}: registered once, PKCE code exchanged, tokens sealed; a second start reused them"), false);
         }
         finally
         {
@@ -515,7 +538,7 @@ public static partial class SmokeChecks
             return line is null ? new SmokeCheck(name, false, "the asked call wrote no audit line")
                 : line.Contains(secret, StringComparison.Ordinal) || !line.Contains(Llm.Tools.ToolRedaction.Placeholder, StringComparison.Ordinal)
                     ? new SmokeCheck(name, false, "the audit line kept the token argument")
-                    : new SmokeCheck(name, true, $"2 tools listed as {tool.Name}… ({row.Name}) through McpSession; echo asked, allowed and answered; audited with the token redacted; a picture decoded; a resource read");
+                    : new SmokeCheck(name, true, $"{tools.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} tools listed as {tool.Name}… ({row.Name}) through McpSession; echo asked, allowed and answered; audited with the token redacted; a picture decoded; a resource read");
         }
         finally
         {

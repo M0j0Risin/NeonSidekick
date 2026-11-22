@@ -511,4 +511,26 @@ public class LlmSessionTests
         Assert.Null(session.ServerLimitNoticeFor(new HttpRequestException("down")));
         Assert.Equal(new ContextLength(16_384, ContextLengthProbe.ServerLimitSource), session.ContextLength);
     }
+
+    /// <summary>A model that refused pictures (2026-11-22, the review's #39): held for that server and model, said once, another model judged afresh.</summary>
+    [Fact]
+    public async Task APictureRefusal_HoldsForThatModel_SaidOnce_AndAnotherModelIsJudgedAfresh()
+    {
+        ServerOn1234("a", "b");
+        using var session = Session();
+        await session.ConnectAsync(new AppSettingsData { LlmModel = "a", LlmScanMode = "local" }, CancellationToken.None);
+        bool sees = session.SeesPictures;
+
+        Assert.Equal(Assistant.PicturesRefusedNotice, session.NotePicturesRefused());
+        Assert.Null(session.NotePicturesRefused());
+        Assert.True(session.PicturesRefused);
+        Assert.False(session.SeesPictures);
+
+        await session.ConnectAsync(new AppSettingsData { LlmModel = "a", LlmScanMode = "local" }, CancellationToken.None);
+        Assert.True(session.PicturesRefused);
+
+        await session.ConnectAsync(new AppSettingsData { LlmModel = "b", LlmScanMode = "local" }, CancellationToken.None);
+        Assert.False(session.PicturesRefused);
+        Assert.Equal(sees, session.SeesPictures);
+    }
 }

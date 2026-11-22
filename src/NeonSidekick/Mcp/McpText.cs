@@ -61,6 +61,14 @@ public static class McpText
     /// <summary>The most pictures one call hands the model; a result's later ones are <see cref="PictureLeftOut"/>.</summary>
     public const int PicturesPerCall = 4;
 
+    /// <summary>
+    /// A picture in place of its block for a model that isn't sent pictures (2026-11-22, the review's #131): it went to the user alone, never
+    /// "in the next message".
+    /// </summary>
+    public static string PictureShownToUser(int number, int width, int height) =>
+        "(picture " + number.ToString(CultureInfo.InvariantCulture) + ", " + width.ToString(CultureInfo.InvariantCulture) + "x"
+        + height.ToString(CultureInfo.InvariantCulture) + ", shown to the user; this model isn't sent pictures)";
+
     /// <summary>A picture in place of its block, the <c>ha_camera</c> wording: <c>(picture 1, 1280x720, in the next message)</c>.</summary>
     public static string PictureAttached(int number, int width, int height) =>
         "(picture " + number.ToString(CultureInfo.InvariantCulture) + ", " + width.ToString(CultureInfo.InvariantCulture) + "x"
@@ -176,6 +184,70 @@ public static class McpText
         return head + range + (next is { } n ? "; continue with start " + n.ToString(CultureInfo.InvariantCulture) : "") + ":";
     }
 
+    /// <summary>A resource's text that holds nothing (2026-11-22, the review's #54).</summary>
+    public const string ResourceEmpty = "(empty)";
+
+    /// <summary>A <c>start</c> given with no <c>uri</c> (2026-11-22, the review's #89): it pages a read, never a list.</summary>
+    public const string StartNeedsUri = ErrorPrefix + "start continues a resource's read: give it with uri, or leave it out to list";
+
+    /// <summary>Another part the read returned beside the one the uri names (2026-11-22, the review's #118): named, read by its own uri.</summary>
+    public static string OtherPart(string uri, string? mime, int chars) =>
+        "(also returned: " + Llm.Tools.UntrustedText.QuoteOr(uri, "(no uri)") + ", " + (string.IsNullOrWhiteSpace(mime) ? "text" : Llm.Tools.UntrustedText.Name(mime))
+        + ", " + chars.ToString("N0", CultureInfo.InvariantCulture) + " characters; read it by its uri)";
+
+    /// <summary>A later page of a read whose pictures or other parts came with its first (2026-11-22, the review's #74).</summary>
+    public static string CameWithFirstPage(int pictures, int others)
+    {
+        var parts = new List<string>();
+        if (pictures > 0)
+        {
+            parts.Add(pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " picture" : " pictures"));
+        }
+
+        if (others > 0)
+        {
+            parts.Add(others.ToString(CultureInfo.InvariantCulture) + (others == 1 ? " other part" : " other parts"));
+        }
+
+        return "(its " + string.Join(" and ", parts) + " came with the first page, start 0)";
+    }
+
+    /// <summary>An MCP picture restored with no label (2026-11-22, the review's #101).</summary>
+    public const string UnnamedPicture = "an MCP picture";
+
+    /// <summary>
+    /// An MCP picture's name on the pictures list (2026-11-22, the review's #103): its label with what a file name can't hold made <c>-</c>,
+    /// and the type's extension.
+    /// </summary>
+    public static string PictureFileName(string label, string extension)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new StringBuilder(label.Length);
+        foreach (char c in label.Trim())
+        {
+            sb.Append(char.IsWhiteSpace(c) || c == '#' || Array.IndexOf(invalid, c) >= 0 ? '-' : c);
+        }
+
+        string name = sb.ToString().Trim('-', '.');
+        while (name.Contains("--", StringComparison.Ordinal))
+        {
+            name = name.Replace("--", "-", StringComparison.Ordinal);
+        }
+
+        return (name.Length == 0 ? "mcp-picture" : name) + extension;
+    }
+
+    /// <summary>The most of a resource link's name a result shows (#139).</summary>
+    public const int MaxLinkNameChars = 200;
+
+    /// <summary>
+    /// An embedded text past the result's one budget (2026-11-22, the review's #56): named with its length, and how to read it when
+    /// <c>mcp_read</c> is offered.
+    /// </summary>
+    public static string ResourceLeftOut(string uri, int chars, bool readOffered) =>
+        "(resource " + Llm.Tools.UntrustedText.QuoteOr(uri, "(no uri)") + ", " + chars.ToString("N0", CultureInfo.InvariantCulture)
+        + " characters, left out: this result's text is full" + (readOffered ? "; mcp_read with this uri reads it)" : ")");
+
     /// <summary>A resource whose contents are neither text nor a picture: named, never read.</summary>
     public static string ResourceNotRead(string uri, string? mime, long bytes) =>
         "(resource " + Llm.Tools.UntrustedText.QuoteOr(uri, "(no uri)") + ", " + (string.IsNullOrWhiteSpace(mime) ? "no type" : Llm.Tools.UntrustedText.Name(mime))
@@ -190,7 +262,8 @@ public static class McpText
         var sb = new StringBuilder("(a link to resource ");
         if (!string.IsNullOrWhiteSpace(name))
         {
-            sb.Append(Llm.Tools.UntrustedText.Fenced(name)).Append(' ');
+            // On one line and cut (2026-11-22, the review's #139): a name with line breaks never breaks out of its line.
+            sb.Append(Llm.Tools.UntrustedText.Fenced(Llm.Tools.UntrustedText.Cut(McpText.OneLine(name), MaxLinkNameChars))).Append(' ');
         }
 
         sb.Append(Llm.Tools.UntrustedText.QuoteOr(uri, "(no uri)"));
@@ -379,6 +452,9 @@ public static class McpText
         "Connected " + name + ": " + Tools(tools) + " in " + ((long)elapsed.TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + " ms";
     public static string FailedLogLine(string name, string detail) => "Failed " + name + ": " + detail;
     public static string StoppedLogLine(string name) => "Stopped " + name;
+
+    /// <summary>A server's <c>resources/templates/list</c> that answered with an error (2026-11-22, the review's #57): its resources still list.</summary>
+    public static string TemplatesFailedLogLine(string name, string detail) => name + "'s resource templates didn't list: " + detail;
     public static string ConfigProblemLogLine(string path, string detail) => "Could not read " + path + ": " + detail;
     public static string StderrLogLine(string name, string line) => name + " stderr: " + line;
 
@@ -859,6 +935,9 @@ public static class McpText
     /// <summary>The start's line, a reload's notice and the log for a server not signed in: never reported as failed.</summary>
     public static string NeedsSignInLine(string name) => Glyph + " MCP: " + name + " needs a sign-in: /mcp › Servers, s";
 
+    /// <summary>The same warning headless (2026-11-22, the review's #30): no <c>/mcp</c> there, so it says where a sign-in is made.</summary>
+    public static string NeedsSignInHeadlessLine(string name) => Glyph + " MCP: " + name + " needs a sign-in: " + SignInHeadlessTail;
+
     /// <summary>The same, as a status-line notice (no glyph: the pane's notices carry none for a failure).</summary>
     public static string NeedsSignInNotice(string name) => name + " needs a sign-in: s signs in";
 
@@ -886,6 +965,12 @@ public static class McpText
     /// <summary>The notice for <c>s</c> while another sign-in waits.</summary>
     public const string SignInBusy = "another sign-in is waiting: finish it or press Esc first";
 
+    /// <summary>The notice for <c>s</c> on a switched-off server that could sign in (2026-11-22, the review's #63).</summary>
+    public static string SignInTurnOnFirst(string name) => name + " is off: turn it on with Space, then press s to sign in";
+
+    /// <summary>A sign-in that never started (2026-11-22, the review's #129): another one got there first, MCP went off, or the server went away.</summary>
+    public static string SignInNotNow(string name) => "the sign-in to " + name + " didn't start: another sign-in is waiting, MCP is off, or the server is gone";
+
     /// <summary>The sign-out question. Forgets the tokens here only: the service keeps its grant until it is removed there.</summary>
     public static string SignOutQuestion(string name) =>
         "Sign out of " + name + "? This forgets the sign-in on this computer; to cut the app off at the service, remove NeonSidekick from your account's connected apps.";
@@ -903,7 +988,21 @@ public static class McpText
 
     /// <summary>The refusal of a redirect port already taken.</summary>
     public static string SignInPortBusy(int port, string detail) =>
-        "port " + port.ToString(CultureInfo.InvariantCulture) + " for the sign-in's redirect is in use (" + detail + "); set oauth.redirectPort to another";
+        "port " + port.ToString(CultureInfo.InvariantCulture) + SignInPortBusyMark + detail + "); set oauth.redirectPort to another";
+
+    private const string SignInPortBusyMark = " for the sign-in's redirect is in use (";
+
+    /// <summary>Whether a row's detail is <see cref="SignInPortBusy"/>'s (2026-11-22, the review's #114: the smoke's port taken between its pick and the bind).</summary>
+    public static bool IsSignInPortBusy(string? detail) => detail?.Contains(SignInPortBusyMark, StringComparison.Ordinal) == true;
+
+    /// <summary>
+    /// Logged once a server (2026-11-22, the review's #53): an <c>oauth</c> block beside a key of the server's own (an Authorization header,
+    /// another key header, a key in the address), which wins; the block is ignored, never a problem that stops the server.
+    /// </summary>
+    public static string OAuthIgnoredWithHeader(string source) => source + ": its oauth block is ignored, since the server has a key of its own (a header or the address)";
+
+    /// <summary>The config problem of a <c>clientSecret</c> with no <c>clientId</c> (2026-11-22, the review's #79): a secret alone names no app.</summary>
+    public const string OAuthSecretNeedsId = "oauth.clientSecret needs oauth.clientId beside it";
 
     /// <summary>The notice and row detail of a failed sign-in.</summary>
     public static string SignInFailed(string name, string detail) => name + ": the sign-in failed: " + detail;
@@ -911,32 +1010,45 @@ public static class McpText
     /// <summary>The sign-in that ran out of time.</summary>
     public static string SignInTimedOut(int seconds) => "no answer from the browser in " + seconds.ToString(CultureInfo.InvariantCulture) + " s";
 
-    /// <summary>The service's own refusal, its <c>error</c> word (fenced by the caller).</summary>
-    public static string SignInRefused(string error) => "the service answered " + error;
+    /// <summary>The service's own refusal: its <c>error</c> word and, when it sent one, its <c>error_description</c> (2026-11-22, the review's #138); both fenced by the caller.</summary>
+    public static string SignInRefused(string error, string? description = null) => "the service answered " + error + (description is null ? "" : ": " + description);
 
-    public const string SignInCancelledDetail = "cancelled";
+    public const string SignInCancelledDetail = "canceled";
 
     public static string SignedInNotice(string name, int tools) => Glyph + " MCP: signed in to " + name + ", " + Tools(tools);
     public static string SignedOutNotice(string name) => Glyph + " MCP: signed out of " + name;
-    public static string SignInCancelledNotice(string name) => Glyph + " MCP: the sign-in to " + name + " was cancelled";
+    public static string SignInCancelledNotice(string name) => Glyph + " MCP: the sign-in to " + name + " was canceled";
 
     // Log lines: the server's name only, never a code, a state, a token or a secret.
     public static string SignInStartedLogLine(string name, int port) => "Sign-in to " + name + " started, redirect port " + port.ToString(CultureInfo.InvariantCulture);
     public static string SignedInLogLine(string name) => "Signed in to " + name;
-    public static string SignInCancelledLogLine(string name) => "Sign-in to " + name + " cancelled";
+    public static string SignInCancelledLogLine(string name) => "Sign-in to " + name + " canceled";
+
+    /// <summary><c>mcp_read</c>'s word for a call that named no server (2026-11-22, the review's #15).</summary>
+    public const string NoServerNamed = "(no server)";
     public static string SignInFailedLogLine(string name, string detail) => "Sign-in to " + name + " failed: " + detail;
     public static string SignedOutLogLine(string name) => "Signed out of " + name;
     public static string SignInUrlRefusedLogLine(string name, string scheme) => "Sign-in to " + name + " refused: its address is " + scheme + ", not https";
     public static string TokensPrunedLogLine(string name) => "Forgot the sign-in of " + name + ": no such url server any more";
     public static string TokensUnreadableLogLine(string name, string detail) => "The sign-in of " + name + " can't be read here (" + detail + "); it needs a sign-in";
     public static string TokensSealFailedLogLine(string name, string detail) => "The sign-in of " + name + " couldn't be encrypted (" + detail + "); kept for this run only";
-    public static string TokensFileBusyLogLine(string name, string detail) => "The sign-in of " + name + " wasn't saved yet (" + detail + "); kept, saved at the next refresh";
-    public static string TokensFileUnreadableLogLine(string detail) => "mcp-tokens.json can't be read (" + detail + "); read as empty";
+    public static string TokensFileBusyLogLine(string name, string detail) => "The sign-in of " + name + " wasn't saved yet (" + detail + "); kept, saved at the next write or when the app ends";
+    public static string TokensFileUnreadableLogLine(string detail) => "mcp-tokens.json can't be read (" + detail + "); the sign-ins read before are kept";
+
+    /// <summary>A token file that won't parse, moved aside (2026-11-22, the review's #19): the store starts fresh, the old bytes kept for a look.</summary>
+    public static string TokensFileMovedAsideLogLine(string detail) => "mcp-tokens.json won't parse (" + detail + "); moved to mcp-tokens.json.bad, every server needs a sign-in";
+
+    /// <summary>A sign-out the token file was too busy to save (2026-11-22, the review's #7).</summary>
+    public const string SignOutBusy = "the sign-in file is busy (another copy of the app?); try the sign-out again";
     public static string RegisteredAgainLogLine(string name, int was, int now) =>
         "The redirect port of " + name + " changed (" + was.ToString(CultureInfo.InvariantCulture) + " to " + now.ToString(CultureInfo.InvariantCulture) + "); its app registers again";
 
-    /// <summary>The browser page after a sign-in: fixed text, the server's name escaped, nothing from the query.</summary>
-    public static string SignedInPage(string name) => Page("Signed in to " + System.Net.WebUtility.HtmlEncode(name), "You can close this tab and go back to NeonSidekick.");
+    /// <summary>
+    /// The browser page once the callback came (2026-11-22, the review's #123): fixed text, the server's name escaped, nothing from the query.
+    /// It never says "signed in": the code is only received here, and the exchange after it can still fail; the app says how it ended.
+    /// </summary>
+    public static string SignInReceivedPage(string name) =>
+        Page("NeonSidekick got the sign-in for " + System.Net.WebUtility.HtmlEncode(name), "It finishes in the app, which says whether it worked. You can close this tab.");
 
     /// <summary>The browser page after a refused sign-in.</summary>
     public static string SignInErrorPage(string name) => Page("The sign-in to " + System.Net.WebUtility.HtmlEncode(name) + " didn't finish", "NeonSidekick says why. You can close this tab.");

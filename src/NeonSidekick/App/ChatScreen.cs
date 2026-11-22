@@ -489,7 +489,7 @@ internal sealed partial class ChatScreen
     public const string InterruptedNotice = "(" + NoticeGlyphs.Interrupt + "interrupted)";
     public const string InterruptDisabledReason = "switched off after two interruptions heard nothing";
     public const string RememberUsageError = "/memory remember takes the text to keep: /memory remember <text>";   // /remember's until 2026-11-20
-    public const string MemoryFullError = "Memory is full (" + MaxMemoriesText + " entries); /memory forget clears it.";
+    public const string MemoryFullError = MemoryText.FullFolderError;   // which ceiling since 2026-11-22 (the review's #26): MemoryText
     public const string MemoryFailedError = "Could not save the memory; the log has the reason.";
     public const string NothingToForgetNotice = "(" + NoticeGlyphs.Memory + "nothing to forget)";
     public const string KeptNotice = "(kept)";
@@ -665,7 +665,6 @@ internal sealed partial class ChatScreen
 
     public const string CopyFailedError = "Could not write to the clipboard; try again.";
     public static readonly string ProfileNameError = "Profile name " + Profiles.NameError + ".";
-    private const string MaxMemoriesText = "200";
 
     /// <summary>The most cells a window title takes, the ellipsis included.</summary>
     public const int WindowTitleCells = 25;
@@ -998,6 +997,8 @@ internal sealed partial class ChatScreen
             _mcpAllowed.Clear();
         }
 
+        // The MCP pictures' numbers start again with the conversation (2026-11-22, the review's #60); a resume seeds them past its own.
+        _mcp.ResetPictures();
         _projectFileAllowed.Clear();
     }
 
@@ -1465,6 +1466,8 @@ internal sealed partial class ChatScreen
         // Its calls that ask (2026-11-19, feature idea #28) ask on this screen's pane, the session passed in too; cleared at dispose.
         _mcp.Approver = AllowMcpAsync;
         _mcp.ReadToolOffered = () => McpReadOffered(_effective());
+        // An MCP picture's marker says whether the model is shown it (2026-11-22, the review's #131).
+        _mcp.PicturesSeen = () => _session.SeesPictures;
         _clockTools = ClockTools(time);
         // The sandbox reads the live setting and profile directory on every call: a /cwd save or
         // a profile switch changes the root with nothing to rebind.
@@ -3390,7 +3393,7 @@ internal sealed partial class ChatScreen
             new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
             new(SystemPromptSummary.SkillsTabTitle, () => SystemPromptSummary.SkillsTab(SystemPromptFacts())),
             // The model scorecard (2026-11-21, feature idea #7): one grouped query when the tab is built, at the width of that build.
-            new(UsageText.ModelsTabTitle, () => UsageText.ModelsTab(_sessions.ModelStats(), _effective().SessionLogging, _pane.Profile.Width - 2)),
+            new(UsageText.ModelsTabTitle, () => UsageText.ModelsTab(_sessions.ModelStats(), _effective().SessionLogging, ModelsBodyWidth())),
         ];
     }
 
@@ -3416,7 +3419,7 @@ internal sealed partial class ChatScreen
             UsageText.ToolsTabIndex => SystemPromptSummary.ToolLines(ToolGroups(), _effective().LlmOfferTools),
             UsageText.SkillsTabIndex => SystemPromptSummary.SkillsLines(SystemPromptFacts()),
             UsageText.ContextTabIndex => UsageText.ContextLines(ContextFacts()),
-            UsageText.ModelsTabIndex => UsageText.ModelsLines(_sessions.ModelStats(), _effective().SessionLogging, _pane.Profile.Width - 4),
+            UsageText.ModelsTabIndex => UsageText.ModelsLines(_sessions.ModelStats(), _effective().SessionLogging, ModelsBodyWidth()),
             _ => UsageText.Lines(_session.Usage, _session.ContextLength).Concat(UsageText.ContextLines(ContextFacts())),
         };
         foreach (var line in lines)
@@ -5007,7 +5010,8 @@ internal sealed partial class ChatScreen
             DuckDbTools: duckDb.Count,
             DuckDbWrite: duckDb.Any(t => DuckDbWriteToolNames.Contains(t.Name)),
             // The servers' notes as the turn would carry them (2026-11-19): the one filter, over the MCP tools the count above reads.
-            McpNotes: Composed().McpNotes);
+            McpNotes: Composed().McpNotes,
+            MemoryHere: MemoryMode.Saves(effective) && Composed().Tools.OfType<SaveMemoryTool>().FirstOrDefault()?.OffersHere == true);
     }
 
     /// <summary>
@@ -8265,7 +8269,10 @@ internal sealed partial class ChatScreen
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
         var r = set.Rules;
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot(recall?.Folder) : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.DirectiveFor(r.Advisors ? set.Advisors?.Advisors : null, r.Web ? PlanTurn.ResearchOf(set.Tools) : null) ?? inputs.Pass?.Directive, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres, save: inputs.MemorySave, sqliteWrite: r.Sqlite && r.SqliteWrite, serverWrites: r.ServerWrites, images: r.Images, advisors: r.Advisors, shopping: r.Shopping, globalSkills: globalSkills, eventLog: r.EventLog, clock: r.Clock, duckDb: r.DuckDb, duckDbWrite: r.DuckDb && r.DuckDbWrite, mcpNotes: set.McpNotes);
+        // The folder from the memory tools when recall_memory isn't offered (2026-11-22, the review's #2): the prompt keeps this folder's memories.
+        string? promptFolder = recall?.Folder ?? inputs.Memory.OfType<RecallMemoryTool>().FirstOrDefault()?.Folder;
+        bool memoryHere = inputs.MemorySave && set.Tools.OfType<SaveMemoryTool>().FirstOrDefault()?.OffersHere == true;   // #33
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot(promptFolder) : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.DirectiveFor(r.Advisors ? set.Advisors?.Advisors : null, r.Web ? PlanTurn.ResearchOf(set.Tools) : null) ?? inputs.Pass?.Directive, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres, save: inputs.MemorySave, sqliteWrite: r.Sqlite && r.SqliteWrite, serverWrites: r.ServerWrites, images: r.Images, advisors: r.Advisors, shopping: r.Shopping, globalSkills: globalSkills, eventLog: r.EventLog, clock: r.Clock, duckDb: r.DuckDb, duckDbWrite: r.DuckDb && r.DuckDbWrite, mcpNotes: set.McpNotes, memoryHere: memoryHere);
     }
 
     /// <summary>
@@ -9127,6 +9134,7 @@ internal sealed partial class ChatScreen
             _files.ForgetSeen();
             _conversation++;
             ForgetAllows();   // nor are its allows (2026-10-24, review D3)
+            _mcp.ResetPictures(_session.History.Messages);   // its MCP pictures' numbers go on past its own (#60)
             _claudeSessionId = stored.ClaudeSessionId;
             // The restored session's own made files (2026-11-16, #41): a cut turn's (past the row's turns) go.
             _madeFiles.Restore(stored.MadeFiles, _session.History.Messages, record.Summary.Turns);
@@ -10235,7 +10243,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// After a resume (2026-11-21, feature idea #4): when the session worked in another folder, offer it. The question when the folder still
     /// exists (a yes saved through <see cref="SettingsMenu.TrySaveWorkingDirectory"/>, the profile's own <c>files</c> folder as <c>""</c>, as the
-    /// picker saves it); a notice when it is gone, when <c>--cwd</c> or its variable holds the folder (a yes would save a value not in force),
+    /// picker saves it); a notice when it is gone or written for the other system, can't be reached in time, when a loop, a review or a queued line is in play,
+    /// when <c>--cwd</c> holds the folder (a yes would save a value not in force),
     /// or when the page resumed it (the page never sees PC paths, and <c>/cwd</c> is the PC's). A session with no folder, or this one's, asks nothing.
     /// </summary>
     private async Task OfferSessionFolderAsync(long id, CancellationToken cancellationToken)
@@ -10245,9 +10254,36 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        if (!Directory.Exists(folder))
+        // A folder written for the other system is one that's gone here, never tried as a path of this one's (2026-11-22, the review's #78, #82).
+        if (FolderMatch.Normal(folder) is null)
         {
             _transcript.Notice(SessionText.FolderGone(folder));
+            return;
+        }
+
+        // The check off the screen's thread, with a short wait (#142): a share gone quiet never holds the screen.
+        var exists = Task.Run(() => (FolderExistsForTests ?? Directory.Exists)(folder), CancellationToken.None);
+        bool there;
+        try
+        {
+            there = await exists.WaitAsync(FolderCheckWait, TimeProvider.System, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            _transcript.Notice(SessionText.FolderUnreachable(folder));
+            return;
+        }
+
+        if (!there)
+        {
+            _transcript.Notice(SessionText.FolderGone(folder));
+            return;
+        }
+
+        // A Ralph loop, a review or a queued line in play: told, never asked (#99), as the page is.
+        if (_ralph is not null || _plan.Reviewing || _audit.Running is not null || LinesWaiting())
+        {
+            _transcript.Notice(SessionText.FolderDiffers(folder));
             return;
         }
 
@@ -10274,6 +10310,18 @@ internal sealed partial class ChatScreen
             AfterFolderMoved();
         }
     }
+
+    /// <summary>The Models tab's body: the pane's width less its edge and the body's indent, one figure for the pane and the lines (2026-11-22, the review's #109).</summary>
+    private int ModelsBodyWidth() => _pane.Profile.Width - 2 - SystemPromptSummary.BodyIndent;
+
+    /// <summary>A saved turn's model: the endpoint's, else the configured one (2026-11-22, the review's #140), so the Models tab names it.</summary>
+    private string? TurnModel() => _session.Endpoint?.ModelId ?? (_effective().LlmModel is { Length: > 0 } configured ? configured : null);
+
+    /// <summary>The folder check's seam (#142): <see cref="Directory.Exists(string?)"/> unless a test gives one.</summary>
+    internal Func<string, bool>? FolderExistsForTests { get; set; }
+
+    /// <summary>How long a resumed session's folder check may take before the folder reads as out of reach (#142); wall time, a share's own wait.</summary>
+    internal TimeSpan FolderCheckWait { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
     /// The folder picker behind <c>/cwd browse</c> and, since 2026-09-22 (the user's ask), the
@@ -12902,6 +12950,10 @@ internal sealed partial class ChatScreen
             _mcp.NoticeQueued -= WebNudge;
             _mcp.Approver = null;
             _mcp.OpenBrowser = null;
+            // Every hook this screen set (2026-11-22, the review's #87): a session passed in outlives the screen.
+            _mcp.ReadToolOffered = null;
+            _mcp.PicturesSeen = null;
+            _mcp.SignInNotice = null;
             if (_ownsMcp)
             {
                 await _mcp.DisposeAsync().ConfigureAwait(false);
@@ -16357,8 +16409,8 @@ internal sealed partial class ChatScreen
         }
 
         // The user's own add enables a disabled one again (2026-10-13); --here saves it for the working folder alone (2026-11-21).
-        string? folder = here ? _files.Root : null;
-        var (answer, error) = RememberAnswer(_memory.Add(text, enableDisabled: true, folder: folder), _files.Root);
+        // An everywhere add of another folder's fact widens it, a --here one of an everywhere fact keeps it (2026-11-22, the review's #34, #20).
+        var (answer, error) = RememberAnswer(_memory.Remember(text, _files.Root, here, enableDisabled: true), _files.Root);
         if (error)
         {
             sink.Error(answer);
@@ -16381,10 +16433,14 @@ internal sealed partial class ChatScreen
     {
         MemoryAddOutcome.Added when result.Folder is not null => (MemoryText.RememberedHereNotice(result.Text), false),
         MemoryAddOutcome.Added => (RememberedNotice(result.Text), false),
+        MemoryAddOutcome.Enabled when result.Folder is not null && FolderMatch.Same(result.Folder, here) => (MemoryText.RememberedHereNotice(result.Text), false),
         MemoryAddOutcome.Enabled => (RememberEnabledNotice(result.Text), false),
+        MemoryAddOutcome.Duplicate when result.WidenedFrom is { } from => (MemoryText.WidenedNotice(result.Text, from), false),
+        MemoryAddOutcome.Duplicate when result.CoversHere => (MemoryText.CoversHereNotice(result.Text), false),
         MemoryAddOutcome.Duplicate when result.Folder is not null && !FolderMatch.Same(result.Folder, here) => (MemoryText.DuplicateElsewhere(result.Text, result.Folder), false),
         MemoryAddOutcome.Duplicate => (AlreadyRememberedNotice(result.Text), false),
-        MemoryAddOutcome.Full => (MemoryFullError, true),
+        MemoryAddOutcome.Full => (result.FileFull ? MemoryText.FullFileError : MemoryText.FullFolderError, true),
+        MemoryAddOutcome.FolderRefused => (MemoryText.FolderRefused(here ?? ""), true),
         MemoryAddOutcome.Empty => (RememberUsageError, true),
         _ => (MemoryFailedError, true),
     };
@@ -17203,7 +17259,7 @@ internal sealed partial class ChatScreen
                         // Its calls and tokens (2026-10-10; 0 and 0 until then, from the days a bot had no tools).
                         var (botTrace, botUsage) = _lastBotTurn;
                         _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), botTrace.ToolCalls, botTrace.ToolNames, botTrace.LoadedSkills, Math.Max(botTrace.Errors, _lastTurnFailed ? 1 : 0), botUsage.Input, botUsage.Output, _lastTurnCancelled, botTrace.Sources,
-                            model: (links.Count > 0 ? links[next]?.Endpoint.ModelId : null) ?? _session.Endpoint?.ModelId, usage: botUsage, cwd: _files.Root);
+                            model: (links.Count > 0 ? links[next]?.Endpoint.ModelId : null) ?? _session.Endpoint?.ModelId, usage: botUsage, cwd: null);   // no folder: a bot chat isn't the folder's work (2026-11-22, the review's #40)
                         _sessions.SaveHistory(id, SessionHistory.ToJson(BotChat.StoredHistory(starter, lines, castNames, topic)));
                     }
                 }
@@ -19262,7 +19318,7 @@ internal sealed partial class ChatScreen
         var usage = _session.Usage.LastReply;
         // The model that answered, the turn's timed output and the folder (2026-11-21, feature ideas #4 and #7).
         int? ordinal = _sessions.AppendTurn(id, pass?.Line ?? text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled, trace.Sources,
-            model: _session.Endpoint?.ModelId, usage: usage, cwd: _files.Root);
+            model: TurnModel(), usage: usage, cwd: _files.Root);
         StampTurn(assistant.History, ordinal);
         SaveSessionHistory();
         if (first && !cancelled && pass is null && SessionNamingMode.Resolve(effective) == SessionNaming.ModelWritten)
@@ -19609,7 +19665,9 @@ internal sealed partial class ChatScreen
             full = image.Path;
         }
 
-        string name = Path.GetFileName(image.Path.Replace('/', Path.DirectorySeparatorChar));
+        string name = image.Path.Length == 0 && image.McpSource is { Length: > 0 } label
+            ? McpText.PictureFileName(label, ImageFile.ExtensionFor(image.MediaType, image.Bytes))   // by its label (2026-11-22, the review's #103)
+            : Path.GetFileName(image.Path.Replace('/', Path.DirectorySeparatorChar));
         // A camera picture with no file (watch mode's, 2026-10-02) opens from the Camera output folder's .watch, found now; one with no
         // path at all (a still whose save was refused, 2026-10-27, the review) has nothing there and opens from its bytes.
         string? folder = full is null && image.Camera && image.Path.Length > 0 ? WatchFolderPath() : null;
@@ -20008,10 +20066,12 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result:
                 _transcript.ToolResult(result.Name, result.Text, time);
-                // Any other tool's pictures show too (2026-11-21, feature idea #31: an MCP tool's screenshot), on the PC and the page.
-                if (result.Images is { Count: > 0 })
+                // An MCP tool's or mcp_read's pictures show too (2026-11-21, feature idea #31: an MCP tool's screenshot), on the PC and the
+                // page. Those alone (2026-11-22, the review's #43): known by their McpSource, so a camera or screen picture, shown when it was
+                // taken, never shows a second time here, nor reaches the page's pictures this way.
+                if (result.Images?.Where(i => i.McpSource is { Length: > 0 }).ToList() is { Count: > 0 } mcpPictures)
                 {
-                    ToolThumbnails(result, thumbnails);
+                    ToolThumbnails(result with { Images = mcpPictures }, thumbnails);
                 }
 
                 break;
@@ -20031,6 +20091,15 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.Compacted compacted when !_botTurnRunning:
                 MidTurnCompacted(compacted);
+                break;
+            case TurnEvent.PicturesRefused when !_botTurnRunning || _botOnMainLink:
+                // The model refused pictures (2026-11-22, the review's #39): none for the rest of the session, said once. A bot on a link of its
+                // own only retried its own turn; that model isn't the session's.
+                if (_session.NotePicturesRefused() is { } refusedNotice)
+                {
+                    _transcript.Notice(refusedNotice);
+                }
+
                 break;
             case TurnEvent.ServerLimit limit when !_botTurnRunning || _botOnMainLink:
                 // The server named a smaller window (2026-11-09): the session's for this server and model (D4), said once. A bot on a

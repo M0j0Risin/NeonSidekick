@@ -40,9 +40,12 @@ public static class SessionText
     // ---- the session's folder (2026-11-21, feature idea #4) ----
 
     /// <summary>The resume's question when the session's folder is another one that still exists.</summary>
-    public static string SwitchFolderQuestion(string folder) => $"This session worked in {folder}. Switch to it?";
+    public static string SwitchFolderQuestion(string folder) => $"This session worked in {folder}. Switch to it? It becomes this profile's working folder.";
 
-    /// <summary>The resume's notice when the session's folder is gone.</summary>
+    /// <summary>The resume's notice when the folder's check didn't answer in time (a share that's gone quiet, 2026-11-22, the review's #142).</summary>
+    public static string FolderUnreachable(string folder) => $"This session worked in {folder}, which can't be reached right now; staying in this folder.";
+
+    /// <summary>The resume's notice when the session's folder is gone, or is written for the other system (the review's #78, #82).</summary>
     public static string FolderGone(string folder) => $"This session worked in {folder}, which is gone; staying in this folder.";
 
     /// <summary>The resume's notice under <c>--cwd</c> or its variable: the flag holds the folder for this launch.</summary>
@@ -60,7 +63,7 @@ public static class SessionText
     public const string HereMark = "this folder";
 
     /// <summary>An empty <c>/sessions here</c>.</summary>
-    public const string NoneHere = "No sessions in this folder yet. Sessions saved before this version have no folder.";
+    public const string NoneHere = "No sessions in this folder yet. A session saved without a folder isn't listed here.";
 
     /// <summary>The pane's footer line naming the session's folder.</summary>
     public static string FolderFooter(string folder) => "folder: " + folder;

@@ -124,7 +124,7 @@ public class SmokeChecksTests
 
         Assert.Equal("mcp:roundtrip", check.Name);
         Assert.True(check.Passed, check.Detail);
-        Assert.Equal("2 tools listed as smoke__echo… (smoke) through McpSession; echo asked, allowed and answered; audited with the token redacted; a picture decoded; a resource read", check.Detail);
+        Assert.Equal("3 tools listed as smoke__echo… (smoke) through McpSession; echo asked, allowed and answered; audited with the token redacted; a picture decoded; a resource read", check.Detail);
     }
 
     /// <summary>The MCP sign-in (2026-11-21, feature idea #32): the SDK's OAuth path over the stub, the loopback listener, the sealed tokens reused.</summary>

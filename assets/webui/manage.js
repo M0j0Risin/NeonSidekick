@@ -81,6 +81,7 @@
   // loses to an older one. Rows dim while the PC is busy; a refused resume's reason shows in the note.
 
   let sessionsView = null;
+  let hereOnly = false;   // /sessions here (the review's #52): this folder's rows alone, until the tab or the sheet is opened another way
   let searchTimer = null;
   let lastSessions = null;   // {path, view}: the last answer alone, so a 304 draws it (the review's #29: never one kept per search)
 
@@ -107,7 +108,7 @@
     b.type = 'button';
     const title = el('div', 'manage-text', row.title);
     const facts = [row.when, row.turns, row.model].filter(x => x).join(' · ') + (row.current ? ' · ' + (words.sessionsCurrent || 'this conversation') : '')
-      + (row.here ? ' · ' + (words.sessionsHere || 'this folder') : '');
+      + (row.here && !hereOnly ? ' · ' + (words.sessionsHere || 'this folder') : '');
     const meta = el('div', 'manage-meta', facts);
     b.append(title, meta);
     if (row.snippet && row.snippet.length) b.appendChild(snippetEl(row.snippet));
@@ -144,12 +145,13 @@
     sessionsView = view;
     filter.placeholder = words.sessionsFilter || 'Filter';
     filter.setAttribute('aria-label', words.sessionsFilter || 'Filter');
-    const rows = view.rows.map(r => sessionRow(r, view));
-    const found = view.found.map(r => sessionRow(r, view));
+    const rows = view.rows.filter(r => !hereOnly || r.here).map(r => sessionRow(r, view));
+    const found = view.found.filter(r => !hereOnly || r.here).map(r => sessionRow(r, view));
     filter.classList.toggle('hidden', rows.length + found.length <= 8 && !filter.value);
     const parts = [...rows];
     if (found.length) parts.push(el('div', 'manage-head', words.sessionsFound || 'Found in the conversation'), ...found);
-    if (!parts.length) parts.push(el('div', 'manage-none', filter.value.trim() ? (words.sessionsNoMatch || 'Nothing matches.') : (words.sessionsNone || 'No stored sessions.')));
+    if (!parts.length) parts.push(el('div', 'manage-none', filter.value.trim() ? (words.sessionsNoMatch || 'Nothing matches.')
+      : hereOnly ? (words.sessionsNoneHere || 'No sessions in this folder yet.') : (words.sessionsNone || 'No stored sessions.')));
     list.replaceChildren(...parts);
     paintBusy();
   }
@@ -269,6 +271,7 @@
 
   async function selectTab(t) {
     if (!ManageTabs.includes(t)) return;
+    hereOnly = false;   // a tab switch shows the whole list
     setTab(t);
     sayNote('');
     filter.value = '';
@@ -283,13 +286,18 @@
 
   // Opens on t, or the tab used last. The 📣 sheet or the drawer, if open, gives its history entry to this one (replaceState), as they
   // swap with each other; anything else pushes a {manage} entry.
-  async function openSheet(t) {
+  async function openSheet(t, here) {
     if (t && !ManageTabs.includes(t)) return;
     if (open) {
       if (t && t !== tab) await selectTab(t);
+      if (hereOnly !== !!here && tab === 'sessions') {
+        hereOnly = !!here;
+        if (sessionsView) drawSessions(sessionsView);
+      }
       return;
     }
     if (opening) return;
+    hereOnly = !!here && t === 'sessions';
     if (t) setTab(t);
     filter.value = '';
     opening = true;
@@ -381,6 +389,7 @@
     isShown: () => open,
     has: t => ManageTabs.includes(t),
     open: t => openSheet(t),
+    openHere: () => openSheet('sessions', true),
     hide: toButton => hide(toButton),
     close: toButton => close(toButton),
     // The feed's reset (a new conversation, a reconnect): an open tab is the new conversation's.

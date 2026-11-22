@@ -84,7 +84,7 @@ You:
 - `[notice]`, `[warning]`, `[error]` and `[category] message` lines are notices and diagnostics (warnings and errors only; `--log` has the rest). Thinking and the 📚 sources line are never printed.
 - Each **line** of input is one message; blank lines are skipped. Ctrl+C ends the run; a reply cut short ends with `(canceled)`.
 - Input is read as UTF-8 (a file with a byte-order mark says its own encoding).
-- **`--quiet`** puts only the replies on stdout, a blank line between them, and everything else on stderr:
+- **`--quiet`** puts only the replies on stdout, a blank line between them, and everything else on stderr. A reply can hold blank lines too, so for one reply per answer run one `--prompt` a call, chained with `--session`:
 
   ```powershell
   Get-Content job.txt | NeonSidekick.exe --headless --quiet 2> run.log > replies.txt
@@ -94,9 +94,9 @@ You:
 
 `--prompt "<text>"` runs one line and exits; it implies `--headless`. stdout gets the reply alone, with no banner, `You: ` or `Neon: `; the rest goes to stderr. The line can be a slash command, and the passes it queues (a gap review, a Ralph loop) still run.
 
-- **Piped stdin is context:** a message gets it under `Piped input:` in a fenced block. It's cut, start and end kept, past half the model's window (100,000 characters with the window unknown), with a `[notice]`.
-- **A command takes no piped text:** it's read and left out, with a `[notice]`. A custom command is a message once expanded, so it takes it.
-- **A silent pipe:** if nothing comes on stdin within 3 seconds, the prompt runs alone with a `[notice]`. Pass slow input with `--prompt-file`, or skip stdin with `< NUL` (`< /dev/null` on a Mac).
+- **Piped stdin is context:** a message gets it under `Piped input:` in a fenced block. It's cut, start and end kept, past half of what the model's window has left (100,000 characters with the window unknown), with a `[notice]`. The run waits for the pipe to end, so a stream that never ends (`tail -f`) never runs.
+- **A command the app runs takes no piped text:** it's read and left out, with a `[notice]`. A line it passes to the model as text (an unknown `/word`, a path, a custom command once expanded) is a message and takes it.
+- **A silent pipe:** if nothing comes on stdin for a moment, the prompt runs alone with a `[notice]`. Pass slow input with `--prompt-file`, or skip stdin with `< NUL` ([on a Mac](MAC.md#setup)).
 - **`--prompt-file <file>`** sends the whole file as one message, never as a command, even when it starts with `/`. A command goes in `--prompt`.
 
 ```powershell
@@ -286,9 +286,9 @@ Shell police refusals count too, under `--yolo` as well.
 ## Exit codes
 
 - **0:** nothing failed, and nothing `--allow` covers was refused.
-- **2:** nothing ran: a bad argument, an unknown profile, an `--allow mcp:<server>` that names no server or several, a missing or blank `--prompt-file`, a `--session` naming no stored session, a settings zip `--import-settings` refused, or an old copy started during or just after an [update](COMMANDS.md#updating).
+- **2:** nothing ran: a bad argument, an unknown profile, an `--allow mcp:<server>` that names no server or several, a missing or blank `--prompt-file`, piped stdin that can't be read, a `--session` naming no stored session or whose sessions store can't be opened, a settings zip `--import-settings` refused, or an old copy started during or just after an [update](COMMANDS.md#updating).
 - **3:** at least one command or call `--allow` covers was refused.
-- **4:** a message or a command failed: a turn that failed after its retries, a message with no server, a command's `[error]` line, a plan review, audit or Ralph loop that stopped short, or a call to an MCP server that needs a sign-in. 4 beats 3.
+- **4:** a message or a command failed: a turn that failed after its retries, a message with no server, a command's `[error]` line, a Ralph loop that ended short of done (its pass limit and stalls too, not a stop you made) or crashed, a gap review or code audit whose pass failed (not a canceled pass, its limit or a stall), a call to an MCP server that needs a sign-in, or a session that wasn't saved. 4 beats 3.
 
 A run of commands alone with no server still exits 0. Before it exits, a failed run prints one line naming what failed:
 
@@ -333,13 +333,18 @@ Get-Content D:\Jobs\release_notes.txt |
 From Python:
 
 ```python
-import subprocess
+import re, subprocess
 
-proc = subprocess.run(
-    ["NeonSidekick.exe", "--headless", "--quiet", "--profile", "automation", "--cwd", r"D:\Repo\MyApp"],
-    input="Summarize the open TODOs.\nNow rank them by effort.\n/exit\n", capture_output=True, text=True, encoding="utf-8",
-)
-replies = proc.stdout.split("\n\n")   # --quiet: the replies alone, a blank line between them
+def ask(prompt, session=None):
+    args = ["NeonSidekick.exe", "--prompt", prompt, "--profile", "automation", "--cwd", r"D:\Repo\MyApp"]
+    if session:
+        args += ["--session", session]
+    proc = subprocess.run(args, capture_output=True, text=True, encoding="utf-8")
+    found = re.search(r"session #(\d+)", proc.stderr)
+    return proc.stdout, proc.returncode, found and found.group(1)
+
+todos, code, session = ask("Summarize the open TODOs.")
+ranked, code, _ = ask("Now rank them by effort.", session)   # one reply a call: a reply can hold blank lines
 ```
 
 For a scheduled job, run a script like these from Task Scheduler (`cron` or `launchd` on a Mac).
@@ -348,9 +353,9 @@ For a scheduled job, run a script like these from Task Scheduler (`cron` or `lau
 
 `--session <id>` carries on a stored session: its conversation, plan and Claude threads come back, and the run's turns join its row. `--session last` takes the one updated most recently, by any copy of the app, a bot chat included.
 
-- **Its folder:** without `--cwd`, the run works in the session's folder, for this run only; a folder that's gone gets a `[notice]`.
+- **Its folder:** without `--cwd`, the run works in the session's folder, for this run only; a folder that's gone, or written for the other system, gets a `[notice]`.
 - **Its id:** every run that wrote a session ends with `[notice] session #12` on stderr. Pass that id rather than `last` when another copy may be writing.
-- With *Session logging* off, the session still loads, but the run's turns aren't saved to it.
+- With *Session logging* off, the session still loads, but nothing the run does changes its stored row (turns, `/rewind`, `/undo`, plan saves).
 
 ```powershell
 NeonSidekick.exe --prompt "Read src\Parser.cs and list its public methods." --cwd D:\Repo\MyApp

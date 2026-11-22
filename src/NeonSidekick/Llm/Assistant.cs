@@ -880,7 +880,7 @@ public sealed class Assistant
     /// the memory directive loses its save sentences (<see cref="MemoryPrompt.ReadOnlyDirective"/>). With <paramref name="globalSkills"/>
     /// false (2026-10-13, the profile's <c>Global skills</c> off) the skills block names no global scope (<see cref="Skills.SkillsPrompt.EditorSentenceProfileOnly"/>).
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true, bool duckDb = false, bool duckDbWrite = false, IReadOnlyList<Mcp.McpServerNote>? mcpNotes = null)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true, bool duckDb = false, bool duckDbWrite = false, IReadOnlyList<Mcp.McpServerNote>? mcpNotes = null, bool memoryHere = false)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
@@ -893,7 +893,7 @@ public sealed class Assistant
 
         if (memories is not null)
         {
-            sb.Append("\n\n").Append(MemoryPrompt.Section(memories, tools && recall, save));
+            sb.Append("\n\n").Append(MemoryPrompt.Section(memories, tools && recall, save, memoryHere));
         }
 
         if (tools && skills is not null)
@@ -1571,6 +1571,59 @@ public sealed class Assistant
     }
 
     /// <summary>
+    /// What a server says when the model takes no pictures (2026-11-22, the review's #39), matched in its error's text, never its status:
+    /// llama-server answers a 500 (<c>image input is not supported - hint: … mmproj</c>), OpenAI a 400 (<c>image_url is only supported by
+    /// certain models</c>), vLLM a 400 (<c>not a multimodal model</c>, <c>At most 0 image(s)</c>). Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> PictureRefusalTexts =
+    [
+        "image input is not supported", "image_url is only supported by certain models", "not a multimodal model", "at most 0 image(s)",
+        "does not support image", "vision is not supported",
+    ];
+
+    /// <summary>
+    /// Whether a failed request reads as the model refusing its pictures (<see cref="PictureRefusalTexts"/>, any case): an API error's body,
+    /// else any message in the chain. The loop acts on it only for a request that carried pictures and got nothing back.
+    /// </summary>
+    public static bool LooksLikePictureRefusal(Exception ex)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+        foreach (var current in ExceptionChain(ex))
+        {
+            string text = current is ClientResultException client && client.GetRawResponse()?.Content?.ToString() is { Length: > 0 } body ? body + "\n" + client.Message : current.Message;
+            if (PictureRefusalTexts.Any(p => text.Contains(p, StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The built-in tools that hand the model pictures (one list, 2026-11-22: a bot's unseen set and the refusal's widening share it):
+    /// generated, viewed, captured, edited and drawn pictures.
+    /// </summary>
+    public static readonly IReadOnlySet<string> PictureTools = new HashSet<string>(StringComparer.Ordinal)
+    {
+        GenerateImageTool.ToolName, ViewImageTool.ToolName, CameraCaptureTool.ToolName, ScreenCaptureTool.ToolName, ImageEditTool.ToolName,
+        RenderPictureTool.ToolName, RenderChartTool.ToolName, RenderCollageTool.ToolName,
+    };
+
+    /// <summary><paramref name="unseen"/> with every tool this turn offers that hands back pictures: the built-in ones and the MCP ones (#39).</summary>
+    private IReadOnlySet<string> WithEveryPictureTool(IReadOnlySet<string> unseen)
+    {
+        var widened = new HashSet<string>(unseen, StringComparer.Ordinal);
+        widened.UnionWith(PictureTools);
+        widened.UnionWith(Tools.Where(t => t is Mcp.McpTool or Mcp.McpReadTool).Select(t => t.Name));
+        return widened;
+    }
+
+    /// <summary>The <c>--log</c> line for a picture refusal the loop recovers from (#39).</summary>
+    internal static string PicturesRefusedLogLine(int sent, int takenOut) =>
+        string.Create(CultureInfo.InvariantCulture, $"The model refused the request's {sent} picture(s); {takenOut} taken out of the history, trying again without them.");
+
+    /// <summary>
     /// The exceptions of <paramref name="ex"/>'s chain, outermost first (2026-11-10, review P5-4/P1-14: one walk for the five that each had
     /// their own): every inner exception in turn, an <see cref="AggregateException"/> replaced by its first inner exception at every level
     /// (one with none is yielded as itself), so no caller ever tests an aggregate.
@@ -1600,6 +1653,12 @@ public sealed class Assistant
         return string.Create(CultureInfo.InvariantCulture,
             $"The server said the request was too long ({overflow.Matched}): sent {Given(overflow.Sent)}, limit {Given(overflow.Limit)}, reply {Given(overflow.Output)}; the guard's window is {guard.WindowTokens} at {guard.Percent}%, the history's estimate {historyEstimate} tokens.");
     }
+
+    /// <summary>
+    /// What the host says, once a session, when the model refused pictures (2026-11-22, the review's #39): the turn went again without them,
+    /// and none are sent for the rest of the session. Pinned.
+    /// </summary>
+    public const string PicturesRefusedNotice = "The model refused pictures; they're now their names, and it won't be sent pictures this session.";
 
     /// <summary>
     /// The notice before the one retry of a request the server dropped as it was sent: <c>The server dropped the request
@@ -1985,6 +2044,11 @@ public sealed class Assistant
         // Whether a request the server dropped as it was sent has been tried again with fewer pictures (2026-10-03): once a turn.
         bool picturesRetried = false;
 
+        // Whether the model refused the pictures a request carried, and they came out (2026-11-22, the review's #39): once a turn. The
+        // picture-giving tools' pictures then go to the user alone for the rest of the turn (turnUnseen), as for a model known blind.
+        bool picturesRefused = false;
+        var turnUnseen = ToolPicturesUnseen;
+
         // Whether a request the server refused as too long has been shrunk and sent again since the last request that succeeded
         // (2026-11-09): a long turn can recover more than once, but never loops on one round.
         bool overflowRetried = false;
@@ -2192,6 +2256,19 @@ public sealed class Assistant
                 string explained = ExplainFailure(failure!, lastUsage);
                 bool hinted = false;
                 DiagnosticLog.Info(Category, "Model call failed: " + explained + ArgumentsLogTail(watch.Latest));
+                if (clock.First is null && partial.Length == 0 && sentPictures > 0 && !picturesRefused && LooksLikePictureRefusal(failure!))
+                {
+                    // A model that takes no pictures (2026-11-22, the review's #39, the user's call): every picture in the history becomes its
+                    // name, so no later request fails on an old one; the host marks the session, and the same round goes again.
+                    picturesRefused = true;
+                    var gone = _history.TakeEveryPictureOut();
+                    turnUnseen = WithEveryPictureTool(turnUnseen);
+                    DiagnosticLog.Info(Category, PicturesRefusedLogLine(sentPictures, gone.Pictures));
+                    yield return new TurnEvent.PicturesRefused();
+                    iteration--;
+                    continue;
+                }
+
                 if (clock.First is null && partial.Length == 0 && sentPictures > 0 && LooksLikeOversizedRequest(failure!))
                 {
                     // A request with pictures dropped before a byte came back (2026-10-03): most likely its size. Once a
@@ -2447,8 +2524,8 @@ public sealed class Assistant
                 var pictures = invoked.Images;
                 // A tool whose pictures are the user's alone (ToolPicturesUnseen) still hands them to the screen below; the model's
                 // copy of the result says so, so it never describes a picture it was not shown.
-                bool seen = !ToolPicturesUnseen.Contains(call.Name);
-                results.Add(ResultContent(call, seen || pictures.Count == 0 ? result : result + "\n" + PicturesUnseenNote));
+                bool seen = !turnUnseen.Contains(call.Name);
+                results.Add(ResultContent(call, seen || pictures.Count == 0 ? result : NeonSidekick.Llm.Tools.UntrustedText.BeforeNote(result, PicturesUnseenNote)));
                 if (seen)
                 {
                     fetched.AddRange(pictures);
@@ -3502,12 +3579,7 @@ public sealed class Assistant
         if (checkedArguments.Note is { } note && !TurnTrace.IsError(answer.Text))
         {
             string text = answer.Text;
-            answer = answer with
-            {
-                Text = NeonSidekick.Llm.Tools.UntrustedText.EndsWithNote(text)
-                    ? NeonSidekick.Llm.Tools.UntrustedText.WithoutNote(text) + "\n" + note + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote
-                    : text + "\n" + note,
-            };
+            answer = answer with { Text = NeonSidekick.Llm.Tools.UntrustedText.BeforeNote(text, note) };
         }
 
         return answer;

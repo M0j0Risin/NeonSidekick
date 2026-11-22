@@ -17,10 +17,14 @@ public static class FolderMatch
         return WorkingDirectory.PathComparer.Equals(left, right);
     }
 
-    /// <summary>The folder as compared: full, no trailing separator; null for one that can't be made full.</summary>
+    /// <summary>
+    /// The folder as compared: full, no trailing separator; null for one that can't be made full. A folder must already be fully qualified in
+    /// this system's style (2026-11-22, the review's #78): a Mac's <c>/Users/x/Repo</c> read on Windows would otherwise be made
+    /// <c>C:\Users\x\Repo</c>, and a relative one would take the process's folder; both are refused, never guessed.
+    /// </summary>
     public static string? Normal(string? folder)
     {
-        if (string.IsNullOrWhiteSpace(folder))
+        if (string.IsNullOrWhiteSpace(folder) || !Path.IsPathFullyQualified(folder))
         {
             return null;
         }

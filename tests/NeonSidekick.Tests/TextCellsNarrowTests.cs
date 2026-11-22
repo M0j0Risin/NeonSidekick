@@ -157,4 +157,15 @@ public sealed class TextCellsNarrowTests
         Assert.Contains("🛠️ Tools", InfoPane.TabStripMarkup("🛠️ Tools", tabs, 0), StringComparison.Ordinal);
         Assert.DoesNotContain("🛠️  Tools", InfoPane.TabStripMarkup("🛠️ Tools", tabs, 0), StringComparison.Ordinal);
     }
+
+    /// <summary>The word wrap behind the Models tab's caption and notes (2026-11-22, the review's #65).</summary>
+    [Fact]
+    public void WrapWords_JoinsWordsUpToTheWidth_BreaksALongWordWhole_AndMovesAWideCharacterPastTheEdge()
+    {
+        Assert.Equal(["one two", "three"], TextCells.WrapWords("one two three", 8));
+        Assert.Equal(["abcde", "fgh x"], TextCells.WrapWords("abcdefgh x", 5));   // the broken word's tail takes the next word too
+        Assert.Equal(["abcd", "漢字"], TextCells.WrapWords("abcd漢字", 5));   // 漢 would straddle the edge: it starts the next line
+        Assert.Equal([""], TextCells.WrapWords("", 10));
+        Assert.All(TextCells.WrapWords("a 漢字漢字 b", 3), line => Assert.True(TextCells.Width(line) <= 3, line));
+    }
 }

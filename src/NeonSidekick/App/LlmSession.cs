@@ -242,7 +242,34 @@ internal sealed partial class LlmSession : IDisposable
     /// reads the same test): not the embedded model without its projector, and not without image codecs. Read at each turn, so a model
     /// switched mid-session is judged afresh.
     /// </summary>
-    public bool SeesPictures => Files.ImageCodecs.Available && EmbeddedServer is not { Vision: false };
+    public bool SeesPictures => Files.ImageCodecs.Available && EmbeddedServer is not { Vision: false } && !PicturesRefused;
+
+    // The server and model that refused pictures (2026-11-22, the review's #39), swapped with Volatile as the server limit is.
+    private sealed record PictureRefusal(Uri Url, string Model);
+    private PictureRefusal? _pictureRefusal;
+
+    /// <summary>
+    /// Whether the model in use refused a request's pictures this session (2026-11-22, the review's #39): held for that server and model, so a
+    /// reconnect to the same pair keeps it and another model is judged afresh. <see cref="SeesPictures"/> is false while it holds.
+    /// </summary>
+    public bool PicturesRefused =>
+        Volatile.Read(ref _pictureRefusal) is { } refused && Endpoint is { } endpoint
+        && refused.Url == endpoint.BaseUrl && string.Equals(refused.Model, endpoint.ModelId, StringComparison.Ordinal);
+
+    /// <summary>
+    /// A refusal the turn loop recovered from (<see cref="Llm.TurnEvent.PicturesRefused"/>): marks this server and model, and returns
+    /// <see cref="Llm.Assistant.PicturesRefusedNotice"/> the first time, null after (or with no endpoint).
+    /// </summary>
+    public string? NotePicturesRefused()
+    {
+        if (Endpoint is not { } endpoint || PicturesRefused)
+        {
+            return null;
+        }
+
+        Volatile.Write(ref _pictureRefusal, new PictureRefusal(endpoint.BaseUrl, endpoint.ModelId));
+        return Llm.Assistant.PicturesRefusedNotice;
+    }
 
     public LlmTimeouts Timeouts { get; private set; } = LlmTimeouts.Default;
 

@@ -480,6 +480,8 @@ public sealed partial class SidekickApp
         {
             Diagnostics.DiagnosticLog.Error(ChatScreen.AppCategory, "ralph: the loop failed", ex);
             await HeadlessNoticeLineAsync("[notice] " + RalphText.LoopFailedError(Llm.Assistant.Explain(ex))).ConfigureAwait(false);
+            // A crashed loop fails the run (2026-11-22, the review's #18), though it ends as a stop does.
+            HeadlessFailInstead(RalphWord, RalphText.LoopFailedError(Llm.Assistant.Explain(ex)));
             await HeadlessRalphEndAsync(state, sandbox, RalphStop.Stopped).ConfigureAwait(false);
         }
     }
@@ -619,7 +621,7 @@ public sealed partial class SidekickApp
             // The judgment threw (2026-10-19, the second review, the screen's twin): said, and the loop ends as a stop does, its lock let go.
             Diagnostics.DiagnosticLog.Error(ChatScreen.AppCategory, "ralph: the loop failed", ex);
             notices.Add(RalphText.LoopFailedError(Llm.Assistant.Explain(ex)));
-            HeadlessFail(RalphWord, RalphText.LoopFailedError(Llm.Assistant.Explain(ex)));
+            HeadlessFailInstead(RalphWord, RalphText.LoopFailedError(Llm.Assistant.Explain(ex)));
             stop = RalphStop.Stopped;
         }
 
@@ -660,10 +662,11 @@ public sealed partial class SidekickApp
             await HeadlessNoticeLineAsync("[notice] " + text.Trim()).ConfigureAwait(false);
         }
 
-        // A loop that ended short of done is a failed run (2026-11-21, #41); a stop the user made (Ctrl+C, a typed line) is not.
+        // A loop that ended short of done is a failed run (2026-11-21, #41); a stop the user made (Ctrl+C, a typed line) is not. Its stop names
+        // the line in place of what a pass before it noted (2026-11-22, the review's #97), in the summary's words, never the enum's (#64).
         if (stop is not (RalphStop.Done or RalphStop.Paused or RalphStop.Stopped or RalphStop.UserStopped))
         {
-            HeadlessFail(RalphWord, HeadlessText.Stopped(ended.Lines.Count > 0 ? ended.Lines[^1].Item1 : stop.ToString()));
+            HeadlessFailInstead(RalphWord, HeadlessText.Stopped(RalphText.StopWord(stop)));
         }
 
         if (ended.Forget)

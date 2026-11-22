@@ -248,7 +248,7 @@ public class MemoryMenuTests : IDisposable
         Assert.Contains(MemoryMenu.RemovePrompt("two"), _console.Output);
         Assert.Contains(ChatScreen.KeptNotice, _console.Output);
         Assert.Contains("(💾 removed: two)", _console.Output);
-        Assert.DoesNotContain(MemoryMenu.ForgetWord.PadRight(9), _console.Output);   // the choice never drawn
+        Assert.DoesNotContain(MemoryMenu.ForgetWord.PadRight(MemoryMenu.ActionWordWidth), _console.Output);   // the choice never drawn
         Assert.Equal(new[] { "one", "three" }, new MemoryStore(_dir).Snapshot());
         pane.Dispose();
     }

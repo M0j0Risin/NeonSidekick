@@ -13,6 +13,50 @@ public sealed record McpRenderContext(string Label, bool ReadOffered)
 {
     /// <summary>A context that never names <c>mcp_read</c>: the plain shape tests and the smoke probe pin.</summary>
     public static McpRenderContext Plain(string label) => new(label, false);
+
+    /// <summary>
+    /// The conversation's picture numbers (2026-11-22, the review's #60): one counter for every MCP tool and <c>mcp_read</c>, so two calls'
+    /// pictures never share a label. A fresh one by default (a test's, the smoke's), numbering from 1.
+    /// </summary>
+    public McpPictureCounter Pictures { get; init; } = new();
+
+    /// <summary>
+    /// Whether the model is shown the pictures (2026-11-22, the review's #131): false, a picture's marker says it was shown to the user, never
+    /// that it comes in the next message.
+    /// </summary>
+    public bool PicturesSeen { get; init; } = true;
+}
+
+/// <summary>The numbers an MCP conversation's pictures take (2026-11-22, the review's #60). Thread-safe.</summary>
+public sealed class McpPictureCounter
+{
+    private int _last;
+
+    /// <summary>The next number, from 1.</summary>
+    public int Next() => Interlocked.Increment(ref _last);
+
+    /// <summary>Starts again past <paramref name="last"/>: 0 for a new conversation, a restored one's highest number for a resume.</summary>
+    public void Reset(int last = 0) => Volatile.Write(ref _last, Math.Max(0, last));
+
+    /// <summary>
+    /// The highest <c>#N</c> among <paramref name="labels"/> (a restored history's MCP picture labels), or 0: a resume numbers past it, so a
+    /// restored <c>browser_take_screenshot #2</c> is never given again.
+    /// </summary>
+    public static int Highest(IEnumerable<string> labels)
+    {
+        ArgumentNullException.ThrowIfNull(labels);
+        int highest = 0;
+        foreach (string label in labels)
+        {
+            int hash = label.LastIndexOf(" #", StringComparison.Ordinal);
+            if (hash >= 0 && int.TryParse(label.AsSpan(hash + 2), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int n))
+            {
+                highest = Math.Max(highest, n);
+            }
+        }
+
+        return highest;
+    }
 }
 
 /// <summary>A rendered MCP result (2026-11-21, feature idea #31): the model's text and the pictures that come in the next message.</summary>
@@ -33,12 +77,26 @@ public sealed record McpRendered(string Text, IReadOnlyList<ImageAttachment> Pic
 public sealed class McpPictures
 {
     private readonly string _label;
+    private readonly McpPictureCounter _counter;
+    private readonly bool _seen;
     private readonly List<ImageAttachment> _taken = [];
 
-    public McpPictures(string label)
+    /// <param name="label">What names the pictures (<c>&lt;label&gt; #n</c>).</param>
+    /// <param name="counter">The conversation's numbers (#60); a fresh one numbers from 1.</param>
+    /// <param name="seen">Whether the model is shown them (#131).</param>
+    public McpPictures(string label, McpPictureCounter? counter = null, bool seen = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(label);
         _label = label;
+        _counter = counter ?? new McpPictureCounter();
+        _seen = seen;
+    }
+
+    /// <summary>A context's pictures: its label, its counter, whether they're seen.</summary>
+    public static McpPictures For(McpRenderContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return new McpPictures(context.Label, context.Pictures, context.PicturesSeen);
     }
 
     /// <summary>The pictures taken so far, in order.</summary>
@@ -74,19 +132,21 @@ public sealed class McpPictures
             return McpText.PictureUnreadable(ImageLoadFailure.CouldNotRead);
         }
 
-        string label = _label + " #" + (_taken.Count + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (bytes.Length == 0)
         {
             return McpText.PictureUnreadable(ImageLoadFailure.CouldNotRead);
         }
 
-        if (!ImageFile.TryLoad(bytes, label, out var image, out var failure, photo: false) || image is null)
+        if (!ImageFile.TryLoad(bytes, _label, out var image, out var failure, photo: false) || image is null)
         {
             return McpText.PictureUnreadable(failure);
         }
 
+        // Numbered only once taken, from the conversation's counter (#60): a refused block takes no number.
+        int number = _counter.Next();
+        string label = _label + " #" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
         _taken.Add(image with { Path = "", McpSource = label });
-        return McpText.PictureAttached(_taken.Count, image.Width, image.Height);
+        return _seen ? McpText.PictureAttached(number, image.Width, image.Height) : McpText.PictureShownToUser(number, image.Width, image.Height);
     }
 
     /// <summary>Whether a blob's media type names a picture (<c>image/…</c>); one with none is not taken for one.</summary>

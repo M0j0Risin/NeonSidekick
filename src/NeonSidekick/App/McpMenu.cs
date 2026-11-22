@@ -331,7 +331,7 @@ internal sealed class McpMenu
                 _detached = true;
             }
 
-            FlushSignInNotices();
+            FlushSignInNotices(closing: true);
             _pane.Close();
         }
     }
@@ -350,6 +350,18 @@ internal sealed class McpMenu
         }
     }
 
+    /// <summary>The sign-in started from this pane, if any (2026-11-22: tests wait on its end before pressing Esc, which would cancel it).</summary>
+    internal Task? SignInTask
+    {
+        get
+        {
+            lock (_signInGate)
+            {
+                return _signInTask;
+            }
+        }
+    }
+
     /// <summary>The pick's stale signal: the reply's end, and the sign-in's news (its address, its end).</summary>
     private CancellationTokenSource? Wake(CancellationToken replyStale)
     {
@@ -362,6 +374,12 @@ internal sealed class McpMenu
             }
 
             _wake = replyStale.CanBeCanceled ? CancellationTokenSource.CreateLinkedTokenSource(replyStale) : new CancellationTokenSource();
+            // Lines queued before this pick began (2026-11-22, the review's #23): woken at once, never left waiting for the next key.
+            if (!_signInNotices.IsEmpty)
+            {
+                _wake.Cancel();
+            }
+
             return _wake;
         }
     }
@@ -389,12 +407,16 @@ internal sealed class McpMenu
         }
     }
 
-    /// <summary>The sign-in's lines on the pane's own thread: the address above the pane on the transcript, the outcome on the status line.</summary>
-    private void FlushSignInNotices()
+    /// <summary>
+    /// The sign-in's lines on the pane's own thread: the address above the pane on the transcript, the outcome on the status line. At the
+    /// close (<paramref name="closing"/>) every line goes to the transcript (2026-11-22): an outcome queued as Esc closed the pane would
+    /// otherwise land on a status line that is never drawn again.
+    /// </summary>
+    private void FlushSignInNotices(bool closing = false)
     {
         while (_signInNotices.TryDequeue(out var line))
         {
-            INoticeSink sink = line.Transcript ? _transcript : Sink;
+            INoticeSink sink = closing || line.Transcript ? _transcript : Sink;
             if (line.Error)
             {
                 sink.Error(line.Text);
@@ -481,18 +503,35 @@ internal sealed class McpMenu
             return;
         }
 
-        if (server.State == McpState.Connected && _session.HoldsSignIn(server.Name))
+        // A sign-out whatever the row's state (2026-11-22, the review's #13): a failed or dropped server's kept tokens too, and an entry that
+        // won't unseal here (HoldsSignIn counts any kept entry).
+        if (_session.HoldsSignIn(server.Name))
         {
             if (!await _menu.ConfirmAsync(McpText.SignOutQuestion(server.Name), cancellationToken, close: false).ConfigureAwait(false))
             {
                 return;
             }
 
-            if (await _session.SignOutAsync(server.Name).ConfigureAwait(false))
+            switch (await _session.SignOutAsync(server.Name).ConfigureAwait(false))
             {
-                Sink.Notice(McpText.SignedOutNotice(server.Name));
+                case SignOutResult.SignedOut:
+                    Sink.Notice(McpText.SignedOutNotice(server.Name));
+                    break;
+                case SignOutResult.Busy:
+                    Sink.Error(McpText.SignOutBusy);
+                    break;
+                default:
+                    Sink.Notice(McpText.NoSignIn(server.Name));
+                    break;
             }
 
+            return;
+        }
+
+        // A switched-off server that could sign in (2026-11-22, the review's #63): turn it on first, never "uses no sign-in".
+        if (!server.Enabled && server.Startable && _session.CanSignIn(server.Name))
+        {
+            Sink.Notice(McpText.SignInTurnOnFirst(server.Name));
             return;
         }
 
@@ -507,7 +546,8 @@ internal sealed class McpMenu
         {
             var cancel = new CancellationTokenSource();
             _signInCancel = cancel;
-            _session.SignInNotice = (text, error) => SignInSays(text, error, transcript: true);
+            Action<string, bool> notice = (text, error) => SignInSays(text, error, transcript: true);
+            _session.SignInNotice = notice;
             _signInTask = Task.Run(async () =>
             {
                 McpServerStatus? outcome = null;
@@ -517,20 +557,35 @@ internal sealed class McpMenu
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
-                    SignInSays(McpText.SignInFailed(name, LogText.Excerpt(ex.Message)), true, transcript: false);
-                    return;
+                    outcome = new McpServerStatus(name, McpScope.Global, null, true, McpState.Failed, LogText.Excerpt(ex.Message), [], "");
                 }
                 finally
                 {
-                    _session.SignInNotice = null;
+                    // Ours alone (2026-11-22, the review's #50): a later sign-in's handler and token are never cleared or disposed by this one.
+                    if (ReferenceEquals(_session.SignInNotice, notice))
+                    {
+                        _session.SignInNotice = null;
+                    }
+
+                    lock (_signInGate)
+                    {
+                        if (ReferenceEquals(_signInCancel, cancel))
+                        {
+                            _signInCancel = null;
+                        }
+                    }
                 }
 
+                bool cancelled = cancel.IsCancellationRequested;
+                cancel.Dispose();
                 switch (outcome)
                 {
-                    case null when cancel.IsCancellationRequested:
+                    case null when cancelled:
                         SignInSays(McpText.SignInCancelledNotice(name), false, transcript: false);
                         break;
                     case null:
+                        // Not started (2026-11-22, the review's #129): another sign-in got there first, MCP went off, or the server went away.
+                        SignInSays(McpText.SignInNotNow(name), false, transcript: false);
                         break;
                     case { State: McpState.Connected }:
                         SignInSays(McpText.SignedInNotice(name, outcome.Tools.Count), false, transcript: false);

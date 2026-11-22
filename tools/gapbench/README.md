@@ -37,8 +37,9 @@ A bench uses the published exe (`publish/output`) and takes hours: a run can nee
 - **A bench that stops can be resumed.** Run the same command with the same `--out` and the same `--set` pairs:
   finished runs are skipped. `--fresh` starts the folder over.
 - **`--set Name=value` tries a setting.** The name is a `profile.json` key; a misspelled one is refused.
-- **A run flagged `exit code 4`** had a review that stopped short, or a message or command that failed; the run's
-  output ends with a line naming which.
+- **A run flagged `exit code 4`** had a review whose pass failed (a canceled pass, its limit and a stall don't count), or
+  a message or command that failed; the run's output ends with a line naming which. The closing `[notice] session #N`
+  line on stderr is never a flag.
 
 The results' headline also says how often the plan shadow rule (gaps tagged low don't restart the clean streak) would
 have stopped a review before a planted gap was caught, and how the gaps' severity tags agree with the planted ones.

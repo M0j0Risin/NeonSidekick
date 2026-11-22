@@ -41,6 +41,9 @@ internal sealed class SessionsMenu
     /// <summary><c>/sessions here</c>'s title (2026-11-21, feature idea #4), and the no-pane list's first line, so a short list is never taken for the whole store.</summary>
     public const string HereTitle = Title + " · " + SessionText.HereMark;
 
+    /// <summary>The no-pane list's title, naming the folder (2026-11-22, the review's #119): <c>Sessions · C:\Repo\X</c>.</summary>
+    public static string HereTitleFor(string? folder) => string.IsNullOrWhiteSpace(folder) ? HereTitle : Title + " · " + folder;
+
     public const string RestoreWord = "restore";
     public const string RenameWord = "rename";
     public const string ExportWord = "export";
@@ -228,7 +231,7 @@ internal sealed class SessionsMenu
         {
             if (here)
             {
-                _transcript.Notice(HereTitle);
+                _transcript.Notice(HereTitleFor(_root()));
             }
 
             foreach (var line in ListLines(sessions, _current(), zone))
@@ -250,7 +253,8 @@ internal sealed class SessionsMenu
                 // The rows under the filter (2026-10-07): the indices into the list, the cursor kept on the same session when it stays.
                 var shown = Enumerable.Range(0, sessions.Count).Where(i => Matches(filter, sessions[i])).ToList();
                 string? root = _root();
-                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(sessions[i], sessions[i].Id == current, zone, idWidth, turnsWidth, FolderMatch.Same(sessions[i].Cwd, root))).ToList() : [MenuFilter.NoMatchRow(filter)];
+                // Every row of the here view is this folder's: no mark on each (2026-11-22, the review's #110).
+                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(sessions[i], sessions[i].Id == current, zone, idWidth, turnsWidth, !here && FolderMatch.Same(sessions[i].Cwd, root))).ToList() : [MenuFilter.NoMatchRow(filter)];
                 var page = new MenuPage(title, rows, MenuFilter.Hint(Keys, filter))
                 {
                     Filter = filter,

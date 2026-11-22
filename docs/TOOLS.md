@@ -1139,7 +1139,7 @@ Under *Memory mode*.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `save_memory` | `text`, `here` | Saves one lasting fact about you, known in every later session; `here` keeps a fact about the project to this folder. Not offered while *Memory mode* is `read-only`. |
+| `save_memory` | `text`, `here` | Saves one lasting fact about you, known in every later session; `here` keeps a fact about the project to this folder. A fact kept for another folder, saved without `here`, then applies everywhere. Not offered while *Memory mode* is `read-only`. |
 | `recall_memory` | — | Everything remembered, oldest first: the memories for everywhere and this folder's, not another folder's or those turned off on the `/memory` pane. Called at the start of every conversation. |
 
 ### Skills
@@ -1202,6 +1202,7 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * A server's changed tool list applies from your next message.
 * **Server text is untrusted:** each text a tool returns reaches the model fenced (`⟪ ⟫`); a failed call starts `Error:`. A server's tool descriptions aren't fenced: trusting a server is your choice in `mcp.json`.
 * **Pictures a tool returns** (a browser screenshot, say) reach a model that sees pictures, at most four a call, and show in the transcript and the Web UI. A model that can't see them gets a note instead.
+* **A server that refuses pictures** gets the request again without them, and the model gets none for the rest of the session.
 * **Saved sessions leave those pictures out** unless *MCP keep in sessions* is on ([SETTINGS.md](SETTINGS.md#mcp-servers)): a screenshot can hold anything on the page.
 * **Resources in a result:** an embedded text reaches the model fenced, cut at 32,000 characters; a resource link or any other file is named, never fetched on its own.
 * **Calls ask first** (Deny, Allow once, Allow for this session) unless the server marks the tool read-only and not destructive. An allow lasts until `/new`, `/clear`, `/resume`, a profile switch, or a change to that server's settings.
@@ -1212,7 +1213,9 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **Tokens are encrypted** in place for your Windows user ([on a Mac](MAC.md#setup)) when the app next starts or connects its servers (a `/mcp` reload too). That covers a plain `env` or `headers` value named with a word like `TOKEN`, `SECRET`, `PASSWORD`, `AUTH`, `CREDENTIAL` or `COOKIE`, or ending in `KEY`, a URL with a password, and `oauth.clientSecret`.
 * **Where a token goes:** `args` and `url` aren't encrypted, so put a token in `env` (a `command` server) or `headers` (a `url` server). A pre-registered app's secret goes in `oauth.clientSecret`.
 * **Signing in** (Linear, Notion and other hosted servers): one that wants a sign-in reads `needs sign-in` on `/mcp` › Servers; `s` or Enter opens it in your browser. Nothing is registered until you ask.
-* **The sign-in opens only `https` pages,** or `http` on this computer, and returns to `http://127.0.0.1:8766/callback` (`oauth.redirectPort` changes it). A server with an `Authorization` header never signs in.
+* **The sign-in opens only `https` pages,** or `http` on this computer, and returns to `http://127.0.0.1:8766/callback` (`oauth.redirectPort` changes it).
+* **A server with a key of its own** (an `Authorization` header, another key header, or a key in its address) never signs in; its 401 reads as failed, and an `oauth` block beside it is ignored, with a log line.
+* **A sign-in that runs out mid-session** turns the row back to `needs sign-in`, and the call fails, asking you to sign in again. The browser never opens on its own.
 * **Sign-ins are kept encrypted** for your Windows user ([on a Mac](MAC.md#setup)) in the profile's `configs/mcp-tokens.json`, out of the settings zip and out of the model's reach.
 * **Signing out** (`s` on a signed-in server) forgets the sign-in on this computer only; to cut the app off, remove NeonSidekick from your account's connected apps.
 * **A server with no self-registration** needs an app you register there first, with the redirect address above: give its `clientId` (and `clientSecret`, if any) in `"oauth"`.

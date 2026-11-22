@@ -254,6 +254,17 @@ public class McpRowsTests : IAsyncDisposable
             ],
             McpRows.ToolLines(facts));
         Assert.Equal([McpText.NoToolsLine], McpRows.ToolLines(Facts(await ConnectedAsync("""{ "mcpServers": {} }"""))));
+
+        // A resource server: the built-in mcp_read first, as the pane lists it (2026-11-22, the review's #90).
+        Assert.Equal(
+            [
+                SystemPromptSummary.GroupName(McpText.BuiltInSection, 1, 1),
+                "  mcp_read      on         " + McpText.ReadRowDescription,
+                "docker (1 of 2)",
+                "  docker__echo  on   asks  Echoes the text back.",
+                "  docker__fail  off  asks  Always fails.",
+            ],
+            McpRows.ToolLines(facts with { ResourceServers = ["docker"] }));
     }
 
     /// <summary>A dropped server (2026-11-19): still connected, so its tools still count, but its row and footer say it dropped.</summary>

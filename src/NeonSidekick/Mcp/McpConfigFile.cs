@@ -213,11 +213,20 @@ public sealed class McpConfigFile
                 continue;
             }
 
+            // An oauth block beside the server's own key (2026-11-22, the review's #53): the key wins; said once a server and shape, never a problem.
+            if (log && config.OAuth is not null && config.IsHttp && !config.SignInPossible && OAuthIgnoredSaid.TryAdd(source, 0))
+            {
+                DiagnosticLog.Warn(Category, McpText.OAuthIgnoredWithHeader(source));
+            }
+
             usable.Add(new KeyValuePair<string, McpServerConfig>(name, config));
         }
 
         return new McpConfigLoad(path, usable, problems);
     }
+
+    /// <summary>The entries whose ignored <c>oauth</c> block was logged (#53), so a reload or a turn's read never says it again.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> OAuthIgnoredSaid = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Reads the home's file and every profile's (2026-11-19, feature idea #29), so a plain token is encrypted before the first screen or turn,

@@ -146,9 +146,10 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes, bool Do
     /// <paramref name="keepBytes"/> of them are left, the newest message holding a picture never touched (so fewer may go
     /// than asked). A message that loses a picture is a clone with <see cref="LeftOut"/> in each picture's place, its
     /// other parts and its tags as they were; every other message is the same instance. The retry after a dropped
-    /// request asks for this directly, with half what that request carried.
+    /// request asks for this directly, with half what that request carried. With <paramref name="newestToo"/> the newest
+    /// message's pictures go as well (2026-11-22, the review's #39: a model that refuses pictures refuses that one too).
     /// </summary>
-    public static PictureTrim TakeOut(IReadOnlyList<ChatMessage> messages, int keepPictures, long keepBytes, bool documentsAsText = false)
+    public static PictureTrim TakeOut(IReadOnlyList<ChatMessage> messages, int keepPictures, long keepBytes, bool documentsAsText = false, bool newestToo = false)
     {
         ArgumentNullException.ThrowIfNull(messages);
         ArgumentOutOfRangeException.ThrowIfNegative(keepPictures);
@@ -167,7 +168,8 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes, bool Do
         int taken = 0;
         int documents = 0;
         long takenBytes = 0;
-        for (int i = 0; i < newest && (pictures > keepPictures || bytes > keepBytes); i++)
+        int end = newestToo ? newest + 1 : newest;
+        for (int i = 0; i < end && (pictures > keepPictures || bytes > keepBytes); i++)
         {
             var message = messages[i];
             if (message.Role != ChatRole.User || !message.Contents.Any(c => c is DataContent))

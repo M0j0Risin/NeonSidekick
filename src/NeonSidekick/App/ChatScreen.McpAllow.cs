@@ -53,7 +53,7 @@ internal sealed partial class ChatScreen
         AllowSession allow;
         try
         {
-            allow = await AllowWithSessionAsync(_mcpAllowed, McpSession.McpAllowKey(ask.Server, ask.ServerTool, ask.Fingerprint, ask.Definition), title, caption, whole, turnToken).ConfigureAwait(false);
+            allow = await AllowWithSessionAsync(_mcpAllowed, McpSession.McpAllowKey(ask.Server, ask.AllowTool ?? ask.ServerTool, ask.Fingerprint, ask.Definition), title, caption, whole, turnToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (turnToken.IsCancellationRequested)
         {

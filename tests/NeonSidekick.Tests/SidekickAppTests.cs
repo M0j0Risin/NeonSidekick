@@ -149,8 +149,8 @@ public partial class SidekickAppTests : IDisposable
     private readonly InProcessMcpServers _mcpServers = new();
 
     /// <summary>The prompt as headless builds it: Agent skills on by default, no skill installed, so every prompt with tools ends with the skills block over an empty catalog (2026-09-16); no timer tool, so the tool rules lose their timer sentence (2026-09-20).</summary>
-    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool sessions = true, bool mcp = false, bool git = true, bool shell = true, bool help = true, bool clock = true, bool save = false) =>
-        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], sessions: sessions && tools, mcp: mcp && tools, timers: false, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools, clock: clock, save: save);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02); Memory mode read-only by default (2026-11-20): no save sentences
+    private static string SkilledPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skill>? skills = null, bool sessions = true, bool mcp = false, bool git = true, bool shell = true, bool help = true, bool clock = true, bool save = false, bool memoryHere = true) =>
+        Assistant.SystemPrompt(speechOutput, memories, persona, operatingRules, voiceDirective, tools, web, files, ask, project, skills ?? [], sessions: sessions && tools, mcp: mcp && tools, timers: false, git: git && tools, shell: shell && tools, native: shell && tools, help: help && tools, clock: clock, save: save, memoryHere: memoryHere);   // Shell prefer native tools on by default (2026-09-26); neon_help standing (2026-10-02); Memory mode read-only by default (2026-11-20): no save sentences
 
     /// <summary>Every window title the app set (the <c>setTitle</c> seam): the interactive screen's launch, never headless.</summary>
     private readonly List<string> _titles = new();
@@ -976,7 +976,10 @@ public partial class SidekickAppTests : IDisposable
         Assert.Equal(2, _mcpServers.Requested.Count);
     }
 
-    /// <summary>Headless has no /mcp (2026-11-19): a server that doesn't come back says the next start retries it, as an [error].</summary>
+    /// <summary>
+    /// Headless has no /mcp (2026-11-19): a server that doesn't come back says the next start retries it, as a [warning] since 2026-11-22 (the
+    /// review's #24): the turn was answered without it, so the run exits 0.
+    /// </summary>
     [Fact]
     public async Task Headless_AnMcpServerThatDoesntComeBack_SaysTheNextStartRetriesIt_NeverMcp()
     {
@@ -984,10 +987,10 @@ public partial class SidekickAppTests : IDisposable
         _chat.Enqueue(FakeChatClient.Call("c1", "pipe__drop", new Dictionary<string, object?> { ["text"] = "x" }));
         _chat.EnqueueText("It dropped twice.");
 
-        string output = await Headless("drop it\n", exitCode: 4);
+        string output = await Headless("drop it\n");
 
         Assert.Contains("[tool] pipe__drop -> " + NeonSidekick.Mcp.McpText.ErrorPrefix + NeonSidekick.Mcp.McpText.DroppedAgainError("pipe", NeonSidekick.Mcp.McpText.HeadlessRetryTail), output);
-        Assert.Contains("[error] " + NeonSidekick.Mcp.McpText.NotBackNotice("pipe", NeonSidekick.Mcp.McpText.DroppedAgainDetail, NeonSidekick.Mcp.McpText.HeadlessRetryTail), output);
+        Assert.Contains("[warning] " + NeonSidekick.Mcp.McpText.NotBackNotice("pipe", NeonSidekick.Mcp.McpText.DroppedAgainDetail, NeonSidekick.Mcp.McpText.HeadlessRetryTail), output);
         Assert.DoesNotContain(NeonSidekick.Mcp.McpText.RetryTail, output);
     }
 

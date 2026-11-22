@@ -35,16 +35,29 @@ public static class McpOAuth
     /// Whether <paramref name="ex"/>, or one it wraps, is the server's HTTP 401: a server that wants a sign-in. The SDK's transport throws
     /// that first <see cref="HttpRequestException"/> as it is (a 401 never falls back to SSE); a wrap above it is walked.
     /// </summary>
-    public static bool IsUnauthorized(Exception? ex)
+    public static bool IsUnauthorized(Exception? ex) =>
+        Any(ex, e => e is HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized });
+
+    /// <summary>Whether <paramref name="ex"/>, or one it wraps, is <see cref="McpSignInNeeded"/>.</summary>
+    public static bool IsSignInNeeded(Exception? ex) => Any(ex, e => e is McpSignInNeeded);
+
+    /// <summary>Whether <paramref name="ex"/>, or one it wraps, is the app's own sign-in failure (<see cref="McpSignInFailed"/>): its words are the app's.</summary>
+    public static bool IsSignInFailed(Exception? ex) => Any(ex, e => e is McpSignInFailed);
+
+    /// <summary>
+    /// The one walk (2026-11-22, the review's #96): <paramref name="ex"/>, each inner exception, and every one an <see cref="AggregateException"/>
+    /// holds, so a 401 or a needs-sign-in wrapped by a task is found by both checks alike. Depth-capped against a cycle.
+    /// </summary>
+    private static bool Any(Exception? ex, Func<Exception, bool> match, int depth = 0)
     {
-        for (var e = ex; e is not null; e = e.InnerException)
+        for (var e = ex; e is not null && depth < 32; e = e.InnerException, depth++)
         {
-            if (e is HttpRequestException { StatusCode: System.Net.HttpStatusCode.Unauthorized })
+            if (match(e))
             {
                 return true;
             }
 
-            if (e is AggregateException aggregate && aggregate.InnerExceptions.Any(IsUnauthorized))
+            if (e is AggregateException aggregate && aggregate.InnerExceptions.Any(inner => Any(inner, match, depth + 1)))
             {
                 return true;
             }
@@ -52,19 +65,22 @@ public static class McpOAuth
 
         return false;
     }
+}
 
-    /// <summary>Whether <paramref name="ex"/>, or one it wraps, is <see cref="McpSignInNeeded"/>.</summary>
-    public static bool IsSignInNeeded(Exception? ex)
+/// <summary>
+/// The app's own sign-in failure (2026-11-22, the review's #137): a refused address, a busy port, a timeout, the service's refusal (its words
+/// fenced). Its message is the app's, so the row's detail is shown as the app's; an SDK exception's message may carry a server's text and isn't.
+/// </summary>
+public sealed class McpSignInFailed : InvalidOperationException
+{
+    public McpSignInFailed(string message)
+        : base(message)
     {
-        for (var e = ex; e is not null; e = e.InnerException)
-        {
-            if (e is McpSignInNeeded)
-            {
-                return true;
-            }
-        }
+    }
 
-        return false;
+    public McpSignInFailed(string message, Exception inner)
+        : base(message, inner)
+    {
     }
 }
 

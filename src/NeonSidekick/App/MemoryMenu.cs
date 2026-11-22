@@ -112,8 +112,11 @@ internal sealed class MemoryMenu
 
     /// <summary>A folder choice's row, its effect dim beside it (2026-11-21). Pinned.</summary>
     public static string FolderActionRow(RowAction action) => action == RowAction.ThisFolder
-        ? Markup.Escape(MemoryText.ThisFolderOnly.PadRight(17)) + Theme.DimMarkup("offer it only while working in this folder")
-        : Markup.Escape(MemoryText.Everywhere.PadRight(17)) + Theme.DimMarkup("offer it in every folder");
+        ? Markup.Escape(MemoryText.FolderWord.PadRight(ActionWordWidth)) + Theme.DimMarkup(MemoryText.FolderNote)
+        : Markup.Escape(MemoryText.EverywhereWord.PadRight(ActionWordWidth)) + Theme.DimMarkup(MemoryText.EverywhereNote);
+
+    /// <summary>The action words' one width (2026-11-22, the review's #16): edit, disable, enable, forget, everywhere and folder line up.</summary>
+    public const int ActionWordWidth = 12;
 
     /// <summary>The words of the choice (2026-10-13). Pinned.</summary>
     public const string EditWord = "edit";
@@ -127,9 +130,9 @@ internal sealed class MemoryMenu
     /// </summary>
     public static IReadOnlyList<string> ActionRows(bool disabled) =>
     [
-        Markup.Escape(EditWord.PadRight(9)) + Theme.DimMarkup("change its text"),
-        Markup.Escape((disabled ? EnableWord : DisableWord).PadRight(9)) + Theme.DimMarkup(disabled ? "offer it to the model again" : "keep it, but don't offer it to the model"),
-        Markup.Escape(ForgetWord.PadRight(9)) + Theme.DimMarkup("remove it"),
+        Markup.Escape(EditWord.PadRight(ActionWordWidth)) + Theme.DimMarkup(MemoryText.EditNote),
+        Markup.Escape((disabled ? EnableWord : DisableWord).PadRight(ActionWordWidth)) + Theme.DimMarkup(disabled ? MemoryText.EnableNote : MemoryText.DisableNote),
+        Markup.Escape(ForgetWord.PadRight(ActionWordWidth)) + Theme.DimMarkup(MemoryText.ForgetNote),
     ];
 
     /// <summary>The choice's title: the memory, quoted (2026-10-13). Pinned.</summary>
@@ -420,13 +423,20 @@ internal sealed class MemoryMenu
                         {
                             // The folder set as the choice offered (2026-11-21); already so (a change from the page meanwhile) is said as done.
                             string? to = picked == RowAction.ThisFolder ? _folder?.Invoke() : null;
-                            if (_store.SetFolder(text, to) || Find(_store.EntriesSnapshot(), text) is { } now && (to is null ? now.Folder is null : Files.FolderMatch.Same(now.Folder, to)))
+                            switch (_store.SetFolder(text, to))
                             {
-                                Sink.Notice(to is null ? MemoryText.MovedEverywhere(text) : MemoryText.MovedHere(text));
-                            }
-                            else
-                            {
-                                Sink.Error(MissingError);
+                                case MemoryScopeOutcome.Moved or MemoryScopeOutcome.Unchanged:
+                                    Sink.Notice(to is null ? MemoryText.MovedEverywhere(text) : MemoryText.MovedHere(text));
+                                    break;
+                                case MemoryScopeOutcome.Full:
+                                    Sink.Error(MemoryText.FullFolderError);   // #26: it stays where it was
+                                    break;
+                                case MemoryScopeOutcome.Refused:
+                                    Sink.Error(MemoryText.FolderRefused(to ?? ""));
+                                    break;
+                                default:
+                                    Sink.Error(MissingError);
+                                    break;
                             }
 
                             break;
@@ -557,13 +567,15 @@ internal sealed class MemoryMenu
             return null;
         }
 
-        var result = _store.Add(typed, enableDisabled: true);   // the user's own add enables a disabled one again (2026-10-13)
+        // The user's own add enables a disabled one again (2026-10-13); for everywhere, so another folder's copy widens (2026-11-22, #34).
+        string? folder = _folder?.Invoke();
+        var result = _store.Remember(typed, folder, scoped: false, enableDisabled: true);
         if (result.Outcome == MemoryAddOutcome.Empty)
         {
             return null;   // nothing typed
         }
 
-        var (answer, error) = ChatScreen.RememberAnswer(result);
+        var (answer, error) = ChatScreen.RememberAnswer(result, folder);   // the folder, so another folder's copy is named (#76)
         if (error)
         {
             Sink.Error(answer);

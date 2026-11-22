@@ -103,8 +103,9 @@ public sealed partial class SessionStore : IDisposable
     /// from before gains it and an older build reads past it; no row it knew changed shape.
     /// <c>turn_sources</c> (2026-11-15, the web-tools plan's §2: each turn's pages, downloads and searches) followed the same way.
     /// The added columns (2026-11-21, feature ideas #4 and #7: <c>sessions.cwd</c>, <c>turns.model</c>, <c>turns.output_ms</c>,
-    /// <c>turns.timed_output</c>) leave it at 3 too: nullable, added at the open, and every older build names its columns in each INSERT and
-    /// SELECT, so it reads the file as before. That matters: the updater's rollback can bring an older copy back, which refuses any other number.
+    /// <c>turns.timed_output</c>; <c>turns.cwd</c> since 2026-11-22, the review's #41) leave it at 3 too: nullable, added at the open, and every
+    /// older build names its columns in each INSERT and SELECT, so it reads the file as before. That matters: the updater's rollback can bring an
+    /// older copy back, which refuses any other number.
     /// </summary>
     public const int SchemaVersion = 3;
 
@@ -216,7 +217,7 @@ public sealed partial class SessionStore : IDisposable
             }
             catch (SqliteException ex)
             {
-                Fail("begin a session", ex);
+                SaveFailed("begin a session", ex);
                 return null;
             }
         }
@@ -258,12 +259,13 @@ public sealed partial class SessionStore : IDisposable
                 insert.Transaction = transaction;
                 // The new row's id comes back with the insert (2026-11-16, the web-tools review's #93), for its sources.
                 insert.CommandText = _extraColumns
-                    ? "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled, model, output_ms, timed_output) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled, $model, $ms, $timed) RETURNING id"
+                    ? "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled, model, output_ms, timed_output, cwd) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled, $model, $ms, $timed, $cwd) RETURNING id"
                     : "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled) RETURNING id";
                 var (ms, timed) = Speed(usage);
                 insert.Parameters.AddWithValue("$model", string.IsNullOrEmpty(model) ? DBNull.Value : model);
                 insert.Parameters.AddWithValue("$ms", (object?)ms ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$timed", (object?)timed ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$cwd", (object?)cwd ?? DBNull.Value);   // each turn's folder, for a truncate (#41)
                 insert.Parameters.AddWithValue("$id", id);
                 insert.Parameters.AddWithValue("$at", now);
                 insert.Parameters.AddWithValue("$user", userText);
@@ -301,7 +303,7 @@ public sealed partial class SessionStore : IDisposable
             }
             catch (SqliteException ex)
             {
-                Fail("append a turn", ex);
+                SaveFailed("append a turn", ex);
                 return null;
             }
         }
@@ -385,7 +387,11 @@ public sealed partial class SessionStore : IDisposable
                 int removed = delete.ExecuteNonQuery();
                 using var count = connection.CreateCommand();
                 count.Transaction = transaction;
-                count.CommandText = "UPDATE sessions SET turns = COALESCE((SELECT max(ordinal) FROM turns WHERE session_id = $id), 0), updated_at = $updated WHERE id = $id";
+                // The folder goes back with the turns (2026-11-22, the review's #41): the last kept turn's that has one; a session saved before turns
+                // kept theirs keeps its own.
+                count.CommandText = _extraColumns
+                    ? "UPDATE sessions SET turns = COALESCE((SELECT max(ordinal) FROM turns WHERE session_id = $id), 0), cwd = COALESCE((SELECT cwd FROM turns WHERE session_id = $id AND cwd IS NOT NULL ORDER BY ordinal DESC LIMIT 1), cwd), updated_at = $updated WHERE id = $id"
+                    : "UPDATE sessions SET turns = COALESCE((SELECT max(ordinal) FROM turns WHERE session_id = $id), 0), updated_at = $updated WHERE id = $id";
                 count.Parameters.AddWithValue("$id", id);
                 count.Parameters.AddWithValue("$updated", Stamp(_time.GetUtcNow()));
                 count.ExecuteNonQuery();
@@ -395,7 +401,7 @@ public sealed partial class SessionStore : IDisposable
             }
             catch (SqliteException ex)
             {
-                Fail("truncate a session", ex);
+                SaveFailed("truncate a session", ex);
                 return 0;
             }
         }
@@ -424,7 +430,7 @@ public sealed partial class SessionStore : IDisposable
             }
             catch (SqliteException ex)
             {
-                Fail("save the history", ex);
+                SaveFailed("save the history", ex);
             }
         }
     }
@@ -1544,49 +1550,72 @@ public sealed partial class SessionStore : IDisposable
         }
     }
 
+    /// <summary>The columns added at the open (2026-11-21; <c>turns.cwd</c> 2026-11-22, the review's #41), each nullable.</summary>
+    private static readonly (string Table, string Column, string Type)[] AddedColumns =
+    [
+        ("sessions", "cwd", "TEXT"), ("turns", "model", "TEXT"), ("turns", "output_ms", "INTEGER"), ("turns", "timed_output", "INTEGER"), ("turns", "cwd", "TEXT"),
+    ];
+
     /// <summary>
-    /// <c>sessions.cwd</c> and the turn's <c>model</c>, <c>output_ms</c> and <c>timed_output</c>, each added when missing, in one transaction
-    /// (the store's first column adds, 2026-11-21). False, with the failure logged, when they couldn't be.
+    /// <see cref="AddedColumns"/>, each added when missing, in one transaction (the store's first column adds, 2026-11-21). Since 2026-11-22 (the
+    /// review's #105 and #102): another copy that added them between the check and the add is a success, a busy file or a duplicate column is
+    /// tried once more, and a failure is logged once, as a warning (sessions go on without the folder). False when they couldn't be added.
     /// </summary>
     private static bool AddColumns(SqliteConnection connection, Action? before)
     {
-        try
+        for (int attempt = 1; ; attempt++)
         {
-            before?.Invoke();
-            var missing = new List<string>();
-            if (!Has(connection, "sessions", "cwd"))
+            try
             {
-                missing.Add("ALTER TABLE sessions ADD COLUMN cwd TEXT");
-            }
-
-            foreach (var (column, type) in new[] { ("model", "TEXT"), ("output_ms", "INTEGER"), ("timed_output", "INTEGER") })
-            {
-                if (!Has(connection, "turns", column))
+                before?.Invoke();
+                var missing = AddedColumns.Where(c => !Has(connection, c.Table, c.Column)).ToList();
+                if (missing.Count == 0)
                 {
-                    missing.Add("ALTER TABLE turns ADD COLUMN " + column + " " + type);
+                    return true;
                 }
-            }
 
-            if (missing.Count == 0)
-            {
+                using var transaction = connection.BeginTransaction();
+                foreach (var (table, column, type) in missing)
+                {
+                    using var add = connection.CreateCommand();
+                    add.Transaction = transaction;
+                    add.CommandText = "ALTER TABLE " + table + " ADD COLUMN " + column + " " + type;
+                    add.ExecuteNonQuery();
+                }
+
+                transaction.Commit();
                 return true;
             }
-
-            using var transaction = connection.BeginTransaction();
-            foreach (string statement in missing)
+            catch (SqliteException ex)
             {
-                using var add = connection.CreateCommand();
-                add.Transaction = transaction;
-                add.CommandText = statement;
-                add.ExecuteNonQuery();
-            }
+                if (AllAdded(connection))
+                {
+                    return true;   // another copy's adds: as good as ours
+                }
 
-            transaction.Commit();
-            return true;
+                bool again = ex.SqliteErrorCode is 5 or 6 || ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase);
+                if (again && attempt == 1)
+                {
+                    continue;
+                }
+
+                DiagnosticLog.Warn(Category, ColumnsFailedWarning(ex.Message), ex);
+                return false;
+            }
         }
-        catch (SqliteException ex)
+    }
+
+    /// <summary>Logged (Warn, once an open) when the columns couldn't be added (#102). Pinned.</summary>
+    public static string ColumnsFailedWarning(string reason) => $"Could not add the folder and model columns in {FileName}: {reason}";
+
+    private static bool AllAdded(SqliteConnection connection)
+    {
+        try
         {
-            Fail("add the folder and model columns", ex);
+            return AddedColumns.All(c => Has(connection, c.Table, c.Column));
+        }
+        catch (SqliteException)
+        {
             return false;
         }
     }
@@ -1644,6 +1673,25 @@ public sealed partial class SessionStore : IDisposable
 
     private static void Fail(string what, SqliteException ex) =>
         DiagnosticLog.Error(Category, $"Could not {what} in {FileName}: {ex.Message}", ex);
+
+    private int _saveFailures;
+    private string? _lastSaveFailure;
+
+    /// <summary>
+    /// How many writes of a session's row failed (2026-11-22, the review's #125): a begin, a turn, a history save, a truncate; never a read, the
+    /// message history's trim at open, or a store that never opened. Headless counts a rise as a failed run.
+    /// </summary>
+    public int SaveFailures => Volatile.Read(ref _saveFailures);
+
+    /// <summary>The last such write's reason, for the run's summary.</summary>
+    public string? LastSaveFailure => Volatile.Read(ref _lastSaveFailure);
+
+    private void SaveFailed(string what, SqliteException ex)
+    {
+        Fail(what, ex);
+        Volatile.Write(ref _lastSaveFailure, ex.Message);
+        Interlocked.Increment(ref _saveFailures);
+    }
 
     /// <summary>The whole schema, every statement <c>IF NOT EXISTS</c>: the tables, the index, then the FTS5 side (<see cref="SchemaFts"/>).</summary>
     private const string Schema = """

@@ -42,6 +42,12 @@ public sealed record McpAsk(string Server, string ServerTool, string Name, IRead
 
     /// <summary>The tool's <see cref="McpTool.DefinitionKey"/> as asked about (#116): a redefined tool asks again. Empty where no session built the ask.</summary>
     public string Definition { get; init; } = "";
+
+    /// <summary>
+    /// The name a session allow is kept under, when not <see cref="ServerTool"/> (2026-11-22, the review's #116): <c>mcp_read</c> for both
+    /// resource methods, so allowing a list covers the reads too. <see cref="ServerTool"/> still names the method on the pane.
+    /// </summary>
+    public string? AllowTool { get; init; }
 }
 
 /// <summary>

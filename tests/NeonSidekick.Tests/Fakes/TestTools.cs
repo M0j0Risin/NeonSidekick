@@ -166,9 +166,9 @@ public sealed class FixedTool(string name, string text) : AIFunction
 }
 
 /// <summary>Answers a <see cref="ToolImageResult"/> for the pictures it was given: the shape of <c>view_image</c>, without a file.</summary>
-public sealed class PictureTool(IReadOnlyList<ImageAttachment> images, string name = "picture") : AIFunction
+public sealed class PictureTool(IReadOnlyList<ImageAttachment> images, string name = "picture", string? text = null) : AIFunction
 {
-    public PictureTool(ImageAttachment image, string name = "picture") : this([image], name)
+    public PictureTool(ImageAttachment image, string name = "picture", string? text = null) : this([image], name, text)
     {
     }
 
@@ -181,7 +181,7 @@ public sealed class PictureTool(IReadOnlyList<ImageAttachment> images, string na
     public override JsonElement JsonSchema => Schema;
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
-        => new(new ToolImageResult("saw " + string.Join(", ", images.Select(i => i.Path)), images));
+        => new(new ToolImageResult(text ?? "saw " + string.Join(", ", images.Select(i => i.Path)), images));
 }
 
 /// <summary>A tool's answer as the model reads it: the sentence of a <see cref="ToolDiffResult"/> (2026-10-03, the file-writing tools), else the string.</summary>

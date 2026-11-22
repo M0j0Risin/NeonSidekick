@@ -347,4 +347,67 @@ public static class TextCells
 
         return index > 0 ? 1 : 0;
     }
+
+    /// <summary>
+    /// <paramref name="text"/> word-wrapped to <paramref name="cells"/> by cell width (2026-11-22, the review's #65: the <c>/usage</c> Models
+    /// caption and notes): words joined with single spaces up to the width; a word wider than a line broken across lines whole, cluster by
+    /// cluster, a wide character that would straddle the edge moved to the next. At least one line; pure.
+    /// </summary>
+    public static IReadOnlyList<string> WrapWords(string text, int cells)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        cells = Math.Max(1, cells);
+        var lines = new List<string>();
+        var line = new System.Text.StringBuilder();
+        int used = 0;
+        foreach (string word in text.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int w = Width(word);
+            if (used > 0 && used + 1 + w <= cells)
+            {
+                line.Append(' ').Append(word);
+                used += 1 + w;
+                continue;
+            }
+
+            if (used > 0)
+            {
+                lines.Add(line.ToString());
+                line.Clear();
+                used = 0;
+            }
+
+            if (w <= cells)
+            {
+                line.Append(word);
+                used = w;
+                continue;
+            }
+
+            // Longer than a line: broken whole, never cut.
+            for (int i = 0; i < word.Length;)
+            {
+                int length = System.Globalization.StringInfo.GetNextTextElementLength(word, i);
+                string cluster = word.Substring(i, length);
+                int cw = Width(cluster);
+                if (used > 0 && used + cw > cells)
+                {
+                    lines.Add(line.ToString());
+                    line.Clear();
+                    used = 0;
+                }
+
+                line.Append(cluster);
+                used += cw;
+                i += length;
+            }
+        }
+
+        if (used > 0 || lines.Count == 0)
+        {
+            lines.Add(line.ToString());
+        }
+
+        return lines;
+    }
 }

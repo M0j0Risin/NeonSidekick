@@ -57,7 +57,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private WebReply WebSaveMemory(string text, IPAddress? remote)
     {
-        var result = _memory.Add(text, enableDisabled: true);
+        var result = _memory.Remember(text, _files.Root, scoped: false, enableDisabled: true);   // the page's add is for everywhere: another folder's copy widens (#34)
         if (result.Outcome == Memory.MemoryAddOutcome.Empty)
         {
             return new WebReply(WebOutcome.Refused, WebUiText.DraftEmpty);

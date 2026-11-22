@@ -163,4 +163,49 @@ public sealed partial class WebUiPageTests
         Publish("state", Json(State()));
         await page.WaitAsync("!document.getElementById('manage-list').classList.contains('dim')", "undimmed once idle");
     }
+
+    /// <summary>
+    /// <c>/sessions here</c> from the page (2026-11-22, the review's #52): the Sessions tab with this folder's rows alone, unmarked, the
+    /// none-here word when there are none; the tab opened plainly shows the whole list again.
+    /// </summary>
+    [WindowsFact]
+    public async Task OpenHere_ShowsThisFoldersRowsAlone_AndAPlainOpen_TheWholeList()
+    {
+        var mine = CurrentRow with { Here = true };
+        _backend.SessionsFor = _ => SessionsView(rows: [mine, OlderRow]);
+        _backend.Snap = new WebSnapshot([], [], State(), WebUiText.Words, null, null);
+        if (await SignedInAsync("/") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("window.NeonManage !== undefined", "manage.js");
+        await page.EvalAsync("window.NeonManage.openHere()");
+        await page.WaitAsync(ManageShown + " && document.querySelectorAll('#manage-list .session-row').length === 1", "this folder's row alone");
+        Assert.Equal("On screen now", await page.TextAsync(SessionRows + "[0].querySelector('.manage-text').textContent"));
+        Assert.DoesNotContain(WebUiText.SessionsHere, await page.TextAsync(SessionRows + "[0].querySelector('.manage-meta').textContent"), StringComparison.Ordinal);
+
+        await page.EvalAsync("window.NeonManage.open('sessions')");
+        await page.WaitAsync("document.querySelectorAll('#manage-list .session-row').length === 2", "the whole list");
+        Assert.Contains(WebUiText.SessionsHere, await page.TextAsync(SessionRows + "[0].querySelector('.manage-meta').textContent"), StringComparison.Ordinal);
+
+        await page.EvalAsync("window.NeonManage.openHere()");   // back to this folder's, the sheet still open
+        await page.WaitAsync("document.querySelectorAll('#manage-list .session-row').length === 1", "this folder's row alone again");
+    }
+
+    [WindowsFact]
+    public async Task OpenHere_WithNoneOfThisFolder_SaysSo()
+    {
+        _backend.SessionsFor = _ => SessionsView(rows: [OlderRow]);
+        _backend.Snap = new WebSnapshot([], [], State(), WebUiText.Words, null, null);
+        if (await SignedInAsync("/") is not { } page)
+        {
+            return;
+        }
+
+        await page.WaitAsync("window.NeonManage !== undefined", "manage.js");
+        await page.EvalAsync("window.NeonManage.openHere()");
+        await page.WaitAsync(ManageShown + " && document.querySelector('#manage-list .manage-none') !== null", "none here");
+        Assert.Equal(WebUiText.SessionsNoneHere, await page.TextAsync("document.querySelector('#manage-list .manage-none').textContent"));
+    }
 }

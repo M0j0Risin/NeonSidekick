@@ -353,9 +353,10 @@ public sealed partial class SidekickApp
         }
 
         string name = audit.Name;
-        if (reason == PlanGapStop.Stopped)
+        // A cancelled pass (Ctrl+C) is no failed run (2026-11-22, the review's #45); a move or a pass that failed is.
+        if (reason == PlanGapStop.Stopped && (moved || !turn.Cancelled))
         {
-            HeadlessFail(AuditWord, HeadlessText.Stopped(moved ? "the working folder moved" : "a pass didn't end on its own"));
+            HeadlessFail(AuditWord, HeadlessText.Stopped(moved ? HeadlessText.FolderMovedWord : HeadlessText.PassStalledWord));
         }
 
         lines.AddRange(AuditText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses, audit.Focus, coverage.Read, coverage.Scope));

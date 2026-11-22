@@ -450,6 +450,7 @@ public class MemoryStoreTests : IDisposable
     {
         Assert.Equal("memory.json", MemoryStore.FileName);
         Assert.Equal(200, MemoryStore.MaxEntries);
+        Assert.Equal(1000, MemoryStore.MaxStoredEntries);
         Assert.Equal(300, MemoryStore.MaxTextLength);
     }
 

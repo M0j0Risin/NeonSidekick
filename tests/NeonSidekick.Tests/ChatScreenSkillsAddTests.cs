@@ -146,7 +146,7 @@ public partial class ChatScreenTests
         await RunAsync();
 
         var haiku = new Skill("haiku", "Writes haiku. Use when asked for one.", SkillScope.Profile, directory);
-        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [haiku], sessions: true, git: true, shell: true, native: true, help: true, globalSkills: false), _chat.Requests[0][0].Text);
+        Assert.Equal(Assistant.SystemPrompt(false, [], web: true, skills: [haiku], sessions: true, git: true, shell: true, native: true, help: true, globalSkills: false, memoryHere: true), _chat.Requests[0][0].Text);
         Assert.DoesNotContain("deploy", _chat.Requests[0][0].Text);
         Assert.Contains(SkillsPrompt.EditorSentenceProfileOnly, _chat.Requests[0][0].Text);
         var editor = _chat.Options[0]!.Tools!.Cast<AIFunction>().Single(t => t.Name == SkillEditorTool.ToolName);

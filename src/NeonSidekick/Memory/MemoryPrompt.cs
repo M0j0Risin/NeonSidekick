@@ -35,6 +35,13 @@ public static class MemoryPrompt
         "or asks you to remember something, call " + Llm.Tools.SaveMemoryTool.ToolName + " with one short sentence in the third person, then continue your reply. " +
         "Do not save passing details, and do not save anything you already remember.";
 
+    /// <summary>
+    /// With a folder to save for (2026-11-22, the review's #33): a project's facts saved with <c>here</c>, so they stay out of other folders'
+    /// prompts. Only while <c>save_memory</c> offers <c>here</c>; never a bot's. Pinned.
+    /// </summary>
+    public const string SaveHereSentence =
+        "A lasting fact about this project or folder (how its tests run, its conventions) is saved with here set to true, so it is offered only while working in this folder.";
+
     /// <summary>Where the list arrives in the main chat: the opening <c>recall_memory</c> pair. Pinned.</summary>
     public const string RecallSentence =
         "What you remember arrives as the result of " + Llm.Tools.RecallMemoryTool.ToolName + " at the start of the conversation; call it again when the list is no longer in view.";
@@ -87,12 +94,12 @@ public static class MemoryPrompt
     /// and, when there are any, the list under it (<see cref="Recalled"/>): no tool can carry it, so
     /// the prompt does.
     /// </summary>
-    public static string Section(IReadOnlyList<string> memories, bool tools = true, bool save = true)
+    public static string Section(IReadOnlyList<string> memories, bool tools = true, bool save = true, bool here = false)
     {
         ArgumentNullException.ThrowIfNull(memories);
         if (tools)
         {
-            return save ? Directive : ReadOnlyDirective;
+            return save ? (here ? Directive + " " + SaveHereSentence : Directive) : ReadOnlyDirective;
         }
 
         return memories.Count == 0 ? DirectiveWithoutTool : DirectiveWithoutTool + "\n\n" + Recalled(memories);

@@ -69,26 +69,28 @@ public sealed class ModelStatsTests : IDisposable
             new("gemma", 2, 1, 0, 0, 0, 20, 0, 0, DateTimeOffset.UnixEpoch, 2),
         };
 
-        foreach (int width in new[] { 120, UsageText.ModelsModelMin + UsageText.ModelsFiguresWidth })   // the pane's narrowest the table fits
+        foreach (int width in new[] { 120, UsageText.ModelsModelMin + UsageText.FiguresWidth(stats) })   // the pane's narrowest the whole table fits
         {
             var rows = UsageText.ModelsRows(stats, logging: true, width);
-            Assert.All(rows.Skip(2).Take(stats.Count + 1), r => Assert.True(TextCells.Width(r.Text) <= width, r.Text));   // the heading and the rows never wrap
-            Assert.Equal((UsageText.ModelsCaption, ""), (rows[0].Text, rows[1].Text));
-            Assert.StartsWith(UsageText.ModelsModelHeading, rows[2].Text);
-            var (longRow, longDim) = rows[3];   // the caption, a gap, the heading, then a row a model
+            Assert.All(rows, r => Assert.True(TextCells.Width(r.Text) <= width, r.Text));   // every line fits (#65)
+            int heading = rows.ToList().FindIndex(r => r.Text.StartsWith(UsageText.ModelsModelHeading, StringComparison.Ordinal));
+            Assert.Equal(UsageText.ModelsCaption, string.Join(" ", rows.Take(heading - 1).Select(r => r.Text)));   // the caption, wrapped
+            Assert.Equal("", rows[heading - 1].Text);
+            var (longRow, longDim) = rows[heading + 1];   // the caption, a gap, the heading, then a row a model
             Assert.False(longDim);
             Assert.Contains("50.0", longRow);   // 2000 tokens over 40 s
             Assert.Contains("10%", longRow);    // 5 of 50 calls
             Assert.EndsWith("50.0", longRow);
-            var (gemma, gemmaDim) = rows[4];
+            var (gemma, gemmaDim) = rows[heading + 2];
             Assert.StartsWith("gemma ", gemma);
             Assert.True(gemmaDim);
             Assert.EndsWith("—", gemma);        // no speed
-            Assert.Contains(rows, r => r.Text == UsageText.ModelsUntaggedNote);
-            Assert.Contains(rows, r => r.Text == UsageText.ModelsFewNote);
-            int modelWidth = Math.Max(UsageText.ModelsModelMin, width - UsageText.ModelsFiguresWidth);
+            string notes = string.Join(" ", rows.Skip(heading + 3).Select(r => r.Text));
+            Assert.Contains(UsageText.ModelsUntaggedNote, notes);
+            Assert.Contains(UsageText.ModelsFewNote, notes);
+            int modelWidth = Math.Max(UsageText.ModelsModelMin, width - UsageText.FiguresWidth(stats));
             Assert.Equal(width < 120 ? UsageText.CutMiddle(longId, modelWidth) : longId, longRow[..modelWidth].TrimEnd());
-            Assert.Equal(width < 120, rows.Any(r => r.Text == longId && r.Dim));   // a cut id written whole under the table
+            Assert.Equal(width < 120, rows.Any(r => r.Text == longId && r.Dim) || (width < longId.Length && notes.Replace(" ", "").Contains(longId, StringComparison.Ordinal)));   // a cut id written whole under the table
             Assert.Equal(width < 120, longRow.Contains('…'));
         }
     }
@@ -101,5 +103,36 @@ public sealed class ModelStatsTests : IDisposable
         Assert.Equal(UsageText.ModelsTabIndex, ChatScreen.UsageTab("Models"));
         Assert.Equal("Qwen…K_XL", UsageText.CutMiddle("Qwen3-Coder-Q4_K_XL", 9));
         Assert.Equal("short", UsageText.CutMiddle("short", 9));
+    }
+
+    /// <summary>
+    /// The columns follow the figures (2026-11-22, the review's #94): 100,000 turns stay in line; and at 60 cells (#65) every line fits, the caption
+    /// and notes wrapped, the right-most columns dropped so the model column keeps its narrowest.
+    /// </summary>
+    [Fact]
+    public void TheColumns_AreAsWideAsTheirFigures_AndANarrowPane_DropsTheRightMost()
+    {
+        var stats = new List<ModelStat>
+        {
+            new("qwen3", 100_000, 4000, 300_000, 12, 3, 9_000_000, 8_000_000, 400_000_000, DateTimeOffset.UnixEpoch, 0),
+            new("gemma", 25, 1, 10, 0, 0, 200, 100, 4_000, DateTimeOffset.UnixEpoch, 0),
+        };
+
+        var wide = UsageText.ModelsRows(stats, logging: true, 160);
+        int heading = wide.ToList().FindIndex(r => r.Text.StartsWith(UsageText.ModelsModelHeading, StringComparison.Ordinal));
+        Assert.Contains("100,000", wide[heading + 1].Text);
+        Assert.Equal(TextCells.Width(wide[heading].Text), TextCells.Width(wide[heading + 1].Text));   // the heading as wide as the row: columns in line
+        Assert.Equal(TextCells.Width(wide[heading].Text), TextCells.Width(wide[heading + 2].Text));
+        Assert.True(UsageText.FigureWidths(stats)[0] >= "100,000".Length);
+
+        var narrow = UsageText.ModelsRows(stats, logging: false, 60);
+        Assert.All(narrow, r => Assert.True(TextCells.Width(r.Text) <= 60, r.Text));
+        int narrowHeading = narrow.ToList().FindIndex(r => r.Text.StartsWith(UsageText.ModelsModelHeading, StringComparison.Ordinal));
+        Assert.StartsWith("qwen3", narrow[narrowHeading + 1].Text);
+        Assert.DoesNotContain("tok/s", narrow[narrowHeading].Text);   // dropped from the right
+        Assert.Contains("Turns", narrow[narrowHeading].Text);
+        Assert.Contains(UsageText.ModelsLoggingOff, string.Join(" ", narrow.Select(r => r.Text)));
+        Assert.Contains("tool calls", UsageText.ModelsCaption);   // what Errors count (#85)
+        Assert.DoesNotContain("before this version", UsageText.ModelsUntaggedNote);
     }
 }

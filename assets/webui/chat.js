@@ -1796,6 +1796,7 @@ async function sendText(text, opts) {
     say(r.message || (leftOut ? words.attachLeftOut : ''));   // an attachment let go meanwhile, or one that didn't upload
     if (r.json && r.json.open === 'prompts') openPrompts('prompts');   // bare /prompts: the page's own sheet, on its Prompts tab
     else if (r.json && r.json.open === 'queue') openQueue();   // bare /queue: the same sheet's Queue tab (the 🗂️ sheet's until 2026-11-21)
+    else if (r.json && r.json.open === 'sessionsHere' && manage()) manage().openHere();   // /sessions here: this folder's rows alone (the review's #52)
     else if (r.json && r.json.open && manage() && manage().has(r.json.open)) manage().open(r.json.open);
     return;
   }
@@ -2006,7 +2007,7 @@ function memoryRows(sheet) {
     text.appendChild(document.createTextNode(item.text));
     if (item.off) text.appendChild(el('span', 'off-mark', ' · ' + (words.memoryOff || 'off')));
     // A memory for one folder (2026-11-21): this one, the PC's current, or another; the page never sees the path.
-    if (item.scoped) text.appendChild(el('span', 'off-mark', ' · ' + (item.here ? (words.memoryHere || 'this folder') : (words.memoryElsewhere || 'one folder'))));
+    if (item.scoped) text.appendChild(el('span', 'off-mark', ' · ' + (item.here ? (words.memoryHere || 'this folder') : (words.memoryElsewhere || 'another folder'))));
     const label = (words.memoryEdit || 'Edit this memory') + ': ' + item.text;
     text.setAttribute('aria-label', label);
     text.title = label;

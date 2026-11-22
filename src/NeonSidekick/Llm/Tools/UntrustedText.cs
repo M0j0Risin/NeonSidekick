@@ -94,6 +94,17 @@ public static class UntrustedText
     }
 
     /// <summary>
+    /// <paramref name="answer"/> with the app's <paramref name="line"/> added before its closing <see cref="QuoteNote"/> when it has one, so the
+    /// note stays the last line (2026-11-22, the review's #100); else at the end.
+    /// </summary>
+    public static string BeforeNote(string answer, string line)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        ArgumentNullException.ThrowIfNull(line);
+        return EndsWithNote(answer) ? WithoutNote(answer) + "\n" + line + "\n" + QuoteNote : answer + "\n" + line;
+    }
+
+    /// <summary>
     /// A name the model copied back out of a fenced list, with the fence dropped (2026-11-16, the web-tools review's #166: <c>⟪milk⟫</c>
     /// names milk): the marks go only when the trimmed value both starts with <see cref="QuoteOpen"/> and ends with
     /// <see cref="QuoteClose"/>, so a name written with one stray mark is kept as written. Pure.

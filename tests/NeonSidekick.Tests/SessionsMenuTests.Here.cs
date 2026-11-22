@@ -29,11 +29,12 @@ public partial class SessionsMenuTests
         SeedIn("from here", here);
         SeedIn("from elsewhere", Path.Combine(_dir, "other"));
         SeedIn("from before", null);
+        _console.Profile.Width = 400;   // the temp folder's long path on one line
 
         Assert.Null(await NoPaneMenuIn(here.ToUpperInvariant() + Path.DirectorySeparatorChar).ShowAsync(CancellationToken.None, here: true));
 
         string output = _console.Output;
-        Assert.Contains(SessionsMenu.HereTitle, output);
+        Assert.Contains(SessionsMenu.HereTitleFor(here.ToUpperInvariant() + Path.DirectorySeparatorChar), output);   // the folder named (#119)
         Assert.Contains("from here", output);
         Assert.DoesNotContain("from elsewhere", output);
         Assert.DoesNotContain("from before", output);
@@ -64,5 +65,31 @@ public partial class SessionsMenuTests
         Assert.Equal("t\n" + SessionText.FolderFooter(folder), footer.Text);
         Assert.False(SessionsMenu.Footer(session with { Cwd = null }, false, zone).KeepLines);
         Assert.Equal("Sessions · this folder", SessionsMenu.HereTitle[(SessionsMenu.HereTitle.IndexOf("Sessions", StringComparison.Ordinal))..]);
+    }
+
+    /// <summary>The here view's rows carry no mark (2026-11-22, the review's #110): every row is this folder's; the whole list marks them.</summary>
+    [Fact]
+    public async Task Here_InThePane_MarksNoRow_TheWholeListDoes()
+    {
+        string here = Path.Combine(_dir, "repo");
+        SeedIn("from here", here);
+        SeedIn("from elsewhere", Path.Combine(_dir, "other"));
+
+        _console.Profile.Height = 40;
+        var pane = new ScreenPane(_console, new ScreenGeometry(() => null), _time) { Hint = () => "idle" };
+        var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
+        var menu = new SessionsMenu(_store, () => _current, new TranscriptRenderer(pane), new MenuPane(pane, keys), new InputLine(pane, keys), _time, _purged.Add, Export, () => here);
+        pane.Show();
+        Push(new ConsoleKeyInfo('\x1b', ConsoleKey.Escape, false, false, false));
+        Assert.Null(await menu.ShowAsync(CancellationToken.None, here: true));
+        string heres = _console.Output;
+        Assert.Contains("from here", heres);
+        Assert.DoesNotContain("· " + SessionText.HereMark, heres.Replace(SessionsMenu.HereTitle, "", StringComparison.Ordinal));
+
+        Push(new ConsoleKeyInfo('\x1b', ConsoleKey.Escape, false, false, false));
+        Assert.Null(await menu.ShowAsync(CancellationToken.None));
+        Assert.Contains("· " + SessionText.HereMark, _console.Output[heres.Length..]);   // the whole list still marks them
+        Assert.Equal(SessionsMenu.Title + " · " + here, SessionsMenu.HereTitleFor(here));
+        Assert.Equal(SessionsMenu.HereTitle, SessionsMenu.HereTitleFor(null));
     }
 }

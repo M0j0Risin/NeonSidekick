@@ -54,4 +54,57 @@ public class HeadlessFailuresTests
     [InlineData("Neon: fine", null)]
     [InlineData("an [error] in a reply", null)]
     public void AnErrorLine_IsTheTagAtTheStart_AfterTheReplyPrefixOrNot(string line, string? why) => Assert.Equal(why, SidekickApp.HeadlessErrorOf(line));
+
+    // ── 2026-11-22, the review's #132, #97, #1, #29 ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TheSameFailure_OnSeveralLines_IsCounted_NeverDropped()
+    {
+        var failures = new HeadlessFailures();
+        failures.NextLine();
+        failures.Add(HeadlessText.AMessage, "Model error");
+        failures.Add("/ha", "a second on the same line is not counted");
+        failures.NextLine();
+        failures.Add(HeadlessText.AMessage, "Model error");
+        failures.NextLine();
+        failures.Add("/ha", "no such entity");
+
+        Assert.Equal([(HeadlessText.AMessage, "Model error", 2), ("/ha", "no such entity", 1)], failures.Entries);
+        Assert.Equal("3 failed: a message ×2 (Model error), /ha (no such entity)", failures.SummaryLine());
+    }
+
+    [Fact]
+    public void ALoopsStop_ReplacesWhatAPassNotedOnItsLine()
+    {
+        var failures = new HeadlessFailures();
+        failures.NextLine();
+        failures.Add(HeadlessText.AMessage, "a pass's blip");
+        failures.Replace("/plan ralph", HeadlessText.Stopped("pass limit"));
+
+        Assert.Equal([("/plan ralph", "stopped: pass limit", 1)], failures.Entries);
+    }
+
+    [Fact]
+    public void ARunWideFailure_IsSaidOnce_AndSurvivesAPassRunAgain()
+    {
+        var failures = new HeadlessFailures();
+        int mark = failures.Mark();
+        failures.NextLine();
+        failures.AddRunWide(HeadlessText.TheSession, HeadlessText.NotSaved("database is locked"));
+        failures.AddRunWide(HeadlessText.TheSession, HeadlessText.NotSaved("database is locked"));
+        failures.BackTo(mark);
+
+        Assert.Equal([(HeadlessText.TheSession, "not saved: database is locked", 1)], failures.Entries);
+        Assert.True(failures.Any);
+    }
+
+    [Theory]
+    [InlineData("[notice] hi", true)]
+    [InlineData("Neon: [error] gone", true)]
+    [InlineData("[warning] not back", true)]
+    [InlineData("[tool] x -> y", true)]
+    [InlineData("[the docs](https://example.com) say so", false)]
+    [InlineData("Neon: [Docs](x) first", false)]
+    [InlineData("Claude: [notice] its own words", false)]
+    public void OnlyTheAppsTags_AreTheAppsLines(string line, bool tagged) => Assert.Equal(tagged, SidekickApp.HeadlessTagged(line));
 }

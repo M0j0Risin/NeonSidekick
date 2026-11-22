@@ -34,6 +34,9 @@ public sealed record McpPipeServerOptions
     /// null, it declares none. A resource whose <c>Text</c> is null is a PNG blob (<see cref="McpPipeServer.PngBase64"/>).
     /// </summary>
     public IReadOnlyList<(string Uri, string Name, string? Text)>? Resources { get; init; }
+
+    /// <summary>Makes <c>resources/templates/list</c> answer with an internal error (a test's: the resources still list).</summary>
+    public bool TemplatesFail { get; init; }
 }
 
 /// <summary>
@@ -225,10 +228,12 @@ public sealed class McpPipeServer : IAsyncDisposable
                 {
                     Resources = server.ResourceList().Select(r => new Resource { Uri = r.Uri, Name = r.Name, MimeType = r.Text is null ? "image/png" : "text/plain" }).ToList(),
                 }),
-                ListResourceTemplatesHandler = shape.Resources is null ? null : (_, _) => ValueTask.FromResult(new ListResourceTemplatesResult
-                {
-                    ResourceTemplates = [new ResourceTemplate { UriTemplate = TemplateUri, Name = "echo" }],
-                }),
+                ListResourceTemplatesHandler = shape.Resources is null ? null : (_, _) => shape.TemplatesFail
+                    ? throw new ModelContextProtocol.McpProtocolException("templates broke", ModelContextProtocol.McpErrorCode.InternalError)
+                    : ValueTask.FromResult(new ListResourceTemplatesResult
+                    {
+                        ResourceTemplates = [new ResourceTemplate { UriTemplate = TemplateUri, Name = "echo" }],
+                    }),
                 ReadResourceHandler = shape.Resources is null ? null : (request, _) => ValueTask.FromResult(server.Read(request.Params?.Uri ?? "")),
                 CallToolHandler = (request, cancellationToken) => request.Params?.Name switch
                 {

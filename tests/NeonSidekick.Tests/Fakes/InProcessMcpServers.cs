@@ -55,6 +55,9 @@ public sealed class InProcessMcpServers : IAsyncDisposable
     /// <summary>Leaves <paramref name="name"/>'s next server without resources again (a server that came back without them).</summary>
     public void NoResources(string name) => _resources.Remove(name);
 
+    /// <summary>The servers whose <c>resources/templates/list</c> answers with an error.</summary>
+    public HashSet<string> TemplatesFail { get; } = new(StringComparer.Ordinal);
+
     /// <summary>A named server's tool's <c>destructiveHint</c> (2026-11-19, feature idea #28; set before the connect).</summary>
     public void Destructive(string name, string tool, bool destructive)
     {
@@ -106,6 +109,7 @@ public sealed class InProcessMcpServers : IAsyncDisposable
             Destructive = _destructive.GetValueOrDefault(name),
             Instructions = _instructions.GetValueOrDefault(name),
             Resources = _resources.GetValueOrDefault(name),
+            TemplatesFail = TemplatesFail.Contains(name),
         });
         _servers[name] = server;
         if (_held.Remove(name, out var gate))

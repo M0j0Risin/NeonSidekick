@@ -7,8 +7,8 @@ using Spectre.Console.Rendering;
 namespace NeonSidekick.App;
 
 // ── The Models tab (2026-11-21, feature idea #7: a scorecard from real use) ─────────────────────────────────────────────────────────────
-// One row per model over the saved turns (SessionStore.ModelStats), the seven figures right-aligned at fixed widths as the Statistics tab's
-// numbers are; the model column takes what is left, a long id cut in the middle so its size and quant suffix stay, and written whole on a
+// One row per model over the saved turns (SessionStore.ModelStats), the seven figures right-aligned, each column as wide as its widest figure
+// (2026-11-22, the review's #94), the right-most dropped when even the narrowest model column wouldn't fit; the model column takes what is left, a long id cut in the middle so its size and quant suffix stay, and written whole on a
 // dim line under the table (the pane scrolls text; it has no row to select). The PC's alone: the page's usage card stays the Statistics.
 
 public static partial class UsageText
@@ -30,14 +30,15 @@ public static partial class UsageText
     /// <summary>Added to <see cref="ModelsEmpty"/> while Session logging is off.</summary>
     public const string ModelsLoggingOff = "Session logging is off, so new turns aren't saved.";
 
-    /// <summary>The caption above the table.</summary>
-    public const string ModelsCaption = "From the saved sessions: purged or rewound turns drop out. Errors follow the task as much as the model, so compare like with like.";
+    /// <summary>The caption above the table, word-wrapped to the pane (2026-11-22, the review's #65); Errors are tool calls' (#85).</summary>
+    public const string ModelsCaption = "From the saved sessions: purged or rewound turns drop out. Errors are the share of tool calls that failed; " +
+        "a turn that failed outright isn't counted. They follow the task as much as the model, so compare like with like.";
 
     /// <summary>The note under the table for a model with fewer than <see cref="ModelsFewTurns"/> turns, which shows dim.</summary>
     public static string ModelsFewNote => "Dim rows: fewer than " + ModelsFewTurns.ToString(CultureInfo.InvariantCulture) + " turns, too few to judge by.";
 
     /// <summary>The note under the table once a turn from before the per-turn model counted under its session's model.</summary>
-    public const string ModelsUntaggedNote = "Turns saved before this version count under their session's model.";
+    public const string ModelsUntaggedNote = "Turns saved without a model count under their session's model.";   // no version named (2026-11-22, #140, #71)
 
     /// <summary>A row whose session stored no model.</summary>
     public const string ModelsNoModel = "(no model)";
@@ -45,27 +46,28 @@ public static partial class UsageText
     /// <summary>Fewer turns than this show dim.</summary>
     public const int ModelsFewTurns = 20;
 
-    /// <summary>The figure columns: heading and width, each right-aligned, two cells apart.</summary>
-    internal static readonly (string Heading, int Width)[] ModelsColumns =
-    [
-        ("Turns", 6), ("Sessions", 8), ("Calls/turn", 10), ("Errors", 7), ("Cancelled", 9), ("Out/turn", 8), ("tok/s", 6),
-    ];
+    /// <summary>The figure columns' headings, each column right-aligned, two cells apart, as wide as its widest figure (#94).</summary>
+    internal static readonly string[] ModelsHeadings = ["Turns", "Sessions", "Calls/turn", "Errors", "Canceled", "Out/turn", "tok/s"];
 
-    /// <summary>The model column's heading, and its narrowest: the table fits 80 columns and up (<see cref="ModelsFiguresWidth"/> plus this).</summary>
+    /// <summary>The model column's heading, and its narrowest.</summary>
     public const string ModelsModelHeading = "Model";
 
     public const int ModelsModelMin = 12;
 
     private const int ModelsGap = 2;
 
-    /// <summary>The cells the figure columns take, gaps included.</summary>
-    internal static int ModelsFiguresWidth => ModelsColumns.Sum(c => c.Width + ModelsGap);
+    /// <summary>Each figure column's width: its heading's or its widest figure's (2026-11-22, the review's #94: 100,000 turns stay in line).</summary>
+    internal static int[] FigureWidths(IReadOnlyList<ModelStat> stats) =>
+        ModelsHeadings.Select((heading, i) => Math.Max(TextCells.Width(heading), stats.Select(s => TextCells.Width(Figures(s).ElementAt(i))).DefaultIfEmpty(0).Max())).ToArray();
 
-    /// <summary>The pane's tab: the caption, the table and its notes, or <see cref="ModelsEmpty"/>; <paramref name="width"/> the cells the body has.</summary>
+    /// <summary>The cells every figure column takes, gaps included.</summary>
+    internal static int FiguresWidth(IReadOnlyList<ModelStat> stats) => FigureWidths(stats).Sum(w => w + ModelsGap);
+
+    /// <summary>The pane's tab: the caption, the table and its notes, or <see cref="ModelsEmpty"/>; <paramref name="width"/> the cells the body has, its indent taken off already (#109).</summary>
     public static IRenderable ModelsTab(IReadOnlyList<ModelStat> stats, bool logging, int width)
     {
         ArgumentNullException.ThrowIfNull(stats);
-        var lines = ModelsRows(stats, logging, width - SystemPromptSummary.BodyIndent);
+        var lines = ModelsRows(stats, logging, width);
         var parts = new List<IRenderable>();
         foreach (var (text, dim) in lines)
         {
@@ -81,18 +83,37 @@ public static partial class UsageText
 
     /// <summary>
     /// The tab's lines and which show dim: the caption, the heading, a row a model (dim under <see cref="ModelsFewTurns"/>), then the notes and
-    /// each cut id in full. Each line fits <paramref name="width"/> cells (the model column never narrower than <see cref="ModelsModelMin"/>). Pure.
+    /// each cut id in full. Every line fits <paramref name="width"/> cells (2026-11-22, the review's #65): the caption, notes and ids word-wrapped,
+    /// the table's right-most columns dropped when the model column couldn't keep <see cref="ModelsModelMin"/>. Pure.
     /// </summary>
     public static IReadOnlyList<(string Text, bool Dim)> ModelsRows(IReadOnlyList<ModelStat> stats, bool logging, int width)
     {
         ArgumentNullException.ThrowIfNull(stats);
+        var rows = new List<(string, bool)>();
+        void Wrapped(string text) => rows.AddRange(TextCells.WrapWords(text, width).Select(line => (line, true)));
         if (stats.Count == 0)
         {
-            return logging ? [(ModelsEmpty, true)] : [(ModelsEmpty, true), (ModelsLoggingOff, true)];
+            Wrapped(ModelsEmpty);
+            if (!logging)
+            {
+                Wrapped(ModelsLoggingOff);
+            }
+
+            return rows;
         }
 
-        int modelWidth = Math.Max(ModelsModelMin, width - ModelsFiguresWidth);
-        var rows = new List<(string, bool)> { (ModelsCaption, true), ("", false), (Row(ModelsModelHeading, ModelsColumns.Select(c => c.Heading), modelWidth), true) };
+        int[] widths = FigureWidths(stats);
+        int columns = widths.Length;
+        while (columns > 0 && ModelsModelMin + widths.Take(columns).Sum(w => w + ModelsGap) > width)
+        {
+            columns--;
+        }
+
+        widths = widths[..columns];
+        int modelWidth = Math.Max(ModelsModelMin, width - widths.Sum(w => w + ModelsGap));
+        Wrapped(ModelsCaption);
+        rows.Add(("", false));
+        rows.Add((Row(ModelsModelHeading, ModelsHeadings, widths, modelWidth), true));
         var cut = new List<string>();
         foreach (var stat in stats)
         {
@@ -103,34 +124,34 @@ public static partial class UsageText
                 cut.Add(name);
             }
 
-            rows.Add((Row(shown, Figures(stat), modelWidth), stat.Turns < ModelsFewTurns));
+            rows.Add((Row(shown, Figures(stat), widths, modelWidth), stat.Turns < ModelsFewTurns));
         }
 
         rows.Add(("", false));
         if (stats.Any(s => s.Turns < ModelsFewTurns))
         {
-            rows.Add((ModelsFewNote, true));
+            Wrapped(ModelsFewNote);
         }
 
         if (stats.Any(s => s.Untagged > 0))
         {
-            rows.Add((ModelsUntaggedNote, true));
+            Wrapped(ModelsUntaggedNote);
         }
 
         if (!logging)
         {
-            rows.Add((ModelsLoggingOff, true));
+            Wrapped(ModelsLoggingOff);
         }
 
         foreach (string name in cut)
         {
-            rows.Add((name, true));
+            Wrapped(name);
         }
 
         return rows;
     }
 
-    /// <summary>A model's seven figures in <see cref="ModelsColumns"/>' order.</summary>
+    /// <summary>A model's seven figures in <see cref="ModelsHeadings"/>' order.</summary>
     internal static IEnumerable<string> Figures(ModelStat stat) =>
     [
         Count(stat.Turns),
@@ -148,10 +169,10 @@ public static partial class UsageText
 
     private static string Percent(double share) => Math.Round(share * 100, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture) + "%";
 
-    private static string Row(string model, IEnumerable<string> figures, int modelWidth)
+    private static string Row(string model, IEnumerable<string> figures, int[] widths, int modelWidth)
     {
         string head = model + new string(' ', Math.Max(0, modelWidth - TextCells.Width(model)));
-        return head + string.Concat(figures.Zip(ModelsColumns, (f, c) => new string(' ', ModelsGap) + f.PadLeft(c.Width)));
+        return head + string.Concat(figures.Zip(widths, (f, w) => new string(' ', ModelsGap) + new string(' ', Math.Max(0, w - TextCells.Width(f))) + f));
     }
 
     /// <summary><paramref name="text"/> in <paramref name="cells"/>, cut in the middle with <c>…</c> when longer, so both ends stay. Pure.</summary>

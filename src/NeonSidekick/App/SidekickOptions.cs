@@ -531,7 +531,7 @@ public sealed record SidekickOptions(
             }
 
             // The one-shot prompt (2026-11-21, feature idea #42): implies --headless at once, so every later check that reads Headless sees it.
-            if (TryValueFlag(PromptFlag, args, ref i, arg, lower, out var prompt, out error))
+            if (TryValueFlag(PromptFlag, args, ref i, arg, lower, out var prompt, out error, raw: true))
             {
                 if (error is not null)
                 {
@@ -542,7 +542,7 @@ public sealed record SidekickOptions(
                 continue;
             }
 
-            if (TryValueFlag(PromptFileFlag, args, ref i, arg, lower, out var promptFile, out error))
+            if (TryValueFlag(PromptFileFlag, args, ref i, arg, lower, out var promptFile, out error, raw: true))
             {
                 if (error is not null)
                 {
@@ -873,17 +873,19 @@ public sealed record SidekickOptions(
 
     /// <summary>
     /// Matches <c>--flag value</c> and <c>--flag=value</c>. A missing value, or one that looks like
-    /// another flag, is an error naming the flag.
+    /// another flag, is an error naming the flag. <paramref name="raw"/> (2026-11-22, the review's #44 and #143: <c>--prompt</c> and
+    /// <c>--prompt-file</c>) keeps the value as given, untrimmed, and takes one that starts with a single <c>-</c> (<c>"- list the files"</c>):
+    /// only <c>--…</c>, <c>-h</c> and <c>-?</c> read as another flag.
     /// </summary>
-    private static bool TryValueFlag(string flag, IReadOnlyList<string> args, ref int i, string arg, string lower, out string? value, out string? error)
+    private static bool TryValueFlag(string flag, IReadOnlyList<string> args, ref int i, string arg, string lower, out string? value, out string? error, bool raw = false)
     {
         value = null;
         error = null;
 
         if (lower.StartsWith(flag + "=", StringComparison.Ordinal))
         {
-            value = arg[(flag.Length + 1)..].Trim();
-            if (value.Length == 0)
+            value = raw ? args[i].TrimStart()[(flag.Length + 1)..] : arg[(flag.Length + 1)..].Trim();   // raw: the argument before Parse trimmed it
+            if (string.IsNullOrWhiteSpace(value))
             {
                 error = $"{flag} needs a value";
             }
@@ -896,14 +898,18 @@ public sealed record SidekickOptions(
             return false;
         }
 
-        if (i + 1 >= args.Count || args[i + 1].Trim().StartsWith('-') || args[i + 1].Trim().Length == 0)
+        if (i + 1 >= args.Count || args[i + 1].Trim().Length == 0 || (raw ? LooksLikeFlag(args[i + 1].Trim()) : args[i + 1].Trim().StartsWith('-')))
         {
             error = $"{flag} needs a value";
             return true;
         }
 
         i++;
-        value = args[i].Trim();
+        value = raw ? args[i] : args[i].Trim();
         return true;
     }
+
+    /// <summary>A raw value's test for another flag: <c>--…</c>, <c>-h</c>, <c>-?</c> (#44).</summary>
+    private static bool LooksLikeFlag(string next) =>
+        next.StartsWith("--", StringComparison.Ordinal) || next.Equals("-h", StringComparison.OrdinalIgnoreCase) || next.Equals("-?", StringComparison.Ordinal);
 }

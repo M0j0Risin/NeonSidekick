@@ -102,6 +102,12 @@ public abstract record TurnEvent
     /// (<c>LlmSession.NoteServerLimit</c>, 2026-11-10, D4) and says so once.
     /// </summary>
     public sealed record ServerLimit(int Tokens) : TurnEvent;
+
+    /// <summary>
+    /// The model refused a request's pictures and the round went again without them (2026-11-22, the review's #39). The host marks its
+    /// session (<c>LlmSession.NotePicturesRefused</c>), so the model is sent none for the rest of it, and says so once.
+    /// </summary>
+    public sealed record PicturesRefused : TurnEvent;
 }
 
 /// <summary>

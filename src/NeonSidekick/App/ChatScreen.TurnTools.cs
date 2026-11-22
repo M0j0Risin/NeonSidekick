@@ -163,13 +163,6 @@ internal sealed record TurnToolSet(IReadOnlyList<AIFunction> Tools, IReadOnlyLis
 internal sealed partial class ChatScreen
 {
     /// <summary>
-    /// The tool list for a turn and the rules it calls for (2026-10-04, out of <c>PrepareTurn</c> so a <c>/botchat</c> bot's turn is
-    /// put together the same way): plan mode's narrowing, then <see cref="TurnToolInputs.OnlyTools"/> (every other name joins the
-    /// disabled set, so an emptied group drops its rule as <c>/tools</c> does), then <see cref="Without"/> on every group, then the
-    /// per-group decisions and the concatenation, unchanged — see <c>PrepareTurn</c>'s comment for each. Pure: no
-    /// <c>BeginTurn</c>, no opening call; the caller does those. <see cref="TurnToolSet.Empty"/> with tools off.
-    /// </summary>
-    /// <summary>
     /// Whether <c>mcp_read</c> is offered under <paramref name="effective"/> (2026-11-21, feature idea #33): tools on, <c>MCP servers enabled</c>
     /// on and the tool not switched off in <c>/mcp</c> › Tools. A server's resources decide the rest (<c>McpSession.TurnTools</c>).
     /// </summary>
@@ -192,6 +185,13 @@ internal sealed partial class ChatScreen
             : tools.Where(t => t is Mcp.McpTool or Mcp.McpReadTool).Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
     }
 
+    /// <summary>
+    /// The tool list for a turn and the rules it calls for (2026-10-04, out of <c>PrepareTurn</c> so a <c>/botchat</c> bot's turn is
+    /// put together the same way): plan mode's narrowing, then <see cref="TurnToolInputs.OnlyTools"/> (every other name joins the
+    /// disabled set, so an emptied group drops its rule as <c>/tools</c> does), then <see cref="Without"/> on every group, then the
+    /// per-group decisions and the concatenation, unchanged — see <c>PrepareTurn</c>'s comment for each. Pure: no
+    /// <c>BeginTurn</c>, no opening call; the caller does those. <see cref="TurnToolSet.Empty"/> with tools off.
+    /// </summary>
     public static TurnToolSet ComposeTurnTools(TurnToolInputs inputs)
     {
         ArgumentNullException.ThrowIfNull(inputs);

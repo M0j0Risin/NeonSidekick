@@ -66,6 +66,27 @@ public enum MemoryAddOutcome
 
     /// <summary>The same text was stored disabled and is enabled again (2026-10-13): the user's own add (<c>/memory remember</c>, the pane's + remember).</summary>
     Enabled,
+
+    /// <summary>A folder was given that isn't a full path on this system (2026-11-22, the review's #107); nothing changed, never saved as everywhere.</summary>
+    FolderRefused,
+}
+
+/// <summary>What <see cref="MemoryStore.SetFolder"/> did (2026-11-22, the review's #26).</summary>
+public enum MemoryScopeOutcome
+{
+    Moved,
+
+    /// <summary>It already was so; nothing written.</summary>
+    Unchanged,
+
+    /// <summary>No memory holds the text; nothing written.</summary>
+    Missing,
+
+    /// <summary>The move would offer a folder more than <see cref="MemoryStore.MaxEntries"/>; it stays where it was.</summary>
+    Full,
+
+    /// <summary>The folder isn't a full path on this system (#107); nothing written.</summary>
+    Refused,
 }
 
 /// <summary>What <see cref="MemoryStore.Edit"/> did (2026-10-13, the <c>/memory</c> pane's edit).</summary>
@@ -89,8 +110,12 @@ public enum MemoryEditOutcome
 /// <summary>The outcome of an edit and the text as stored (or the other memory's, for a duplicate).</summary>
 public readonly record struct MemoryEditResult(MemoryEditOutcome Outcome, string Text);
 
-/// <summary>The outcome of an add and the text as it was (or would have been) stored.</summary>
-public readonly record struct MemoryAddResult(MemoryAddOutcome Outcome, string Text, string? Folder = null);
+/// <summary>
+/// The outcome of an add and the text as it was (or would have been) stored. Since 2026-11-22 (the review): <paramref name="FileFull"/> a full
+/// that is the file's ceiling (#26); <paramref name="WidenedFrom"/> the folder a duplicate was kept for until this save widened it (#34);
+/// <paramref name="CoversHere"/> a save for this folder of one kept everywhere, left so (#20).
+/// </summary>
+public readonly record struct MemoryAddResult(MemoryAddOutcome Outcome, string Text, string? Folder = null, bool FileFull = false, string? WidenedFrom = null, bool CoversHere = false);
 
 /// <summary>
 /// What <see cref="MemoryStore.Import"/> did: how many entries were written, how many were skipped
@@ -121,8 +146,14 @@ public sealed class MemoryStore
 {
     public const string FileName = "memory.json";
 
-    /// <summary>The ceiling on stored entries; the prompt grows with every one.</summary>
+    /// <summary>
+    /// The ceiling on the memories one folder is offered (the everywhere ones and its own, enabled); the prompt grows with every one. Since
+    /// 2026-11-22 (the review's #26) a folder's own count against its view alone, so 200 in one repo never stop an add in another.
+    /// </summary>
     public const int MaxEntries = 200;
+
+    /// <summary>The ceiling on every entry in the file, disabled and other folders' too (2026-11-22, #26), so <c>memory.json</c> stays bounded.</summary>
+    public const int MaxStoredEntries = 1000;
 
     /// <summary>Characters kept per entry; longer text is cut with an ellipsis.</summary>
     public const int MaxTextLength = 300;
@@ -191,19 +222,37 @@ public sealed class MemoryStore
 
     /// <summary>
     /// One memory's folder set (2026-11-21, feature idea #6): <paramref name="folder"/> made <see cref="Files.FolderMatch.Normal"/>, or null for
-    /// everywhere. False when nothing matched or it already was so. A rewrite that fails puts the folder back and throws, as <see cref="Remove"/> does.
+    /// everywhere. A rewrite that fails puts the folder back and throws, as <see cref="Remove"/> does. Since 2026-11-22 (the review): a folder that
+    /// won't normalize is refused, never everywhere (#107); the same folder is compared as folders are (#92); a move that would offer some folder
+    /// more than <see cref="MaxEntries"/> is <see cref="MemoryScopeOutcome.Full"/> and moves nothing (#26).
     /// </summary>
-    public bool SetFolder(string? text, string? folder)
+    public MemoryScopeOutcome SetFolder(string? text, string? folder)
     {
         string normalized = Normalize(text);
         string? where = Files.FolderMatch.Normal(folder);
+        if (where is null && folder is not null)
+        {
+            return MemoryScopeOutcome.Refused;
+        }
+
         lock (_gate)
         {
             var entries = Entries();
             var entry = entries.FirstOrDefault(e => string.Equals(e.Text, normalized, StringComparison.OrdinalIgnoreCase));
-            if (entry is null || string.Equals(entry.Folder, where, StringComparison.Ordinal))
+            if (entry is null)
             {
-                return false;
+                return MemoryScopeOutcome.Missing;
+            }
+
+            if (where is null ? entry.Folder is null : Files.FolderMatch.Same(entry.Folder, where))
+            {
+                return MemoryScopeOutcome.Unchanged;
+            }
+
+            // Everywhere to a folder is counted there already; any other move of an offered memory is checked where it lands.
+            if (!entry.Disabled && (where is null || entry.Folder is not null) && !Fits(entries.Where(e => !ReferenceEquals(e, entry)), where))
+            {
+                return MemoryScopeOutcome.Full;
             }
 
             string? before = entry.Folder;
@@ -219,7 +268,68 @@ public sealed class MemoryStore
             }
 
             DiagnosticLog.Info(Category, ChangeLogLine(where is null ? "Widened" : "Scoped", entry.Text));
-            return true;
+            return MemoryScopeOutcome.Moved;
+        }
+    }
+
+    /// <summary>
+    /// Whether one more memory for <paramref name="folder"/> (null: everywhere) fits under <see cref="MaxEntries"/> (2026-11-22, the review's #26):
+    /// a folder's add against the everywhere ones and its own; an everywhere add against the everywhere ones and the largest folder's own, as it
+    /// joins every folder's view. Disabled ones are never offered, so never counted. Caller holds the lock.
+    /// </summary>
+    private static bool Fits(IEnumerable<MemoryEntry> entries, string? folder)
+    {
+        var live = entries.Where(e => !e.Disabled).ToList();
+        int everywhere = live.Count(e => e.Folder is null);
+        int own = folder is not null
+            ? live.Count(e => e.Folder is not null && Files.FolderMatch.Same(e.Folder, folder))
+            : live.Where(e => e.Folder is not null).GroupBy(e => Files.FolderMatch.Normal(e.Folder) ?? e.Folder!, Files.WorkingDirectory.PathComparer).Select(g => g.Count()).DefaultIfEmpty(0).Max();
+        return everywhere + own < MaxEntries;
+    }
+
+    /// <summary>
+    /// A stored folder as compared (2026-11-22, the review's #92): normalized; one that won't normalize here (saved on the other system, #78) kept
+    /// as written, so it matches no folder and stays "another folder", never everywhere; a blank one is everywhere.
+    /// </summary>
+    private static string? StoredFolder(string? folder) => string.IsNullOrWhiteSpace(folder) ? null : Files.FolderMatch.Normal(folder) ?? folder;
+
+    /// <summary>
+    /// Every add's way in (2026-11-22, the review's #34, #88, #20): <see cref="Add"/>, and then a save for everywhere (<paramref name="scoped"/>
+    /// false) of a fact kept for a folder other than <paramref name="currentFolder"/> widens it (<see cref="SetFolder"/> null), the result saying
+    /// so, or full when that would pass the ceiling; a save for this folder of one kept everywhere stays everywhere, said so. Never throws: a
+    /// widen that couldn't be written is <see cref="MemoryAddOutcome.Failed"/>. Named apart from the file's private save.
+    /// </summary>
+    public MemoryAddResult Remember(string? text, string? currentFolder, bool scoped, bool enableDisabled = false)
+    {
+        var result = Add(text, enableDisabled, scoped ? currentFolder ?? "" : null);
+        if (result.Outcome != MemoryAddOutcome.Duplicate)
+        {
+            return result;
+        }
+
+        if (scoped && result.Folder is null)
+        {
+            return result with { CoversHere = true };
+        }
+
+        if (scoped || result.Folder is not { } kept || Files.FolderMatch.Same(kept, currentFolder))
+        {
+            return result;
+        }
+
+        try
+        {
+            return SetFolder(result.Text, null) switch
+            {
+                MemoryScopeOutcome.Moved or MemoryScopeOutcome.Unchanged => result with { Folder = null, WidenedFrom = kept },
+                MemoryScopeOutcome.Full => result with { Outcome = MemoryAddOutcome.Full },
+                _ => result,
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Error(Category, $"Could not write {FileName}: {ex.Message}", ex);
+            return result with { Outcome = MemoryAddOutcome.Failed };
         }
     }
 
@@ -399,16 +509,24 @@ public sealed class MemoryStore
     /// Saves one memory. Never throws; the result says what happened and carries the normalised text. The same text stored but disabled
     /// (2026-10-13, the code review) is <see cref="MemoryAddOutcome.Disabled"/>, nothing changed — or, with <paramref name="enableDisabled"/>
     /// (the user's own add), enabled again, <see cref="MemoryAddOutcome.Enabled"/>. <see cref="MaxEntries"/> counts the enabled ones: the
-    /// ceiling is the prompt's.
+    /// ceiling is the prompt's: since 2026-11-22 (the review's #26) per folder (<see cref="Fits"/>), with <see cref="MaxStoredEntries"/> over the file.
     /// </summary>
     /// <param name="folder">The one working folder the memory is for (2026-11-21, feature idea #6, <c>/memory remember --here</c> and
-    /// <c>save_memory</c>'s <c>here</c>); null for everywhere. A duplicate answers with the saved copy's folder, so a caller can say where it applies.</param>
+    /// <c>save_memory</c>'s <c>here</c>); null for everywhere. A duplicate answers with the saved copy's folder, so a caller can say where it applies.
+    /// One given that isn't a full path here is <see cref="MemoryAddOutcome.FolderRefused"/> (#107). A disabled one the user's add enables again
+    /// takes it (#20): it wasn't offered anywhere.</param>
     public MemoryAddResult Add(string? text, bool enableDisabled = false, string? folder = null)
     {
         string normalized = Normalize(text);
         if (normalized.Length == 0)
         {
             return new(MemoryAddOutcome.Empty, normalized);
+        }
+
+        string? where = Files.FolderMatch.Normal(folder);
+        if (where is null && folder is not null)
+        {
+            return new(MemoryAddOutcome.FolderRefused, normalized);
         }
 
         lock (_gate)
@@ -422,20 +540,24 @@ public sealed class MemoryStore
                     return new(MemoryAddOutcome.Disabled, existing.Text);
                 }
 
-                if (entries.Count(e => !e.Disabled) >= MaxEntries)
+                string? lands = where ?? existing.Folder;
+                if (!Fits(entries, lands))
                 {
                     return new(MemoryAddOutcome.Full, existing.Text);
                 }
 
+                string? was = existing.Folder;
                 existing.Disabled = false;
+                existing.Folder = lands;
                 if (!TrySave(entries))
                 {
                     existing.Disabled = true;
+                    existing.Folder = was;
                     return new(MemoryAddOutcome.Failed, existing.Text);
                 }
 
                 DiagnosticLog.Info(Category, ChangeLogLine("Enabled", existing.Text));
-                return new(MemoryAddOutcome.Enabled, existing.Text);
+                return new(MemoryAddOutcome.Enabled, existing.Text, existing.Folder);
             }
 
             if (existing is not null)
@@ -443,12 +565,17 @@ public sealed class MemoryStore
                 return new(MemoryAddOutcome.Duplicate, existing.Text, existing.Folder);
             }
 
-            if (entries.Count(e => !e.Disabled) >= MaxEntries)
+            if (entries.Count >= MaxStoredEntries)
+            {
+                return new(MemoryAddOutcome.Full, normalized, FileFull: true);
+            }
+
+            if (!Fits(entries, where))
             {
                 return new(MemoryAddOutcome.Full, normalized);
             }
 
-            var entry = new MemoryEntry { Text = normalized, SavedAt = _time.GetUtcNow(), Folder = Files.FolderMatch.Normal(folder) };
+            var entry = new MemoryEntry { Text = normalized, SavedAt = _time.GetUtcNow(), Folder = where };
             entries.Add(entry);
             if (!TrySave(entries))
             {
@@ -465,8 +592,8 @@ public sealed class MemoryStore
     /// Another store's entries into this one (<c>/profile push|pull memory</c> since 2026-10-13; <c>/memory copy</c>, 2026-09-17 as <c>/memcopy</c>, until then): appended after what is
     /// here, or — <paramref name="overwrite"/> — in place of it. Each text is normalised like an
     /// <see cref="Add"/>; one that is already in the list (this store's, or an earlier entry of the
-    /// batch, ignoring case) is a duplicate and skipped; past <see cref="MaxEntries"/> the rest are
-    /// dropped. The source's dates are kept. One write at the end: a write that fails puts the old
+    /// batch, ignoring case) is a duplicate and skipped; one past <see cref="Add"/>'s ceilings (per folder, and the file's
+    /// <see cref="MaxStoredEntries"/>, disabled ones counted there too, 2026-11-22, the review's #26) is dropped. The source's dates are kept. One write at the end: a write that fails puts the old
     /// list back and throws (<see cref="IOException"/> or <see cref="UnauthorizedAccessException"/>),
     /// so the caller never reports a copy that did not happen. An overwrite with nothing to write
     /// still writes: the target ends empty, as asked.
@@ -493,13 +620,14 @@ public sealed class MemoryStore
                     continue;
                 }
 
-                if (merged.Count >= MaxEntries)
+                string? folder = StoredFolder(entry.Folder);   // #92
+                if (merged.Count >= MaxStoredEntries || (!entry.Disabled && !Fits(merged, folder)))
                 {
                     dropped++;
                     continue;
                 }
 
-                merged.Add(new MemoryEntry { Text = normalized, SavedAt = entry.SavedAt, Disabled = entry.Disabled, Folder = entry.Folder });   // a disabled one stays so (2026-10-13), a folder's stays its (2026-11-21)
+                merged.Add(new MemoryEntry { Text = normalized, SavedAt = entry.SavedAt, Disabled = entry.Disabled, Folder = folder });   // a disabled one stays so (2026-10-13), a folder's stays its (2026-11-21)
                 added++;
             }
 
@@ -643,6 +771,7 @@ public sealed class MemoryStore
         foreach (var entry in entries)
         {
             entry.Text = Normalize(entry.Text);
+            entry.Folder = StoredFolder(entry.Folder);   // #92: a hand edit's trailing separator or case still this folder
         }
 
         return entries;

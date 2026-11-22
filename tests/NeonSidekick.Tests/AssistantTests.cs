@@ -4368,4 +4368,85 @@ public class AssistantTests
         Assert.True(ConversationCompactor.HoldsCutMark(ResultOf(client.Requests[^1], "c1")));
         Assert.Equal("done", history.Messages[^1].Text);
     }
+
+    // ── A model that refuses pictures (2026-11-22, the review's #39, #100) ──
+
+    [Theory]
+    [InlineData("image input is not supported - hint: if this is unexpected, you may need to provide the mmproj")]   // llama-server, a 500
+    [InlineData("Invalid content: image_url is only supported by certain models.")]                                 // OpenAI, a 400
+    [InlineData("Qwen/Qwen3-8B is not a multimodal model")]                                                         // vLLM, a 400
+    [InlineData("At most 0 image(s) may be provided in one request.")]                                              // vLLM, a 400
+    public void LooksLikePictureRefusal_ReadsTheServersText_NotItsStatus(string text)
+    {
+        Assert.True(Assistant.LooksLikePictureRefusal(new HttpRequestException(text, null, System.Net.HttpStatusCode.InternalServerError)));
+        Assert.True(Assistant.LooksLikePictureRefusal(new InvalidOperationException("wrapped", new HttpRequestException(text, null, System.Net.HttpStatusCode.BadRequest))));
+    }
+
+    [Fact]
+    public void LooksLikePictureRefusal_MissesTheNearMisses()
+    {
+        Assert.False(Assistant.LooksLikePictureRefusal(new HttpRequestException("image too large", null, System.Net.HttpStatusCode.RequestEntityTooLarge)));
+        Assert.False(Assistant.LooksLikePictureRefusal(new HttpRequestException("Internal Server Error", null, System.Net.HttpStatusCode.InternalServerError)));
+        Assert.False(Assistant.LooksLikePictureRefusal(ConnectionReset()));
+        Assert.Equal("The model refused pictures; they're now their names, and it won't be sent pictures this session.", Assistant.PicturesRefusedNotice);
+    }
+
+    [Fact]
+    public async Task ARefusedPicture_IsTakenOutOfTheHistory_AndTheRoundGoesAgainWithout()
+    {
+        var (client, history, assistant) = Build();
+        Pictures(history, 2);
+        assistant.PictureBudget = new PictureBudget(0, 0);
+        client.EnqueueText("never");
+        client.EnqueueText("answered");
+        client.BeforeUpdateOf = (request, _, _) => request == 0
+            ? throw new HttpRequestException("image input is not supported - hint: … mmproj", null, System.Net.HttpStatusCode.InternalServerError)
+            : Task.CompletedTask;
+
+        var events = await Run(assistant, "and now?");
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(2, PicturesIn(client.Requests[0]));
+        Assert.Equal(0, PicturesIn(client.Requests[1]));
+        Assert.Equal(0, PicturesIn(history.Messages));
+        Assert.Single(events.OfType<TurnEvent.PicturesRefused>());
+        Assert.Equal(["answered"], Deltas(events));
+    }
+
+    /// <summary>The newest picture, the one the user just asked about, goes too (#39): kept, the round would fail again.</summary>
+    [Fact]
+    public async Task ARefusal_TakesTheNewestPictureOutToo()
+    {
+        var (client, history, assistant) = Build();
+        assistant.PictureBudget = new PictureBudget(0, 0);
+        history.AddUser("what is this?", [Shot("now.png")]);
+        client.EnqueueText("never");
+        client.EnqueueText("a name only");
+        client.BeforeUpdateOf = (request, _, _) => request == 0
+            ? throw new HttpRequestException("image input is not supported", null, System.Net.HttpStatusCode.InternalServerError)
+            : Task.CompletedTask;
+
+        var events = await Run(assistant, "well?");
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Equal(1, PicturesIn(client.Requests[0]));
+        Assert.Equal(0, PicturesIn(client.Requests[1]));
+        Assert.Equal(["a name only"], Deltas(events));
+    }
+
+    [Fact]
+    public async Task AnUnseenPicturesNote_GoesBeforeTheQuoteNote_SoTheNoteStaysLast()
+    {
+        var image = new ImageAttachment("", [1, 2, 3], ImageFile.Png, 4, 4) { McpSource = "pw__shot #1" };
+        string fenced = UntrustedText.WithNote(UntrustedText.Fenced("shot"));
+        var (client, _, assistant) = Build(new AIFunction[] { new PictureTool(image, "pw__shot", fenced) });
+        assistant.ToolPicturesUnseen = new HashSet<string>(StringComparer.Ordinal) { "pw__shot" };
+        client.Enqueue(FakeChatClient.Call("c1", "pw__shot", new Dictionary<string, object?>()));
+        client.EnqueueText("done");
+
+        await Run(assistant, "look");
+
+        var answer = Assert.Single(client.Requests[1][3].Contents.OfType<FunctionResultContent>());
+        Assert.Equal(UntrustedText.Fenced("shot") + "\n" + Assistant.PicturesUnseenNote + "\n" + UntrustedText.QuoteNote, answer.Result);
+    }
 }
