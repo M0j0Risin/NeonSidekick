@@ -8,7 +8,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_Avatar_SaysIt_SetsTheBestMatch_AndClearsIt_WithNoServer()
     {
-        string output = await Headless("/avatar\n/avatar octopus\n/avatar\n/avatar zzqqxx\n/avatar clear\n/avatar clear\n");
+        string output = await Headless("/avatar\n/avatar octopus\n/avatar\n/avatar zzqqxx\n/avatar clear\n/avatar clear\n", exitCode: 4);
 
         var catalog = EmojiCatalog.Shipped;
         Assert.Contains(EmojiText.Current("", catalog), output);

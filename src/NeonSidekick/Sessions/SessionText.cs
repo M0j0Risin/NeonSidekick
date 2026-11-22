@@ -37,6 +37,41 @@ public static class SessionText
     public const string NoQuery = "Error: give the text to search for";
     public const string NoId = "Error: give the session id to read";
 
+    // ---- the session's folder (2026-11-21, feature idea #4) ----
+
+    /// <summary>The resume's question when the session's folder is another one that still exists.</summary>
+    public static string SwitchFolderQuestion(string folder) => $"This session worked in {folder}. Switch to it?";
+
+    /// <summary>The resume's notice when the session's folder is gone.</summary>
+    public static string FolderGone(string folder) => $"This session worked in {folder}, which is gone; staying in this folder.";
+
+    /// <summary>The resume's notice under <c>--cwd</c> or its variable: the flag holds the folder for this launch.</summary>
+    public static string FolderHeld(string folder, string overriddenBy) => $"This session worked in {folder}; {overriddenBy} holds the folder for this launch.";
+
+    /// <summary>The PC's notice when the page resumed a session from another folder: the page never sees paths, and <c>/cwd</c> is the PC's.</summary>
+    public static string FolderDiffers(string folder) => $"This session worked in {folder}; /cwd switches to it.";
+
+    /// <summary><c>/sessions here</c>'s word and its completion note.</summary>
+    public const string HereWord = "here";
+
+    public const string HereNote = "this folder's sessions";
+
+    /// <summary>The dim mark on a row of this folder's session.</summary>
+    public const string HereMark = "this folder";
+
+    /// <summary>An empty <c>/sessions here</c>.</summary>
+    public const string NoneHere = "No sessions in this folder yet. Sessions saved before this version have no folder.";
+
+    /// <summary>The pane's footer line naming the session's folder.</summary>
+    public static string FolderFooter(string folder) => "folder: " + folder;
+
+    /// <summary>
+    /// The model a side turn records (2026-11-21, feature idea #7): the command that answered it (<c>/claude</c>, <c>/cmd</c>), and for
+    /// <c>/advisor</c> the advisor's profile too (<c>/advisor neo</c>); never blank, so <c>/usage</c> › Models counts it as its own row
+    /// rather than as the chat's model, which never answered it.
+    /// </summary>
+    public static string SideTurnModel(string command, string? who = null) => string.IsNullOrWhiteSpace(who) ? command : command + " " + who.Trim();
+
     // ---- titles ----
 
     /// <summary>The first non-blank line of <paramref name="text"/>, its spaces collapsed, cut to <see cref="MaxTitleChars"/> with an ellipsis; <see cref="Untitled"/> for none.</summary>

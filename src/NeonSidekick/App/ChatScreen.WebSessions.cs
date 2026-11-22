@@ -80,7 +80,9 @@ internal sealed partial class ChatScreen
         long? current = _sessionId;
         string q = (query ?? "").Trim();
         var zone = _time.LocalTimeZone;
-        WebSessionRow Row(SessionSummary s) => new(s.Id, SessionText.DisplayTitle(s), SessionText.Moment(s.UpdatedAt, zone), SessionText.Turns(s.Turns), s.Model, s.Id == current);
+        string root = _files.Root;   // read once: a flag for the page, never the path (2026-11-21, feature idea #4)
+        WebSessionRow Row(SessionSummary s) => new(s.Id, SessionText.DisplayTitle(s), SessionText.Moment(s.UpdatedAt, zone), SessionText.Turns(s.Turns), s.Model, s.Id == current,
+            Here: Files.FolderMatch.Same(s.Cwd, root));
 
         var rows = q.Length == 0
             ? store.List(WebSessionRows).Select(ForThePage).Select(Row).ToList()

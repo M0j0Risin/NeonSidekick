@@ -17,6 +17,9 @@ public sealed record HelpMcpLookup(string Server, McpState State)
     /// </summary>
     public bool? Asks { get; init; }
 
+    /// <summary>Whether the server is a <see cref="McpState.Failed"/> row that wants a sign-in (2026-11-21, feature idea #32): the live line says so.</summary>
+    public bool NeedsSignIn { get; init; }
+
     /// <summary>
     /// The server a tool's name belongs to among <paramref name="servers"/>: the one listing a tool of that name
     /// (<see cref="McpServerStatus.FindTool"/> over every row, since the answer says the server's state), else the one whose sanitized name
@@ -36,7 +39,7 @@ public sealed record HelpMcpLookup(string Server, McpState State)
             .Where(p => name.StartsWith(p.Prefix, StringComparison.Ordinal))
             .OrderByDescending(p => p.Prefix.Length)
             .FirstOrDefault();
-        return lead.Server is null ? null : new HelpMcpLookup(lead.Server.Name, lead.Server.State);
+        return lead.Server is null ? null : new HelpMcpLookup(lead.Server.Name, lead.Server.State) { NeedsSignIn = lead.Server.NeedsSignIn };
     }
 }
 
@@ -153,7 +156,7 @@ public sealed record HelpLive(
             : Planning ? HelpText.LivePlanMode
             : Settings is { McpServers: false } ? ToolsText.SwitchOffReason(SettingsField.McpServers)
             : found is null ? HelpText.LiveNoMcpServer
-            : found.State != McpState.Connected ? HelpText.LiveMcpState(found.State)
+            : found.State != McpState.Connected ? HelpText.LiveMcpState(found.State, found.NeedsSignIn)
             : McpAsksBarred && found.Asks == true ? HelpText.LiveRalphAsk
             : DisabledByName.Contains(name) ? HelpText.LiveMcpOffByName
             : null;

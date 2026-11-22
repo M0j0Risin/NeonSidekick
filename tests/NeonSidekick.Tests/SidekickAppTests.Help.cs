@@ -55,7 +55,7 @@ public partial class SidekickAppTests
     public async Task Headless_Update_IsTheScreensAlone(string typed)
     {
         // It went on to the server check and then the model as text (2026-11-04, review P5-12).
-        string output = await Headless(typed);
+        string output = await Headless(typed, exitCode: 4);
         Assert.Contains("[error] " + Updates.UpdateText.NotHeadless, output);
     }
 

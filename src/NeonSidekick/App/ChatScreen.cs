@@ -238,6 +238,9 @@ public enum SessionActionKind
     /// <summary><c>export [&lt;id&gt;] [md|html]</c> (2026-10-30): <c>Id</c> the session (0 = the one on screen), <c>Format</c> the file it becomes (Markdown unless <c>html</c>).</summary>
     Export,
 
+    /// <summary><c>here</c> (2026-11-21, feature idea #4): the pane, listing only the sessions of the folder in force.</summary>
+    Here,
+
     /// <summary>Anything the grammar does not cover; <c>ChatScreen.SessionUsageError</c>.</summary>
     Invalid,
 }
@@ -374,7 +377,7 @@ public enum MemoryActionKind
 /// The parsed <c>/memory</c> argument; <paramref name="Mode"/> is set by <see cref="MemoryActionKind.Mode"/> alone, <paramref name="Text"/> by
 /// <see cref="MemoryActionKind.Remember"/> alone (as typed after the word, trimmed).
 /// </summary>
-public readonly record struct MemoryAction(MemoryActionKind Kind, MemoryAccess Mode = MemoryAccess.ReadWrite, string Text = "");
+public readonly record struct MemoryAction(MemoryActionKind Kind, MemoryAccess Mode = MemoryAccess.ReadWrite, string Text = "", bool Here = false);
 
 /// <summary>
 /// The interactive chat: connect, read a line, dispatch a command or run a turn, repeat. Owns the
@@ -646,6 +649,9 @@ internal sealed partial class ChatScreen
     public const string MemoryForgetWord = "forget";
     public const string MemoryRememberWord = "remember";   // 2026-11-20, the user's call: /remember folded into /memory
     public const string MemoryRememberNote = "add a memory";
+
+    /// <summary><c>remember --here</c>'s completion note (2026-11-21, feature idea #6). Pinned.</summary>
+    public const string MemoryRememberHereNote = "only in this folder";
     public const string MemoryForgetNote = "forget every memory";
     public const string MemoryEditWord = "edit";   // 2026-09-23, the user's ask: memory.json in the editor, as /profile edit opens profile.json
     public const string MemoryEditNote = "open memory.json in your editor";
@@ -903,6 +909,9 @@ internal sealed partial class ChatScreen
     private OperataFile _operata = null!;
     private VocaliaFile _vocalia = null!;
     private IReadOnlyList<AIFunction> _memoryTools = null!;
+
+    /// <summary>A shared-memory bot's pair over <see cref="_memory"/>, built with no folder (2026-11-21, feature idea #6); dropped with the store at a profile switch.</summary>
+    private IReadOnlyList<AIFunction>? _botSharedMemoryTools;
     private MemoryMenu _memoryMenu = null!;
     private SessionStore _sessions = null!;
     private IReadOnlyList<AIFunction> _sessionTools = null!;
@@ -1450,11 +1459,12 @@ internal sealed partial class ChatScreen
         _showInViewer = showInViewer;
         _closeThumbs = closeThumbs;
         _ownsMcp = mcp is null;
-        _mcp = mcp ?? new McpSession(settings, McpSession.DefaultTransport, time);
+        _mcp = mcp ?? new McpSession(settings, (config, name, oauth) => McpSession.DefaultTransport(config, name, oauth), time);   // the sign-in's options reach the wire (2026-11-21)
         // A server that dropped, came back or changed its tools (2026-11-19, feature idea #30) wakes the idle read, so its notice prints at once.
         _mcp.NoticeQueued += WebNudge;
         // Its calls that ask (2026-11-19, feature idea #28) ask on this screen's pane, the session passed in too; cleared at dispose.
         _mcp.Approver = AllowMcpAsync;
+        _mcp.ReadToolOffered = () => McpReadOffered(_effective());
         _clockTools = ClockTools(time);
         // The sandbox reads the live setting and profile directory on every call: a /cwd save or
         // a profile switch changes the root with nothing to rebind.
@@ -1482,6 +1492,7 @@ internal sealed partial class ChatScreen
         // The web door and the printing door before the file tools (2026-10-03): convert_to_pdf, one of them, makes its PDFs
         // with the web tools' own headless browser (one run at a time across both) or Microsoft Print to PDF.
         _web = web ?? WebAccess.Create(() => Web.NetworkMode.Resolve(_effective()), time);
+        _mcp.OpenBrowser = _web.OpenUrl;   // a requested MCP sign-in opens the user's browser (2026-11-21, feature idea #32)
         // The print tools and /print (2026-09-28): the spooler the composition root hands in (none in tests); a model's print waits on the pane under ask.
         _print = new PrintService(printSpooler ?? NullPrintSpooler.Instance, _files, _effective, _time);
         _pdf = new PdfConverter(_web.Browser, _web.Fetcher, _print, _files, _effective, _time, botCheck: SolveBotCheckAsync);
@@ -3378,6 +3389,8 @@ internal sealed partial class ChatScreen
             new(SystemPromptSummary.PromptTabTitle, () => SystemPromptSummary.PromptTab(SystemPromptFacts())),
             new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
             new(SystemPromptSummary.SkillsTabTitle, () => SystemPromptSummary.SkillsTab(SystemPromptFacts())),
+            // The model scorecard (2026-11-21, feature idea #7): one grouped query when the tab is built, at the width of that build.
+            new(UsageText.ModelsTabTitle, () => UsageText.ModelsTab(_sessions.ModelStats(), _effective().SessionLogging, _pane.Profile.Width - 2)),
         ];
     }
 
@@ -3403,6 +3416,7 @@ internal sealed partial class ChatScreen
             UsageText.ToolsTabIndex => SystemPromptSummary.ToolLines(ToolGroups(), _effective().LlmOfferTools),
             UsageText.SkillsTabIndex => SystemPromptSummary.SkillsLines(SystemPromptFacts()),
             UsageText.ContextTabIndex => UsageText.ContextLines(ContextFacts()),
+            UsageText.ModelsTabIndex => UsageText.ModelsLines(_sessions.ModelStats(), _effective().SessionLogging, _pane.Profile.Width - 4),
             _ => UsageText.Lines(_session.Usage, _session.ContextLength).Concat(UsageText.ContextLines(ContextFacts())),
         };
         foreach (var line in lines)
@@ -3957,6 +3971,14 @@ internal sealed partial class ChatScreen
         {
             // The text as typed (2026-11-20): the one word cut's rest (review #12, #50), not the split words, so its inner spacing and case stay.
             SlashCommands.FirstWord(args ?? "", out string rest);
+            // --here first (2026-11-21, feature idea #6): the memory is for the working folder alone. Only before the text, so a fact that
+            // mentions --here later stays as typed.
+            string trimmed = rest.TrimStart();
+            if (SlashCommands.FirstWord(trimmed, out string after).Equals(MemoryText.HereFlag, StringComparison.OrdinalIgnoreCase))
+            {
+                return new(MemoryActionKind.Remember, Text: after, Here: true);
+            }
+
             return new(MemoryActionKind.Remember, Text: rest);
         }
 
@@ -4911,7 +4933,7 @@ internal sealed partial class ChatScreen
             _operata.Read(),
             _vocalia.Read(),
             MemoryMode.Enabled(effective),
-            MemoryMode.Enabled(effective) ? _memory.Snapshot() : [],
+            MemoryMode.Enabled(effective) ? _memory.Snapshot(_files.Root) : [],
             effective.TtsOutput,
             _speech.IsReady,
             effective.LlmOfferTools,
@@ -4924,7 +4946,7 @@ internal sealed partial class ChatScreen
             disabled,
             effective.ProjectFile,
             effective.McpServers,
-            Composed().Tools.OfType<Mcp.McpTool>().Count(),
+            Composed().Tools.Count(t => t is Mcp.McpTool or Mcp.McpReadTool),
             effective.GitLibTools,
             Without(_gitTools, disabled).Count,
             ShellOffered(effective),
@@ -5049,7 +5071,7 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;
-        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), drawable: Drawable(effective.ImageTools, _rendering), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, video: _videoTools, videoEnabled: VideoOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), duckDb: DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled), duckDbEnabled: DuckDbOffered(effective, _duckDb), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes());
+        var groups = SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), skillInstalled: Catalog(effective).Count > 0, mcp: _mcp.ServerTools, mcpResources: _mcp.ReadTools(), mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), drawable: Drawable(effective.ImageTools, _rendering), obsidian: ObsidianToolsFor(_vaultTools, effective), obsidianEnabled: ObsidianOffered(effective), sql: SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()), sqlEnabled: SqlOffered(effective, _sql), comfy: _comfyTools, comfyEnabled: ComfyOffered(effective, _comfy), advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: _haTools, homeAssistantEnabled: HomeAssistantOffered(effective), print: _printTools, printEnabled: PrintOffered(effective), oracle: OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()), oracleEnabled: OracleOffered(effective, _oracle), mysql: MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()), mysqlEnabled: MySqlOffered(effective, _mysql), unc: UncToolsFor(_uncTools, effective, _unc.Catalog(), files), uncEnabled: UncOffered(effective, _unc), docker: DockerToolsFor(_dockerTools, effective), dockerEnabled: DockerOffered(effective), camera: _cameraTools, cameraEnabled: CameraOffered(effective), help: _helpTools, screen: _screenTools, screenEnabled: ScreenOffered(effective), images: _imageTools, imagesEnabled: effective.ImageTools, video: _videoTools, videoEnabled: VideoOffered(effective), sqlite: SqliteToolsFor(_sqliteTools, effective, _pane.Enabled), sqliteEnabled: SqliteOffered(effective, _sqlite), duckDb: DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled), duckDbEnabled: DuckDbOffered(effective, _duckDb), postgres: PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()), postgresEnabled: PostgresOffered(effective, _postgres), youTube: _youTubeTools, youTubeEnabled: YouTubeOffered(effective, _youTubeTools), youTubeKey: YouTube.YouTubeDataApi.Key(effective) is not null, shopping: _shoppingTools, shoppingEnabled: ShoppingOffered(effective), eventLog: _eventLogTools, eventLogEnabled: EventLogOffered(effective, _eventLog, _macLog), eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes());
         return groups.SelectMany(g => g.Tools.Where(t => g.Offers(t.Name)).Select(t => new CompletionItem(t.Name, t.Description))).ToList();
     }
 
@@ -5548,6 +5570,7 @@ internal sealed partial class ChatScreen
         new(SessionPurgeWord, "purge a session: /sessions purge <id> | older <days> | all"),
         new(SessionTitleWord, "rename this session: /sessions title [<text>] (alone: a box with the title in it)"),
         new(SessionExportWord, "write a session to a file: /sessions export [<id>] [md|html] (this one without an id)"),
+        new(SessionText.HereWord, SessionText.HereNote),   // 2026-11-21, feature idea #4
     ];
 
     /// <summary>The line a double-click on the upper rule's session name runs (2026-09-28): the bare <c>/sessions title</c>, the rename box. Pinned.</summary>
@@ -5752,6 +5775,7 @@ internal sealed partial class ChatScreen
                     new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote),
                     new CompletionItem(UsageText.ToolsWord, UsageText.ToolsWordNote),
                     new CompletionItem(UsageText.SkillsWord, UsageText.SkillsWordNote),
+                    new CompletionItem(UsageText.ModelsWord, UsageText.ModelsWordNote),   // 2026-11-21, feature idea #7
                 ], argText);
 
             case SlashCommand.Header:
@@ -5948,8 +5972,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.Memory:
             {
                 // The modes, remember (2026-11-20), forget and edit (copy and its profiles until 2026-10-13: /profile push|pull memory since).
-                // After "remember " the text is free: nothing matches it.
-                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryRememberWord, MemoryRememberNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
+                // After "remember " the text is free: nothing matches it. "remember --here" (2026-11-21) is one two-word item, as /sys builds head + word
+                // items, so "remember --h" completes it; the text after it stays free too.
+                return MentionCompleter.Matches([new(MemoryMode.ReadWrite, MemoryReadWriteNote), new(MemoryMode.ReadOnly, MemoryReadOnlyNote), new(MemoryMode.Off, MemoryDisabledNote), new(MemoryRememberWord, MemoryRememberNote), new(MemoryRememberWord + " " + MemoryText.HereFlag, MemoryRememberHereNote), new(MemoryForgetWord, MemoryForgetNote), new(MemoryEditWord, MemoryEditNote)], argText);
             }
 
             case SlashCommand.Sys:
@@ -6681,7 +6706,7 @@ internal sealed partial class ChatScreen
         disabled ??= TurnDisabled(effective);
         var fileTools = _fileTools;
         bool files = effective.FileTools && Without(fileTools, disabled).Count > 0;   // the turn's rule (PrepareTurn): an emptied file group is the switch off
-        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), drawable: Drawable(effective.ImageTools, _rendering), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()) : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()) : null, mysql: MySqlOffered(effective, _mysql) ? MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()) : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, images: _imageTools, imagesEnabled: effective.ImageTools, video: VideoOffered(effective) ? _videoTools : null, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, duckDb: DuckDbOffered(effective, _duckDb) ? DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null, youTube: YouTubeOffered(effective, _youTubeTools) ? YouTubeToolsFor(_youTubeTools, effective) : null, shopping: ShoppingOffered(effective) ? _shoppingTools : null, eventLog: EventLogOffered(effective, _eventLog, _macLog) ? _eventLogTools : null, eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes())));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
+        return WithPlanGroup(SystemPromptSummary.OfferedOnly(SystemPromptSummary.ToolGroups(_clockTools, _timerTools, fileTools, _memoryTools, MemoryMode.Enabled(effective), effective.LlmOfferTools, WebToolsFor(_webTools, files), effective.WebTools, effective.FileTools, _askTools, effective.AskUser, _pane.Enabled, _skillTools, effective.AgentSkills, _sessionTools, effective.SessionTool, disabled, memorySave: MemoryMode.Saves(effective), mcp: _mcp.ServerTools, mcpResources: _mcp.ReadTools(), mcpEnabled: effective.McpServers, git: _gitTools, gitEnabled: effective.GitLibTools, shell: _shellTools, shellEnabled: ShellOffered(effective), codeAvailable: CodeAvailable(), drawable: Drawable(effective.ImageTools, _rendering), obsidian: ObsidianOffered(effective) ? ObsidianToolsFor(_vaultTools, effective) : null, sql: SqlOffered(effective, _sql) ? SqlToolsFor(_sqlTools, effective, _pane.Enabled, _sql.Catalog()) : null, comfy: ComfyOffered(effective, _comfy) ? _comfyTools : null, advisors: AdvisorsListed(effective) ? _neonAdvisorTools : null, advisorsEnabled: AdvisorsOffered(effective), homeAssistant: HomeAssistantOffered(effective) ? _haTools : null, oracle: OracleOffered(effective, _oracle) ? OracleToolsFor(_oracleTools, effective, _pane.Enabled, _oracle.Catalog()) : null, mysql: MySqlOffered(effective, _mysql) ? MySqlToolsFor(_mysqlTools, effective, _pane.Enabled, _mysql.Catalog()) : null, unc: UncOffered(effective, _unc) ? UncToolsFor(_uncTools, effective, _unc.Catalog(), files) : null, docker: DockerOffered(effective) ? DockerToolsFor(_dockerTools, effective) : null, camera: CameraOffered(effective) ? _cameraTools : null, help: _helpTools, screen: ScreenOffered(effective) ? _screenTools : null, images: _imageTools, imagesEnabled: effective.ImageTools, video: VideoOffered(effective) ? _videoTools : null, sqlite: SqliteOffered(effective, _sqlite) ? SqliteToolsFor(_sqliteTools, effective, _pane.Enabled) : null, duckDb: DuckDbOffered(effective, _duckDb) ? DuckDbToolsFor(_duckDbTools, effective, _pane.Enabled) : null, postgres: PostgresOffered(effective, _postgres) ? PostgresToolsFor(_postgresTools, effective, _pane.Enabled, _postgres.Catalog()) : null, youTube: YouTubeOffered(effective, _youTubeTools) ? YouTubeToolsFor(_youTubeTools, effective) : null, shopping: ShoppingOffered(effective) ? _shoppingTools : null, eventLog: EventLogOffered(effective, _eventLog, _macLog) ? _eventLogTools : null, eventLogTicked: _macLog.Log is not null ? _macLog.LocalTicked : _eventLog.Catalog().Computers.Count > 0, timersEnabled: TimersOffered(effective), admin: AdminGroups(effective), clockEnabled: ClockOffered(effective), helpEnabled: HelpOffered(effective), monitors: MonitorGroup(effective), homeNotes: HomeToolNotes())));   // the vault group only with a vault (2026-09-22): /sys stays as it was for a profile that never names one
     }
 
     /// <summary>Whether <c>execute_code</c> has a language to run (2026-09-21): the setting's languages, one of them installed.</summary>
@@ -6703,6 +6728,7 @@ internal sealed partial class ChatScreen
         return new McpFacts(_mcp.Servers, _mcp.Problems, effective.McpServers, effective.LlmOfferTools, ToolsText.DisabledSet(effective.ToolsDisabled), _mcp.ProfilePath, _mcp.GlobalPath)
         {
             Allowed = McpHeldForSession,
+            ResourceServers = _mcp.ResourceServers,
         };
     }
 
@@ -6865,8 +6891,9 @@ internal sealed partial class ChatScreen
         _persona = new PersonaFile(_settings.ProfileDirectory);
         _operata = new OperataFile(_settings.ProfileDirectory);
         _vocalia = new VocaliaFile(_settings.ProfileDirectory);
-        _memoryTools = MemoryTools(_memory);
-        _memoryMenu = new MemoryMenu(new ConsoleWithInput(_pane, _keys), _memory, _flow, _menuPane, () => MemoryMode.Resolve(_settings.Current), mode => _menu.SetMemoryMode(mode), () => _pane.Enabled ? _input : null);
+        _memoryTools = MemoryTools(_memory, () => _files.Root);
+        _botSharedMemoryTools = null;
+        _memoryMenu = new MemoryMenu(new ConsoleWithInput(_pane, _keys), _memory, _flow, _menuPane, () => MemoryMode.Resolve(_settings.Current), mode => _menu.SetMemoryMode(mode), () => _pane.Enabled ? _input : null, () => _files.Root);
         // The session store (2026-09-18): the old profile's handle closed, the new one opened lazily
         // by its first use; the retention purge runs here, at startup and after every switch.
         _sessions?.Dispose();
@@ -6875,7 +6902,7 @@ internal sealed partial class ChatScreen
         // A purged session takes its file checkpoints with it (2026-10-28): subscribed before the retention purge below.
         _sessions.Purged += OnSessionsPurged;
         _sessionTools = SessionTools(_sessions, _effective, () => _sessionId, _time);
-        _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(left: false); } }, ExportSessionCoreAsync);
+        _sessionsMenu = new SessionsMenu(_sessions, () => _sessionId, _flow, _menuPane, _input, _time, id => { if (_sessionId == id) { ForgetSession(left: false); } }, ExportSessionCoreAsync, () => _files.Root);
         PurgeExpiredSessions();
         // The file checkpoints' sweep (2026-10-28): the age rule, gone folders' stores, purges a close cut short; in the background.
         SweepCheckpoints();
@@ -7070,7 +7097,11 @@ internal sealed partial class ChatScreen
     public static string NoArgumentError(string token) => $"{token} takes no argument; /help shows each command's form.";
 
     /// <summary>The tools a turn offers while memory is on: the save and, since 2026-09-17, the recall (also the opening memory call's). Shared with headless.</summary>
-    public static IReadOnlyList<AIFunction> MemoryTools(MemoryStore memory) => new AIFunction[] { new SaveMemoryTool(memory), new RecallMemoryTool(memory) };
+    /// <summary>
+    /// <c>save_memory</c> and <c>recall_memory</c> over a store. <paramref name="folder"/> (2026-11-21, feature idea #6) is the working folder whose
+    /// memories join the everywhere ones and where a <c>here</c> save goes; null (a bot, a test) offers the everywhere ones alone and no <c>here</c>.
+    /// </summary>
+    public static IReadOnlyList<AIFunction> MemoryTools(MemoryStore memory, Func<string?>? folder = null) => new AIFunction[] { new SaveMemoryTool(memory, folder), new RecallMemoryTool(memory, folder) };
 
     /// <summary>The clock tools, offered on every turn while <c>Clock tools</c> is on (2026-10-18; no switch until then): they read a clock and write nothing. Shared with headless.</summary>
     public static IReadOnlyList<AIFunction> ClockTools(TimeProvider time) => new AIFunction[]
@@ -8186,7 +8217,9 @@ internal sealed partial class ChatScreen
         {
             assistant.Tools = [];
             assistant.OpeningCalls = [];
-            assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), tools: false, project: project, markdown: markdown);
+            // The folder the memory tools were built with (2026-11-21): no tool carries the list here, so the prompt holds this folder's.
+            string? memoryFolder = inputs.Memory.OfType<RecallMemoryTool>().FirstOrDefault()?.Folder;
+            assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot(memoryFolder) : null, persona.Read(), operata.Read(), vocalia.Read(), tools: false, project: project, markdown: markdown);
             return;
         }
 
@@ -8232,7 +8265,7 @@ internal sealed partial class ChatScreen
         // The notified exits since the last turn ride in as seeded polls (2026-09-21), on every turn, while process is offered.
         assistant.PendingCalls = processes is null ? [] : PendingProcessPolls(processes, assistant.Tools);
         var r = set.Rules;
-        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot() : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.DirectiveFor(r.Advisors ? set.Advisors?.Advisors : null, r.Web ? PlanTurn.ResearchOf(set.Tools) : null) ?? inputs.Pass?.Directive, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres, save: inputs.MemorySave, sqliteWrite: r.Sqlite && r.SqliteWrite, serverWrites: r.ServerWrites, images: r.Images, advisors: r.Advisors, shopping: r.Shopping, globalSkills: globalSkills, eventLog: r.EventLog, clock: r.Clock, duckDb: r.DuckDb, duckDbWrite: r.DuckDb && r.DuckDbWrite, mcpNotes: set.McpNotes);
+        assistant.History.SystemPrompt = Assistant.SystemPrompt(speechOutput, memoryEnabled ? memory.Snapshot(recall?.Folder) : null, persona.Read(), operata.Read(), vocalia.Read(), web: r.Web, files: r.Files, ask: r.Ask, project: project, skills: catalog, markdown: markdown, sessions: r.Sessions, download: r.Download, recall: recall is not null, delete: r.Delete, mcp: r.Mcp, timers: r.Timers, git: r.Git, shell: r.Shell, police: r.Police, obsidian: r.Obsidian, obsidianDelete: r.ObsidianDelete, sql: r.Sql, native: r.Native, plan: inputs.Plan?.DirectiveFor(r.Advisors ? set.Advisors?.Advisors : null, r.Web ? PlanTurn.ResearchOf(set.Tools) : null) ?? inputs.Pass?.Directive, homeAssistant: r.HomeAssistant, oracle: r.Oracle, mysql: r.MySql, unc: r.Unc, uncFetch: r.UncFetch, uncWrite: r.UncWrite, docker: r.Docker, dockerWrite: r.DockerWrite, help: r.Help, sqlite: r.Sqlite, postgres: r.Postgres, save: inputs.MemorySave, sqliteWrite: r.Sqlite && r.SqliteWrite, serverWrites: r.ServerWrites, images: r.Images, advisors: r.Advisors, shopping: r.Shopping, globalSkills: globalSkills, eventLog: r.EventLog, clock: r.Clock, duckDb: r.DuckDb, duckDbWrite: r.DuckDb && r.DuckDbWrite, mcpNotes: set.McpNotes);
     }
 
     /// <summary>
@@ -8273,7 +8306,7 @@ internal sealed partial class ChatScreen
         Ask = AskOffered(effective) ? _askTools : null,
         Sessions = _sessionTools,
         SessionsEnabled = effective.SessionTool,
-        Mcp = _mcp.Tools,
+        Mcp = _mcp.TurnTools(),
         McpNotes = _mcp.ServerInstructions,
         McpEnabled = effective.McpServers,
         Git = _gitTools,
@@ -8755,7 +8788,7 @@ internal sealed partial class ChatScreen
 
     // ── /sessions (2026-09-18) ──────────────────────────────────────────────
 
-    public const string SessionUsageError = "/sessions lists the sessions, or /sessions <id> | purge <id> | purge older <age> | purge all | title <text> | export [<id>] [md|html]";
+    public const string SessionUsageError = "/sessions lists the sessions, or /sessions <id> | purge <id> | purge older <age> | purge all | title <text> | export [<id>] [md|html] | here";
 
     public static string SessionMissingError(long id) => $"No session {SessionText.Id(id)}; /sessions lists them.";
 
@@ -8810,6 +8843,11 @@ internal sealed partial class ChatScreen
         if (tokens[0].Equals(SessionExportWord, StringComparison.OrdinalIgnoreCase))
         {
             return ParseExportArgs(tokens);
+        }
+
+        if (tokens[0].Equals(SessionText.HereWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return tokens.Length == 1 ? new(SessionActionKind.Here) : new(SessionActionKind.Invalid);
         }
 
         if (tokens.Length == 1)
@@ -8880,9 +8918,13 @@ internal sealed partial class ChatScreen
         switch (action.Kind)
         {
             case SessionActionKind.Pane:
-                if (await _sessionsMenu.ShowAsync(cancellationToken).ConfigureAwait(false) is { } picked)
+            case SessionActionKind.Here:
+                if (await _sessionsMenu.ShowAsync(cancellationToken, here: action.Kind == SessionActionKind.Here).ConfigureAwait(false) is { } picked)
                 {
-                    RestoreSession(picked);
+                    if (RestoreSession(picked))
+                    {
+                        await OfferSessionFolderAsync(picked, cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 else
                 {
@@ -8891,7 +8933,11 @@ internal sealed partial class ChatScreen
 
                 break;
             case SessionActionKind.Restore:
-                RestoreSession(action.Id);
+                if (RestoreSession(action.Id))
+                {
+                    await OfferSessionFolderAsync(action.Id, cancellationToken).ConfigureAwait(false);
+                }
+
                 break;
             case SessionActionKind.Purge:
                 await PurgeSessionAsync(action.Id, cancellationToken).ConfigureAwait(false);
@@ -10128,14 +10174,7 @@ internal sealed partial class ChatScreen
     {
         var action = ParseCwdArgs(args);
         var effective = _effective();
-
-        // A folder moved to: what was read is forgotten, and a crash's temps in its top level go (2026-10-30, review F88).
-        void Moved()
-        {
-            ForgetReading();
-            _transcript.ForgetPaths();   // its answers are full paths under the old folder (2026-11-02, review P2-4)
-            CwdSweep = _files.SweepRoot();   // off the screen's thread (2026-11-02, review P13-7)
-        }
+        void Moved() => AfterFolderMoved();
 
         switch (action.Kind)
         {
@@ -10179,6 +10218,60 @@ internal sealed partial class ChatScreen
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>
+    /// A folder moved to (<c>/cwd</c>, and a resumed session's switch since 2026-11-21): what was read is forgotten, and a crash's temps in its
+    /// top level go (2026-10-30, review F88).
+    /// </summary>
+    private void AfterFolderMoved()
+    {
+        ForgetReading();
+        _transcript.ForgetPaths();   // its answers are full paths under the old folder (2026-11-02, review P2-4)
+        CwdSweep = _files.SweepRoot();   // off the screen's thread (2026-11-02, review P13-7)
+    }
+
+    /// <summary>
+    /// After a resume (2026-11-21, feature idea #4): when the session worked in another folder, offer it. The question when the folder still
+    /// exists (a yes saved through <see cref="SettingsMenu.TrySaveWorkingDirectory"/>, the profile's own <c>files</c> folder as <c>""</c>, as the
+    /// picker saves it); a notice when it is gone, when <c>--cwd</c> or its variable holds the folder (a yes would save a value not in force),
+    /// or when the page resumed it (the page never sees PC paths, and <c>/cwd</c> is the PC's). A session with no folder, or this one's, asks nothing.
+    /// </summary>
+    private async Task OfferSessionFolderAsync(long id, CancellationToken cancellationToken)
+    {
+        if (_sessions.Summary(id)?.Cwd is not { } folder || FolderMatch.Same(folder, _files.Root))
+        {
+            return;
+        }
+
+        if (!Directory.Exists(folder))
+        {
+            _transcript.Notice(SessionText.FolderGone(folder));
+            return;
+        }
+
+        if (_overriddenBy(SettingsField.WorkingDirectory) is { } overriddenBy && SettingsMenu.OverrideHolds(SettingsField.WorkingDirectory, _settings.Current))
+        {
+            _transcript.Notice(SessionText.FolderHeld(folder, overriddenBy));
+            return;
+        }
+
+        if (FromWebNow)
+        {
+            _transcript.Notice(SessionText.FolderDiffers(folder));
+            return;
+        }
+
+        if (!await ConfirmAsync(SessionText.SwitchFolderQuestion(folder), cancellationToken).ConfigureAwait(false))
+        {
+            return;
+        }
+
+        bool profiles = FolderMatch.Same(folder, WorkingDirectory.Resolve("", _settings.ProfileDirectory));
+        if (_menu.TrySaveWorkingDirectory(profiles ? "" : folder))
+        {
+            AfterFolderMoved();
         }
     }
 
@@ -12808,6 +12901,7 @@ internal sealed partial class ChatScreen
             _skillRecords.Store.Dispose();
             _mcp.NoticeQueued -= WebNudge;
             _mcp.Approver = null;
+            _mcp.OpenBrowser = null;
             if (_ownsMcp)
             {
                 await _mcp.DisposeAsync().ConfigureAwait(false);
@@ -16254,7 +16348,7 @@ internal sealed partial class ChatScreen
     /// lines to <paramref name="sink"/> (the idle line's flow, or the transcript under a reply). Every <i>Memory mode</i> saves it (2026-11-20, the
     /// memory-remember review's #58, the user's pick): the mode governs the model; the user's own hand always adds, as the 💾 pane's did.
     /// </summary>
-    private void Remember(INoticeSink sink, string text)
+    private void Remember(INoticeSink sink, string text, bool here = false)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -16262,7 +16356,9 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var (answer, error) = RememberAnswer(_memory.Add(text, enableDisabled: true));   // the user's own add enables a disabled one again (2026-10-13)
+        // The user's own add enables a disabled one again (2026-10-13); --here saves it for the working folder alone (2026-11-21).
+        string? folder = here ? _files.Root : null;
+        var (answer, error) = RememberAnswer(_memory.Add(text, enableDisabled: true, folder: folder), _files.Root);
         if (error)
         {
             sink.Error(answer);
@@ -16279,10 +16375,14 @@ internal sealed partial class ChatScreen
     /// <c>/memory remember</c>'s answer to the store's outcome, and whether it is an error (2026-10-16: shared with the Web UI's 💾 ⇪, so their words
     /// can't drift). Pure.
     /// </summary>
-    public static (string Text, bool Error) RememberAnswer(MemoryAddResult result) => result.Outcome switch
+    /// <param name="here">The working folder (2026-11-21, feature idea #6): a duplicate whose saved copy is for another folder names that one, so
+    /// the add never reads as done while the fact stays out of this folder.</param>
+    public static (string Text, bool Error) RememberAnswer(MemoryAddResult result, string? here = null) => result.Outcome switch
     {
+        MemoryAddOutcome.Added when result.Folder is not null => (MemoryText.RememberedHereNotice(result.Text), false),
         MemoryAddOutcome.Added => (RememberedNotice(result.Text), false),
         MemoryAddOutcome.Enabled => (RememberEnabledNotice(result.Text), false),
+        MemoryAddOutcome.Duplicate when result.Folder is not null && !FolderMatch.Same(result.Folder, here) => (MemoryText.DuplicateElsewhere(result.Text, result.Folder), false),
         MemoryAddOutcome.Duplicate => (AlreadyRememberedNotice(result.Text), false),
         MemoryAddOutcome.Full => (MemoryFullError, true),
         MemoryAddOutcome.Empty => (RememberUsageError, true),
@@ -16312,7 +16412,7 @@ internal sealed partial class ChatScreen
                 break;
 
             case { Kind: MemoryActionKind.Remember } add:
-                Remember(_flow, add.Text);   // 2026-11-20: /remember's add, folded in
+                Remember(_flow, add.Text, add.Here);   // 2026-11-20: /remember's add, folded in; --here since 2026-11-21
                 break;
 
             case { Kind: MemoryActionKind.Mode } set:
@@ -17102,7 +17202,8 @@ internal sealed partial class ChatScreen
                     {
                         // Its calls and tokens (2026-10-10; 0 and 0 until then, from the days a bot had no tools).
                         var (botTrace, botUsage) = _lastBotTurn;
-                        _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), botTrace.ToolCalls, botTrace.ToolNames, botTrace.LoadedSkills, Math.Max(botTrace.Errors, _lastTurnFailed ? 1 : 0), botUsage.Input, botUsage.Output, _lastTurnCancelled, botTrace.Sources);
+                        _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), botTrace.ToolCalls, botTrace.ToolNames, botTrace.LoadedSkills, Math.Max(botTrace.Errors, _lastTurnFailed ? 1 : 0), botUsage.Input, botUsage.Output, _lastTurnCancelled, botTrace.Sources,
+                            model: (links.Count > 0 ? links[next]?.Endpoint.ModelId : null) ?? _session.Endpoint?.ModelId, usage: botUsage, cwd: _files.Root);
                         _sessions.SaveHistory(id, SessionHistory.ToJson(BotChat.StoredHistory(starter, lines, castNames, topic)));
                     }
                 }
@@ -17409,7 +17510,8 @@ internal sealed partial class ChatScreen
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
         if (bot.Profile is null || BotChatMemoryMode.Resolve(effective) == BotMemoryMode.SharedParent)
         {
-            return (_memory, Without(_memoryTools, disabled));
+            // Its own pair over the screen's store, built with no folder (2026-11-21): a bot chat isn't about a folder, so it sees the everywhere memories alone.
+            return (_memory, Without(_botSharedMemoryTools ??= MemoryTools(_memory), disabled));
         }
 
         if (!own.TryGetValue(bot.Name, out var mine))
@@ -18717,6 +18819,8 @@ internal sealed partial class ChatScreen
             _turnPictures = images;   // the directive names a picture sent with this message too (2026-10-18)
             PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength, replyFloor: PlanReplyFloor(_plan, _files)), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
             assistant.ThinkingInFlightOnly = Assistant.InFlightOnlyWire(_session.Endpoint?.BaseUrl);
+            // An MCP result's pictures to a model that can't see them (2026-11-21, feature idea #31): the user's alone, judged at each turn.
+            assistant.ToolPicturesUnseen = UnseenMcpPictures(_session.SeesPictures, assistant.Tools);
             // The tools whose path is the working folder's (2026-11-02, review P2-6): a tool line links only theirs.
             _transcript.WorkingFolderTools = TurnToolSet.WorkingFolderNamesOf(assistant.Tools);
             _turnPictures = [];
@@ -19139,7 +19243,7 @@ internal sealed partial class ChatScreen
         // line's, so the model may retitle it.
         string? customTitle = TakeCustomCommandTitle();
         // Titled without a saved picture's path (2026-11-16, #40): the title shows on the page, and a phone photo's line starts with its label.
-        _sessionId ??= _sessions.Begin(pass?.Title ?? (customTitle is null ? SessionText.FirstLineTitle(PasteBlocks.WithoutSavedPaths(text)) : SessionText.FirstLineTitle(customTitle)), _session.Endpoint?.ModelId ?? "");
+        _sessionId ??= _sessions.Begin(pass?.Title ?? (customTitle is null ? SessionText.FirstLineTitle(PasteBlocks.WithoutSavedPaths(text)) : SessionText.FirstLineTitle(customTitle)), _session.Endpoint?.ModelId ?? "", _files.Root);
         if (_sessionId is not { } id)
         {
             return;
@@ -19156,7 +19260,9 @@ internal sealed partial class ChatScreen
         }
 
         var usage = _session.Usage.LastReply;
-        int? ordinal = _sessions.AppendTurn(id, pass?.Line ?? text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled, trace.Sources);
+        // The model that answered, the turn's timed output and the folder (2026-11-21, feature ideas #4 and #7).
+        int? ordinal = _sessions.AppendTurn(id, pass?.Line ?? text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled, trace.Sources,
+            model: _session.Endpoint?.ModelId, usage: usage, cwd: _files.Root);
         StampTurn(assistant.History, ordinal);
         SaveSessionHistory();
         if (first && !cancelled && pass is null && SessionNamingMode.Resolve(effective) == SessionNaming.ModelWritten)
@@ -19174,7 +19280,7 @@ internal sealed partial class ChatScreen
         if (_sessionId is { } id)
         {
             var messages = _session.History.Messages;
-            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName, _madeFiles.Saved(messages)));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName, _madeFiles.Saved(messages), keepMcp: _effective().McpKeepInSessions));
         }
     }
 
@@ -19902,6 +20008,12 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result:
                 _transcript.ToolResult(result.Name, result.Text, time);
+                // Any other tool's pictures show too (2026-11-21, feature idea #31: an MCP tool's screenshot), on the PC and the page.
+                if (result.Images is { Count: > 0 })
+                {
+                    ToolThumbnails(result, thumbnails);
+                }
+
                 break;
             case TurnEvent.Notice notice when notice.IsError:
                 _transcript.Error(TurnText.Shown(notice, PassTurnNow));

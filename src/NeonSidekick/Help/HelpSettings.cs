@@ -157,6 +157,7 @@ public static partial class HelpSettings
         SettingsField.FileViewImageMaxPerCall => "How many pictures one `view_image` call may load, and how many pages one `read_pdf` call with pictures draws (1–100).",
         SettingsField.McpServers => "The master switch: on, every enabled server starts at launch (and after a profile switch) and its tools are offered; off, nothing starts.",
         SettingsField.McpConnectTimeoutSeconds => "How long a server gets to finish the handshake and list its tools before it is marked failed (5–300).",
+        SettingsField.McpKeepInSessions => "Keeps the pictures MCP tools return (a browser screenshot, say) in stored sessions, like any picture. Off, a stored session keeps a line naming each picture instead; the conversation still holds them until it ends.",
         SettingsField.GitLibTools => "Offers the GitLib tools (`gitlib_status`, …: status, log, show, diff, blame, branch, stage, commit, stash, revert, tag, discard, delete) over the repository in the working directory. They run inside the app, with no git program. Off, the model reaches git through the shell only, and `/gituser` does nothing. The Ralph loop and `/code-audit` read the repository either way, and never write to it.",
         SettingsField.GitLibDiffMaxLines => "Where a `gitlib_diff` patch is cut (20–5000).",
         SettingsField.GitLibLogMaxCommits => "How many commits `gitlib_log` returns unless the call says otherwise (1–200).",

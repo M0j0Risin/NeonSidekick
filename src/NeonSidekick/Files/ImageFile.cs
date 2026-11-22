@@ -36,6 +36,15 @@ public sealed record ImageAttachment(string Path, byte[] Bytes, string MediaType
     public bool Reference { get; init; }
 
     /// <summary>
+    /// A picture an MCP tool's result carried (2026-11-21, feature idea #31): the label it goes by, the tool's prefixed name and its
+    /// place in the result (<c>playwright__browser_screenshot #1</c>, or <c>mcp_read #1</c>). Such a picture has no file (<see cref="Path"/>
+    /// empty), so the label is what the history writes as its name (<c>ConversationHistory.PathKey</c>), what a picture taken out of a
+    /// request names, and how a stored session marks it (<c>MCP keep in sessions</c>). Not called <c>Mcp</c>: that would shadow the
+    /// <c>NeonSidekick.Mcp</c> namespace code writes as <c>Mcp.McpText…</c>.
+    /// </summary>
+    public string? McpSource { get; init; }
+
+    /// <summary>
     /// An attached PDF's text (2026-10-14, the PDF plan's phase 3 and gap 39): the read started when it was pasted, carried as the task so
     /// a message sent or queued before it ends hands the read over rather than cancelling it; the send awaits it. Null for a picture.
     /// One attachment list for both (the plan's choice): a PDF is an attachment with <see cref="PdfFile.MediaType"/>, its whole file in

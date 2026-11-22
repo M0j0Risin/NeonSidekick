@@ -20,6 +20,7 @@ public sealed class InProcessMcpServers : IAsyncDisposable
     private readonly Dictionary<string, TaskCompletionSource> _held = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<string, bool>> _destructive = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string?> _instructions = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (string Uri, string Name, string? Text)[]> _resources = new(StringComparer.Ordinal);
 
     /// <summary>The default tool list of a server not given its own: an echo and the fail tool.</summary>
     public static readonly IReadOnlyList<(string Name, string Description)> DefaultTools = [("echo", "Echoes the text back."), (McpPipeServer.FailToolName, "Always fails.")];
@@ -47,6 +48,12 @@ public sealed class InProcessMcpServers : IAsyncDisposable
 
     /// <summary>A named server's handshake instructions (2026-11-19, feature idea #59; set before the connect, kept for the reconnects).</summary>
     public void Instructions(string name, string? text) => _instructions[name] = text;
+
+    /// <summary>The resources <paramref name="name"/>'s next server publishes (2026-11-21, mcp_read); none set, it declares no resources.</summary>
+    public void Resources(string name, params (string Uri, string Name, string? Text)[] resources) => _resources[name] = resources;
+
+    /// <summary>Leaves <paramref name="name"/>'s next server without resources again (a server that came back without them).</summary>
+    public void NoResources(string name) => _resources.Remove(name);
 
     /// <summary>A named server's tool's <c>destructiveHint</c> (2026-11-19, feature idea #28; set before the connect).</summary>
     public void Destructive(string name, string tool, bool destructive)
@@ -98,6 +105,7 @@ public sealed class InProcessMcpServers : IAsyncDisposable
             Drops = !Steady.Contains(name),
             Destructive = _destructive.GetValueOrDefault(name),
             Instructions = _instructions.GetValueOrDefault(name),
+            Resources = _resources.GetValueOrDefault(name),
         });
         _servers[name] = server;
         if (_held.Remove(name, out var gate))

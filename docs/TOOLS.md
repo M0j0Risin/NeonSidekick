@@ -24,7 +24,7 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 
 * **A group appears only when it can work:** Obsidian needs a vault, the databases and UNC a connection or share you ticked, Home Assistant its URL and key, ComfyUI its URL and a workflow.
 * **Headless** leaves some tools out, and refuses anything that would stop to ask you unless `--allow` names it: [Before you start](HEADLESS.md#before-you-start).
-* **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps the reading tools, `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. `gitlib_tag`, `gitlib_branch` and `gitlib_stash` stay for listing only. It drops the MCP tools and every tool that changes or starts something (`start_timer`, `open`, `process`, `image_edit`…).
+* **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps the reading tools, `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. `gitlib_tag`, `gitlib_branch` and `gitlib_stash` stay for listing only. It drops the MCP tools but `mcp_read`, and every tool that changes or starts something (`start_timer`, `open`, `process`, `image_edit`…).
 * **Code audit** ([COMMANDS.md](COMMANDS.md#code-audit)) keeps the file, picture, PDF and git reads, `neon_advisor`, `neon_help`, `get_current_time`, `load_skill`, `recall_memory` and `ask_user`, and adds `present_audit`. The web's reads join under *Code audit web research*; an advisor in a pass gets the same set.
 * **On a Mac:** what runs there is in [MAC.md](MAC.md#what-works); a group that behaves differently has its own "… on a Mac" section below.
 * **A misnamed argument is answered:** a call with an argument the tool doesn't take runs nothing and is told the likely name. A tool that takes no arguments runs, with a note; an MCP tool is checked only when its schema is closed.
@@ -1139,8 +1139,8 @@ Under *Memory mode*.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `save_memory` | `text` | Saves one lasting fact about you, known in every later session. Not offered while *Memory mode* is `read-only`. |
-| `recall_memory` | — | Everything remembered, oldest first, except memories turned off on the `/memory` pane. Called at the start of every conversation. |
+| `save_memory` | `text`, `here` | Saves one lasting fact about you, known in every later session; `here` keeps a fact about the project to this folder. Not offered while *Memory mode* is `read-only`. |
+| `recall_memory` | — | Everything remembered, oldest first: the memories for everywhere and this folder's, not another folder's or those turned off on the `/memory` pane. Called at the start of every conversation. |
 
 ### Skills
 
@@ -1201,11 +1201,21 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **A server that drops** reconnects once at its next call, or on Enter at its `/mcp` row. A call cut off by the drop is sent again only if the server marks it read-only and not destructive.
 * A server's changed tool list applies from your next message.
 * **Server text is untrusted:** each text a tool returns reaches the model fenced (`⟪ ⟫`); a failed call starts `Error:`. A server's tool descriptions aren't fenced: trusting a server is your choice in `mcp.json`.
+* **Pictures a tool returns** (a browser screenshot, say) reach a model that sees pictures, at most four a call, and show in the transcript and the Web UI. A model that can't see them gets a note instead.
+* **Saved sessions leave those pictures out** unless *MCP keep in sessions* is on ([SETTINGS.md](SETTINGS.md#mcp-servers)): a screenshot can hold anything on the page.
+* **Resources in a result:** an embedded text reaches the model fenced, cut at 32,000 characters; a resource link or any other file is named, never fetched on its own.
 * **Calls ask first** (Deny, Allow once, Allow for this session) unless the server marks the tool read-only and not destructive. An allow lasts until `/new`, `/clear`, `/resume`, a profile switch, or a change to that server's settings.
 * **A server you don't fully trust:** its marks are its own word, so give it `"ask": "always"` (in `mcp.json`, or `a` on `/mcp` › Servers) and `"instructions": false`. `"never"` asks none; every call that asks is logged.
+* **`mcp_read`** lists and reads the resources a connected server publishes (pages, files, records), and follows the links tools return. It's offered while a server has resources, and asks only for a server whose `ask` is `always`.
+* **Advisors never get `mcp_read`** or any MCP tool: what they read would go to the advisor's provider.
 * **Headless** refuses a call that asks unless the run has `--allow mcp`, or `--allow mcp:<server>` ([HEADLESS.md](HEADLESS.md#when-a-command-is-refused)).
-* **Tokens are encrypted** in place for your Windows user ([on a Mac](MAC.md#setup)) when the app next starts or connects its servers (a `/mcp` reload too). That covers a plain `env` or `headers` value named with a word like `TOKEN`, `SECRET`, `PASSWORD`, `AUTH`, `CREDENTIAL` or `COOKIE`, or ending in `KEY`, and a URL with a password.
-* **Where a token goes:** `args` and `url` aren't encrypted, so put a token in `env` (a `command` server) or `headers` (a `url` server).
+* **Tokens are encrypted** in place for your Windows user ([on a Mac](MAC.md#setup)) when the app next starts or connects its servers (a `/mcp` reload too). That covers a plain `env` or `headers` value named with a word like `TOKEN`, `SECRET`, `PASSWORD`, `AUTH`, `CREDENTIAL` or `COOKIE`, or ending in `KEY`, a URL with a password, and `oauth.clientSecret`.
+* **Where a token goes:** `args` and `url` aren't encrypted, so put a token in `env` (a `command` server) or `headers` (a `url` server). A pre-registered app's secret goes in `oauth.clientSecret`.
+* **Signing in** (Linear, Notion and other hosted servers): one that wants a sign-in reads `needs sign-in` on `/mcp` › Servers; `s` or Enter opens it in your browser. Nothing is registered until you ask.
+* **The sign-in opens only `https` pages,** or `http` on this computer, and returns to `http://127.0.0.1:8766/callback` (`oauth.redirectPort` changes it). A server with an `Authorization` header never signs in.
+* **Sign-ins are kept encrypted** for your Windows user ([on a Mac](MAC.md#setup)) in the profile's `configs/mcp-tokens.json`, out of the settings zip and out of the model's reach.
+* **Signing out** (`s` on a signed-in server) forgets the sign-in on this computer only; to cut the app off, remove NeonSidekick from your account's connected apps.
+* **A server with no self-registration** needs an app you register there first, with the redirect address above: give its `clientId` (and `clientSecret`, if any) in `"oauth"`.
 * **`${NAME}`** (or `${NAME:-default}`) in `command`, `args`, `env`, `url` or `headers` is filled from your environment when the server starts, never with a variable the app [keeps from children](ENVIRONMENT.md). One in `url` or `headers` sends that value to the server; an unset one goes as written, with a warning.
 * **What encrypting costs:** once a token is encrypted, or with `ask` or `instructions` set, the file may not paste back into Claude Desktop. `/settings export` carries a token only to the same user on the same computer.
 * **Server notes:** what a server says about using its tools reaches the model fenced, at most 2,000 characters a server and 6,000 in all, as hints that never override your rules. `"instructions": false` leaves a server's out.
@@ -1215,7 +1225,9 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 {
   "mcpServers": {
     "gateway": { "command": "docker", "args": ["mcp", "gateway", "run"] },
-    "notes": { "url": "https://mcp.example.com/mcp", "headers": { "Authorization": "Bearer <token>" }, "ask": "writes" }
+    "notes": { "url": "https://mcp.example.com/mcp", "headers": { "Authorization": "Bearer <token>" }, "ask": "writes" },
+    "linear": { "url": "https://mcp.linear.app/mcp" },
+    "tracker": { "url": "https://mcp.example.org/mcp", "oauth": { "clientId": "<id>", "scopes": ["read"], "redirectPort": 8766 } }
   }
 }
 ```
@@ -1237,4 +1249,8 @@ Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outsid
 * **Large cells in MySQL and PostgreSQL** are read whole before being cut to the answer's size; SQL Server and Oracle read only what they show.
 * **SQLite's `ON CONFLICT REPLACE`:** an `INSERT` into a table declared that way replaces rows with only `data` ticked; the gate sees the statement, not the table.
 * **A hosted MCP server that ends its session** has been tried only against the app's in-process test server, not a real one.
+* **MCP sign-ins** have been tried against the app's in-process test service; Linear and Notion are still to be checked by hand.
+* **A server that accepts only client metadata documents** for its sign-in, with no self-registration, needs `oauth.clientId`: the app publishes no such document.
+* **A sign-in server without PKCE S256** in its metadata can't be signed in to: the MCP library refuses it.
+* **A self-hosted server whose sign-in page is plain `http` on another computer** can't be signed in to: the app opens only `https` sign-in pages.
 * **SQL Server `runas` on another machine:** a dropped session the SQL Server driver reconnects, and the sign-in hold against a real domain account, are untried on a second machine.

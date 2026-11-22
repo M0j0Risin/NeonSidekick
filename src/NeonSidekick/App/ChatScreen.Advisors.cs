@@ -195,7 +195,7 @@ internal sealed partial class ChatScreen
         string line = AdvisorText.Word + " " + args.Trim();
         _log.Add(line, answer);
         _lastReply = answer;
-        LogSideTurn(line, answer, default, cancelled: false, effective);
+        LogSideTurn(line, answer, default, cancelled: false, effective, Sessions.SessionText.SideTurnModel("/advisor", advisor.Profile));
     }
 
     /// <summary>

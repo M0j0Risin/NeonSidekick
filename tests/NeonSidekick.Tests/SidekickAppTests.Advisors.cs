@@ -81,7 +81,7 @@ public partial class SidekickAppTests
         HeadlessAdvisor();
         _chat.EnqueueText("The foreign key.");
 
-        string output = await Headless("/advisor\n/advisor dba Which index?\n/advisor nobody q\n");
+        string output = await Headless("/advisor\n/advisor dba Which index?\n/advisor nobody q\n", exitCode: 4);
 
         Assert.Contains("[notice] " + AdvisorText.ListHeading, output);
         Assert.Contains("[notice] " + AdvisorText.ListLine(new AdvisorEntry("dba", "database architect"), new AdvisorServerFacts(AdvisorServer.Scan, AdvisorServer.DefaultModel), exists: true), output);

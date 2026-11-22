@@ -161,7 +161,8 @@ public static class SettingsArchive
 
         if (Is(s[0], ConfigsName))
         {
-            return s.Length == 2 && HasExtension(s[1], ".json") && !Is(s[1], Viewer.BrowserHistory.FileName);
+            // The MCP sign-ins (2026-11-21) stay behind too: sealed for this user and computer, so sign in again on the other one.
+            return s.Length == 2 && HasExtension(s[1], ".json") && !Is(s[1], Viewer.BrowserHistory.FileName) && !Is(s[1], Mcp.McpTokenStore.FileName);
         }
 
         return IsCatalogItem(s);
@@ -370,7 +371,7 @@ public static class SettingsArchive
             {
                 Add(file, relative, c, seen);
             }
-            else if (configs && !IsJunk(file.Name) && !Is(file.Name, Viewer.BrowserHistory.FileName))
+            else if (configs && !IsJunk(file.Name) && !Is(file.Name, Viewer.BrowserHistory.FileName) && !Is(file.Name, Mcp.McpTokenStore.FileName))
             {
                 c.LeftOut.Add(relative);
             }

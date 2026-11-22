@@ -13,8 +13,11 @@ public enum TitleSource
     User,
 }
 
-/// <summary>One session row without its turns: the <c>/sessions</c> list's view and a hit's header.</summary>
-public sealed record SessionSummary(long Id, DateTimeOffset StartedAt, DateTimeOffset UpdatedAt, string Title, TitleSource TitleSource, string Model, int Turns);
+/// <summary>
+/// One session row without its turns: the <c>/sessions</c> list's view and a hit's header. <paramref name="Cwd"/> (2026-11-21, feature idea
+/// #4) is the working folder of its last turn, resolved; null for a session saved before, or while the store couldn't add the column.
+/// </summary>
+public sealed record SessionSummary(long Id, DateTimeOffset StartedAt, DateTimeOffset UpdatedAt, string Title, TitleSource TitleSource, string Model, int Turns, string? Cwd = null);
 
 /// <summary>
 /// One completed turn as the transcript showed it: the user's text (pastes expanded), the reply's
@@ -78,7 +81,7 @@ public sealed record ReflectionRow(long? SessionId, int TurnOrdinal, bool Forced
 /// and compares as text. Every write is synchronous on the caller's thread (a few ms), reads for
 /// the tool run under <c>Task.Run</c> at the tool.</para>
 /// </summary>
-public sealed class SessionStore : IDisposable
+public sealed partial class SessionStore : IDisposable
 {
     public const string FileName = "sessions.db";
 
@@ -99,6 +102,9 @@ public sealed class SessionStore : IDisposable
     /// <c>Keep message history</c>) left it at 3: an added table is <c>IF NOT EXISTS</c> on every open, so a file
     /// from before gains it and an older build reads past it; no row it knew changed shape.
     /// <c>turn_sources</c> (2026-11-15, the web-tools plan's §2: each turn's pages, downloads and searches) followed the same way.
+    /// The added columns (2026-11-21, feature ideas #4 and #7: <c>sessions.cwd</c>, <c>turns.model</c>, <c>turns.output_ms</c>,
+    /// <c>turns.timed_output</c>) leave it at 3 too: nullable, added at the open, and every older build names its columns in each INSERT and
+    /// SELECT, so it reads the file as before. That matters: the updater's rollback can bring an older copy back, which refuses any other number.
     /// </summary>
     public const int SchemaVersion = 3;
 
@@ -122,6 +128,15 @@ public sealed class SessionStore : IDisposable
     private readonly TimeProvider _time;
     private SqliteConnection? _connection;
     private bool _failed;
+
+    /// <summary>Whether the added columns are there for this run (2026-11-21): false after an add that failed, so writes and reads leave them out.</summary>
+    private bool _extraColumns;
+
+    /// <summary>
+    /// Run inside the column adds' guard, before them: a test throws a <see cref="SqliteException"/> here to stand for another copy holding
+    /// the write lock past the busy wait, which no file can be made to do on cue. Null in the app.
+    /// </summary>
+    internal Action? BeforeColumnAdds { get; init; }
     private bool _disposed;
 
     /// <param name="directory">The profile directory; the file is <see cref="FileName"/> in its <see cref="FolderName"/>, made at the first open.</param>
@@ -169,8 +184,8 @@ public sealed class SessionStore : IDisposable
         }
     }
 
-    /// <summary>A new session row with no turns yet; null while unavailable.</summary>
-    public long? Begin(string title, string model)
+    /// <summary>A new session row with no turns yet; null while unavailable. <paramref name="cwd"/> (2026-11-21) is the working folder, resolved.</summary>
+    public long? Begin(string title, string model, string? cwd = null)
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(model);
@@ -186,7 +201,10 @@ public sealed class SessionStore : IDisposable
             {
                 string now = Stamp(_time.GetUtcNow());
                 using var command = connection.CreateCommand();
-                command.CommandText = "INSERT INTO sessions(started_at, updated_at, title, title_source, model, turns, history_json) VALUES ($started, $updated, $title, $source, $model, 0, ''); SELECT last_insert_rowid();";
+                command.CommandText = _extraColumns
+                    ? "INSERT INTO sessions(started_at, updated_at, title, title_source, model, turns, history_json, cwd) VALUES ($started, $updated, $title, $source, $model, 0, '', $cwd); SELECT last_insert_rowid();"
+                    : "INSERT INTO sessions(started_at, updated_at, title, title_source, model, turns, history_json) VALUES ($started, $updated, $title, $source, $model, 0, ''); SELECT last_insert_rowid();";
+                command.Parameters.AddWithValue("$cwd", (object?)cwd ?? DBNull.Value);
                 command.Parameters.AddWithValue("$started", now);
                 command.Parameters.AddWithValue("$updated", now);
                 command.Parameters.AddWithValue("$title", title);
@@ -212,7 +230,13 @@ public sealed class SessionStore : IDisposable
     /// <paramref name="sources"/> (2026-11-15, the web-tools plan's §2) go in <c>turn_sources</c> in the same transaction, one row each in
     /// order; a <see cref="Web.WebSourceKind.Search"/> with no URL or title, so replay and export count searches without storing a query.
     /// </remarks>
-    public int? AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled, IReadOnlyList<Web.WebSource>? sources = null)
+    /// <para>
+    /// <paramref name="model"/>, <paramref name="usage"/> and <paramref name="cwd"/> (2026-11-21, feature ideas #4 and #7): the model that
+    /// answered, the turn's timed output (<see cref="Llm.TokenUsage.Generating"/> and the tokens it covers) for <c>/usage</c> › Models, and
+    /// the working folder, which becomes the session's (the folder of its last turn). Null leaves each column empty.
+    /// </para>
+    public int? AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled, IReadOnlyList<Web.WebSource>? sources = null,
+        string? model = null, Llm.TokenUsage? usage = null, string? cwd = null)
     {
         ArgumentNullException.ThrowIfNull(userText);
         ArgumentNullException.ThrowIfNull(replyText);
@@ -233,7 +257,13 @@ public sealed class SessionStore : IDisposable
                 using var insert = connection.CreateCommand();
                 insert.Transaction = transaction;
                 // The new row's id comes back with the insert (2026-11-16, the web-tools review's #93), for its sources.
-                insert.CommandText = "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled) RETURNING id";
+                insert.CommandText = _extraColumns
+                    ? "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled, model, output_ms, timed_output) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled, $model, $ms, $timed) RETURNING id"
+                    : "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled) RETURNING id";
+                var (ms, timed) = Speed(usage);
+                insert.Parameters.AddWithValue("$model", string.IsNullOrEmpty(model) ? DBNull.Value : model);
+                insert.Parameters.AddWithValue("$ms", (object?)ms ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$timed", (object?)timed ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$id", id);
                 insert.Parameters.AddWithValue("$at", now);
                 insert.Parameters.AddWithValue("$user", userText);
@@ -253,7 +283,10 @@ public sealed class SessionStore : IDisposable
 
                 using var bump = connection.CreateCommand();
                 bump.Transaction = transaction;
-                bump.CommandText = "UPDATE sessions SET turns = turns + 1, updated_at = $updated WHERE id = $id";
+                bump.CommandText = _extraColumns && cwd is not null
+                    ? "UPDATE sessions SET turns = turns + 1, updated_at = $updated, cwd = $cwd WHERE id = $id"
+                    : "UPDATE sessions SET turns = turns + 1, updated_at = $updated WHERE id = $id";
+                bump.Parameters.AddWithValue("$cwd", (object?)cwd ?? DBNull.Value);
                 bump.Parameters.AddWithValue("$id", id);
                 bump.Parameters.AddWithValue("$updated", now);
                 bump.ExecuteNonQuery();
@@ -451,7 +484,7 @@ public sealed class SessionStore : IDisposable
             try
             {
                 using var command = connection.CreateCommand();
-                command.CommandText = "SELECT id, started_at, updated_at, title, title_source, model, turns FROM sessions ORDER BY updated_at DESC, id DESC" + (max > 0 ? " LIMIT $max" : "");
+                command.CommandText = "SELECT " + SummaryColumns + " FROM sessions ORDER BY updated_at DESC, id DESC" + (max > 0 ? " LIMIT $max" : "");
                 command.Parameters.AddWithValue("$max", max);
                 using var reader = command.ExecuteReader();
                 var list = new List<SessionSummary>();
@@ -483,7 +516,7 @@ public sealed class SessionStore : IDisposable
             try
             {
                 using var command = connection.CreateCommand();
-                command.CommandText = "SELECT id, started_at, updated_at, title, title_source, model, turns FROM sessions WHERE id = $id";
+                command.CommandText = "SELECT " + SummaryColumns + " FROM sessions WHERE id = $id";
                 command.Parameters.AddWithValue("$id", id);
                 using var reader = command.ExecuteReader();
                 return reader.Read() ? ReadSummary(reader) : null;
@@ -512,7 +545,7 @@ public sealed class SessionStore : IDisposable
                 string history;
                 using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = "SELECT id, started_at, updated_at, title, title_source, model, turns, history_json FROM sessions WHERE id = $id";
+                    command.CommandText = "SELECT " + SummaryColumns + ", history_json FROM sessions WHERE id = $id";
                     command.Parameters.AddWithValue("$id", id);
                     using var reader = command.ExecuteReader();
                     if (!reader.Read())
@@ -521,7 +554,7 @@ public sealed class SessionStore : IDisposable
                     }
 
                     summary = ReadSummary(reader);
-                    history = reader.GetString(7);
+                    history = reader.GetString(8);
                 }
 
                 var turns = new List<SessionTurn>(summary.Turns);
@@ -657,7 +690,7 @@ public sealed class SessionStore : IDisposable
                 foreach (long session in order)
                 {
                     using var command = connection.CreateCommand();
-                    command.CommandText = "SELECT id, started_at, updated_at, title, title_source, model, turns FROM sessions WHERE id = $id";
+                    command.CommandText = "SELECT " + SummaryColumns + " FROM sessions WHERE id = $id";
                     command.Parameters.AddWithValue("$id", session);
                     using var reader = command.ExecuteReader();
                     if (reader.Read())
@@ -1312,7 +1345,23 @@ public sealed class SessionStore : IDisposable
     };
 
     private static SessionSummary ReadSummary(SqliteDataReader reader) =>
-        new(reader.GetInt64(0), Parse(reader.GetString(1)), Parse(reader.GetString(2)), reader.GetString(3), Source(reader.GetString(4)), reader.GetString(5), reader.GetInt32(6));
+        new(reader.GetInt64(0), Parse(reader.GetString(1)), Parse(reader.GetString(2)), reader.GetString(3), Source(reader.GetString(4)), reader.GetString(5), reader.GetInt32(6),
+            reader.IsDBNull(7) ? null : reader.GetString(7));
+
+    /// <summary>The summary's columns, the folder eighth (a NULL in its place while the store couldn't add it). Caller holds the lock.</summary>
+    private string SummaryColumns => "id, started_at, updated_at, title, title_source, model, turns, " + (_extraColumns ? "cwd" : "NULL");
+
+    /// <summary>A turn's timed output for the speed columns: the milliseconds generating and the tokens they cover, or nulls when untimed.</summary>
+    private static (long? Ms, long? Timed) Speed(Llm.TokenUsage? usage)
+    {
+        if (usage is not { } u || u.Generating <= TimeSpan.Zero)
+        {
+            return (null, null);
+        }
+
+        long timed = u.Output - u.UntimedOutput;
+        return timed > 0 ? ((long)u.Generating.TotalMilliseconds, timed) : (null, null);
+    }
 
     /// <summary>
     /// The reflections of those sessions (<paramref name="turnsWhere"/> reads the same for both tables,
@@ -1467,6 +1516,11 @@ public sealed class SessionStore : IDisposable
                 schema.ExecuteNonQuery();
             }
 
+            // The added columns (2026-11-21, feature ideas #4 and #7), best effort as the trim below: another copy holding the write lock
+            // past the busy wait fails the add, and sessions must not go off over it. Without them the writes and reads leave them out for
+            // this run, and the next open tries again.
+            _extraColumns = AddColumns(connection, BeforeColumnAdds);
+
             // A history longer than the cap (a file from before 2026-10-17, when the cap went from 1,000 to 100) cut at the open, so the
             // counts, the reads and a profile copy see the cap at once. Best effort: a failed trim never turns sessions off.
             try
@@ -1487,6 +1541,53 @@ public sealed class SessionStore : IDisposable
             _failed = true;
             DiagnosticLog.Warn(Category, $"Could not open {FileName}; sessions are off: {ex.Message}", ex);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// <c>sessions.cwd</c> and the turn's <c>model</c>, <c>output_ms</c> and <c>timed_output</c>, each added when missing, in one transaction
+    /// (the store's first column adds, 2026-11-21). False, with the failure logged, when they couldn't be.
+    /// </summary>
+    private static bool AddColumns(SqliteConnection connection, Action? before)
+    {
+        try
+        {
+            before?.Invoke();
+            var missing = new List<string>();
+            if (!Has(connection, "sessions", "cwd"))
+            {
+                missing.Add("ALTER TABLE sessions ADD COLUMN cwd TEXT");
+            }
+
+            foreach (var (column, type) in new[] { ("model", "TEXT"), ("output_ms", "INTEGER"), ("timed_output", "INTEGER") })
+            {
+                if (!Has(connection, "turns", column))
+                {
+                    missing.Add("ALTER TABLE turns ADD COLUMN " + column + " " + type);
+                }
+            }
+
+            if (missing.Count == 0)
+            {
+                return true;
+            }
+
+            using var transaction = connection.BeginTransaction();
+            foreach (string statement in missing)
+            {
+                using var add = connection.CreateCommand();
+                add.Transaction = transaction;
+                add.CommandText = statement;
+                add.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+            return true;
+        }
+        catch (SqliteException ex)
+        {
+            Fail("add the folder and model columns", ex);
+            return false;
         }
     }
 

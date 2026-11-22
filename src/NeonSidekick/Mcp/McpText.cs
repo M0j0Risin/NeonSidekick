@@ -50,14 +50,157 @@ public static class McpText
 
     // ── The tool adapter ────────────────────────────────────────────────────
 
-    /// <summary>What an image content block becomes in the model's result (pictures are not carried, 2026-09-20).</summary>
-    public const string ImageDropped = "(an image block was dropped)";
-
-    /// <summary>What any other non-text block becomes: <c>(an audio block was dropped)</c>.</summary>
+    /// <summary>What a block of a kind the app doesn't carry becomes: <c>(an audio block was dropped)</c>.</summary>
     public static string BlockDropped(string type) => "(" + Article(type) + " " + type + " block was dropped)";
 
     /// <summary>A result with no content at all.</summary>
     public const string NoContent = "(no content)";
+
+    // ── Pictures and resources in a result (2026-11-21, feature ideas #31 and #33) ──
+
+    /// <summary>The most pictures one call hands the model; a result's later ones are <see cref="PictureLeftOut"/>.</summary>
+    public const int PicturesPerCall = 4;
+
+    /// <summary>A picture in place of its block, the <c>ha_camera</c> wording: <c>(picture 1, 1280x720, in the next message)</c>.</summary>
+    public static string PictureAttached(int number, int width, int height) =>
+        "(picture " + number.ToString(CultureInfo.InvariantCulture) + ", " + width.ToString(CultureInfo.InvariantCulture) + "x"
+        + height.ToString(CultureInfo.InvariantCulture) + ", in the next message)";
+
+    /// <summary>A picture block whose bytes would not make a picture: too big, not base64, not a picture, or no codecs here.</summary>
+    public static string PictureUnreadable(Files.ImageLoadFailure failure) => failure switch
+    {
+        Files.ImageLoadFailure.TooLarge => "(a picture was left out: it is over "
+            + (Files.ImageFile.MaxFileBytes / 1_000_000).ToString(CultureInfo.InvariantCulture) + " MB or "
+            + (Files.ImageFile.MaxPixels / 1_000_000).ToString(CultureInfo.InvariantCulture) + " megapixels)",
+        Files.ImageLoadFailure.Unsupported => "(a picture was left out: pictures can't be read on this computer)",
+        _ => "(a picture was left out: it could not be read)",
+    };
+
+    /// <summary>A picture past <see cref="PicturesPerCall"/>.</summary>
+    public static readonly string PictureLeftOut =
+        "(a picture was left out: one call carries " + PicturesPerCall.ToString(CultureInfo.InvariantCulture) + " at most)";
+
+    /// <summary>A saved session's line for an MCP picture <c>MCP keep in sessions</c> leaves out (<c>SessionHistory</c>).</summary>
+    public static string PictureNotKept(string label) => "(picture " + label + " from an MCP tool, not kept in the session)";
+
+    /// <summary>
+    /// What the picture budget leaves for an MCP picture it took out of a request (<c>PictureBudget.LeftOutFor</c>): no file to look at
+    /// again with <c>view_image</c>, so it says to call the tool again.
+    /// </summary>
+    public static string PictureTakenOut(string label) =>
+        "(picture " + label + " from an MCP tool, taken out to keep the request small; call the tool again to see it)";
+
+    /// <summary>The app's header over an embedded resource's text: <c>Resource ⟪uri⟫ (text/markdown):</c>, the server's URI fenced.</summary>
+    public static string ResourceHeader(string uri, string? mime) =>
+        "Resource " + Llm.Tools.UntrustedText.QuoteOr(uri, "(no uri)") + (string.IsNullOrWhiteSpace(mime) ? "" : " (" + Llm.Tools.UntrustedText.Name(mime) + ")") + ":";
+
+    /// <summary>
+    /// The note under an embedded resource's text cut at <paramref name="shown"/> of <paramref name="total"/> characters: how
+    /// <c>mcp_read</c> goes on from there when it is offered for the server, else that the rest wasn't kept.
+    /// </summary>
+    public static string ResourceCut(int shown, int total, bool readOffered) =>
+        "(cut at " + shown.ToString("N0", CultureInfo.InvariantCulture) + " of " + total.ToString("N0", CultureInfo.InvariantCulture)
+        + " characters; " + (readOffered ? "mcp_read with this uri and start " + shown.ToString(CultureInfo.InvariantCulture) + " reads on)" : "the rest was not kept)");
+
+    // ── mcp_read (2026-11-21, feature idea #33) ──
+
+    /// <summary>The Tools tab's heading over <c>mcp_read</c>, ahead of the servers' sections.</summary>
+    public const string BuiltInSection = "Built in";
+
+    /// <summary><c>mcp_read</c>'s description on the Tools tab.</summary>
+    public const string ReadRowDescription = "Reads the resources MCP servers publish, and follows resource links in their results.";
+
+    /// <summary><c>mcp_read</c>'s footer: the servers it reads from, and when it asks.</summary>
+    public static string ReadRowFooter(IReadOnlyList<string> servers) =>
+        "Reads from " + string.Join(", ", servers) + ". A read asks only for a server whose ask is always.";
+
+    /// <summary>The protocol's method for a resource list: the <see cref="McpAsk.ServerTool"/> of a list that asks (a <c>/</c> no tool name carries).</summary>
+    public const string ResourcesListMethod = "resources/list";
+
+    /// <summary>The protocol's method for a read: the <see cref="McpAsk.ServerTool"/> of a read that asks.</summary>
+    public const string ResourcesReadMethod = "resources/read";
+
+    /// <summary>A string as a JSON element (an ask's arguments), written by hand: no serializer context needed.</summary>
+    public static System.Text.Json.JsonElement JsonString(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        using var document = System.Text.Json.JsonDocument.Parse("\"" + System.Text.Json.JsonEncodedText.Encode(value).ToString() + "\"");
+        return document.RootElement.Clone();
+    }
+
+    /// <summary>A server that isn't connected or declares no resources: <c>notion offers no resources; mcp_read reads from: docs, wiki</c>.</summary>
+    public static string NoResourcesError(string server, IReadOnlyList<string> offered) =>
+        server + " offers no resources" + (offered.Count == 0 ? "; no connected MCP server does" : "; mcp_read reads from: " + string.Join(", ", offered));
+
+    /// <summary>A negative <c>start</c>.</summary>
+    public static string BadStart(int start) =>
+        ErrorPrefix + "start " + start.ToString(CultureInfo.InvariantCulture) + " is before the beginning; leave it out to read from the top";
+
+    /// <summary>A <c>start</c> at or past the end, as <c>web_fetch</c>'s offset.</summary>
+    public static string StartPastEnd(int start, int total) =>
+        ErrorPrefix + "start " + start.ToString(CultureInfo.InvariantCulture) + " is past the end of the resource (" + total.ToString("N0", CultureInfo.InvariantCulture) + " characters)";
+
+    /// <summary>A request the server answered with an error, its words fenced: <c>notion could not read it: ⟪…⟫</c>.</summary>
+    public static string ReadFailed(string server, string fencedDetail) => server + " could not read it: " + fencedDetail;
+
+    /// <summary>A server that declares resources and lists none.</summary>
+    public static string NoResourcesListed(string server) => "(" + server + " lists no resources)";
+
+    /// <summary>The list's first line: <c>docs: 3 resources, 1 template</c>.</summary>
+    public static string ResourcesHeader(string server, int resources, int templates) =>
+        server + ": " + resources.ToString(CultureInfo.InvariantCulture) + (resources == 1 ? " resource" : " resources")
+        + (templates == 0 ? "" : ", " + templates.ToString(CultureInfo.InvariantCulture) + (templates == 1 ? " template" : " templates"));
+
+    /// <summary>The line over the templates.</summary>
+    public const string TemplatesHeader = "Templates (fill in each {…} for the uri):";
+
+    /// <summary>A list cut at the cap.</summary>
+    public static string MoreResources(int max) => "(more left out: the list shows " + max.ToString(CultureInfo.InvariantCulture) + " of each)";
+
+    /// <summary>
+    /// A read's header: <c>Resource ⟪uri⟫ (text/markdown), characters 1–32,000 of 50,000; continue with start 32000:</c>, the range out of the
+    /// total and the next <c>start</c> only while there's more. A read of pictures alone is <c>Resource ⟪uri⟫:</c>.
+    /// </summary>
+    public static string ReadHeader(string uri, string? mime, int from, int to, int total, int? next)
+    {
+        string head = "Resource " + Llm.Tools.UntrustedText.QuoteOr(uri, "(no uri)") + (string.IsNullOrWhiteSpace(mime) ? "" : " (" + Llm.Tools.UntrustedText.Name(mime) + ")");
+        if (total == 0)
+        {
+            return head + ":";
+        }
+
+        string range = to >= total && from <= 1
+            ? ", " + total.ToString("N0", CultureInfo.InvariantCulture) + " characters"
+            : ", characters " + from.ToString("N0", CultureInfo.InvariantCulture) + "–" + to.ToString("N0", CultureInfo.InvariantCulture)
+                + " of " + total.ToString("N0", CultureInfo.InvariantCulture);
+        return head + range + (next is { } n ? "; continue with start " + n.ToString(CultureInfo.InvariantCulture) : "") + ":";
+    }
+
+    /// <summary>A resource whose contents are neither text nor a picture: named, never read.</summary>
+    public static string ResourceNotRead(string uri, string? mime, long bytes) =>
+        "(resource " + Llm.Tools.UntrustedText.QuoteOr(uri, "(no uri)") + ", " + (string.IsNullOrWhiteSpace(mime) ? "no type" : Llm.Tools.UntrustedText.Name(mime))
+        + ", " + bytes.ToString("N0", CultureInfo.InvariantCulture) + " bytes, not read: only text and pictures are)";
+
+    /// <summary>
+    /// A resource link block: its name, URI and description fenced (the server's), and how to read it when <c>mcp_read</c> is offered
+    /// for the server.
+    /// </summary>
+    public static string ResourceLink(string? name, string uri, string? description, bool readOffered)
+    {
+        var sb = new StringBuilder("(a link to resource ");
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            sb.Append(Llm.Tools.UntrustedText.Fenced(name)).Append(' ');
+        }
+
+        sb.Append(Llm.Tools.UntrustedText.QuoteOr(uri, "(no uri)"));
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            sb.Append(": ").Append(Llm.Tools.UntrustedText.Fenced(McpText.OneLine(description)));
+        }
+
+        return sb.Append(readOffered ? "; read it with mcp_read)" : ")").ToString();
+    }
 
     /// <summary>A tool the server described with nothing.</summary>
     public const string NoDescription = "(no description)";
@@ -139,7 +282,7 @@ public static class McpText
     public static readonly IReadOnlyList<string> TabTitles = [ServersTabTitle, ToolsTabTitle, OptionsTabTitle];
 
     /// <summary>The Servers tab's hint.</summary>
-    public const string ServersKeys = "Enter / Space = on or off · a = ask · Enter on failed or dropped = retry · ←/→ tabs · Esc = close";
+    public const string ServersKeys = "Enter / Space = on or off · a = ask · s = sign in or out · Enter on failed or dropped = retry · ←/→ tabs · Esc = close";
 
     /// <summary>The Servers and Tools tabs' first line while the master switch is off (shortened later on 2026-09-20: the server rows are inert then).</summary>
     public const string OffLine = "MCP servers is off (the Options tab)";
@@ -692,6 +835,115 @@ public static class McpText
     /// <summary>The once-per-text Info line when a server's notes were left out to stay under the total.</summary>
     public static string InstructionsLeftOutLogLine(string server) =>
         server + "'s notes were left out: the servers' notes together would pass " + NotesTotal.ToString(CultureInfo.InvariantCulture) + " chars";
+
+    // ── Sign-in (2026-11-21, feature idea #32) ───────────────────────────────
+
+    /// <summary>The config problem of an <c>oauth</c> object on a <c>command</c> server.</summary>
+    public const string OAuthNeedsUrl = "oauth is for a url server; a command server has no sign-in";
+
+    /// <summary>The config problem of a <c>redirectPort</c> outside 1–65535 or not a whole number.</summary>
+    public const string BadRedirectPort = "oauth.redirectPort must be a whole number from 1 to 65535";
+
+    /// <summary>The config problem of an <c>oauth</c> that isn't an object, or <c>scopes</c> that isn't a list of strings.</summary>
+    public const string BadOAuth = "oauth must be an object with clientId, clientSecret, scopes (a list of strings) and redirectPort";
+
+    /// <summary>A needs-sign-in row's detail (the app's words).</summary>
+    public const string NeedsSignInDetail = "needs a sign-in";
+
+    /// <summary>The row's status when the server wants a sign-in.</summary>
+    public const string StatusNeedsSignIn = "needs sign-in · s signs in";
+
+    /// <summary>The row's status while a sign-in waits for the browser.</summary>
+    public const string StatusSigningIn = "signing in… Esc cancels";
+
+    /// <summary>The start's line, a reload's notice and the log for a server not signed in: never reported as failed.</summary>
+    public static string NeedsSignInLine(string name) => Glyph + " MCP: " + name + " needs a sign-in: /mcp › Servers, s";
+
+    /// <summary>The same, as a status-line notice (no glyph: the pane's notices carry none for a failure).</summary>
+    public static string NeedsSignInNotice(string name) => name + " needs a sign-in: s signs in";
+
+    /// <summary>The log line for a server that answered 401.</summary>
+    public static string NeedsSignInLogLine(string name) => name + " needs a sign-in";
+
+    /// <summary>The model's text for a call to a server that needs a sign-in. Pinned.</summary>
+    public static string SignInNeededError(string server, string tail) => server + " needs a sign-in; " + tail;
+
+    /// <summary>The interactive tail of <see cref="SignInNeededError"/>.</summary>
+    public const string SignInTail = "the user signs in from /mcp › Servers, s";
+
+    /// <summary>Headless's tail: <c>--allow</c> doesn't cover it.</summary>
+    public const string SignInHeadlessTail = "sign in from the interactive app first; the sign-in is kept for headless runs";
+
+    /// <summary><c>neon_help</c>'s live words for a server that needs a sign-in.</summary>
+    public const string LiveNeedsSignIn = "needs a sign-in: /mcp › Servers, s";
+
+    /// <summary>The footer word on a signed-in server.</summary>
+    public const string SignedInFooter = "signed in · s signs out";
+
+    /// <summary>The notice for <c>s</c> on a row that has no sign-in.</summary>
+    public static string NoSignIn(string name) => name + " doesn't use a sign-in";
+
+    /// <summary>The notice for <c>s</c> while another sign-in waits.</summary>
+    public const string SignInBusy = "another sign-in is waiting: finish it or press Esc first";
+
+    /// <summary>The sign-out question. Forgets the tokens here only: the service keeps its grant until it is removed there.</summary>
+    public static string SignOutQuestion(string name) =>
+        "Sign out of " + name + "? This forgets the sign-in on this computer; to cut the app off at the service, remove NeonSidekick from your account's connected apps.";
+
+    /// <summary>The transcript's fallback line with the address the browser was sent to.</summary>
+    public static string SignInOpenedNotice(string name, string url) => Glyph + " MCP: signing in to " + name + " in your browser; if it didn't open: " + url;
+
+    /// <summary>The notice when the browser could not be opened; the address is still printed.</summary>
+    public static string SignInBrowserFailed(string name, string url, string detail) =>
+        Glyph + " MCP: couldn't open the browser (" + detail + "); open this to sign in to " + name + ": " + url;
+
+    /// <summary>The refusal of a sign-in address that isn't https or http on this computer. Never opened, never printed.</summary>
+    public static string SignInUrlRefused(string scheme, string host) =>
+        "the sign-in address is " + scheme + ":" + (host.Length > 0 ? "//" + host : "") + ", not https; the app opens only https sign-in pages, or http on this computer";
+
+    /// <summary>The refusal of a redirect port already taken.</summary>
+    public static string SignInPortBusy(int port, string detail) =>
+        "port " + port.ToString(CultureInfo.InvariantCulture) + " for the sign-in's redirect is in use (" + detail + "); set oauth.redirectPort to another";
+
+    /// <summary>The notice and row detail of a failed sign-in.</summary>
+    public static string SignInFailed(string name, string detail) => name + ": the sign-in failed: " + detail;
+
+    /// <summary>The sign-in that ran out of time.</summary>
+    public static string SignInTimedOut(int seconds) => "no answer from the browser in " + seconds.ToString(CultureInfo.InvariantCulture) + " s";
+
+    /// <summary>The service's own refusal, its <c>error</c> word (fenced by the caller).</summary>
+    public static string SignInRefused(string error) => "the service answered " + error;
+
+    public const string SignInCancelledDetail = "cancelled";
+
+    public static string SignedInNotice(string name, int tools) => Glyph + " MCP: signed in to " + name + ", " + Tools(tools);
+    public static string SignedOutNotice(string name) => Glyph + " MCP: signed out of " + name;
+    public static string SignInCancelledNotice(string name) => Glyph + " MCP: the sign-in to " + name + " was cancelled";
+
+    // Log lines: the server's name only, never a code, a state, a token or a secret.
+    public static string SignInStartedLogLine(string name, int port) => "Sign-in to " + name + " started, redirect port " + port.ToString(CultureInfo.InvariantCulture);
+    public static string SignedInLogLine(string name) => "Signed in to " + name;
+    public static string SignInCancelledLogLine(string name) => "Sign-in to " + name + " cancelled";
+    public static string SignInFailedLogLine(string name, string detail) => "Sign-in to " + name + " failed: " + detail;
+    public static string SignedOutLogLine(string name) => "Signed out of " + name;
+    public static string SignInUrlRefusedLogLine(string name, string scheme) => "Sign-in to " + name + " refused: its address is " + scheme + ", not https";
+    public static string TokensPrunedLogLine(string name) => "Forgot the sign-in of " + name + ": no such url server any more";
+    public static string TokensUnreadableLogLine(string name, string detail) => "The sign-in of " + name + " can't be read here (" + detail + "); it needs a sign-in";
+    public static string TokensSealFailedLogLine(string name, string detail) => "The sign-in of " + name + " couldn't be encrypted (" + detail + "); kept for this run only";
+    public static string TokensFileBusyLogLine(string name, string detail) => "The sign-in of " + name + " wasn't saved yet (" + detail + "); kept, saved at the next refresh";
+    public static string TokensFileUnreadableLogLine(string detail) => "mcp-tokens.json can't be read (" + detail + "); read as empty";
+    public static string RegisteredAgainLogLine(string name, int was, int now) =>
+        "The redirect port of " + name + " changed (" + was.ToString(CultureInfo.InvariantCulture) + " to " + now.ToString(CultureInfo.InvariantCulture) + "); its app registers again";
+
+    /// <summary>The browser page after a sign-in: fixed text, the server's name escaped, nothing from the query.</summary>
+    public static string SignedInPage(string name) => Page("Signed in to " + System.Net.WebUtility.HtmlEncode(name), "You can close this tab and go back to NeonSidekick.");
+
+    /// <summary>The browser page after a refused sign-in.</summary>
+    public static string SignInErrorPage(string name) => Page("The sign-in to " + System.Net.WebUtility.HtmlEncode(name) + " didn't finish", "NeonSidekick says why. You can close this tab.");
+
+    private static string Page(string heading, string line) =>
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>NeonSidekick</title></head><body style=\"font-family:sans-serif;margin:3em\"><h1>"
+        + heading + "</h1><p>" + line + "</p></body></html>";
 
     private static string Article(string word) =>
         word.Length > 0 && "aeiouAEIOU".Contains(word[0]) ? "an" : "a";

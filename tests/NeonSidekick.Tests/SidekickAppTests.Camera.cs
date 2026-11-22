@@ -12,7 +12,7 @@ public partial class SidekickAppTests
     {
         _camera = new FakeCameraSystem();
 
-        string output = await Headless("/camera list\n/camera snap\n/camera\n");
+        string output = await Headless("/camera list\n/camera snap\n/camera\n", exitCode: 4);
 
         Assert.Contains("  1. Fake Cam  ← chosen" + Environment.NewLine, output);
         Assert.Equal(2, output.Split("[error] " + CameraText.NeedsScreen).Length - 1);
@@ -24,7 +24,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_SplashWordsAndPasted_NeedTheScreen()
     {
-        string output = await Headless("/splash view\n/splash purge\n/pasted thumbs\n/pasted\n/splash\n");
+        string output = await Headless("/splash view\n/splash purge\n/pasted thumbs\n/pasted\n/splash\n", exitCode: 4);
 
         Assert.Equal(2, output.Split("[error] " + NeonSidekick.UI.SplashCommand.NeedsScreen).Length - 1);
         Assert.Equal(2, output.Split("[error] " + NeonSidekick.Images.PastedCommand.NeedsScreen).Length - 1);
@@ -39,7 +39,7 @@ public partial class SidekickAppTests
         Directory.CreateDirectory(Path.GetDirectoryName(still)!);
         File.WriteAllText(still, "stays");
 
-        string output = await Headless("/ha stills purge\n/ha stills\n");
+        string output = await Headless("/ha stills purge\n/ha stills\n", exitCode: 4);
 
         Assert.Equal(2, output.Split("[error] " + NeonSidekick.HomeAssistant.HaText.StillsNeedsScreen).Length - 1);
         Assert.True(File.Exists(still));
@@ -67,7 +67,7 @@ public partial class SidekickAppTests
             d.HomeBarAliases = new Dictionary<string, string> { ["entity:camera.porch"] = "Door" };
         });
 
-        string output = await Headless("/ha camera Porch Camera\n/ha camera Door\n/ha camera Shed\n");
+        string output = await Headless("/ha camera Porch Camera\n/ha camera Door\n/ha camera Shed\n", exitCode: 4);
 
         string folder = Path.Combine(_settings.ProfileImagesDirectory, NeonSidekick.HomeAssistant.HaCamera.FolderName);
         string[] saved = Directory.GetFiles(folder);
@@ -83,7 +83,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_Camera_WithoutALayer_SaysSo()
     {
-        string output = await Headless("/camera list\n");
+        string output = await Headless("/camera list\n", exitCode: 4);
 
         Assert.Contains("[error] " + CameraText.Failure(CameraFailure.Unsupported, null), output);
     }

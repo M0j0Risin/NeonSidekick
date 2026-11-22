@@ -4,6 +4,26 @@ using System.Text.Json.Serialization;
 namespace NeonSidekick.Mcp;
 
 /// <summary>
+/// A <c>url</c> server's <c>"oauth"</c> object (2026-11-21, feature idea #32): needed only for a server without dynamic registration, which
+/// wants an app registered with it beforehand. Without it, a sign-in is still offered whenever such a server answers 401. <see cref="ClientSecret"/>
+/// is sealed in place like a token (<see cref="McpSecrets"/>); <c>${NAME}</c> expands in it and in <see cref="ClientId"/>.
+/// </summary>
+public sealed class McpOAuthConfig
+{
+    /// <summary>A pre-registered app's client id.</summary>
+    public string? ClientId { get; set; }
+
+    /// <summary>A pre-registered app's client secret, if it has one.</summary>
+    public string? ClientSecret { get; set; }
+
+    /// <summary>The scopes to ask for; the server's own choice when absent.</summary>
+    public List<string>? Scopes { get; set; }
+
+    /// <summary>The loopback port the sign-in's redirect comes back to (<c>http://127.0.0.1:&lt;port&gt;/callback</c>); <see cref="McpOAuth.DefaultRedirectPort"/> when absent.</summary>
+    public int? RedirectPort { get; set; }
+}
+
+/// <summary>
 /// One server of <c>mcp.json</c> (2026-09-20), in the ecosystem's own spelling so a block pasted from
 /// Claude Desktop or Claude Code loads as it is: a stdio server names a <see cref="Command"/> (with
 /// <see cref="Args"/>, <see cref="Env"/> and <see cref="Cwd"/> optional), a streamable-HTTP server a
@@ -47,6 +67,25 @@ public sealed class McpServerConfig
     /// out. A server's instructions are its own text, so this is the opt-out for one you don't trust.
     /// </summary>
     public bool? Instructions { get; set; }
+
+    /// <summary>A <c>url</c> server's sign-in settings (2026-11-21, feature idea #32); null for none, the usual case.</summary>
+    [JsonPropertyName("oauth")]   // the camel-case policy would read "oAuth"
+    public McpOAuthConfig? OAuth { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="Headers"/> carries an <c>Authorization</c> header, in any case (2026-11-21): the dictionary from JSON compares
+    /// keys exactly, a header name doesn't. A server with its own Authorization gets no sign-in.
+    /// </summary>
+    [JsonIgnore]
+    public bool HasAuthorizationHeader => Headers?.Keys.Any(k => k.Equals("Authorization", StringComparison.OrdinalIgnoreCase)) == true;
+
+    /// <summary>Whether a sign-in can serve this server: a <c>url</c> server without its own Authorization header.</summary>
+    [JsonIgnore]
+    public bool SignInPossible => IsHttp && !HasAuthorizationHeader;
+
+    /// <summary>The loopback port the sign-in listens on: the entry's <c>redirectPort</c>, else <see cref="McpOAuth.DefaultRedirectPort"/>.</summary>
+    [JsonIgnore]
+    public int RedirectPort => OAuth?.RedirectPort ?? McpOAuth.DefaultRedirectPort;
 
     /// <summary>
     /// <see cref="Ask"/> parsed (<see cref="McpAskRule.TryParse"/>); <see cref="McpAskMode.Writes"/> for a bad word too, which is a
@@ -95,6 +134,20 @@ public sealed class McpServerConfig
                 return McpText.BadUrl(Url!);
             }
 
+            if (OAuth is { } oauth)
+            {
+                // The sign-in's settings (2026-11-21): a stdio server has no sign-in; the port must be one a listener can bind.
+                if (!IsHttp)
+                {
+                    return McpText.OAuthNeedsUrl;
+                }
+
+                if (oauth.RedirectPort is { } port && port is < 1 or > 65535)
+                {
+                    return McpText.BadRedirectPort;
+                }
+            }
+
             return McpAskRule.TryParse(Ask, out _) ? null : McpText.BadAsk;
         }
     }
@@ -117,9 +170,10 @@ public sealed class McpServerConfig
     /// config the load cache shares is never changed.
     /// </summary>
     public McpServerConfig With(List<string>? args = null, Dictionary<string, string>? env = null, string? command = null, string? url = null,
-        Dictionary<string, string>? headers = null, string? ask = null, bool? instructions = null)
+        Dictionary<string, string>? headers = null, string? ask = null, bool? instructions = null, McpOAuthConfig? oauth = null)
     {
         var copy = (McpServerConfig)MemberwiseClone();
+        copy.OAuth = oauth ?? OAuth;
         copy.Args = args ?? Args;
         copy.Env = env ?? Env;
         copy.Command = command ?? Command;

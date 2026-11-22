@@ -619,6 +619,7 @@ public sealed partial class SidekickApp
             // The judgment threw (2026-10-19, the second review, the screen's twin): said, and the loop ends as a stop does, its lock let go.
             Diagnostics.DiagnosticLog.Error(ChatScreen.AppCategory, "ralph: the loop failed", ex);
             notices.Add(RalphText.LoopFailedError(Llm.Assistant.Explain(ex)));
+            HeadlessFail(RalphWord, RalphText.LoopFailedError(Llm.Assistant.Explain(ex)));
             stop = RalphStop.Stopped;
         }
 
@@ -634,6 +635,8 @@ public sealed partial class SidekickApp
             return;
         }
 
+        // The loop goes on (2026-11-21, #41): a pass it judged and carries past, a retry among them, is no failed run; how the loop ends is.
+        _headlessFailures.BackTo(_turnFailMark);
         await HeadlessRalphQueueAsync(state, sandbox, cancellationToken).ConfigureAwait(false);
     }
 
@@ -655,6 +658,12 @@ public sealed partial class SidekickApp
         foreach (var (text, _) in ended.Lines)
         {
             await HeadlessNoticeLineAsync("[notice] " + text.Trim()).ConfigureAwait(false);
+        }
+
+        // A loop that ended short of done is a failed run (2026-11-21, #41); a stop the user made (Ctrl+C, a typed line) is not.
+        if (stop is not (RalphStop.Done or RalphStop.Paused or RalphStop.Stopped or RalphStop.UserStopped))
+        {
+            HeadlessFail(RalphWord, HeadlessText.Stopped(ended.Lines.Count > 0 ? ended.Lines[^1].Item1 : stop.ToString()));
         }
 
         if (ended.Forget)

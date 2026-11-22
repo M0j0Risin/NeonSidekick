@@ -42,7 +42,9 @@ public sealed class NeonAdvisorTool : AIFunction
          // Every database tool (2026-10-24, the database review's J1, decision DB4): its rows would go to the advisor's provider.
          .. App.ChatScreen.DatabaseToolNames,
          // A home camera's picture (2026-10-27, ha_camera): it would go to the advisor's provider too, DB4's reasoning.
-         HaCameraTool.ToolName],
+         HaCameraTool.ToolName,
+         // An MCP server's resources (2026-11-21, mcp_read): a Notion page or a Linear issue would go to the advisor's provider, DB4's reasoning.
+         Mcp.McpReadTool.ToolName],
         StringComparer.Ordinal);
 
     private static IReadOnlySet<string>? s_excluded;

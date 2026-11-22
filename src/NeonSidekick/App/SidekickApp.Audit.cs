@@ -304,6 +304,7 @@ public sealed partial class SidekickApp
             // Another NeonSidekick took the report's lock over (2026-10-29), as on the screen: nothing more written, the sidecar included. Checked on a
             // move too (2026-10-30, review F111: the moved path merged the sidecar and saved the header unchecked).
             lines.Add(AuditText.LockLostNotice(audit.Name));
+            HeadlessFail(AuditWord, HeadlessText.Stopped(AuditText.LockLostNotice(audit.Name)));
             loop.Next(false, userSpoke: false, null, meter);
             lines.AddRange(AuditText.ReviewSummaryLines(loop.History, PlanGapStop.Stopped, loop.CleanPasses, audit.Focus));
             audit.Stop();
@@ -352,6 +353,11 @@ public sealed partial class SidekickApp
         }
 
         string name = audit.Name;
+        if (reason == PlanGapStop.Stopped)
+        {
+            HeadlessFail(AuditWord, HeadlessText.Stopped(moved ? "the working folder moved" : "a pass didn't end on its own"));
+        }
+
         lines.AddRange(AuditText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses, audit.Focus, coverage.Read, coverage.Scope));
         int clean = reason == PlanGapStop.Converged ? loop.CleanPasses : loop.PassClean ? loop.CleanCount : 0;
         bool anyOpen = false;

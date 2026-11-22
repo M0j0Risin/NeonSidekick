@@ -570,7 +570,7 @@ public static class SlashCommands
             new("/tree", "show the working directory's tree"),
             new("/tts", "toggle speech output"),
             new(Updates.UpdateText.Word, "update the app from its GitHub releases"),
-            new("/usage", "usage, context, prompt, tools, skills"),   // "token usage and what fills the context" until 2026-11-07 (/sys' tabs folded in)
+            new("/usage", "context, prompt, tools, skills, models"),   // "token usage and what fills the context" until 2026-11-07 (/sys' tabs folded in); "usage, …" dropped for models (2026-11-21) to stay in 40 cells
             new("/vault", "show the Obsidian vault's tree"),
             new("/view", "view images, folders, PDFs or videos"),
             new(Viewer.VideoFileCommand.Word, "play a video file, or control it"),

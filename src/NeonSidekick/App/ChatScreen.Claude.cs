@@ -227,7 +227,7 @@ internal sealed partial class ChatScreen
             string line = SlashLine(prompt);
             _log.Add(line, reply.ToString());
             _lastReply = reply.ToString();
-            LogSideTurn(line, reply.ToString(), result?.Usage ?? default, cancelled, effective);
+            LogSideTurn(line, reply.ToString(), result?.Usage ?? default, cancelled, effective, SessionText.SideTurnModel("/claude"));
         }
 
         return default;
@@ -241,7 +241,7 @@ internal sealed partial class ChatScreen
     /// (<see cref="LogTurn"/>'s shape without a local-model trace): the row begun at the first one, the tokens Claude's (none for
     /// a shell line), the history saved with the Claude id. Nothing while <c>Session logging</c> is off.
     /// </summary>
-    private void LogSideTurn(string line, string reply, Llm.TokenUsage usage, bool cancelled, AppSettingsData effective)
+    private void LogSideTurn(string line, string reply, Llm.TokenUsage usage, bool cancelled, AppSettingsData effective, string model)
     {
         if (!effective.SessionLogging)
         {
@@ -249,7 +249,7 @@ internal sealed partial class ChatScreen
         }
 
         bool first = _sessionId is null;
-        _sessionId ??= _sessions.Begin(SessionText.FirstLineTitle(UI.PasteBlocks.WithoutSavedPaths(line)), _session.Endpoint?.ModelId ?? "");
+        _sessionId ??= _sessions.Begin(SessionText.FirstLineTitle(UI.PasteBlocks.WithoutSavedPaths(line)), _session.Endpoint?.ModelId ?? "", _files.Root);
         if (_sessionId is not { } id)
         {
             return;
@@ -260,7 +260,7 @@ internal sealed partial class ChatScreen
             RefreshSessionTitle();
         }
 
-        StampTurn(_session.History, _sessions.AppendTurn(id, line, reply, 0, [], [], 0, usage.Input, usage.Output, cancelled));
+        StampTurn(_session.History, _sessions.AppendTurn(id, line, reply, 0, [], [], 0, usage.Input, usage.Output, cancelled, model: model, usage: usage, cwd: _files.Root));
         SaveClaudeHistory();
     }
 
@@ -269,7 +269,7 @@ internal sealed partial class ChatScreen
     {
         if (_sessionId is { } id)
         {
-            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName, _madeFiles.Saved(_session.History.Messages)));
+            _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName, _madeFiles.Saved(_session.History.Messages), keepMcp: _effective().McpKeepInSessions));
         }
     }
 }

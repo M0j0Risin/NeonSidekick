@@ -1419,6 +1419,7 @@ public sealed class AppSettings : IDisposable
         WebTools = source.WebTools,
         McpConnectTimeoutSeconds = source.McpConnectTimeoutSeconds,
         McpServers = source.McpServers,
+        McpKeepInSessions = source.McpKeepInSessions,
         McpServersDisabled = [.. source.McpServersDisabled],
     };
 

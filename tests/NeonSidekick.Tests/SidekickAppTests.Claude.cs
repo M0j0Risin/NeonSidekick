@@ -17,7 +17,7 @@ public partial class SidekickAppTests
         _claudeCli.EnqueueReply("s-1", "Again.");
         _claudeCli.EnqueueStartFailure(ClaudeText.NotFound);
 
-        string output = await Headless("/claude read a.txt\n/claude and again\n/claude new\n/claude\n/claude once more\n");
+        string output = await Headless("/claude read a.txt\n/claude and again\n/claude new\n/claude\n/claude once more\n", exitCode: 4);
 
         Assert.Contains("[tool] " + ClaudeText.ToolNote("Read", "a.txt"), output);
         Assert.Contains(SidekickApp.HeadlessClaudePrefix + "It says hi.", output);

@@ -8,7 +8,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_Video_NeedsTheScreen()
     {
-        string output = await Headless("/video clip.mp4\n/video status\n");
+        string output = await Headless("/video clip.mp4\n/video status\n", exitCode: 4);
 
         Assert.Equal(2, output.Split("[error] " + VideoText.NeedsScreen).Length - 1);
     }

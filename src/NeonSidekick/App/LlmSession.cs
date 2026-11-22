@@ -237,6 +237,13 @@ internal sealed partial class LlmSession : IDisposable
     /// <summary>The embedded server the current endpoint runs on (2026-09-29); null for any other endpoint or when it did not start.</summary>
     public EmbeddedServerInfo? EmbeddedServer { get; private set; }
 
+    /// <summary>
+    /// Whether the model in use can see pictures (2026-10-18, a run's reference pictures; here since 2026-11-21, feature idea #31, so headless
+    /// reads the same test): not the embedded model without its projector, and not without image codecs. Read at each turn, so a model
+    /// switched mid-session is judged afresh.
+    /// </summary>
+    public bool SeesPictures => Files.ImageCodecs.Available && EmbeddedServer is not { Vision: false };
+
     public LlmTimeouts Timeouts { get; private set; } = LlmTimeouts.Default;
 
     /// <summary>

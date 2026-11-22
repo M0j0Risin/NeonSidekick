@@ -44,7 +44,7 @@ public partial class SidekickAppTests
         _http.Map("https://www.youtube.com/oembed", HttpStatusCode.OK, File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "youtube", "oembed-playlist.json")));
         const string Link = "https://www.youtube.com/playlist?list=PLabcdefghijklmnopq";
 
-        string output = await Headless("/youtube save " + Link + "\n/youtube\n/youtube save playlist\n");
+        string output = await Headless("/youtube save " + Link + "\n/youtube\n/youtube save playlist\n", exitCode: 4);
 
         Assert.Contains("Saved the playlist \"Open Movies & Shorts\"; it resumes at the entry and place it is left at." + Environment.NewLine, output);
         Assert.Contains("1. ▤ Open Movies & Shorts — Blender · not played yet · playlist id PLabcdefghijklmnopq", output);

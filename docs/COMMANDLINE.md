@@ -16,7 +16,11 @@ Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command l
 | `--import-settings <zip>` | Adds a [settings zip](COMMANDS.md#moving-settings-to-another-computer)'s profiles and files before the start; a relative path starts from where you launch. A refused zip exits with code 2; a zip already imported is skipped. |
 | `--yolo` | Runs every shell command and script without asking; the shell police still applies unless you add `--no-police`. |
 | `--no-police` | Turns off the shell police: commands may name paths outside the working directory, and the forbidden-string and database checks stop. |
-| `--allow <list>` | Headless only: runs this run's calls that would ask, `docker`, `print`, `ha`, `advisor`, `mcp` or `mcp:<server>`, comma-separated ([HEADLESS.md](HEADLESS.md#flags-in-headless-runs)). Without `--headless`, exit 2; so is a server name that matches none, or several. |
+| `--allow <list>` | Headless only: runs this run's calls that would ask, `docker`, `print`, `ha`, `advisor`, `mcp` or `mcp:<server>`, comma-separated ([HEADLESS.md](HEADLESS.md#flags-in-headless-runs)). Without `--headless` or `--prompt`, exit 2; so is a server name that matches none, or several. |
+| `--prompt "<text>"` | Asks one question and exits; implies `--headless`. stdout gets the reply alone, and piped stdin joins a message as context ([One question, one answer](HEADLESS.md#one-question-one-answer)). |
+| `--prompt-file <file>` | As `--prompt`, the whole file as one message, never a command; a relative path starts from where you launch. A missing or blank file is exit 2. |
+| `--quiet` | Headless only: stdout gets only the replies; everything else goes to stderr. Without `--headless` or `--prompt`, exit 2. |
+| `--session <id>\|last` | Headless only: carries on a stored session (`last`: the one updated most recently), in its folder for this run ([Carrying on a session](HEADLESS.md#carrying-on-a-session)). Without `--headless` or `--prompt`, or an unknown id, exit 2. |
 | `--log <path>` | Appends every diagnostic line to a file (making its folder); `/log file` opens it. `{ts}` becomes the start time (`logs/neon_{ts}.log` → `logs/neon_20261003-142530.log`). |
 | `--headless` | A plain text prompt over stdin/stdout, no TUI; it loads `neon` unless `--profile` or `NEONSIDEKICK_PROFILE` names another ([HEADLESS.md](HEADLESS.md)). |
 | `--smoke` | Checks that the native parts load, then exits. |
@@ -45,6 +49,6 @@ The check modes change nothing: they read only (`--sql-check` makes one temporar
 
 On a release package, a check's start can still undo an interrupted update or tidy `.update` ([Updating](COMMANDS.md#updating)).
 
-**Exit codes:** 0 done (a check passed), 1 a check failed, 2 a bad argument, an unknown profile, an `--allow mcp:<server>` naming no server or several, or an old copy started during or just after an [update](COMMANDS.md#updating), 3 a headless run in which a shell command or a call `--allow` covers was refused ([When a command is refused](HEADLESS.md#when-a-command-is-refused)).
+**Exit codes:** 0 done (a check passed), 1 a check failed, 2 a bad argument, an unknown profile, an `--allow mcp:<server>` naming no server or several, or an old copy started during or just after an [update](COMMANDS.md#updating), 3 a headless run in which a shell command or a call `--allow` covers was refused, 4 a headless run in which a message or a command failed ([Exit codes](HEADLESS.md#exit-codes)).
 
 `--mcp-relay`, `--llama-guard`, `--shell-guard` and `--update-probe` are for when the app starts its own executable: the Claude Code server, on a Mac stopping the embedded model's server or background commands if the app crashes, and test-starting an update. Don't pass them yourself.

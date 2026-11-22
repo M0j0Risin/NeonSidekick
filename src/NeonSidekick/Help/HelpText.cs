@@ -395,8 +395,9 @@ public static class HelpText
     public static string LiveNotOffered(string? why) => string.IsNullOrEmpty(why) ? "Right now: not offered." : $"Right now: not offered ({why}).";
 
     /// <summary>An MCP server that is not connected, by its state alone.</summary>
-    public static string LiveMcpState(McpState state) => state switch
+    public static string LiveMcpState(McpState state, bool needsSignIn = false) => state switch
     {
+        McpState.Failed when needsSignIn => "its server " + Mcp.McpText.LiveNeedsSignIn,
         McpState.Connecting => "its server is still connecting",
         McpState.Failed => "its server failed to connect",
         _ => "its server is not connected",

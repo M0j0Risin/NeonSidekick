@@ -215,7 +215,7 @@ public static class WebCommands
             // Classed by the PC's own parser, so the page and the PC never read a line two ways.
             SlashCommand.Session => ChatScreen.ParseSessionArgs(args).Kind switch
             {
-                SessionActionKind.Pane => WebCommandVerdict.SessionsTab,
+                SessionActionKind.Pane or SessionActionKind.Here => WebCommandVerdict.SessionsTab,   // here (2026-11-21): the sheet marks this folder's rows
                 SessionActionKind.Restore or SessionActionKind.Title => WebCommandVerdict.Run,
                 SessionActionKind.TitlePane => Pane(word, "/rename <name>"),
                 SessionActionKind.Purge or SessionActionKind.PurgeOlder or SessionActionKind.PurgeAll or SessionActionKind.Export => Refused(WebUiText.PcOnly(word + " " + first)),

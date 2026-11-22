@@ -538,6 +538,7 @@ public static partial class HelpSettings
         // /mcp › Options
         SettingsField.McpServers => "The master switch: on, every enabled MCP server starts at launch and its tools are offered; off, none starts.",
         SettingsField.McpConnectTimeoutSeconds => "The time a server gets to start and list its tools before it is marked failed (5–300 s).",
+        SettingsField.McpKeepInSessions => "Keeps the pictures MCP tools return in saved sessions. Off, a saved session keeps only a line naming each picture.",
 
         _ => "",
     };

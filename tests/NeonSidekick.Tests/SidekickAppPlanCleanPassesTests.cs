@@ -160,7 +160,7 @@ public partial class SidekickAppTests
         _chat.Enqueue(HeadlessPresentPlan());
         _chat.EnqueueText("Saved.");
 
-        string output = await Headless("/plan chat\n/plan ready\nLet's plan a guide\n/plan ready\n/plan ready\n");
+        string output = await Headless("/plan chat\n/plan ready\nLet's plan a guide\n/plan ready\n/plan ready\n", exitCode: 4);
 
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Contains("[notice] " + PlanText.ChatEnteredNotice, output);

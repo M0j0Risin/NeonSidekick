@@ -63,7 +63,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Saved prompts:** messages you send often, picked from a list (`/prompts`) or your phone.
 * **MIDI control:** a foot pedal, pad or button runs any slash command, your own too (`/midi learn`).
 * **Custom commands:** your own slash commands, one Markdown file each in Claude Code's format, your words filled in (`/commands`).
-* **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs ([HEADLESS.md](docs/HEADLESS.md)).
+* **Headless mode:** `--headless` runs over stdin/stdout for scripts and scheduled jobs, or `--prompt "…"` for one answer ([HEADLESS.md](docs/HEADLESS.md)).
 
 ### Models
 * **Local servers:** finds OpenAI-compatible servers on the app's computer or your network, or takes a URL.
@@ -86,7 +86,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 
 ### Tools & guardrails
 * **Built-in tools:** files, Git, shell (PowerShell, cmd, bash, zsh), scripts (PowerShell, Python, Node), questions to you, clock, timers and `neon_help` (the app's manual).
-* **MCP servers:** outside programs with more tools and data (Model Context Protocol).
+* **MCP servers:** outside programs with more tools and data (Model Context Protocol), hosted ones you sign in to too.
 * **Integrations:** the research, IT, smart home and creative tools below, once switched on in `/tools` ([TOOLS.md](docs/TOOLS.md)).
 * **Sandboxed:** file tools reach only the working directory; shell commands go through an approval pane (once, this session, or always).
 * **Undo:** `/undo` puts back the files a turn changed; `/rewind` can take them back with the conversation.

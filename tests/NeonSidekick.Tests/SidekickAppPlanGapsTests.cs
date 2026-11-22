@@ -85,7 +85,7 @@ public partial class SidekickAppTests
         _chat.EnqueueText("(never seen)");
         _chat.BeforeUpdateOf = (request, update, _) => request == 2 ? throw new System.Net.Http.HttpRequestException("the server went away") : Task.CompletedTask;
 
-        string output = await Headless("/plan Add a guide\n/plan gaps\n");
+        string output = await Headless("/plan Add a guide\n/plan gaps\n", exitCode: 4);
 
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Contains("[notice] " + PlanText.GapStopNotice(PlanGapStop.Stopped, 1, 0), output);
@@ -100,7 +100,7 @@ public partial class SidekickAppTests
         _chat.Enqueue(HeadlessPresentPlan());
         _chat.EnqueueText("Saved.");
 
-        string output = await Headless("/plan gaps resume\n/plan Add a guide\n/plan gaps resume\n");
+        string output = await Headless("/plan gaps resume\n/plan Add a guide\n/plan gaps resume\n", exitCode: 4);
 
         Assert.Contains("[error] " + PlanText.NothingPausedError, output);
         Assert.Equal(2, _chat.Requests.Count);
@@ -287,7 +287,7 @@ public partial class SidekickAppTests
         _chat.EnqueueText("Which framework?");
         _chat.EnqueueText("I need the framework first.");   // the pass's one follow-up (2026-11-17): still no revision
 
-        string output = await Headless("/plan Add a guide\n/plan gaps advisor\n/plan gaps nonsense\n");
+        string output = await Headless("/plan Add a guide\n/plan gaps advisor\n/plan gaps nonsense\n", exitCode: 4);
 
         Assert.Contains("[notice] " + PlanText.GapsConfirmFallbackNotice, output);
         Assert.Contains("[notice] " + PlanText.GapsHeadlessCapNotice(AppSettingsData.MaxPlanGapPasses), output);
@@ -310,7 +310,7 @@ public partial class SidekickAppTests
         _chat.EnqueueText("Which framework?");
         _chat.EnqueueText("I need the framework first.");   // the pass's one follow-up (2026-11-17)
 
-        string output = await Headless("/plan Add a guide\n/plan gaps model 1\n/plan gaps 0\n/plan gaps 101\n");
+        string output = await Headless("/plan Add a guide\n/plan gaps model 1\n/plan gaps 0\n/plan gaps 101\n", exitCode: 4);
 
         Assert.Equal(6, _chat.Requests.Count);
         Assert.Equal(PlanText.GapPassMessage(HeadlessPlanPath, 1, 1, PlanReviewer.Model), HeadlessLastUser(_chat.Requests[2]));

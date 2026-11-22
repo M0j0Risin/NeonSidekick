@@ -261,9 +261,9 @@ public static class HelpCommands
         ]),
         new("/memory",
         [
-            new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **forget** (after a yes); **+ remember** (`r`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
+            new("/memory", "List the memories on a pane. Enter on one offers **edit** (its text on the input row), **disable** (kept and grayed out, but never offered to the model; **enable** undoes it) and **This folder only** or **Everywhere** (a memory for one folder is marked; another folder's shows dim), **forget** (after a yes); **+ remember** (`r`) types a new one. **mode: …** (`m`) on the title row steps *Memory mode*: read-write, read-only, off."),
             new("/memory read-write|read-only|off", "Set *Memory mode*."),
-            new("/memory remember <text>", "Add a memory, whatever *Memory mode* says."),
+            new("/memory remember [--here] <text>", "Add a memory, whatever *Memory mode* says. `--here`, before the text, offers it only while working in this folder."),
             new("/memory forget|edit", "Forget every memory, after a yes (`forget`), or open `memory.json` in your editor (`edit`; invalid JSON is ignored with a warning)."),
         ]),
         new("/midi",
@@ -456,7 +456,8 @@ public static class HelpCommands
         ]),
         new("/sessions",
         [
-            new("/sessions [<id>]", "List the stored sessions on a pane, or restore one by its id (`#12` works too). Ctrl+Y runs it too."),
+            new("/sessions [<id>]", "List the stored sessions on a pane, or restore one by its id (`#12` works too); a session that worked in another folder offers to switch to it. Ctrl+Y runs it too."),
+            new("/sessions here", "List only the sessions of the working folder in force; sessions saved before this version have no folder. Works while a reply runs."),
             new("/sessions purge <id>|all", "Delete one stored session, or every one."),
             new("/sessions purge older <age>", "Delete the sessions older than an age: a number of days (`30`) or a duration (`12h`, `90m`, `2 hours`, `1d 6h`)."),
             new("/sessions title [<text>]", "Rename the current session; alone, it opens a box with the current name (as a double-click on the name above the input row does). Works while a reply runs."),
@@ -573,8 +574,9 @@ public static class HelpCommands
         ]),
         new("/usage",
         [
-            new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Its other tabs show what fills the context, the system prompt, the tools and the skills. Ctrl+U runs it too."),
+            new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Its other tabs show what fills the context, the system prompt, the tools, the skills and each model's figures. Ctrl+U runs it too."),
             new("/usage context", "Open it on the Context tab: what fills the context window (the system prompt, each tool group, the history, pictures and thinking) and, with the window known, what turning a switchable group off would save."),
+            new("/usage models", "Open it on the Models tab: each model's turns, sessions, tool calls a turn, error and cancel rates, output a turn and speed, from the saved sessions. Few-turn rows show dim."),
             new("/usage prompt|tools|skills", "Open it on the Prompt tab (the system message the next turn sends, apart from the skills block: persona, rules, project notes, memory, plan mode and the voice directive), the Tools tab (each tool it offers, grouped) or the Skills tab (the skills block's directive, then each skill it offers with its scope, description and `SKILL.md` file, or why the skills are off)."),
         ]),
         new("/vault",

@@ -39,7 +39,11 @@ public static partial class McpReferences
             args: config.Args?.Select(a => Expand(a, "args")!).ToList(),
             env: config.Env?.ToDictionary(e => e.Key, e => Expand(e.Value, e.Key)!, config.Env.Comparer),
             url: Expand(config.Url, "url"),
-            headers: config.Headers?.ToDictionary(h => h.Key, h => Expand(h.Value, h.Key)!, config.Headers.Comparer));
+            headers: config.Headers?.ToDictionary(h => h.Key, h => Expand(h.Value, h.Key)!, config.Headers.Comparer),
+            // The sign-in's app (2026-11-21, feature idea #32): its id and secret, on a copy of the oauth object.
+            oauth: config.OAuth is { } o && (Has(o.ClientId) || Has(o.ClientSecret))
+                ? new McpOAuthConfig { ClientId = Expand(o.ClientId, "oauth.clientId"), ClientSecret = Expand(o.ClientSecret, "oauth.clientSecret"), Scopes = o.Scopes, RedirectPort = o.RedirectPort }
+                : null);
         return (expanded, unset);
     }
 
@@ -50,7 +54,8 @@ public static partial class McpReferences
         return Has(config.Command) || Has(config.Url)
             || (config.Args?.Any(Has) ?? false)
             || (config.Env?.Values.Any(Has) ?? false)
-            || (config.Headers?.Values.Any(Has) ?? false);
+            || (config.Headers?.Values.Any(Has) ?? false)
+            || Has(config.OAuth?.ClientId) || Has(config.OAuth?.ClientSecret);
     }
 
     private static bool Has(string? text) => text is not null && text.Contains("${", StringComparison.Ordinal);

@@ -104,6 +104,14 @@ public sealed class StoredPart
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Document { get; set; }
+
+    /// <summary>
+    /// An image part that is an MCP tool's picture (2026-11-21, feature idea #31), kept because <c>MCP keep in sessions</c> was on, its label in
+    /// <see cref="Path"/>: restored with its <see cref="ConversationHistory.McpKey"/> mark, so a later save with the setting off still leaves it
+    /// out. Left out while false; older rows and older builds are unchanged.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Mcp { get; set; }
 }
 
 /// <summary>The document a session row's <c>history_json</c> holds.</summary>
@@ -223,9 +231,10 @@ public static class SessionHistory
     /// is stored as a line naming its file (<see cref="Camera.CameraText.NotKept"/>) unless <paramref name="keepCamera"/>
     /// (<c>Camera keep in sessions</c>, 2026-10-02: off by default, so a resumed session does not carry the user's face); a
     /// screenshot (<see cref="ConversationHistory.ScreenKey"/>) likewise unless <paramref name="keepScreen"/> (<c>Screen capture keep
-    /// in sessions</c>, 2026-10-04).
+    /// in sessions</c>, 2026-10-04), and an MCP tool's picture (<see cref="ConversationHistory.McpKey"/>) unless <paramref name="keepMcp"/>
+    /// (<c>MCP keep in sessions</c>, 2026-11-21, off by default: a browser screenshot can hold anything on the page).
     /// </summary>
-    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null, string? mark = null, IReadOnlyList<Files.StoredMadeFile>? madeFiles = null)
+    public static string ToJson(IReadOnlyList<ChatMessage> messages, StoredPlan? plan = null, StoredPlan? executing = null, string? claudeSessionId = null, bool withThinking = false, string? claudeServerSessionId = null, bool keepCamera = false, bool keepScreen = false, Dictionary<string, List<Advisors.AdvisorPair>>? advisorThreads = null, Dictionary<string, string>? advisorSessions = null, string? mark = null, IReadOnlyList<Files.StoredMadeFile>? madeFiles = null, bool keepMcp = false)
     {
         ArgumentNullException.ThrowIfNull(messages);
         var document = new StoredHistory
@@ -235,7 +244,7 @@ public static class SessionHistory
         };
         foreach (var message in messages)
         {
-            document.Messages.Add(Store(message, withThinking, keepCamera, keepScreen));
+            document.Messages.Add(Store(message, withThinking, keepCamera, keepScreen, keepMcp));
         }
 
         return JsonSerializer.Serialize(document, SessionJsonContext.Default.StoredHistory);
@@ -333,7 +342,7 @@ public static class SessionHistory
     }
 
 
-    internal static StoredMessage Store(ChatMessage message, bool withThinking = false, bool keepCamera = false, bool keepScreen = false)
+    internal static StoredMessage Store(ChatMessage message, bool withThinking = false, bool keepCamera = false, bool keepScreen = false, bool keepMcp = false)
     {
         bool carrier = ConversationHistory.IsImageCarrier(message);
         var stored = new StoredMessage { Role = message.Role.Value, Carrier = carrier, Opening = ConversationHistory.IsOpener(message), Ordinal = ConversationHistory.TurnOrdinal(message), Checkpoint = ConversationHistory.TurnCheckpoint(message), UndoNote = ConversationHistory.UndoNoteOf(message), Typed = ConversationHistory.TypedOf(message), AppWritten = ConversationHistory.IsAppWritten(message), Checkpoints = ConversationHistory.CheckpointList(message) is { Count: > 0 } kept ? kept.ToList() : null, Source = carrier ? ConversationHistory.CarrierSource(message) : null };
@@ -354,6 +363,9 @@ public static class SessionHistory
                 case DataContent data when !keepScreen && ConversationHistory.ScreenPath(data) is { } screenPath:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Screen.ScreenText.NotKept(screenPath) });
                     break;
+                case DataContent data when !keepMcp && McpLabel(data) is { } mcpLabel:
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Mcp.McpText.PictureNotKept(mcpLabel) });
+                    break;
                 // A plan's reference picture the app attached (2026-10-18): a line naming its file beside the plan, never its bytes again in each
                 // pass's row; the file is still there for the next run.
                 case DataContent data when ConversationHistory.ReferencePath(data) is { } referencePath:
@@ -372,7 +384,7 @@ public static class SessionHistory
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.TextKind, Text = Pdf.PdfText.PageNotKept(pdfPage.File, pdfPage.Page) });
                     break;
                 case DataContent data when data.HasTopLevelMediaType("image"):
-                    stored.Parts.Add(new StoredPart { Kind = StoredPart.ImageKind, Bytes = Convert.ToBase64String(data.Data.Span), MediaType = data.MediaType, Path = ConversationHistory.PicturePath(data) });
+                    stored.Parts.Add(new StoredPart { Kind = StoredPart.ImageKind, Bytes = Convert.ToBase64String(data.Data.Span), MediaType = data.MediaType, Path = ConversationHistory.PicturePath(data), Mcp = McpLabel(data) is not null });
                     break;
                 case FunctionCallContent call:
                     stored.Parts.Add(new StoredPart { Kind = StoredPart.CallKind, CallId = call.CallId, Name = call.Name, Arguments = Assistant.SerializeArguments(call.Arguments) });
@@ -388,6 +400,10 @@ public static class SessionHistory
 
         return stored;
     }
+
+    /// <summary>An MCP picture's label (<see cref="ConversationHistory.McpKey"/>), or null for any other picture.</summary>
+    private static string? McpLabel(DataContent data) =>
+        data.AdditionalProperties?.TryGetValue(ConversationHistory.McpKey, out object? value) == true && value is string label ? label : null;
 
     internal static ChatMessage? Restore(StoredMessage stored)
     {
@@ -407,6 +423,11 @@ public static class SessionHistory
                     if (!string.IsNullOrWhiteSpace(part.Path))
                     {
                         picture.AdditionalProperties = new AdditionalPropertiesDictionary { [ConversationHistory.PathKey] = part.Path };
+                    }
+
+                    if (part.Mcp)
+                    {
+                        (picture.AdditionalProperties ??= [])[ConversationHistory.McpKey] = part.Path ?? "";
                     }
 
                     contents.Add(picture);

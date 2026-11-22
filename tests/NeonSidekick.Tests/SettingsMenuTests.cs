@@ -1149,6 +1149,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.CodeAuditLowKeepsStreak,   // 2026-11-17, phase 3 of the gap and audit improvements
                 SettingsField.ConfirmFocusByChange,   // 2026-11-18, Phase 3 item 3 of the gap and audit improvements
                 SettingsField.WebFooter,   // 2026-11-21, the 📚 line made a setting
+                SettingsField.McpKeepInSessions,   // 2026-11-21, MCP pictures not kept by default
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -5977,7 +5978,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(["Mentions", "Folding", "Diffs"], SettingsMenu.ToolsMenuSections[ToolsText.MenuIndex(ToolsText.OptionsTabTitle)].Select(s => s.Title));
         Assert.Equal(["Sources", "Prompt and mentions"], SettingsMenu.SkillsMenuSections[0].Select(s => s.Title));
         Assert.Equal(["Learning", "What it reads", "Pace", "What it may change"], SettingsMenu.SkillsMenuSections[1].Select(s => s.Title));
-        Assert.Equal(["Servers"], SettingsMenu.McpMenuSections[0].Select(s => s.Title));
+        Assert.Equal(["Servers", "Pictures"], SettingsMenu.McpMenuSections[0].Select(s => s.Title));
 
         // The rows moved to sit under their headings: YouTube's playing pair after the search rows, the reflection's sessions switch under What it reads.
         Assert.Equal([SettingsField.YouTubeOpenLinksIn, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice], SettingsMenu.ToolsTabFields[ToolsText.MenuIndex(ToolsText.YouTubeTabTitle)].TakeLast(3));

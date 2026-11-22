@@ -57,19 +57,21 @@ public readonly record struct PictureBudget(int Pictures, int Megabytes, bool Do
         // An attached PDF taken out (gap 18) leaves its text, cut: text is cheap beside its bytes and keeps what it said.
         return ConversationHistory.DocumentText(picture) is { } text ? Pdf.PdfText.DocumentLeftOut(text)
             : ConversationHistory.PdfPage(picture) is { } page ? Pdf.PdfText.PageNotKept(page.File, page.Page)
+            : picture.AdditionalProperties?.TryGetValue(ConversationHistory.McpKey, out object? mcp) == true && mcp is string label
+                ? Mcp.McpText.PictureTakenOut(label)   // no file for view_image (2026-11-21, feature idea #31): call the tool again
             : LeftOut(ConversationHistory.PicturePath(picture));
     }
 
     /// <summary>
     /// <see cref="LeftOutFor"/> as the part that takes <paramref name="picture"/>'s place in the history (2026-10-19, the review): it keeps the
-    /// picture's camera, screenshot and reference marks, so what reads a taken-out picture again (<c>PlanReferences.FromHistory</c>) still knows
+    /// picture's camera, screenshot, reference and MCP marks, so what reads a taken-out picture again (<c>PlanReferences.FromHistory</c>) still knows
     /// a camera photo or a screenshot the keep-in-sessions settings leave out.
     /// </summary>
     public static TextContent LeftOutPart(DataContent picture)
     {
         ArgumentNullException.ThrowIfNull(picture);
         var part = new TextContent(LeftOutFor(picture));
-        foreach (string key in (string[])[ConversationHistory.CameraKey, ConversationHistory.ScreenKey, ConversationHistory.ReferenceKey])
+        foreach (string key in (string[])[ConversationHistory.CameraKey, ConversationHistory.ScreenKey, ConversationHistory.ReferenceKey, ConversationHistory.McpKey])
         {
             if (picture.AdditionalProperties?.TryGetValue(key, out object? value) == true)
             {

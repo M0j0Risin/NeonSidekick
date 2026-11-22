@@ -267,7 +267,7 @@ internal sealed partial class ChatScreen
         SlashCommand.View when ViewsVideo(args) => MidTurnClass.Pane,
         SlashCommand.View when ParseViewArgs(args) is { Chat: false, Path.Length: > 0 } => MidTurnClass.Quick,
         SlashCommand.Screen when NeonSidekick.Screen.ScreenText.IsFolderWord(args) => MidTurnClass.Quick,   // /screen view | thumbs (2026-10-09): a window of its own
-        SlashCommand.Session when ParseSessionArgs(args).Kind == SessionActionKind.TitlePane => MidTurnClass.Pane,
+        SlashCommand.Session when ParseSessionArgs(args).Kind is SessionActionKind.TitlePane or SessionActionKind.Here => MidTurnClass.Pane,   // here (2026-11-21): the bare pane filtered
         SlashCommand.HomeBar => HomeBarToggles(args) ? MidTurnClass.Quick : MidTurnClass.Pane,   // 2026-10-12: a toggle at once; the picker, a chip's pane or confirm on the watcher
         SlashCommand.Toolbar when ToolbarItems.IsEdit(args) => MidTurnClass.Pane,   // /toolbar edit (2026-10-12): the checklist on the watcher; a toggle stays quick
         SlashCommand.Perf when PerfBarMode.IsEdit(args) => MidTurnClass.Pane,       // /perfbar edit, the same
@@ -666,7 +666,7 @@ internal sealed partial class ChatScreen
                 {
                     // Since 2026-10-12: a pick after the reply ended restores at the pane's close, as at the idle line.
                     var reply = Reply;
-                    if (await _sessionsMenu.ShowAsync(cancellationToken, reply).ConfigureAwait(false) is { } picked && !reply.Running)
+                    if (await _sessionsMenu.ShowAsync(cancellationToken, reply, here: ParseSessionArgs(args).Kind == SessionActionKind.Here).ConfigureAwait(false) is { } picked && !reply.Running)
                     {
                         _handoverSession = picked;
                     }
@@ -879,7 +879,7 @@ internal sealed partial class ChatScreen
                 HandleCopy(args);
                 break;
             case SlashCommand.Memory when ParseMemoryArgs(args) is { Kind: MemoryActionKind.Remember } add:
-                Remember(_transcript, add.Text);   // only /memory remember is quick (MidTurnPolicy); any other /memory reaching here does nothing (review #5)
+                Remember(_transcript, add.Text, add.Here);   // only /memory remember is quick (MidTurnPolicy); any other /memory reaching here does nothing (review #5)
                 break;
             case SlashCommand.Explore:
                 HandleExplore(args);
@@ -1197,6 +1197,8 @@ internal sealed partial class ChatScreen
         if (session is { } id && RestoreSession(id))
         {
             reset = true;   // only when the conversation was replaced (2026-10-13, the code review): the one on screen picked again keeps the tail
+            // Its folder offered before a queued line runs (2026-11-21, feature idea #4), so that line runs in the folder the answer left.
+            await OfferSessionFolderAsync(id, cancellationToken).ConfigureAwait(false);
         }
 
         return reset;

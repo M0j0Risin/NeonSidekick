@@ -145,6 +145,55 @@ public class SidekickOptionsTests
         Assert.Empty(o.ActiveFlags());   // a log file overrides no setting
     }
 
+    /// <summary>
+    /// The one-shot flags (2026-11-21, feature ideas #42 to #44): <c>--prompt</c> and <c>--prompt-file</c> imply <c>--headless</c> (so <c>--allow</c>,
+    /// <c>--quiet</c> and <c>--session</c> go with them in any order), never together; <c>--quiet</c> and <c>--session</c> need a headless run.
+    /// </summary>
+    [Fact]
+    public void Parse_Prompt_ImpliesHeadless_AndTheFlagsThatNeedIt_GoWithIt()
+    {
+        var o = SidekickOptions.Parse(["--allow", "mcp", "--prompt", "hi there", "--quiet"]);
+        Assert.Null(o.Error);
+        Assert.True(o.Headless);
+        Assert.Equal("hi there", o.Prompt);
+        Assert.True(o.RepliesOnly);
+        Assert.Equal("--prompt --quiet", o.Describe()!.Split("--allow mcp ")[^1]);   // the prompt's text never logged
+        Assert.Equal(SidekickOptions.PromptConflict, SidekickOptions.Parse(["--prompt", "a", "--prompt-file", "b.md"]).Error);
+        Assert.Equal(SidekickOptions.QuietNeedsHeadless, SidekickOptions.Parse(["--quiet"]).Error);
+        Assert.Equal(SidekickOptions.SessionNeedsHeadless, SidekickOptions.Parse(["--session", "3"]).Error);
+        Assert.Equal("--prompt needs a value", SidekickOptions.Parse(["--prompt"]).Error);
+        Assert.False(SidekickOptions.Parse(["--headless", "--quiet"]).Prompt is not null);
+    }
+
+    [Fact]
+    public void Parse_PromptFile_IsMadeFull_FromTheProcessFolder()
+    {
+        var o = SidekickOptions.Parse(["--prompt-file", "notes.md", "--cwd", "C:\\elsewhere"]);
+        Assert.Null(o.Error);
+        Assert.True(o.Headless);
+        Assert.Equal(Path.GetFullPath("notes.md"), o.PromptFile);
+    }
+
+    [Theory]
+    [InlineData("12", 12L, false)]
+    [InlineData("#12", 12L, false)]
+    [InlineData("last", null, true)]
+    [InlineData("LAST", null, true)]
+    public void Parse_Session_TakesAnIdOrLast(string value, long? id, bool last)
+    {
+        var o = SidekickOptions.Parse(["--headless", "--session", value]);
+        Assert.Null(o.Error);
+        Assert.Equal((id, last), (o.SessionId, o.SessionLast));
+        Assert.True(o.ResumesSession);
+    }
+
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("0")]
+    [InlineData("#")]
+    public void Parse_Session_AnythingElse_IsABadArgument(string value) =>
+        Assert.Equal(SidekickOptions.SessionBad(value), SidekickOptions.Parse(["--headless", "--session", value]).Error);
+
     /// <summary><c>--allow</c> (2026-11-19, feature idea #45): lists and repeats join, the words without regard to case, the server as typed.</summary>
     [Fact]
     public void Parse_Allow_JoinsListsAndRepeats_KeepingTheServersCase()
@@ -165,7 +214,7 @@ public class SidekickOptionsTests
         Assert.Null(SidekickOptions.Parse(["--allow", "mcp", "--headless"]).Error);
         Assert.Null(SidekickOptions.Parse(["--headless", "--allow", "mcp"]).Error);
         Assert.Equal(SidekickOptions.AllowNeedsHeadless, SidekickOptions.Parse(["--allow", "mcp"]).Error);
-        Assert.Equal("--allow is for --headless runs; the screen asks instead", SidekickOptions.AllowNeedsHeadless);
+        Assert.Equal("--allow is for --headless or --prompt runs; the screen asks instead", SidekickOptions.AllowNeedsHeadless);
         Assert.Equal(SidekickOptions.AllowUnknown("shell"), SidekickOptions.Parse(["--headless", "--allow", "shell"]).Error);
         Assert.Equal(SidekickOptions.AllowBlankServer, SidekickOptions.Parse(["--headless", "--allow=mcp:"]).Error);
         Assert.Equal("--allow needs a value", SidekickOptions.Parse(["--headless", "--allow"]).Error);
@@ -407,7 +456,7 @@ public class SidekickOptionsTests
         Assert.Contains("--yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)", SidekickOptions.Usage);
         Assert.Contains("[--no-police]", SidekickOptions.Usage);
         Assert.Contains("--no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)", SidekickOptions.Usage);
-        Assert.Contains("Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call --allow covers was refused", SidekickOptions.Usage);
+        Assert.Contains("Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call --allow covers was refused, 4 headless run in which a message or a command failed (4 beats 3)", SidekickOptions.Usage);
         Assert.Contains("[--allow <list>]", SidekickOptions.Usage);
         Assert.Contains("--profile <name>  profile for this launch (outranks NEONSIDEKICK_PROFILE; default neon)", SidekickOptions.Usage);
         Assert.Contains("--log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)", SidekickOptions.Usage);

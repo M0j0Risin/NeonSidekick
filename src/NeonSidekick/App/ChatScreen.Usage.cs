@@ -76,8 +76,11 @@ internal sealed partial class ChatScreen
         long promptTokens = prompt.Sum(p => p.Tokens);
         // An MCP server's row (2026-11-20, the mcp-ask review's #97) saves its own notes alone; its name is the label's, since a connected
         // server can list no tools.
+        // mcp_read's group (2026-11-21) saves the prompt what leaving that one tool out would: the MCP rule goes only when it was the last.
         SystemPromptFacts Off(string label, SettingsField field) =>
-            field == SettingsField.McpServers && label.StartsWith(SystemPromptSummary.McpGroupPrefix, StringComparison.Ordinal)
+            field == SettingsField.McpServers && string.Equals(label, SystemPromptSummary.McpResourcesGroup, StringComparison.Ordinal)
+                ? promptFacts with { McpTools = Math.Max(0, promptFacts.McpTools - 1) }
+            : field == SettingsField.McpServers && label.StartsWith(SystemPromptSummary.McpGroupPrefix, StringComparison.Ordinal)
                 ? promptFacts.WithoutMcpServer(label[SystemPromptSummary.McpGroupPrefix.Length..])
                 : promptFacts.Without(field);
         var groups = ToolGroups(effective, disabled)
@@ -132,6 +135,7 @@ internal sealed partial class ChatScreen
             : string.Equals(word, UsageText.PromptWord, StringComparison.OrdinalIgnoreCase) ? UsageText.PromptTabIndex
             : string.Equals(word, UsageText.ToolsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.ToolsTabIndex
             : string.Equals(word, UsageText.SkillsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.SkillsTabIndex
+            : string.Equals(word, UsageText.ModelsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.ModelsTabIndex   // 2026-11-21
             : null;
     }
 }

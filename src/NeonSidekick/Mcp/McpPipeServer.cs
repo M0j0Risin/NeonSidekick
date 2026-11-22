@@ -27,6 +27,13 @@ public sealed record McpPipeServerOptions
     public IReadOnlyDictionary<string, bool>? Destructive { get; init; }
 
     public string? Instructions { get; init; }
+
+    /// <summary>
+    /// The resources the server publishes (2026-11-21, feature idea #33): set, the server declares <c>resources</c> and answers
+    /// <c>resources/list</c>, <c>resources/templates/list</c> (one template, <see cref="McpPipeServer.TemplateUri"/>) and <c>resources/read</c>;
+    /// null, it declares none. A resource whose <c>Text</c> is null is a PNG blob (<see cref="McpPipeServer.PngBase64"/>).
+    /// </summary>
+    public IReadOnlyList<(string Uri, string Name, string? Text)>? Resources { get; init; }
 }
 
 /// <summary>
@@ -46,6 +53,27 @@ public sealed class McpPipeServer : IAsyncDisposable
     public const string FailToolName = "fail";
     public const string FailText = "boom";
     public const string ImageToolName = "image";
+
+    /// <summary>A tool answering an embedded text resource, <see cref="EmbeddedUri"/> holding <see cref="EmbeddedText"/> (2026-11-21).</summary>
+    public const string ResourceToolName = "resource";
+
+    /// <summary>A tool answering an embedded PNG blob resource (2026-11-21).</summary>
+    public const string BlobToolName = "blob";
+
+    /// <summary>A tool answering a resource link to <see cref="EmbeddedUri"/> (2026-11-21).</summary>
+    public const string LinkToolName = "link";
+
+    public const string EmbeddedUri = "pipe://notes/readme.md";
+    public const string EmbeddedText = "The readme's text.";
+
+    /// <summary>The one template the server lists when it has resources: a read of a filled-in uri echoes the uri back.</summary>
+    public const string TemplateUri = "pipe://echo/{word}";
+
+    /// <summary>
+    /// A real 4×3 PNG as base64 (2026-11-21, feature idea #31): what the image tool and a blob carry, so a result decodes to a picture. The
+    /// 8-byte signature it answered until then was no picture at all.
+    /// </summary>
+    public const string PngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGP4z9AARww4OQBkQBH1e29BNAAAAABJRU5ErkJggg==";
 
     /// <summary>A tool that ends the server mid-call (2026-11-19): it closes both pipes and never answers. Acts only when a test lists it.</summary>
     public const string DropToolName = "drop";
@@ -82,6 +110,8 @@ public sealed class McpPipeServer : IAsyncDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly List<(string Name, string ArgumentsJson)> _calls = [];
     private readonly IReadOnlyDictionary<string, bool> _destructive;
+    private IReadOnlyList<(string Uri, string Name, string? Text)>? _resources;
+    private int _reads;
     private readonly object _toolsLock = new();
     private IReadOnlySet<string> _readOnly;
     private IReadOnlyList<(string Name, string Description)> _tools;
@@ -117,6 +147,9 @@ public sealed class McpPipeServer : IAsyncDisposable
     /// </summary>
     public Task? ListingGate { get; set; }
 
+    /// <summary>How many <c>resources/read</c> requests the server answered (2026-11-21).</summary>
+    public int Reads => Volatile.Read(ref _reads);
+
     /// <summary>How many <c>tools/list</c> requests the server answered (2026-11-19): a client's first listing and every one after.</summary>
     public int Listings => Volatile.Read(ref _listings);
 
@@ -145,13 +178,20 @@ public sealed class McpPipeServer : IAsyncDisposable
         var shape = options ?? McpPipeServerOptions.Default;
         var schema = shape.Closed ? ClosedSchema : Schema;
         bool drops = shape.Drops;
-        var server = new McpPipeServer(tools, shape.ReadOnly ?? new HashSet<string>(StringComparer.Ordinal), shape.Destructive ?? new Dictionary<string, bool>(StringComparer.Ordinal));
+        var server = new McpPipeServer(tools, shape.ReadOnly ?? new HashSet<string>(StringComparer.Ordinal), shape.Destructive ?? new Dictionary<string, bool>(StringComparer.Ordinal))
+        {
+            _resources = shape.Resources,
+        };
         var serverOptions = new McpServerOptions
         {
             ServerInfo = new Implementation { Name = serverName, Version = "1.0" },
             ServerInstructions = shape.Instructions,
             // ListChanged (2026-11-19): a server that sends notifications/tools/list_changed declares it, as a real one must.
-            Capabilities = new ServerCapabilities { Tools = new ToolsCapability { ListChanged = true } },
+            Capabilities = new ServerCapabilities
+            {
+                Tools = new ToolsCapability { ListChanged = true },
+                Resources = shape.Resources is null ? null : new ResourcesCapability(),
+            },
             Handlers = new McpServerHandlers
             {
                 ListToolsHandler = async (_, cancellationToken) =>
@@ -181,6 +221,15 @@ public sealed class McpPipeServer : IAsyncDisposable
                         }).ToList(),
                     };
                 },
+                ListResourcesHandler = shape.Resources is null ? null : (_, _) => ValueTask.FromResult(new ListResourcesResult
+                {
+                    Resources = server.ResourceList().Select(r => new Resource { Uri = r.Uri, Name = r.Name, MimeType = r.Text is null ? "image/png" : "text/plain" }).ToList(),
+                }),
+                ListResourceTemplatesHandler = shape.Resources is null ? null : (_, _) => ValueTask.FromResult(new ListResourceTemplatesResult
+                {
+                    ResourceTemplates = [new ResourceTemplate { UriTemplate = TemplateUri, Name = "echo" }],
+                }),
+                ReadResourceHandler = shape.Resources is null ? null : (request, _) => ValueTask.FromResult(server.Read(request.Params?.Uri ?? "")),
                 CallToolHandler = (request, cancellationToken) => request.Params?.Name switch
                 {
                     DropToolName when drops => server.DropAsync(request.Params, cancellationToken),
@@ -209,9 +258,43 @@ public sealed class McpPipeServer : IAsyncDisposable
         return name switch
         {
             FailToolName => new CallToolResult { Content = [new TextContentBlock { Text = FailText }], IsError = true },
-            ImageToolName => new CallToolResult { Content = [new ImageContentBlock { Data = System.Text.Encoding.ASCII.GetBytes("iVBORw0KGgo="), MimeType = "image/png" }] },
+            ImageToolName => new CallToolResult { Content = [new ImageContentBlock { Data = System.Text.Encoding.ASCII.GetBytes(PngBase64), MimeType = "image/png" }] },
+            ResourceToolName => new CallToolResult { Content = [new EmbeddedResourceBlock { Resource = new TextResourceContents { Uri = EmbeddedUri, MimeType = "text/markdown", Text = EmbeddedText } }] },
+            BlobToolName => new CallToolResult { Content = [new EmbeddedResourceBlock { Resource = new BlobResourceContents { Uri = "pipe://pictures/dot.png", MimeType = "image/png", Blob = System.Text.Encoding.ASCII.GetBytes(PngBase64) } }] },
+            LinkToolName => new CallToolResult { Content = [new ResourceLinkBlock { Uri = EmbeddedUri, Name = "readme", Description = "The project's readme." }] },
             _ => new CallToolResult { Content = [new TextContentBlock { Text = EchoPrefix + text }] },
         };
+    }
+
+    private IReadOnlyList<(string Uri, string Name, string? Text)> ResourceList()
+    {
+        lock (_toolsLock)
+        {
+            return _resources ?? [];
+        }
+    }
+
+    /// <summary>A <c>resources/read</c>: a listed resource's text or PNG, a filled-in template's uri echoed, any other uri a protocol error.</summary>
+    private ReadResourceResult Read(string uri)
+    {
+        Interlocked.Increment(ref _reads);
+        var found = ResourceList().FirstOrDefault(r => string.Equals(r.Uri, uri, StringComparison.Ordinal));
+        if (found.Uri is not null)
+        {
+            return new ReadResourceResult
+            {
+                Contents = found.Text is { } text
+                    ? [new TextResourceContents { Uri = uri, MimeType = "text/plain", Text = text }]
+                    : [new BlobResourceContents { Uri = uri, MimeType = "image/png", Blob = System.Text.Encoding.ASCII.GetBytes(PngBase64) }],
+            };
+        }
+
+        if (uri.StartsWith("pipe://echo/", StringComparison.Ordinal))
+        {
+            return new ReadResourceResult { Contents = [new TextResourceContents { Uri = uri, MimeType = "text/plain", Text = EchoPrefix + uri["pipe://echo/".Length..] }] };
+        }
+
+        throw new ModelContextProtocol.McpProtocolException("no resource " + uri, ModelContextProtocol.McpErrorCode.ResourceNotFound);
     }
 
     /// <summary>

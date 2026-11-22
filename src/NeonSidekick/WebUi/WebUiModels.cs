@@ -654,10 +654,11 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string QueueNone = "", string QueueAtPc = "", string QueueFromPage = "", string QueueSendNow = "", string QueueModeLabel = "",
     string QueueCancelLabel = "", string RemoveRow = "", string RemoveRowArmed = "", string QueueChordLine = "",
     string SessionsNone = "", string SessionsNoMatch = "", string SessionsFilter = "", string SessionsFound = "", string SessionsArmed = "",
-    string SessionsCurrent = "", string SessionsBusy = "", string SessionsLoading = "", string SessionsNotSaved = "",
+    string SessionsCurrent = "", string SessionsHere = "", string SessionsBusy = "", string SessionsLoading = "", string SessionsNotSaved = "",
     string FilesNone = "", string FilesTrimmed = "", string FilesHint = "",
     string AttachButton = "", string AttachRemove = "", string AttachWaiting = "", string AttachTooBig = "", string AttachRoom = "", string AttachStopped = "",
-    string AttachLeftOut = "", string AttachPdf = "", string ManageReadFailed = "");
+    string AttachLeftOut = "", string AttachPdf = "", string ManageReadFailed = "",
+    string MemoryHere = "", string MemoryElsewhere = "");
 
 /// <summary>
 /// The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, plan lucid-roaming-lantern #42): the PC's queued lines (<see cref="Pc"/>, the <c>/queue</c> pane's), the
@@ -703,7 +704,7 @@ public sealed record WebQueueModeRequest(string? Mode = null, string? Cancel = n
 public sealed record WebSessionsView(string Profile, IReadOnlyList<WebSessionRow> Rows, IReadOnlyList<WebSessionRow> Found, bool ResumeOffered, string? Note = null, bool NotSaved = false);
 
 /// <summary>A session's row: its id, title (no saved paths), when it last moved and its turns as the PC's pane reads them, its model's label; the current one marked; a hit's snippet.</summary>
-public sealed record WebSessionRow(long Id, string Title, string When, string Turns, string Model, bool Current, IReadOnlyList<WebSnippetPart>? Snippet = null);
+public sealed record WebSessionRow(long Id, string Title, string When, string Turns, string Model, bool Current, IReadOnlyList<WebSnippetPart>? Snippet = null, bool Here = false);
 
 /// <summary>A piece of a hit's snippet: its text, and whether it is what matched (a <c>&lt;mark&gt;</c> on the page).</summary>
 public sealed record WebSnippetPart(string Text, bool Match = false);
@@ -739,7 +740,9 @@ public sealed record WebPrompt(int Number, string Text, string Id);
 public sealed record WebMemories(IReadOnlyList<WebMemory> Items, bool ModeOff, int MaxChars = 0);
 
 /// <summary>A memory: its text, and whether it is turned off (kept, but the model doesn't see it).</summary>
-public sealed record WebMemory(string Text, bool Off);
+/// <summary>One memory on the page. <paramref name="Scoped"/> and <paramref name="Here"/> (2026-11-21, feature idea #6): saved for one folder, and that folder
+/// the PC's current one; never the path, which the page never sees.</summary>
+public sealed record WebMemory(string Text, bool Off, bool Scoped = false, bool Here = false);
 
 /// <summary>The profile's message history for the page (2026-10-16): its lines oldest first, the PC's drafts set aside and paste tokens left out.</summary>
 public sealed record WebHistory(IReadOnlyList<string> Lines);

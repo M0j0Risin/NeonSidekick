@@ -109,7 +109,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | Pane | Keys |
 |---|---|
 | **Conversation** | |
-| `/memory` | Enter: edit, disable/enable, forget (asks) · Delete forgets (asks) · `r` remember · `m` *Memory mode* |
+| `/memory` | Enter: edit, disable/enable, this folder only / everywhere, forget (asks) · Delete forgets (asks) · `r` remember · `m` *Memory mode* |
 | `/queue` | Enter or Delete removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
 | `/rewind`'s files question | `f` conversation and files · `c` conversation only · Enter chooses · Esc cancels |
@@ -153,7 +153,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · Esc denies |
-| `/mcp` › Servers | `a` the server's ask (writes, always, never), written into its mcp.json; also on a skipped server whose ask is a typo |
+| `/mcp` › Servers | `a` the server's ask (writes, always, never), written into its mcp.json; also on a skipped server whose ask is a typo. `s` signs in or out; Enter on a needs-sign-in row signs in, Esc calls a waiting sign-in off |
 | An MCP call's approval | `d` deny · `o` once · `s` session · `v` the arguments · Esc denies |
 | The project file's approval | `d` deny · `o` once · `s` session · Esc denies: the model's change to `NEON.md`, `AGENTS.md` or `CLAUDE.md` |
 | **Servers and processes** | |
@@ -301,7 +301,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
 * **Open their pane over the reply:**
   * Info: `/help`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/about`, `/usage`, `/keycheck`, `/tree`, `/vault`, `/browse`
   * Settings: `/settings`, `/tools`, `/mcp`, `/skills`, `/commands`, `/comfy`, `/reasoning`, `/sampling`, `/webui`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane
-  * Conversation: `/memory`, `/queue`, `/sessions`, `/sessions title`, `/rename`, `/msgclear`, `/prompts`
+  * Conversation: `/memory`, `/queue`, `/sessions`, `/sessions here`, `/sessions title`, `/rename`, `/msgclear`, `/prompts`
   * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/midi` (and `learn`), `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`, `/update`, `/update rollback`
 * **Run at once:**
   * Display: `/mark`, `/header`, `/toolbar`, `/perfbar`, `/homebar` (and `on`, `off`), `/expand`, `/collapse`, `/window`, `/log`, `/terminal`, `/shortcut`, `/explore`, `/open`, `/cwd`
@@ -675,7 +675,7 @@ The button at the message box's left (or a bare `/prompts` or `/queue` from the 
 * A tap on the ⏳ lines over the message box opens the Queue tab.
 * **📣 Prompts:** a tap sends a saved prompt as if typed; ✎ puts it on the message line; ⇪ saves the message line as a new one.
 * **🕘 History:** a tap puts an earlier line on the message line. *Clear all* empties the history, stored and at the PC, as `/msgclear` does.
-* **💾 Memory:** ⇪ saves the message line as a memory, as `/memory remember` does. A tap on a memory edits it or turns it off or on.
+* **💾 Memory:** ⇪ saves the message line as a memory, as `/memory remember` does. A tap on a memory edits it or turns it off or on. A memory for one folder is marked "this folder" or "one folder".
 * A 🗑️ and *Clear all* take two taps. The PC's hint row flashes what the page saved, edited or deleted.
 
 #### Sessions and files

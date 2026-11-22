@@ -11,7 +11,7 @@ public partial class SidekickAppTests
     [Fact]
     public async Task Headless_Prompts_SavesListsPrintsAndRemoves_TheModelAskedNothing()
     {
-        string output = await Headless("/prompts save Summarize this.\n/prompts save Review the diff\n/prompts list\n/prompts 2\n/prompts 9\n/prompts remove 1\n/prompts\n/prompts list --clear\n");
+        string output = await Headless("/prompts save Summarize this.\n/prompts save Review the diff\n/prompts list\n/prompts 2\n/prompts 9\n/prompts remove 1\n/prompts\n/prompts list --clear\n", exitCode: 4);
 
         var prompts = new SavedPrompts(_settings.ProfileDirectory);
         Assert.Contains(SavedPromptText.Caption(2) + Environment.NewLine, output);

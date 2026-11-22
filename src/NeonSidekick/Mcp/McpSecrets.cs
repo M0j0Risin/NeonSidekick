@@ -14,6 +14,8 @@ public static class McpSecrets
 {
     private const string HeadersKey = "headers";
     private const string EnvKey = "env";
+    private const string OAuthKey = "oauth";
+    private const string ClientSecretKey = "clientSecret";
 
     /// <summary>
     /// Whether a <c>headers</c> or <c>env</c> value is one to encrypt (2026-11-20, the mcp-ask review's #21, #47): its name says it's a secret
@@ -57,6 +59,24 @@ public static class McpSecrets
         var writes = new List<ConnectionsFileEdit.ValueWrite>();
         Collect(path, server, config.Headers, HeadersKey, pending, writes);
         Collect(path, server, config.Env, EnvKey, pending, writes);
+        // A pre-registered app's secret (2026-11-21, feature idea #32): sealed as a token, its own path; a ${NAME} reference stays as written.
+        Dictionary<string, string>? oauth = null;
+        if (config.OAuth?.ClientSecret is { } secret && NeedsSealing(secret))
+        {
+            oauth = new Dictionary<string, string>(StringComparer.Ordinal) { [ClientSecretKey] = secret };
+            var encrypted = WindowsCredentials.Protect(secret);
+            if (encrypted.Error is { } protectError)
+            {
+                DiagnosticLog.Warn(McpConfigFile.Category, McpText.EncryptFailedLogLine(path, server, ClientSecretKey, protectError));
+                oauth = null;
+            }
+            else
+            {
+                pending.Add((oauth, ClientSecretKey, encrypted.Value!));
+                writes.Add(new ConnectionsFileEdit.ValueWrite([McpConfigFile.ServersKey, server, OAuthKey, ClientSecretKey], encrypted.Value!, secret));
+            }
+        }
+
         if (writes.Count == 0)
         {
             return;
@@ -69,6 +89,10 @@ public static class McpSecrets
             var (values, key, sealedValue) = pending[i];
             switch (failed.GetValueOrDefault(i))
             {
+                case null when ReferenceEquals(values, oauth):
+                    config.OAuth!.ClientSecret = sealedValue;
+                    DiagnosticLog.Info(McpConfigFile.Category, McpText.EncryptedLogLine(path, server, key));
+                    break;
                 case null:
                     values[key] = sealedValue;
                     DiagnosticLog.Info(McpConfigFile.Category, McpText.EncryptedLogLine(path, server, key));
@@ -139,8 +163,21 @@ public static class McpSecrets
             return (null, envError);
         }
 
-        return headersChanged || envChanged
-            ? (config.With(env: envChanged ? env : null, headers: headersChanged ? headers : null), null)
+        // The sign-in's secret (2026-11-21): opened into a copy of the oauth object, so the stored config never holds it plain.
+        McpOAuthConfig? oauth = null;
+        if (config.OAuth is { ClientSecret: { } secret } stored && WindowsCredentials.IsSealed(secret))
+        {
+            var plain = WindowsCredentials.Unprotect(secret);
+            if (plain.Error is { } error)
+            {
+                return (null, McpText.CannotReveal(ClientSecretKey, error));
+            }
+
+            oauth = new McpOAuthConfig { ClientId = stored.ClientId, ClientSecret = plain.Value, Scopes = stored.Scopes, RedirectPort = stored.RedirectPort };
+        }
+
+        return headersChanged || envChanged || oauth is not null
+            ? (config.With(env: envChanged ? env : null, headers: headersChanged ? headers : null, oauth: oauth), null)
             : (config, null);
     }
 
@@ -190,7 +227,8 @@ public static class McpSecrets
     }
 
     private static McpServerConfig Blanked(McpServerConfig config) =>
-        config.With(env: BlankValues(config.Env), headers: BlankValues(config.Headers));
+        config.With(env: BlankValues(config.Env), headers: BlankValues(config.Headers),
+            oauth: config.OAuth is { } o ? new McpOAuthConfig { ClientId = o.ClientId, ClientSecret = o.ClientSecret is null ? null : "", Scopes = o.Scopes, RedirectPort = o.RedirectPort } : null);
 
     private static Dictionary<string, string>? BlankValues(Dictionary<string, string>? values) =>
         values?.ToDictionary(v => v.Key, _ => "", values.Comparer);

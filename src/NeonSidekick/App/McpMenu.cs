@@ -43,6 +43,20 @@ internal sealed class McpMenu
     /// <summary>The hidden button behind the Servers tab's <c>a</c> (never drawn, so never seen).</summary>
     private const string AskButtonTitle = "ask";
 
+    /// <summary>The hidden button behind the Servers tab's <c>s</c> (2026-11-21, feature idea #32): sign in, or out.</summary>
+    private const string SignInButtonTitle = "sign in";
+
+    /// <summary>The index of <see cref="SignInButtonTitle"/> among the page's buttons.</summary>
+    private const int SignInButton = 1;
+
+    // A requested sign-in (2026-11-21): it runs behind the pane, which stays open and live; Esc calls it off, a second Esc closes.
+    private readonly object _signInGate = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<(string Text, bool Error, bool Transcript)> _signInNotices = new();
+    private Task? _signInTask;
+    private CancellationTokenSource? _signInCancel;
+    private CancellationTokenSource? _wake;
+    private bool _detached;
+
     /// <summary>Whether the MCP wave still runs behind the input line (2026-09-29): the rows that take the session's gate are refused meanwhile.</summary>
     public Func<bool> Connecting { get; init; } = static () => false;
 
@@ -97,7 +111,7 @@ internal sealed class McpMenu
             SpaceToggles = true,
             // A server's ask on Servers alone (2026-11-20, plan idempotent-mixing-ripple): tied to tab 0, an `a` on the Tools tab still filters,
             // and no TabButtons, whose strip would drop the Options tab's badge.
-            Buttons = [new MenuButton(AskButtonTitle, 'a') { Hidden = true, Tab = 0 }],
+            Buttons = [new MenuButton(AskButtonTitle, 'a') { Hidden = true, Tab = 0 }, new MenuButton(SignInButtonTitle, 's') { Hidden = true, Tab = 0 }],
             TabCursors = [McpRows.FirstServerRow(servers), ToolsText.FirstToolRow(tools), 0],
             // The Tools tab's band says the cursor's tool (2026-10-05, /tools' Offered shape); the Servers tab's the cursor's server whole (2026-10-07).
             Footer = (t, row) => t switch
@@ -168,10 +182,16 @@ internal sealed class McpMenu
         string filter = "";
         string? shownServer = null;   // the Tools tab's server on show (2026-10-10), by name so a reconnect that reorders keeps it; null = all
         _menu.Root = McpText.Label;
+        lock (_signInGate)
+        {
+            _detached = false;
+        }
+
         try
         {
             while (true)
             {
+                FlushSignInNotices();
                 var facts = _facts();
                 var saved = _settings.Current;
                 var servers = McpRows.ServerRows(facts);
@@ -186,7 +206,18 @@ internal sealed class McpMenu
                     cursor = tab == 1 ? ToolsText.FirstToolRow(tools) : McpRows.FirstServerRow(servers);
                 }
 
-                if (await _pane.PickAsync(page, cursor, cancellationToken, stale: reply.Stale).ConfigureAwait(false) is not { } pick)
+                bool replyRan = reply.Running;
+                using var wake = Wake(reply.Stale);
+                var picked = await _pane.PickAsync(page, cursor, cancellationToken, stale: wake?.Token ?? reply.Stale).ConfigureAwait(false);
+                if (picked is null && SignInWaiting && !cancellationToken.IsCancellationRequested)
+                {
+                    // Esc while a sign-in waits (2026-11-21): it is called off, the pane stays; a second Esc closes it.
+                    CancelSignIn();
+                    await WaitSignInAsync().ConfigureAwait(false);
+                    continue;
+                }
+
+                if (picked is not { } pick)
                 {
                     return changes;
                 }
@@ -195,6 +226,11 @@ internal sealed class McpMenu
                 cursor = pick.Row;
                 if (pick.Refresh)
                 {
+                    if (!replyRan || reply.Running)
+                    {
+                        continue;   // a sign-in's news (2026-11-21), not the reply's end
+                    }
+
                     Sink.Notice(SettingsMenu.ReplyEndedNotice);   // the reply ended under the pane (2026-10-12): every row open now
                     shownServer = _pane.ShownSubs is { Count: > 1 } refreshed && byServer.Count > 0 ? toolTabs[Math.Clamp(refreshed[1], 0, byServer.Count - 1)] : shownServer;
                     continue;
@@ -212,7 +248,14 @@ internal sealed class McpMenu
                     // The Servers tab's `a` (2026-11-20): first, or the tab's branch below would read it as Enter and flip the server.
                     if (tab == 0 && cursor >= 0 && cursor < servers.Count)
                     {
-                        await AskAsync(servers[cursor].Row, facts, reply.Running, cancellationToken).ConfigureAwait(false);
+                        if (pick.Button == SignInButton)
+                        {
+                            await SignInOrOutAsync(servers[cursor].Row, facts, reply.Running, cancellationToken).ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            await AskAsync(servers[cursor].Row, facts, reply.Running, cancellationToken).ConfigureAwait(false);
+                        }
                     }
 
                     continue;
@@ -282,7 +325,224 @@ internal sealed class McpMenu
         finally
         {
             _menu.Root = SettingsMenu.Title;
+            lock (_signInGate)
+            {
+                // A sign-in still waiting runs to its end; what it says goes to the transcript from here (2026-11-21).
+                _detached = true;
+            }
+
+            FlushSignInNotices();
             _pane.Close();
+        }
+    }
+
+    // ── Sign-in (2026-11-21, feature idea #32) ──────────────────────────────
+
+    /// <summary>Whether a sign-in started from this pane still waits.</summary>
+    private bool SignInWaiting
+    {
+        get
+        {
+            lock (_signInGate)
+            {
+                return _signInTask is { IsCompleted: false };
+            }
+        }
+    }
+
+    /// <summary>The pick's stale signal: the reply's end, and the sign-in's news (its address, its end).</summary>
+    private CancellationTokenSource? Wake(CancellationToken replyStale)
+    {
+        lock (_signInGate)
+        {
+            if (_signInTask is not { IsCompleted: false } && _signInNotices.IsEmpty)
+            {
+                _wake = null;
+                return null;
+            }
+
+            _wake = replyStale.CanBeCanceled ? CancellationTokenSource.CreateLinkedTokenSource(replyStale) : new CancellationTokenSource();
+            return _wake;
+        }
+    }
+
+    /// <summary>A line from the sign-in, from any thread: to the pane's loop while it is open, else the transcript through the session's queue.</summary>
+    private void SignInSays(string text, bool error, bool transcript)
+    {
+        lock (_signInGate)
+        {
+            if (_detached)
+            {
+                _session.QueueNotice(text, error);
+                return;
+            }
+
+            _signInNotices.Enqueue((text, error, transcript));
+            try
+            {
+                _wake?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // That pick is over; the next one reads the queue first.
+            }
+        }
+    }
+
+    /// <summary>The sign-in's lines on the pane's own thread: the address above the pane on the transcript, the outcome on the status line.</summary>
+    private void FlushSignInNotices()
+    {
+        while (_signInNotices.TryDequeue(out var line))
+        {
+            INoticeSink sink = line.Transcript ? _transcript : Sink;
+            if (line.Error)
+            {
+                sink.Error(line.Text);
+            }
+            else
+            {
+                sink.Notice(line.Text);
+            }
+        }
+    }
+
+    /// <summary>Calls off this pane's sign-in, whether or not it has reached the session yet.</summary>
+    private void CancelSignIn()
+    {
+        lock (_signInGate)
+        {
+            try
+            {
+                _signInCancel?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ended meanwhile.
+            }
+        }
+
+        _session.CancelSignIn();
+    }
+
+    private async Task WaitSignInAsync()
+    {
+        Task? running;
+        lock (_signInGate)
+        {
+            running = _signInTask;
+        }
+
+        if (running is not null)
+        {
+            await running.ConfigureAwait(false);
+        }
+
+        FlushSignInNotices();
+    }
+
+    /// <summary>
+    /// The Servers tab's <c>s</c>: on a needs-sign-in row a sign-in, on a signed-in server a sign-out after a yes; any other row says it
+    /// uses no sign-in. Mid-turn, during the connect wave, with the master switch off, or while another sign-in waits, refused.
+    /// </summary>
+    private async Task SignInOrOutAsync(McpRow? row, McpFacts facts, bool midTurn, CancellationToken cancellationToken)
+    {
+        if (row is not McpRow.Server named || McpRows.ServerOf(facts, named) is not { } server)
+        {
+            return;
+        }
+
+        if (midTurn)
+        {
+            Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
+            return;
+        }
+
+        if (Connecting())
+        {
+            Sink.Notice(BackgroundJobText.McpStillConnecting);
+            return;
+        }
+
+        if (!facts.Enabled)
+        {
+            Sink.Notice(McpText.OffNotice);
+            return;
+        }
+
+        if (SignInWaiting || _session.SigningIn is not null)
+        {
+            Sink.Notice(McpText.SignInBusy);
+            return;
+        }
+
+        if (server.Startable && server.Enabled && server.State == McpState.Failed && server.NeedsSignIn)
+        {
+            StartSignIn(server.Name);
+            return;
+        }
+
+        if (server.State == McpState.Connected && _session.HoldsSignIn(server.Name))
+        {
+            if (!await _menu.ConfirmAsync(McpText.SignOutQuestion(server.Name), cancellationToken, close: false).ConfigureAwait(false))
+            {
+                return;
+            }
+
+            if (await _session.SignOutAsync(server.Name).ConfigureAwait(false))
+            {
+                Sink.Notice(McpText.SignedOutNotice(server.Name));
+            }
+
+            return;
+        }
+
+        Sink.Notice(McpText.NoSignIn(server.Name));
+    }
+
+    /// <summary>Starts a sign-in behind the pane: its row reads signing in, its address goes on the transcript, its outcome on the status line.</summary>
+    private void StartSignIn(string name)
+    {
+        var effective = _effective();
+        lock (_signInGate)
+        {
+            var cancel = new CancellationTokenSource();
+            _signInCancel = cancel;
+            _session.SignInNotice = (text, error) => SignInSays(text, error, transcript: true);
+            _signInTask = Task.Run(async () =>
+            {
+                McpServerStatus? outcome = null;
+                try
+                {
+                    outcome = await _session.SignInAsync(name, effective, cancel.Token).ConfigureAwait(false);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    SignInSays(McpText.SignInFailed(name, LogText.Excerpt(ex.Message)), true, transcript: false);
+                    return;
+                }
+                finally
+                {
+                    _session.SignInNotice = null;
+                }
+
+                switch (outcome)
+                {
+                    case null when cancel.IsCancellationRequested:
+                        SignInSays(McpText.SignInCancelledNotice(name), false, transcript: false);
+                        break;
+                    case null:
+                        break;
+                    case { State: McpState.Connected }:
+                        SignInSays(McpText.SignedInNotice(name, outcome.Tools.Count), false, transcript: false);
+                        break;
+                    case { Detail: McpText.SignInCancelledDetail }:
+                        SignInSays(McpText.SignInCancelledNotice(name), false, transcript: false);
+                        break;
+                    default:
+                        SignInSays(McpText.SignInFailed(name, outcome.Detail ?? ""), true, transcript: false);
+                        break;
+                }
+            });
         }
     }
 
@@ -351,6 +611,13 @@ internal sealed class McpMenu
         var server = facts.Servers.FirstOrDefault(s => s.Name == name);
         if (server is null || !server.Startable)
         {
+            return;
+        }
+
+        if (server.Enabled && server.State == McpState.Failed && server.NeedsSignIn)
+        {
+            // Enter on a needs-sign-in row signs in (2026-11-21): a plain retry would land on needs sign-in again.
+            await SignInOrOutAsync(row, facts, midTurn, cancellationToken).ConfigureAwait(false);
             return;
         }
 

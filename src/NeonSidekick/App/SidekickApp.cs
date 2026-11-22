@@ -66,11 +66,20 @@ public sealed partial class SidekickApp
     /// </summary>
     public const int HeadlessBadAllowExitCode = 2;
 
+    /// <summary>
+    /// The exit code of a headless run in which a message or a command failed (2026-11-21, feature idea #41): a turn that failed after its
+    /// retries, a message with no server to send it to, a command's <c>[error]</c> line, a loop or a review that stopped short, a call to a server
+    /// that needs a sign-in. It beats <see cref="HeadlessRefusedExitCode"/>; a run of commands alone with no server still exits 0.
+    /// </summary>
+    public const int HeadlessFailedExitCode = 4;
+
     private readonly IAnsiConsole _console;
     private readonly AppSettings _settings;
     private readonly EnvironmentOverrides _environment;
     private readonly TextReader _headlessInput;
-    private readonly TextWriter _headlessOutput;
+
+    /// <summary>Whether stdin is a pipe or a file (2026-11-21, feature idea #42): a one-shot prompt reads it whole as context.</summary>
+    private readonly bool _headlessInputRedirected;
     private readonly Func<IReadOnlyList<SmokeCheck>> _smokeChecks;
     private readonly LlmEndpointProbe _probe;
     private readonly ContextLengthProbe _contextProbe;
@@ -89,7 +98,7 @@ public sealed partial class SidekickApp
     // clients built over the Claude CLI endpoint all drive this one.
     private Claude.IClaudeServerHost? _claudeServer;
     private readonly WebAccess _web;
-    private readonly Func<Mcp.McpServerConfig, string, ModelContextProtocol.Client.IClientTransport> _mcpTransport;
+    private readonly McpTransportFactory _mcpTransport;
     private readonly Func<Uri, Comfy.ComfyClient>? _comfyClient;
     private readonly Func<Uri, string, HomeAssistant.HaClient>? _haClient;
     private readonly Func<Uri, CancellationToken, Task<HomeAssistant.IHaWire>>? _haWire;
@@ -175,9 +184,6 @@ public sealed partial class SidekickApp
     private readonly Func<byte[]?>? _clipboardImage;
     private readonly Action<string>? _setTitle;
 
-    /// <summary>Whether the headless cursor sits at the start of a line; diagnostics need their own line.</summary>
-    private bool _headlessAtLineStart = true;
-
     /// <summary>The flags of the current run; <see cref="SidekickOptions.None"/> until <see cref="RunAsync"/>.</summary>
     private SidekickOptions _options = SidekickOptions.None;
 
@@ -208,6 +214,8 @@ public sealed partial class SidekickApp
     /// <param name="frames">Where the screen's frames are held and let go as one write (2026-09-29, the rows' flicker at a turn's end): <c>Program.cs</c> passes the <see cref="UI.FrameWriter"/> it made stdout; null (tests) holds nothing.</param>
     /// <param name="embeddedLlm">Makes the embedded model's service for one run (2026-09-29): <c>Program.cs</c> passes <see cref="EmbeddedLlm.EmbeddedLlmService.Create"/> on Windows x64, tests a fake; null offers no embedded model.</param>
     /// <param name="claudeServer">Makes the Claude Code server's process host for one run (2026-09-30), and one more for each linked profile's client, an advisor's or a bot's (2026-10-13, <see cref="ClaudeHostFor"/>): null makes the app's own (<see cref="Claude.ClaudeServerHost"/>, which starts nothing until a turn asks), tests a fake.</param>
+    /// <param name="headlessError">Headless's stderr (2026-11-21, feature idea #43): <c>Program.cs</c> passes a UTF-8 writer over it, tests a <see cref="StringWriter"/>; under <c>--quiet</c> and <c>--prompt</c> everything but the replies goes there. Null = <see cref="Console.Error"/>.</param>
+    /// <param name="headlessInputRedirected">Whether stdin is a pipe or a file (2026-11-21, feature idea #42): a one-shot prompt then reads it whole as context.</param>
     public SidekickApp(
         IAnsiConsole console,
         AppSettings settings,
@@ -286,7 +294,9 @@ public sealed partial class SidekickApp
         Func<int, CancellationToken, Task<WebUi.TailscaleServeResult?>>? tailscaleServe = null,
         string? installFolder = null,
         Func<Updates.IUpdater>? updater = null,
-        Midi.IMidiSystem? midiSystem = null)
+        Midi.IMidiSystem? midiSystem = null,
+        TextWriter? headlessError = null,
+        bool headlessInputRedirected = false)
     {
         // MIDI control (2026-11-12, the MIDI plan): WinMM on Windows, CoreMIDI on a Mac, a fake in tests, none by default.
         _midiSystem = midiSystem;
@@ -374,7 +384,8 @@ public sealed partial class SidekickApp
         _claude = claude;
         _console = console ?? throw new ArgumentNullException(nameof(console));
         // The MCP servers' transport (2026-09-20): the SDK's stdio child or streamable HTTP in the app, a pipe to an in-process server in tests.
-        _mcpTransport = mcpTransport ?? McpSession.DefaultTransport;
+        // The sign-in's options reach the wire in the app's own transport (2026-11-21); a test's pipe takes none.
+        _mcpTransport = mcpTransport is null ? (config, name, oauth) => McpSession.DefaultTransport(config, name, oauth) : (config, name, _) => mcpTransport(config, name);
         // The cross-client skills folder, resolved once: %USERPROFILE%\.agents\skills in the app, a temp folder in tests.
         _externalSkills = externalSkills ?? SkillRoots.DefaultExternalDirectory();
         _geometry = geometry;
@@ -386,7 +397,8 @@ public sealed partial class SidekickApp
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _environment = environment ?? throw new ArgumentNullException(nameof(environment));
         _headlessInput = headlessInput ?? Console.In;
-        _headlessOutput = headlessOutput ?? Console.Out;
+        InitHeadlessWriters(headlessOutput, headlessError);
+        _headlessInputRedirected = headlessInputRedirected;
         _smokeChecks = smokeChecks ?? (() => SmokeChecks.Run(AppContext.BaseDirectory, ModelsDirectory));
         _probe = probe ?? new LlmEndpointProbe(new HttpClient());
         _contextProbe = contextProbe ?? new ContextLengthProbe(new HttpClient());
@@ -932,6 +944,16 @@ public sealed partial class SidekickApp
 
     private async Task<int> RunHeadlessAsync(CancellationToken cancellationToken)
     {
+        StartHeadlessOutput();
+        // The one-shot prompt, its piped context and --session (2026-11-21, feature ideas #42 and #44): read before anything connects, a
+        // problem exit 2; the session's folder taken into the flags' layer here, before the working directory is built.
+        var start = await HeadlessStartAsync(cancellationToken).ConfigureAwait(false);
+        if (start.Exit is { } startExit)
+        {
+            await FlushHeadlessAsync().ConfigureAwait(false);
+            return startExit;
+        }
+
         bool previousEcho = DiagnosticLog.EchoToConsole;
         DiagnosticLog.EchoToConsole = false;
         Action<DiagnosticEvent> forward = OnHeadlessDiagnostic;
@@ -949,13 +971,15 @@ public sealed partial class SidekickApp
         await using var mcp = new McpSession(_settings, _mcpTransport, _time, Mcp.McpText.HeadlessRetryTail);
         // Its calls that ask (2026-11-19, feature idea #28): refused unless --allow names them, each refusal counted toward exit 3.
         mcp.Approver = _headlessAllowances.Mcp;
+        mcp.ReadToolOffered = () => ChatScreen.McpReadOffered(EffectiveSettings);
         var memory = BuildMemoryStore();
-        var memoryTools = ChatScreen.MemoryTools(memory);
         // No timers headless: nothing could deliver the alert (the same rule as speech and voice); PrepareTurn drops the prompt's timer sentence with them (2026-09-20).
         var clockTools = ChatScreen.ClockTools(_time);
         // The file tools need no console, so headless has them; the editor opener is the real one.
         // The setting File tools decides per turn, like Web tools; the clock alone is standing.
         var files = BuildWorkingDirectory();
+        // The memory tools follow the run's folder (2026-11-21, feature idea #6): --cwd's, or --session's.
+        var memoryTools = ChatScreen.MemoryTools(memory, () => files.Root);
         LaunchSweep = files.SweepRoot();
         // A read_file the mid-turn guard cut is no longer seen (2026-11-10, review P1-9), as on the screen.
         session.ResultCut = call => ChatScreen.ForgetCutRead(files, call);
@@ -1111,6 +1135,20 @@ public sealed partial class SidekickApp
         var presentPlan = new Llm.Tools.PresentPlanTool(plan, files, _time, (_, _) => Task.FromResult(new Plans.PlanVerdict(Plans.PlanChoice.Saved)), () => HeadlessGapLimit(EffectiveSettings.PlanGapPasses), () => EffectiveSettings.PlanGapCleanPasses,
             inlineLimit: () => Plans.RalphText.InlineLimit((session.ContextLength?.Tokens ?? 0) * Llm.ConversationCompactor.CharsPerToken));
         var planState = new HeadlessPlanState();
+        // A resumed row's mark and made files (2026-11-21, feature idea #44): headless tracks neither, so they go back as they came.
+        string? resumedMark = null;
+        IReadOnlyList<Files.StoredMadeFile>? resumedMadeFiles = null;
+        // The last session row this run wrote, for the closing session #N line on stderr.
+        long? wroteSession = null;
+
+        // One save of the history for every headless site (2026-11-21): the keep settings as the screen passes them, and a resumed row's own parts.
+        void SaveHeadlessHistory(long id, IReadOnlyList<ChatMessage> messages)
+        {
+            var effective = EffectiveSettings;
+            sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(messages, plan.ToStored(), planState.Executing, claudeSessionId, effective.SessionSaveThinking, claudeServerSessionId,
+                effective.CameraKeepInSessions, effective.ScreenKeepInSessions, advisorThreads.Snapshot(), advisorThreads.Sessions(), resumedMark, resumedMadeFiles, keepMcp: effective.McpKeepInSessions));
+            wroteSession = id;
+        }
         // The Ralph loop headless (2026-10-18): what its passes are judged with.
         planState.RalphContext = new HeadlessRalphContext(session, git, neonAdvisor, interpreters, _ralphVerifier ?? new Plans.RalphVerifier(runner, interpreters.Locate), allowList);
         // The code audit (2026-10-18, made above): no seam, so each present_audit call prints as any tool's; its passes ride the gap review's slot.
@@ -1146,7 +1184,7 @@ public sealed partial class SidekickApp
                 Drawable = ChatScreen.Drawable(effective.ImageTools, rendering),
                 Sessions = sessionTools,
                 SessionsEnabled = effective.SessionTool,
-                Mcp = mcp.Tools,
+                Mcp = mcp.TurnTools(),
                 McpNotes = mcp.ServerInstructions,
                 McpEnabled = effective.McpServers,
                 Git = gitTools,
@@ -1241,8 +1279,12 @@ public sealed partial class SidekickApp
         _liveSession = session;
         try
         {
-            await HeadlessLineAsync(VersionLine).ConfigureAwait(false);
-            await HeadlessLineAsync(HeadlessModeLine).ConfigureAwait(false);
+            await HeadlessInfoLineAsync(VersionLine).ConfigureAwait(false);
+            await HeadlessInfoLineAsync(HeadlessModeLine).ConfigureAwait(false);
+            foreach (string notice in start.Notices)
+            {
+                await HeadlessNoticeLineAsync("[notice] " + notice).ConfigureAwait(false);
+            }
 
             // --allow mcp:<name> checked against every name the files hold, broken entries too, before the model or a server starts
             // (2026-11-20, the mcp-ask review's #9, #124, #75, #111): a typo is exit 2, as a bad argument is. Read without sealing or logging,
@@ -1288,7 +1330,7 @@ public sealed partial class SidekickApp
                 ReportHeadlessLeftover(session);
             }
 
-            await HeadlessLineAsync(session.Endpoint is null ? HeadlessNoServerLine(LlmScanMode.Resolve(EffectiveSettings)) : LlmSession.ConnectedLine(session.Endpoint)).ConfigureAwait(false);
+            await HeadlessInfoLineAsync(session.Endpoint is null ? HeadlessNoServerLine(LlmScanMode.Resolve(EffectiveSettings)) : LlmSession.ConnectedLine(session.Endpoint)).ConfigureAwait(false);
             try
             {
                 await mcp.ConnectAllAsync(EffectiveSettings, null, cancellationToken).ConfigureAwait(false);
@@ -1300,21 +1342,41 @@ public sealed partial class SidekickApp
 
             if (mcp.StatusLine() is { } mcpLine)
             {
-                await HeadlessLineAsync(mcpLine).ConfigureAwait(false);
+                await HeadlessInfoLineAsync(mcpLine).ConfigureAwait(false);
             }
 
             foreach (string warning in mcp.WarningLines())
             {
-                await HeadlessLineAsync(warning).ConfigureAwait(false);
+                await HeadlessInfoLineAsync(warning).ConfigureAwait(false);
             }
 
             var assistant = session.Assistant;
+            if (start.Resume is { } resume)
+            {
+                session.History.Restore(resume.Messages);
+                sessionId = resume.Id;
+                claudeSessionId = resume.Stored.ClaudeSessionId;
+                claudeServerSessionId = resume.Stored.ClaudeServerSessionId;
+                advisorThreads.Restore(resume.Stored.AdvisorThreads);
+                advisorThreads.RestoreSessions(resume.Stored.AdvisorSessions);
+                plan.Restore(resume.Stored.Plan);
+                planState.Executing = resume.Stored.Executing is { Path.Length: > 0 } executing ? executing : null;
+                if (planState.Executing is { Ralph: true } ralphPlan)
+                {
+                    ralphPlan.Paused = true;   // as RestorePlan: a crash mid-pass resumes with /plan ralph
+                }
+
+                resumedMark = resume.Stored.Mark;
+                resumedMadeFiles = resume.Stored.MadeFiles;
+            }
 
             // The conversation forgotten (/clear, /new, /splash, and a /test run's clean slate since 2026-09-30): the history, the
             // usage, the session row and the Claude threads; plan mode left with its notice.
             async Task ForgetConversationAsync()
             {
                 assistant?.History.Clear();
+                resumedMark = null;   // the resumed row's mark and made files were its own (2026-11-21)
+                resumedMadeFiles = null;
                 undoNotes.Clear();   // the conversation they described is gone (2026-10-28, review P5-02)
                 session.Usage.ResetConversation();
                 sessionId = null;
@@ -1354,6 +1416,8 @@ public sealed partial class SidekickApp
                 undoNotes.Clear();   // review P5-02, as above
                 session.Usage.ResetConversation();
                 sessionId = null;
+                resumedMark = null;
+                resumedMadeFiles = null;
                 claudeSessionId = null;
                 claudeServerSessionId = null;
                 advisorThreads.Clear();
@@ -1363,17 +1427,36 @@ public sealed partial class SidekickApp
                 gapImages = next.Images;
             }
 
+            // The one-shot prompt (2026-11-21, feature idea #42): its one line, then the end of input; a --prompt-file's is a message whatever it
+            // starts with (messageLine skips every command check); the piped context joins the prompt's line only when that is a message.
+            bool oneShot = start.Prompt is not null;
+            bool promptPending = oneShot;
+            bool promptUsed = false;
+            string? pipedLeft = start.Piped is { Length: > 0 } piped ? piped : null;
+            string promptWord = "";
+            bool messageLine = false;
+            bool lineIsPrompt = false;
+            (SlashCommand Command, string Args) LineParse(string typed, Func<string, bool>? isCustom = null) =>
+                messageLine ? (SlashCommand.None, "") : isCustom is null ? SlashCommands.Parse(typed) : SlashCommands.Parse(typed, isCustom);
+
             while (!cancellationToken.IsCancellationRequested)
             {
+                if (pipedLeft is not null && promptUsed)
+                {
+                    // The prompt was a command: the piped text was read, so its producer wasn't left blocked, and is left out.
+                    await HeadlessNoticeLineAsync("[notice] " + HeadlessText.PipedInputIgnored(promptWord)).ConfigureAwait(false);
+                    pipedLeft = null;
+                }
+
+                messageLine = false;
+                lineIsPrompt = false;
                 while (processes.TryTakeAlert(out var alert))
                 {
                     await HeadlessNoticeLineAsync("[notice] " + Shell.ShellText.AlertLine(alert)).ConfigureAwait(false);
                 }
 
                 await HeadlessMcpNoticesAsync(mcp).ConfigureAwait(false);
-                await _headlessOutput.WriteAsync("You: ").ConfigureAwait(false);
-                await _headlessOutput.FlushAsync(cancellationToken).ConfigureAwait(false);
-                _headlessAtLineStart = false;
+                await HeadlessPromptAsync(cancellationToken).ConfigureAwait(false);
 
                 string? line;
                 turnImages = [];
@@ -1384,8 +1467,16 @@ public sealed partial class SidekickApp
                     turnImages = gapImages;
                     gapImages = [];
                     line = pass;
-                    await _headlessOutput.WriteAsync((gapEcho ?? pass) + Environment.NewLine).ConfigureAwait(false);
+                    await HeadlessEchoAsync(gapEcho ?? pass).ConfigureAwait(false);
                     gapEcho = null;
+                }
+                else if (oneShot)
+                {
+                    line = promptPending ? start.Prompt : null;
+                    lineIsPrompt = promptPending;
+                    messageLine = promptPending && start.PromptIsMessage;
+                    promptUsed |= promptPending;
+                    promptPending = false;
                 }
                 else
                 {
@@ -1400,11 +1491,9 @@ public sealed partial class SidekickApp
                         break;
                     }
                 }
-                // A real console echoed the user's Enter; a pipe did not, and that is the caller's
-                // rendering problem, not ours.
-                _headlessAtLineStart = true;
+                HeadlessLineRead();
 
-                if (line is null || line.Trim().Equals("/exit", StringComparison.OrdinalIgnoreCase))
+                if (line is null || (!messageLine && line.Trim().Equals("/exit", StringComparison.OrdinalIgnoreCase)))
                 {
                     DiagnosticLog.Info(ChatScreen.AppCategory, HeadlessExitLogLine(line is null ? ChatScreen.ExitByEndOfInput : ChatScreen.ExitByCommand));
                     break;
@@ -1416,22 +1505,28 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
+                HeadlessNextLine(text, messageLine);
+                if (lineIsPrompt)
+                {
+                    promptWord = text.Split(' ', 2)[0];
+                }
+
                 // The picture folders' words (2026-10-18): their windows and the purge's question are the screen's.
-                if (SlashCommands.Parse(text) is (SlashCommand.Splash, { Length: > 0 }))
+                if (LineParse(text) is (SlashCommand.Splash, { Length: > 0 }))
                 {
                     await HeadlessLineAsync("[error] " + UI.SplashCommand.NeedsScreen).ConfigureAwait(false);
                     continue;
                 }
 
-                if (SlashCommands.Parse(text) is (SlashCommand.Pasted, _))
+                if (LineParse(text) is (SlashCommand.Pasted, _))
                 {
                     await HeadlessLineAsync("[error] " + Images.PastedCommand.NeedsScreen).ConfigureAwait(false);
                     continue;
                 }
 
                 // /clear, /new and /splash are one act here — there is no screen to keep, wipe or draw a picture on — under their own lines.
-                bool isClear = text.Equals("/clear", StringComparison.OrdinalIgnoreCase) || text.Equals("/splash", StringComparison.OrdinalIgnoreCase);
-                if (isClear || text.Equals("/new", StringComparison.OrdinalIgnoreCase))
+                bool isClear = !messageLine && (text.Equals("/clear", StringComparison.OrdinalIgnoreCase) || text.Equals("/splash", StringComparison.OrdinalIgnoreCase));
+                if (isClear || (!messageLine && text.Equals("/new", StringComparison.OrdinalIgnoreCase)))
                 {
                     await ForgetConversationAsync().ConfigureAwait(false);
                     await HeadlessLineAsync(HeadlessReplyPrefix + (isClear ? "(conversation cleared)" : ChatScreen.NewConversationNotice)).ConfigureAwait(false);
@@ -1440,7 +1535,7 @@ public sealed partial class SidekickApp
 
                 // /skills add (2026-09-26): ahead of the server check, since an install needs no LLM; the screen's flow,
                 // several hits listed as ids and nothing written without --yes. A bare /skills still goes to the model.
-                if (SlashCommands.Parse(text) is (SlashCommand.Skills, var skillArgs)
+                if (LineParse(text) is (SlashCommand.Skills, var skillArgs)
                     && skillArgs.Split(' ', 2)[0].Equals(Skills.SkillInstallText.AddWord, StringComparison.OrdinalIgnoreCase))
                 {
                     await HeadlessSkillsAddAsync(skillArgs, cancellationToken).ConfigureAwait(false);
@@ -1448,37 +1543,38 @@ public sealed partial class SidekickApp
                 }
 
                 // /claude (2026-09-27): ahead of the server check too — Claude Code is its own model; the history it joins is the session's.
-                if (SlashCommands.Parse(text) is (SlashCommand.Claude, var claudeArgs))
+                if (LineParse(text) is (SlashCommand.Claude, var claudeArgs))
                 {
                     var claudeTurn = await HeadlessClaudeAsync(claude, session, claudeArgs, claudeSessionId, files.Root, cancellationToken).ConfigureAwait(false);
                     claudeSessionId = claudeTurn.SessionId;
                     if (claudeTurn.Reply is { } claudeReply && EffectiveSettings.SessionLogging)
                     {
-                        sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "");
+                        sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "", files.Root);
                         if (sessionId is { } claudeRow)
                         {
-                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(claudeRow, text, claudeReply, 0, [], [], 0, claudeTurn.Usage.Input, claudeTurn.Usage.Output, claudeTurn.Cancelled));
+                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(claudeRow, text, claudeReply, 0, [], [], 0, claudeTurn.Usage.Input, claudeTurn.Usage.Output, claudeTurn.Cancelled,
+                                model: Sessions.SessionText.SideTurnModel("/claude"), usage: claudeTurn.Usage, cwd: files.Root));
                         }
                     }
 
                     if (sessionId is { } claudeSaved)
                     {
-                        sessions.SaveHistory(claudeSaved, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
+                        SaveHeadlessHistory(claudeSaved, session.History.Messages);
                     }
 
                     continue;
                 }
 
                 // /advisor (2026-10-10): ahead of the server check too — an advisor on its own URL needs none of this run's.
-                if (SlashCommands.Parse(text) is (SlashCommand.Advisor, var advisorArgs))
+                if (LineParse(text) is (SlashCommand.Advisor, var advisorArgs))
                 {
                     if (await HeadlessAdvisorAsync(neonAdvisor, session, advisorArgs, cancellationToken).ConfigureAwait(false) is { } advisorReply && EffectiveSettings.SessionLogging)
                     {
-                        sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "");
+                        sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "", files.Root);
                         if (sessionId is { } advisorRow)
                         {
-                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(advisorRow, text, advisorReply, 0, [], [], 0, 0, 0, false));
-                            sessions.SaveHistory(advisorRow, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
+                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(advisorRow, text, advisorReply, 0, [], [], 0, 0, 0, false, model: Sessions.SessionText.SideTurnModel("/advisor", Advisors.AdvisorRoster.Find(Advisors.AdvisorRoster.Entries(EffectiveSettings.AdvisorList), Advisors.AdvisorText.Split(advisorArgs).Item1).Item1?.Profile), cwd: files.Root));
+                            SaveHeadlessHistory(advisorRow, session.History.Messages);
                         }
                     }
 
@@ -1487,7 +1583,7 @@ public sealed partial class SidekickApp
 
                 // /rewind [n] (2026-09-30): ahead of the server check too, since cutting the history needs no LLM. There is no
                 // picker and no input row, so it goes n messages back at once (1 by default) and prints the dropped message.
-                if (SlashCommands.Parse(text) is (SlashCommand.Rewind, var rewindArgs))
+                if (LineParse(text) is (SlashCommand.Rewind, var rewindArgs))
                 {
                     var held = ConversationRewind.Turns(session.History.Messages);
                     if (held.Count == 0)
@@ -1527,7 +1623,7 @@ public sealed partial class SidekickApp
                     DiagnosticLog.Info(ChatScreen.AppCategory, RewindText.RewoundLogLine(cut.Turns, picked.Number));
                     if (sessionId is { } rewound)
                     {
-                        sessions.SaveHistory(rewound, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
+                        SaveHeadlessHistory(rewound, session.History.Messages);
                     }
 
                     await HeadlessLineAsync(HeadlessReplyPrefix + RewindText.RewoundNotice(cut.Turns, picked.Text)).ConfigureAwait(false);
@@ -1548,7 +1644,7 @@ public sealed partial class SidekickApp
 
                 // /undo [n] and /undo purge [all] (2026-10-28, the checkpoints plan): nothing asks headless, so conflicts are skipped and the
                 // purges run as typed.
-                if (SlashCommands.Parse(text) is (SlashCommand.Undo, var undoArgs))
+                if (LineParse(text) is (SlashCommand.Undo, var undoArgs))
                 {
                     if (UndoText.Parse(undoArgs) is not { } undo)
                     {
@@ -1564,14 +1660,14 @@ public sealed partial class SidekickApp
 
                     if (await HeadlessUndoAsync(session.History.Messages, undo.Count, files, images, undoNotes, cancellationToken).ConfigureAwait(false) && sessionId is { } undid)
                     {
-                        sessions.SaveHistory(undid, Sessions.SessionHistory.ToJson(session.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
+                        SaveHeadlessHistory(undid, session.History.Messages);
                     }
 
                     continue;
                 }
 
                 // /ha (2026-09-28): ahead of the server check too — the house needs no LLM.
-                if (SlashCommands.Parse(text) is (SlashCommand.HomeAssistant, var haArgs))
+                if (LineParse(text) is (SlashCommand.HomeAssistant, var haArgs))
                 {
                     // /ha stills (2026-10-27): its windows and the purge's question are the screen's, as /pasted's are.
                     if (HomeAssistant.HaStillsCommand.TryParse(haArgs, out _))
@@ -1591,7 +1687,7 @@ public sealed partial class SidekickApp
 
                 // /browser (2026-10-13): the Browser window is the screen's; headless says so, ahead of the server check. The saved links
                 // (later that day) need no window: save <url>, list, list --clear (at once) and unsave work here (BrowserCommand.Headless).
-                if (SlashCommands.Parse(text) is (SlashCommand.Browser, var browserArgs))
+                if (LineParse(text) is (SlashCommand.Browser, var browserArgs))
                 {
                     foreach (string browserRow in BrowserCommand.Headless(new Viewer.BrowserLinks(_settings.ProfileDirectory, _time), browserArgs))
                     {
@@ -1603,7 +1699,7 @@ public sealed partial class SidekickApp
 
                 // /prompts (2026-10-13): the saved prompts, ahead of the server check so the model never gets the line. No pane and no
                 // draft line here: the list and a prompt are printed, save, remove and list --clear (at once) work (PromptsCommand.Headless).
-                if (SlashCommands.Parse(text) is (SlashCommand.Prompts, var promptsArgs))
+                if (LineParse(text) is (SlashCommand.Prompts, var promptsArgs))
                 {
                     foreach (string promptsRow in PromptsCommand.Headless(new Prompts.SavedPrompts(_settings.ProfileDirectory, _time), promptsArgs))
                     {
@@ -1614,7 +1710,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /camera (2026-10-02): ahead of the server check too; headless lists the cameras and nothing else.
-                if (SlashCommands.Parse(text) is (SlashCommand.Camera, var cameraArgs))
+                if (LineParse(text) is (SlashCommand.Camera, var cameraArgs))
                 {
                     if (Camera.CameraCommand.Parse(cameraArgs).Verb != Camera.CameraVerb.List)
                     {
@@ -1631,7 +1727,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /screen (2026-10-04): the camera's shape; headless lists the targets and captures nothing (a screenshot goes on a line).
-                if (SlashCommands.Parse(text) is (SlashCommand.Screen, var screenArgs))
+                if (LineParse(text) is (SlashCommand.Screen, var screenArgs))
                 {
                     if (!string.Equals(screenArgs.Trim(), "list", StringComparison.OrdinalIgnoreCase))
                     {
@@ -1664,7 +1760,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /video (2026-11-12): every form wants the video window, which headless has none of.
-                if (SlashCommands.Parse(text) is (SlashCommand.Video, _))
+                if (LineParse(text) is (SlashCommand.Video, _))
                 {
                     await HeadlessLineAsync("[error] " + Viewer.VideoText.NeedsScreen).ConfigureAwait(false);
                     continue;
@@ -1673,7 +1769,7 @@ public sealed partial class SidekickApp
                 // /youtube (2026-10-05): a search lists what it finds, ahead of the server check (the API needs no LLM); the saved
                 // videos (2026-10-07) are listed, saved by id or link and taken off; a named playlist's entries are listed (2026-10-08);
                 // every other verb wants the video window, which headless has none of.
-                if (SlashCommands.Parse(text) is (SlashCommand.YouTube, var youTubeArgs))
+                if (LineParse(text) is (SlashCommand.YouTube, var youTubeArgs))
                 {
                     var youTubeLine = YouTube.YouTubeCommand.Parse(youTubeArgs);
                     if (youTubeLine.Verb is YouTube.YouTubeVerb.Save or YouTube.YouTubeVerb.Unsave or YouTube.YouTubeVerb.Saved or YouTube.YouTubeVerb.ClearSaved)
@@ -1709,7 +1805,7 @@ public sealed partial class SidekickApp
 
                 // /shopping (2026-10-11): ahead of the server check too — the list needs no LLM. No pane: the bare word prints the list,
                 // and a typed clear all or store remove is the act (headless /youtube list --clear's rule); print through /print's service.
-                if (SlashCommands.Parse(text) is (SlashCommand.Shopping, var shoppingArgs))
+                if (LineParse(text) is (SlashCommand.Shopping, var shoppingArgs))
                 {
                     Func<string, string, CancellationToken, Task<string>>? shoppingPrint = Printing.PrintText.Supported ? (markdown, title, token) => print.RunAsync(new Printing.PrintRequest(null, Markdown: markdown, Title: title), token) : null;
                     foreach (string shoppingRow in await Shopping.ShoppingCommandRunner.RunAsync(shopping, Shopping.ShoppingCommand.Parse(shoppingArgs), files, confirm: null, shoppingPrint, cancellationToken, shoppingReference, _time).ConfigureAwait(false))
@@ -1721,35 +1817,35 @@ public sealed partial class SidekickApp
                 }
 
                 // /avatar (2026-10-10): ahead of the server check too — the profile's face needs no LLM; no picker here.
-                if (SlashCommands.Parse(text) is (SlashCommand.Avatar, var avatarArgs))
+                if (LineParse(text) is (SlashCommand.Avatar, var avatarArgs))
                 {
                     await HeadlessLineAsync(HeadlessAvatar(avatarArgs)).ConfigureAwait(false);
                     continue;
                 }
 
                 // /webui (2026-10-14): the Web UI is the screen's alone in this version.
-                if (SlashCommands.Parse(text) is (SlashCommand.WebUi, _))
+                if (LineParse(text) is (SlashCommand.WebUi, _))
                 {
                     await HeadlessLineAsync("[error] " + WebUi.WebUiText.NotHeadlessError).ConfigureAwait(false);
                     continue;
                 }
 
                 // /midi (2026-11-12, the MIDI plan): nothing is listened to headless.
-                if (SlashCommands.Parse(text) is (SlashCommand.Midi, _))
+                if (LineParse(text) is (SlashCommand.Midi, _))
                 {
                     await HeadlessLineAsync("[error] " + Midi.MidiText.NotHeadlessError).ConfigureAwait(false);
                     continue;
                 }
 
                 // /update (2026-11-04, review P5-12): the screen's alone too, or it went to the server check and then the model as text.
-                if (SlashCommands.Parse(text) is (SlashCommand.Update, _))
+                if (LineParse(text) is (SlashCommand.Update, _))
                 {
                     await HeadlessLineAsync("[error] " + Updates.UpdateText.NotHeadless).ConfigureAwait(false);
                     continue;
                 }
 
                 // /eventlog (2026-10-15): ahead of the server check too — the logs need no LLM; the rows as lines.
-                if (SlashCommands.Parse(text) is (SlashCommand.EventLog, var eventLogArgs))
+                if (LineParse(text) is (SlashCommand.EventLog, var eventLogArgs))
                 {
                     var eventLogResult = _unifiedLog is not null   // a Mac's logs (2026-10-18, the Mac event-log plan's phase 4)
                         ? await EventLog.MacLogCommand.RunAsync(macLog, eventLogArgs, ChatScreen.EventLogLimit(EffectiveSettings), ChatScreen.EventLogScanLimit(EffectiveSettings), cancellationToken).ConfigureAwait(false)
@@ -1763,7 +1859,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /monitor (2026-10-23, the monitors plan): ahead of the server check too — no LLM needed; list and the changes, unasked.
-                if (SlashCommands.Parse(text) is (SlashCommand.Monitor, var monitorArgs))
+                if (LineParse(text) is (SlashCommand.Monitor, var monitorArgs))
                 {
                     var (monitorLines, monitorFailed) = await MonitorLinesAsync(monitorActions, EffectiveSettings, monitorArgs, change => _settings.Update(change), cancellationToken).ConfigureAwait(false);
                     foreach (string monitorLine in monitorLines)
@@ -1775,7 +1871,7 @@ public sealed partial class SidekickApp
                 }
 
                 // The admin families' commands (2026-10-15, the admin-tools plan): ahead of the server check too — none needs an LLM; the lines printed.
-                if (SlashCommands.Parse(text) is (var adminCommand and (SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad), var adminArgs))
+                if (LineParse(text) is (var adminCommand and (SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad), var adminArgs))
                 {
                     var (adminLines, adminFailed) = adminCommand switch
                     {
@@ -1793,7 +1889,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /docker (2026-10-02): ahead of the server check too — the engine needs no LLM; the bare word lists.
-                if (SlashCommands.Parse(text) is (SlashCommand.Docker, var dockerArgs))
+                if (LineParse(text) is (SlashCommand.Docker, var dockerArgs))
                 {
                     var dockerResult = await Docker.DockerCommand.RunAsync(docker, dockerArgs, cancellationToken).ConfigureAwait(false);
                     foreach (string dockerLine in dockerResult.Lines)
@@ -1805,7 +1901,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /print (2026-09-28): ahead of the server check too — only /print reply needs a reply to print.
-                if (SlashCommands.Parse(text) is (SlashCommand.Print, var printArgs))
+                if (LineParse(text) is (SlashCommand.Print, var printArgs))
                 {
                     // The TUI's answer where nothing prints (2026-10-07 for a Mac, the docs pass; a Mac prints since 2026-10-08).
                     if (!Printing.PrintText.Supported)
@@ -1824,7 +1920,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /pdf (2026-10-03): ahead of the server check too — only /pdf reply needs a reply. Its edits too (2026-10-14).
-                if (SlashCommands.Parse(text) is (SlashCommand.Pdf, var pdfArgs))
+                if (LineParse(text) is (SlashCommand.Pdf, var pdfArgs))
                 {
                     string pdfResult = await Pdf.PdfCommand.RunAsync(pdf, pdfArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken, pdfEditing).ConfigureAwait(false);
                     await HeadlessLineAsync((pdfResult.StartsWith("Error:", StringComparison.Ordinal) ? "[error] " : "") + pdfResult).ConfigureAwait(false);
@@ -1832,7 +1928,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /settings export|import (2026-11-13, settings transfer): ahead of the server check, as /pdf; every other /settings still goes to the model.
-                if (SlashCommands.Parse(text) is (SlashCommand.Settings, var settingsArgs) && SettingsTransferCommand.Parse(settingsArgs) is { } transfer)
+                if (LineParse(text) is (SlashCommand.Settings, var settingsArgs) && SettingsTransferCommand.Parse(settingsArgs) is { } transfer)
                 {
                     foreach (var transferLine in await RunSettingsTransferAsync(transfer.Verb, transfer.Path, cancellationToken).ConfigureAwait(false))
                     {
@@ -1843,7 +1939,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /docx (2026-10-29, the Office writing plan): ahead of the server check like /pdf — only /docx reply needs a reply.
-                if (SlashCommands.Parse(text) is (SlashCommand.Docx, var docxArgs))
+                if (LineParse(text) is (SlashCommand.Docx, var docxArgs))
                 {
                     string docxResult = await Office.DocxCommand.RunAsync(docx, docxArgs, () => LastReplyText(assistant?.History.Messages), cancellationToken).ConfigureAwait(false);
                     await HeadlessLineAsync((docxResult.StartsWith("Error:", StringComparison.Ordinal) ? "[error] " : "") + docxResult).ConfigureAwait(false);
@@ -1852,7 +1948,7 @@ public sealed partial class SidekickApp
 
                 // /sessions export (2026-10-30, review F60): the screen's alone, so an [error] line rather than a message to the model. A bare
                 // /sessions still goes on as the text it is (HEADLESS.md).
-                if (SlashCommands.Parse(text) is (SlashCommand.Session, var sessionsArgs)
+                if (LineParse(text) is (SlashCommand.Session, var sessionsArgs)
                     && sessionsArgs.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries) is [var sessionsVerb, ..]
                     && sessionsVerb.Equals(ChatScreen.SessionExportWord, StringComparison.OrdinalIgnoreCase))
                 {
@@ -1861,7 +1957,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /test (2026-09-28): ahead of the server check, since the listing and the saved runs need no LLM; a run refuses without one.
-                if (SlashCommands.Parse(text) is (SlashCommand.Test, var testArgs))
+                if (LineParse(text) is (SlashCommand.Test, var testArgs))
                 {
                     await HeadlessTestAsync(session, testArgs, ForgetConversationAsync, cancellationToken).ConfigureAwait(false);
                     continue;
@@ -1871,9 +1967,9 @@ public sealed partial class SidekickApp
                 // then a message from here on — customSent skips the command checks below, so a body starting /plan never runs as /plan.
                 // The turn's message carries what was typed or that the app wrote it (2026-10-31, review P1-5/P8-1, Llm.TurnMark).
                 string? customTitle = null;
-                bool customSent = false;
+                bool customSent = messageLine;
                 Llm.TurnMark? turnMark = null;
-                if (SlashCommands.Parse(text, customCommands.Knows) is (SlashCommand.Custom, _))
+                if (LineParse(text, customCommands.Knows) is (SlashCommand.Custom, _))
                 {
                     // Found and expanded as the screen does (2026-10-31, review P1-11: a file gone since the parse is NotFound).
                     var run = CustomCommandsCommand.Resolve(customCommands, text);
@@ -1896,7 +1992,7 @@ public sealed partial class SidekickApp
                 }
 
                 // /commands (2026-10-30): the list as notices, new and save write the file and print its path (no editor here); no LLM needed.
-                if (!customSent && SlashCommands.Parse(text) is (SlashCommand.Commands, var commandsArgs))
+                if (!customSent && LineParse(text) is (SlashCommand.Commands, var commandsArgs))
                 {
                     var commandsLine = CustomCommandsCommand.Parse(commandsArgs);
                     switch (commandsLine.Verb)
@@ -1934,7 +2030,7 @@ public sealed partial class SidekickApp
 
                 // /help <your command> (2026-10-30): its card from the scan, no model asked, as the screen's; plain text here (2026-10-31, review
                 // P3-6: the screen's is Markdown), and a Skipped file's card too (review P4-6).
-                if (!customSent && SlashCommands.Parse(text) is (SlashCommand.Help, { Length: > 0 } cardWords)
+                if (!customSent && LineParse(text) is (SlashCommand.Help, { Length: > 0 } cardWords)
                     && CustomCommandsCommand.HelpCard(customCommands.Recent(), cardWords) is { } card)
                 {
                     await HeadlessLineAsync(HeadlessReplyPrefix + CustomCommandText.Card(card, markdown: false)).ConfigureAwait(false);
@@ -1943,7 +2039,7 @@ public sealed partial class SidekickApp
 
                 // /help <words> (2026-10-14), as the screen does: the model looks the words up with neon_help, or with no model (or the
                 // tool off) the manual answers itself, ahead of the server check. A bare /help still goes on as the text it is.
-                if (!customSent && SlashCommands.Parse(text) is (SlashCommand.Help, { Length: > 0 } helpWords))
+                if (!customSent && LineParse(text) is (SlashCommand.Help, { Length: > 0 } helpWords))
                 {
                     if (assistant is not null && ChatScreen.HelpLookupOffered(EffectiveSettings.LlmOfferTools, ChatScreen.HelpOffered(EffectiveSettings), ToolsText.DisabledSet(EffectiveSettings.ToolsDisabled)))
                     {
@@ -1968,10 +2064,15 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
-                var (command, args) = customSent ? (SlashCommand.None, "") : SlashCommands.Parse(text);
+                var (command, args) = customSent ? (SlashCommand.None, "") : LineParse(text);
                 if (command == SlashCommand.Compact)
                 {
                     var (outcome, details) = await CompactHeadlessAsync(session, assistant, args.Length > 0 ? args : null, autoPercent: null, cancellationToken).ConfigureAwait(false);
+                    if (outcome.StartsWith(CompactionText.FailedPrefix, StringComparison.Ordinal))
+                    {
+                        HeadlessFail("/compact", outcome[CompactionText.FailedPrefix.Length..]);
+                    }
+
                     await HeadlessLineAsync(HeadlessReplyPrefix + outcome).ConfigureAwait(false);
                     foreach (string detail in details)
                     {
@@ -1989,7 +2090,7 @@ public sealed partial class SidekickApp
                     {
                         if (sessionId is { } planSession)
                         {
-                            sessions.SaveHistory(planSession, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
+                            SaveHeadlessHistory(planSession, assistant.History.Messages);
                         }
 
                         // A Ralph loop begun (2026-10-18): its first pass in the slot.
@@ -2059,6 +2160,8 @@ public sealed partial class SidekickApp
                 lastInputs = turnInputs;
                 ChatScreen.PrepareTurn(assistant, turnInputs, memory, persona, operata, vocalia, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength, replyFloor: ChatScreen.PlanReplyFloor(plan, files)), skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, markdown: false, processes, EffectiveSettings.LlmPreserveThinking, LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId));
                 assistant.ThinkingInFlightOnly = Assistant.InFlightOnlyWire(session.Endpoint?.BaseUrl);
+                // An MCP result's pictures to a model that can't see them (2026-11-21, feature idea #31), as the screen does.
+                assistant.ToolPicturesUnseen = ChatScreen.UnseenMcpPictures(session.SeesPictures, assistant.Tools);
                 assistant.PictureBudget = new PictureBudget(EffectiveSettings.LlmPictureKeep, EffectiveSettings.LlmPictureMegabytes);
 
                 // The Claude Code server (2026-09-30), as the screen does: the turn names its session, no guard over a history the CLI does not read.
@@ -2086,6 +2189,19 @@ public sealed partial class SidekickApp
                 assistant.TurnMark = passTurn ? Llm.TurnMark.App : turnMark;
                 // An audit's views as its pass turn is sent (2026-11-17): a turn dropped for a retry forgets what it read.
                 var viewedMark = audit.InPass ? audit.ViewedMark() : null;
+                if (pipedLeft is not null && lineIsPrompt && (messageLine || customSent || !line.TrimStart().StartsWith('/')))
+                {
+                    var (withPiped, cutNotice) = HeadlessWithPiped(text, pipedLeft, session.ContextLength?.Tokens);
+                    text = withPiped;
+                    pipedLeft = null;
+                    if (cutNotice is not null)
+                    {
+                        await HeadlessNoticeLineAsync("[notice] " + cutNotice).ConfigureAwait(false);
+                    }
+                }
+
+                // What failed before this turn (2026-11-21, #41): a pass the app runs again takes back what its failed turn noted.
+                _turnFailMark = _headlessFailures.Mark();
                 HeadlessTurn turn;
                 try
                 {
@@ -2157,7 +2273,7 @@ public sealed partial class SidekickApp
                 {
                     bool firstRow = sessionId is null;
                     // A custom command's session is titled with the typed line (2026-10-30), as the screen's.
-                    sessionId ??= sessions.Begin(inPass?.Title ?? Sessions.SessionText.FirstLineTitle(customTitle ?? text), session.Endpoint?.ModelId ?? "");
+                    sessionId ??= sessions.Begin(inPass?.Title ?? Sessions.SessionText.FirstLineTitle(customTitle ?? text), session.Endpoint?.ModelId ?? "", files.Root);
                     if (firstRow && inPass is not null && sessionId is { } titled)
                     {
                         sessions.SetTitle(titled, inPass.Title, Sessions.TitleSource.User);
@@ -2166,8 +2282,9 @@ public sealed partial class SidekickApp
                     if (sessionId is { } id)
                     {
                         var usage = session.Usage.LastRequest;
-                        ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, inPass?.Line ?? text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled, turn.Trace.Sources));
-                        sessions.SaveHistory(id, Sessions.SessionHistory.ToJson(assistant.History.Messages, plan.ToStored(), planState.Executing, claudeSessionId, EffectiveSettings.SessionSaveThinking, claudeServerSessionId, advisorThreads: advisorThreads.Snapshot(), advisorSessions: advisorThreads.Sessions()));
+                        ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, inPass?.Line ?? text, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled, turn.Trace.Sources,
+                            model: session.Endpoint?.ModelId, usage: usage, cwd: files.Root));
+                        SaveHeadlessHistory(id, assistant.History.Messages);
                     }
                 }
 
@@ -2201,6 +2318,7 @@ public sealed partial class SidekickApp
                     }
 
                     assistant.History.RemoveLastTurn();
+                    _headlessFailures.BackTo(_turnFailMark);   // a blip the app recovered from is no failed run
                     if (turnImages.Count > 0)
                     {
                         // The pictures may be the failure, as on the screen (the Ralph loop's retry rule).
@@ -2228,9 +2346,22 @@ public sealed partial class SidekickApp
                 await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
             }
 
+            // What failed (2026-11-21, feature idea #41): one line, and exit 4, which beats 3.
+            if (_headlessFailures.SummaryLine() is { } failedLine)
+            {
+                DiagnosticLog.Info(ChatScreen.AppCategory, failedLine);
+                await HeadlessNoticeLineAsync("[notice] " + failedLine).ConfigureAwait(false);
+            }
+
+            // The session this run wrote, on stderr, for the next run's --session (2026-11-21, feature idea #44).
+            if (wroteSession is { } wrote)
+            {
+                await HeadlessStderrNoticeAsync(HeadlessText.SessionLine(wrote)).ConfigureAwait(false);
+            }
+
             await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
-            await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-            return refused.Count > 0 || _headlessAllowances.AnyRefused ? HeadlessRefusedExitCode : 0;
+            await FlushHeadlessAsync().ConfigureAwait(false);
+            return _headlessFailures.Any ? HeadlessFailedExitCode : refused.Count > 0 || _headlessAllowances.AnyRefused ? HeadlessRefusedExitCode : 0;
         }
         finally
         {
@@ -2739,6 +2870,11 @@ public sealed partial class SidekickApp
     /// </summary>
     private void EndHeadlessGapReview(Plans.PlanSession plan, WorkingDirectory files, Plans.PlanGapLoop loop, Plans.PlanGapStop reason, string? path, string? body, bool advisorAsked, List<string> lines)
     {
+        if (reason == Plans.PlanGapStop.Stopped)
+        {
+            HeadlessFail("/plan gaps", HeadlessText.Stopped(Plans.PlanText.GapStopNotice(reason, loop.Pass, loop.Closed)));
+        }
+
         lines.AddRange(Plans.PlanText.ReviewSummaryLines(loop.History, reason, loop.CleanPasses));
         if (path is not null && body is not null && reason is Plans.PlanGapStop.Converged or Plans.PlanGapStop.Unconfirmed or Plans.PlanGapStop.Limit or Plans.PlanGapStop.Stalled)
         {
@@ -3043,9 +3179,7 @@ public sealed partial class SidekickApp
                 {
                     case TurnEvent.TextDelta delta:
                         reply.Append(delta.Text);
-                        await _headlessOutput.WriteAsync(delta.Text).ConfigureAwait(false);
-                        await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-                        _headlessAtLineStart = delta.Text.EndsWith('\n');
+                        await HeadlessReplyTextAsync(delta.Text).ConfigureAwait(false);
                         break;
                     case TurnEvent.ToolCall call:
                         await HeadlessNoticeLineAsync($"[tool] {call.Name} {call.ArgumentsJson}").ConfigureAwait(false);
@@ -3120,7 +3254,7 @@ public sealed partial class SidekickApp
 
         await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
         ReportHeadlessLeftover(session);   // an advisor's embedded load, under a tool call, may have cleared the GPU
-        await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        await FlushHeadlessAsync().ConfigureAwait(false);
         return new HeadlessTurn(reply.ToString(), trace, cancelled, failed, failure);
     }
 
@@ -3174,13 +3308,11 @@ public sealed partial class SidekickApp
                                 // A block after a tool line starts with the parser's paragraph break: the prefix is the break here.
                                 shown = shown.TrimStart('\r', '\n');
                                 await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
-                                await _headlessOutput.WriteAsync(HeadlessClaudePrefix).ConfigureAwait(false);
+                                await WriteHeadlessPrefixAsync(HeadlessClaudePrefix).ConfigureAwait(false);
                                 prefixed = true;
                             }
 
-                            await _headlessOutput.WriteAsync(shown).ConfigureAwait(false);
-                            await _headlessOutput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
-                            _headlessAtLineStart = shown.EndsWith('\n');
+                            await HeadlessReplyTextAsync(shown).ConfigureAwait(false);
                             break;
                         case Claude.ClaudeEvent.ToolActivity tool:
                             await HeadlessNoticeLineAsync("[tool] " + Claude.ClaudeText.ToolNote(tool.Name, tool.Detail)).ConfigureAwait(false);
@@ -3250,12 +3382,6 @@ public sealed partial class SidekickApp
             session.History.AddUser(Claude.ClaudeText.HistoryUser(prompt));
             session.History.AddAssistant(Claude.ClaudeText.HistoryReply(reply.ToString()));
         }
-    }
-
-    private async Task WriteHeadlessPrefixAsync()
-    {
-        await _headlessOutput.WriteAsync(HeadlessReplyPrefix).ConfigureAwait(false);
-        _headlessAtLineStart = false;
     }
 
     /// <summary>
@@ -3386,19 +3512,6 @@ public sealed partial class SidekickApp
 
         public void Answered(AdvisorEntry advisor, string answer, string model, Llm.TokenUsage usage, string? warning, string avatar) =>
             app.HeadlessSyncLine("[notice] " + Advisors.AdvisorText.Footer(advisor.Profile, model, usage, warning));
-    }
-
-    /// <summary>One line written at once, on a line of its own (the advisor's view).</summary>
-    private void HeadlessSyncLine(string line)
-    {
-        if (!_headlessAtLineStart)
-        {
-            _headlessOutput.WriteLine();
-        }
-
-        _headlessOutput.WriteLine(line);
-        _headlessOutput.Flush();
-        _headlessAtLineStart = true;
     }
 
     /// <summary>
@@ -3538,14 +3651,8 @@ public sealed partial class SidekickApp
     /// </summary>
     private void HeadlessDockerPhase(string phase)
     {
-        if (!_headlessAtLineStart)
-        {
-            _headlessOutput.WriteLine();
-        }
-
         string line = phase.StartsWith(Docker.DockerText.Glyph, StringComparison.Ordinal) ? phase : Docker.DockerText.Glyph + " " + phase;
-        _headlessOutput.WriteLine("[notice] " + line);
-        _headlessAtLineStart = true;
+        HeadlessSyncLine("[notice] " + line);
     }
 
     /// <summary>
@@ -3669,16 +3776,6 @@ public sealed partial class SidekickApp
         return videos.Count == 0 ? [YouTube.YouTubeText.NoneSaved] : YouTube.YouTubeText.SavedList(videos).Split('\n');
     }
 
-    private async Task HeadlessLineAsync(string line)
-    {
-        await _headlessOutput.WriteLineAsync(line).ConfigureAwait(false);
-        _headlessAtLineStart = true;
-    }
-
-    /// <summary>
-    /// A notice line, on a line of its own; since 2026-10-17 spaced after a selector sequence the terminal draws one cell wide
-    /// (<see cref="UI.TextCells.SpaceSelectorSequences"/> under <c>headlessNarrow</c>, Terminal.app's main screen, never a pipe). A reply never is.
-    /// </summary>
     /// <summary>
     /// The MCP session's queued notices as headless lines (2026-11-19, feature idea #30): after each turn and before each line is read,
     /// a reconnect or a changed tool list as <c>[notice]</c>, a server that didn't come back as <c>[error]</c>.
@@ -3689,43 +3786,6 @@ public sealed partial class SidekickApp
         {
             await HeadlessNoticeLineAsync((error ? "[error] " : "[notice] ") + text).ConfigureAwait(false);
         }
-    }
-
-    private async Task HeadlessNoticeLineAsync(string line)
-    {
-        await EnsureHeadlessLineStartAsync().ConfigureAwait(false);
-        await HeadlessLineAsync(UI.TextCells.SpaceSelectorSequences(line, _headlessNarrow)).ConfigureAwait(false);
-    }
-
-    private async Task EnsureHeadlessLineStartAsync()
-    {
-        if (!_headlessAtLineStart)
-        {
-            await _headlessOutput.WriteLineAsync().ConfigureAwait(false);
-            _headlessAtLineStart = true;
-        }
-    }
-
-    /// <summary>
-    /// Warnings and errors reach the headless writer as <c>[category] message</c> lines; anything
-    /// quieter is dropped. Synchronous because <see cref="DiagnosticLog"/> calls subscribers
-    /// inline; the turn loop awaits between writes, so the two never interleave mid-line.
-    /// </summary>
-    private void OnHeadlessDiagnostic(DiagnosticEvent evt)
-    {
-        if (evt.Level < DiagnosticLevel.Warning)
-        {
-            return;
-        }
-
-        if (!_headlessAtLineStart)
-        {
-            _headlessOutput.WriteLine();
-        }
-
-        _headlessOutput.WriteLine($"[{evt.Category}] {evt.Message}");
-        _headlessOutput.Flush();
-        _headlessAtLineStart = true;
     }
 
     /// <summary>

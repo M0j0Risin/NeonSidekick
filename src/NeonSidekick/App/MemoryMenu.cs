@@ -67,7 +67,53 @@ internal sealed class MemoryMenu
         Edit,
         Toggle,
         Forget,
+
+        /// <summary>Saved for the working folder alone (2026-11-21, feature idea #6).</summary>
+        ThisFolder,
+
+        /// <summary>Offered in every folder again.</summary>
+        Everywhere,
     }
+
+    /// <summary>Where a memory applies, as seen from the working folder (2026-11-21, feature idea #6).</summary>
+    public enum FolderScope
+    {
+        /// <summary>No folder known (a pane built without one): no folder choices.</summary>
+        Unknown,
+
+        /// <summary>Everywhere: the choice to keep it to this folder.</summary>
+        Everywhere,
+
+        /// <summary>This folder only: the choice to widen it.</summary>
+        Here,
+
+        /// <summary>Another folder only: listed, not in this folder's prompt; both choices.</summary>
+        Elsewhere,
+    }
+
+    /// <summary>Where <paramref name="entry"/> applies from <paramref name="folder"/>; <see cref="FolderScope.Unknown"/> with no folder. Pure.</summary>
+    public static FolderScope ScopeOf(MemoryEntry entry, string? folder)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return folder is null ? FolderScope.Unknown
+            : entry.Folder is null ? FolderScope.Everywhere
+            : Files.FolderMatch.Same(entry.Folder, folder) ? FolderScope.Here
+            : FolderScope.Elsewhere;
+    }
+
+    /// <summary>The folder choices <paramref name="scope"/> offers, in order (2026-11-21). Pure.</summary>
+    public static IReadOnlyList<RowAction> FolderActions(FolderScope scope) => scope switch
+    {
+        FolderScope.Everywhere => [RowAction.ThisFolder],
+        FolderScope.Here => [RowAction.Everywhere],
+        FolderScope.Elsewhere => [RowAction.Everywhere, RowAction.ThisFolder],
+        _ => [],
+    };
+
+    /// <summary>A folder choice's row, its effect dim beside it (2026-11-21). Pinned.</summary>
+    public static string FolderActionRow(RowAction action) => action == RowAction.ThisFolder
+        ? Markup.Escape(MemoryText.ThisFolderOnly.PadRight(17)) + Theme.DimMarkup("offer it only while working in this folder")
+        : Markup.Escape(MemoryText.Everywhere.PadRight(17)) + Theme.DimMarkup("offer it in every folder");
 
     /// <summary>The words of the choice (2026-10-13). Pinned.</summary>
     public const string EditWord = "edit";
@@ -147,15 +193,18 @@ internal sealed class MemoryMenu
     private readonly Func<MemoryAccess>? _memoryMode;
     private readonly Func<MemoryAccess, bool>? _setMemoryMode;
     private readonly Func<InputLine?>? _input;
+    private readonly Func<string?>? _folder;
 
     /// <param name="transcript">Where the lines outside the pane go: the transcript, or the screen's deferring sink when the list may open while a reply runs.</param>
     /// <param name="pane">The menu host in the bottom pane; disabled (no pane), the list is a Spectre prompt.</param>
     /// <param name="memoryMode">The Memory mode in force (2026-10-03 as Memory's switch): with <paramref name="setMemoryMode"/>, the buttons on the pane's title row; null, none.</param>
     /// <param name="setMemoryMode">Sets Memory mode, saving and saying so (<see cref="SettingsMenu.SetMemoryMode"/>).</param>
     /// <param name="input">The input row a memory is edited or added on (2026-10-13); null, or answering null, leaves edit and add out.</param>
-    public MemoryMenu(IAnsiConsole console, MemoryStore store, INoticeSink transcript, MenuPane pane, Func<MemoryAccess>? memoryMode = null, Func<MemoryAccess, bool>? setMemoryMode = null, Func<InputLine?>? input = null)
+    /// <param name="folder">The working folder (2026-11-21, feature idea #6): its memories marked, and the choice to keep one to it or widen it; null, no folder choices.</param>
+    public MemoryMenu(IAnsiConsole console, MemoryStore store, INoticeSink transcript, MenuPane pane, Func<MemoryAccess>? memoryMode = null, Func<MemoryAccess, bool>? setMemoryMode = null, Func<InputLine?>? input = null, Func<string?>? folder = null)
     {
         _input = input;
+        _folder = folder;
         _console = console ?? throw new ArgumentNullException(nameof(console));
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -186,11 +235,19 @@ internal sealed class MemoryMenu
         return entry.SavedAt == default ? NoDate : entry.SavedAt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
     }
 
-    /// <summary>One menu row as markup: the date dimmed, two spaces, the text escaped; a disabled memory's whole line greyed out (2026-10-13, the user's ask).</summary>
-    public static string RowMarkup(MemoryEntry entry)
+    /// <summary>
+    /// One menu row as markup: the date dimmed, two spaces, the text escaped; a disabled memory's whole line greyed out (2026-10-13, the user's ask).
+    /// A folder memory (2026-11-21, feature idea #6) ends with a dim <c>· &lt;leaf&gt; folder</c>; one for another folder is greyed whole with
+    /// <c>· another folder</c>, listed but not in this folder's prompt.
+    /// </summary>
+    public static string RowMarkup(MemoryEntry entry, string? folder = null)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        return entry.Disabled ? Theme.DimMarkup(DateLabel(entry) + "  " + entry.Text) : Theme.DimMarkup(DateLabel(entry)) + "  " + Markup.Escape(entry.Text);
+        var scope = ScopeOf(entry, folder);
+        string mark = entry.Folder is null ? "" : "  · " + (scope == FolderScope.Elsewhere ? MemoryText.OtherFolderMark : MemoryText.HereMark(entry.Folder));
+        return entry.Disabled || scope == FolderScope.Elsewhere
+            ? Theme.DimMarkup(DateLabel(entry) + "  " + entry.Text + mark)
+            : Theme.DimMarkup(DateLabel(entry)) + "  " + Markup.Escape(entry.Text) + (mark.Length > 0 ? Theme.DimMarkup(mark) : "");
     }
 
     /// <summary>
@@ -200,7 +257,21 @@ internal sealed class MemoryMenu
     public static MenuFooter? Footer(IReadOnlyList<MemoryEntry> entries, int row)
     {
         ArgumentNullException.ThrowIfNull(entries);
-        return row >= 0 && row < entries.Count ? new MenuFooter(entries[row].Text, entries[row].Disabled ? DisabledFooter : null) : null;
+        if (row < 0 || row >= entries.Count)
+        {
+            return null;
+        }
+
+        // A folder memory's full path under its text (2026-11-21), beside the disabled line when both apply.
+        var entry = entries[row];
+        string? last = (entry.Folder, entry.Disabled) switch
+        {
+            (null, true) => DisabledFooter,
+            ({ } folder, true) => MemoryText.FolderFooter(folder) + " · " + DisabledFooter,
+            ({ } folder, false) => MemoryText.FolderFooter(folder),
+            _ => null,
+        };
+        return new MenuFooter(entry.Text, last);
     }
 
     /// <summary>The plain numbered list for a console without menus: <c>1. 2026-09-11  text</c>.</summary>
@@ -262,7 +333,7 @@ internal sealed class MemoryMenu
                     bool remember = Line is not null;
                     string hint = entries.Count > 0 ? SwitchKeys : EmptySwitchKeys;
                     list = entries.Count > 0
-                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), remember ? hint : WithoutRemember(hint)) { Footer = (_, row) => Footer(shown, row) }
+                        ? new MenuPage(Title, entries.Select(e => RowMarkup(e, _folder?.Invoke())).ToList(), remember ? hint : WithoutRemember(hint)) { Footer = (_, row) => Footer(shown, row) }
                         : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], remember ? hint : WithoutRemember(hint)) { Placeholder = true };
                     list = list with { Buttons = Buttons(mode, remember), Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
@@ -278,7 +349,7 @@ internal sealed class MemoryMenu
                     // The remember button alone on the title row (2026-10-13) where Memory's switch is not wired.
                     bool remember = Line is not null;
                     list = entries.Count > 0
-                        ? new MenuPage(Title, entries.Select(RowMarkup).ToList(), remember ? Keys : PlainKeys) { Footer = (_, row) => Footer(shown, row) }
+                        ? new MenuPage(Title, entries.Select(e => RowMarkup(e, _folder?.Invoke())).ToList(), remember ? Keys : PlainKeys) { Footer = (_, row) => Footer(shown, row) }
                         : new MenuPage(Title, [Theme.DimMarkup(EmptyNotice)], remember ? Keys : PlainKeys) { Placeholder = true };
                     list = list with { Buttons = remember ? [new MenuButton(RememberButton, RememberKey)] : null, Removes = entries.Count > 0 };
                     pick = await _pane.PickAsync(list, cursor, cancellationToken).ConfigureAwait(false);
@@ -289,7 +360,7 @@ internal sealed class MemoryMenu
                 }
                 else
                 {
-                    list = new MenuPage(Title, entries.Select(RowMarkup).ToList(), PlainKeys) { Footer = (_, row) => Footer(shown, row) };
+                    list = new MenuPage(Title, entries.Select(e => RowMarkup(e, _folder?.Invoke())).ToList(), PlainKeys) { Footer = (_, row) => Footer(shown, row) };
                     pick = await PickAsync(list, cursor, cancellationToken).ConfigureAwait(false) is { } picked ? new MenuPick(0, picked) : null;
                 }
 
@@ -320,7 +391,8 @@ internal sealed class MemoryMenu
                 try
                 {
                     // Delete is forget, asked as ever; Enter offers the choice first. A memory gone meanwhile is said so, the list read again.
-                    switch (entry is null ? null : pick.Value.Remove ? RowAction.Forget : await ChooseAsync(entry, cancellationToken).ConfigureAwait(false))
+                    var picked = entry is null ? null : pick.Value.Remove ? RowAction.Forget : await ChooseAsync(entry, cancellationToken).ConfigureAwait(false);
+                    switch (picked)
                     {
                         case null when entry is null:
                             Sink.Error(MissingError);
@@ -343,6 +415,22 @@ internal sealed class MemoryMenu
                             }
 
                             break;
+
+                        case RowAction.ThisFolder or RowAction.Everywhere:
+                        {
+                            // The folder set as the choice offered (2026-11-21); already so (a change from the page meanwhile) is said as done.
+                            string? to = picked == RowAction.ThisFolder ? _folder?.Invoke() : null;
+                            if (_store.SetFolder(text, to) || Find(_store.EntriesSnapshot(), text) is { } now && (to is null ? now.Folder is null : Files.FolderMatch.Same(now.Folder, to)))
+                            {
+                                Sink.Notice(to is null ? MemoryText.MovedEverywhere(text) : MemoryText.MovedHere(text));
+                            }
+                            else
+                            {
+                                Sink.Error(MissingError);
+                            }
+
+                            break;
+                        }
 
                         case RowAction.Forget:
                             if (!await ConfirmAsync(RemovePrompt(text), cancellationToken).ConfigureAwait(false))
@@ -409,13 +497,19 @@ internal sealed class MemoryMenu
     /// </summary>
     private async Task<RowAction?> ChooseAsync(MemoryEntry entry, CancellationToken cancellationToken)
     {
-        var rows = ActionRows(entry.Disabled);
+        var rows = ActionRows(entry.Disabled).ToList();
         var actions = new List<RowAction> { RowAction.Edit, RowAction.Toggle, RowAction.Forget };
         if (Line is null)
         {
-            rows = rows.Skip(1).ToList();
+            rows.RemoveAt(0);
             actions.RemoveAt(0);
         }
+
+        // The folder choices after forget (2026-11-21, feature idea #6), so the rows above keep their places: this folder only, everywhere,
+        // or both for another folder's.
+        var folderActions = FolderActions(ScopeOf(entry, _folder?.Invoke()));
+        rows.AddRange(folderActions.Select(FolderActionRow));
+        actions.AddRange(folderActions);
 
         var page = new MenuPage(ActionTitle(entry.Text), rows, ActionKeys);
         return await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } picked && picked >= 0 && picked < actions.Count ? actions[picked] : null;

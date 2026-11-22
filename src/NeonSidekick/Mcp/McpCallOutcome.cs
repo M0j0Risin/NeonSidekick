@@ -31,8 +31,11 @@ public sealed record McpCallOutcome
 
     public static McpCallOutcome Failed(string error, bool fenced = false) => new(null, error ?? throw new ArgumentNullException(nameof(error)), fenced);
 
-    /// <summary>The model's one string.</summary>
-    public string Render() => Result is { } result
-        ? McpTool.Render(result)
-        : McpText.ErrorPrefix + Error + (Fenced ? "\n" + Llm.Tools.UntrustedText.QuoteNote : "");
+    /// <summary>The model's one string, under <see cref="McpRenderContext.Plain"/> (a test's view of the text).</summary>
+    public string Render() => Render(McpRenderContext.Plain("mcp")).Text;
+
+    /// <summary>What the model is handed (2026-11-21, feature idea #31): the answer's text and pictures, or the app's error with none.</summary>
+    public McpRendered Render(McpRenderContext context) => Result is { } result
+        ? McpTool.Render(result, context)
+        : new McpRendered(McpText.ErrorPrefix + Error + (Fenced ? "\n" + Llm.Tools.UntrustedText.QuoteNote : ""), []);
 }

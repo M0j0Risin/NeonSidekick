@@ -14,7 +14,7 @@ namespace NeonSidekick.App;
 /// <c>Markup</c>, as the other panes. 2026-09-28, the user's call: the Notes tab (how the figures
 /// are measured) is gone and the Tokens tab is named Statistics, the pane's one tab.
 /// </summary>
-public static class UsageText
+public static partial class UsageText
 {
     /// <summary>The info pane's strip label (the glyph since later on 2026-09-21; the toolbar wears it for the pane too since 2026-09-29).</summary>
     public const string Label = ChatScreen.UsageToolGlyph + " Usage";
@@ -338,7 +338,7 @@ public static class UsageText
     public const string SkillsWordNote = "the skills the next turn offers";
 
     /// <summary>The refusal of any other argument (the three words from <c>/sys</c> since 2026-11-07). Pinned.</summary>
-    public const string UsageError = "/usage takes context, prompt, tools or skills, or nothing for the pane.";
+    public const string UsageError = "/usage takes context, prompt, tools, skills or models, or nothing for the pane.";
 
     /// <summary>The tab's one line on the Claude Code server, which keeps the conversation itself. Pinned.</summary>
     public const string ClaudeCodeContext = "The Claude Code server manages its own context, so there is nothing here to break down.";

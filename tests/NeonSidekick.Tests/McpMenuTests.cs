@@ -114,7 +114,7 @@ public partial class McpMenuTests : IAsyncDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Contains("\n" + Titled(Strip) + "\n \n" + ServersHeading(2) + "\n▸ docker      on   connected · 2 tools  stdio: docker mcp gateway run\n  chrome      on   connected · 1 tool  http: http://localhost:9/mcp\n" + FilesHeading + "\n  edit profile mcp.json\n  edit global mcp.json\n  reload\n" + Rule(100) + "\n  " + McpText.StatusConnected(2) + ": ", Output);   // the cursor's server whole under the list (2026-10-07): its tools by name   // the footer's rule and blank slab (2026-10-04; the rule and slab 2026-10-05), then a blank row to the Tools tab's height
-        Assert.Contains(McpText.ServersKeys, Output);
+        Assert.Contains(McpText.ServersKeys[..90], Output);   // 118 cells since the s key (2026-11-21): the 100-column console cuts the rest
         Assert.Equal(SettingsMenu.Title, settings.Root);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -417,7 +417,7 @@ public partial class McpMenuTests : IAsyncDisposable
 
         Assert.False(_settings.Current.McpServers);
         Assert.Equal(45, _settings.Current.McpConnectTimeoutSeconds);
-        AssertTabEnds("\n" + Titled(Strip) + "\n \n" + Heading("── Servers") + "\n▸ MCP servers enabled      on\n  MCP connect timeout (s)  30\n", 100);
+        AssertTabEnds("\n" + Titled(Strip) + "\n \n" + Heading("── Servers") + "\n▸ MCP servers enabled      on\n  MCP connect timeout (s)  30\n" + Heading("── Pictures") + "\n  MCP keep in sessions     off\n", 100);
         Assert.Contains(McpText.Label + " › MCP servers", Output);
         Assert.Contains("no MCP server is started; the pane still lists the config", Output);
         Assert.Contains("  · MCP servers enabled: off\n", Output);

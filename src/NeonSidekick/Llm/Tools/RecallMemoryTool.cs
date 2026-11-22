@@ -28,21 +28,30 @@ public sealed class RecallMemoryTool : AIFunction
 
     private readonly MemoryStore _store;
 
-    public RecallMemoryTool(MemoryStore store)
+    private readonly Func<string?>? _folder;
+
+    /// <param name="folder">The working folder whose memories join the everywhere ones (2026-11-21, feature idea #6), read at each call, so a
+    /// <c>/cwd</c> changes the list at the next turn; null offers the everywhere ones alone.</param>
+    public RecallMemoryTool(MemoryStore store, Func<string?>? folder = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _folder = folder;
     }
+
+    /// <summary>The folder the list is for now; null for a tool built without one.</summary>
+    public string? Folder => _folder?.Invoke();
 
     public override string Name => ToolName;
 
     public override string Description =>
-        "Everything you remember about the user, oldest first: every fact saved with " + SaveMemoryTool.ToolName + " in any session. " +
+        "Everything you remember, oldest first: the facts saved with " + SaveMemoryTool.ToolName + " in any session for everywhere, and those saved for this folder only " +
+        "(another folder's are left out). " +
         "Its result opens every conversation; call it again after a save or when the list is no longer in view.";
 
     public override JsonElement JsonSchema => Schema;
 
     /// <summary>The list as the model reads it (<see cref="MemoryPrompt.Recalled"/>), from the store as it stands now.</summary>
-    public string Describe() => MemoryPrompt.Recalled(_store.Snapshot());
+    public string Describe() => MemoryPrompt.Recalled(_store.Snapshot(Folder));
 
     /// <summary>
     /// The transcript's one dim line for a result — <c>nothing remembered yet</c>, <c>1 memory recalled</c>,

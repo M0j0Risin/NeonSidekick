@@ -70,17 +70,19 @@ Elsewhere:
 | `/commands` | Lists your custom commands, to use, move, copy, rename, edit or delete; **new command…** starts one. |
 | `/commands new <name> [--global]` | Writes the template into the profile's `commands` folder (or the global one) and opens it in your editor. |
 | `/commands save <name> [--global]` | Saves the last message you typed (during a reply, the one it answers) as `/<name>`. A custom command's or the app's own message is refused. |
-| `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). |
+| `/sessions [<id>]` | Lists the stored sessions, or restores one with its pictures (`#12` works too). A session from another folder offers to switch to it. |
+| `/sessions here` | Lists only this folder's sessions, marked `this folder` on the full list. Sessions saved before this version have no folder. |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, all, or those older than an age (`30` days, `12h`, `1d 6h`), with their file checkpoints: those turns can't be undone. |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
 | `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) into the working folder, never over a file: Markdown with Obsidian properties and a pictures folder, or one HTML page in your theme, with each turn's sources. |
-| `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), forget or add one. |
+| `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), keep to this folder or widen, forget or add one. A memory for one folder is marked; another folder's shows dim. |
 | `/memory read-write\|read-only\|off` | Sets *Memory mode*. |
-| `/memory remember <text>` | Adds a memory, whatever *Memory mode* says. |
+| `/memory remember [--here] <text>` | Adds a memory, whatever *Memory mode* says. `--here`, before the text, offers it only while working in this folder. |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 | `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
+| `/usage models` | The Models tab: each model's turns, sessions, tool calls a turn, error and cancel rates, output a turn and tok/s, from the saved sessions. |
 | `/usage prompt\|tools\|skills` | The Prompt tab (the system message, less the skills block), the Tools tab (each tool offered) or the Skills tab (the skills block: its directive, then each skill with its scope and file). |
 
 ### Models and servers
@@ -114,7 +116,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/profile push\|pull history <name> [overwrite]`, `/profile push\|pull memory <name> [overwrite]`, `/profile push\|pull prompts <name> [overwrite]` | Copies the message history (refused while the target has *Keep message history* off), the memories or the saved prompts. |
 | `/profile push\|pull persona <name> [overwrite]`, `/profile push\|pull operata <name> [overwrite]`, `/profile push\|pull vocalia <name> [overwrite]` | Copies `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (the spoken-reply directive). |
 | `/profile push\|pull avatar user\|model <name>` | Copies the *User avatar* or the *Model avatar*. |
-| `/profile push\|pull mcp <name> [overwrite]` | Copies the profile's own MCP servers as written (env, headers, args), keeping the target's comments; `overwrite` replaces same-named ones. |
+| `/profile push\|pull mcp <name> [overwrite]` | Copies the profile's own MCP servers as written (env, headers, args, oauth), keeping the target's comments; `overwrite` replaces same-named ones. |
 | `/profile push\|pull links <name> [overwrite]`, `/profile push\|pull youtube <name> [overwrite]`, `/profile push\|pull midi <name> [overwrite]` | Copies the Browser window's saved links, the saved YouTube videos and playlists (with where each was left), or the MIDI bindings. |
 | `/profile push\|pull monitors <name> [overwrite]` | Copies the monitor input names, hidden inputs and PC inputs, keeping the target's own; a bare push or pull replaces them. |
 | `/profile push\|pull skills <name>` | Copies the profile's own skills, skipping one the target has (by folder or name); a copy starts with no history. |
@@ -368,7 +370,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 `/plan <requirement>` has the model research and present a plan before anything changes. It needs *LLM offer tools* and is refused during a reply; `/new`, `/clear` and a profile switch leave plan mode. Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
-* **Tools:** read-only ones only (files, git reads, web, database reads, sessions, `ask_user`…) plus `present_plan`. Whatever writes, runs or starts something, and every MCP tool, waits for approval.
+* **Tools:** read-only ones only (files, git reads, web, database reads, sessions, `ask_user`…) plus `present_plan`. Whatever writes, runs or starts something, and every MCP tool but `mcp_read`, waits for approval. `mcp_read` reads a server's resources and still asks under `"ask": "always"`.
   * The model consults the relevant [advisors](#advisor) first when `neon_advisor` is offered, and with the web tools checks the APIs and versions the plan needs, naming its sources.
 * **The file:** `.neon/plans/<name>.md` in the working directory; 📝 shows while planning. The conversation's pictures are saved beside it (`<name>/ref-1.png`…, under `## References`) and go with a run's first message to a model that sees pictures (a Ralph pass gets its step's).
   * `plan-template.md` there is `/plan template`'s example, never opened or run as a plan.
@@ -604,12 +606,12 @@ A monitor, every monitor or one window, nothing to install (macOS 14 or later on
 `/settings export` writes `neonsidekick-settings-<date>-<time>.zip` to your Downloads folder, and `/settings import <zip>` on the other computer adds what it holds. A computer where the app hasn't run yet can take it at the first start with `--import-settings <zip>` ([COMMANDLINE.md](COMMANDLINE.md)), so `neon` keeps its name. A later start with the same zip skips it; `/settings import` takes it again.
 
 * **Carried:** each profile's settings, prompt files, `configs` files (not the browser history), skills, commands and workflows, and the home's themes, voices, skills, commands, workflows and connection files.
-* **Left out:** sessions, models, pictures, working-folder files, checkpoints, browser data, databases, and a skill's `.venv` and `__pycache__`. The export names any loose file it left out.
+* **Left out:** sessions, models, pictures, working-folder files, checkpoints, browser data, databases, MCP sign-ins (sign in again there), and a skill's `.venv` and `__pycache__`. The export names any loose file it left out.
 * **Never overwrites:** a profile whose name is taken arrives as `<name>-imported`; a home file, theme, skill or workflow already here is skipped. Both are listed.
 * **Reset on import:** profile keys this computer can't read (type them again), the Web UI token and a typed HTTPS address, and a working folder, Obsidian vault or program path that isn't here.
 * **Between Windows and a Mac:** the default shell when this system lacks it, Docker's pipe and the editors are reset, and each system's own forbidden shell commands are swapped in.
 * **Connection files:** their passwords travel as written; the import names the files whose passwords sit in the other computer's store.
-* **Keep the zip private:** it holds your persona, memory and MCP `env` and headers as written. It lands outside the model's working folder unless that folder holds Downloads; delete it once imported.
+* **Keep the zip private:** it holds your persona, memory and MCP `env`, headers and `oauth` as written. It lands outside the model's working folder unless that folder holds Downloads; delete it once imported.
 * **Import only your own zips:** an imported profile's settings and MCP servers run as you once you switch to it, and a home `configs` file applies to every profile.
 
 ### Desktop shortcuts

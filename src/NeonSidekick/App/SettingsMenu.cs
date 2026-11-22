@@ -1410,9 +1410,15 @@ public enum SettingsField
 
     /// <summary>
     /// Toggle: the dim 📚 sources line under a reply (<see cref="Settings.AppSettingsData.WebFooter"/>, 2026-11-21, the user's ask). The Chat
-    /// tab's Transcript run right under <see cref="ReplyFooter"/>; read at each turn's end and each replay. Last in the enum, as every newcomer.
+    /// tab's Transcript run right under <see cref="ReplyFooter"/>; read at each turn's end and each replay.
     /// </summary>
     WebFooter,
+
+    /// <summary>
+    /// Toggle: whether a saved session keeps an MCP tool's pictures (<see cref="Settings.AppSettingsData.McpKeepInSessions"/>, 2026-11-21,
+    /// feature idea #31). <c>/mcp</c> › Options' third row, under Pictures; read at each save. Last in the enum, as every newcomer.
+    /// </summary>
+    McpKeepInSessions,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -2043,7 +2049,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> McpTabFields =
     [
-        [SettingsField.McpServers, SettingsField.McpConnectTimeoutSeconds],
+        [SettingsField.McpServers, SettingsField.McpConnectTimeoutSeconds, SettingsField.McpKeepInSessions],
     ];
 
     private readonly IAnsiConsole _console;
@@ -2457,7 +2463,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.HomeAssistantTools or SettingsField.PrintTools or SettingsField.OracleTools or SettingsField.OraclePercentMention or SettingsField.MySqlTools or SettingsField.MySqlPercentMention
             or SettingsField.UncTools or SettingsField.UncWrites or SettingsField.UncStarMention
             or SettingsField.DockerTools or SettingsField.DockerWrites or SettingsField.DockerServers or SettingsField.DockerServerOneAtATime or SettingsField.DockerServerStopOnExit
-            or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera or SettingsField.BotChatRecentContext
+            or SettingsField.CameraTools or SettingsField.CameraKeepInSessions or SettingsField.McpKeepInSessions or SettingsField.CameraWatchUnprompted or SettingsField.BotChatCamera or SettingsField.BotChatRecentContext
             or SettingsField.ScreenTools or SettingsField.ScreenPreview or SettingsField.ScreenKeepInSessions or SettingsField.ImageTools
             or SettingsField.SqliteTools or SettingsField.SqliteSandboxFiles or SettingsField.SqlitePercentMention
             or SettingsField.DuckDbTools or SettingsField.DuckDbSandboxFiles or SettingsField.DuckDbPercentMention
@@ -2539,6 +2545,7 @@ internal sealed partial class SettingsMenu
         SettingsField.PastedImagesFolder => "Pasted images folder",
         SettingsField.McpServers => "MCP servers enabled",
         SettingsField.McpConnectTimeoutSeconds => "MCP connect timeout (s)",
+        SettingsField.McpKeepInSessions => "MCP keep in sessions",
         SettingsField.ShowImageThumbnails => "Show image thumbnails",
         SettingsField.LlmCompactType => "LLM compact mode",
         SettingsField.LlmCompactKeepRecent => "LLM compact keep recent",
@@ -2956,6 +2963,7 @@ internal sealed partial class SettingsMenu
             SettingsField.CameraDevice => string.IsNullOrWhiteSpace(data.CameraDevice) ? FirstCameraLabel : NeonSidekick.Camera.CameraChoice.Label(data.CameraDevice),
             SettingsField.CameraResolution => data.CameraResolution,
             SettingsField.CameraKeepInSessions => OnOff(data.CameraKeepInSessions),
+            SettingsField.McpKeepInSessions => OnOff(data.McpKeepInSessions),
             SettingsField.CameraOutputFolder => string.IsNullOrWhiteSpace(data.CameraOutputFolder) ? CameraOutputHereLabel : data.CameraOutputFolder,
             SettingsField.ScreenTools => OnOff(data.ScreenTools),
             SettingsField.ScreenAsk => data.ScreenAsk,
@@ -8506,6 +8514,7 @@ internal sealed partial class SettingsMenu
             SettingsField.DockerWrites => data.DockerWrites,
             SettingsField.CameraTools => data.CameraTools,
             SettingsField.CameraKeepInSessions => data.CameraKeepInSessions,
+            SettingsField.McpKeepInSessions => data.McpKeepInSessions,
             SettingsField.ScreenTools => data.ScreenTools,
             SettingsField.ScreenPreview => data.ScreenPreview,
             SettingsField.ScreenKeepInSessions => data.ScreenKeepInSessions,
@@ -8651,6 +8660,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.EventLogTools: data.EventLogTools = on; break;
             case SettingsField.CameraTools: data.CameraTools = on; break;
             case SettingsField.CameraKeepInSessions: data.CameraKeepInSessions = on; break;
+            case SettingsField.McpKeepInSessions: data.McpKeepInSessions = on; break;
             case SettingsField.ScreenTools: data.ScreenTools = on; break;
             case SettingsField.ScreenPreview: data.ScreenPreview = on; break;
             case SettingsField.ScreenKeepInSessions: data.ScreenKeepInSessions = on; break;
@@ -8883,6 +8893,7 @@ internal sealed partial class SettingsMenu
         SettingsField.ToolsDollarMention => on ? "$ and part of a name lists the offered tools on the line" : "$ is ordinary text",
         SettingsField.ShowFileDiffs => on ? "a file edit shows its diff under its line" : "a file edit shows its one line",
         SettingsField.McpServers => on ? "the configured MCP servers connect and their tools are offered" : "no MCP server is started; the pane still lists the config",
+        SettingsField.McpKeepInSessions => on ? "saved sessions keep the pictures MCP tools return" : "saved sessions name an MCP tool's pictures instead of keeping them",
         SettingsField.ReflectionAutoLearn => on ? "automatic reflection enabled" : "automatic reflection disabled",
         SettingsField.ReflectionIncludesSessions => on ? "a reflection can read past sessions for insights" : "a reflection reads the conversation on screen alone",
         SettingsField.ReflectionYieldsToTurns => on ? "a turn pauses a running reflection which may resume after the turn" : "reflections run asynchronously (when the model allows)",

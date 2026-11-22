@@ -19,6 +19,12 @@ public sealed record McpFacts(IReadOnlyList<McpServerStatus> Servers, IReadOnlyL
     /// footer says so. Null reads as none, as the tests' facts have it. The <c>asks</c> tag stays: the rule applies again after <c>/new</c>.
     /// </summary>
     public Func<string, bool>? Allowed { get; init; }
+
+    /// <summary>
+    /// The connected servers that declare resources (2026-11-21, feature idea #33): while there's one, the Tools tab lists the built-in
+    /// <c>mcp_read</c> first, its footer naming them. Empty, as the tests' facts have it, leaves the row out.
+    /// </summary>
+    public IReadOnlyList<string> ResourceServers { get; init; } = [];
 }
 
 /// <summary>What a row of the Servers tab does on Enter: a server's flip, one of the two edit rows, the reload row.</summary>
@@ -81,7 +87,9 @@ public static class McpRows
         {
             McpState.Connected when server.Dropped is not null => McpText.StatusDropped,   // 2026-11-19: its tools still offered, back at the next call
             McpState.Connected => McpText.StatusConnected(server.Tools.Count),
+            McpState.Connecting when server.SigningIn => McpText.StatusSigningIn,   // 2026-11-21, feature idea #32
             McpState.Connecting => McpText.StatusConnecting,
+            McpState.Failed when server.NeedsSignIn => McpText.StatusNeedsSignIn,
             McpState.Failed => McpText.StatusFailed(server.Detail ?? ""),
             _ => McpText.StatusOff,
         };
@@ -204,7 +212,11 @@ public static class McpRows
                     {
                         McpState.Connected when server.Dropped is not null => McpText.StatusDropped,
                         McpState.Connected => McpText.StatusConnected(server.Tools.Count) + (server.Tools.Count > 0 ? ": " + string.Join(", ", server.Tools.Select(t => t.Name)) : ""),
+                        McpState.Connecting when server.SigningIn => McpText.StatusSigningIn,
                         McpState.Connecting => McpText.StatusConnecting,
+                        // A sign-in that failed or was cancelled says why after the state (2026-11-21).
+                        McpState.Failed when server.NeedsSignIn => McpText.StatusNeedsSignIn
+                            + (server.Detail is { } why && why != McpText.NeedsSignInDetail ? " (" + why + ")" : ""),
                         McpState.Failed => McpText.StatusFailed(server.Detail ?? ""),
                         _ => McpText.StatusOff,
                     };
@@ -223,7 +235,7 @@ public static class McpRows
     private static string ConnectedWords(McpServerStatus server)
     {
         string notes = McpText.NotesFooter(server.NotesLength, server.NotesRaw, server.NotesLeftOut, server.NotesOn);
-        return McpText.AskFooter(server.Ask) + " · " + (notes.Length > 0 ? notes + " · " : "");
+        return McpText.AskFooter(server.Ask) + " · " + (notes.Length > 0 ? notes + " · " : "") + (server.SignedIn ? McpText.SignedInFooter + " · " : "");
     }
 
     /// <summary>
@@ -272,8 +284,23 @@ public static class McpRows
         }
 
         bool offered = facts.ToolsEnabled && facts.Enabled;
-        int width = NameWidth(all.SelectMany(s => s.Tools).Select(t => t.Name));
+        bool builtIn = only is null && facts.ResourceServers.Count > 0;
+        IEnumerable<string> names = all.SelectMany(s => s.Tools).Select(t => t.Name);
+        int width = NameWidth(facts.ResourceServers.Count > 0 ? names.Append(McpReadTool.ToolName) : names);
         int shownServers = 0;
+        // The built-in mcp_read first (2026-11-21, feature idea #33), on the whole list alone: it reads every resource server's.
+        if (builtIn && MenuFilter.Matches(filter, McpReadTool.ToolName, McpText.ReadRowDescription))
+        {
+            bool on = !facts.Disabled.Contains(McpReadTool.ToolName);
+            shownServers++;
+            rows.Add((SectionRule.Markup(McpText.BuiltInSection, SystemPromptSummary.GroupCount(on ? 1 : 0, 1)), null, true));
+            string ask = "".PadRight(AskWidth);
+            string row = offered && on
+                ? Styled(Theme.AccentSecondary, McpReadTool.ToolName.PadRight(width)) + Theme.ColorMarkup(Theme.Ink, ToolsText.State(on).PadRight(StateWidth)) + ask + Theme.DimMarkup(McpText.ReadRowDescription)
+                : Theme.DimMarkup(McpReadTool.ToolName.PadRight(width) + ToolsText.State(on).PadRight(StateWidth) + ask + McpText.ReadRowDescription);
+            rows.Add((row, McpReadTool.ToolName, false));
+        }
+
         foreach (var server in connected)
         {
             // A tool that asks also matches its tag (2026-11-20, the mcp-ask review's #114): typing "asks" keeps the tools the column marks.
@@ -351,6 +378,11 @@ public static class McpRows
     {
         ArgumentNullException.ThrowIfNull(facts);
         ArgumentNullException.ThrowIfNull(tool);
+        if (string.Equals(tool, McpReadTool.ToolName, StringComparison.Ordinal) && facts.ResourceServers.Count > 0)
+        {
+            return new MenuFooter(McpText.ReadRowDescription, McpText.ReadRowFooter(facts.ResourceServers));
+        }
+
         // The connected rows only (#119's FindTool, each caller its rows): the tab lists no other.
         if (McpServerStatus.FindTool(facts.Servers.Where(s => s.State == McpState.Connected), tool) is not var (server, found))
         {

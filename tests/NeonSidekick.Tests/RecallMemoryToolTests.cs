@@ -27,7 +27,8 @@ public class RecallMemoryToolTests : IDisposable
         Assert.Equal("recall_memory", RecallMemoryTool.ToolName);
         Assert.Equal(RecallMemoryTool.ToolName, _tool.Name);
         Assert.Equal(
-            "Everything you remember about the user, oldest first: every fact saved with save_memory in any session. " +
+            "Everything you remember, oldest first: the facts saved with save_memory in any session for everywhere, and those saved for this folder only " +
+            "(another folder's are left out). " +
             "Its result opens every conversation; call it again after a save or when the list is no longer in view.",
             _tool.Description);
 

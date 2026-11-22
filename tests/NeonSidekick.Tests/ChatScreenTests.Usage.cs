@@ -13,11 +13,11 @@ namespace NeonSidekick.Tests;
 public partial class ChatScreenTests
 {
     /// <summary>
-    /// The <c>/usage</c> pane's title row: its label, then the five tabs (one tab, the label alone, until the Context tab on 2026-11-01; two until
-    /// /sys' Prompt and Tools tabs and the new Skills tab came on 2026-11-07).
+    /// The <c>/usage</c> pane's title row: its label, then the six tabs (one tab, the label alone, until the Context tab on 2026-11-01; two until
+    /// /sys' Prompt and Tools tabs and the new Skills tab came on 2026-11-07; five until the Models tab on 2026-11-21).
     /// </summary>
     private static string UsagePaneTitle => UsageText.Label + " │ " + UsageText.StatisticsTabTitle + " · " + UsageText.ContextTabTitle + " · "
-        + SystemPromptSummary.PromptTabTitle + " · " + SystemPromptSummary.ToolsTabTitle + " · " + SystemPromptSummary.SkillsTabTitle + " ";
+        + SystemPromptSummary.PromptTabTitle + " · " + SystemPromptSummary.ToolsTabTitle + " · " + SystemPromptSummary.SkillsTabTitle + " · " + UsageText.ModelsTabTitle + " ";
 
     [Fact]
     public async Task WithGeometry_UsageContext_OpensOnTheContextTab()
@@ -177,6 +177,7 @@ public partial class ChatScreenTests
             new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote),   // the three from /sys in tab order (2026-11-07)
             new CompletionItem(UsageText.ToolsWord, UsageText.ToolsWordNote),
             new CompletionItem(UsageText.SkillsWord, UsageText.SkillsWordNote),
+            new CompletionItem(UsageText.ModelsWord, UsageText.ModelsWordNote),   // 2026-11-21
         ], ChatScreen.ArgumentItems("/usage", "", sources));
         Assert.Single(ChatScreen.ArgumentItems("/usage", "co", sources));
         Assert.Equal(UsageText.SkillsWord, Assert.Single(ChatScreen.ArgumentItems("/usage", "s", sources)).Text);

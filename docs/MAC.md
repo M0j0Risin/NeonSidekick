@@ -62,7 +62,7 @@ You need an Apple Silicon Mac (M1 or later). Unpack the Mac package as the [READ
 
 ### Setup
 
-* **Secrets go in the Keychain.** API keys, passwords and `mcp.json` tokens are encrypted with a key in your login Keychain (the *NeonSidekick* item). A `passwordStore: credman` password is a Keychain item: `security add-generic-password -s <target> -a <user> -w`.
+* **Secrets go in the Keychain.** API keys, passwords, `mcp.json` tokens and MCP sign-ins are encrypted with a key in your login Keychain (the *NeonSidekick* item). A `passwordStore: credman` password is a Keychain item: `security add-generic-password -s <target> -a <user> -w`.
 * **Shell and scripts.** `run_command` runs in zsh unless *Shell default shell* says `bash` or `powershell` (pwsh, when installed). Scripts run with `python3`, `node` or `pwsh`.
 * **Editors.** `/sys persona` and the like open the file in its default app. For `/draft`, set *Draft editor* to a command that waits (`code --wait`, `open -W -t`); vim can't share the terminal.
 * **The embedded model** installs as on Windows ([SETTINGS](SETTINGS.md)), with llama.cpp's Mac build. Its server stops when the app ends, even on a crash. *LLM one local model* covers it alone: there are no Docker servers.
@@ -185,6 +185,7 @@ Not yet tried on a Mac:
 * **The robot splash following the mouse.** Terminal.app reports the mouse only with View › Allow Mouse Reporting on.
 * **The menus marking the row under the pointer.** The same setting in Terminal.app.
 * **Moving settings between a PC and a Mac** (`/settings export` and `import`): keys left blank, the shell and forbidden commands made the Mac's, and a script's execute bit kept.
+* **An MCP sign-in** (the browser, the return to this computer and the Keychain), **an MCP tool's pictures**, and **`--prompt` with a pipe under zsh.**
 
 Known limits:
 * **YouTube may ask for consent each run:** WebKit blocks the player's third-party cookies, so a consent isn't kept.

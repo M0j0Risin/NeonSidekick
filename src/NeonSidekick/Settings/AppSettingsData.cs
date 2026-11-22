@@ -3266,6 +3266,13 @@ public sealed class AppSettingsData
     public bool McpServers { get; set; }
 
     /// <summary>
+    /// Whether a saved session keeps the pictures MCP tools return (2026-11-21, feature idea #31, the user's call): off (the default), the
+    /// conversation holds them until it ends but <c>sessions.db</c> gets a line naming each instead, as <see cref="CameraKeepInSessions"/>
+    /// does; a browser screenshot can hold anything on the page. <c>/mcp</c> › Options' third row. No variable.
+    /// </summary>
+    public bool McpKeepInSessions { get; set; }
+
+    /// <summary>
     /// The MCP servers switched off by name on <c>/mcp</c>' Servers tab (2026-09-20): sorted
     /// ordinal, no duplicates, written by <c>ToolsText.Flip</c> like <see cref="ToolsDisabled"/>.
     /// Not a settings row — the second list in the file. A name no file names any more stays

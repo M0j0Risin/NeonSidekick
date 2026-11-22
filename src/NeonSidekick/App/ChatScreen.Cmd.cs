@@ -523,6 +523,6 @@ internal sealed partial class ChatScreen
         _session.History.AddAssistant(reply);
         _log.Add(line, run.Result);
         _lastReply = run.Result;
-        LogSideTurn(line, run.Result, default, run.Cancelled, effective);
+        LogSideTurn(line, run.Result, default, run.Cancelled, effective, Sessions.SessionText.SideTurnModel("/cmd"));
     }
 }

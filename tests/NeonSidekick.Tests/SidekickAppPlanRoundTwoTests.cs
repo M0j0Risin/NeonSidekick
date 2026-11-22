@@ -19,7 +19,7 @@ public partial class SidekickAppTests
         File.WriteAllText(Path.Combine(HeadlessPlansFolder, "add-guide.md"), PlanDocument.Render(new PlanHeader(PlanStatus.Incomplete, 2, at, at, "Add a guide"), "Guide", "# Guide\n- [x] One\n- [ ] Two"));
         _chat.EnqueueText("What should change?");
 
-        string output = await Headless("/plan open\n/plan open nope\n/plan open add-guide\n");
+        string output = await Headless("/plan open\n/plan open nope\n/plan open add-guide\n", exitCode: 4);
 
         Assert.Contains("[notice] add-guide — Guide (incomplete · 1/2", output);
         Assert.Contains("Neon: [error] " + PlanText.NoSuchPlanError("nope"), output);
@@ -34,7 +34,7 @@ public partial class SidekickAppTests
         // 2026-10-20: /plan template headless writes the example; /plan edit is an editor on the PC; the template is never a listed plan.
         ServerOn1234("llama");
 
-        string output = await Headless("/plan template\n/plan edit\n/plan edit plan-template\n/plan open\n");
+        string output = await Headless("/plan template\n/plan edit\n/plan edit plan-template\n/plan open\n", exitCode: 4);
 
         Assert.Equal(PlanFiles.TemplateText(), File.ReadAllText(Path.Combine(HeadlessPlansFolder, "plan-template.md")));
         Assert.Contains("[notice] " + PlanText.TemplateWrittenNotice(PlanFiles.TemplatePath), output);
@@ -113,7 +113,7 @@ public partial class SidekickAppTests
         ServerOn1234("llama");
         _chat.EnqueueText("What should it cover?");
 
-        string output = await Headless("/plan Add a guide\n/plan save\n");
+        string output = await Headless("/plan Add a guide\n/plan save\n", exitCode: 4);
 
         Assert.Contains("Neon: [error] " + PlanText.NothingToSaveError, output);
         Assert.DoesNotContain(PlanText.UnpresentedHint, output);

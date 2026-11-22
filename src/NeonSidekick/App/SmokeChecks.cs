@@ -204,6 +204,7 @@ public static partial class SmokeChecks
         results.Add(ProbeOnnxRuntime());
         results.Add(ProbeSessions());
         results.Add(ProbeMcp());
+        results.Add(ProbeMcpOAuth());
         results.Add(ProbeClaudeCliRelay());
         results.Add(ProbeGit());
         results.Add(ProbeCheckpoints());
@@ -289,6 +290,92 @@ public static partial class SmokeChecks
     }
 
     /// <summary>
+    /// <c>mcp:oauth</c> (2026-11-21, feature idea #32): the SDK's OAuth path on the published binary, over the in-process stub
+    /// (<see cref="Mcp.McpOAuthStub"/>, no network): a start reads needs sign-in with nothing registered, a requested sign-in runs discovery,
+    /// registration, PKCE and the code exchange, the stub's browser reaches the app's real loopback listener on a free port (never the
+    /// default), the tokens go to the scratch profile's file through the JSON context and sealed by DPAPI or the Keychain, and a second start
+    /// reuses them with no browser and no second registration. A scratch home, deleted after.
+    /// </summary>
+    public static SmokeCheck ProbeMcpOAuth()
+    {
+        const string name = "mcp:oauth";
+        try
+        {
+            return ProbeMcpOAuthAsync(name).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            return new SmokeCheck(name, false, $"{ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private static async Task<SmokeCheck> ProbeMcpOAuthAsync(string name)
+    {
+        using var stub = new Mcp.McpOAuthStub();
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        string home = Path.Combine(Path.GetTempPath(), "NeonSidekick.smoke", Guid.NewGuid().ToString("N"));
+        var probe = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        probe.Start();
+        int port = ((System.Net.IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+        try
+        {
+            using var settings = new NeonSidekick.Settings.AppSettings(home);
+            Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(settings.ProfileDirectory));
+            File.WriteAllText(Mcp.McpConfigFile.ProfilePath(settings.ProfileDirectory),
+                "{ \"mcpServers\": { \"smoke\": { \"url\": \"" + Mcp.McpOAuthStub.Endpoint + "\", \"oauth\": { \"redirectPort\": "
+                + port.ToString(System.Globalization.CultureInfo.InvariantCulture) + " } } } }");
+            var effective = NeonSidekick.Settings.AppSettings.Copy(settings.Current);
+            effective.McpServers = true;
+            int opened = 0;
+            McpSession Session() => new(settings, (config, server, oauth) => McpSession.DefaultTransport(config, server, oauth, stub))
+            {
+                OpenBrowser = url =>
+                {
+                    Interlocked.Increment(ref opened);
+                    _ = Task.Run(() => stub.BrowseAsync(url, budget.Token));
+                },
+            };
+
+            await using (var first = Session())
+            {
+                await first.ConnectAllAsync(effective, null, budget.Token).ConfigureAwait(false);
+                if (first.Servers.FirstOrDefault() is not { NeedsSignIn: true } || stub.Registrations != 0)
+                {
+                    return new SmokeCheck(name, false, $"a start without a sign-in read {first.Servers.FirstOrDefault()?.State}, {stub.Registrations} registrations");
+                }
+
+                var signedIn = await first.SignInAsync("smoke", effective, budget.Token).ConfigureAwait(false);
+                if (signedIn is not { State: McpState.Connected } || signedIn.Tools.Count != 1)
+                {
+                    return new SmokeCheck(name, false, $"the sign-in ended {signedIn?.State}: {signedIn?.Detail}");
+                }
+            }
+
+            string stored = File.ReadAllText(Mcp.McpTokenStore.PathFor(settings.ProfileDirectory));
+            if (stub.Secrets.Any(stored.Contains) || !stored.Contains("\"sealed\"", StringComparison.Ordinal))
+            {
+                return new SmokeCheck(name, false, "the token file holds a token in plain text");
+            }
+
+            await using (var second = Session())
+            {
+                await second.ConnectAllAsync(effective, null, budget.Token).ConfigureAwait(false);
+                if (second.Servers.FirstOrDefault() is not { State: McpState.Connected } || opened != 1 || stub.Registrations != 1)
+                {
+                    return new SmokeCheck(name, false, $"the second start read {second.Servers.FirstOrDefault()?.State}, {opened} browsers, {stub.Registrations} registrations");
+                }
+            }
+
+            return new SmokeCheck(name, true, $"signed in through the loopback listener on port {port}: registered once, PKCE code exchanged, tokens sealed; a second start reused them");
+        }
+        finally
+        {
+            Files.WorkingDirectory.DeleteDirectoryQuietly(home);
+        }
+    }
+
+    /// <summary>
     /// <c>claude-cli:relay</c> (2026-09-30): the Claude Code server's way to the app's tools on the published binary — the
     /// app's MCP listener (<see cref="Claude.ClaudeMcpServer"/>, the SDK's server over a loopback socket), the relay
     /// (<see cref="Claude.McpRelay"/>) copying a pipe pair to it as the CLI's stdio, the real <c>McpClient</c> listing the
@@ -358,7 +445,9 @@ public static partial class SmokeChecks
     private static async Task<SmokeCheck> ProbeMcpAsync(string name)
     {
         const string secret = "smoke-secret-value";
-        await using var server = Mcp.McpPipeServer.Start([("echo", "Echoes the text back.")], "smoke");
+        // An image tool and one resource too (2026-11-21, feature ideas #31 and #33): the published exe decodes a picture and reads a resource.
+        await using var server = Mcp.McpPipeServer.Start([("echo", "Echoes the text back."), (Mcp.McpPipeServer.ImageToolName, "Answers a picture.")], "smoke",
+            new Mcp.McpPipeServerOptions { Resources = [("pipe://smoke/notes.txt", "notes", "smoke notes")] });
         using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(20));
         string home = Path.Combine(Path.GetTempPath(), "NeonSidekick.smoke", Guid.NewGuid().ToString("N"));
         var audit = new List<string>();
@@ -386,10 +475,10 @@ public static partial class SmokeChecks
                 Approver = (_, _) => Task.FromResult<Mcp.McpVerdict>(new Mcp.McpVerdict.Allowed(Mcp.McpText.AllowedOnce)),
             };
             await session.ConnectAllAsync(effective, null, budget.Token).ConfigureAwait(false);
-            var tools = session.Tools;
-            if (tools.Count != 1 || session.Servers.FirstOrDefault() is not { State: McpState.Connected } row)
+            var tools = session.TurnTools();
+            if (tools.Count != 3 || session.Servers.FirstOrDefault() is not { State: McpState.Connected } row)
             {
-                return new SmokeCheck(name, false, $"{tools.Count} tools offered, expected 1 from a connected smoke server");
+                return new SmokeCheck(name, false, $"{tools.Count} tools offered, expected echo, image and mcp_read from a connected smoke server");
             }
 
             var tool = tools[0];
@@ -402,6 +491,20 @@ public static partial class SmokeChecks
                 return new SmokeCheck(name, false, $"echo answered \"{text}\", expected \"{expected}\"");
             }
 
+            // The picture (2026-11-21): the image block decodes to a 4x3 picture through the codecs, with no file.
+            var picture = await tools[1].InvokeAsync(new AIFunctionArguments(), budget.Token).ConfigureAwait(false);
+            if (picture is not Llm.Tools.ToolImageResult { Images: [{ Width: 4, Height: 3, Path: "" } image] } || image.McpSource is null)
+            {
+                return new SmokeCheck(name, false, $"the image tool answered {picture?.GetType().Name ?? "nothing"}, expected one 4x3 picture");
+            }
+
+            // The read (2026-11-21): mcp_read reads the resource's text through the session.
+            var read = await tools[2].InvokeAsync(new AIFunctionArguments { ["server"] = "smoke", ["uri"] = "pipe://smoke/notes.txt" }, budget.Token).ConfigureAwait(false);
+            if (read is not string readText || !readText.Contains(Llm.Tools.UntrustedText.Quote("smoke notes"), StringComparison.Ordinal))
+            {
+                return new SmokeCheck(name, false, $"mcp_read answered \"{read}\", expected the resource's text");
+            }
+
             string prefix = Mcp.McpText.AuditPrefix(tool.Name, Mcp.McpText.AllowedOnce);
             string? line;
             lock (audit)
@@ -412,7 +515,7 @@ public static partial class SmokeChecks
             return line is null ? new SmokeCheck(name, false, "the asked call wrote no audit line")
                 : line.Contains(secret, StringComparison.Ordinal) || !line.Contains(Llm.Tools.ToolRedaction.Placeholder, StringComparison.Ordinal)
                     ? new SmokeCheck(name, false, "the audit line kept the token argument")
-                    : new SmokeCheck(name, true, $"1 tool listed as {tool.Name} ({row.Name}) through McpSession; echo asked, allowed and answered; audited with the token redacted");
+                    : new SmokeCheck(name, true, $"2 tools listed as {tool.Name}… ({row.Name}) through McpSession; echo asked, allowed and answered; audited with the token redacted; a picture decoded; a resource read");
         }
         finally
         {
@@ -1166,14 +1269,14 @@ public static partial class SmokeChecks
             string version;
             using (var store = new Sessions.SessionStore(dir))
             {
-                if (store.Begin("smoke", "smoke-model") is not { } id)
+                if (store.Begin("smoke", "smoke-model", dir) is not { } id)
                 {
                     return new SmokeCheck(name, false, "the store did not open (see the log)");
                 }
 
                 // A source too (2026-11-15, the web-tools plan's §2): turn_sources written in the turn's transaction and read back by Load's join.
                 store.AppendTurn(id, "the smoke test wrote this", "and the reply answered", 2, ["read_file", "patch_file"], ["smoke-skill"], 1, 1, 2, false,
-                    [new Web.WebSource(Web.WebSourceKind.Page, "https://example.com/", "Example")]);
+                    [new Web.WebSource(Web.WebSourceKind.Page, "https://example.com/", "Example")], model: "smoke-model", cwd: dir);
                 var history = new List<ChatMessage> { new(ChatRole.User, "the smoke test wrote this"), new(ChatRole.Assistant, "and the reply answered") };
                 store.SaveHistory(id, Sessions.SessionHistory.ToJson(history));
                 var hits = store.Search("smoke", 5);

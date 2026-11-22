@@ -22,6 +22,8 @@ public sealed class SaveMemoryTool : AIFunction
 
     private const string ArgumentName = "text";
 
+    private const string HereName = "here";
+
     private static readonly JsonElement Schema = ToolSchema.Parse(
         """
         {
@@ -36,11 +38,35 @@ public sealed class SaveMemoryTool : AIFunction
         }
         """);
 
+    /// <summary>The schema with <c>here</c> (2026-11-21, feature idea #6): offered only to a tool built with a folder.</summary>
+    private static readonly JsonElement HereSchema = ToolSchema.Parse(
+        """
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "One short sentence about the user, in the third person: \"Their name is Chris.\", \"They prefer replies in metric units.\""
+            },
+            "here": {
+              "type": "boolean",
+              "description": "True when the fact is about this project or folder only, not about the user (\"This repo's tests run with build.ps1.\"); leave it off for facts about the user."
+            }
+          },
+          "required": ["text"]
+        }
+        """);
+
     private readonly MemoryStore _store;
 
-    public SaveMemoryTool(MemoryStore store)
+    private readonly Func<string?>? _folder;
+
+    /// <param name="folder">The working folder a <c>here</c> save is for (2026-11-21, feature idea #6); null leaves <c>here</c> out of the schema
+    /// (a bot, whose chat isn't about a folder).</param>
+    public SaveMemoryTool(MemoryStore store, Func<string?>? folder = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _folder = folder;
     }
 
     public override string Name => ToolName;
@@ -48,12 +74,15 @@ public sealed class SaveMemoryTool : AIFunction
     public override string Description =>
         "Saves one lasting fact about the user to long-term memory, so it is known in every later session. Not for passing details.";
 
-    public override JsonElement JsonSchema => Schema;
+    public override JsonElement JsonSchema => _folder is null ? Schema : HereSchema;
 
     /// <summary>The tool's answer, pinned: what the model reads and what the transcript shows.</summary>
-    public static string Describe(MemoryAddResult result) => result.Outcome switch
+    /// <param name="here">The folder the save was made in (2026-11-21): a duplicate saved for another folder names that one.</param>
+    public static string Describe(MemoryAddResult result, string? here = null) => result.Outcome switch
     {
+        MemoryAddOutcome.Added when result.Folder is not null => MemoryText.RememberedHere(result.Text),
         MemoryAddOutcome.Added => "remembered: " + result.Text,
+        MemoryAddOutcome.Duplicate when result.Folder is not null && !Files.FolderMatch.Same(result.Folder, here) => MemoryText.DuplicateElsewhere(result.Text, result.Folder),
         MemoryAddOutcome.Duplicate => "already remembered: " + result.Text,
         MemoryAddOutcome.Disabled => "not saved: the user has disabled this memory (it is kept but not offered to you); do not save it again: " + result.Text,   // 2026-10-13, the code review
         MemoryAddOutcome.Full => $"memory is full ({MemoryStore.MaxEntries.ToString(CultureInfo.InvariantCulture)} entries); the user can clear it with /memory forget",
@@ -64,7 +93,11 @@ public sealed class SaveMemoryTool : AIFunction
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(arguments);
-        return new ValueTask<object?>(Describe(_store.Add(ReadText(arguments))));
+        string? folder = _folder?.Invoke();
+        bool scoped = folder is not null && ToolArguments.TryReadBoolean(arguments, HereName, out bool? here, out _) && here == true;   // a malformed here reads as off: the safer scope is everywhere's twin, never a wrong folder
+        var result = _store.Add(ReadText(arguments), folder: scoped ? folder : null);
+        // The answer's folder is the saved copy's: a fresh save reports where it went, a duplicate where the copy already applies.
+        return new ValueTask<object?>(Describe(result.Outcome == MemoryAddOutcome.Added && !scoped ? result with { Folder = null } : result, folder));
     }
 
     /// <summary>The <c>text</c> argument however it arrived: a <see cref="JsonElement"/> from the wire, or a string from a test.</summary>

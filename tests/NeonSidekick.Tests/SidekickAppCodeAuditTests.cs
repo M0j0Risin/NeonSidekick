@@ -177,7 +177,7 @@ public partial class SidekickAppTests
             return Task.CompletedTask;
         };
 
-        string output = await Headless("/code-audit src\n");
+        string output = await Headless("/code-audit src\n", exitCode: 4);
 
         Assert.Equal(3, _chat.Requests.Count);
         var report = AuditFiles.Read(new WorkingDirectory(() => HeadlessAuditRoot, TimeProvider.System), HeadlessAuditPath)!;
@@ -219,7 +219,7 @@ public partial class SidekickAppTests
         string output;
         try
         {
-            output = await Headless("/code-audit src\n");
+            output = await Headless("/code-audit src\n", exitCode: 4);
         }
         finally
         {
@@ -290,7 +290,7 @@ public partial class SidekickAppTests
         _settings.Update(d => d.ToolsDisabled = [ReadFileTool.ToolName]);
         _chat.EnqueueText("What should it cover?");
 
-        string output = await Headless("/code-audit src\n/plan Add a guide\n/code-audit src\n");
+        string output = await Headless("/code-audit src\n/plan Add a guide\n/code-audit src\n", exitCode: 4);
 
         Assert.Contains("[error] " + AuditText.NeedsReadFileError, output);
         Assert.Contains("[error] " + AuditText.PlanningError, output);

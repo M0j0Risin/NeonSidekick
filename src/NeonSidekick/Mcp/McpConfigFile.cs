@@ -193,7 +193,11 @@ public sealed class McpConfigFile
                     DiagnosticLog.Warn(Category, McpText.ConfigProblemLogLine(source, detail));
                 }
 
-                problems.Add(new McpConfigProblem(source, McpText.BadEntry(detail)) { Name = name, Path = path });
+                // The sign-in's settings in a shape that won't read (2026-11-21): said in their own words, the entry's other problems as before.
+                string problem = ex.Path?.StartsWith("$.oauth.redirectPort", StringComparison.OrdinalIgnoreCase) == true ? McpText.BadRedirectPort
+                    : ex.Path?.StartsWith("$.oauth", StringComparison.OrdinalIgnoreCase) == true ? McpText.BadOAuth
+                    : McpText.BadEntry(detail);
+                problems.Add(new McpConfigProblem(source, problem) { Name = name, Path = path });
                 continue;
             }
 

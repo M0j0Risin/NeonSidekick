@@ -52,7 +52,7 @@ public partial class SidekickAppTests
         ServerOn1234("llama");
         _chat.EnqueueText("Done.");
 
-        string output = await Headless("/commands new triage\nSummarize this.\n/commands save sum\n/commands save sum\n/commands\n");
+        string output = await Headless("/commands new triage\nSummarize this.\n/commands save sum\n/commands save sum\n/commands\n", exitCode: 4);
 
         string triage = Path.Combine(_settings.ProfileCustomCommandsDirectory, "triage.md");
         string sum = Path.Combine(_settings.ProfileCustomCommandsDirectory, "sum.md");
@@ -106,7 +106,7 @@ public partial class SidekickAppTests
         ServerOn1234("llama");
         _chat.EnqueueText("Done.").EnqueueText("Again.");
 
-        string output = await Headless("Summarize this.\n/commands save sum\n/sum\n/commands save again\n");
+        string output = await Headless("Summarize this.\n/commands save sum\n/sum\n/commands save again\n", exitCode: 4);
 
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("Summarize this.", _chat.Requests[1].Last(m => m.Role == ChatRole.User).Text);

@@ -169,6 +169,29 @@ internal sealed partial class ChatScreen
     /// per-group decisions and the concatenation, unchanged — see <c>PrepareTurn</c>'s comment for each. Pure: no
     /// <c>BeginTurn</c>, no opening call; the caller does those. <see cref="TurnToolSet.Empty"/> with tools off.
     /// </summary>
+    /// <summary>
+    /// Whether <c>mcp_read</c> is offered under <paramref name="effective"/> (2026-11-21, feature idea #33): tools on, <c>MCP servers enabled</c>
+    /// on and the tool not switched off in <c>/mcp</c> › Tools. A server's resources decide the rest (<c>McpSession.TurnTools</c>).
+    /// </summary>
+    public static bool McpReadOffered(Settings.AppSettingsData effective)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        return effective.LlmOfferTools && effective.McpServers && !ToolsText.DisabledSet(effective.ToolsDisabled).Contains(Mcp.McpReadTool.ToolName);
+    }
+
+    /// <summary>
+    /// The turn's tools whose pictures the model is not shown (2026-11-21, feature idea #31): with a model that can't see pictures
+    /// (<c>LlmSession.SeesPictures</c> false), every MCP tool and <c>mcp_read</c>, so their pictures still go to the user and the model is
+    /// told it can't see them (<see cref="Assistant.PicturesUnseenNote"/>). Empty for a model that sees.
+    /// </summary>
+    public static IReadOnlySet<string> UnseenMcpPictures(bool sees, IEnumerable<AIFunction> tools)
+    {
+        ArgumentNullException.ThrowIfNull(tools);
+        return sees
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : tools.Where(t => t is Mcp.McpTool or Mcp.McpReadTool).Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+    }
+
     public static TurnToolSet ComposeTurnTools(TurnToolInputs inputs)
     {
         ArgumentNullException.ThrowIfNull(inputs);

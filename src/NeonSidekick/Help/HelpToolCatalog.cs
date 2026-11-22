@@ -34,6 +34,7 @@ internal static class HelpToolCatalog
     public const string SkillsGroup = "Skills";
     public const string SessionsGroup = ToolsText.SessionsMenuTitle;   // its /tools menu since 2026-11-21
     public const string QuestionsGroup = "Questions";
+    public const string McpGroup = "MCP";
     public const string PlanGroup = "Plan";
     public const string AuditGroup = "Code audit";
     public const string RalphGroup = "Ralph loop";
@@ -300,13 +301,15 @@ internal static class HelpToolCatalog
         T(WebSaveLinkTool.ToolName, WebGroup, SettingsField.WebTools, "Saves, removes or renames one of the user's saved web links."),
         T(DownloadFileTool.ToolName, WebGroup, SettingsField.WebTools, "Downloads a file from the web into the working directory, unread and unopened, checked against a SHA-256 or SHA-512 when one is given.", needs: [SettingsField.FileTools]),
         // Memory
-        T(SaveMemoryTool.ToolName, MemoryGroup, SettingsField.MemoryMode, "Saves one lasting fact about the user, known in every later session.", needs: [SettingsField.MemoryMode], setup: "only while *Memory mode* is read-write"),
-        T(RecallMemoryTool.ToolName, MemoryGroup, SettingsField.MemoryMode, "Gives back every fact saved about the user, oldest first."),
+        T(SaveMemoryTool.ToolName, MemoryGroup, SettingsField.MemoryMode, "Saves one lasting fact about the user, known in every later session; `here` keeps a fact about the project to the working folder.", needs: [SettingsField.MemoryMode], setup: "only while *Memory mode* is read-write"),
+        T(RecallMemoryTool.ToolName, MemoryGroup, SettingsField.MemoryMode, "Gives back the facts saved for everywhere and for the working folder, oldest first."),
         // Skills
         T(LoadSkillTool.ToolName, SkillsGroup, SettingsField.AgentSkills, "Loads a skill's full instructions by name.", setup: "needs a skill installed (`/skills`)"),
         T(SkillEditorTool.ToolName, SkillsGroup, SettingsField.AgentSkills, "Creates or updates a skill: a named folder of instructions kept for later sessions."),
         // Sessions
         T(SessionManagerTool.ToolName, SessionsGroup, SettingsField.SessionTool, "Finds and reads the user's earlier conversations in this profile."),
+        // MCP (2026-11-21, feature idea #33): the one built-in MCP tool; the servers' own tools are answered by McpAnswer
+        T(Mcp.McpReadTool.ToolName, McpGroup, SettingsField.McpServers, "Lists and reads the resources a connected MCP server publishes, and follows resource links in its tools' results.", setup: "needs a connected server that offers resources; a read asks for a server whose `ask` is `always`"),
         // Questions
         T(AskUserTool.ToolName, QuestionsGroup, SettingsField.AskUser, "Asks the user one to ten multiple-choice questions on screen and waits for the answers.", headless: false, pane: true),
         // The passes' own

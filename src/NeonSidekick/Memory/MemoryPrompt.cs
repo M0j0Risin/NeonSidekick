@@ -48,6 +48,12 @@ public static class MemoryPrompt
     /// <summary>Above the list, only when there is one.</summary>
     public const string Heading = "What you remember about the user, oldest first:";
 
+    /// <summary>
+    /// After a memory saved for one folder only (2026-11-21, feature idea #6), in the list the model reads, so it doesn't take a project's
+    /// rule for one about the user. Never in the stored text, the pane or the page. Pinned.
+    /// </summary>
+    public const string FolderOnlyMark = " (this folder only)";
+
     /// <summary>The recall result while nothing is stored. Pinned.</summary>
     public const string NothingRemembered = "Nothing remembered about the user yet.";
 

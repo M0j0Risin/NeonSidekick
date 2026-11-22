@@ -19,6 +19,17 @@ public sealed class MemoryEntry
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool Disabled { get; set; }
+
+    /// <summary>
+    /// The one working folder this memory is for (2026-11-21, feature idea #6: a project's facts out of another repo's prompt): the full path,
+    /// no trailing separator (<see cref="Files.FolderMatch.Normal"/>); null for everywhere. Written only when set, so an older file reads as
+    /// everywhere and an older build ignores it. A folder from another PC never matches, so its memory stays dormant there.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Folder { get; set; }
+
+    /// <summary>A copy, every field.</summary>
+    public MemoryEntry Copy() => new() { Text = Text, SavedAt = SavedAt, Disabled = Disabled, Folder = Folder };
 }
 
 /// <summary>The on-disk shape of <c>memory.json</c>: a version and the entries, oldest first.</summary>
@@ -79,7 +90,7 @@ public enum MemoryEditOutcome
 public readonly record struct MemoryEditResult(MemoryEditOutcome Outcome, string Text);
 
 /// <summary>The outcome of an add and the text as it was (or would have been) stored.</summary>
-public readonly record struct MemoryAddResult(MemoryAddOutcome Outcome, string Text);
+public readonly record struct MemoryAddResult(MemoryAddOutcome Outcome, string Text, string? Folder = null);
 
 /// <summary>
 /// What <see cref="MemoryStore.Import"/> did: how many entries were written, how many were skipped
@@ -163,12 +174,52 @@ public sealed class MemoryStore
         }
     }
 
-    /// <summary>The texts the model is offered, oldest first, as a copy: every stored one but the disabled (2026-10-13).</summary>
-    public IReadOnlyList<string> Snapshot()
+    /// <summary>
+    /// The texts the model is offered, oldest first, as a copy: every stored one but the disabled (2026-10-13), and since 2026-11-21 (feature
+    /// idea #6) only the everywhere ones and those for <paramref name="folder"/> (<see cref="Files.FolderMatch.Same"/>); a folder-only one ends
+    /// with <see cref="MemoryPrompt.FolderOnlyMark"/>, so the model doesn't take a project's rule for one about the user. A null folder (a bot,
+    /// a tool built without one) offers the everywhere ones alone.
+    /// </summary>
+    public IReadOnlyList<string> Snapshot(string? folder = null)
     {
         lock (_gate)
         {
-            return Entries().Where(e => !e.Disabled).Select(e => e.Text).ToArray();
+            return Entries().Where(e => !e.Disabled && (e.Folder is null || Files.FolderMatch.Same(e.Folder, folder)))
+                .Select(e => e.Folder is null ? e.Text : e.Text + MemoryPrompt.FolderOnlyMark).ToArray();
+        }
+    }
+
+    /// <summary>
+    /// One memory's folder set (2026-11-21, feature idea #6): <paramref name="folder"/> made <see cref="Files.FolderMatch.Normal"/>, or null for
+    /// everywhere. False when nothing matched or it already was so. A rewrite that fails puts the folder back and throws, as <see cref="Remove"/> does.
+    /// </summary>
+    public bool SetFolder(string? text, string? folder)
+    {
+        string normalized = Normalize(text);
+        string? where = Files.FolderMatch.Normal(folder);
+        lock (_gate)
+        {
+            var entries = Entries();
+            var entry = entries.FirstOrDefault(e => string.Equals(e.Text, normalized, StringComparison.OrdinalIgnoreCase));
+            if (entry is null || string.Equals(entry.Folder, where, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            string? before = entry.Folder;
+            entry.Folder = where;
+            try
+            {
+                Save(entries);
+            }
+            catch
+            {
+                entry.Folder = before;
+                throw;
+            }
+
+            DiagnosticLog.Info(Category, ChangeLogLine(where is null ? "Widened" : "Scoped", entry.Text));
+            return true;
         }
     }
 
@@ -177,7 +228,7 @@ public sealed class MemoryStore
     {
         lock (_gate)
         {
-            return Entries().Select(e => new MemoryEntry { Text = e.Text, SavedAt = e.SavedAt, Disabled = e.Disabled }).ToArray();
+            return Entries().Select(e => e.Copy()).ToArray();
         }
     }
 
@@ -350,7 +401,9 @@ public sealed class MemoryStore
     /// (the user's own add), enabled again, <see cref="MemoryAddOutcome.Enabled"/>. <see cref="MaxEntries"/> counts the enabled ones: the
     /// ceiling is the prompt's.
     /// </summary>
-    public MemoryAddResult Add(string? text, bool enableDisabled = false)
+    /// <param name="folder">The one working folder the memory is for (2026-11-21, feature idea #6, <c>/memory remember --here</c> and
+    /// <c>save_memory</c>'s <c>here</c>); null for everywhere. A duplicate answers with the saved copy's folder, so a caller can say where it applies.</param>
+    public MemoryAddResult Add(string? text, bool enableDisabled = false, string? folder = null)
     {
         string normalized = Normalize(text);
         if (normalized.Length == 0)
@@ -387,7 +440,7 @@ public sealed class MemoryStore
 
             if (existing is not null)
             {
-                return new(MemoryAddOutcome.Duplicate, existing.Text);
+                return new(MemoryAddOutcome.Duplicate, existing.Text, existing.Folder);
             }
 
             if (entries.Count(e => !e.Disabled) >= MaxEntries)
@@ -395,7 +448,7 @@ public sealed class MemoryStore
                 return new(MemoryAddOutcome.Full, normalized);
             }
 
-            var entry = new MemoryEntry { Text = normalized, SavedAt = _time.GetUtcNow() };
+            var entry = new MemoryEntry { Text = normalized, SavedAt = _time.GetUtcNow(), Folder = Files.FolderMatch.Normal(folder) };
             entries.Add(entry);
             if (!TrySave(entries))
             {
@@ -404,7 +457,7 @@ public sealed class MemoryStore
             }
 
             DiagnosticLog.Info(Category, ChangeLogLine("Remembered", normalized));
-            return new(MemoryAddOutcome.Added, normalized);
+            return new(MemoryAddOutcome.Added, normalized, entry.Folder);
         }
     }
 
@@ -446,7 +499,7 @@ public sealed class MemoryStore
                     continue;
                 }
 
-                merged.Add(new MemoryEntry { Text = normalized, SavedAt = entry.SavedAt, Disabled = entry.Disabled });   // a disabled one stays so (2026-10-13)
+                merged.Add(new MemoryEntry { Text = normalized, SavedAt = entry.SavedAt, Disabled = entry.Disabled, Folder = entry.Folder });   // a disabled one stays so (2026-10-13), a folder's stays its (2026-11-21)
                 added++;
             }
 

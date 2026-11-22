@@ -19,4 +19,7 @@ namespace NeonSidekick.Mcp;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(McpConfigFile))]
 [JsonSerializable(typeof(McpServerConfig))]
+[JsonSerializable(typeof(McpOAuthConfig))]
+[JsonSerializable(typeof(Dictionary<string, McpTokenEntry>))]
+[JsonSerializable(typeof(ModelContextProtocol.Authentication.TokenContainer))]
 public sealed partial class McpJsonContext : JsonSerializerContext;

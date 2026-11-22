@@ -66,6 +66,10 @@ public sealed record SidekickOptions(
     public const string YoloFlag = "--yolo";
     public const string NoPoliceFlag = "--no-police";
     public const string AllowFlag = "--allow";
+    public const string PromptFlag = "--prompt";
+    public const string PromptFileFlag = "--prompt-file";
+    public const string QuietFlag = "--quiet";
+    public const string SessionFlag = "--session";
     public const string SqlCheckFlag = "--sql-check";
     public const string OracleCheckFlag = "--oracle-check";
     public const string MySqlCheckFlag = "--mysql-check";
@@ -92,7 +96,46 @@ public sealed record SidekickOptions(
     public IReadOnlyList<string> AllowList { get; init; } = [];
 
     /// <summary>The refusal for <c>--allow</c> without <c>--headless</c>. Pinned through the parse tests.</summary>
-    public const string AllowNeedsHeadless = "--allow is for --headless runs; the screen asks instead";
+    public const string AllowNeedsHeadless = "--allow is for --headless or --prompt runs; the screen asks instead";
+
+    /// <summary>
+    /// <c>--prompt "&lt;text&gt;"</c> (2026-11-21, feature idea #42): one input line, then the run ends; it implies <c>--headless</c> (the
+    /// user's call), and stdout carries the reply alone. Piped stdin joins it as context.
+    /// </summary>
+    public string? Prompt { get; init; }
+
+    /// <summary>
+    /// <c>--prompt-file &lt;file&gt;</c> (2026-11-21): <see cref="Prompt"/>'s twin, the whole file one message (never a command, whatever it starts
+    /// with), read at the start. Made full against the process's own folder at the parse, as a shell user expects, never <c>--cwd</c>'s.
+    /// </summary>
+    public string? PromptFile { get; init; }
+
+    /// <summary><c>--quiet</c> (2026-11-21, feature idea #43): stdout carries only the replies, everything else going to stderr. Headless only.</summary>
+    public bool Quiet { get; init; }
+
+    /// <summary>
+    /// <c>--session &lt;id&gt;|last</c> (2026-11-21, feature idea #44): the headless run carries on that stored session (<see cref="SessionLast"/>
+    /// for <c>last</c>, the row most recently updated). Headless only; a malformed value is a bad argument before any profile loads.
+    /// </summary>
+    public long? SessionId { get; init; }
+
+    /// <summary><c>--session last</c>.</summary>
+    public bool SessionLast { get; init; }
+
+    /// <summary>Whether a <c>--session</c> was given.</summary>
+    public bool ResumesSession => SessionId is not null || SessionLast;
+
+    /// <summary>Whether stdout carries the replies alone (<c>--quiet</c> or a one-shot prompt).</summary>
+    public bool RepliesOnly => Quiet || Prompt is not null || PromptFile is not null;
+
+    /// <summary>The refusals of the new flags. Pinned through the parse tests.</summary>
+    public const string PromptConflict = "--prompt and --prompt-file don't go together";
+
+    public const string QuietNeedsHeadless = "--quiet is for --headless or --prompt runs";
+
+    public const string SessionNeedsHeadless = "--session is for --headless or --prompt runs; at the screen, /sessions restores one";
+
+    public static string SessionBad(string value) => "--session takes a session id (12 or #12) or last, not \"" + value + "\"";
 
     /// <summary>The refusal for a blank server after <c>mcp:</c>.</summary>
     public const string AllowBlankServer = "--allow mcp: needs a server's name";
@@ -243,12 +286,16 @@ public sealed record SidekickOptions(
         "  --import-settings <zip>  add a /settings export zip's profiles and files before the start; a refused zip exits 2, one already imported is skipped\n" +
         "  --yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)\n" +
         "  --no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)\n" +
-        "  --allow <list>  --headless only: run the calls that would ask, this run only: docker, print, ha, advisor, mcp or mcp:<server>, comma-separated\n" +
+        "  --allow <list>  --headless or --prompt only: run the calls that would ask, this run only: docker, print, ha, advisor, mcp or mcp:<server>, comma-separated\n" +
+        "  --prompt <text>  one input line, then exit; implies --headless; stdout carries the reply alone; piped stdin joins it as context\n" +
+        "  --prompt-file <file>  as --prompt, the whole file one message (never a command)\n" +
+        "  --quiet        --headless only: stdout carries only the replies; everything else goes to stderr\n" +
+        "  --session <id>|last  --headless or --prompt only: carry on that stored session (last: the one updated most recently)\n" +
         "  --log <path>   append every diagnostic line (Trace and up) to a file; {ts} in the path becomes the start time (yyyyMMdd-HHmmss)\n" +
         "  --version      print the version and exit\n" +
         "  -h, --help     this text\n" +
         "\n" +
-        "Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call --allow covers was refused\n" +
+        "Exit codes: 0 done, 1 a check failed, 2 bad argument or unknown profile, 3 headless run in which a shell command or a call --allow covers was refused, 4 headless run in which a message or a command failed (4 beats 3)\n" +
         "\n" +
         "Keys: Esc = cancel/back";
 
@@ -483,6 +530,62 @@ public sealed record SidekickOptions(
                 continue;
             }
 
+            // The one-shot prompt (2026-11-21, feature idea #42): implies --headless at once, so every later check that reads Headless sees it.
+            if (TryValueFlag(PromptFlag, args, ref i, arg, lower, out var prompt, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                result = result with { Prompt = prompt, Headless = true };
+                continue;
+            }
+
+            if (TryValueFlag(PromptFileFlag, args, ref i, arg, lower, out var promptFile, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                string full;
+                try
+                {
+                    full = Path.GetFullPath(promptFile!);   // the process's own folder (2026-11-21), never --cwd's
+                }
+                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+                {
+                    return result with { Error = $"{PromptFileFlag}: {ex.Message}" };
+                }
+
+                result = result with { PromptFile = full, Headless = true };
+                continue;
+            }
+
+            if (TryValueFlag(SessionFlag, args, ref i, arg, lower, out var resume, out error))
+            {
+                if (error is not null)
+                {
+                    return result with { Error = error };
+                }
+
+                if (resume!.Equals("last", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = result with { SessionLast = true, SessionId = null };
+                }
+                else if (ChatScreen.TryParseSessionId(resume, out long sessionId))
+                {
+                    result = result with { SessionId = sessionId, SessionLast = false };
+                }
+                else
+                {
+                    return result with { Error = SessionBad(resume) };
+                }
+
+                continue;
+            }
+
             switch (lower)
             {
                 case "--smoke":
@@ -515,6 +618,9 @@ public sealed record SidekickOptions(
                 case NoPoliceFlag:
                     result = result with { NoPolice = true };
                     break;
+                case QuietFlag:
+                    result = result with { Quiet = true };
+                    break;
                 case "--version":
                     result = result with { ShowVersion = true };
                     break;
@@ -533,7 +639,16 @@ public sealed record SidekickOptions(
 
         // After the loop (2026-11-19): arguments are read in order, so a check at the case would refuse "--allow mcp --headless".
         // --help and --version answer first (2026-11-20, the mcp-ask review's #26): "--allow mcp --help" shows the help, not this error.
-        return result.AllowList.Count > 0 && !result.Headless && !result.ShowHelp && !result.ShowVersion ? result with { Error = AllowNeedsHeadless } : result;
+        if (result.ShowHelp || result.ShowVersion)
+        {
+            return result;
+        }
+
+        return result.Prompt is not null && result.PromptFile is not null ? result with { Error = PromptConflict }
+            : result.AllowList.Count > 0 && !result.Headless ? result with { Error = AllowNeedsHeadless }
+            : result.Quiet && !result.Headless ? result with { Error = QuietNeedsHeadless }
+            : result.ResumesSession && !result.Headless ? result with { Error = SessionNeedsHeadless }
+            : result;
     }
 
     /// <summary>The flags that carry a value this launch (a test seam since the status panel went, 2026-09-14).</summary>
@@ -660,6 +775,27 @@ public sealed record SidekickOptions(
         if (AllowList.Count > 0)
         {
             parts.Add(AllowFlag + " " + string.Join(",", AllowList));
+        }
+
+        // The one-shot flags (2026-11-21): named, never the prompt's text, which may be private; the file's path is the user's own.
+        if (Prompt is not null)
+        {
+            parts.Add(PromptFlag);
+        }
+
+        if (PromptFile is not null)
+        {
+            parts.Add(PromptFileFlag + " " + PromptFile);
+        }
+
+        if (Quiet)
+        {
+            parts.Add(QuietFlag);
+        }
+
+        if (ResumesSession)
+        {
+            parts.Add(SessionFlag + " " + (SessionLast ? "last" : SessionId!.Value.ToString(CultureInfo.InvariantCulture)));
         }
 
         if (LogPath is not null)

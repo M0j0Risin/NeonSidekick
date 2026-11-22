@@ -49,7 +49,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>The memories as the sheet's 💾 tab lists them: the PC pane's order, the turned-off ones marked, and whether the mode is off.</summary>
     private WebMemories WebMemoriesNow() =>
-        new([.. _memory.EntriesSnapshot().Select(e => new WebMemory(e.Text, e.Disabled))], !MemoryMode.Enabled(_effective()), Memory.MemoryStore.MaxTextLength);
+        new([.. _memory.EntriesSnapshot().Select(e => new WebMemory(e.Text, e.Disabled, e.Folder is not null, Files.FolderMatch.Same(e.Folder, _files.Root)))], !MemoryMode.Enabled(_effective()), Memory.MemoryStore.MaxTextLength);
 
     /// <summary>
     /// The page's draft saved as a memory: <c>/memory remember</c>'s rule and words (saved in every <i>Memory mode</i> since 2026-11-20, review #58;
@@ -63,7 +63,7 @@ internal sealed partial class ChatScreen
             return new WebReply(WebOutcome.Refused, WebUiText.DraftEmpty);
         }
 
-        var (answer, error) = RememberAnswer(result);
+        var (answer, error) = RememberAnswer(result, _files.Root);
         if (error)
         {
             return new WebReply(WebOutcome.Refused, answer);

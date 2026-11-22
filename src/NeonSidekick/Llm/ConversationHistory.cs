@@ -61,6 +61,13 @@ public sealed class ConversationHistory
     public const string ScreenKey = "neon.screen";
 
     /// <summary>
+    /// The additional property an MCP picture's part carries (2026-11-21, feature idea #31): its label (<see cref="ImageAttachment.McpSource"/>);
+    /// <c>SessionHistory</c> stores a line naming it unless <c>MCP keep in sessions</c> is on, and <see cref="PictureBudget.LeftOutFor"/> says to
+    /// call the tool again, since the label is no file for <c>view_image</c>.
+    /// </summary>
+    public const string McpKey = "neon.mcp";
+
+    /// <summary>
     /// The <see cref="AIContent.AdditionalProperties"/> key that holds a picture part's path or name, a <see cref="string"/>
     /// (2026-10-03): what <see cref="PictureBudget.LeftOut"/> names when the picture is taken out of a request, so the model
     /// can look again. Kept in a stored session (<c>StoredPart.Path</c>). Never on the wire.
@@ -100,6 +107,16 @@ public sealed class ConversationHistory
         if (!string.IsNullOrWhiteSpace(image.Path))
         {
             part.AdditionalProperties = new AdditionalPropertiesDictionary { [PathKey] = image.Path };
+        }
+        else if (image.McpSource is { Length: > 0 } label)
+        {
+            // An MCP picture has no file (2026-11-21): its label is its name, so a budget that takes it out still names it.
+            part.AdditionalProperties = new AdditionalPropertiesDictionary { [PathKey] = label };
+        }
+
+        if (image.McpSource is { Length: > 0 } source)
+        {
+            (part.AdditionalProperties ??= new AdditionalPropertiesDictionary())[McpKey] = source;
         }
 
         if (image.Camera)

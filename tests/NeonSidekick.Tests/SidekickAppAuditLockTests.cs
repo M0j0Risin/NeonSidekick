@@ -48,9 +48,9 @@ public partial class SidekickAppTests
         Assert.False(File.Exists(HeadlessAuditLock(path)));   // let go at the run's end
 
         WriteHeadlessOtherLock(path);
-        string output = await Headless("/code-audit resume\n/code-audit fix\n");
+        string output = await Headless("/code-audit resume\n/code-audit fix\n", exitCode: 4);
 
-        Assert.Equal(2, output.Split(AuditText.LockedError(path)).Length - 1);
+        Assert.Equal(2, output.Split("[error] " + AuditText.LockedError(path)).Length - 1);   // the error lines; the failed summary names it once more
         Assert.Equal(2, _chat.Requests.Count);   // the pass and its follow-up; nothing after
         Assert.True(File.Exists(HeadlessAuditLock(path)));
     });
@@ -78,7 +78,7 @@ public partial class SidekickAppTests
             return Task.CompletedTask;
         };
 
-        string output = await Headless("/code-audit src\n");
+        string output = await Headless("/code-audit src\n", exitCode: 4);   // a stopped audit is a failed run (2026-11-21)
 
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Contains(AuditText.LockLostNotice(Path.GetFileNameWithoutExtension(path!)), output);

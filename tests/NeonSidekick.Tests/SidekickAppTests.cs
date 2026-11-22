@@ -76,7 +76,10 @@ public partial class SidekickAppTests : IDisposable
         Func<string, string, IWakeWordDetector>? wake = null,
         Func<NeonSidekick.Docker.IDockerServers>? dockerServers = null,
         bool headlessNarrow = false,
-        Func<NeonSidekick.EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null)
+        Func<NeonSidekick.EmbeddedLlm.IEmbeddedLlm>? embeddedLlm = null,
+        TextWriter? stderr = null,
+        bool redirected = false,
+        TimeProvider? time = null)
         => new(
             _console,
             _settings,
@@ -99,7 +102,7 @@ public partial class SidekickAppTests : IDisposable
             // Never a real Vosk model in tests: a bad directory would abort the process, not throw.
             wake ?? ((_, _) => _wake),
             // The manual clock, so the opening call's line is the same on every machine.
-            new ManualTimeProvider(),
+            time ?? new ManualTimeProvider(),
             setTitle: _titles.Add,
             externalSkills: Path.Combine(_dir, "agents-skills"),
             mcpTransport: _mcpServers.Transport,
@@ -125,7 +128,10 @@ public partial class SidekickAppTests : IDisposable
             // The file checkpoints (2026-10-28): none unless a test sets the fake, so no other test journals.
             checkpoints: _checkpoints,
             // Home Assistant (2026-11-13, headless /ha camera): the real client unless a test hands in one over a stub.
-            haClient: _haClient);
+            haClient: _haClient,
+            // stderr and a redirected stdin (2026-11-21, --quiet and --prompt): a test's own writer, else the process's.
+            headlessError: stderr,
+            headlessInputRedirected: redirected);
 
     private readonly Fakes.FakeRalphVerifier _ralphVerifier = new();
 
@@ -171,7 +177,11 @@ public partial class SidekickAppTests : IDisposable
         var app = App(env, new StringReader(input), stdout, chat: chat, headlessNarrow: headlessNarrow, embeddedLlm: embeddedLlm);
         app.HeadlessPassRetryWaitForTests = TimeSpan.Zero;   // the tests' clock is manual (2026-11-17)
         int code = await app.RunAsync((options ?? SidekickOptions.None) with { Headless = true }, CancellationToken.None);
-        Assert.Equal(exitCode, code);
+        if (code != exitCode)
+        {
+            Assert.Fail($"Exit {code}, not {exitCode}: {stdout}");   // the output names what failed (2026-11-21)
+        }
+
         Assert.Empty(_console.Output); // headless never touches the TUI console
         return stdout.ToString();
     }
@@ -364,12 +374,12 @@ public partial class SidekickAppTests : IDisposable
     [Fact]   // every system since 2026-10-11, when /docker came to a Mac
     public async Task Headless_Docker_ListsTheContainers_AndSaysWhenTheEngineIsAway()
     {
-        string away = await Headless("/docker\n");
+        string away = await Headless("/docker\n", exitCode: 4);
         Assert.Contains(@"[error] Error: cannot reach the Docker engine on \\.\pipe\docker_engine: ", away);
 
         _http.Map(NeonSidekick.Docker.DockerClient.Host + "/version", HttpStatusCode.OK, File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "docker", "version.json")));
         _http.Map(NeonSidekick.Docker.DockerClient.Host + "/v1.47/containers/json", HttpStatusCode.OK, File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "docker", "containers.json")));
-        string output = await Headless("/docker\n/docker frob\n");
+        string output = await Headless("/docker\n/docker frob\n", exitCode: 4);
         Assert.Contains("Docker: 6 containers (4 running, 1 exited, 1 paused)" + Environment.NewLine + "mariadb_dev · running (healthy)", output);
         Assert.Contains("[error] " + NeonSidekick.Docker.DockerText.Usage, output);
         Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
@@ -379,7 +389,7 @@ public partial class SidekickAppTests : IDisposable
     [Fact]
     public async Task Headless_EventLog_PrintsTheRows_AndSaysWhenThereAreNoLogs()
     {
-        string away = await Headless("/eventlog\n");
+        string away = await Headless("/eventlog\n", exitCode: 4);
         Assert.Contains("[error] " + NeonSidekick.EventLog.EventLogText.NoneHere, away);
         if (!OperatingSystem.IsWindows())
         {
@@ -388,7 +398,7 @@ public partial class SidekickAppTests : IDisposable
 
         _eventLogSystem = new Fakes.FakeEventLogSystem();
         _eventLogSystem.Add("System", Fakes.FakeEventLogSystem.Xml("Kernel-Power", 41, 1, 9, Fakes.ManualTimeProvider.DefaultUtcNow), "The system rebooted without cleanly shutting down first.");
-        string output = await Headless("/eventlog sys\n/eventlog sys level:loud\n");
+        string output = await Headless("/eventlog sys\n/eventlog sys level:loud\n", exitCode: 4);
         Assert.Contains("System on local: 1 event, newest first" + Environment.NewLine + "#9  2026-09-11 14:05:30 -07:00  critical  Kernel-Power  41  The system rebooted without cleanly shutting down first.", output);
         Assert.Contains("[error] " + NeonSidekick.EventLog.EventLogText.BadLevel("loud"), output);
         Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
@@ -401,7 +411,7 @@ public partial class SidekickAppTests : IDisposable
         _unifiedLog = new Fakes.FakeUnifiedLog();
         _unifiedLog.Entries.Add(Fakes.FakeUnifiedLog.Entry(Fakes.ManualTimeProvider.DefaultUtcNow.AddMinutes(-2), message: "login failed Password=hunter2;"));
 
-        string output = await Headless("/eventlog\n/eventlog system level:loud\n/eventlog nope\n");
+        string output = await Headless("/eventlog\n/eventlog system level:loud\n/eventlog nope\n", exitCode: 4);
 
         Assert.Contains("system on this Mac: 1 entry, newest first" + Environment.NewLine + "u", output);
         Assert.Contains("  2026-09-11 14:03:30 -07:00  error  loginwindow[395]  com.apple.loginwindow.logging/TAL  login failed Password=hunter2;", output);
@@ -414,7 +424,7 @@ public partial class SidekickAppTests : IDisposable
     [Fact]
     public async Task Headless_Print_ListsThePrinters_AndSaysWhy()
     {
-        string output = await Headless("/print printers\n/print nope.txt\n/print reply\n");
+        string output = await Headless("/print printers\n/print nope.txt\n/print reply\n", exitCode: 4);
 
         Assert.Contains((OperatingSystem.IsMacOS() ? NeonSidekick.Printing.PrintText.MacNoPrinters : NeonSidekick.Printing.PrintText.NoPrinters) + Environment.NewLine, output);
         Assert.Contains("[error] " + FileText.Missing("nope.txt"), output);
@@ -429,7 +439,7 @@ public partial class SidekickAppTests : IDisposable
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, "notes.md"), "# Notes\n\nBody");
 
-        string output = await Headless("/docx notes.md\n/docx nope.md\n/docx reply\n", options: SidekickOptions.None with { WorkingDirectory = folder });
+        string output = await Headless("/docx notes.md\n/docx nope.md\n/docx reply\n", options: SidekickOptions.None with { WorkingDirectory = folder }, exitCode: 4);
 
         Assert.Contains("Made notes.docx", output);
         Assert.True(File.Exists(Path.Combine(folder, "notes.docx")));
@@ -442,7 +452,7 @@ public partial class SidekickAppTests : IDisposable
     [Fact]
     public async Task Headless_SessionsExport_IsAnErrorLine()
     {
-        string output = await Headless("/sessions export\n/sessions EXPORT 3 html\n");
+        string output = await Headless("/sessions export\n/sessions EXPORT 3 html\n", exitCode: 4);
 
         Assert.Equal(2, output.Split("[error] " + NeonSidekick.Sessions.SessionText.ExportScreenOnlyError).Length - 1);
         Assert.DoesNotContain(SidekickApp.HeadlessNoAssistantReply, output);
@@ -459,7 +469,7 @@ public partial class SidekickAppTests : IDisposable
         string zip = Path.Combine(_dir + "-out", "x.zip");
         try
         {
-            string output = await Headless("/settings export " + zip + Environment.NewLine + "/settings export " + zip + Environment.NewLine);
+            string output = await Headless("/settings export " + zip + Environment.NewLine + "/settings export " + zip + Environment.NewLine, exitCode: 4);
 
             Assert.Contains("[notice] Settings exported to " + zip, output);
             Assert.Contains("[error] " + SettingsTransferText.AlreadyThere(zip), output);
@@ -491,7 +501,7 @@ public partial class SidekickAppTests : IDisposable
         ServerOn1234("llama");
         _chat.EnqueueText("drawer").EnqueueText("AGREE");
 
-        string output = await Headless("/test mind\n/test sycophancy\n/test nope\n");
+        string output = await Headless("/test mind\n/test sycophancy\n/test nope\n", exitCode: 4);
 
         Assert.Contains("[notice] ✓ mind — Answer tracked Alice's belief (drawer), not reality (backpack).", output);
         Assert.Contains("[notice] ✗ sycophancy — ", output);
@@ -505,7 +515,7 @@ public partial class SidekickAppTests : IDisposable
     [Fact]
     public async Task Headless_Test_ListsWithoutAServer_ARunNeedsOne()
     {
-        string output = await Headless("/test\n/test mind\n");
+        string output = await Headless("/test\n/test mind\n", exitCode: 4);
 
         Assert.Contains("| mind | Theory of Mind (Reasoning) |", output);
         Assert.Contains(SidekickApp.HeadlessNoAssistantReply, output);
@@ -558,7 +568,7 @@ public partial class SidekickAppTests : IDisposable
     {
         _http.Map("https://codeload.github.com/anthropics/skills/zip/", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(HttpStatusCode.OK, SkillZip.Repo("pdf", "docx"), "application/zip")));
 
-        string output = await Headless("/skills add anthropics/skills/pdf\n/skills add anthropics/skills/pdf --global --yes\n/skills add anthropics/skills\n/skills add\n");
+        string output = await Headless("/skills add anthropics/skills/pdf\n/skills add anthropics/skills/pdf --global --yes\n/skills add anthropics/skills\n/skills add\n", exitCode: 4);
 
         Assert.Contains("**pdf** — Does a thing. Use when asked.", output);
         Assert.Contains("[notice] " + SkillInstallText.HeadlessNeedsYes("pdf"), output);
@@ -974,7 +984,7 @@ public partial class SidekickAppTests : IDisposable
         _chat.Enqueue(FakeChatClient.Call("c1", "pipe__drop", new Dictionary<string, object?> { ["text"] = "x" }));
         _chat.EnqueueText("It dropped twice.");
 
-        string output = await Headless("drop it\n");
+        string output = await Headless("drop it\n", exitCode: 4);
 
         Assert.Contains("[tool] pipe__drop -> " + NeonSidekick.Mcp.McpText.ErrorPrefix + NeonSidekick.Mcp.McpText.DroppedAgainError("pipe", NeonSidekick.Mcp.McpText.HeadlessRetryTail), output);
         Assert.Contains("[error] " + NeonSidekick.Mcp.McpText.NotBackNotice("pipe", NeonSidekick.Mcp.McpText.DroppedAgainDetail, NeonSidekick.Mcp.McpText.HeadlessRetryTail), output);
@@ -1332,7 +1342,7 @@ public partial class SidekickAppTests : IDisposable
         _chat.Enqueue(FakeChatClient.Call("c1", "date_difference", new Dictionary<string, object?> { ["from"] = "2026-09-11", ["to"] = "2026-12-25" }));
         _chat.Enqueue(FakeChatClient.Call("c2", "date_difference", new Dictionary<string, object?> { ["from"] = "2026-09-11", ["to"] = "2026-12-25" }));
 
-        string output = await Headless("how long?\n");
+        string output = await Headless("how long?\n", exitCode: 4);
 
         Assert.Contains("[error] Stopped after 1 tool iterations without a final answer.", output);
         Assert.Single(_chat.Requests);
@@ -1370,7 +1380,7 @@ public partial class SidekickAppTests : IDisposable
     [Fact]
     public async Task Headless_NoServer_SaysSo_AndAnswersEveryLineWithAnError()
     {
-        string output = await Headless("hello\n");
+        string output = await Headless("hello\n", exitCode: 4);
 
         Assert.Contains(SidekickApp.HeadlessNoServerLine(ScanScope.Local), output);
         Assert.Contains("Neon: " + SidekickApp.HeadlessNoAssistantReply, output);
@@ -1384,7 +1394,7 @@ public partial class SidekickAppTests : IDisposable
         ServerOn1234("llama");
         _settings.Update(d => d.LlmScanMode = "disabled");
 
-        string output = await Headless("hello\n");
+        string output = await Headless("hello\n", exitCode: 4);
 
         Assert.Contains(SidekickApp.HeadlessNoServerLine(ScanScope.Disabled), output);
         Assert.Contains("Neon: " + SidekickApp.HeadlessNoAssistantReply, output);
@@ -1401,7 +1411,7 @@ public partial class SidekickAppTests : IDisposable
         var fresh = new AppSettingsData();
         _settings.Update(d => { d.LlmScanMode = fresh.LlmScanMode; d.FileTools = fresh.FileTools; d.WebTools = fresh.WebTools; d.ShellCommandPolicy = fresh.ShellCommandPolicy; });
 
-        string output = await Headless("hello\n");
+        string output = await Headless("hello\n", exitCode: 4);
 
         Assert.Contains(SidekickApp.HeadlessNoServerLine(ScanScope.Disabled), output);
         Assert.Empty(_http.Requests);
@@ -1432,7 +1442,7 @@ public partial class SidekickAppTests : IDisposable
         ServerOn1234("llama");
         _chat.EnqueueText("one").EnqueueText("two").EnqueueText("three").EnqueueText("again");
 
-        string output = await Headless("/rewind\nfirst\nsecond\nthird\n/rewind 4\n/rewind 2\nsecond again\n");
+        string output = await Headless("/rewind\nfirst\nsecond\nthird\n/rewind 4\n/rewind 2\nsecond again\n", exitCode: 4);
 
         Assert.Contains("Neon: " + RewindText.NothingNotice, output);
         Assert.Contains("[error] " + RewindText.UsageError(3), output);
@@ -1462,7 +1472,7 @@ public partial class SidekickAppTests : IDisposable
             .EnqueueText("Two.")
             .EnqueueText("Back.");
 
-        string output = await Headless("/undo\nwrite a note\n/undo 0\n/undo\nwhat now\nwrite two\n/rewind files\nafter\n/undo purge\n");
+        string output = await Headless("/undo\nwrite a note\n/undo 0\n/undo\nwhat now\nwrite two\n/rewind files\nafter\n/undo purge\n", exitCode: 4);
 
         Assert.Contains("Neon: " + UndoText.NothingToUndo, output);
         Assert.Contains("[error] " + UndoText.UsageError, output);
@@ -1543,7 +1553,7 @@ public partial class SidekickAppTests : IDisposable
         string output;
         try
         {
-            output = await Headless("write a note\nhow are you\n/rewind 2 files\nafter\n");
+            output = await Headless("write a note\nhow are you\n/rewind 2 files\nafter\n", exitCode: 4);
         }
         finally
         {
@@ -1686,7 +1696,7 @@ public partial class SidekickAppTests : IDisposable
             ? throw new NeonSidekick.Llm.Anthropic.AnthropicApiException(400, "invalid_request_error", "prompt is too long: 3000 tokens > 2048 maximum")
             : Task.CompletedTask;
 
-        string output = await Headless("first\nsecond\n/compact\n");
+        string output = await Headless("first\nsecond\n/compact\n", exitCode: 4);
 
         int notice = output.IndexOf("[notice] " + CompactionText.ServerLimitNotice(2_048), StringComparison.Ordinal);
         int failed = output.IndexOf(CompactionText.FailedPrefix, StringComparison.Ordinal);
@@ -1703,7 +1713,7 @@ public partial class SidekickAppTests : IDisposable
         _chat.Enqueue(FakeChatClient.Text("half"));
         _chat.BeforeUpdate = (i, _) => _chat.Requests.Count == 3 && i == 0 ? throw new HttpRequestException("gone") : Task.CompletedTask;
 
-        string output = await Headless("/compact\nfirst\nsecond\n/compact\n");
+        string output = await Headless("/compact\nfirst\nsecond\n/compact\n", exitCode: 4);
 
         Assert.Contains("Neon: " + CompactionText.NothingToCompact, output);
         Assert.Contains("Neon: 🗜️ Compact failed: HttpRequestException: gone", output);
@@ -1879,7 +1889,7 @@ public partial class SidekickAppTests : IDisposable
         _chat.EnqueueText("par", "tial").EnqueueText("fine");
         _chat.ThrowAt = 1;
 
-        string output = await Headless("one\ntwo\n");
+        string output = await Headless("one\ntwo\n", exitCode: 4);
 
         // Not asserted as adjacent lines: DiagnosticLog is process-wide, and a Warning raised by a
         // test running in parallel can be forwarded between these two.
@@ -1906,7 +1916,7 @@ public partial class SidekickAppTests : IDisposable
     public async Task Headless_ChatClientFactoryThrows_IsAnErrorNotACrash()
     {
         ServerOn1234("llama");
-        string output = await Headless("hi\n", chat: (_, _) => throw new InvalidOperationException("no client"));
+        string output = await Headless("hi\n", chat: (_, _) => throw new InvalidOperationException("no client"), exitCode: 4);
 
         Assert.Contains("[App] Could not create the chat client: InvalidOperationException: no client", output);
         Assert.Contains("Neon: " + SidekickApp.HeadlessNoAssistantReply, output);

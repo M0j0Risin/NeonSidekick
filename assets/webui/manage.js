@@ -106,7 +106,8 @@
     const b = el('button', 'manage-row session-row');
     b.type = 'button';
     const title = el('div', 'manage-text', row.title);
-    const facts = [row.when, row.turns, row.model].filter(x => x).join(' · ') + (row.current ? ' · ' + (words.sessionsCurrent || 'this conversation') : '');
+    const facts = [row.when, row.turns, row.model].filter(x => x).join(' · ') + (row.current ? ' · ' + (words.sessionsCurrent || 'this conversation') : '')
+      + (row.here ? ' · ' + (words.sessionsHere || 'this folder') : '');
     const meta = el('div', 'manage-meta', facts);
     b.append(title, meta);
     if (row.snippet && row.snippet.length) b.appendChild(snippetEl(row.snippet));

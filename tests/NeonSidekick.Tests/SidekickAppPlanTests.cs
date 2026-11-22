@@ -89,7 +89,7 @@ public partial class SidekickAppTests
         ServerOn1234("llama");
         _chat.EnqueueText("What should it cover?");
 
-        string output = await Headless("/plan\n/plan cancel\n/plan Add a guide\n/plan approve\n/plan cancel\n");
+        string output = await Headless("/plan\n/plan cancel\n/plan Add a guide\n/plan approve\n/plan cancel\n", exitCode: 4);
 
         Assert.Contains("Neon: [error] " + PlanText.UsageError, output);
         Assert.Contains("Neon: [error] " + PlanText.NotPlanningError, output);

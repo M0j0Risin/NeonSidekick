@@ -96,6 +96,12 @@ public static class McpAskRule
         };
     }
 
+    /// <summary>
+    /// Whether a resource read or list (<c>mcp_read</c>, 2026-11-21, feature idea #33) asks under <paramref name="mode"/>: only under
+    /// <see cref="McpAskMode.Always"/>, since a read changes nothing; <c>writes</c> and <c>never</c> don't ask.
+    /// </summary>
+    public static bool AsksRead(McpAskMode mode) => mode == McpAskMode.Always;
+
     /// <summary>What the caption may say of <paramref name="tool"/>'s effects (<see cref="McpChangeNote"/>).</summary>
     public static McpChangeNote Note(McpTool tool)
     {

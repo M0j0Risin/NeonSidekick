@@ -1014,11 +1014,8 @@ internal sealed partial class ChatScreen
         return PlanReferences.ReconcileSection(body, saved);
     }
 
-    /// <summary>
-    /// Whether the model in use can see pictures (2026-10-18, a run's reference pictures): not the embedded model without its projector, and not
-    /// without image codecs.
-    /// </summary>
-    private bool ModelSeesPictures() => ImageCodecs.Available && _session.EmbeddedServer is not { Vision: false };
+    /// <summary>Whether the model in use can see pictures: <see cref="LlmSession.SeesPictures"/> (its home since 2026-11-21, shared with headless).</summary>
+    private bool ModelSeesPictures() => _session.SeesPictures;
 
     /// <summary>The <c>/plan open</c> completion list: every plan under <c>.neon/plans/</c>, newest first, with its status and steps.</summary>
     private IReadOnlyList<CompletionItem> PlanChoices() =>

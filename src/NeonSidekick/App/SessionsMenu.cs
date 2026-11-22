@@ -1,3 +1,4 @@
+using NeonSidekick.Files;
 using NeonSidekick.Sessions;
 using NeonSidekick.UI;
 using Spectre.Console;
@@ -37,6 +38,9 @@ internal sealed class SessionsMenu
     /// <summary>The dim note after the row of the conversation on screen.</summary>
     public const string CurrentNote = "this conversation";
 
+    /// <summary><c>/sessions here</c>'s title (2026-11-21, feature idea #4), and the no-pane list's first line, so a short list is never taken for the whole store.</summary>
+    public const string HereTitle = Title + " · " + SessionText.HereMark;
+
     public const string RestoreWord = "restore";
     public const string RenameWord = "rename";
     public const string ExportWord = "export";
@@ -64,6 +68,7 @@ internal sealed class SessionsMenu
     private readonly TimeProvider _time;
     private readonly Action<long> _purged;
     private readonly Func<long, SessionExportFormat, CancellationToken, Task<(string? Notice, string? Error)>> _export;
+    private readonly Func<string?> _root;
 
     /// <param name="store">The profile's store; the list is read when the pane opens and again after every change.</param>
     /// <param name="current">The session on screen (marked in the list, never restored); null before its first turn.</param>
@@ -73,9 +78,11 @@ internal sealed class SessionsMenu
     /// <param name="time">The clock whose local zone the moments are shown in.</param>
     /// <param name="purged">Told the id of every session purged here, so the screen can forget the current one.</param>
     /// <param name="export">Writes a session to a file: the screen's <c>/sessions export</c> without its spinner; its notice or error goes on the status line.</param>
+    /// <param name="root">The working folder in force (2026-11-21, feature idea #4): the rows of its sessions are marked, and <c>/sessions here</c> lists only them. Null marks none.</param>
     public SessionsMenu(SessionStore store, Func<long?> current, INoticeSink transcript, MenuPane pane, InputLine input, TimeProvider time, Action<long> purged,
-        Func<long, SessionExportFormat, CancellationToken, Task<(string? Notice, string? Error)>> export)
+        Func<long, SessionExportFormat, CancellationToken, Task<(string? Notice, string? Error)>> export, Func<string?>? root = null)
     {
+        _root = root ?? (() => null);
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _current = current ?? throw new ArgumentNullException(nameof(current));
         _transcript = transcript ?? throw new ArgumentNullException(nameof(transcript));
@@ -102,13 +109,15 @@ internal sealed class SessionsMenu
     /// A list row: <c>#12  2026-09-18 14:05  12 turns</c> dim, the title, and <see cref="CurrentNote"/>
     /// dim after the conversation on screen. The id and the turns label are padded to
     /// <paramref name="idWidth"/> and <paramref name="turnsWidth"/> — the widest in the list shown
-    /// (<see cref="Widths"/>) — so <c>#3</c> and <c>1 turn</c> line up under <c>#12</c> and <c>5 turns</c>.
+    /// (<see cref="Widths"/>) — so <c>#3</c> and <c>1 turn</c> line up under <c>#12</c> and <c>5 turns</c>. <paramref name="here"/> (2026-11-21)
+    /// adds <see cref="SessionText.HereMark"/> dim for a session of the folder in force.
     /// </summary>
-    public static string RowMarkup(SessionSummary session, bool current, TimeZoneInfo zone, int idWidth = 0, int turnsWidth = 0)
+    public static string RowMarkup(SessionSummary session, bool current, TimeZoneInfo zone, int idWidth = 0, int turnsWidth = 0, bool here = false)
     {
         ArgumentNullException.ThrowIfNull(session);
         string row = Theme.DimMarkup(SessionText.Id(session.Id).PadRight(idWidth) + "  " + SessionText.Moment(session.UpdatedAt, zone) + "  " + SessionText.Turns(session.Turns).PadRight(turnsWidth)) + "  " + Markup.Escape(SessionText.DisplayTitle(session));
-        return current ? row + "  " + Theme.DimMarkup(CurrentNote) : row;
+        row = current ? row + "  " + Theme.DimMarkup(CurrentNote) : row;
+        return here ? row + "  " + Theme.DimMarkup("· " + SessionText.HereMark) : row;
     }
 
     /// <summary>The two column widths of a list: the widest id and the widest turns label in it.</summary>
@@ -122,12 +131,16 @@ internal sealed class SessionsMenu
     /// The footer under the list for <paramref name="session"/> (2026-10-07): its whole title, then
     /// <c>started 2026-10-07 09:12 · last 2026-10-07 14:40 · 14 turns · qwen3 · this conversation</c>, the model left out when none
     /// was stored. The facts are an export's facts line without its id (<see cref="SessionExport.Facts"/>, 2026-10-30, review F68). Pinned.
+    /// A session with a folder (2026-11-21) names it on a line under the title; one saved before has none.
     /// </summary>
     public static MenuFooter Footer(SessionSummary session, bool current, TimeZoneInfo zone)
     {
         ArgumentNullException.ThrowIfNull(session);
         string facts = SessionExport.Facts(session, zone, withId: false);
-        return new MenuFooter(SessionText.DisplayTitle(session), current ? facts + " · " + CurrentNote : facts);
+        string last = current ? facts + " · " + CurrentNote : facts;
+        return session.Cwd is { Length: > 0 } folder
+            ? new MenuFooter(SessionText.DisplayTitle(session) + "\n" + SessionText.FolderFooter(folder), last) { KeepLines = true }
+            : new MenuFooter(SessionText.DisplayTitle(session), last);
     }
 
     /// <summary>Whether <paramref name="session"/> stays under <paramref name="filter"/>: its title or its model holds it (2026-10-07).</summary>
@@ -186,23 +199,26 @@ internal sealed class SessionsMenu
     /// null when the pane closed any other way.
     /// </summary>
     /// <param name="midTurn">The pane opened while a reply runs: the list shows, a pick is refused.</param>
-    public Task<long?> ShowAsync(CancellationToken cancellationToken, bool midTurn = false) => ShowAsync(cancellationToken, ReplyRun.Of(midTurn));
+    /// <param name="here"><c>/sessions here</c> (2026-11-21, feature idea #4): only the sessions of the folder in force.</param>
+    public Task<long?> ShowAsync(CancellationToken cancellationToken, bool midTurn = false, bool here = false) => ShowAsync(cancellationToken, ReplyRun.Of(midTurn), here);
 
     /// <summary>The list under a reply asked live (2026-10-12, <see cref="ReplyRun"/>): its picks open when the reply ends, the pane saying so.</summary>
-    public async Task<long?> ShowAsync(CancellationToken cancellationToken, ReplyRun reply)
+    public async Task<long?> ShowAsync(CancellationToken cancellationToken, ReplyRun reply, bool here = false)
     {
         var zone = _time.LocalTimeZone;
-        var sessions = _store.List(0);
+        string title = here ? HereTitle : Title;
+        string empty = here ? SessionText.NoneHere : EmptyNotice;
+        var sessions = Listed(here);
         if (sessions.Count == 0)
         {
             // The pane opens on the empty list too (2026-10-07, the consistency pass); without one, the line.
             if (_pane.Enabled)
             {
-                await _pane.ShowEmptyAsync(Title, EmptyNotice, cancellationToken).ConfigureAwait(false);
+                await _pane.ShowEmptyAsync(title, empty, cancellationToken).ConfigureAwait(false);
             }
             else
             {
-                _transcript.Notice(EmptyNotice);
+                _transcript.Notice(empty);
             }
 
             return null;
@@ -210,6 +226,11 @@ internal sealed class SessionsMenu
 
         if (!_pane.Enabled)
         {
+            if (here)
+            {
+                _transcript.Notice(HereTitle);
+            }
+
             foreach (var line in ListLines(sessions, _current(), zone))
             {
                 _transcript.Notice(line);
@@ -228,8 +249,9 @@ internal sealed class SessionsMenu
                 var (idWidth, turnsWidth) = Widths(sessions);
                 // The rows under the filter (2026-10-07): the indices into the list, the cursor kept on the same session when it stays.
                 var shown = Enumerable.Range(0, sessions.Count).Where(i => Matches(filter, sessions[i])).ToList();
-                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(sessions[i], sessions[i].Id == current, zone, idWidth, turnsWidth)).ToList() : [MenuFilter.NoMatchRow(filter)];
-                var page = new MenuPage(Title, rows, MenuFilter.Hint(Keys, filter))
+                string? root = _root();
+                List<string> rows = shown.Count > 0 ? shown.Select(i => RowMarkup(sessions[i], sessions[i].Id == current, zone, idWidth, turnsWidth, FolderMatch.Same(sessions[i].Cwd, root))).ToList() : [MenuFilter.NoMatchRow(filter)];
+                var page = new MenuPage(title, rows, MenuFilter.Hint(Keys, filter))
                 {
                     Filter = filter,
                     Caption = MenuFilter.CaptionOrNull(filter, shown.Count, sessions.Count),
@@ -277,11 +299,11 @@ internal sealed class SessionsMenu
 
                 if (outcome == RowOutcome.Changed)
                 {
-                    sessions = _store.List(0);
+                    sessions = Listed(here);
                     if (sessions.Count == 0)
                     {
                         _pane.Close();
-                        _transcript.Notice(EmptyNotice);
+                        _transcript.Notice(empty);
                         return null;
                     }
 
@@ -293,6 +315,19 @@ internal sealed class SessionsMenu
         {
             _pane.Close();
         }
+    }
+
+    /// <summary>Every session, newest first; under <c>here</c> only the folder in force's (2026-11-21), a session saved before having none.</summary>
+    private IReadOnlyList<SessionSummary> Listed(bool here)
+    {
+        var all = _store.List(0);
+        if (!here)
+        {
+            return all;
+        }
+
+        string? root = _root();
+        return all.Where(s => FolderMatch.Same(s.Cwd, root)).ToList();
     }
 
     /// <summary>

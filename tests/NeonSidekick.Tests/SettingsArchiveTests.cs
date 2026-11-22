@@ -138,6 +138,7 @@ public sealed class SettingsArchiveTests : IDisposable
     [InlineData("profiles/neon/memory.json", false)]
     [InlineData("profiles/neon/configs/memory.json", true)]
     [InlineData("profiles/neon/configs/browser-history.json", false)]
+    [InlineData("profiles/neon/configs/mcp-tokens.json", false)]   // the MCP sign-ins (2026-11-21): sealed for this user and computer
     [InlineData("profiles/neon/db/sessions/sessions.db", false)]
     [InlineData("profiles/neon/images/x.png", false)]
     [InlineData("profiles/neon/files/a.txt", false)]

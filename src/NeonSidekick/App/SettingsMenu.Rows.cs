@@ -181,7 +181,7 @@ internal sealed partial class SettingsMenu
     /// <summary>The section headings of <c>/mcp</c>' Options tab, indexed like <see cref="McpTabFields"/> (2026-10-10, the user's ask). Pinned.</summary>
     public static readonly IReadOnlyList<IReadOnlyList<(SettingsField First, string Title)>> McpMenuSections =
     [
-        [(SettingsField.McpServers, "Servers")],
+        [(SettingsField.McpServers, "Servers"), (SettingsField.McpKeepInSessions, "Pictures")],
     ];
 
     /// <summary>Each settings tab's rows as the pane shows them: its field, or null for a heading. Built once from <see cref="TabFields"/> and <see cref="TabSections"/>.</summary>

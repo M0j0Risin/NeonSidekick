@@ -48,7 +48,8 @@ public sealed partial class WebUiTests
         var root = json.RootElement;
         Assert.Equal(["profile", "rows", "found", "resumeOffered", "note", "notSaved"], root.EnumerateObject().Select(p => p.Name));
         var row = root.GetProperty("rows")[0];
-        Assert.Equal(["id", "title", "when", "turns", "model", "current", "snippet"], row.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["id", "title", "when", "turns", "model", "current", "snippet", "here"], row.EnumerateObject().Select(p => p.Name));   // here (2026-11-21): a flag, never the path
+        Assert.DoesNotContain(row.EnumerateObject(), p => p.Name is "cwd" or "folder");
         Assert.Equal(["text", "match"], row.GetProperty("snippet")[1].EnumerateObject().Select(p => p.Name));
         Assert.False(root.GetProperty("found")[0].TryGetProperty("snippet", out _));   // nulls left out
 

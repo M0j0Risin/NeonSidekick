@@ -4,12 +4,14 @@ How to run Neon Sidekick from scripts with `--headless`. Back to the [README](..
 
 `NeonSidekick.exe --headless` is a plain stdin/stdout prompt: no TUI, no voice, no timers and nothing that can ask you a question. It answers each line of input on stdout.
 
-It exits at `/exit` or the end of input with code 0, or 3 if a shell command or a call `--allow` covers was refused ([When a command is refused](#when-a-command-is-refused)). From a checkout: `dotnet run --project src/NeonSidekick -- --headless …`.
+It exits at `/exit` or the end of input with code 0, 3 if a shell command or a call `--allow` covers was refused, or 4 if a message or a command failed ([Exit codes](#exit-codes)). `--prompt "…"` asks one question and prints the answer alone. From a checkout: `dotnet run --project src/NeonSidekick -- --headless …`.
 
 ```powershell
 NeonSidekick.exe --headless                                               # type messages yourself (over SSH, or where the TUI misbehaves)
 "What day of the week is it?" | NeonSidekick.exe --headless > answer.txt  # one question, the answer to a file
 Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one message per line of job.txt
+NeonSidekick.exe --prompt "What day of the week is it?" > answer.txt      # the answer alone, everything else on stderr
+Get-Content error.log | NeonSidekick.exe --prompt "Why did this fail?"   # the log goes with the question
 ```
 
 ## Contents
@@ -20,7 +22,9 @@ Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one 
 - [Flags in headless runs](#flags-in-headless-runs)
 - [Running "yolo": every shell command allowed](#running-yolo-every-shell-command-allowed)
 - [When a command is refused](#when-a-command-is-refused)
+- [Exit codes](#exit-codes)
 - [Putting the flags together](#putting-the-flags-together)
+- [Carrying on a session](#carrying-on-a-session)
 - [Environment variables that matter in headless runs](#environment-variables-that-matter-in-headless-runs)
 - [Flags that don't combine with `--headless`](#flags-that-dont-combine-with---headless)
 
@@ -28,7 +32,7 @@ Get-Content job.txt | NeonSidekick.exe --headless > run_output.txt        # one 
 
 - **A headless run never checks for updates or installs one.** A run started during an [update](COMMANDS.md#updating) waits for it, with nothing added to stdout.
   - Its start still settles the install folder: it undoes an interrupted install and tidies a leftover download. A finished install's line and a failure's report wait for the next interactive start.
-  - An old copy started during or just after an update runs nothing, and says on stderr to start it again ([exit codes](#when-a-command-is-refused)).
+  - An old copy started during or just after an update runs nothing, and says on stderr to start it again ([exit codes](#exit-codes)).
 - **A fresh profile does little headless.** The model gets only the clock (*Clock tools*), help (*Help tools*), memory reading (*Memory mode* `read-only`), past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`).
   - Set up a server (or `--url`) and the tool groups the job needs first, in the TUI (`/settings`, `/tools`) or `profile.json`.
 - **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, DuckDB, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`.
@@ -73,10 +77,32 @@ You:
 
 - First the version, `Headless mode` and the server (or `LLM: no server …` and what to do), then a line on the MCP servers if any are set up.
 - A dropped MCP server reconnects at its next call, with a `[notice]`; one that doesn't come back stays down until the next start.
+- A server that needs a sign-in can't sign in here: sign in from the interactive app first, and headless runs use that sign-in. A call to one still needing it fails the run.
+- `mcp_read` reads the servers' resources too; a read asks only for a server whose `ask` is `always`, so `--allow mcp` covers it.
 - `You: ` is printed before each line is read, even from a pipe, so a reply often starts `You: Neon: `.
 - `[tool]` lines trace tool calls and their results as the model reads them, fences included. A conversation's opening calls (clock, working directory, memory) print before `Neon: `.
 - `[notice]`, `[warning]`, `[error]` and `[category] message` lines are notices and diagnostics (warnings and errors only; `--log` has the rest). Thinking and the 📚 sources line are never printed.
 - Each **line** of input is one message; blank lines are skipped. Ctrl+C ends the run; a reply cut short ends with `(canceled)`.
+- Input is read as UTF-8 (a file with a byte-order mark says its own encoding).
+- **`--quiet`** puts only the replies on stdout, a blank line between them, and everything else on stderr:
+
+  ```powershell
+  Get-Content job.txt | NeonSidekick.exe --headless --quiet 2> run.log > replies.txt
+  ```
+
+### One question, one answer
+
+`--prompt "<text>"` runs one line and exits; it implies `--headless`. stdout gets the reply alone, with no banner, `You: ` or `Neon: `; the rest goes to stderr. The line can be a slash command, and the passes it queues (a gap review, a Ralph loop) still run.
+
+- **Piped stdin is context:** a message gets it under `Piped input:` in a fenced block. It's cut, start and end kept, past half the model's window (100,000 characters with the window unknown), with a `[notice]`.
+- **A command takes no piped text:** it's read and left out, with a `[notice]`. A custom command is a message once expanded, so it takes it.
+- **A silent pipe:** if nothing comes on stdin within 3 seconds, the prompt runs alone with a `[notice]`. Pass slow input with `--prompt-file`, or skip stdin with `< NUL` (`< /dev/null` on a Mac).
+- **`--prompt-file <file>`** sends the whole file as one message, never as a command, even when it starts with `/`. A command goes in `--prompt`.
+
+```powershell
+$answer = Get-Content build.log -Raw | NeonSidekick.exe --prompt "Which test failed, and why?" 2> $null
+if ($LASTEXITCODE -eq 4) { "No answer: a message or a command failed." }
+```
 
 ## Slash commands in headless mode
 
@@ -86,7 +112,7 @@ They need no server unless the row says so.
 
 | Command | What it does headless |
 |---|---|
-| `/exit` | Ends the run (exit code 0), as the end of input does. |
+| `/exit` | Ends the run, as the end of input does ([Exit codes](#exit-codes)). |
 | `/new`, `/clear`, `/splash` | Forget the conversation; the next message starts a new stored session. |
 | `/rewind [n] [files]` | Goes back n messages (1 by default) at once, printing the dropped message to send again; `files` puts back the files those turns changed too. |
 | `/undo [n]`, `/undo purge [all]` | Puts back the files the last n turns changed, or deletes the file checkpoints, nothing asked; files changed since are skipped and named. |
@@ -151,6 +177,7 @@ Any other `/…` line is sent to the model as a message, so `/model gemma` switc
 | `/server`, `/model`, `/cwd`, `/profile` | `--url`, `--model`, `--cwd`, `--profile` (or their variables). |
 | `/reasoning`, `/sampling` | `NEONSIDEKICK_LLM_REASONING`, `NEONSIDEKICK_LLM_SAMPLING`. |
 | `/settings` (other forms), `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json` (an API key typed there in plain text is encrypted at the next load). |
+| `/sessions <id>` | `--session <id>\|last` ([Carrying on a session](#carrying-on-a-session)). |
 | `/memory`, `/sessions`, `/imagine`, `/process`, `/tree`, `/vault` | Ask the model: it has the memory, session, ComfyUI, `process`, file and Obsidian tools when they're on ([which](#before-you-start)). `/sessions export` is an `[error]`: it works on the screen only. |
 | `/loop` | Repeat the line, or loop in the script. |
 | `/usage` | `--log` records the run. |
@@ -171,6 +198,10 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--yolo` | Every shell command runs without asking ([below](#running-yolo-every-shell-command-allowed)). | `--yolo --cwd D:\Repo\MyApp` |
 | `--no-police` | The path police off ([below](#turning-off-the-path-police)). | `--no-police --cwd D:\Repo\MyApp` |
 | `--allow <list>` | Runs the calls that would ask: `docker`, `print`, `ha`, `advisor`, `mcp` (every server) or `mcp:<server>`. Repeats join; each allowed call is logged with `--log`. | `--allow mcp:github,docker` |
+| `--prompt "<text>"` | One line, then the end ([One question, one answer](#one-question-one-answer)); implies `--headless`. | `--prompt "Summarize README.md"` |
+| `--prompt-file <file>` | As `--prompt`, the file one message; a relative path starts from where you launch. A missing or blank file is exit 2. | `--prompt-file D:\Jobs\ask.md` |
+| `--quiet` | Only the replies on stdout; everything else on stderr. | `--quiet 2> run.log` |
+| `--session <id>\|last` | Carries on a stored session ([below](#carrying-on-a-session)). An unknown id is exit 2. | `--session last` |
 
 `mcp:<server>` names a server as `mcp.json` spells it; another case matches only when one server fits. A name that matches no server, or several, is exit 2 before anything starts. An entry that changes nothing under the run's settings gets a `[notice]`.
 
@@ -250,7 +281,20 @@ A call that would ask (MCP, Docker, print, Home Assistant, an advisor) is refuse
 [notice] 1 Docker change was refused (--allow docker allows it)
 ```
 
-Shell police refusals count too, under `--yolo` as well. **Exit codes:** **0** no command or call `--allow` covers was refused, **2** a bad argument, an unknown profile, an `--allow mcp:<server>` that names no server or several, a settings zip `--import-settings` refused (nothing imported), or an old copy started during or just after an [update](COMMANDS.md#updating) (nothing ran), **3** at least one command or call `--allow` covers was refused.
+Shell police refusals count too, under `--yolo` as well.
+
+## Exit codes
+
+- **0:** nothing failed, and nothing `--allow` covers was refused.
+- **2:** nothing ran: a bad argument, an unknown profile, an `--allow mcp:<server>` that names no server or several, a missing or blank `--prompt-file`, a `--session` naming no stored session, a settings zip `--import-settings` refused, or an old copy started during or just after an [update](COMMANDS.md#updating).
+- **3:** at least one command or call `--allow` covers was refused.
+- **4:** a message or a command failed: a turn that failed after its retries, a message with no server, a command's `[error]` line, a plan review, audit or Ralph loop that stopped short, or a call to an MCP server that needs a sign-in. 4 beats 3.
+
+A run of commands alone with no server still exits 0. Before it exits, a failed run prints one line naming what failed:
+
+```
+[notice] 2 failed: a message (Model error: …), /ha (nothing named 'Shed' among camera; …)
+```
 
 ```powershell
 Get-Content job.txt | NeonSidekick.exe --headless --cwd D:\Repo\MyApp | Tee-Object run.txt
@@ -292,13 +336,26 @@ From Python:
 import subprocess
 
 proc = subprocess.run(
-    ["NeonSidekick.exe", "--headless", "--profile", "automation", "--cwd", r"D:\Repo\MyApp"],
+    ["NeonSidekick.exe", "--headless", "--quiet", "--profile", "automation", "--cwd", r"D:\Repo\MyApp"],
     input="Summarize the open TODOs.\nNow rank them by effort.\n/exit\n", capture_output=True, text=True, encoding="utf-8",
 )
-replies = [line.split("Neon: ", 1)[1] for line in proc.stdout.splitlines() if "Neon: " in line]
+replies = proc.stdout.split("\n\n")   # --quiet: the replies alone, a blank line between them
 ```
 
 For a scheduled job, run a script like these from Task Scheduler (`cron` or `launchd` on a Mac).
+
+## Carrying on a session
+
+`--session <id>` carries on a stored session: its conversation, plan and Claude threads come back, and the run's turns join its row. `--session last` takes the one updated most recently, by any copy of the app, a bot chat included.
+
+- **Its folder:** without `--cwd`, the run works in the session's folder, for this run only; a folder that's gone gets a `[notice]`.
+- **Its id:** every run that wrote a session ends with `[notice] session #12` on stderr. Pass that id rather than `last` when another copy may be writing.
+- With *Session logging* off, the session still loads, but the run's turns aren't saved to it.
+
+```powershell
+NeonSidekick.exe --prompt "Read src\Parser.cs and list its public methods." --cwd D:\Repo\MyApp
+NeonSidekick.exe --prompt "Which of those have no tests?" --session last
+```
 
 ## Environment variables that matter in headless runs
 
@@ -313,6 +370,6 @@ Flags beat variables, and variables beat the profile's saved values. [ENVIRONMEN
 
 ## Flags that don't combine with `--headless`
 
-`--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--duckdb-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`, `--docker-check`, `--camera-check`, `--monitor-check` and `--midi-check` are separate modes; with `--headless`, headless wins and they're ignored. `--help` and `--version` print and exit first.
+`--smoke`, `--audio-check`, `--voice-check`, `--sql-check`, `--oracle-check`, `--mysql-check`, `--sqlite-check`, `--duckdb-check`, `--postgres-check`, `--unc-check`, `--eventlog-check`, `--network-check`, `--services-check`, `--tasks-check`, `--ad-check`, `--docker-check`, `--camera-check`, `--monitor-check` and `--midi-check` are separate modes; with `--headless` or `--prompt`, headless wins and they're ignored. `--help` and `--version` print and exit first.
 
 `--mcp-relay`, `--llama-guard`, `--shell-guard` and `--update-probe` are the app's internal modes, not for you to run.

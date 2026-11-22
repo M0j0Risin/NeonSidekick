@@ -2005,6 +2005,8 @@ function memoryRows(sheet) {
     text.type = 'button';
     text.appendChild(document.createTextNode(item.text));
     if (item.off) text.appendChild(el('span', 'off-mark', ' · ' + (words.memoryOff || 'off')));
+    // A memory for one folder (2026-11-21): this one, the PC's current, or another; the page never sees the path.
+    if (item.scoped) text.appendChild(el('span', 'off-mark', ' · ' + (item.here ? (words.memoryHere || 'this folder') : (words.memoryElsewhere || 'one folder'))));
     const label = (words.memoryEdit || 'Edit this memory') + ': ' + item.text;
     text.setAttribute('aria-label', label);
     text.title = label;

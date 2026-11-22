@@ -180,11 +180,11 @@ public sealed class UntrustedFenceTests : IDisposable
         var failed = new CallToolResult { IsError = true, Content = [new TextContentBlock { Text = "Error: x" }] };
         var said = new CallToolResult { Content = [new TextContentBlock { Text = "Error: in the text" }] };
 
-        Assert.Equal("⟪one⟫\n" + McpText.ImageDropped + "\n⟪two ››⟫\n" + Note, McpTool.Render(mixed));
+        Assert.Equal("⟪one⟫\n" + McpText.PictureUnreadable(NeonSidekick.Files.ImageLoadFailure.CouldNotRead) + "\n⟪two ››⟫\n" + Note, McpTool.Render(mixed));
         Assert.Equal(McpText.ErrorPrefix + "⟪x⟫\n" + Note, McpTool.Render(failed));
         Assert.StartsWith("⟪Error", McpTool.Render(said), StringComparison.Ordinal);
         Assert.Equal(McpText.NoContent, McpTool.Render(new CallToolResult { Content = [] }));
-        Assert.Equal(McpText.ImageDropped, McpTool.Render(new CallToolResult { Content = [new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
+        Assert.Equal(McpText.PictureUnreadable(NeonSidekick.Files.ImageLoadFailure.CouldNotRead), McpTool.Render(new CallToolResult { Content = [new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
     }
 
     // ── Docker, Home Assistant, YouTube, Git ─────────────────────────────────

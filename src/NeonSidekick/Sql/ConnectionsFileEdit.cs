@@ -928,6 +928,50 @@ public static class ConnectionsFileEdit
         }
     }
 
+    /// <summary>
+    /// Both holds an edit takes on <paramref name="path"/>, in the edits' order (2026-11-21, the MCP token store, feature idea #32): this
+    /// process's lock (<see cref="LockFor"/>, a <see cref="Monitor"/>), then the cross-process lock file (<see cref="CrossProcess"/>). Both are
+    /// thread-affine and the wait sleeps, so the caller does its read, splice and write synchronously inside and disposes on the same
+    /// thread; an <c>await</c> inside would let <c>Dispose</c> run elsewhere and throw. Past the wait an <see cref="IOException"/>, as an edit's.
+    /// </summary>
+    internal static IDisposable Hold(string path, TimeSpan? wait = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        object gate = LockFor(path);
+        Monitor.Enter(gate);
+        try
+        {
+            return new Held(gate, CrossProcess(path, wait));
+        }
+        catch
+        {
+            Monitor.Exit(gate);
+            throw;
+        }
+    }
+
+    private sealed class Held(object gate, IDisposable file) : IDisposable
+    {
+        private int _done;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _done, 1) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                file.Dispose();
+            }
+            finally
+            {
+                Monitor.Exit(gate);
+            }
+        }
+    }
+
     private sealed class Nothing : IDisposable
     {
         public static readonly Nothing Instance = new();

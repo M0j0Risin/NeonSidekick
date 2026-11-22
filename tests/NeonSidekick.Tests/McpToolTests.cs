@@ -84,18 +84,18 @@ public class McpToolTests
     }
 
     [Fact]
-    public void Render_JoinsTextBlocks_DropsTheOthersWithAPinnedLine_AndPrefixesAnError()
+    public void Render_JoinsTextBlocks_NamesWhatItCouldNotCarry_AndPrefixesAnError()
     {
         Assert.Equal("⟪one⟫\n⟪two⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "one" }, new TextContentBlock { Text = "two" }] }));
         Assert.Equal("(no content)", McpTool.Render(new CallToolResult { Content = [] }));
-        Assert.Equal("(an image block was dropped)", McpTool.Render(new CallToolResult { Content = [new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
+        Assert.Equal("(a picture was left out: it could not be read)", McpTool.Render(new CallToolResult { Content = [new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
         Assert.Equal("(an audio block was dropped)", McpTool.Render(new CallToolResult { Content = [new AudioContentBlock { Data = new byte[] { 1 }, MimeType = "audio/wav" }] }));
         Assert.Equal("(a resource_link block was dropped)", McpText.BlockDropped("resource_link"));
-        Assert.Equal("⟪text⟫\n(an image block was dropped)\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "text" }, new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
+        Assert.Equal("⟪text⟫\n(a picture was left out: it could not be read)\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "text" }, new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
         Assert.Equal("Error: ⟪boom⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "boom" }], IsError = true }));
         Assert.Equal("Error: ⟪already⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "Error: already" }], IsError = true }));
         Assert.Equal("Error: ⟪Errors pile up⟫\n" + UntrustedText.QuoteNote, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "Errors pile up" }], IsError = true }));
-        Assert.Equal(McpText.ImageDropped, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "  " }, new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
+        Assert.Equal(McpText.PictureUnreadable(NeonSidekick.Files.ImageLoadFailure.CouldNotRead), McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "  " }, new ImageContentBlock { Data = new byte[] { 1 }, MimeType = "image/png" }] }));
         Assert.Equal(McpText.NoContent, McpTool.Render(new CallToolResult { Content = [new TextContentBlock { Text = "" }] }));
         Assert.Equal("Error: (no content)", McpTool.Render(new CallToolResult { Content = [], IsError = true }));
         Assert.Equal("Error: ", McpText.ErrorPrefix);
@@ -137,8 +137,11 @@ public class McpToolTests
         var (error, _) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c2", "pipe__fail", new Dictionary<string, object?>()), CancellationToken.None);
         Assert.Equal("Error: ⟪boom⟫" + "\n" + NeonSidekick.Llm.Tools.UntrustedText.QuoteNote, error);
         var (picture, none) = await Assistant.InvokeToolAsync(tools, new FunctionCallContent("c3", "pipe__image", new Dictionary<string, object?>()), CancellationToken.None);
-        Assert.Equal(McpText.ImageDropped, picture);
-        Assert.Empty(none);
+        Assert.Equal(McpText.PictureAttached(1, 4, 3), picture);
+        var shown = Assert.Single(none);
+        Assert.Equal("", shown.Path);
+        Assert.Equal("pipe__image #1", shown.McpSource);
+        Assert.Equal((4, 3), (shown.Width, shown.Height));
     }
 
     /// <summary>The read-only mark (2026-11-19, feature idea #30) comes from the server's <c>readOnlyHint</c>; a tool with no caller still calls its client.</summary>

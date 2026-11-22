@@ -27,13 +27,18 @@ public sealed class McpTool : AIFunction
     private readonly string _name;
     private readonly string _description;
     private readonly Func<McpTool, CallToolRequestParams, CancellationToken, ValueTask<McpCallOutcome>>? _caller;
+    private readonly Func<string, bool>? _readOffered;
 
     /// <param name="server">The configured server's name (unsanitised; the prefix is <paramref name="name"/>'s).</param>
     /// <param name="client">The client at build time: the call goes through it only when there is no <paramref name="caller"/>.</param>
     /// <param name="inner">The server's tool as the SDK listed it.</param>
     /// <param name="name">The prefixed, de-duplicated name (<see cref="McpToolName.Unique"/>).</param>
     /// <param name="caller">The session's call (2026-11-19): it finds the server's current client, reconnects a dropped one, and answers.</param>
-    public McpTool(string server, McpClient client, McpClientTool inner, string name, Func<McpTool, CallToolRequestParams, CancellationToken, ValueTask<McpCallOutcome>>? caller = null)
+    /// <param name="readOffered">
+    /// Whether <c>mcp_read</c> is offered for a server this turn (2026-11-21, feature idea #33), asked at each call: a result's resource
+    /// links and cut notes point to it only then (<see cref="McpRenderContext.ReadOffered"/>). Null: never.
+    /// </param>
+    public McpTool(string server, McpClient client, McpClientTool inner, string name, Func<McpTool, CallToolRequestParams, CancellationToken, ValueTask<McpCallOutcome>>? caller = null, Func<string, bool>? readOffered = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(server);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -42,6 +47,7 @@ public sealed class McpTool : AIFunction
         _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         _name = name;
         _caller = caller;
+        _readOffered = readOffered;
         string described = McpText.OneLine(inner.Description);
         _description = described.Length > 0 ? described : McpText.NoDescription;
     }
@@ -122,12 +128,15 @@ public sealed class McpTool : AIFunction
         if (_caller is not null)
         {
             var outcome = await _caller(this, request, cancellationToken).ConfigureAwait(false);
-            return outcome.Render();
+            return outcome.Render(RenderContext()).ToolResult();
         }
 
         var result = await _client.CallToolAsync(request, cancellationToken).ConfigureAwait(false);
-        return Render(result);
+        return Render(result, RenderContext()).ToolResult();
     }
+
+    /// <summary>This tool's context for its result: its own name labels the pictures, and <c>mcp_read</c> is named when offered for its server.</summary>
+    private McpRenderContext RenderContext() => new(_name, _readOffered?.Invoke(ServerName) == true);
 
     /// <summary>
     /// The call's arguments as JSON elements: a <see cref="JsonElement"/> from the wire is cloned as it is;
@@ -169,46 +178,67 @@ public sealed class McpTool : AIFunction
         return document.RootElement.Clone();
     }
 
+    /// <summary><see cref="Render(CallToolResult, McpRenderContext)"/>'s text alone, under <see cref="McpRenderContext.Plain"/>: the plain shape tests pin.</summary>
+    public static string Render(CallToolResult result) => Render(result, McpRenderContext.Plain("mcp")).Text;
+
     /// <summary>
-    /// The result as the model's one string: the text blocks joined by a line break, an image block
-    /// <see cref="McpText.ImageDropped"/>, any other kind <see cref="McpText.BlockDropped"/>, nothing at all
-    /// <see cref="McpText.NoContent"/>. Since 2026-11-15 (the web-tools plan's §3, feature idea #39) each text block is the server's and
-    /// fenced on its own (<see cref="Llm.Tools.UntrustedText.Fenced"/>), the app's notes between them bare, and
+    /// The result as the model sees it: one string and the pictures that follow it. The text blocks are joined by a line break, nothing at
+    /// all is <see cref="McpText.NoContent"/>. Since 2026-11-15 (the web-tools plan's §3, feature idea #39) each text block is the server's
+    /// and fenced on its own (<see cref="Llm.Tools.UntrustedText.Fenced"/>), the app's notes between them bare, and
     /// <see cref="Llm.Tools.UntrustedText.QuoteNote"/> is the last line. An <c>isError</c> result, MCP's signal for a failed call, always
     /// starts <see cref="McpText.ErrorPrefix"/>, ahead of the first fence (it was left off one whose text began "Error" until then: fenced,
     /// that text would no longer read as failed). A result without <c>isError</c> whose text says "Error" reads as the server's text.
     /// Since 2026-11-16: a blank text block is skipped, so a result of nothing else is <see cref="McpText.NoContent"/> (the web-tools review's
     /// #107), and an <c>isError</c> result's own leading "Error:" is taken off its first block, so neither the model nor the user reads
-    /// "Error: Error:" (#145). Pure.
+    /// "Error: Error:" (#145).
+    /// <para>Since 2026-11-21 (feature ideas #31 and #33) the other blocks reach the model, where every image block was "(an image block was
+    /// dropped)" until then: an image block, or an embedded resource holding a picture, is decoded into a picture
+    /// (<see cref="McpPictures"/>) and leaves <see cref="McpText.PictureAttached"/> in its place, up to <see cref="McpText.PicturesPerCall"/>;
+    /// an embedded resource's text is fenced under <see cref="McpText.ResourceHeader"/> and cut at <see cref="Files.WorkingDirectory.MaxReadChars"/>
+    /// the way <c>mcp_read</c> pages it, so its cut note's start is where <c>mcp_read</c> goes on; any other embedded blob is
+    /// <see cref="McpText.ResourceNotRead"/>; a resource link is <see cref="McpText.ResourceLink"/>. Audio and kinds still unknown stay
+    /// <see cref="McpText.BlockDropped"/>. An <c>isError</c> result's pictures still attach. Pure.</para>
     /// </summary>
-    public static string Render(CallToolResult result)
+    public static McpRendered Render(CallToolResult result, McpRenderContext context)
     {
         ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(context);
         var sb = new StringBuilder();
-        bool fenced = false;
+        var pictures = new McpPictures(context.Label);
+        bool texted = false;
         bool error = result.IsError == true;
         foreach (var block in result.Content ?? [])
         {
             string piece;
-            if (block is TextContentBlock text)
+            switch (block)
             {
-                string words = text.Text ?? "";
-                if (string.IsNullOrWhiteSpace(words))
-                {
-                    continue;
-                }
+                case TextContentBlock text:
+                    string words = text.Text ?? "";
+                    if (string.IsNullOrWhiteSpace(words))
+                    {
+                        continue;
+                    }
 
-                if (error && !fenced)
-                {
-                    words = WithoutErrorPrefix(words);
-                }
+                    if (error && !texted)
+                    {
+                        words = WithoutErrorPrefix(words);
+                    }
 
-                piece = Llm.Tools.UntrustedText.Fenced(words);
-                fenced = true;
-            }
-            else
-            {
-                piece = block is ImageContentBlock ? McpText.ImageDropped : McpText.BlockDropped(block.Type ?? "unknown");
+                    piece = Llm.Tools.UntrustedText.Fenced(words);
+                    texted = true;
+                    break;
+                case ImageContentBlock image:
+                    piece = pictures.Add(image.Data, () => image.DecodedData);
+                    break;
+                case EmbeddedResourceBlock embedded:
+                    piece = Embedded(embedded.Resource, pictures, context.ReadOffered);
+                    break;
+                case ResourceLinkBlock link:
+                    piece = McpText.ResourceLink(link.Name, link.Uri ?? "", link.Description, context.ReadOffered);
+                    break;
+                default:
+                    piece = McpText.BlockDropped(block.Type ?? "unknown");
+                    break;
             }
 
             if (sb.Length > 0)
@@ -219,13 +249,27 @@ public sealed class McpTool : AIFunction
             sb.Append(piece);
         }
 
-        string rendered = sb.Length > 0 ? sb.ToString() : McpText.NoContent;
-        if (fenced)
-        {
-            rendered += "\n" + Llm.Tools.UntrustedText.QuoteNote;
-        }
+        string rendered = Llm.Tools.UntrustedText.WithNote(sb.Length > 0 ? sb.ToString() : McpText.NoContent);
+        return new McpRendered(error ? McpText.ErrorPrefix + rendered : rendered, pictures.Taken);
+    }
 
-        return error ? McpText.ErrorPrefix + rendered : rendered;
+    /// <summary>An embedded resource as its piece of the result: its text fenced and cut as <c>mcp_read</c> pages it, a picture, or named only.</summary>
+    private static string Embedded(ResourceContents? resource, McpPictures pictures, bool readOffered)
+    {
+        switch (resource)
+        {
+            case TextResourceContents text:
+                string body = text.Text ?? "";
+                var (shown, consumed) = Llm.Tools.UntrustedText.ScrubPrefix(body, 0, Files.WorkingDirectory.MaxReadChars);
+                string piece = McpText.ResourceHeader(text.Uri ?? "", text.MimeType) + "\n" + Llm.Tools.UntrustedText.Quote(shown);
+                return consumed < body.Length ? piece + "\n" + McpText.ResourceCut(consumed, body.Length, readOffered) : piece;
+            case BlobResourceContents blob when McpPictures.IsPicture(blob.MimeType):
+                return pictures.Add(blob.Blob, () => blob.DecodedData);
+            case BlobResourceContents blob:
+                return McpText.ResourceNotRead(blob.Uri ?? "", blob.MimeType, McpPictures.DecodedLength(blob.Blob));
+            default:
+                return McpText.BlockDropped("resource");
+        }
     }
 
     // A server's own "Error:" (any case) off the front of its failed call's text, the rest kept; the app's prefix says it once.

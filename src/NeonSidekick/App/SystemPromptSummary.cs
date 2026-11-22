@@ -512,6 +512,12 @@ public static class SystemPromptSummary
     /// <summary>The MCP groups' name prefix: <c>MCP docker (14)</c>.</summary>
     public const string McpGroupPrefix = "MCP ";
 
+    /// <summary>
+    /// <c>mcp_read</c>'s group (2026-11-21, feature idea #33). Never starting with <see cref="McpGroupPrefix"/>: <c>/usage</c> › Context reads
+    /// a group with that prefix as a server's and would take this one for a server called "resources". Pinned.
+    /// </summary>
+    public const string McpResourcesGroup = "Resources (MCP)";
+
     /// <summary>The note on <c>load_skill</c> while no skill is installed (the tool is dropped then; the <c>/tools</c> list says so, 2026-09-19). Pinned.</summary>
     public const string NoSkillSuffix = "no skill installed";
 
@@ -899,6 +905,7 @@ public static class SystemPromptSummary
         bool skillInstalled = true,
         IReadOnlyList<McpServerTools>? mcp = null,
         bool mcpEnabled = true,
+        IReadOnlyList<AIFunction>? mcpResources = null,
         IReadOnlyList<AIFunction>? git = null,
         bool gitEnabled = true,
         IReadOnlyList<AIFunction>? shell = null,
@@ -1192,6 +1199,12 @@ public static class SystemPromptSummary
             foreach (var server in mcp)
             {
                 groups.Add(Group(McpGroupPrefix + server.Name, server.Tools, mcpNote, mcpEnabled && toolsEnabled, SettingsField.McpServers, disabled, disabledSuffix: McpDisabledSuffix));
+            }
+
+            // mcp_read (2026-11-21, feature idea #33): a group of its own after the servers', while a connected server declares resources.
+            if (mcpResources is { Count: > 0 })
+            {
+                groups.Add(Group(McpResourcesGroup, mcpResources, mcpNote, mcpEnabled && toolsEnabled, SettingsField.McpServers, disabled, disabledSuffix: McpDisabledSuffix));
             }
         }
 

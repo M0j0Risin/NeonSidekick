@@ -702,6 +702,11 @@ public static class WebUiText
     /// <summary>A memory turned off, after its text.</summary>
     public const string MemoryOff = "off";
 
+    /// <summary>A memory saved for the PC's current folder only, and one for another folder (2026-11-21, feature idea #6); never the path.</summary>
+    public const string MemoryHere = "this folder";
+
+    public const string MemoryElsewhere = "one folder";
+
     /// <summary>The memory tab's line while <i>Memory mode</i> is off.</summary>
     public const string MemoryModeOff = "Memory is off: the model doesn't see these (/memory read-write turns it on).";
 
@@ -882,6 +887,9 @@ public static class WebUiText
 
     /// <summary>The current session's mark.</summary>
     public const string SessionsCurrent = "this conversation";
+
+    /// <summary>The mark of a session of the PC's folder in force (2026-11-21, feature idea #4): the page never sees the path.</summary>
+    public const string SessionsHere = Sessions.SessionText.HereMark;
 
     /// <summary>The note while the PC is busy: a reply or botchat, or a model loading.</summary>
     public const string SessionsBusy = "The PC is busy; resume once it's free.";
@@ -1110,9 +1118,10 @@ public static class WebUiText
         VoiceHeardNothing, VoiceNeedsHttps, VoiceMicRefused, VoiceFailed,
         ManageButton, CloseManage, SessionsTab, FilesTab, QueueTab, QueueNone, QueueAtPc, QueueFromPage, QueueSendNow, QueueModeLabel,
         QueueCancelLabel, RemoveRow, RemoveRowArmed, QueueChordLine,
-        SessionsNone, SessionsNoMatch, SessionsFilter, SessionsFound, SessionsArmed, SessionsCurrent, SessionsBusy, SessionsLoading, SessionsNotSaved,
+        SessionsNone, SessionsNoMatch, SessionsFilter, SessionsFound, SessionsArmed, SessionsCurrent, SessionsHere, SessionsBusy, SessionsLoading, SessionsNotSaved,
         FilesNone, FilesTrimmed, FilesHint,
-        AttachButton, AttachRemove, AttachWaiting, AttachTooBig, AttachRoom, AttachStopped, AttachLeftOut, AttachPdf, ManageReadFailed);
+        AttachButton, AttachRemove, AttachWaiting, AttachTooBig, AttachRoom, AttachStopped, AttachLeftOut, AttachPdf, ManageReadFailed,
+        MemoryHere, MemoryElsewhere);
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 

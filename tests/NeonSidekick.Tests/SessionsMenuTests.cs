@@ -6,7 +6,7 @@ using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
 
-public class SessionsMenuTests : IDisposable
+public partial class SessionsMenuTests : IDisposable
 {
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
     private readonly TestConsole _console = new();

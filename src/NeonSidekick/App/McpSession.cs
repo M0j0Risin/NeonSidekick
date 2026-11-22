@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.AI;
+using ModelContextProtocol.Authentication;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using NeonSidekick.Diagnostics;
@@ -86,7 +87,25 @@ public sealed record McpServerStatus(string Name, McpScope Scope, McpScope? Shad
     /// when the model reads it.
     /// </summary>
     public bool DetailIsApps { get; init; }
+
+    /// <summary>
+    /// Whether a <see cref="McpState.Failed"/> row is a server that wants a sign-in (2026-11-21, feature idea #32): a flag, not a state, so the
+    /// switches over <see cref="McpState"/> keep treating it as failed (a retry, a call's not-back refusal) and only the words change.
+    /// </summary>
+    public bool NeedsSignIn { get; init; }
+
+    /// <summary>Whether a <see cref="McpState.Connecting"/> row is a requested sign-in waiting for the browser.</summary>
+    public bool SigningIn { get; init; }
+
+    /// <summary>Whether a connected row's server holds a sign-in (the footer's "signed in", and <c>s</c> signs out).</summary>
+    public bool SignedIn { get; init; }
 }
+
+/// <summary>
+/// What a server's config becomes on the wire (2026-11-21, feature idea #32): <paramref name="oauth"/> is the sign-in's options, attached
+/// only for a server holding a sign-in or one being signed in to; null otherwise.
+/// </summary>
+public delegate IClientTransport McpTransportFactory(McpServerConfig config, string name, ClientOAuthOptions? oauth);
 
 /// <summary>One connected server's tools, for the <c>/usage</c> and <c>/mcp</c> groups.</summary>
 public sealed record McpServerTools(string Name, IReadOnlyList<AIFunction> Tools);
@@ -114,7 +133,7 @@ public sealed record McpServerTools(string Name, IReadOnlyList<AIFunction> Tools
 /// reconnect) and the snapshot lock for every read and write of the connections and rows, since the drop watcher and the background
 /// listing run on the SDK's threads and never take the gate.
 /// </remarks>
-internal sealed class McpSession : IAsyncDisposable, IDisposable
+internal sealed class McpSession : IAsyncDisposable, IDisposable, Mcp.IMcpResources
 {
     public const string Category = McpConfigFile.Category;
 
@@ -157,7 +176,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     private readonly record struct Sent(CallToolResult? Result, ClientCompletionDetails? Details);
 
     private readonly AppSettings _settings;
-    private readonly Func<McpServerConfig, string, IClientTransport> _transport;
+    private readonly McpTransportFactory _transport;
     private readonly TimeProvider _time;
     private readonly string _retryTail;
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -188,6 +207,12 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// <param name="retryTail">How the texts of a server that didn't come back end (2026-11-19): <see cref="McpText.RetryTail"/> by default,
     /// <see cref="McpText.HeadlessRetryTail"/> from headless, which has no <c>/mcp</c>.</param>
     public McpSession(AppSettings settings, Func<McpServerConfig, string, IClientTransport> transport, TimeProvider? time = null, string? retryTail = null)
+        : this(settings, Wrap(transport), time, retryTail)
+    {
+    }
+
+    /// <summary>The same over a transport that takes the sign-in's options (2026-11-21): the app's <see cref="DefaultTransport(McpServerConfig, string, ClientOAuthOptions?)"/>, or a test's over the OAuth stub.</summary>
+    public McpSession(AppSettings settings, McpTransportFactory transport, TimeProvider? time = null, string? retryTail = null)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _transport = transport ?? throw new ArgumentNullException(nameof(transport));
@@ -291,18 +316,33 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         return taken;
     }
 
-    /// <summary>The real transports: a child process for a <c>command</c>, streamable HTTP (SSE fallback) for a <c>url</c>. The HTTP client is the SDK's own.</summary>
-    public static IClientTransport DefaultTransport(McpServerConfig config, string name)
+    private static McpTransportFactory Wrap(Func<McpServerConfig, string, IClientTransport> transport)
+    {
+        ArgumentNullException.ThrowIfNull(transport);
+        return (config, name, _) => transport(config, name);
+    }
+
+    /// <summary>The real transports with no sign-in: a child process for a <c>command</c>, streamable HTTP (SSE fallback) for a <c>url</c>.</summary>
+    public static IClientTransport DefaultTransport(McpServerConfig config, string name) => DefaultTransport(config, name, null);
+
+    /// <summary>
+    /// The real transports: a child process for a <c>command</c>, streamable HTTP (SSE fallback) for a <c>url</c>, with the sign-in's
+    /// <paramref name="oauth"/> when given (2026-11-21, feature idea #32). <paramref name="handler"/> (a test's and the smoke's OAuth stub)
+    /// goes under a client of its own; without it the client is a plain <see cref="HttpClient"/>, the very one the SDK would make itself.
+    /// </summary>
+    public static IClientTransport DefaultTransport(McpServerConfig config, string name, ClientOAuthOptions? oauth, HttpMessageHandler? handler = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         if (config.IsHttp)
         {
-            return new HttpClientTransport(new HttpClientTransportOptions
+            var options = new HttpClientTransportOptions
             {
                 Endpoint = new Uri(config.Url!.Trim(), UriKind.Absolute),
                 Name = name,
                 AdditionalHeaders = config.Headers,
-            });
+                OAuth = oauth,
+            };
+            return new HttpClientTransport(options, handler is null ? new HttpClient() : new HttpClient(handler), null, ownsHttpClient: true);
         }
 
         return new StdioClientTransport(new StdioClientTransportOptions
@@ -355,12 +395,14 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     public async Task ConnectAllAsync(AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
+        CancelSignIn();
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await DisposeAllAsync().ConfigureAwait(false);
             ForgetCachedFiles();
             var merged = Read();
+            PruneTokens(merged);
             var disabled = ToolsText.DisabledSet(effective.McpServersDisabled);
             var rows = merged.Entries.Select(e => Initial(e, effective.McpServers, disabled)).ToList();
             Publish(rows, merged.Problems, attempted: rows.Any(r => r.State == McpState.Connecting));
@@ -481,11 +523,13 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     public async Task<(int Added, int Removed, int Kept)> ReloadAsync(AppSettingsData effective, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(effective);
+        CancelSignIn();
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             ForgetCachedFiles();
             var merged = Read();
+            PruneTokens(merged);
             var disabled = ToolsText.DisabledSet(effective.McpServersDisabled);
             var entries = merged.Entries.Where(e => e.Startable).ToDictionary(e => e.Name, StringComparer.Ordinal);   // a shadowed global shares its name with the profile's
             List<(string Name, Connection Live)> held;
@@ -570,7 +614,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
 
     /// <summary>One warning per failed server: <c>🔌 MCP: docker failed: …</c>.</summary>
     public IEnumerable<string> WarningLines() =>
-        Servers.Where(s => s.State == McpState.Failed).Select(s => McpText.FailedLine(s.Name, s.Detail ?? ""));
+        Servers.Where(s => s.State == McpState.Failed).Select(s => s.NeedsSignIn ? McpText.NeedsSignInLine(s.Name) : McpText.FailedLine(s.Name, s.Detail ?? ""));
 
     private static McpServerStatus Initial(McpServerEntry entry, bool enabled, IReadOnlySet<string> disabled)
     {
@@ -579,12 +623,20 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         return new McpServerStatus(entry.Name, entry.Scope, entry.ShadowedBy, !disabled.Contains(entry.Name), state, null, [], entry.Config.Describe());
     }
 
-    private async Task<McpServerStatus> ConnectOneAsync(McpServerEntry entry, int timeoutSeconds, CancellationToken cancellationToken)
+    private async Task<McpServerStatus> ConnectOneAsync(McpServerEntry entry, int timeoutSeconds, CancellationToken cancellationToken, bool signIn = false)
     {
         string name = entry.Name;
         long started = 0;
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         McpClient? client = null;
+        McpServerConfig? connecting = null;
+        bool signedIn = false;
+        // A requested sign-in waits on the browser (2026-11-21): its own budget, not MCP connect timeout, which would cancel the wait.
+        if (signIn)
+        {
+            timeoutSeconds = McpOAuth.SignInTimeoutSeconds;
+        }
+
         try
         {
             // A stored value decrypted only here (2026-11-19, feature idea #29): the transport gets the plain copy, while the entry, the
@@ -605,9 +657,12 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
                 LogOnce("unset\0" + name + "\0" + reference.Key + "\0" + reference.Name, McpText.UnsetReferenceLogLine(name, reference.Key, reference.Name), warn: true);
             }
 
+            connecting = config;
+            var oauth = OAuthFor(name, config, signIn);
+            signedIn = oauth is not null && !signIn;
             started = _time.GetTimestamp();
             budget.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-            var transport = _transport(config, name);
+            var transport = _transport(config, name, oauth);
             var options = new McpClientOptions
             {
                 ClientInfo = new Implementation { Name = ClientName, Version = AppVersion() },
@@ -635,22 +690,55 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
                 return ValueTask.CompletedTask;
             });
             DiagnosticLog.Info(Category, McpText.ConnectedLogLine(name, tools.Count, elapsed));
+            if (signIn && HoldsSignIn(name, config))
+            {
+                DiagnosticLog.Info(Category, McpText.SignedInLogLine(name));
+            }
+
             FlushLogs();
             // With the connection's facts (2026-11-20, the mcp-ask review's #68): a caller that publishes this row as it is shows them too.
-            return ConnectedFacts(new McpServerStatus(name, entry.Scope, null, true, McpState.Connected, null, tools, entry.Config.Describe()), connection);
+            return ConnectedFacts(new McpServerStatus(name, entry.Scope, null, true, McpState.Connected, null, tools, entry.Config.Describe())
+            {
+                SignedIn = signedIn || HoldsSignIn(name, config),
+            }, connection);
         }
         catch (Exception ex)
         {
             bool cancelled = ex is OperationCanceledException;
-            string detail = cancelled
-                ? (cancellationToken.IsCancellationRequested ? McpText.Cancelled : McpText.TimedOut(timeoutSeconds))
-                : LogText.Excerpt(ex.Message);
-            DiagnosticLog.Info(Category, McpText.FailedLogLine(name, detail));
             if (client is not null)
             {
                 await DisposeQuietlyAsync(client).ConfigureAwait(false);
             }
 
+            // A server that wants a sign-in (2026-11-21, feature idea #32): a 401 with no sign-in attached, or the SDK falling through to a new
+            // authorization nobody asked for. Never "failed" at every start; nothing registered with the service.
+            if (!signIn && !cancelled && connecting is { SignInPossible: true } && (McpOAuth.IsUnauthorized(ex) || McpOAuth.IsSignInNeeded(ex)))
+            {
+                DiagnosticLog.Info(Category, McpText.NeedsSignInLogLine(name));
+                FlushLogs();
+                return new McpServerStatus(name, entry.Scope, null, true, McpState.Failed, McpText.NeedsSignInDetail, [], entry.Config.Describe())
+                {
+                    DetailIsApps = true,
+                    NeedsSignIn = true,
+                };
+            }
+
+            string detail = cancelled
+                ? (cancellationToken.IsCancellationRequested ? McpText.Cancelled : McpText.TimedOut(timeoutSeconds))
+                : LogText.Excerpt(ex.Message);
+            if (signIn)
+            {
+                DiagnosticLog.Info(Category, cancellationToken.IsCancellationRequested ? McpText.SignInCancelledLogLine(name) : McpText.SignInFailedLogLine(name, detail));
+                FlushLogs();
+                // A failed or cancelled sign-in leaves the server needing one: the row says so, the notice says why.
+                return new McpServerStatus(name, entry.Scope, null, true, McpState.Failed, cancellationToken.IsCancellationRequested ? McpText.SignInCancelledDetail : detail, [], entry.Config.Describe())
+                {
+                    DetailIsApps = cancelled || ex is InvalidOperationException,
+                    NeedsSignIn = connecting is { SignInPossible: true },
+                };
+            }
+
+            DiagnosticLog.Info(Category, McpText.FailedLogLine(name, detail));
             FlushLogs();
             return new McpServerStatus(name, entry.Scope, null, true, McpState.Failed, detail, [], entry.Config.Describe()) { DetailIsApps = cancelled };
         }
@@ -660,13 +748,266 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     private List<McpTool> BuildTools(string name, McpClient client, IList<McpClientTool> listed)
     {
         var names = McpToolName.Unique(listed.Select(t => McpToolName.Prefixed(name, t.Name)).ToList());
-        return listed.Select((t, i) => new McpTool(name, client, t, names[i], CallAsync)).ToList();
+        return listed.Select((t, i) => new McpTool(name, client, t, names[i], CallAsync, ReadOffered)).ToList();
     }
 
     private static string AppVersion()
     {
         var v = typeof(McpSession).Assembly.GetName().Version;
         return v is null ? "0" : $"{v.Major}.{v.Minor}.{v.Build}";
+    }
+
+    // ── Sign-in (2026-11-21, feature idea #32) ─────────────────────────────
+
+    private McpTokenStore? _tokens;
+    private CancellationTokenSource? _signIn;
+    private string? _signingIn;
+
+    /// <summary>Opens an address in the user's browser (the screen's shell open); null prints it alone (headless never signs in).</summary>
+    public Action<string>? OpenBrowser { get; set; }
+
+    /// <summary>Where a requested sign-in's address line goes (the <c>/mcp</c> pane's); null = the session's notice queue.</summary>
+    public Action<string, bool>? SignInNotice { get; set; }
+
+    /// <summary>Queues a notice for the host to print (<see cref="TakeNotices"/>), as the session's own are.</summary>
+    public void QueueNotice(string text, bool error) => Notice(text, error);
+
+    /// <summary>Raised with a server's name when a call or a read meets a server that needs a sign-in: headless counts it as a failure.</summary>
+    public Action<string>? SignInNeededCall { get; set; }
+
+    /// <summary>The store over a profile's token file; a test's store with a failing seal. Null = the real one.</summary>
+    public Func<string, McpTokenStore>? TokenStoreFor { get; set; }
+
+    /// <summary>The profile's sign-ins (<c>&lt;profile&gt;/configs/mcp-tokens.json</c>), built again when the profile changes.</summary>
+    public McpTokenStore Tokens
+    {
+        get
+        {
+            string path = McpTokenStore.PathFor(_settings.ProfileDirectory);
+            var store = _tokens;
+            if (store is null || !string.Equals(store.FilePath, path, StringComparison.Ordinal))
+            {
+                store = TokenStoreFor?.Invoke(path) ?? new McpTokenStore(path);
+                _tokens = store;
+            }
+
+            return store;
+        }
+    }
+
+    /// <summary>The server a requested sign-in is waiting on, or null.</summary>
+    public string? SigningIn { get { lock (_snapshot) { return _signingIn; } } }
+
+    /// <summary>The address a server's tokens are kept under: its <c>url</c> once <c>${NAME}</c> is filled in.</summary>
+    private static string SignInUrl(McpServerConfig config) =>
+        McpReferences.Expand(config, Shell.ChildEnvironment.ForReference).Config.Url?.Trim() ?? "";
+
+    /// <summary>Whether a sign-in can serve server <paramref name="name"/> as configured now: a <c>url</c> server without its own Authorization header.</summary>
+    public bool CanSignIn(string name) => Entry(name)?.Config.SignInPossible == true;
+
+    /// <summary>Whether server <paramref name="name"/> holds a sign-in for its address (whatever its port): what <c>s</c> signs out of.</summary>
+    public bool HoldsSignIn(string name) => Entry(name) is { Config.SignInPossible: true } entry && Tokens.HasAny(name, SignInUrl(entry.Config));
+
+    private bool HoldsSignIn(string name, McpServerConfig expanded) =>
+        expanded.SignInPossible && Tokens.Has(name, expanded.Url!.Trim(), expanded.RedirectPort);
+
+    private McpServerEntry? Entry(string name) => Read(seal: false).Entries.FirstOrDefault(e => e.Startable && e.Name == name);
+
+    /// <summary>
+    /// The sign-in's options for <paramref name="name"/> (2026-11-21), or null for none: attached only when the store holds tokens for this
+    /// address and port, or for a requested sign-in. Otherwise a server not signed in yet would register a fresh client with the service at
+    /// every start and reload, the SDK registering before it asks for the browser. The kept client id and secret go back in, so a refresh
+    /// or a sign-in again reuses the registered app; the entry's own <c>oauth</c> wins over them.
+    /// </summary>
+    private ClientOAuthOptions? OAuthFor(string name, McpServerConfig config, bool signIn)
+    {
+        if (!config.SignInPossible)
+        {
+            return null;
+        }
+
+        var store = Tokens;
+        string url = config.Url!.Trim();
+        int port = config.RedirectPort;
+        var kept = store.Get(name, url, port);
+        if (kept is null && !signIn)
+        {
+            return null;
+        }
+
+        var own = config.OAuth;
+        return new ClientOAuthOptions
+        {
+            RedirectUri = McpOAuth.RedirectUri(port),
+            ClientId = own?.ClientId ?? kept?.ClientId,
+            ClientSecret = own?.ClientId is not null ? own.ClientSecret : kept?.ClientSecret,
+            Scopes = own?.Scopes,
+            DynamicClientRegistration = new DynamicClientRegistrationOptions { ClientName = McpOAuth.ClientName },
+            TokenCache = store.CacheFor(name, url, port),
+            // Always set (the SDK's default reads the console, which the TUI owns). Unasked, a fall-through to a new authorization is a
+            // needs-sign-in row, never a browser opening on its own.
+            AuthorizationCallbackHandler = signIn
+                ? async (context, token) => await McpSignIn.WaitAsync(name, context.AuthorizationUri!, context.RedirectUri!, OpenBrowser, SignInNotice ?? Notice, token).ConfigureAwait(false)
+                : (_, _) => Task.FromException<AuthorizationResult?>(new McpSignInNeeded()),
+        };
+    }
+
+    /// <summary>
+    /// Removes the sign-ins of servers no longer in the catalog (a start and a reload): never while either file has a problem with no name
+    /// (a broken file lists no servers, and a typo mustn't sign out every server; a blank name can't be matched either), and a server whose
+    /// entry has a problem of its own keeps its sign-in until the entry is fixed or removed.
+    /// </summary>
+    private void PruneTokens(McpMerged merged)
+    {
+        if (merged.Problems.Any(p => p.Name is null))
+        {
+            return;
+        }
+
+        try
+        {
+            var store = Tokens;
+            if (!File.Exists(store.FilePath))
+            {
+                return;
+            }
+
+            var keep = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in merged.Entries.Where(e => e.Config.IsHttp))
+            {
+                keep.Add(McpTokenStore.Key(entry.Name, SignInUrl(entry.Config)));
+            }
+
+            var broken = merged.Problems.Select(p => p.Name!).ToHashSet(StringComparer.Ordinal);
+            store.Prune(keep, broken);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Debug(Category, LogText.Excerpt(ex.Message));
+        }
+    }
+
+    /// <summary>Calls off a requested sign-in (a reload, the wave, the dispose, a second sign-in's Esc); its listener stops with it.</summary>
+    public void CancelSignIn()
+    {
+        CancellationTokenSource? waiting;
+        lock (_snapshot)
+        {
+            waiting = _signIn;
+        }
+
+        try
+        {
+            waiting?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Ended meanwhile.
+        }
+    }
+
+    /// <summary>
+    /// A requested sign-in to server <paramref name="name"/> (2026-11-21, <c>s</c> or Enter on its needs-sign-in row): its connection started
+    /// again with the sign-in's options and a browser wait of <see cref="McpOAuth.SignInTimeoutSeconds"/>, the row reading signing in
+    /// meanwhile. One at a time: null when another waits, the server isn't startable, or the master switch is off. A cancel (Esc, a reload)
+    /// is a needs-sign-in row with the cancelled detail, never a throw.
+    /// </summary>
+    public async Task<McpServerStatus?> SignInAsync(string name, AppSettingsData effective, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(effective);
+        using var mine = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
+        lock (_snapshot)
+        {
+            if (_signIn is not null || _disposed)
+            {
+                return null;
+            }
+
+            _signIn = mine;
+            _signingIn = name;
+        }
+
+        try
+        {
+            await _gate.WaitAsync(mine.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            EndSignIn(mine);
+            return null;
+        }
+
+        try
+        {
+            var merged = Read();
+            var entry = merged.Entries.FirstOrDefault(e => e.Name == name && e.Startable);
+            if (entry is null || !effective.McpServers)
+            {
+                return null;
+            }
+
+            await DisposeOneAsync(name).ConfigureAwait(false);
+            PublishRow(Initial(entry, enabled: true, ToolsText.DisabledSet([])) with { State = McpState.Connecting, SigningIn = true }, merged.Problems, attempted: true);
+            var outcome = await ConnectOneAsync(entry, effective.McpConnectTimeoutSeconds, mine.Token, signIn: true).ConfigureAwait(false);
+            PublishRow(outcome, merged.Problems, attempted: true);
+            return outcome;
+        }
+        finally
+        {
+            EndSignIn(mine);
+            _gate.Release();
+        }
+    }
+
+    private void EndSignIn(CancellationTokenSource mine)
+    {
+        lock (_snapshot)
+        {
+            if (ReferenceEquals(_signIn, mine))
+            {
+                _signIn = null;
+                _signingIn = null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Signs out of server <paramref name="name"/>: its tokens forgotten on this computer (no revocation is sent: not every service offers
+    /// one), its client dropped, its row needs sign-in with no reconnect attempt. False when it held no sign-in.
+    /// </summary>
+    public async Task<bool> SignOutAsync(string name)
+    {
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (Entry(name) is not { Config.SignInPossible: true } entry)
+            {
+                return false;
+            }
+
+            string url = SignInUrl(entry.Config);
+            if (!Tokens.HasAny(name, url))
+            {
+                return false;
+            }
+
+            // The client first: one still live could refresh and store its tokens again after the forget.
+            await DisposeOneAsync(name).ConfigureAwait(false);
+            Tokens.Forget(name, url);
+            var row = Servers.FirstOrDefault(r => r.Name == name);
+            if (row is not null)
+            {
+                PublishRow(row with { State = McpState.Failed, Detail = McpText.NeedsSignInDetail, DetailIsApps = true, NeedsSignIn = true, SignedIn = false, Tools = [], Dropped = null });
+            }
+
+            DiagnosticLog.Info(Category, McpText.SignedOutLogLine(name));
+            FlushLogs();
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     // ── Drops ───────────────────────────────────────────────────────────────
@@ -823,6 +1164,278 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         {
             DiagnosticLog.Info(Category, McpText.AuditLogLine(audited, decision, outcome, json));
         }
+    }
+
+    // ── Resources (2026-11-21, feature idea #33: mcp_read) ──────────────────
+
+    /// <summary>
+    /// The connected servers that declare resources (<c>ServerCapabilities.Resources</c>), in the catalog's order: what <c>mcp_read</c> is
+    /// offered for. A dropped one stays listed, since a read reconnects it as a call does.
+    /// </summary>
+    public IReadOnlyList<string> ResourceServers
+    {
+        get
+        {
+            lock (_snapshot)
+            {
+                return _servers
+                    .Where(s => s.State == McpState.Connected && _connections.TryGetValue(s.Name, out var live) && live.Client.ServerCapabilities?.Resources is not null)
+                    .Select(s => s.Name)
+                    .ToList();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the host offers <c>mcp_read</c> at all (2026-11-21): <c>MCP servers enabled</c> on and the tool not switched off. Set by the
+    /// screen and headless; null reads as not offered, so a result's links never point to a tool the model doesn't have.
+    /// </summary>
+    public Func<bool>? ReadToolOffered { get; set; }
+
+    /// <summary>Whether a result from <paramref name="server"/> may point to <c>mcp_read</c> (<see cref="McpRenderContext.ReadOffered"/>).</summary>
+    private bool ReadOffered(string server) => ReadToolOffered?.Invoke() == true && ResourceServers.Contains(server, StringComparer.Ordinal);
+
+    /// <summary>What a turn offers of MCP: every connected server's tools, then <c>mcp_read</c> while a connected server declares resources.</summary>
+    public IReadOnlyList<AIFunction> TurnTools()
+    {
+        var read = ReadTools();
+        return read.Count == 0 ? Tools : [.. Tools, .. read];
+    }
+
+    /// <summary><c>mcp_read</c> for the servers that declare resources now, or nothing while none does: the turn's and <c>/usage</c>' one tool.</summary>
+    public IReadOnlyList<AIFunction> ReadTools()
+    {
+        var servers = ResourceServers;
+        return servers.Count == 0 ? [] : [new Mcp.McpReadTool(this, servers)];
+    }
+
+    /// <summary>
+    /// The server's resources and resource templates, every page up to <paramref name="max"/> of each (the tool shows that many), with
+    /// whether more were left. A refusal is the call's text.
+    /// </summary>
+    public async Task<McpResourceAnswer> ListResourcesAsync(string server, int max, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        var arguments = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
+        var (listing, refusal) = await ResourceAsync(server, McpText.ResourcesListMethod, arguments, async (client, token) =>
+        {
+            var resources = new List<Resource>();
+            var templates = new List<ResourceTemplate>();
+            bool more = false;
+            string? cursor = null;
+            do
+            {
+                var page = await client.ListResourcesAsync(new ListResourcesRequestParams { Cursor = cursor }, token).ConfigureAwait(false);
+                resources.AddRange(page.Resources ?? []);
+                cursor = page.NextCursor;
+            }
+            while (cursor is not null && resources.Count < max);
+
+            more |= cursor is not null || resources.Count > max;
+            cursor = null;
+            try
+            {
+                do
+                {
+                    var page = await client.ListResourceTemplatesAsync(new ListResourceTemplatesRequestParams { Cursor = cursor }, token).ConfigureAwait(false);
+                    templates.AddRange(page.ResourceTemplates ?? []);
+                    cursor = page.NextCursor;
+                }
+                while (cursor is not null && templates.Count < max);
+            }
+            catch (ModelContextProtocol.McpProtocolException ex) when (ex.ErrorCode == ModelContextProtocol.McpErrorCode.MethodNotFound)
+            {
+                // Templates are optional: a server with resources may not answer resources/templates/list at all.
+                cursor = null;
+            }
+
+            more |= cursor is not null || templates.Count > max;
+            return new McpResourceList(resources.Take(max).ToList(), templates.Take(max).ToList(), more);
+        }, cancellationToken).ConfigureAwait(false);
+        return new McpResourceAnswer(listing, null, refusal);
+    }
+
+    /// <summary>The resource at <paramref name="uri"/> as the server reads it. A refusal is the call's text.</summary>
+    public async Task<McpResourceAnswer> ReadResourceAsync(string server, string uri, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(server);
+        ArgumentNullException.ThrowIfNull(uri);
+        var arguments = new Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal)
+        {
+            ["uri"] = McpText.JsonString(uri),
+        };
+        var (read, refusal) = await ResourceAsync(server, McpText.ResourcesReadMethod, arguments,
+            (client, token) => client.ReadResourceAsync(new ReadResourceRequestParams { Uri = uri }, token).AsTask(), cancellationToken).ConfigureAwait(false);
+        return new McpResourceAnswer(null, read, refusal);
+    }
+
+    /// <summary>
+    /// One resource request, the twin of <see cref="CallAsync"/> for a read: the server resolved (<see cref="ResolveResourcesAsync"/>), asked
+    /// under <c>"ask": "always"</c> alone (<see cref="McpAskRule.AsksRead"/>, the <see cref="McpAsk"/>'s server tool the protocol's
+    /// <paramref name="method"/> and its name <c>mcp_read</c>, so a session allow covers the server's reads until its config changes), sent,
+    /// and sent once more after a drop, since a read changes nothing: when it was asked already or the server as it came back wouldn't
+    /// ask, and the server still offers resources. An asked request is audited as a call is. A server's own error is thrown, as a call's.
+    /// </summary>
+    private async Task<(T? Value, McpCallOutcome? Refusal)> ResourceAsync<T>(string name, string method, IReadOnlyDictionary<string, System.Text.Json.JsonElement> arguments, Func<McpClient, CancellationToken, Task<T>> send, CancellationToken cancellationToken)
+        where T : class
+    {
+        var ready = await ResolveResourcesAsync(name, method, null, cancellationToken).ConfigureAwait(false);
+        if (ready.Refusal is { } refused)
+        {
+            return (null, refused);
+        }
+
+        string? reconnected = ready.Reconnected;
+        var live = ready.Live!;
+        bool asks = McpAskRule.AsksRead(live.Entry.Config.AskMode);
+        if (!asks)
+        {
+            return await SendResourceAndRecoverAsync(name, method, live, send, reconnected, asked: false, cancellationToken).ConfigureAwait(false);
+        }
+
+        string json = McpText.ArgumentsJson(arguments, indented: false, redact: true);
+        string decision = McpText.DeniedWord;
+        string outcome = McpText.OutcomeNotSent;
+        bool decided = false;
+        try
+        {
+            var ask = new McpAsk(name, method, McpReadToolName, arguments, McpChangeNote.None)
+            {
+                Fingerprint = live.Fingerprint,
+                Definition = McpReadToolName,
+            };
+            var verdict = Approver is { } approver ? await approver(ask, cancellationToken).ConfigureAwait(false) : McpVerdict.Nobody;
+            decided = true;
+            switch (verdict)
+            {
+                case McpVerdict.Allowed(var how):
+                    decision = how;
+                    break;
+                case McpVerdict.NotAsked(var tail):
+                    decision = McpText.NotAskedWord;
+                    Reconnected(name, reconnected);
+                    return (null, McpCallOutcome.Failed(McpText.NotAskedError(McpReadToolName, tail)));
+                default:
+                    Reconnected(name, reconnected);
+                    return (null, McpCallOutcome.Failed(McpText.DeniedError(McpReadToolName)));
+            }
+
+            var after = await ResolveResourcesAsync(name, method, live.Fingerprint, cancellationToken).ConfigureAwait(false);
+            if (after.Refusal is { } refusedAfter)
+            {
+                if (!after.NotBack)
+                {
+                    Reconnected(name, reconnected);
+                }
+
+                return (null, refusedAfter);
+            }
+
+            reconnected = after.Reconnected ?? reconnected;
+            var sent = await SendResourceAndRecoverAsync(name, method, after.Live!, send, reconnected, asked: true, cancellationToken).ConfigureAwait(false);
+            outcome = sent.Refusal is null ? McpText.OutcomeRan : McpText.OutcomeDropped;
+            return sent;
+        }
+        catch (OperationCanceledException)
+        {
+            outcome = McpText.OutcomeCanceled;
+            if (!decided)
+            {
+                Reconnected(name, reconnected);
+            }
+
+            throw;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            outcome = McpText.OutcomeFailed(ex.GetType().Name);
+            throw;
+        }
+        finally
+        {
+            DiagnosticLog.Info(Category, McpText.AuditLogLine(McpReadToolName + " " + name + " " + method, decision, outcome, json));
+        }
+    }
+
+    /// <summary><c>mcp_read</c>'s name, as the session's asks and audit lines give it (the tool's own constant, kept here so the session needn't build it).</summary>
+    private const string McpReadToolName = Mcp.McpReadTool.ToolName;
+
+    /// <summary>
+    /// <see cref="ResolveAsync"/>'s sibling for a resource request: <see cref="Usable"/>, a reconnect of a dead one, the fingerprint check under
+    /// <paramref name="asked"/>, then that the live server still declares resources, in place of <see cref="Offered"/>.
+    /// </summary>
+    private async Task<Ready> ResolveResourcesAsync(string name, string method, string? asked, CancellationToken cancellationToken)
+    {
+        var ready = Usable(name, method);
+        if (ready.Refusal is null && (ready.Live is null || ready.Live.Dead))
+        {
+            ready = await ReconnectForCallAsync(name, method, ready.Live?.Client, null, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (ready.Refusal is not null)
+        {
+            return ready;
+        }
+
+        var live = ready.Live!;
+        if (asked is not null && !string.Equals(live.Fingerprint, asked, StringComparison.Ordinal))
+        {
+            Reconnected(name, ready.Reconnected);
+            return new Ready(null, McpCallOutcome.Failed(McpText.ChangedWhileAsking(name)), null);
+        }
+
+        if (live.Client.ServerCapabilities?.Resources is null)
+        {
+            Reconnected(name, ready.Reconnected);
+            return new Ready(null, McpCallOutcome.Failed(McpText.NoResourcesError(name, ResourceServers)), null);
+        }
+
+        return ready;
+    }
+
+    /// <summary><see cref="SendAndRecoverAsync"/>'s twin for a read: a drop reconnects once and sends again, as for a read-only tool.</summary>
+    private async Task<(T? Value, McpCallOutcome? Refusal)> SendResourceAndRecoverAsync<T>(string name, string method, Connection live, Func<McpClient, CancellationToken, Task<T>> send, string? reconnected, bool asked, CancellationToken cancellationToken)
+        where T : class
+    {
+        var first = await SendAsync(live, send, cancellationToken).ConfigureAwait(false);
+        if (first.Answered)
+        {
+            Reconnected(name, reconnected);
+            return (first.Value, null);
+        }
+
+        if (reconnected is not null)
+        {
+            return (null, await DroppedAgainAsync(name, live, first.Details).ConfigureAwait(false));
+        }
+
+        var again = await ReconnectForCallAsync(name, method, live.Client, first.Details, cancellationToken).ConfigureAwait(false);
+        if (again.Refusal is { } gone)
+        {
+            return (null, gone);
+        }
+
+        var back = again.Live!;
+        if (back.Client.ServerCapabilities?.Resources is null)
+        {
+            Reconnected(name, again.Reconnected);
+            return (null, McpCallOutcome.Failed(McpText.NoResourcesError(name, ResourceServers)));
+        }
+
+        if (!asked && McpAskRule.AsksRead(back.Entry.Config.AskMode))
+        {
+            Reconnected(name, again.Reconnected);
+            return (null, McpCallOutcome.Failed(McpText.DroppedNotResentError(name)));
+        }
+
+        var second = await SendAsync(back, send, cancellationToken).ConfigureAwait(false);
+        if (second.Answered)
+        {
+            Reconnected(name, again.Reconnected);
+            return (second.Value, null);
+        }
+
+        return (null, await DroppedAgainAsync(name, back, second.Details).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -1099,18 +1712,29 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// </summary>
     private static async Task<Sent> SendAsync(Connection live, CallToolRequestParams request, CancellationToken cancellationToken)
     {
+        var sent = await SendAsync(live, (client, token) => client.CallToolAsync(request, token).AsTask(), cancellationToken).ConfigureAwait(false);
+        return new Sent(sent.Value, sent.Details);
+    }
+
+    /// <summary>
+    /// Any one request sent as <see cref="SendAsync(Connection, CallToolRequestParams, CancellationToken)"/> sends a call (2026-11-21: a
+    /// resource read shares it): <see cref="SentOf{T}.Answered"/> with the value, or a drop with the client's details.
+    /// </summary>
+    private static async Task<SentOf<T>> SendAsync<T>(Connection live, Func<McpClient, CancellationToken, Task<T>> send, CancellationToken cancellationToken)
+        where T : class
+    {
         var completion = live.Client.Completion;
-        var call = live.Client.CallToolAsync(request, cancellationToken).AsTask();
+        var call = send(live.Client, cancellationToken);
         var first = await Task.WhenAny(call, completion).ConfigureAwait(false);
         if (!ReferenceEquals(first, call) && !call.IsCompleted)
         {
             _ = call.ContinueWith(static t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-            return new Sent(null, completion.Result);
+            return new SentOf<T>(null, completion.Result, false);
         }
 
         try
         {
-            return new Sent(await call.ConfigureAwait(false), null);
+            return new SentOf<T>(await call.ConfigureAwait(false), null, true);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -1118,13 +1742,17 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
         }
         catch (ClientTransportClosedException closed)
         {
-            return new Sent(null, closed.Details);
+            return new SentOf<T>(null, closed.Details, false);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException && completion.IsCompleted)
         {
-            return new Sent(null, completion.Result);
+            return new SentOf<T>(null, completion.Result, false);
         }
     }
+
+    /// <summary>What one send of any request came to: the value, or a drop with what the client knew about it.</summary>
+    private readonly record struct SentOf<T>(T? Value, ClientCompletionDetails? Details, bool Answered)
+        where T : class;
 
     /// <summary>
     /// The text for a server that didn't come back. Its detail can be the server's own (a connect exception's message, such as a JSON-RPC
@@ -1134,6 +1762,13 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// </summary>
     private McpCallOutcome NotBack(McpServerStatus row)
     {
+        if (row.NeedsSignIn)
+        {
+            // A server that wants a sign-in (2026-11-21): the way to it, never a retry tail; headless counts it as a failure.
+            SignInNeededCall?.Invoke(row.Name);
+            return McpCallOutcome.Failed(McpText.SignInNeededError(row.Name, _retryTail == McpText.HeadlessRetryTail ? McpText.SignInHeadlessTail : McpText.SignInTail));
+        }
+
         string detail = row.Detail ?? "";
         return row.DetailIsApps
             ? McpCallOutcome.Failed(McpText.NotBackError(row.Name, detail, _retryTail))
@@ -1482,6 +2117,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable
     /// </summary>
     public async ValueTask DisposeAsync()
     {
+        CancelSignIn();
         _stop.Cancel();
         await _gate.WaitAsync().ConfigureAwait(false);
         try

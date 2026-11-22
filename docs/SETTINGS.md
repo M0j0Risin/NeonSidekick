@@ -990,11 +990,11 @@ Outside programs that give the model more tools.
 
 ### Servers
 
-One row per server in `mcp.json` (the profile's, then the home's; the profile's entry wins on a name clash), with its state: `connected · N tools`, `connecting`, `failed: …` or `off`. Enter or Space turns one on or off; Enter on a failed one retries. A connected server's footer says how it asks and how long its notes are: `notes 2000 of 5000 chars` when cut, `notes left out (over 6000 in all)` when every server's together are too long. Below: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
+One row per server in `mcp.json` (the profile's, then the home's; the profile's entry wins on a name clash), with its state: `connected · N tools`, `connecting`, `needs sign-in`, `signing in…`, `failed: …` or `off`. Enter or Space turns one on or off; Enter on a failed one retries, and on a needs-sign-in one signs in (`s` too; Esc calls a waiting sign-in off). A connected server's footer says how it asks and how long its notes are: `notes 2000 of 5000 chars` when cut, `notes left out (over 6000 in all)` when every server's together are too long. Below: `edit profile mcp.json`, `edit global mcp.json`, `reload`, and any skipped entries.
 
 ### Tools
 
-Every connected server's tools, as `<server>__<tool>`, with their descriptions; Enter or Space switches one. A tool that asks before each call (by its server's `"ask"`) is tagged `asks` (typing `asks` filters to them), and its footer says whether it asks or is allowed for this session. With two or more servers, a second tab row shows one server's tools.
+Every connected server's tools, as `<server>__<tool>`, with their descriptions; Enter or Space switches one. While a server offers resources, the built-in `mcp_read` heads the list. A tool that asks before each call (by its server's `"ask"`) is tagged `asks` (typing `asks` filters to them), and its footer says whether it asks or is allowed for this session. With two or more servers, a second tab row shows one server's tools.
 
 ### Options
 
@@ -1002,6 +1002,7 @@ Every connected server's tools, as `<server>__<tool>`, with their descriptions; 
 |---|---|---|
 | MCP servers enabled | The master switch: every enabled server starts at launch and its tools are offered. | off |
 | MCP connect timeout (s) | How long a server gets to connect and list its tools (5–300). | 30 |
+| MCP keep in sessions | Keeps the pictures MCP tools return in stored sessions. Off, a line naming each picture is kept instead. | off |
 
 ## System prompt (`/usage`)
 

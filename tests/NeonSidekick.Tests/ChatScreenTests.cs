@@ -3880,6 +3880,40 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain("memory recalled", output);
     }
 
+    /// <summary>
+    /// Project memories (2026-11-21, feature idea #6): <c>/memory remember --here</c> saves for the working folder; its opening recall lists it
+    /// marked, and after a <c>/cwd</c> elsewhere the next request's result leaves it out, in place.
+    /// </summary>
+    [Fact]
+    public async Task RememberHere_IsOfferedOnlyInThisFolder_AndACwdSwapsTheOpeningResult()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string elsewhere = Path.Combine(_dir, "elsewhere");
+        _chat.EnqueueText("Noted.").EnqueueText("Moved.");
+        var seen = new List<string>();
+        _chat.BeforeUpdateOf = (request, i, _) =>
+        {
+            if (i == 0)
+            {
+                seen.Add(MemoryResult(_chat.Requests[request]));
+            }
+
+            return Task.CompletedTask;
+        };
+        PushLine("/memory remember Their name is Chris.");
+        PushLine("/memory remember --here Tests run with build.ps1.");
+        PushLine("hi");
+        PushLine("/cwd " + elsewhere);
+        PushLine("and now?");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + MemoryText.RememberedHereNotice("Tests run with build.ps1."), output);
+        Assert.Equal([MemoryPrompt.Heading + "\n- Their name is Chris.\n- Tests run with build.ps1." + MemoryPrompt.FolderOnlyMark, MemoryPrompt.Heading + "\n- Their name is Chris."], seen);
+        Assert.NotNull(_memory.EntriesSnapshot()[1].Folder);
+    }
+
     [Fact]
     public async Task Remember_Twice_SaysAlreadyRemembered()
     {
@@ -7316,10 +7350,15 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new MemoryAction(MemoryActionKind.Remember, Text: "my  cat"), ChatScreen.ParseMemoryArgs("REMEMBER  my  cat "));
         Assert.Equal(new MemoryAction(MemoryActionKind.Remember), ChatScreen.ParseMemoryArgs(" remember "));
         Assert.Equal(new MemoryAction(MemoryActionKind.Invalid), ChatScreen.ParseMemoryArgs("rememberx"));
-        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("remember", ChatScreen.MemoryRememberNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));   // on, read-write's alias, from 2026-10-27 until 2026-11-20
+        // --here (2026-11-21, feature idea #6): before the text only, any case; later in the text it stays as typed.
+        Assert.Equal(new MemoryAction(MemoryActionKind.Remember, Text: "tests run with build.ps1", Here: true), ChatScreen.ParseMemoryArgs("remember --HERE tests run with build.ps1"));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Remember, Text: "", Here: true), ChatScreen.ParseMemoryArgs("remember --here"));
+        Assert.Equal(new MemoryAction(MemoryActionKind.Remember, Text: "say --here twice"), ChatScreen.ParseMemoryArgs("remember say --here twice"));
+        Assert.Equal(["remember --here"], ChatScreen.ArgumentItems("/memory", "remember --h", Sources()).Select(i => i.Text));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("off", ChatScreen.MemoryDisabledNote), new CompletionItem("remember", ChatScreen.MemoryRememberNote), new CompletionItem("remember --here", ChatScreen.MemoryRememberHereNote), new CompletionItem("forget", ChatScreen.MemoryForgetNote), new CompletionItem("edit", ChatScreen.MemoryEditNote)], ChatScreen.ArgumentItems("/memory", "", Sources()));   // on, read-write's alias, from 2026-10-27 until 2026-11-20
         Assert.Equal(["off"], ChatScreen.ArgumentItems("/memory", "o", Sources()).Select(i => i.Text));
-        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("remember", ChatScreen.MemoryRememberNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
-        Assert.Equal([new CompletionItem("remember", ChatScreen.MemoryRememberNote)], ChatScreen.ArgumentItems("/memory", "rem", Sources()));
+        Assert.Equal([new CompletionItem("read-write", ChatScreen.MemoryReadWriteNote), new CompletionItem("read-only", ChatScreen.MemoryReadOnlyNote), new CompletionItem("remember", ChatScreen.MemoryRememberNote), new CompletionItem("remember --here", ChatScreen.MemoryRememberHereNote)], ChatScreen.ArgumentItems("/memory", "r", Sources()));
+        Assert.Equal([new CompletionItem("remember", ChatScreen.MemoryRememberNote), new CompletionItem("remember --here", ChatScreen.MemoryRememberHereNote)], ChatScreen.ArgumentItems("/memory", "rem", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "remember my", Sources()));   // the text after it is free
         Assert.Equal([new CompletionItem("forget", ChatScreen.MemoryForgetNote)], ChatScreen.ArgumentItems("/memory", "fo", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/memory", "co", Sources()));   // copy retired 2026-10-13
@@ -25921,7 +25960,7 @@ public partial class ChatScreenTests : IDisposable
     {
         var sources = Sources() with { Sessions = () => [new("#12", "Vosk wiring (" + SessionsMenu.CurrentNote + ")"), new("#7", "Dinner")] };
 
-        Assert.Equal(["#12", "#7", "purge", "title", "export"], Texts(ChatScreen.ArgumentItems("/sessions", "", sources)));
+        Assert.Equal(["#12", "#7", "purge", "title", "export", "here"], Texts(ChatScreen.ArgumentItems("/sessions", "", sources)));   // here since 2026-11-21
         Assert.Equal(["#12"], Texts(ChatScreen.ArgumentItems("/sessions", "#1", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/sessions", "#7", sources));   // typed in full: Enter sends
         Assert.Equal([new CompletionItem("purge all", ChatScreen.SessionPurgeAllNote), new CompletionItem("purge older", ChatScreen.SessionPurgeOlderNote), new CompletionItem("purge #12", "Vosk wiring (" + SessionsMenu.CurrentNote + ")"), new CompletionItem("purge #7", "Dinner")], ChatScreen.ArgumentItems("/sessions", "purge ", sources));
@@ -25929,7 +25968,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/sessions", "purge #7", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/sessions", "purge older 3", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/sessions", "title My", sources));   // free text
-        Assert.Equal(["purge", "title", "export"], Texts(ChatScreen.ArgumentItems("/sessions", "", Sources())));   // no store wired: the verbs alone
+        Assert.Equal(["purge", "title", "export", "here"], Texts(ChatScreen.ArgumentItems("/sessions", "", Sources())));   // no store wired: the verbs alone
         Assert.Equal("Vosk wiring", ChatScreen.SessionNote(new SessionSummary(12, ManualTimeProvider.DefaultUtcNow, ManualTimeProvider.DefaultUtcNow, "Vosk wiring", TitleSource.FirstLine, "llama", 1), null));
         Assert.Equal("Vosk wiring (this conversation)", ChatScreen.SessionNote(new SessionSummary(12, ManualTimeProvider.DefaultUtcNow, ManualTimeProvider.DefaultUtcNow, "Vosk wiring", TitleSource.FirstLine, "llama", 1), 12));
     }
@@ -25938,7 +25977,7 @@ public partial class ChatScreenTests : IDisposable
     public void SessionSentences_ArePinned()
     {
         var summary = new SessionSummary(12, ManualTimeProvider.DefaultUtcNow, ManualTimeProvider.DefaultUtcNow, "Vosk wiring", TitleSource.FirstLine, "llama", 12);
-        Assert.Equal("/sessions lists the sessions, or /sessions <id> | purge <id> | purge older <age> | purge all | title <text> | export [<id>] [md|html]", ChatScreen.SessionUsageError);
+        Assert.Equal("/sessions lists the sessions, or /sessions <id> | purge <id> | purge older <age> | purge all | title <text> | export [<id>] [md|html] | here", ChatScreen.SessionUsageError);
         Assert.Equal("No session #12; /sessions lists them.", ChatScreen.SessionMissingError(12));
         Assert.Equal("Could not restore session #12: bad json", ChatScreen.SessionRestoreFailedError(12, "bad json"));
         Assert.Equal("(💬 restored session #12 \"Vosk wiring\" · 12 turns · 2026-09-11 14:05)", ChatScreen.SessionRestoredNotice(summary, ManualTimeProvider.DefaultZone));

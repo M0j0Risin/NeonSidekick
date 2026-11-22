@@ -7,7 +7,8 @@ namespace NeonSidekick.Plans;
 /// names every tool that only reads — the files, the repository, the web, the databases, the vault,
 /// the clock, memory's recall, the skills' load, the sessions' search and the question pane; anything
 /// else is dropped while planning, <see cref="Mutating"/> and whatever is not named at all — every MCP
-/// tool (nothing tells a server's reads from its writes) and any tool added later, until someone
+/// tool (nothing tells a server's reads from its writes) but <c>mcp_read</c> (2026-11-21, feature idea #33: it reads a server's resources
+/// and changes nothing; it still asks under a server's <c>"ask": "always"</c>), and any tool added later, until someone
 /// decides it may stay. A test holds every tool the app builds to exactly one of the lists, so a
 /// new tool is a decision, not an accident. Since 2026-11-15 (the tool-arguments review's #7, #106, the user's call) a third list,
 /// <see cref="ReadForms"/>: tools that list as well as change, offered while planning as their list-only twins
@@ -34,6 +35,8 @@ public static class PlanTools
         "gitlib_status", "gitlib_log", "gitlib_show", "gitlib_diff", "gitlib_blame",
         // web
         "web_search", "web_fetch",
+        // an MCP server's resources (2026-11-21, feature idea #33): reads only; the advisors never get it (NeonAdvisorTool.Excluded)
+        "mcp_read",
         // the saved links (later still on 2026-10-13): the list reads the profile's browser-links.json
         "web_links",
         // SQL: read-only by three layers already
