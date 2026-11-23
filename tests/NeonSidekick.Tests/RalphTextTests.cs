@@ -408,4 +408,39 @@ public sealed class RalphTextTests
         Assert.Contains(learned, directive);
         Assert.Contains("…", directive);                    // the notes shrank to make room
     }
+
+    /// <summary>
+    /// The session review's words (2026-11-22): what the app ran itself in the review request, the scratch rule in both forms of the directive, the
+    /// unnamed-new flag, the nudge, the no-report note and the unclosed-findings fit item.
+    /// </summary>
+    [Fact]
+    public void TheSessionReviewsWords_ArePinned()
+    {
+        string line = RalphText.AppCheckLine("python hello.py --test", "passed", TimeSpan.FromSeconds(0.4));
+        Assert.Equal("What the app ran itself: `python hello.py --test`, passed in 0.4 s", line);
+        Assert.Equal("What the app ran itself: nothing (the plan has no check command)", RalphText.NoAppCheckLine);
+        string request = RalphText.ReviewRequest("One", "one.md exists", "did it", ["built: ok"], ["no file changed"], ["one.md"], "+x", appCheck: line);
+        Assert.Contains("What it checked: ⟪built: ok⟫\n" + line + "\nThe app noticed: no file changed\n", request);
+        Assert.DoesNotContain("What the app ran itself", RalphText.ReviewRequest("One", null, "did it", [], [], [], ""));
+        Assert.Contains("What the app ran itself is a fact, not a claim.", RalphText.ReviewerSystem);
+        Assert.Contains("verdict: pass — <one sentence why>", RalphText.ReviewerSystem);
+        Assert.EndsWith(RalphText.ReviewDataNote, RalphText.ReviewerSystem);
+
+        Assert.Equal("- Delete any scratch file you make before finish_step.", RalphText.ScratchRule);
+        Assert.Contains(RalphText.ScratchRule + "\n", RalphText.Directive("p", 1, 2, "x", "it builds", "make", reviewed: true, canAsk: false, null, null));
+        Assert.Contains(RalphText.ScratchRule + "\n", RalphText.Directive("p", 2, 2, "x", null, "make", reviewed: false, canAsk: false, null, null, finalFix: true));
+
+        Assert.Equal("new files the step doesn't name (a scratch file should be gone): a.txt, b.py", RalphText.FlagUnnamedNew(["a.txt", "b.py"]));
+        Assert.EndsWith("e, f and 2 more", RalphText.FlagUnnamedNew(["a", "b", "c", "e", "f", "g", "h"]));
+
+        Assert.Equal("🔁 Pass 12 · asked to call finish_step", RalphText.NudgeLine(12));
+        Assert.StartsWith("You ended this pass without calling finish_step.", RalphText.NudgeMessage);
+        Assert.Equal("The last pass ended without finish_step after changing: hello.py, plain_check.txt. Look at what it left: keep the step's work, and delete any scratch file it made.",
+            RalphText.NoReportChangedNote(["hello.py", "plain_check.txt"]));
+        Assert.Contains(" … and 1 more.", RalphText.NoReportChangedNote([.. Enumerable.Range(1, 13).Select(i => $"f{i}.txt")]));
+        Assert.Equal("  edits left in place: a, b", RalphText.LeftChangedLine(["a", "b"]));
+
+        Assert.Equal("no step closes finding A6", RalphText.FitUnclosedFindings(["A6"]));
+        Assert.Equal("no step closes findings A6, A9", RalphText.FitUnclosedFindings(["A6", "A9"]));
+    }
 }

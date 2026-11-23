@@ -370,18 +370,18 @@ public sealed class RalphJudgeTests
 
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
 
-        public ByHandRun(string words, RalphReviewer reviewer, int checkpoint = 0)
+        public ByHandRun(string words, RalphReviewer reviewer, int checkpoint = 0, string? verify = null, string requirement = "Guide", string body = ByHandBody)
         {
             Files = new WorkingDirectory(() => _dir, Time);
             Host = new FakeRalphHost(Files, Time);
-            var header = new PlanHeader(PlanStatus.Approved, 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, "Guide");
-            string text = PlanDocument.Render(header, "Guide", ByHandBody);
+            var header = new PlanHeader(PlanStatus.Approved, 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, requirement);
+            string text = PlanDocument.Render(header, "Guide", body);
             Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => Files.WriteText(Plan, text, overwrite: true)).Outcome);
             var steps = PlanSteps.Parse(text);
             Step = PlanSteps.Leaves(steps).Single(s => s.Text == words);
             Lines = PlanSteps.Flat(steps);
             Before = RalphChanges.Snapshot(Files, null);
-            Loop = new RalphLoop(new RalphSnapshot(Plan, _dir, "Guide", null, null, false, "pwsh", reviewer, checkpoint, 0, 3, 60, 0, 1), 3);
+            Loop = new RalphLoop(new RalphSnapshot(Plan, _dir, "Guide", verify, null, false, "pwsh", reviewer, checkpoint, 0, 3, 60, 0, 1), 3);
             Loop.BeginPass(Step, new PlanPassMeter(Time.GetUtcNow(), 0, 0));
             Assert.Null(Loop.Record(new FinishReport(RalphOutcome.Done, "the pass did it", ["ran it"], null, [], [])));
             Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => Files.WriteText("hello.py", "print('hi')\n", overwrite: true)).Outcome);
@@ -625,5 +625,52 @@ public sealed class RalphJudgeTests
         string checkpoint = RalphLog.Read(run.Files, ByHandRun.Plan)!.Entries[^1].Checkpoint!;
         Assert.DoesNotContain("Hunter2", checkpoint, StringComparison.Ordinal);
         Assert.Contains("-P <redacted>", checkpoint, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The reviewer is told what the app ran itself (2026-11-22, the session review: it saw only the model's claims and asked the user to run the very
+    /// command the app had just passed), or that there was nothing to run.
+    /// </summary>
+    [Fact]
+    public async Task TheReview_IsToldTheChecksTheAppRanItself()
+    {
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Model, verify: "python hello.py"))
+        {
+            Assert.True((await run.JudgeAsync()).Facts.Stands);
+            Assert.Equal([RalphText.AppCheckLine("python hello.py", "passed", TimeSpan.Zero)], run.Host.AppChecks);
+        }
+
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Model))
+        {
+            await run.JudgeAsync();
+            Assert.Equal([RalphText.NoAppCheckLine], run.Host.AppChecks);
+        }
+    }
+
+    /// <summary>A fix plan's step that stands ticks the findings it closes in the report (2026-11-22, the session review); one that fails ticks none.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task AStandingFixStep_TicksTheFindingsItCloses(bool passes)
+    {
+        const string report = ".neon/audits/tree-2026-11-22.md";
+        string body = "# Fix\n\n## Steps\n- [ ] Write hello (closes A1)\n  Done when: `hello.py` exists\n- [ ] Docs (closes A2)\n  Done when: README names it\n";
+        using var run = new ByHandRun("Write hello (closes A1)", RalphReviewer.Model, requirement: Audits.AuditText.FixRequirement(report, ["A1", "A2"]), body: body);
+        var now = run.Time.GetLocalNow();
+        var saved = new Audits.AuditReport { Label = "tree", Header = new Audits.AuditHeader(Audits.AuditStatus.Fixing, "1 pass", "", Audits.AuditFocus.Dimensions, "", "model", 1, now, now) };
+        foreach (string id in new[] { "A1", "A2" })
+        {
+            saved.Findings.Add(new Audits.AuditFinding(id, Audits.AuditSeverity.High, "correctness", "a.cs", 1, "P " + id, "D.", null, null, 1, false, false, null, []));
+        }
+
+        Assert.Null(Audits.AuditFiles.Save(run.Files, report, saved, now));
+        run.Host.Verdict = passes ? new RalphVerdict(RalphVerdictKind.Pass, "fine") : new RalphVerdict(RalphVerdictKind.Fail, "not done");
+
+        await run.JudgeAsync();
+
+        var after = Audits.AuditFiles.Read(run.Files, report)!;
+        Assert.Equal(passes, after.Findings[0].Settled);
+        Assert.False(after.Findings[1].Settled);
+        Assert.Equal(passes, run.Host.Notices.Contains(Audits.AuditText.TickedNotice(["A1"], "tree-2026-11-22", 1, 2)));
     }
 }

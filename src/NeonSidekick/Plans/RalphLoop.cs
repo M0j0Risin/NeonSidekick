@@ -323,7 +323,25 @@ public sealed class RalphLoop
         InPass = true;
         CheckpointDue = false;
         LastReviewFail = null;
+        _nudged = false;
         _passStart = meter;
+    }
+
+    private bool _nudged;
+
+    /// <summary>
+    /// Whether the pass under way may be nudged to call <c>finish_step</c> (2026-11-22, the session review: a pass that replied two blank lines was
+    /// judged "no report"): true once a pass, then false until the next begins.
+    /// </summary>
+    public bool TakeNudge()
+    {
+        if (!InPass || _nudged)
+        {
+            return false;
+        }
+
+        _nudged = true;
+        return true;
     }
 
     /// <summary>The notes the pass about to begin gets, once.</summary>
@@ -417,6 +435,14 @@ public sealed class RalphLoop
     {
         ArgumentNullException.ThrowIfNull(facts);
         InPass = false;
+        if (Report is null && !facts.Stands && facts.Changed.Count > 0)
+        {
+            // A pass that ended without finish_step after changing files (2026-11-22, the session review: its retry wasn't told, and its scratch file
+            // outlived the loop): the next pass hears what it left, after the judge's own note. Never when the step stood (the model ticked its box):
+            // the next pass is another step's.
+            PendingNotes = RalphLog.JoinNotes(PendingNotes, RalphText.NoReportChangedNote(facts.Changed));
+        }
+
         var step = Current;
         string key = step is null ? "" : Key(step);
         var state = step is null ? null : _steps.TryGetValue(key, out var known) ? known : _steps[key] = new StepState();

@@ -255,12 +255,69 @@ public static class AuditText
 
     public static string ScopeGone(string path) => NoSuchPath(path);
 
-    /// <summary>The requirement <c>Fix via plan</c> and <c>/code-audit fix</c> enter plan mode with. Pinned.</summary>
+    /// <summary>
+    /// The requirement <c>Fix via plan</c> and <c>/code-audit fix</c> enter plan mode with. Pinned. Since 2026-11-22 (the session review: the model was
+    /// told to tick the report's boxes, which <c>WriteGuard</c> refuses under <c>.neon</c>, so no finding was ever settled) the app ticks them as each
+    /// step passes; <see cref="FixReportOf"/> reads the report back from it, old wording and new.
+    /// </summary>
     public static string FixRequirement(string path, IReadOnlyList<string> openIds)
     {
         ArgumentNullException.ThrowIfNull(openIds);
-        return $"Plan the fixes for the open findings in {path} ({string.Join(", ", openIds)}); each step names the findings it closes; tick a finding's box in the report once fixed.";
+        return FixRequirementPrefix + $"{path} ({string.Join(", ", openIds)}); each step names the findings it closes as (closes A1) or (closes A1, A3); the app ticks them in the report as each step passes.";
     }
+
+    /// <summary><see cref="FixRequirement"/>'s fixed start, the same in every wording it has had.</summary>
+    public const string FixRequirementPrefix = "Plan the fixes for the open findings in ";
+
+    /// <summary>
+    /// The report a fix plan's requirement names (<see cref="FixRequirement"/>'s inverse, 2026-11-22): the path after the fixed start up to the first
+    /// <c>.md (</c>, so a name with spaces or brackets reads; null for any other requirement.
+    /// </summary>
+    public static string? FixReportOf(string? requirement)
+    {
+        if (requirement is null || !requirement.StartsWith(FixRequirementPrefix, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        string rest = requirement[FixRequirementPrefix.Length..];
+        int end = rest.IndexOf(".md (", StringComparison.Ordinal);
+        return end > 0 ? rest[..(end + 3)] : null;
+    }
+
+    /// <summary>The report's name as the notices say it: its file name without <c>.md</c>.</summary>
+    public static string ReportName(string path) => System.IO.Path.GetFileNameWithoutExtension(path.Replace('\\', '/').Split('/')[^1]);
+
+    /// <summary>
+    /// The notice when the app ticked findings (2026-11-22): <c>🔎 Ticked A4, A5 in tree-2026-11-22 (3 of 8 fixed).</c>, the counts the report's own
+    /// after the save (<see cref="AuditReport.SettledCount"/> of open and settled). Pinned.
+    /// </summary>
+    public static string TickedNotice(IReadOnlyList<string> ids, string name, int settled, int total) =>
+        $"{Glyph} Ticked {string.Join(", ", ids)} in {name} ({N(settled)} of {N(total)} fixed).";
+
+    /// <summary>The notice when a loop's end unticked findings whose step no longer stands (2026-11-22). Pinned.</summary>
+    public static string UntickedNotice(IReadOnlyList<string> ids, string name, int settled, int total) =>
+        $"{Glyph} Unticked {string.Join(", ", ids)} in {name}: their steps no longer stand ({N(settled)} of {N(total)} fixed).";
+
+    /// <summary>A tick the report's lock or save refused (2026-11-22): the loop's end tries again. Pinned.</summary>
+    public static string TickRefusedNotice(IReadOnlyList<string> ids, string name, string why) =>
+        $"{Glyph} {string.Join(", ", ids)} not ticked in {name}: {why}";
+
+    /// <summary>The note the app writes under a finding it ticked (2026-11-22): which fix claimed it. Pinned.</summary>
+    public static string SettledNote(string plan, int step) => $"ticked when step {N(step)} of {plan} passed";
+
+    /// <summary>The note under a finding the app unticked: its step was redone. Pinned.</summary>
+    public static string UnsettledNote(string plan, int step) => $"unticked: step {N(step)} of {plan} was redone";
+
+    /// <summary>Whether <paramref name="note"/> is a <see cref="SettledNote"/> of <paramref name="plan"/> (any step).</summary>
+    public static bool IsSettledNoteOf(string note, string plan) =>
+        note.StartsWith("ticked when step ", StringComparison.Ordinal) && note.EndsWith($" of {plan} passed", StringComparison.Ordinal);
+
+    /// <summary>
+    /// After a fix plan is done (2026-11-22, the session review: new audits were run instead, which never recheck a fix): the resume that does. The
+    /// command bare, as the other pointers. Pinned.
+    /// </summary>
+    public static string ReauditHint(string name) => $"{Glyph} /code-audit resume {name} checks the fixes held and looks for new problems.";
 
     // ── The pass ─────────────────────────────────────────────────────────────
 

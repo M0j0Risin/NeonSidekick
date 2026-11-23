@@ -770,6 +770,28 @@ public sealed class ShellTests
         Assert.Equal(8000, ShellCommandLine.MaxCommandChars);
     }
 
+    /// <summary>A launch's PYTHONPATH goes ahead of an inherited one, never in its place (2026-11-22, execute_code's imports).</summary>
+    [Fact]
+    public void ChildEnvironment_PutsALaunchesPythonPath_AheadOfAnInheritedOne()
+    {
+        var launch = new ProcessLaunch("x.exe", [], null, ".", "x", "python", new Dictionary<string, string> { [ChildEnvironment.PythonPathVariable] = "work" });
+        var joined = new ProcessStartInfo("x.exe");
+        joined.Environment[ChildEnvironment.PythonPathVariable] = "mine";
+        ChildEnvironment.Apply(joined, launch);
+        Assert.Equal("work" + Path.PathSeparator + "mine", joined.Environment[ChildEnvironment.PythonPathVariable]);
+
+        var alone = new ProcessStartInfo("x.exe");
+        alone.Environment.Remove(ChildEnvironment.PythonPathVariable);
+        ChildEnvironment.Apply(alone, launch);
+        Assert.Equal("work", alone.Environment[ChildEnvironment.PythonPathVariable]);
+
+        // Any other variable a launch sets still replaces the inherited one.
+        var other = new ProcessStartInfo("x.exe");
+        other.Environment["TERM"] = "dumb";
+        ChildEnvironment.Apply(other, launch with { Environment = new Dictionary<string, string> { ["TERM"] = "xterm" } });
+        Assert.Equal("xterm", other.Environment["TERM"]);
+    }
+
     [Fact]
     public void ChildEnvironment_Applies_TheOverrides_ThenTheLaunchesOwn()
     {

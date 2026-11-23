@@ -162,6 +162,10 @@ internal sealed partial class ChatScreen
             return false;
         }
 
+        // A code audit starts in a new conversation (2026-11-22, the user's call: audits ran on a Ralph pass's or a chat's history), every line of its
+        // start under the rule; a refused start leaves the conversation alone.
+        DropUndoNote();
+        ResetConversationLight(NewConversationNotice);
         string path = _audit.Path!;
         if (unlocked is not null)
         {
@@ -229,9 +233,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <c>/code-audit resume [name] [reviewer] [passes]</c> and the pane's More passes…: a fresh loop on the report, its file kept and its status
-    /// back to auditing, the scope, focus and brief from its header, the scope listed again so new files count.
+    /// back to auditing, the scope, focus and brief from its header, the scope listed again so new files count. <paramref name="fresh"/> (2026-11-22):
+    /// a typed resume starts a new conversation; More passes… goes on in the audit's own.
     /// </summary>
-    private async Task<bool> ResumeAuditAsync(string? name, PlanReviewer? reviewer, int? passes, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, bool said = true)
+    private async Task<bool> ResumeAuditAsync(string? name, PlanReviewer? reviewer, int? passes, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, bool said = true, bool fresh = true)
     {
         _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         var effective = _effective();
@@ -299,6 +304,12 @@ internal sealed partial class ChatScreen
             }
 
             return false;
+        }
+
+        if (fresh)
+        {
+            DropUndoNote();
+            ResetConversationLight(NewConversationNotice);
         }
 
         if (unlocked is not null)
@@ -883,7 +894,7 @@ internal sealed partial class ChatScreen
             case AuditChoice.Fix when hasFix:
                 return await FixAuditReportAsync(path, newest: false, cancellationToken).ConfigureAwait(false);
             case AuditChoice.More:
-                return await ResumeAuditAsync(name, verdict.Reviewer ?? reviewer, null, [], cancellationToken, said: false).ConfigureAwait(false);
+                return await ResumeAuditAsync(name, verdict.Reviewer ?? reviewer, null, [], cancellationToken, said: false, fresh: false).ConfigureAwait(false);
             case AuditChoice.Discard:
                 if (!await ConfirmAsync(AuditText.DiscardQuestion(path), cancellationToken).ConfigureAwait(false))
                 {

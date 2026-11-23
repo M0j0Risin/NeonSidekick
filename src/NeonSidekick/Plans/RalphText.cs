@@ -76,6 +76,7 @@ public static class RalphText
             "- Do not commit unless the step says to.\n" +
             (finalFix ? "" : "- If the step is too big for one pass, call finish_step with outcome split and 2 to 6 substeps, each with a done_when line, and do none of it.\n") +
             (byHand && !finalFix ? ByHandRule + "\n" : "") +
+            ScratchRule + "\n" +
             "- Record facts later passes need (a command that works, what a file is for, a trap you found) in finish_step's learned list.\n" +
             (canAsk ? "" : "- Do not ask the user anything and take no photo or screen capture: if you cannot go on without an answer, call finish_step with outcome blocked and the question in summary.\n") +
             (finalFix
@@ -98,6 +99,12 @@ public static class RalphText
 
         static string Fenced(string heading, string text) => text.Length == 0 ? "" : heading + UntrustedText.Quote(text) + "\n";
     }
+
+    /// <summary>
+    /// The directive's rule on scratch files (2026-11-22, the session review: a pass's <c>plain_check.txt</c> outlived it and became an audit's
+    /// finding), in a step's pass and the final fix's alike. The reviewer sees new files the step doesn't name (<see cref="FlagUnnamedNew"/>). Pinned.
+    /// </summary>
+    public const string ScratchRule = "- Delete any scratch file you make before finish_step.";
 
     /// <summary>
     /// The directive's rule for a step only a person can check (2026-10-21, the plan at <c>~/.claude/plans/i-put-you-in-snoopy-perlis.md</c>): the pass
@@ -383,6 +390,13 @@ public static class RalphText
     public static string FitByHandParent(int count) =>
         count == 1 ? "1 step with sub-steps has a By hand: check" : $"{Count(count)} steps with sub-steps have a By hand: check";
 
+    /// <summary>
+    /// A fix plan's open findings no step's <c>(closes …)</c> names (2026-11-22, <see cref="PlanFit"/>): the app would never tick them. A warning, never
+    /// structural, and never the fit question's reason alone. Pinned, both forms.
+    /// </summary>
+    public static string FitUnclosedFindings(IReadOnlyList<string> ids) =>
+        ids.Count == 1 ? $"no step closes finding {ids[0]}" : $"no step closes findings {string.Join(", ", ids)}";
+
     /// <summary>A plan longer than a pass sends whole (<see cref="InlineLimit"/>). Pinned.</summary>
     public static string FitTooLong(int chars, int limit) => $"the plan is {Count(chars)} characters; a pass sends it whole only up to {Count(limit)}";
 
@@ -655,11 +669,32 @@ public static class RalphText
     /// </summary>
     public static string LastReviewLine(string reason) => "  the last review said: " + Flatten(reason);
 
-    /// <summary>A step that kept failing: the files its passes changed, left in place. Pinned.</summary>
     /// <summary>A log entry's last item in place of the changed files past <see cref="RalphLog.ChangedKept"/>. Pinned.</summary>
     public static string ChangedMore(int more) => $"(and {N(more)} more files)";
 
-    public static string LeftChangedLine(IReadOnlyList<string> files) => "  edits left in place: " + string.Join(", ", files.Take(12)) + (files.Count > 12 ? $" … and {N(files.Count - 12)} more" : "");
+    /// <summary>A step that kept failing: the files its passes changed, left in place. Pinned.</summary>
+    public static string LeftChangedLine(IReadOnlyList<string> files) => "  edits left in place: " + FileList(files);
+
+    /// <summary>
+    /// The next pass's note after a pass that ended without <c>finish_step</c> and changed files (2026-11-22, the session review: a retry was not told
+    /// what the failed pass left, and its scratch file outlived the loop). Pinned.
+    /// </summary>
+    public static string NoReportChangedNote(IReadOnlyList<string> files) =>
+        "The last pass ended without finish_step after changing: " + FileList(files) + ". Look at what it left: keep the step's work, and delete any scratch file it made.";
+
+    /// <summary>
+    /// The nudge after a pass that ended without <c>finish_step</c> (2026-11-22, the session review: a pass replied two blank lines and was judged
+    /// "no report"), sent once a pass in the same conversation. Pinned.
+    /// </summary>
+    public const string NudgeMessage =
+        "You ended this pass without calling finish_step. If the work is done, check it and call finish_step; if not, carry on and call finish_step " +
+        "when you stop (partial or blocked when you can't finish).";
+
+    /// <summary>The nudge's transcript line and log text. Pinned.</summary>
+    public static string NudgeLine(int pass) => $"{Glyph} Pass {N(pass)} · asked to call finish_step";
+
+    /// <summary>Files joined for a line: 12 names, then <c>… and N more</c>.</summary>
+    private static string FileList(IReadOnlyList<string> files) => string.Join(", ", files.Take(12)) + (files.Count > 12 ? $" … and {N(files.Count - 12)} more" : "");
 
     /// <summary>The summary said at every stop with a pass recorded: a heading with the totals, a line a pass. Pinned.</summary>
     public static IReadOnlyList<string> SummaryLines(IReadOnlyList<RalphPassRecord> history, RalphStop stop)
@@ -876,9 +911,10 @@ public static class RalphText
     public const string ReviewerSystem =
         "You review one step of a plan another model carried out. You are given the step, how to tell it is done, what the model reported, what the app " +
         "measured and the changes it made. Judge only whether this step is done as described; do not redo the work. Call step_verdict with pass, fail or needs_user and " +
-        "one sentence why; with no tool, end your answer with a line reading verdict: pass, verdict: fail or verdict: needs_user. " +
+        "one sentence why; with no tool, end your answer with one line reading verdict: pass — <one sentence why> (or verdict: fail — …, or verdict: needs_user — …). " +
         "needs_user means the work you can see is right, but only a person can tell whether its Done when holds (something seen or felt that no command, output or file " +
-        "could show); never use it just because you cannot run commands when the changes and the report could show it. " + ReviewDataNote;
+        "could show); never use it just because you cannot run commands when the changes and the report could show it. " +
+        "What the app ran itself is a fact, not a claim. " + ReviewDataNote;
 
     /// <summary>
     /// What the reviewer is told of the reviewed pass's own words (2026-10-20, a review: its summary and checks reached the reviewer unmarked, so a pass
@@ -913,7 +949,7 @@ public static class RalphText
     /// The review's message: the model's summary and checks fenced as data (<see cref="ReviewDataNote"/>). Pinned. A step only a person can check
     /// (<paramref name="byHand"/>, 2026-10-21) adds <see cref="ByHandReviewLine"/> after its Done when.
     /// </summary>
-    public static string ReviewRequest(string stepText, string? doneWhen, string summary, IReadOnlyList<string> verified, IReadOnlyList<string> flags, IReadOnlyList<string> changed, string diff, bool byHand = false)
+    public static string ReviewRequest(string stepText, string? doneWhen, string summary, IReadOnlyList<string> verified, IReadOnlyList<string> flags, IReadOnlyList<string> changed, string diff, bool byHand = false, string? appCheck = null)
     {
         var text = new System.Text.StringBuilder();
         text.Append("The step: ").Append(Flatten(stepText)).Append('\n');
@@ -925,6 +961,11 @@ public static class RalphText
 
         text.Append("The model's summary: ").Append(UntrustedText.Quote(UntrustedText.Scrub(Flatten(summary)))).Append('\n');
         text.Append("What it checked: ").Append(verified.Count == 0 ? "(nothing)" : string.Join("; ", verified.Select(v => UntrustedText.Quote(UntrustedText.Scrub(Flatten(v)))))).Append('\n');
+        if (appCheck is { Length: > 0 })
+        {
+            text.Append(appCheck).Append('\n');
+        }
+
         if (flags.Count > 0)
         {
             text.Append("The app noticed: ").Append(string.Join("; ", flags)).Append('\n');
@@ -935,12 +976,32 @@ public static class RalphText
         return text.ToString();
     }
 
+    /// <summary>
+    /// The review request's line on the check the app ran itself (2026-11-22, the session review: the reviewer saw only the model's claims, hedged,
+    /// and once asked the user to run the very command the app had just passed): <c>What the app ran itself: `cmd`, passed in 0.4 s</c>. Pinned.
+    /// </summary>
+    public static string AppCheckLine(string command, string word, TimeSpan elapsed) => $"What the app ran itself: {Cmd(command)}, {word} in {Shell.ShellText.Elapsed(elapsed)}";
+
+    /// <summary><see cref="AppCheckLine"/> when the plan has no check command. Pinned.</summary>
+    public const string NoAppCheckLine = "What the app ran itself: nothing (the plan has no check command)";
+
     /// <summary>A by-hand step's review request (2026-10-21): the reviewer need not judge what only the user can. Pinned.</summary>
     public const string ByHandReviewLine =
         "This step's Done when is checked by hand by the user after you: judge everything else; pass when nothing you can see is wrong.";
 
     public const string FlagNothingChanged = "no file changed";
     public static string FlagNamedMissing(IReadOnlyList<string> paths) => "files the step names are missing: " + string.Join(", ", paths);
+
+    /// <summary>
+    /// New files the pass made that the step doesn't name (2026-11-22, the session review: a scratch file outlived its pass), at most
+    /// <see cref="UnnamedNewShown"/>, then <c>and N more</c>. Neutral: steps often make files they don't name; the reviewer judges. Pinned.
+    /// </summary>
+    public static string FlagUnnamedNew(IReadOnlyList<string> paths) =>
+        "new files the step doesn't name (a scratch file should be gone): " + string.Join(", ", paths.Take(UnnamedNewShown)) +
+        (paths.Count > UnnamedNewShown ? $" and {N(paths.Count - UnnamedNewShown)} more" : "");
+
+    /// <summary>The most names <see cref="FlagUnnamedNew"/> lists.</summary>
+    public const int UnnamedNewShown = 5;
     public const string FlagTestsTouched = "test files were changed";
 
     /// <summary>A delta whose snapshot or commit list was cut (2026-10-20, a review): the changed list may miss files. Pinned.</summary>

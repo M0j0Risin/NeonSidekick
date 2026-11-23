@@ -24,7 +24,8 @@ public sealed record RalphSnapshotOfFiles(bool Git, IReadOnlyDictionary<string, 
 /// What a pass changed (2026-10-18): the files, the diff (cut to <see cref="RalphChanges.MaxDiffChars"/>), and the evidence's flags. <paramref name="Cut"/>
 /// (2026-10-20, a review): a snapshot or the commits' list was cut, so the list may miss a change, and "nothing changed" is never claimed.
 /// </summary>
-public sealed record RalphDelta(IReadOnlyList<string> Changed, string Diff, bool NothingChanged, IReadOnlyList<string> NamedMissing, bool TestsTouched, bool Cut = false)
+/// <paramref name="UnnamedNew"/> (2026-11-22, the session review: a pass's scratch file outlived the loop) lists the new files the step doesn't name.
+public sealed record RalphDelta(IReadOnlyList<string> Changed, string Diff, bool NothingChanged, IReadOnlyList<string> NamedMissing, bool TestsTouched, bool Cut = false, IReadOnlyList<string>? UnnamedNew = null)
 {
     /// <summary>The flags as the log and the reviewer read them.</summary>
     public IReadOnlyList<string> Flags =>
@@ -32,6 +33,7 @@ public sealed record RalphDelta(IReadOnlyList<string> Changed, string Diff, bool
         .. NothingChanged ? [RalphText.FlagNothingChanged] : Array.Empty<string>(),
         .. Cut ? [RalphText.FlagEvidenceCut] : Array.Empty<string>(),
         .. NamedMissing.Count > 0 ? [RalphText.FlagNamedMissing(NamedMissing)] : Array.Empty<string>(),
+        .. UnnamedNew is { Count: > 0 } unnamed ? [RalphText.FlagUnnamedNew(unnamed)] : Array.Empty<string>(),
         .. TestsTouched ? [RalphText.FlagTestsTouched] : Array.Empty<string>(),
     ];
 }
@@ -147,6 +149,7 @@ public static class RalphChanges
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(named);
         var changed = new List<string>();
+        var fresh = new List<string>();
         var diff = new StringBuilder();
         var (committed, committedCut) = Committed(before, after, git);
         bool cut = before.Cut || after.Cut || committedCut;
@@ -171,6 +174,11 @@ public static class RalphChanges
             }
 
             changed.Add(path);
+            if (was is null)
+            {
+                fresh.Add(path);
+            }
+
             if (!after.Git || diff.Length >= MaxDiffChars)
             {
                 continue;
@@ -221,8 +229,47 @@ public static class RalphChanges
             text = text[..MaxDiffChars] + RalphText.DiffCut(MaxDiffChars);
         }
 
-        var missing = named.Select(Slash).Where(p => !Exists(files, p)).ToList();
-        return new RalphDelta(changed, text, changed.Count == 0 && !cut, missing, changed.Any(IsTestPath), cut);
+        var slashedNames = named.Select(Slash).ToList();
+        var missing = slashedNames.Where(p => !Exists(files, p)).ToList();
+        var unnamed = before.Cut ? [] : UnnamedNewFiles(fresh, before, after, files, git, slashedNames);
+        return new RalphDelta(changed, text, changed.Count == 0 && !cut, missing, changed.Any(IsTestPath), cut, unnamed);
+    }
+
+    /// <summary>
+    /// Of the changed paths the before snapshot did not hold (<paramref name="fresh"/>), the files that are new and still there, which the step doesn't
+    /// name and no folder it names holds (2026-11-22, the session review). In a repository a snapshot holds only dirty files, so a tracked file the pass
+    /// first edited is not in the before snapshot either: there, new means HEAD as the pass began has no such file (<see cref="GitOutcome.Missing"/>;
+    /// never "no text", which a binary blob also gives), asked only for the paths the name checks leave. Never under <c>.neon/</c> (no snapshot
+    /// holds it). The caller passes none when the before snapshot was cut: a path past its cut isn't known to be new.
+    /// </summary>
+    private static List<string> UnnamedNewFiles(List<string> fresh, RalphSnapshotOfFiles before, RalphSnapshotOfFiles after, WorkingDirectory files, GitAccess? git, List<string> named)
+    {
+        var found = new List<string>();
+        foreach (string path in fresh)
+        {
+            if (Skipped(path) || named.Any(n => string.Equals(n, path, StringComparison.Ordinal) || path.StartsWith(n.TrimEnd('/') + "/", StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            bool there = after.Files.TryGetValue(path, out var now) ? now.Length >= 0 : Mark(files, path, withText: false).Length >= 0;
+            if (!there)
+            {
+                continue;
+            }
+
+            if (after.Git || before.Git)
+            {
+                if (git?.Show(before.Head ?? "HEAD", path) is not { Outcome: GitOutcome.Missing })
+                {
+                    continue;
+                }
+            }
+
+            found.Add(path);
+        }
+
+        return found;
     }
 
     /// <summary>Whether <paramref name="path"/> looks like a test file (generic names: a <c>test</c>/<c>tests</c>/<c>spec</c> folder, <c>*Tests.cs</c>, <c>test_*.py</c>, <c>*.test.ts</c>, <c>*_test.go</c>…).</summary>
@@ -310,8 +357,9 @@ public static class RalphChanges
         return (paths, cut);
     }
 
+    /// <summary>A file or a folder (2026-11-22, the session review: a step naming <c>.neon</c> was flagged as naming a missing file).</summary>
     private static bool Exists(WorkingDirectory files, string path) =>
-        files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && File.Exists(full);
+        files.Resolve(path, forWrite: false, out string full) == FileOutcome.Ok && (File.Exists(full) || Directory.Exists(full));
 
     private static string Slash(string path) => path.Replace('\\', '/').TrimStart('/');
 

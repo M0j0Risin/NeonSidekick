@@ -159,6 +159,29 @@ public sealed class PathPoliceTests
         Assert.Equal("\"'`(),;=<>|&[]{}", PathPolice.Delimiters);
     }
 
+    /// <summary>
+    /// Python's colon after <c>as</c>, <c>lambda</c>, <c>if</c>, <c>elif</c> and <c>while</c> in a <c>python -c</c> line is no drive (2026-11-22, the
+    /// session review: <c>except Exception as e:</c> was refused as drive <c>e:</c>, twice).
+    /// </summary>
+    [WindowsTheory]
+    [InlineData("python -c \"try: x()\nexcept Exception as e: print(e)\"")]
+    [InlineData("python -c \"with open('a.txt') as f: print(f.read())\"")]
+    [InlineData("python -c \"f = lambda x: x * 2; print(f(3))\"")]
+    [InlineData("python -c \"a = 1\nif a: print(a)\"")]
+    [InlineData("python -c \"a = 0\nif a: pass\nelif b: print(b)\"")]
+    [InlineData("python -c \"n = 3\nwhile n: n -= 1\"")]
+    [InlineData("python -c \"except E AS e: pass\"")]   // any case
+    public void APythonColon_AfterItsKeyword_IsNoDrive(string command) => Assert.Null(Command(command));
+
+    /// <summary>A real bare drive is still refused: after any other word, and after <c>in</c> (cmd's <c>for … in (e:)</c>).</summary>
+    [WindowsTheory]
+    [InlineData("dir e:", "e:")]
+    [InlineData("copy a.txt e:", "e:")]
+    [InlineData("for /d %x in (e:) do dir %x", "e:")]
+    [InlineData("python -c \"d = {k: 1}\"", "k:")]   // a dict key: no keyword before it, judged as a drive (the price, pinned)
+    [InlineData("python -c \"x = 1\" as e:secret.txt", "e:secret.txt")]   // a drive-relative path after "as" is still a path
+    public void ABareDrive_AfterAnyOtherWord_IsStillRefused(string command, string token) => Assert.Equal(token, Command(command));
+
     // ---- 2026-10-03: paths inside a token, bare drives, bare cd, quoted paths with a space, cd earlier in the line, links ----
 
     [WindowsTheory]

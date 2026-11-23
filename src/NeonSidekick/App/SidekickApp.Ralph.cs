@@ -49,15 +49,20 @@ public sealed partial class SidekickApp
     }
 
     /// <summary>The next line the headless loop sends without reading stdin: its text, its echo and its pictures.</summary>
-    private sealed record HeadlessNext(string Text, string Echo, IReadOnlyList<ImageAttachment> Images);
+    /// <remarks><paramref name="Fresh"/> false (2026-11-22, the nudge after a pass that called no finish_step) sends it in the pass's conversation.</remarks>
+    private sealed record HeadlessNext(string Text, string Echo, IReadOnlyList<ImageAttachment> Images, bool Fresh = true);
 
     /// <summary>
     /// The headless judge's host: notices into a list printed after, the check run straight (its timeout the snapshot's, as the screen's: 2026-10-19,
     /// the second review, it read the live setting), the review the screen's reviewers; the loop's own folder and repository.
     /// </summary>
-    private sealed class HeadlessRalphHost(SidekickApp app, HeadlessRalph ralph, HeadlessRalphContext context, List<string> notices) : IRalphHost
+    private sealed class HeadlessRalphHost(SidekickApp app, HeadlessRalph ralph, HeadlessRalphContext context, List<string> notices, Audits.AuditSession? audit) : IRalphHost
     {
         public WorkingDirectory Files => ralph.Files;
+
+        /// <summary>Through the run's audit session when there is one (it may hold the report), else the file alone (2026-11-22).</summary>
+        public string? SaveAuditReport(string path, Audits.AuditReport report, DateTimeOffset now) =>
+            audit is not null ? audit.Save(path, report, now, Files) : Audits.AuditFiles.Save(Files, path, report, now);
 
         public GitAccess? Git => ralph.Git;
 
@@ -98,7 +103,7 @@ public sealed partial class SidekickApp
             return await context.Verifier.RunAsync(command, shell, workdir, TimeSpan.FromSeconds(ralph.Loop.Snapshot.CheckTimeoutSeconds), cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken)
+        public async Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, string appCheck, CancellationToken cancellationToken)
         {
             var effective = app.EffectiveSettings;
             // An advisor review Advisor confirm keeps from its advisors falls back to the model, said once a loop (2026-11-20, the mcp-ask
@@ -111,7 +116,7 @@ public sealed partial class SidekickApp
                 notices.Add(RalphText.HeadlessReviewConfirmFallbackNotice);
             }
 
-            string request = RalphReviewers.Request(step, report, delta, context.Session.ContextLength?.Tokens ?? 0);
+            string request = RalphReviewers.Request(step, report, delta, context.Session.ContextLength?.Tokens ?? 0, appCheck);
             if (byAdvisor && effective.AdvisorConfirm)
             {
                 // By advisor only through --allow advisor (2026-11-19): the review calls past the confirm, so it writes the allowance's line itself.
@@ -446,7 +451,7 @@ public sealed partial class SidekickApp
         RalphLog.SetHead(files, path, RalphStart.Head(snapshot, _time.GetLocalNow()));
         if (stored is null
             && PlanFit.Problems(body, new PlanChecks(verify, final), snapshot.Reviewer != RalphReviewer.Off,
-                RalphText.InlineLimit((context.Session.ContextLength?.Tokens ?? 0) * Llm.ConversationCompactor.CharsPerToken)) is { Count: > 0 } problems)
+                RalphText.InlineLimit((context.Session.ContextLength?.Tokens ?? 0) * Llm.ConversationCompactor.CharsPerToken), Audits.AuditTicks.OpenIdsOfPlan(files, path)) is { Count: > 0 } problems)
         {
             await HeadlessNoticeLineAsync("[notice] " + RalphText.FitNotice(problems)).ConfigureAwait(false);
         }
@@ -534,7 +539,7 @@ public sealed partial class SidekickApp
             {
                 // The screen's final check (RalphStart.FinalCheckAsync), its lines said after.
                 var said = new List<string>();
-                var stop = await RalphStart.FinalCheckAsync(new HeadlessRalphHost(this, ralph, context, said), loop, cancellationToken).ConfigureAwait(false);
+                var stop = await RalphStart.FinalCheckAsync(new HeadlessRalphHost(this, ralph, context, said, state.Audit), loop, cancellationToken).ConfigureAwait(false);
                 foreach (string line in said)
                 {
                     await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
@@ -600,8 +605,17 @@ public sealed partial class SidekickApp
         var ralph = state.Ralph!;
         var loop = ralph.Loop;
         var files = ralph.Files;
+        // A pass that ended on its own without finish_step (2026-11-22, the screen's twin): asked once to report, in the pass's own conversation and
+        // row, judged once after that turn (the loop stays in its pass).
+        if (loop.Report is null && !turn.Cancelled && (!turn.Failed || turn.Failure == Llm.TurnFailure.ToolCap) && loop.TakeNudge())
+        {
+            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, $"ralph: pass {loop.Pass} nudged: no finish_step");
+            state.Next = new HeadlessNext(RalphText.NudgeMessage, RalphText.NudgeLine(loop.Pass), [], Fresh: false);
+            return;
+        }
+
         var notices = new List<string>();
-        var host = new HeadlessRalphHost(this, ralph, state.RalphContext!, notices);
+        var host = new HeadlessRalphHost(this, ralph, state.RalphContext!, notices, state.Audit);
         RalphStop? stop;
         try
         {
@@ -662,6 +676,14 @@ public sealed partial class SidekickApp
             await HeadlessNoticeLineAsync("[notice] " + text.Trim()).ConfigureAwait(false);
         }
 
+        if (stop != RalphStop.Locked)
+        {
+            foreach (string line in HeadlessSyncAuditTicks(state, files, loop.Snapshot.Path))
+            {
+                await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
+            }
+        }
+
         // A loop that ended short of done is a failed run (2026-11-21, #41); a stop the user made (Ctrl+C, a typed line) is not. Its stop names
         // the line in place of what a pass before it noted (2026-11-22, the review's #97), in the summary's words, never the enum's (#64).
         if (stop is not (RalphStop.Done or RalphStop.Paused or RalphStop.Stopped or RalphStop.UserStopped))
@@ -677,6 +699,26 @@ public sealed partial class SidekickApp
         {
             paused.Paused = true;
         }
+
+        // The line after the loop starts a new session (2026-11-22, the user's call), but not after a typed line paused it, nor after a loop that ran
+        // no pass this run (the user's own conversation).
+        state.FreshNext = stop is not RalphStop.Paused && loop.PassesThisRun > 0;
+    }
+
+    /// <summary>
+    /// A fix plan's findings brought in step with its steps (2026-11-22, <see cref="Audits.AuditTicks.Sync"/>), saved through the run's audit when there
+    /// is one; the lines to say (a refusal among them).
+    /// </summary>
+    private List<string> HeadlessSyncAuditTicks(HeadlessPlanState state, WorkingDirectory files, string planPath)
+    {
+        var audit = state.Audit;
+        var outcome = Audits.AuditTicks.Sync(files, planPath, (p, r) => audit is not null ? audit.Save(p, r, _time.GetLocalNow(), files) : Audits.AuditFiles.Save(files, p, r, _time.GetLocalNow()));
+        foreach (string line in outcome.Logs)
+        {
+            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, line);
+        }
+
+        return [.. outcome.Notices, .. outcome.Refusal is { } refusal ? [refusal] : Array.Empty<string>()];
     }
 
     /// <summary>

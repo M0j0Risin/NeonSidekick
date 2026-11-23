@@ -24,8 +24,17 @@ internal interface IRalphHost
     /// <summary>A check run (Esc and the page's Stop cancel it: <see cref="RalphCheckKind.Cancelled"/>); null when it could not run.</summary>
     Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken);
 
-    /// <summary>The review's verdict; null when it was stopped.</summary>
-    Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken);
+    /// <summary>
+    /// A code audit's report saved (2026-11-22, a fix plan's findings ticked as its steps stand): through the screen's or headless's
+    /// <see cref="Audits.AuditSession.Save"/>, which keeps the stamp of a lock this session holds; null when saved, else why not.
+    /// </summary>
+    string? SaveAuditReport(string path, Audits.AuditReport report, DateTimeOffset now);
+
+    /// <summary>
+    /// The review's verdict; null when it was stopped. <paramref name="appCheck"/> is the line on the check the app ran itself
+    /// (<see cref="RalphText.AppCheckLine"/> or <see cref="RalphText.NoAppCheckLine"/>, 2026-11-22), a fact for the reviewer.
+    /// </summary>
+    Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, string appCheck, CancellationToken cancellationToken);
 
     /// <summary>
     /// Whether the by-hand question can be put to anyone now (2026-10-22, a review: headless asked nobody, yet a by-hand step's check and review ran
@@ -228,6 +237,7 @@ internal static class RalphJudge
                     break;
                 }
 
+                string appCheck = RalphText.NoAppCheckLine;
                 if (snapshot.StepCheck is { } verify)
                 {
                     var result = await host.CheckAsync(verify, ShellOf(snapshot), RalphText.CheckLabel(verify), cancellationToken).ConfigureAwait(false);
@@ -270,6 +280,9 @@ internal static class RalphJudge
                         loop.PendingNotes = RalphText.CheckFailedNote(verify, RalphLog.CleanTail(tail ?? ""));
                         break;
                     }
+
+                    // Only a passed check reaches the review (2026-11-22, the session review: the reviewer saw only the model's claims).
+                    appCheck = RalphText.AppCheckLine(verify, result.Word, result.Elapsed);
                 }
 
                 // A step only a person can check is asked of the user after its review (2026-10-21, the plan at
@@ -278,7 +291,7 @@ internal static class RalphJudge
                 string? needsUserReason = null;
                 if (snapshot.Reviewer != RalphReviewer.Off)
                 {
-                    var reviewed = await host.ReviewAsync(loop, step, report, delta, cancellationToken).ConfigureAwait(false);
+                    var reviewed = await host.ReviewAsync(loop, step, report, delta, appCheck, cancellationToken).ConfigureAwait(false);
                     if (reviewed is not { } verdict || cancellationToken.IsCancellationRequested)
                     {
                         // Esc under the review stops the loop, the step unticked.
@@ -375,9 +388,39 @@ internal static class RalphJudge
         }
 
         PlanStep? parentTicked = stands ? TickParent(host, path, target) : null;
+        if (stands)
+        {
+            // A fix plan's findings the step closes, ticked in the report (2026-11-22, the session review), the parent's too when it was ticked.
+            SayTicks(host, Audits.AuditTicks.Tick(host.Files, path, parentTicked is null ? [target] : [target, parentTicked], (p, r) => host.SaveAuditReport(p, r, time.GetLocalNow())));
+        }
+
         MarkProgress(host.Files, path, requirement, time);
         return new RalphJudged(new RalphPassFacts(stands, checkFailed, delta.Changed.Count > 0, split, failed, false, delta.Changed, removed, HandCheck: handCheck, Waited: handWaited),
             check, tail, review, delta.Flags, delta.Diff, target, parentTicked, ByHand: byHandAnswer);
+    }
+
+    /// <summary>
+    /// What ticking a fix plan's findings came to, said through <paramref name="host"/>: the notices, a refusal (the host has no warning channel: a
+    /// notice too; the loop's end syncs again) and the log lines.
+    /// </summary>
+    public static void SayTicks(IRalphHost host, Audits.AuditTickOutcome outcome)
+    {
+        ArgumentNullException.ThrowIfNull(host);
+        ArgumentNullException.ThrowIfNull(outcome);
+        foreach (string notice in outcome.Notices)
+        {
+            host.Notice(notice);
+        }
+
+        if (outcome.Refusal is { } refusal)
+        {
+            host.Notice(refusal);
+        }
+
+        foreach (string line in outcome.Logs)
+        {
+            host.Log(line);
+        }
     }
 
     /// <summary>

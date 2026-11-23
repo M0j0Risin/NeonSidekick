@@ -383,4 +383,64 @@ public sealed class RalphChangesTests : IDisposable
         Assert.Equal(["a.txt", "new/b.txt"], delta.Changed);
         Assert.Equal("", delta.Diff);
     }
+
+    /// <summary>A folder the step names is there, not a missing file (2026-11-22, the session review: a step naming `.neon` was flagged).</summary>
+    [Fact]
+    public void ANamedFolder_IsNotMissing()
+    {
+        var (files, git, root) = Repo();
+        Directory.CreateDirectory(Path.Combine(root, ".neon"));
+        Directory.CreateDirectory(Path.Combine(root, "docs"));
+        var before = RalphChanges.Snapshot(files, git);
+
+        var delta = RalphChanges.Delta(before, RalphChanges.Snapshot(files, git), files, git, [".neon", "docs/", "app.cs", "gone/"]);
+
+        Assert.Equal(["gone/"], delta.NamedMissing);
+    }
+
+    /// <summary>
+    /// The new files the step doesn't name are a flag (2026-11-22, the session review: a pass's scratch file outlived the loop): never a named one, one
+    /// under a named folder or under .neon; never a tracked file the pass first edited (a repository's snapshot holds only dirty files), a binary one
+    /// either.
+    /// </summary>
+    [Fact]
+    public void InARepository_NewFilesTheStepDoesntName_AreFlagged()
+    {
+        var (files, git, root) = Repo();
+        GitAccessTests.CommitFile(Path.Combine(_dir, "repo"), "logo.bin", "\0\0image", "a binary");
+        var before = RalphChanges.Snapshot(files, git);
+
+        Write(root, "app.cs", "one\nTWO\n");              // tracked, clean before: in neither snapshot until now
+        Write(root, "logo.bin", "\0\0image two");          // tracked binary
+        Write(root, "named.txt", "the step's");
+        Write(root, "src/made.cs", "under a named folder");
+        Write(root, "plain_check.txt", "scratch");
+        Write(root, ".neon/notes.md", "the app's");
+        var delta = RalphChanges.Delta(before, RalphChanges.Snapshot(files, git), files, git, ["named.txt", "src/"]);
+
+        Assert.Equal(["plain_check.txt"], delta.UnnamedNew);
+        Assert.Contains(RalphText.FlagUnnamedNew(["plain_check.txt"]), delta.Flags);
+
+        // A file made and deleted again in the pass is no leftover.
+        File.Delete(Path.Combine(root, "plain_check.txt"));
+        Write(root, "other.txt", "x");
+        Assert.Equal(["other.txt"], RalphChanges.Delta(before, RalphChanges.Snapshot(files, git), files, git, ["named.txt", "src/"]).UnnamedNew);
+    }
+
+    /// <summary>Outside a repository a file the snapshot before didn't hold is new; past a cut nothing is known to be new, so nothing is flagged.</summary>
+    [Fact]
+    public void APlainFolder_FlagsANewUnnamedFile_ButNeverPastACut()
+    {
+        string root = Path.Combine(_dir, "plain");
+        Directory.CreateDirectory(root);
+        Write(root, "a.txt", "one");
+        var files = new WorkingDirectory(() => root, _time);
+        var before = RalphChanges.Snapshot(files, null);
+        Write(root, "a.txt", "one more");
+        Write(root, "scratch.py", "print(1)");
+        var after = RalphChanges.Snapshot(files, null);
+
+        Assert.Equal(["scratch.py"], RalphChanges.Delta(before, after, files, null, []).UnnamedNew);
+        Assert.Empty(RalphChanges.Delta(before with { Cut = true }, after, files, null, []).UnnamedNew!);
+    }
 }

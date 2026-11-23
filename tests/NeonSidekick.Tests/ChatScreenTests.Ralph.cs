@@ -22,11 +22,11 @@ public partial class ChatScreenTests
     private const string RalphVerify = "dotnet build";
 
     /// <summary>The add-guide plan with <paramref name="body"/>'s steps and its checks, on disk before the run.</summary>
-    private void RalphPlan(string body = RalphSteps, string? verify = RalphVerify, string? final = null, PlanStatus status = PlanStatus.Incomplete)
+    private void RalphPlan(string body = RalphSteps, string? verify = RalphVerify, string? final = null, PlanStatus status = PlanStatus.Incomplete, string requirement = "Add a guide")
     {
         Directory.CreateDirectory(PlansFolder);
         var at = new DateTimeOffset(2026, 9, 20, 9, 0, 0, TimeSpan.Zero);
-        File.WriteAllText(PlanFile, PlanDocument.Render(new PlanHeader(status, 2, at, at, "Add a guide", Verify: verify, Final: final), "Guide", body));
+        File.WriteAllText(PlanFile, PlanDocument.Render(new PlanHeader(status, 2, at, at, requirement, Verify: verify, Final: final), "Guide", body));
     }
 
     /// <summary>
@@ -668,6 +668,8 @@ public partial class ChatScreenTests
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Contains(RalphText.StopNotice(RalphStop.Paused, PlanPath, 1, 2), output);
         Assert.Equal("how is it going?", LastUserText(_chat.Requests[2]));
+        Assert.Contains(_chat.Requests[2], m => m.Text == "Pass 1 over.");   // a paused loop keeps the pass's conversation (2026-11-22)
+        Assert.DoesNotContain(ChatScreen.NewConversationNotice, output);
         Assert.DoesNotContain(FinishStepTool.ToolName, OfferedNames(_chat.Options[2]));
         Assert.Contains("- [x] One", RalphPlanText);
     }
@@ -1167,6 +1169,8 @@ public partial class ChatScreenTests
         Assert.Contains(RalphText.StopNotice(RalphStop.Stopped, PlanPath, 0, 2), output);
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("what are you changing", _chat.Requests[1][^1].Text);
+        // The spoken request runs in the pass's conversation, as a typed line does (2026-11-22): the pass's message is still there.
+        Assert.Contains(_chat.Requests[1], m => m.Role == ChatRole.User && m.Text == LastUserText(_chat.Requests[0]));
         Assert.DoesNotContain(_chat.Requests[1], m => m.Text.Contains("RALPH LOOP PASS", StringComparison.Ordinal));
         Assert.Equal([RalphVerify], _ralphVerifier.Commands);   // the stopped pass checked nothing
         Assert.Contains("- [ ] One", RalphPlanText);

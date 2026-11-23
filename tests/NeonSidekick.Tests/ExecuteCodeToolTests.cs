@@ -303,6 +303,17 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.EndsWith("\nünïcode", result);
     }
 
+    /// <summary>A script imports a module in the working folder (2026-11-22, the session review: its own folder was the run folder, so it could not).</summary>
+    [InterpreterFact("python")]
+    public async Task Python_Script_ImportsAModule_FromItsWorkingDirectory()
+    {
+        File.WriteAllText(Path.Combine(_root, "hello_mod.py"), "def greet():\n    return 'hi from the module'\n");
+        string result = await Invoke(("language", "python"), ("code", "import hello_mod\nprint(hello_mod.greet())"));
+
+        Assert.StartsWith("exit 0 in ", result);
+        Assert.EndsWith("\nhi from the module", result);
+    }
+
     [InterpreterFact("node")]
     public async Task Node_Script_RunsOnItsOwn_AndReadsItsWorkingDirectory()
     {
@@ -333,7 +344,10 @@ public sealed class ExecuteCodeToolTests : IDisposable
         Assert.Equal(@"D:\files", launch.WorkingDirectory);
         Assert.Equal("python", launch.Kind);
         Assert.Equal("print(1)", launch.Label);
-        Assert.Null(launch.Environment);
+        // The working folder's modules import (2026-11-22, the session review): PYTHONPATH is the working directory; the others set nothing.
+        Assert.Equal(@"D:\files", launch.Environment![ChildEnvironment.PythonPathVariable]);
+        Assert.Null(CodeLaunch.For(CodeLanguage.Node, "node.exe", @"C:\runs\code_1", "script.js", ".", "x").Environment);
+        Assert.Null(CodeLaunch.For(CodeLanguage.PowerShell, "pwsh.exe", @"C:\runs\code_1", "script.ps1", ".", "x").Environment);
         Assert.Equal([@"C:\runs\code_1\script.js"], CodeLaunch.For(CodeLanguage.Node, "node.exe", @"C:\runs\code_1", "script.js", ".", "x").ArgumentList);
         Assert.Equal(["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", @"C:\runs\code_1\script.ps1"], CodeLaunch.For(CodeLanguage.PowerShell, "pwsh.exe", @"C:\runs\code_1", "script.ps1", ".", "x").ArgumentList);
     }
@@ -346,7 +360,8 @@ public sealed class ExecuteCodeToolTests : IDisposable
         var launch = CodeLaunch.For(CodeLanguage.Python, "/usr/bin/python3", "/runs/code_1", "script.py", "/Users/me/files", "print(1)");
         Assert.Equal(["-X", "utf8", "/runs/code_1/script.py"], launch.ArgumentList);
         Assert.Equal("/Users/me/files", launch.WorkingDirectory);
-        Assert.Null(launch.Environment);
+        Assert.Equal("/Users/me/files", launch.Environment![ChildEnvironment.PythonPathVariable]);
+        Assert.Null(CodeLaunch.For(CodeLanguage.Node, "node", "/runs/code_1", "script.js", ".", "x").Environment);
         Assert.Equal(["/runs/code_1/script.js"], CodeLaunch.For(CodeLanguage.Node, "node", "/runs/code_1", "script.js", ".", "x").ArgumentList);
         Assert.Equal(["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "/runs/code_1/script.ps1"], CodeLaunch.For(CodeLanguage.PowerShell, "pwsh", "/runs/code_1", "script.ps1", ".", "x").ArgumentList);
     }

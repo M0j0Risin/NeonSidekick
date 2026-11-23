@@ -355,7 +355,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/plan ralph [<name>] [passes]` | Runs a plan as a Ralph loop, a step a pass, each checked before it stands; alone, it resumes a paused loop, else lists the plans. See [Ralph loop](#ralph-loop). |
 | `/code-audit [model\|advisor\|any\|confirm] [<passes>] [diff\|staged\|branch [<base>]\|<path> ...] [<focus> ...] [--] [<brief>]` | Audits the code in read-only passes until passes in a row find nothing new, into a report under `.neon/audits/`. See [Code audit](#code-audit). |
 | `/code-audit open [<name>]` | Lists the reports, or shows one. |
-| `/code-audit fix [<name>]` | Starts plan mode on a report's open findings (the newest report without a name). |
+| `/code-audit fix [<name>]` | Starts plan mode on a report's open findings (the newest report without a name). Each step names the findings it closes, and the app ticks them as steps pass. |
 | `/code-audit resume [<name>] [model\|advisor\|any\|confirm] [<passes>]` | Runs more passes on a kept report (the newest without a name). |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
@@ -400,7 +400,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 ### Ralph loop
 
-`/plan ralph <name>` carries out a plan a step at a time, each step a pass in a fresh conversation, tied together by the plan file and a log. **Approve & Ralph loop**, `/plan approve --ralph` and the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once (typing `/plan approve --ralph` too), its checks named.
+`/plan ralph <name>` carries out a plan a step at a time, each step a pass in a fresh conversation, tied together by the plan file and a log; when it ends, the next message starts a new conversation (a typed line that paused it stays in the pass's). **Approve & Ralph loop**, `/plan approve --ralph` and the `/plan open` list start one too. It needs *LLM offer tools*; you confirm it once (typing `/plan approve --ralph` too), its checks named.
 
 Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
@@ -435,7 +435,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
 ### Code audit
 
-`/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply. Settings: `/settings` › [Automation](SETTINGS.md#automation).
+`/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It starts in a new conversation. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply. Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
 * **Scope:** the working directory or a path (quoted if it has a blank); `diff` (unstaged, staged and untracked changes), `staged`, or `branch [<base>]` (commits since `main`, else `master`). Past 5,000 files the list is cut, and the start says so.
   * **Left out:** git-ignored files (outside a repository, `bin`, `obj`, `node_modules`, `dist` and the like); minified, map and lock files, generated C# and `vendor/` unless a named path holds them; secret-looking files (`.env`, keys, certificates) always. `.neon/` is refused.
@@ -458,7 +458,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
   * A server failure is tried once more; a pass that ends without `present_audit` is asked for it once.
   * A stop you didn't cause, a failed pass or a working directory change rings *Code audit stop tone*.
 * **The pane** shows the open findings and its choices, on the Web UI page too ([keys](INTERFACE.md#pane-keys)):
-  * **Fix via plan:** plan mode on the open findings, the report marked `fixing`. **More passes…:** the reviewer page when advisors are offered.
+  * **Fix via plan:** plan mode on the open findings, the report marked `fixing`; each step names the findings it closes, and the app ticks them as steps pass. **More passes…:** the reviewer page when advisors are offered.
   * **Keep report**, or **Discard report** after a yes (to the Recycle bin or the Trash under *File deletes to Recycle bin*).
 * **Picking up again:** `/code-audit open` lists the reports (`stopped`, `fixing 3/7`, `fixed`…); `fix` and `resume` take the newest without a name, and say which. While `/botchat` runs, forms that start passes are refused (`open` waits for the chat to end).
 * **The audit's lock:** `<name>.lock` beside the report keeps a second Neon Sidekick from starting, resuming, fixing or discarding it while it's audited; there it lists as `running elsewhere`.

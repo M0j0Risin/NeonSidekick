@@ -414,7 +414,7 @@ public static class ToolArguments
     {
         ArgumentNullException.ThrowIfNull(text);
         string trimmed = text.Trim();
-        return trimmed.Length >= 2 && (trimmed[0] == '[' || (objects && trimmed[0] == '{')) ? LooseJson.TryParse(trimmed) : null;
+        return trimmed.Length >= 2 && (trimmed[0] == '[' || (objects && trimmed[0] == '{')) ? LooseJson.TryParse(trimmed, closeOpen: true) : null;
     }
 
     /// <summary>
@@ -522,14 +522,21 @@ public static class ToolArguments
 /// the value, so a well-formed list was refused for the one character after it). Only when what
 /// follows that value is closing brackets and braces (2026-11-15, the tool-arguments review's #39,
 /// #53): <c>["a"] x ["b"]</c> read as <c>["a"]</c> dropped the rest unseen. Every control character
-/// in a string is escaped by <see cref="Normalize"/> (#125). Pure; never throws.
+/// in a string is escaped by <see cref="Normalize"/> (#125). And, asked for (<c>closeOpen</c>, 2026-11-22, the session review: <c>ask_user</c>'s
+/// list ended <c>…"]}</c> without its <c>]</c>, refused four times), a text whose brackets and braces are left open at its end, strings and
+/// escapes respected and no closer mismatched, parsed again with the missing closers added — only when it ends in a value just closed
+/// (<c>]</c> or <c>}</c>), never a string, a <c>,</c> or a <c>:</c>, so a value cut mid-way, or a list cut after a string item, stays refused. Only the list readers ask
+/// (<see cref="ToolArguments.ParseEncodedList"/>, so every list argument: ask_user's questions, patch_file's edits, finish_step's lists and the
+/// others; <c>AskUserTool</c>): an inner list arrives only when the call's outer arguments parsed whole, so the call was finished, not cut off by
+/// the stream, and a missing closer is the model's slip. A table's data and the compactor stay strict, so a cut-off table is never a shorter one.
+/// Pure; never throws.
 /// </summary>
 public static class LooseJson
 {
     private static readonly JsonDocumentOptions Tolerant = new() { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip };
 
     /// <summary>The text as a document — as sent, normalised, or either over its first complete value — or null when nothing parses. The caller disposes it.</summary>
-    public static JsonDocument? TryParse(string text)
+    public static JsonDocument? TryParse(string text, bool closeOpen = false)
     {
         ArgumentNullException.ThrowIfNull(text);
         if ((Parse(text) ?? Parse(Normalize(text))) is { } whole)
@@ -539,12 +546,18 @@ public static class LooseJson
 
         // The first value only when nothing but closing brackets follows it: SGLang's sliced-in "}]}", never a second value or a remark.
         string? first = FirstValue(text);
-        if (first is null || !text.AsSpan(text.AsSpan().IndexOfAny('[', '{') + first.Length).TrimStart(" \t\r\n]}").IsEmpty)
+        if (first is not null && text.AsSpan(text.AsSpan().IndexOfAny('[', '{') + first.Length).TrimStart(" \t\r\n]}").IsEmpty)
         {
-            return null;
+            return Parse(first) ?? Parse(Normalize(first));
         }
 
-        return Parse(first) ?? Parse(Normalize(first));
+        if (closeOpen && MissingClosers(text) is { } closers)
+        {
+            string closed = text.TrimEnd() + closers;
+            return Parse(closed) ?? Parse(Normalize(closed));
+        }
+
+        return null;
 
         static JsonDocument? Parse(string candidate)
         {
@@ -557,6 +570,58 @@ public static class LooseJson
                 return null;
             }
         }
+    }
+
+    /// <summary>
+    /// The closers <paramref name="text"/> leaves open at its end, innermost first (<c>]}</c>), or null: nothing open, a closer that matches no
+    /// opener, a string still open, or a text that doesn't end in a list or an object just closed (<c>]</c>, <c>}</c>).
+    /// </summary>
+    private static string? MissingClosers(string text)
+    {
+        string trimmed = text.TrimEnd();
+        if (trimmed.Length == 0 || trimmed[^1] is not (']' or '}'))
+        {
+            return null;
+        }
+
+        var open = new Stack<char>();
+        char quote = '\0';
+        for (int i = 0; i < trimmed.Length; i++)
+        {
+            char c = trimmed[i];
+            if (quote != '\0')
+            {
+                if (c == '\\')
+                {
+                    i++;
+                }
+                else if (c == quote)
+                {
+                    quote = '\0';
+                }
+
+                continue;
+            }
+
+            switch (c)
+            {
+                case '"' or '\'':
+                    quote = c;
+                    break;
+                case '[' or '{':
+                    open.Push(c);
+                    break;
+                case ']' or '}':
+                    if (open.Count == 0 || open.Pop() != (c == ']' ? '[' : '{'))
+                    {
+                        return null;
+                    }
+
+                    break;
+            }
+        }
+
+        return quote != '\0' || open.Count == 0 ? null : string.Concat(open.Select(o => o == '[' ? ']' : '}'));
     }
 
     /// <summary>A Python-style literal as JSON text (see the class note); text that is JSON already comes back unchanged.</summary>

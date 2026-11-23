@@ -24,7 +24,7 @@ internal sealed partial class ChatScreen
     /// An independent look at a step whose checks stood (<c>Ralph loop reviewer</c>, <see cref="RalphReviewers"/>): the model or the first
     /// advisor, under the watch with a spinner; Esc stops the loop (null).
     /// </summary>
-    private async Task<RalphVerdict?> ReviewRalphStepAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken)
+    private async Task<RalphVerdict?> ReviewRalphStepAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, string appCheck, CancellationToken cancellationToken)
     {
         var effective = _effective();
         var snapshot = loop.Snapshot;
@@ -55,7 +55,7 @@ internal sealed partial class ChatScreen
             byAdvisor = false;
         }
 
-        string request = RalphReviewers.Request(step, report, delta, _session.ContextLength?.Tokens ?? 0);
+        string request = RalphReviewers.Request(step, report, delta, _session.ContextLength?.Tokens ?? 0, appCheck);
         RalphVerdict verdict = RalphVerdict.Unclear();
         long tokens = 0;
         bool stopped = await WaitUnderWatchAsync(async token =>
@@ -90,13 +90,16 @@ internal static class RalphReviewers
     /// <summary>Whether <paramref name="reviewer"/> means an advisor reviews: <c>advisor</c> with one offered, <c>any</c> with one offered.</summary>
     public static bool ByAdvisor(RalphReviewer reviewer, bool advisorOffered) => reviewer is RalphReviewer.Advisor or RalphReviewer.Any && advisorOffered;
 
-    /// <summary>The review's message: the step, its check, the report, the flags, the files and the diff, cut to a quarter of the known window (the diff first).</summary>
-    public static string Request(PlanStep step, FinishReport? report, RalphDelta delta, int contextTokens)
+    /// <summary>
+    /// The review's message: the step, its check, the report, what the app ran itself (<paramref name="appCheck"/>, 2026-11-22), the flags, the files and
+    /// the diff, cut to a quarter of the known window (the diff first).
+    /// </summary>
+    public static string Request(PlanStep step, FinishReport? report, RalphDelta delta, int contextTokens, string? appCheck = null)
     {
         int windowChars = contextTokens * ConversationCompactor.CharsPerToken;
         int room = windowChars > 0 ? Math.Min(RalphChanges.MaxDiffChars, windowChars / 4) : RalphChanges.MaxDiffChars;
         string diff = delta.Diff.Length <= room ? delta.Diff : delta.Diff[..room] + RalphText.ReviewDiffCut;
-        return RalphText.ReviewRequest(step.Text, step.DoneWhen, report?.Summary ?? RalphText.NoReportSummary, report?.Verified ?? [], delta.Flags, delta.Changed, diff, step.ByHand);
+        return RalphText.ReviewRequest(step.Text, step.DoneWhen, report?.Summary ?? RalphText.NoReportSummary, report?.Verified ?? [], delta.Flags, delta.Changed, diff, step.ByHand, appCheck);
     }
 
     /// <summary>The --log line of a review: the verdict in words (<c>needs user</c> since 2026-10-21, never the enum's name), its reason after.</summary>

@@ -262,6 +262,9 @@ public sealed partial class SidekickApp
             await HeadlessNoticeLineAsync("[notice] " + AuditText.CleanLoweredNotice(loop.Limit, loop.CleanAsked)).ConfigureAwait(false);
         }
 
+        // A started audit, new or resumed, runs in a new session (2026-11-22, the user's call): the dispatch takes it before the pass is sent. The pass
+        // meter counts session totals, which a conversation's reset leaves alone.
+        state.FreshNext = true;
         return HeadlessBeginAuditPass(audit, files, loop, meter());
     }
 

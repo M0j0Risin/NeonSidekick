@@ -74,7 +74,8 @@ public static partial class RalphReview
             var m = VerdictLine().Match(lines[i]);
             if (m.Success && Kind(m.Groups[1].Value) is { } kind)
             {
-                string reason = m.Groups[2].Value.Trim().TrimStart('-', ':', '—', ' ').Trim();
+                // The en dash too (2026-11-22): models write it for the asked em dash.
+                string reason = m.Groups[2].Value.Trim().TrimStart('-', ':', '—', '–', ' ').Trim();
                 return new RalphVerdict(kind, reason.Length > 0 ? reason : Reason(lines, i));
             }
         }
@@ -93,7 +94,46 @@ public static partial class RalphReview
         return RalphVerdict.Unclear();
     }
 
-    private static string Reason(List<string> lines, int verdictAt) => verdictAt > 0 ? lines[verdictAt - 1] : "";
+    /// <summary>
+    /// A verdict's reason when its line gives none: the answer's lead, the first line before the verdict that is no heading, rule or lone bold label,
+    /// its emphasis trimmed (2026-11-22, the session review: the line before the verdict was a reviewer's caveat, "I did not see their output…",
+    /// while both reviewers put the judgment first). "" when there is none.
+    /// </summary>
+    private static string Reason(List<string> lines, int verdictAt)
+    {
+        for (int i = 0; i < verdictAt; i++)
+        {
+            string line = lines[i];
+            if (line.StartsWith('#') || IsRule(line) || IsBoldLabel(line))
+            {
+                continue;
+            }
+
+            string trimmed = line.Trim('*', '_', ' ');
+            if (trimmed.Length > 0)
+            {
+                return trimmed;
+            }
+        }
+
+        return "";
+
+        static bool IsRule(string line) => line.Length >= 3 && line.All(c => c is '-' or '*' or '_' or ' ');
+
+        // A label (**Review**, **Assessment:**) is a few words with no sentence end; a bold sentence is a lead.
+        static bool IsBoldLabel(string line)
+        {
+            string bare = line.TrimEnd(':');
+            if (bare.Length <= 4 || !bare.StartsWith("**", StringComparison.Ordinal) || !bare.EndsWith("**", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            string inner = bare[2..^2].Trim().TrimEnd(':');
+            return inner.Length > 0 && !inner.Contains("**", StringComparison.Ordinal) && inner[^1] is not ('.' or '!' or '?')
+                && inner.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length <= 4;
+        }
+    }
 
     private static RalphVerdictKind? Kind(string? word) => word?.Trim().ToLowerInvariant() switch
     {

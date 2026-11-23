@@ -33,6 +33,26 @@ public sealed class RalphReviewTests
         Assert.Equal(reason, verdict.Reason);
     }
 
+    /// <summary>
+    /// A verdict line with no reason takes the answer's lead, never the caveat before the verdict (2026-11-22, the session review: "I did not see their
+    /// output…" was a passed step's reason); a heading, a rule or a lone bold label is skipped; an inline reason after any dash reads bare.
+    /// </summary>
+    [Theory]
+    [InlineData("The README links the guide and the build passes.\n\nThe diff touches only README.md.\n\nI did not see their output myself.\nverdict: pass", "The README links the guide and the build passes.")]
+    [InlineData("## Review\n**The step is done.**\nverdict: pass", "The step is done.")]
+    [InlineData("**Review**\n---\nThe heading is there.\nPASS", "The heading is there.")]
+    [InlineData("verdict: pass — why", "why")]
+    [InlineData("verdict: pass – why", "why")]
+    [InlineData("verdict: pass - why", "why")]
+    [InlineData("verdict: pass", "")]
+    public void AReasonlessVerdict_TakesTheAnswersLead(string text, string reason)
+    {
+        var verdict = RalphReview.FromText(text);
+
+        Assert.Equal(RalphVerdictKind.Pass, verdict.Kind);
+        Assert.Equal(reason, verdict.Reason);
+    }
+
     [Theory]
     [InlineData("needs_user")]
     [InlineData("needs user")]

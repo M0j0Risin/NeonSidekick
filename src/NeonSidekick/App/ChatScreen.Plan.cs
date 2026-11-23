@@ -734,8 +734,11 @@ internal sealed partial class ChatScreen
     private string PlanCheckLine(PlanPresentation plan)
     {
         var effective = _effective();
-        var checks = plan.Checks ?? (PlanFiles.ReadWhole(_files, plan.Path) is { } text && PlanDocument.TryParse(text) is { } header ? new PlanChecks(header.Verify, header.Final) : null);
-        var shape = PlanFit.Shape(plan.Markdown, RalphInlineLimit(), out int byHand);
+        var header = PlanFiles.ReadWhole(_files, plan.Path) is { } text ? PlanDocument.TryParse(text) : null;
+        var checks = plan.Checks ?? (header is not null ? new PlanChecks(header.Verify, header.Final) : null);
+        // A fix plan's open findings no step closes (2026-11-22): its requirement the session's, else the file's.
+        var open = Audits.AuditTicks.OpenIds(_files, _plan.Requirement is { Length: > 0 } requirement ? requirement : header?.Requirement);
+        var shape = PlanFit.Shape(plan.Markdown, RalphInlineLimit(), out int byHand, open);
         return RalphText.PaneCheckLine(checks, RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, Shell.CommandPolicy.Resolve(effective) == Shell.CommandPolicyMode.Ask,
             shape, byHand);
     }
@@ -1736,6 +1739,13 @@ internal sealed partial class ChatScreen
 
             _transcript.Notice(PlanText.DoneNotice(path));
             _transcript.Notice(PlanText.ComesTogetherNotice);   // 2026-10-17, the user's ask: its own line, right after the done line
+            // A fix plan carried out by Approve (2026-11-22): the resume that checks it held, then its findings ticked (no loop judged its steps).
+            if (Audits.AuditTicks.ReauditHintFor(_files, header?.Requirement) is { } hint)
+            {
+                _transcript.Notice(hint);
+            }
+
+            SyncAuditTicks(_files, path);
             _executingPlan = null;
             _executingShown = null;
             SavePlanState();

@@ -195,7 +195,7 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        var problems = PlanFit.Shape(body, RalphInlineLimit(), out int byHand);
+        var problems = PlanFit.Shape(body, RalphInlineLimit(), out int byHand, Audits.AuditTicks.OpenIds(_files, header?.Requirement));
         string checks = RalphText.PaneCheckLine(header is null ? null : new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask,
             byHand: byHand);
         string question = header is null or { Status: PlanStatus.Draft } ? RalphText.ConfirmDraftQuestion(path, checks, problems) : RalphText.ConfirmQuestion(path, checks, problems);
@@ -363,7 +363,7 @@ internal sealed partial class ChatScreen
         if (!checksShown && (header?.Verify is { Length: > 0 } || header?.Final is { Length: > 0 }))
         {
             var effective = _effective();
-            var problems = PlanFit.Shape(body, RalphInlineLimit(), out int byHand);
+            var problems = PlanFit.Shape(body, RalphInlineLimit(), out int byHand, Audits.AuditTicks.OpenIds(_files, header.Requirement));
             string checks = RalphText.PaneCheckLine(new PlanChecks(header.Verify, header.Final), RalphReviewerMode.Resolve(effective), effective.RalphLoopTokenBudget, CommandPolicy.Resolve(effective) == CommandPolicyMode.Ask,
                 byHand: byHand);
             if (!await RalphConfirmAsync(RalphText.ConfirmQuestion(path, checks, problems), cancellationToken).ConfigureAwait(false))
@@ -394,14 +394,25 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        if (!resume && !fitAsked
-            && PlanFit.Problems(body, new PlanChecks(verify, final), RalphReviewerMode.Resolve(_effective()) != RalphReviewer.Off, RalphInlineLimit()) is { Count: > 0 } problems
-            && !await RalphConfirmAsync(RalphText.FitQuestion(problems), cancellationToken).ConfigureAwait(false))
+        if (!resume && !fitAsked)
         {
-            // The plan stays presented, as on the other refusals: /plan gaps tightens it, /plan approve --ralph asks again.
-            _plan.ClearApproval();
-            _transcript.Notice(RalphText.FitDeclinedNotice);
-            return false;
+            // A fix plan's unclosed findings are a warning (2026-11-22): they join the question another problem raises, and never raise it alone.
+            var fit = PlanFit.Read(body, new PlanChecks(verify, final), RalphReviewerMode.Resolve(_effective()) != RalphReviewer.Off, RalphInlineLimit(), Audits.AuditTicks.OpenIdsOfPlan(_files, path));
+            var problems = fit.Problems;
+            if (problems.Count > (fit.Unclosed is null ? 0 : 1))
+            {
+                if (!await RalphConfirmAsync(RalphText.FitQuestion(problems), cancellationToken).ConfigureAwait(false))
+                {
+                    // The plan stays presented, as on the other refusals: /plan gaps tightens it, /plan approve --ralph asks again.
+                    _plan.ClearApproval();
+                    _transcript.Notice(RalphText.FitDeclinedNotice);
+                    return false;
+                }
+            }
+            else if (fit.Unclosed is { } unclosed)
+            {
+                _transcript.Notice(RalphText.FitNotice([unclosed]));
+            }
         }
 
         // The folder from the lock on (2026-10-19, the second review): everything the loop writes and checks is this one's, whatever the settings say later.
@@ -619,7 +630,7 @@ internal sealed partial class ChatScreen
                         stop = await RalphFinalCheckAsync(loop, cancellationToken).ConfigureAwait(false);
                         break;
                     default:
-                        (exit, stop) = await RalphPassAsync(loop, next, body, steps, PlanDocument.Stamp(text), cancellationToken).ConfigureAwait(false);
+                        (exit, stop) = await RalphPassAsync(loop, next, body, steps, PlanDocument.Stamp(text), () => _queue.Added != typed || PendedCount != pended || _webUi.LinesAdded != sent, cancellationToken).ConfigureAwait(false);
                         if (exit)
                         {
                             stop ??= RalphStop.Stopped;
@@ -678,7 +689,7 @@ internal sealed partial class ChatScreen
     /// One pass on <paramref name="next"/>'s step (or the final fix): the light reset, the directive and the message, the pictures, the snapshot, the
     /// short line, the turn, then the judgment and the log; the loop's verdict.
     /// </summary>
-    private async Task<(bool Exit, RalphStop? Stop)> RalphPassAsync(RalphLoop loop, RalphNext next, string body, IReadOnlyList<PlanStep> steps, string? planStamp, CancellationToken cancellationToken)
+    private async Task<(bool Exit, RalphStop? Stop)> RalphPassAsync(RalphLoop loop, RalphNext next, string body, IReadOnlyList<PlanStep> steps, string? planStamp, Func<bool> userSpoke, CancellationToken cancellationToken)
     {
         var effective = _effective();
         var snapshot = loop.Snapshot;
@@ -750,6 +761,27 @@ internal sealed partial class ChatScreen
             _ralphPass = null;
         }
 
+        // A pass that ended on its own without finish_step (2026-11-22, the session review: a reply of two blank lines was judged "no report"): asked
+        // once, in the same conversation, to report — never after an Esc, a failure, a /exit, or a line the user typed or spoke meanwhile.
+        if (loop.Report is null && !exit && ReferenceEquals(_ralph, loop) && !_lastTurnCancelled && (!_lastTurnFailed || _lastTurnFailure == TurnFailure.ToolCap)
+            && _ralphSpoken is null && !userSpoke() && loop.TakeNudge())
+        {
+            string nudge = RalphText.NudgeLine(loop.Pass);
+            DiagnosticLog.Info(AppCategory, $"ralph: pass {loop.Pass} nudged: no finish_step");
+            _ralphPass = (nudge, RalphText.SessionTitle(snapshot.Title, index, total, loop.Pass));
+            _transcript.User(nudge);
+            _lastTurnCancelled = false;
+            _lastTurnFailed = true;
+            try
+            {
+                exit = await RunMessageAsync(RalphText.NudgeMessage, [], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
+            }
+            finally
+            {
+                _ralphPass = null;
+            }
+        }
+
         if (!ReferenceEquals(_ralph, loop))
         {
             // A pane the pass ended under switched the profile or replaced the conversation (2026-10-19, the review): the loop went with it
@@ -804,8 +836,10 @@ internal sealed partial class ChatScreen
         public Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken) =>
             screen.RunRalphCheckAsync(screen.RalphFiles, command, shell, screen._effective(), label, cancellationToken);
 
-        public Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken) =>
-            screen.ReviewRalphStepAsync(loop, step, report, delta, cancellationToken);
+        public Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, string appCheck, CancellationToken cancellationToken) =>
+            screen.ReviewRalphStepAsync(loop, step, report, delta, appCheck, cancellationToken);
+
+        public string? SaveAuditReport(string path, Audits.AuditReport report, DateTimeOffset now) => screen._audit.Save(path, report, now, screen.RalphFiles);
 
         public bool CanAsk => screen.RalphCanAsk();
 
@@ -953,12 +987,22 @@ internal sealed partial class ChatScreen
     /// <c>write_file</c> overwrote one its conversation never read) — never the queue, plan or audit state, the advisors' links, the picture strip or the
     /// allows.
     /// </summary>
-    private void ResetForPass(int pass, int step, int total, string title)
+    private void ResetForPass(int pass, int step, int total, string title) =>
+        ResetConversationLight(RalphText.Glyph + " " + RalphText.SessionTitle(title, step, total, pass));
+
+    /// <summary>
+    /// The light reset (2026-11-22, the session review: a loop's end left the last pass's history and session row live, so audits, plans and chat
+    /// landed in sessions titled "Ralph: … pass N"): the rule and <paramref name="notice"/>, the history, the traces, the conversation's usage, the
+    /// session row, the title, the files seen and the conversation's number (a <c>/cmd --bg</c> started before it ends shown, never kept) — never the
+    /// queue, plan or audit state, the advisors' links, the picture strip, the <c>/mark</c> mark or the allows. A pass's start, a loop's end and a code
+    /// audit's start; <c>/new</c> is <see cref="StartNewConversation"/>, which drops the queue and a paused plan too.
+    /// </summary>
+    private void ResetConversationLight(string notice)
     {
         using (_pane.Batch())
         {
             _transcript.Rule();
-            _transcript.Notice(RalphText.Glyph + " " + RalphText.SessionTitle(title, step, total, pass));
+            _transcript.Notice(notice);
         }
 
         _files.ForgetSeen();
@@ -969,6 +1013,30 @@ internal sealed partial class ChatScreen
         _session.Usage.ResetConversation();
         ForgetSessionRow(advisorLinks: false);
         RefreshSessionTitle();
+        _conversation++;
+    }
+
+    /// <summary>
+    /// A fix plan's findings brought in step with its steps at a loop's or a plain execute's end (2026-11-22, <see cref="Audits.AuditTicks.Sync"/>),
+    /// saved through the session's audit (it may hold the report); a refusal is a warning.
+    /// </summary>
+    private void SyncAuditTicks(WorkingDirectory files, string planPath)
+    {
+        var outcome = Audits.AuditTicks.Sync(files, planPath, (p, r) => _audit.Save(p, r, _time.GetLocalNow(), files));
+        foreach (string notice in outcome.Notices)
+        {
+            _transcript.Notice(notice);
+        }
+
+        if (outcome.Refusal is { } refusal)
+        {
+            _transcript.Warning(refusal);
+        }
+
+        foreach (string line in outcome.Logs)
+        {
+            DiagnosticLog.Info(AppCategory, line);
+        }
     }
 
     /// <summary>The loop over: the summary, the stop's notice, the file and the state, the lock let go, then the stop tone for a stop the user did not cause.</summary>
@@ -1001,6 +1069,12 @@ internal sealed partial class ChatScreen
             }
         }
 
+        if (stop != RalphStop.Locked)
+        {
+            // Another instance holds the plan on Locked: its findings are that one's to tick.
+            SyncAuditTicks(files, path);
+        }
+
         if (ended.Forget)
         {
             _executingPlan = null;
@@ -1012,6 +1086,13 @@ internal sealed partial class ChatScreen
 
         SavePlanState();
         DiagnosticLog.Info(AppCategory, $"ralph: stopped {path}: {RalphText.StopWord(stop)} after {loop.PassesThisRun} passes");
+        // The next message starts a new conversation (2026-11-22, the user's call), but a typed line that paused the loop, or the wake phrase's
+        // request, runs in the pass's (it may ask about the work), and a loop that ran no pass this run leaves the user's own chat alone.
+        if (stop != RalphStop.Paused && _ralphSpoken is null && loop.PassesThisRun > 0)
+        {
+            DropUndoNote();
+            ResetConversationLight(NewConversationNotice);
+        }
         if (!RalphStart.UserCaused(stop))
         {
             RingStopTone(_effective().RalphLoopStopTone);

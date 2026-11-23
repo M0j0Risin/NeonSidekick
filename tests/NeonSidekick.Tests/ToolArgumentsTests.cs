@@ -261,6 +261,33 @@ public class ToolArgumentsTests
     }
 
     /// <summary>
+    /// A list whose last closer the model left out (2026-11-22, the session review: <c>ask_user</c>'s questions ended <c>…"]}</c> without the list's
+    /// <c>]</c>, refused four times): closed when the list readers ask, and only after a list or object just closed.
+    /// </summary>
+    [Fact]
+    public void TryReadObjectList_ClosesAListLeftOpen_AfterAClosedObject()
+    {
+        const string sent = "[{\"question\": \"A?\", \"options\": [\"a\", \"b\"]}, {\"question\": \"B?\", \"options\": [\"c\"]}, {\"question\": \"C?\", \"options\": [\"d\", \"e\"]}";
+        Assert.True(ToolArguments.TryReadObjectList(Args(sent), "x", out var objects, out _));
+        Assert.Equal(3, objects.Count);
+        Assert.Equal("C?", objects[2].GetProperty("question").GetString());
+
+        // Only when asked: the strict reading still refuses it.
+        Assert.Null(LooseJson.TryParse(sent));
+        using (var closed = LooseJson.TryParse(sent, closeOpen: true))
+        {
+            Assert.Equal(3, closed!.RootElement.GetArrayLength());
+        }
+
+        // A mismatched closer, a string cut off, a text ending in a comma or a colon, or a list cut after a string item: nothing is invented.
+        Assert.Null(LooseJson.TryParse("[{\"q\": \"A?\"}}", closeOpen: true));
+        Assert.Null(LooseJson.TryParse("[{\"q\": \"A?", closeOpen: true));
+        Assert.Null(LooseJson.TryParse("[{\"q\": \"A?\"},", closeOpen: true));
+        Assert.Null(LooseJson.TryParse("[{\"q\":", closeOpen: true));
+        Assert.Null(LooseJson.TryParse("[\"a\", \"b\"", closeOpen: true));
+    }
+
+    /// <summary>
     /// A list of strings written as text (2026-11-15, the tool-arguments review's #39, #92): a second list after the first is one odd string,
     /// never the first alone; a lone backslash in a Windows path is read as a backslash; a string's escaped quotes stay quotes.
     /// </summary>

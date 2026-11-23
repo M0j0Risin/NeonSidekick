@@ -301,6 +301,65 @@ public static class AuditFiles
     }
 
     /// <summary>
+    /// <paramref name="ticks"/> applied to the report at <paramref name="path"/> under its lock (2026-11-22, the session review: no app code ever
+    /// settled a finding): each finding's box set as its tick says, the tick's note added under it, then saved through <paramref name="save"/>
+    /// (the session's <see cref="AuditSession.Save"/> where one may hold the report; null when saved, else why not). A tick whose finding is already
+    /// as it says, is unknown, retracted, or fails its <see cref="AuditTick.When"/> changes nothing; a sync that changes nothing writes nothing.
+    /// Null with <paramref name="refusal"/> when another NeonSidekick holds the report, or the save failed; null with no refusal when the report
+    /// can't be read.
+    /// </summary>
+    public static AuditSettled? Settle(WorkingDirectory files, string path, IReadOnlyList<AuditTick> ticks, Func<string, AuditReport, string?> save, out string? refusal)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(ticks);
+        ArgumentNullException.ThrowIfNull(save);
+        AuditSettled? settled = null;
+        string? failed = null;
+        bool ran = WithLock(files, path, () =>
+        {
+            if (Read(files, path) is not { } report)
+            {
+                return;
+            }
+
+            var ticked = new List<string>();
+            var unticked = new List<string>();
+            var skipped = new List<string>();
+            foreach (var tick in ticks)
+            {
+                int at = report.Findings.FindIndex(f => string.Equals(f.Id, tick.Id, StringComparison.OrdinalIgnoreCase));
+                if (at < 0 || report.Findings[at].Retracted)
+                {
+                    skipped.Add(tick.Id);
+                    continue;
+                }
+
+                var finding = report.Findings[at];
+                if (finding.Settled == tick.Settled || (tick.When is { } when && !when(finding)))
+                {
+                    continue;
+                }
+
+                report.Findings[at] = finding with { Settled = tick.Settled, Notes = [.. finding.Notes, tick.Note] };
+                (tick.Settled ? ticked : unticked).Add(finding.Id);
+            }
+
+            if (ticked.Count + unticked.Count > 0)
+            {
+                failed = save(path, report);
+            }
+
+            settled = failed is null ? new AuditSettled(ticked, unticked, skipped, report) : null;
+        }, out refusal);
+        if (ran && failed is not null)
+        {
+            refusal = failed;
+        }
+
+        return settled;
+    }
+
+    /// <summary>
     /// The report a bare <c>/code-audit resume|fix</c> picks: the newest that reads whole and that no other NeonSidekick is auditing (2026-10-30,
     /// review F4: the newest was picked, then refused as running elsewhere, while an older free one stood there). Null with none.
     /// </summary>

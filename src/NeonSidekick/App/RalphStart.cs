@@ -287,6 +287,13 @@ internal static class RalphStart
             lines.Add((RalphText.StopNotice(stop, path, counts.Item1, counts.Item2), false));
             lines.Add((PlanText.DoneNotice(path), false));
             lines.Add((PlanText.ComesTogetherNotice, false));
+            // A fix plan done (2026-11-22, the session review): the resume that checks its fixes held, its requirement the file's own (the screen's
+            // argument is the stored plan's, empty after a restart).
+            if (PlanFiles.ReadWhole(files, path) is { } marked && Audits.AuditTicks.ReauditHintFor(files, PlanDocument.TryParse(marked)?.Requirement) is { } hint)
+            {
+                lines.Add((hint, false));
+            }
+
             forget = true;
         }
         else if (stop == RalphStop.PlanGone)

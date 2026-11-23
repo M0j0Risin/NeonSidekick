@@ -128,7 +128,13 @@ public static class ChildEnvironment
         EnvironmentOverrides.BraveApiKeyVariable,
     ];
 
-    /// <summary>Takes out every <see cref="IsWithheld"/> name, applies <see cref="Overrides"/>, then <paramref name="launch"/>'s own variables, to <paramref name="start"/>.</summary>
+    /// <summary>The Python import path a launch may set (<see cref="CodeLaunch.For"/>): put ahead of an inherited one, never in its place.</summary>
+    public const string PythonPathVariable = "PYTHONPATH";
+
+    /// <summary>
+    /// Takes out every <see cref="IsWithheld"/> name, applies <see cref="Overrides"/>, then <paramref name="launch"/>'s own variables, to
+    /// <paramref name="start"/>; a launch's <see cref="PythonPathVariable"/> is joined ahead of an inherited one (2026-11-22).
+    /// </summary>
     public static void Apply(ProcessStartInfo start, ProcessLaunch launch)
     {
         ArgumentNullException.ThrowIfNull(start);
@@ -144,7 +150,10 @@ public static class ChildEnvironment
         {
             foreach (var (name, value) in own)
             {
-                start.Environment[name] = value;
+                start.Environment[name] = string.Equals(name, PythonPathVariable, StringComparison.OrdinalIgnoreCase)
+                    && start.Environment.TryGetValue(name, out string? inherited) && inherited is { Length: > 0 }
+                    ? value + Path.PathSeparator + inherited
+                    : value;
             }
         }
     }

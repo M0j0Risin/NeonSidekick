@@ -268,7 +268,7 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
         }
 
         var sent = property(OptionsArgument) ?? property(ChoicesArgument);
-        using var encoded = sent is { ValueKind: JsonValueKind.String } s && s.GetString() is { } list ? LooseJson.TryParse(list) : null;
+        using var encoded = sent is { ValueKind: JsonValueKind.String } s && s.GetString() is { } list ? LooseJson.TryParse(list, closeOpen: true) : null;
         if (encoded is not null)
         {
             // The list written by hand inside a string: what a server's parser hands over when its own parse failed.

@@ -147,6 +147,13 @@ public static partial class PathPolice
             for (int i = 0; i < tokens.Count; i++)
             {
                 string token = tokens[i];
+                if (i > 0 && IsBareDrive(token) && PythonColonWords.Contains(tokens[i - 1]))
+                {
+                    // Python's except E as e:, lambda x:, if x: in a python -c line (2026-11-22, the session review: refused as drive e:). No
+                    // command passes a drive after these words; cmd's for … in (d:) does, so "in" stays judged.
+                    continue;
+                }
+
                 bool first = !isScript && i == firstArgument;
                 if (folders.Any(folder => IsOutside(token, judging, folder, first, folderArgument: i == cdIndex)))
                 {
@@ -204,7 +211,7 @@ public static partial class PathPolice
         }
 
         // 9. A bare drive in a command line: that drive's own folder, the root's drive alone staying home. Windows only: elsewhere C: is a name.
-        if (!isScript && OperatingSystem.IsWindows() && token.Length == 2 && char.IsAsciiLetter(token[0]) && token[1] == ':')
+        if (!isScript && OperatingSystem.IsWindows() && IsBareDrive(token))
         {
             return !(root.Length >= 2 && root[1] == ':' && char.ToUpperInvariant(root[0]) == char.ToUpperInvariant(token[0]));
         }
@@ -338,6 +345,15 @@ public static partial class PathPolice
         && (token.Length == 2 ? !isScript && shell == ShellKind.Bash : token[2] == '/');
 
     /// <summary>The tokens of <paramref name="text"/>: cut on whitespace and <see cref="Delimiters"/>, trailing punctuation off, the empty ones dropped.</summary>
+    /// <summary>A bare drive, <c>X:</c> (rule 9's shape).</summary>
+    private static bool IsBareDrive(string token) => token.Length == 2 && char.IsAsciiLetter(token[0]) && token[1] == ':';
+
+    /// <summary>
+    /// The Python words a bare <c>X:</c> after which is Python's colon, never a drive (2026-11-22, the session review, the user's yes to all five):
+    /// <c>except E as e:</c>, <c>lambda x:</c>, <c>if x:</c>, <c>elif x:</c>, <c>while n:</c>. Never <c>in</c>: cmd's <c>for /d %x in (d:)</c> names a drive.
+    /// </summary>
+    private static readonly HashSet<string> PythonColonWords = new(["as", "lambda", "if", "elif", "while"], StringComparer.OrdinalIgnoreCase);
+
     public static IReadOnlyList<string> Tokens(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

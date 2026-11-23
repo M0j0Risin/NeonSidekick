@@ -1450,7 +1450,12 @@ public sealed partial class SidekickApp
                     return;
                 }
 
-                FreshConversation();
+                // The nudge after a pass that called no finish_step (2026-11-22) goes in the pass's own conversation.
+                if (next.Fresh)
+                {
+                    FreshConversation();
+                }
+
                 gapTurn = next.Text;
                 gapEcho = next.Echo;
                 gapImages = next.Images;
@@ -1501,6 +1506,18 @@ public sealed partial class SidekickApp
 
                 await HeadlessMcpNoticesAsync(mcp).ConfigureAwait(false);
                 await HeadlessPromptAsync(cancellationToken).ConfigureAwait(false);
+
+                // A loop over (2026-11-22, the user's call): the next line starts a new session, the last pass's row saved once more first so it
+                // keeps the loop's end (its last save was before the judge, with the plan still being carried out).
+                if (planState.TakeFreshNext())
+                {
+                    if (sessionId is { } endedRow && assistant is not null && EffectiveSettings.SessionLogging)
+                    {
+                        SaveHeadlessHistory(endedRow, assistant.History.Messages);
+                    }
+
+                    FreshConversation();
+                }
 
                 string? line;
                 turnImages = [];
@@ -2158,6 +2175,12 @@ public sealed partial class SidekickApp
                     if (await HeadlessAuditAsync(audit, plan, planState, files, git, args, () => HeadlessPlanMeter(session), cancellationToken).ConfigureAwait(false) is not { } audited)
                     {
                         continue;
+                    }
+
+                    // A started audit, new or resumed, runs in a new session (2026-11-22, the user's call).
+                    if (planState.TakeFreshNext())
+                    {
+                        FreshConversation();
                     }
 
                     text = audited;
@@ -2993,6 +3016,19 @@ public sealed partial class SidekickApp
             return next;
         }
 
+        /// <summary>
+        /// The next line starts a new session (2026-11-22, the user's call): set when a loop that ran a pass ends other than paused, and when a code
+        /// audit starts; taken once.
+        /// </summary>
+        public bool FreshNext { get; set; }
+
+        public bool TakeFreshNext()
+        {
+            bool fresh = FreshNext;
+            FreshNext = false;
+            return fresh;
+        }
+
         /// <summary>The pictures the line <c>/plan</c> handed back goes with (2026-10-18, a fresh approve's references), taken once.</summary>
         public IReadOnlyList<ImageAttachment> Images { get; set; } = [];
 
@@ -3047,6 +3083,13 @@ public sealed partial class SidekickApp
                     Plans.PlanFiles.MarkFile(files, path, Plans.PlanStatus.Done, _time.GetLocalNow(), executing.Requirement, progress);
                     lines.Add(Plans.PlanText.DoneNotice(path));
                     lines.Add(Plans.PlanText.ComesTogetherNotice);   // 2026-10-17: its own [notice] line after the done line
+                    // A fix plan carried out by approve (2026-11-22): the resume hint, then its findings ticked.
+                    if (Audits.AuditTicks.ReauditHintFor(files, Plans.PlanDocument.TryParse(text)?.Requirement) is { } hint)
+                    {
+                        lines.Add(hint);
+                    }
+
+                    lines.AddRange(HeadlessSyncAuditTicks(state, files, path));
                     state.Executing = null;
                     state.Shown = null;
                 }

@@ -56,9 +56,15 @@ internal sealed class FakeRalphHost(WorkingDirectory files, ManualTimeProvider t
     public Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken) =>
         Task.FromResult<RalphCheckResult?>(new RalphCheckResult(RalphCheckKind.Passed, 0, "", TimeSpan.Zero));
 
-    public Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, CancellationToken cancellationToken)
+    public string? SaveAuditReport(string path, Audits.AuditReport report, DateTimeOffset now) => Audits.AuditFiles.Save(files, path, report, now);
+
+    /// <summary>The app-check lines each review was given (2026-11-22).</summary>
+    public List<string> AppChecks { get; } = [];
+
+    public Task<RalphVerdict?> ReviewAsync(RalphLoop loop, PlanStep step, FinishReport? report, RalphDelta delta, string appCheck, CancellationToken cancellationToken)
     {
         Reviews++;
+        AppChecks.Add(appCheck);
         return Task.FromResult(Verdict);
     }
 

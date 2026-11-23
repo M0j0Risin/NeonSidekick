@@ -27,7 +27,7 @@ public enum AuditFindingState
 /// whether its box is ticked (<see cref="Settled"/>) or a pass retracted it (with the reason), and the notes the report keeps under it
 /// ("reopened in pass 4: …", "revised in pass 3: …").
 /// </summary>
-public sealed record AuditFinding(
+public sealed partial record AuditFinding(
     string Id,
     AuditSeverity Severity,
     string Dimension,
@@ -71,6 +71,48 @@ public sealed record AuditFinding(
 
     /// <summary>The id for <paramref name="number"/>: <c>A7</c>.</summary>
     public static string IdFor(int number) => "A" + number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>The widest range <see cref="ClosedBy"/> expands; a wider one is read as its two ends (a slip never builds a long list).</summary>
+    public const int MaxClosedRange = 100;
+
+    /// <summary>
+    /// The ids a fix plan's step line says it closes (2026-11-22, the session review: the app ticks them as the step passes): <c>(closes A7)</c>,
+    /// <c>(closes A1, A3)</c>, <c>closes A2 and A5</c>, a range <c>closes A3–A5</c> or <c>A3-A5</c> (expanded, a reversed one in order), case-insensitive,
+    /// in order without repeats. Only the ids right after the word <c>closes</c> count, so an "(see A9)" elsewhere on the line is never one;
+    /// emphasis around them is no matter.
+    /// </summary>
+    public static IReadOnlyList<string> ClosedBy(string stepText)
+    {
+        ArgumentNullException.ThrowIfNull(stepText);
+        var ids = new List<string>();
+        foreach (System.Text.RegularExpressions.Match m in ClosesList().Matches(stepText))
+        {
+            foreach (System.Text.RegularExpressions.Match item in ClosesItem().Matches(m.Groups[1].Value))
+            {
+                int from = int.Parse(item.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                int to = item.Groups[2].Success ? int.Parse(item.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture) : from;
+                (from, to) = from <= to ? (from, to) : (to, from);
+                IEnumerable<int> numbers = to - from > MaxClosedRange ? [from, to] : Enumerable.Range(from, to - from + 1);
+                foreach (int n in numbers.Where(n => n > 0))
+                {
+                    string id = IdFor(n);
+                    if (!ids.Contains(id))
+                    {
+                        ids.Add(id);
+                    }
+                }
+            }
+        }
+
+        return ids;
+    }
+
+    // "closes" then a list: ids or ranges, joined by commas, "and" or "&".
+    [System.Text.RegularExpressions.GeneratedRegex(@"\bcloses\s*:?\s*((?:\*|_)*A\d{1,6}(?:\s*(?:[-–—]|to)\s*A\d{1,6})?(?:\s*(?:,\s*and|,|and|&)\s*A\d{1,6}(?:\s*(?:[-–—]|to)\s*A\d{1,6})?)*)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex ClosesList();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"A(\d{1,6})(?:\s*(?:[-–—]|to)\s*A(\d{1,6}))?", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex ClosesItem();
 
     /// <summary>The severity's word: <c>critical</c>, <c>high</c>, <c>medium</c>, <c>low</c>.</summary>
     public static string Word(AuditSeverity severity) => severity switch

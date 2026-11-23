@@ -29,7 +29,12 @@ public static class CodeLaunch
         };
     }
 
-    /// <summary>The launch: the interpreter over the script in <paramref name="runFolder"/>, starting in <paramref name="workingDirectory"/>, with no environment of its own.</summary>
+    /// <summary>
+    /// The launch: the interpreter over the script in <paramref name="runFolder"/>, starting in <paramref name="workingDirectory"/>. Python's has
+    /// <c>PYTHONPATH</c> set to the working directory (2026-11-22, the session review: its <c>sys.path[0]</c> is the run folder, so a script could not
+    /// import the working folder's modules), put ahead of an inherited one (<see cref="ChildEnvironment.Apply"/>), as for a script that sits in the
+    /// working folder; the others have no environment of their own (Node's <c>require('./x')</c> resolves from the script's folder either way).
+    /// </summary>
     public static ProcessLaunch For(CodeLanguage language, string executable, string runFolder, string scriptName, string workingDirectory, string label)
     {
         ArgumentNullException.ThrowIfNull(executable);
@@ -39,7 +44,7 @@ public static class CodeLaunch
         string name = CodeLanguages.Name(language);
         return language switch
         {
-            CodeLanguage.Python => new ProcessLaunch(executable, ["-X", "utf8", script], null, workingDirectory, label, name),
+            CodeLanguage.Python => new ProcessLaunch(executable, ["-X", "utf8", script], null, workingDirectory, label, name, new Dictionary<string, string> { [ChildEnvironment.PythonPathVariable] = workingDirectory }),
             CodeLanguage.Node => new ProcessLaunch(executable, [script], null, workingDirectory, label, name),
             _ => new ProcessLaunch(executable, [.. ShellCommandLine.PowerShellSwitches, "-File", script], null, workingDirectory, label, name),
         };

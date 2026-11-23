@@ -4,15 +4,16 @@ namespace NeonSidekick.Plans;
 /// What <see cref="PlanFit.Read"/> found in one reading of a plan's body (2026-10-22, a review: each helper parsed the body again, about four readings a
 /// clean gap pass): its steps, the problems of its shape — the ones a gap review must close before it converges (<see cref="Structural"/>) — and the
 /// two it never must: <see cref="TooLong"/>, which depends on the model's window, and <see cref="NoCheck"/>, which the reviewer covers; with
-/// <see cref="ByHand"/>, its unticked leaves only a person can check.
+/// <see cref="ByHand"/>, its unticked leaves only a person can check. <see cref="Unclosed"/> (2026-11-22): a fix plan's open findings no step closes, a
+/// warning, never structural.
 /// </summary>
-public sealed record PlanFitReading(IReadOnlyList<PlanStep> Steps, IReadOnlyList<string> Structural, string? TooLong, string? NoCheck, int ByHand)
+public sealed record PlanFitReading(IReadOnlyList<PlanStep> Steps, IReadOnlyList<string> Structural, string? TooLong, string? NoCheck, int ByHand, string? Unclosed = null)
 {
-    /// <summary>Every problem, in <see cref="PlanFit"/>'s order: the structural ones, the length, the check.</summary>
-    public IReadOnlyList<string> Problems => [.. Structural, .. Optional(TooLong), .. Optional(NoCheck)];
+    /// <summary>Every problem, in <see cref="PlanFit"/>'s order: the structural ones, the length, the unclosed findings, the check.</summary>
+    public IReadOnlyList<string> Problems => [.. Structural, .. Optional(TooLong), .. Optional(Unclosed), .. Optional(NoCheck)];
 
     /// <summary><see cref="Problems"/> without the no-check item: the plan's shape alone.</summary>
-    public IReadOnlyList<string> Shape => [.. Structural, .. Optional(TooLong)];
+    public IReadOnlyList<string> Shape => [.. Structural, .. Optional(TooLong), .. Optional(Unclosed)];
 
     private static IEnumerable<string> Optional(string? problem) => problem is null ? [] : [problem];
 }
@@ -41,9 +42,10 @@ public static class PlanFit
     /// done never runs again, so its missing line costs nothing), a step with sub-steps whose check is by hand (<see cref="ByHandParents"/>,
     /// 2026-10-21) — the structural problems —, then a body over <paramref name="inlineLimit"/> (<see cref="RalphText.InlineLimit"/>), and no check at
     /// all with <paramref name="reviewed"/> false (with a reviewer each step is still judged, and many projects have no command to name, so a plan
-    /// without one is not a problem there).
+    /// without one is not a problem there). A fix plan's <paramref name="openFindings"/> (2026-11-22, <see cref="Audits.AuditTicks.OpenIds"/>) that no
+    /// step's <c>(closes …)</c> names are <see cref="PlanFitReading.Unclosed"/>.
     /// </summary>
-    public static PlanFitReading Read(string body, PlanChecks? checks, bool reviewed, int inlineLimit)
+    public static PlanFitReading Read(string body, PlanChecks? checks, bool reviewed, int inlineLimit, IReadOnlyCollection<string>? openFindings = null)
     {
         ArgumentNullException.ThrowIfNull(body);
         var steps = PlanSteps.Parse(body);
@@ -71,7 +73,20 @@ public static class PlanFit
         }
 
         string? noCheck = !reviewed && checks is null or { IsEmpty: true } ? RalphText.FitNoCheck : null;
-        return new PlanFitReading(steps, structural, TooLong(body.Length, inlineLimit), noCheck, leaves.Count(s => !s.Ticked && s.ByHand));
+        return new PlanFitReading(steps, structural, TooLong(body.Length, inlineLimit), noCheck, leaves.Count(s => !s.Ticked && s.ByHand), UnclosedOf(steps, openFindings));
+    }
+
+    /// <summary>The open findings no step closes, said (<see cref="RalphText.FitUnclosedFindings"/>), else null.</summary>
+    private static string? UnclosedOf(IReadOnlyList<PlanStep> steps, IReadOnlyCollection<string>? openFindings)
+    {
+        if (openFindings is not { Count: > 0 })
+        {
+            return null;
+        }
+
+        var closed = new HashSet<string>(PlanSteps.Flat(steps).SelectMany(s => Audits.AuditFinding.ClosedBy(s.Text)), StringComparer.OrdinalIgnoreCase);
+        var unclosed = openFindings.Where(id => !closed.Contains(id)).ToList();
+        return unclosed.Count == 0 ? null : RalphText.FitUnclosedFindings(unclosed);
     }
 
     /// <summary>
@@ -81,7 +96,8 @@ public static class PlanFit
     public static IReadOnlyList<string> Structural(string body) => Read(body, null, reviewed: true, int.MaxValue).Structural;
 
     /// <summary>Every problem of <paramref name="body"/> for a loop, in order (<see cref="Read"/>).</summary>
-    public static IReadOnlyList<string> Problems(string body, PlanChecks? checks, bool reviewed, int inlineLimit) => Read(body, checks, reviewed, inlineLimit).Problems;
+    public static IReadOnlyList<string> Problems(string body, PlanChecks? checks, bool reviewed, int inlineLimit, IReadOnlyCollection<string>? openFindings = null) =>
+        Read(body, checks, reviewed, inlineLimit, openFindings).Problems;
 
     /// <summary>
     /// A body of <paramref name="chars"/> characters over <paramref name="inlineLimit"/>, said (<see cref="RalphText.FitTooLong"/>), else null: no parse
@@ -116,12 +132,12 @@ public static class PlanFit
     /// <see cref="Problems"/> without the no-check item: the plan's shape alone, for the approval pane's caption (its check line already says
     /// <c>unchecked</c> and the reviewer).
     /// </summary>
-    public static IReadOnlyList<string> Shape(string body, int inlineLimit) => Read(body, null, reviewed: true, inlineLimit).Shape;
+    public static IReadOnlyList<string> Shape(string body, int inlineLimit, IReadOnlyCollection<string>? openFindings = null) => Read(body, null, reviewed: true, inlineLimit, openFindings).Shape;
 
     /// <summary><see cref="Shape"/> and <see cref="ByHandSteps"/> from one reading of <paramref name="body"/>: the approval pane's check line and a loop's confirm.</summary>
-    public static IReadOnlyList<string> Shape(string body, int inlineLimit, out int byHand)
+    public static IReadOnlyList<string> Shape(string body, int inlineLimit, out int byHand, IReadOnlyCollection<string>? openFindings = null)
     {
-        var reading = Read(body, null, reviewed: true, inlineLimit);
+        var reading = Read(body, null, reviewed: true, inlineLimit, openFindings);
         byHand = reading.ByHand;
         return reading.Shape;
     }

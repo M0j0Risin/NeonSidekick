@@ -378,4 +378,35 @@ public sealed class RalphLoopTests
 
         Assert.Equal(TimeSpan.FromMinutes(2), loop.History[^1].Elapsed);
     }
+
+    /// <summary>
+    /// A pass that ended without finish_step after changing files tells the next what it left (2026-11-22, the session review), after the judge's own
+    /// note; none with no files, nor when the step stood (the model ticked its box: the next pass is another step's). One nudge a pass.
+    /// </summary>
+    [Fact]
+    public void ANoReportPass_ThatChangedFiles_LeavesTheNextANote_AndIsNudgedOnce()
+    {
+        var loop = new RalphLoop(Snapshot(), 3);
+        Assert.False(loop.TakeNudge());   // no pass under way
+        loop.BeginPass(loop.Next(Steps(Three), userSpoke: false).Step, null);
+        Assert.True(loop.TakeNudge());
+        Assert.False(loop.TakeNudge());
+        loop.PendingNotes = "check failed";
+        loop.EndPass(Failed with { Changed = ["hello.py", "plain_check.txt"] }, null);
+        Assert.Equal("check failed\n" + RalphText.NoReportChangedNote(["hello.py", "plain_check.txt"]), loop.TakeNotes());
+
+        loop.BeginPass(loop.Next(Steps(Three), userSpoke: false).Step, null);
+        Assert.True(loop.TakeNudge());   // a new pass, a new nudge
+        loop.EndPass(Nothing, null);
+        Assert.Null(loop.TakeNotes());
+
+        loop.BeginPass(loop.Next(Steps(Three), userSpoke: false).Step, null);
+        loop.EndPass(Stood, null);
+        Assert.Null(loop.TakeNotes());
+
+        loop.BeginPass(loop.Next(Steps("## Steps\n- [x] One\n- [ ] Two\n- [ ] Three\n"), userSpoke: false).Step, null);
+        Assert.Null(loop.Record(Done));
+        loop.EndPass(Failed, null);
+        Assert.Null(loop.TakeNotes());   // it reported: no such note
+    }
 }
