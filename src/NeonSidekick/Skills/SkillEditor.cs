@@ -712,6 +712,57 @@ public static class SkillEditor
     }
 
     /// <summary>
+    /// The Skills pane's move into the working folder (2026-11-23, the user's ask): a profile or global skill's folder copied into
+    /// <paramref name="destinationRoot"/> (a level's <c>.agents\skills</c>) by <see cref="CopyFolder"/> without the app's markers, which mean nothing in a
+    /// repo, then the source deleted for good (the copy is the keeper). Copied, not renamed: the home and a repo can be on different volumes. <see cref="Move"/>'s
+    /// refusals for the source: <see cref="SkillEditOutcome.ExternalReadOnly"/>, <see cref="SkillEditOutcome.GlobalOff"/>, <see cref="SkillEditOutcome.Locked"/>,
+    /// <see cref="SkillEditOutcome.Missing"/>; the copy's own (<see cref="SkillEditOutcome.Exists"/>, <see cref="SkillEditOutcome.Failed"/>) as they come.
+    /// <see cref="SkillEditOutcome.Moved"/> (scope <see cref="SkillScope.Project"/>) when both went; <see cref="SkillEditOutcome.Copied"/> with the detail
+    /// when the copy landed but the source would not go (both stay).
+    /// </summary>
+    public static SkillEditResult MoveToProject(SkillRoots roots, Skill skill, string destinationRoot, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(roots);
+        ArgumentNullException.ThrowIfNull(skill);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationRoot);
+        if (SkillScopes.IsReadOnly(skill.Scope))
+        {
+            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, skill.Scope);
+        }
+
+        if (roots.Hides(skill.Scope))
+        {
+            return new SkillEditResult(SkillEditOutcome.GlobalOff, skill.Name, skill.Scope);
+        }
+
+        if (SkillLock.IsLocked(skill.Directory))
+        {
+            return new SkillEditResult(SkillEditOutcome.Locked, skill.Name, skill.Scope);
+        }
+
+        if (!IsUnderItsRoot(roots, skill))
+        {
+            return new SkillEditResult(SkillEditOutcome.Missing, skill.Name, skill.Scope);
+        }
+
+        var copied = CopyFolder(skill.Directory, destinationRoot, cancellationToken, dropMarkers: true);
+        if (copied.Outcome != SkillEditOutcome.Copied)
+        {
+            return copied with { Name = skill.Name, Scope = SkillScope.Project };
+        }
+
+        try
+        {
+            FileDeletes.Remove(skill.Directory, isDirectory: true, isLink: false, bin: null);
+            return new SkillEditResult(SkillEditOutcome.Moved, skill.Name, SkillScope.Project, copied.Bytes);
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            return new SkillEditResult(SkillEditOutcome.Copied, skill.Name, SkillScope.Project, copied.Bytes, Detail: ex.Message);
+        }
+    }
+
+    /// <summary>
     /// The folder names and the frontmatter names of the profile skills under <paramref name="root"/>, any case (2026-10-25: a copy into it
     /// refuses either twin, since a same-scope twin would be shadowed). Empty for a missing root; a <c>SKILL.md</c> that won't parse gives its folder alone.
     /// </summary>

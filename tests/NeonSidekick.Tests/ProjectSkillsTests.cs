@@ -132,6 +132,105 @@ public class ProjectSkillsTests : IDisposable
         Assert.Equal(worktree, ProjectSkillWalk.RepoRoot(Path.Combine(worktree, "sub"), Path.Combine(_dir, "home"), null));
     }
 
+    /// <summary>
+    /// The scope page's <c>project</c> row's level (2026-11-23, the user's ask): the working folder when the walk reads it first (a repo's subfolder, a plain
+    /// folder, the app home's default files folder); none at the user's home or the app's, where the walk skips it, in a repo or out of one.
+    /// </summary>
+    [Fact]
+    public void MoveTarget_IsTheWorkingFolder_WhenTheWalkReadsIt_NeverAHome()
+    {
+        string home = Path.Combine(_dir, "home");
+        string sub = Path.Combine(_repo, "src");
+        Directory.CreateDirectory(sub);
+        string app = Path.Combine(_dir, "apphome");
+        string files = Path.Combine(app, "profiles", "default", "files");
+        Directory.CreateDirectory(files);
+
+        Assert.Equal(sub, ProjectSkillWalk.MoveTarget(sub, home, app));
+        Assert.Equal(_repo, ProjectSkillWalk.MoveTarget(_repo + Path.DirectorySeparatorChar, home, app));
+        Assert.Equal(files, ProjectSkillWalk.MoveTarget(files, home, app));
+        Assert.Null(ProjectSkillWalk.MoveTarget(home, home, app));   // outside a repo: the walk's list is empty
+        Assert.Null(ProjectSkillWalk.MoveTarget(app, home, app));
+        Directory.CreateDirectory(Path.Combine(app, ".git"));
+        Assert.Null(ProjectSkillWalk.MoveTarget(app, home, app));    // a home kept in git: still skipped
+    }
+
+    /// <summary>
+    /// The after-check a move or delete trusts by (2026-11-23): the same folder but for the one skill passes; another skill changed, added (hashed, or past
+    /// the cap in the order alone) or removed does not.
+    /// </summary>
+    [Fact]
+    public void SameButFor_PassesTheOneSkillAlone()
+    {
+        const string key = ".agents/skills/moved";
+        var before = new ProjectFolderState("f1", new Dictionary<string, string> { ["a"] = "1", ["b"] = "2" }, new Dictionary<string, string>(), ["a", "b"]);
+        var withMoved = new ProjectFolderState("f2", new Dictionary<string, string> { ["a"] = "1", [key] = "9", ["b"] = "2" }, new Dictionary<string, string>(), ["a", key, "b"]);
+
+        Assert.True(SkillsMenu.SameButFor(before, withMoved, key));
+        Assert.True(SkillsMenu.SameButFor(withMoved, before, key));   // a delete: the key gone
+        Assert.False(SkillsMenu.SameButFor(before, withMoved with { Hashes = new Dictionary<string, string> { ["a"] = "1", [key] = "9", ["b"] = "3" } }, key));
+        Assert.False(SkillsMenu.SameButFor(before, withMoved with { Hashes = new Dictionary<string, string> { ["a"] = "1", [key] = "9", ["b"] = "2", ["c"] = "4" }, Keys = ["a", key, "b", "c"] }, key));
+        Assert.False(SkillsMenu.SameButFor(before, withMoved with { Keys = ["a", key, "b", "past-the-cap"] }, key));
+        Assert.False(SkillsMenu.SameButFor(before, withMoved with { Hashes = new Dictionary<string, string> { ["a"] = "1", [key] = "9" }, Keys = ["a", key] }, key));
+    }
+
+    /// <summary>
+    /// The editor's move into a repo (2026-11-23): copied without the app's markers, the source gone; a source that won't delete leaves both and answers
+    /// Copied with the reason; a locked one is refused, nothing copied.
+    /// </summary>
+    [Fact]
+    public void MoveToProject_Copies_DropsTheMarkers_DeletesTheSource_OrKeepsBothWhenItWontGo()
+    {
+        PutOwn(SkillScope.Profile, "haiku");
+        string source = Path.Combine(_roots.Profile, "haiku");
+        File.WriteAllText(Path.Combine(source, SkillProvenance.FileName), "{}");
+        string destination = Path.Combine(_repo, ".agents", "skills");
+        _catalog.Scan(false);
+
+        var moved = SkillEditor.MoveToProject(_roots, _catalog.Find("haiku")!, destination);
+
+        Assert.Equal(SkillEditOutcome.Moved, moved.Outcome);
+        Assert.Equal(SkillScope.Project, moved.Scope);
+        Assert.True(File.Exists(Path.Combine(destination, "haiku", SkillCatalog.FileName)));
+        Assert.False(File.Exists(Path.Combine(destination, "haiku", SkillProvenance.FileName)));
+        Assert.False(Directory.Exists(source));
+
+        PutOwn(SkillScope.Global, "pdf");
+        string global = Path.Combine(_roots.Global, "pdf");
+        _catalog.Scan(false);
+        var pdf = _catalog.Find("pdf")!;
+        SkillEditResult kept;
+        if (OperatingSystem.IsWindows())
+        {
+            // A file held open without delete sharing: the copy reads it, the delete can't take it.
+            using var held = new FileStream(Path.Combine(global, SkillCatalog.FileName), FileMode.Open, FileAccess.Read, FileShare.Read);
+            kept = SkillEditor.MoveToProject(_roots, pdf, destination);
+        }
+        else
+        {
+            File.SetUnixFileMode(_roots.Global, UnixFileMode.UserRead | UnixFileMode.UserExecute);   // the folder can't lose an entry
+            try
+            {
+                kept = SkillEditor.MoveToProject(_roots, pdf, destination);
+            }
+            finally
+            {
+                File.SetUnixFileMode(_roots.Global, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
+
+        Assert.Equal(SkillEditOutcome.Copied, kept.Outcome);
+        Assert.NotEmpty(kept.Detail);
+        Assert.True(File.Exists(Path.Combine(destination, "pdf", SkillCatalog.FileName)));
+        Assert.True(File.Exists(Path.Combine(global, SkillCatalog.FileName)));
+
+        PutOwn(SkillScope.Profile, "locked");
+        SkillLock.Set(Path.Combine(_roots.Profile, "locked"), true, _time.GetUtcNow());
+        _catalog.Scan(false);
+        Assert.Equal(SkillEditOutcome.Locked, SkillEditor.MoveToProject(_roots, _catalog.Find("locked")!, destination).Outcome);
+        Assert.False(Directory.Exists(Path.Combine(destination, "locked")));
+    }
+
     // ── The catalog ──
 
     [Fact]

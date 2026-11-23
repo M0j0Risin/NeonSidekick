@@ -76,6 +76,19 @@ public static class ProjectSkillWalk
     }
 
     /// <summary>
+    /// The level a skill moved into the working folder lands in (2026-11-23, the user's ask: the scope page's <c>project</c> row): the working folder,
+    /// when the walk reads it as its first level; null when it doesn't (the user's home, whose <c>.agents\skills</c> is the external scope, or the app's
+    /// home), so a moved skill is always one the walk offers back.
+    /// </summary>
+    public static string? MoveTarget(string workingFolder, string? userHome, string? appHome)
+    {
+        ArgumentNullException.ThrowIfNull(workingFolder);
+        var levels = LevelFolders(workingFolder, userHome, appHome);
+        string start = Full(workingFolder);
+        return levels.Count > 0 && string.Equals(levels[0], start, StringComparison.Ordinal) ? start : null;
+    }
+
+    /// <summary>
     /// The repo root above (or at) <paramref name="workingFolder"/> that the walk may climb to: <see cref="GitAccess.FindGitEntry"/>'s folder, or
     /// null for none, for one at or above <paramref name="userHome"/>, and for one at or above <paramref name="appHome"/> while the working folder is
     /// inside the app's home.

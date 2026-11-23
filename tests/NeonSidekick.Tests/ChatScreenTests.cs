@@ -24810,9 +24810,9 @@ public partial class ChatScreenTests : IDisposable
                         step++;
                         PushLine(input, "/skills");
                         input.Push(Keys.Enter);   // clock-check's page
-                        for (int i = 0; i < 6; i++)
+                        for (int i = 0; i < 7; i++)
                         {
-                            input.Push(Keys.Down);   // profile, global, move (2026-10-13), copy (2026-10-25), rename, edit, revert
+                            input.Push(Keys.Down);   // profile, global, project (2026-11-23), move (2026-10-13), copy (2026-10-25), rename, edit, revert
                         }
 
                         input.Push(Keys.Enter);   // the version list
@@ -24827,9 +24827,9 @@ public partial class ChatScreenTests : IDisposable
                     {
                         step++;
                         input.Push(Keys.Enter);   // the page again
-                        for (int i = 0; i < 6; i++)
+                        for (int i = 0; i < 7; i++)
                         {
-                            input.Push(Keys.Down);   // the revert row again (past copy since 2026-10-25)
+                            input.Push(Keys.Down);   // the revert row again (past copy since 2026-10-25, project since 2026-11-23)
                         }
 
                         input.Push(Keys.Enter);   // the list: the model's text kept as a revert's version

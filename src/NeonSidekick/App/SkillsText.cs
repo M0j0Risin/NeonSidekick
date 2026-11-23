@@ -15,6 +15,9 @@ namespace NeonSidekick.App;
 /// <para>The repo's skills (2026-11-23, feature idea #16): <see cref="Pending"/> the project skills listed but not offered (<see cref="SkillCatalog.ProjectPending"/>),
 /// <see cref="Folders"/> the walk's folders holding skills with their trust, <see cref="WorkingFolder"/> and <see cref="RepoRoot"/> for the folder labels
 /// (<see cref="SkillsText.FolderLabel"/>). All null while <c>Project skills</c> is off.</para>
+/// <para><see cref="ProjectTarget"/> (2026-11-23, the user's ask: a <c>project</c> row on a skill's scope page) is the level a profile or global skill
+/// moves into, the working folder (its <c>.agents\skills</c>): null while project skills are off, when the working folder isn't the walk's first
+/// level (a home), or when the guard refuses a write there; the row is hidden then.</para>
 /// </summary>
 public sealed record SkillsFacts(
     bool Enabled,
@@ -28,7 +31,8 @@ public sealed record SkillsFacts(
     IReadOnlyList<ProjectPendingSkill>? Pending = null,
     IReadOnlyList<ProjectFolder>? Folders = null,
     string? WorkingFolder = null,
-    string? RepoRoot = null)
+    string? RepoRoot = null,
+    string? ProjectTarget = null)
 {
     /// <summary>The project skills not offered, each with its reason; empty for none.</summary>
     public IReadOnlyList<ProjectPendingSkill> ProjectPending => Pending ?? [];
@@ -710,8 +714,8 @@ public static class SkillsText
     public static string ProjectNotOfferedNote(ProjectPendingReason reason) =>
         "(" + (reason == ProjectPendingReason.NotTrusted ? "not trusted now" : SkillText.PendingReason(reason)) + ")";
 
-    /// <summary>The project sub-tab's keys (2026-11-23). Pinned.</summary>
-    public const string ProjectKeys = "Enter = trust, untrust, edit, copy, disable · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
+    /// <summary>The project sub-tab's keys (2026-11-23; delete later that day, the user's ask). Pinned.</summary>
+    public const string ProjectKeys = "Enter = trust, untrust, edit, copy, disable, delete · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
 
     // ── The trust question ──
 
@@ -806,8 +810,8 @@ public static class SkillsText
     public const string CopyToProfileWord = "copy to profile";
     public const string CopyToGlobalWord = "copy to global";
 
-    /// <summary>The project page's caption (2026-11-23). Pinned.</summary>
-    public static string ProjectPageCaption(string label) => $"This repo's skill, from {label}: read only here. A copy in your skills is yours to change, and hides the repo's.";
+    /// <summary>The project page's caption (2026-11-23; "read only here" went with the delete row later that day, the user's ask). Pinned.</summary>
+    public static string ProjectPageCaption(string label) => $"This repo's skill, from {label}: the model never changes it. A copy in your skills is yours to change, and hides the repo's.";
 
     /// <summary>The project page's edit row: the user's editor, and what a change does. Escaped.</summary>
     public static string ProjectEditRow => Markup.Escape(SkillsMenu.EditWord.PadRight(16)) + Theme.DimMarkup("open its SKILL.md in your editor; a change asks for trust again");
@@ -833,6 +837,89 @@ public static class SkillsText
 
     /// <summary>A copy refused because the root holds a skill of that name already. Pinned.</summary>
     public static string ProjectCopyNameTakenError(string name, SkillScope to) => $"Could not copy skill '{name}': the {SkillScopes.Name(to)} skills already have a skill named '{name}'";
+
+    /// <summary>
+    /// A level's skills folder as the strings name it (2026-11-23): <c>.agents\skills</c>, or <c>.claude\skills</c> for a Claude Code one, in the system's
+    /// separator (<c>.agents/skills</c> on a Mac).
+    /// </summary>
+    public static string ProjectSkillsFolder(bool claude) =>
+        Path.Combine(claude ? ProjectSkillWalk.ClaudeFolderName : ProjectSkillWalk.AgentsFolderName, SkillRoots.DirectoryName);
+
+    /// <summary>A project skill's delete row (2026-11-23, the user's ask): last on its page; to the bin, or for good while no bin is in use. Escaped.</summary>
+    public static string ProjectDeleteRow(bool binned) =>
+        Markup.Escape(SkillsMenu.DeleteWord.PadRight(16))
+        + Theme.DimMarkup(binned ? $"remove it from the repo's folder (to the {NeonSidekick.Files.FileText.RecycleBinName})" : "remove it from the repo's folder for good");
+
+    /// <summary>
+    /// The delete's yes/no (2026-11-23): to the bin, or for good with the reason a bin can't take it (<paramref name="why"/>); a linked skill's says the
+    /// link alone goes. Pinned.
+    /// </summary>
+    public static string ProjectDeletePrompt(string name, string label, bool claude, bool binned, string? why, bool link = false)
+    {
+        string where = $"{label}'s {ProjectSkillsFolder(claude)}";
+        if (link)
+        {
+            return $"Remove the link '{name}' from {where}? Only the link goes; what it points at stays.";
+        }
+
+        return binned
+            ? $"Delete skill '{name}' from {where}, folder and all? It goes to the {NeonSidekick.Files.FileText.RecycleBinName}."
+            : $"Delete skill '{name}' from {where}, folder and all? This can't be undone" + (string.IsNullOrEmpty(why) ? "." : $" ({why}).");
+    }
+
+    /// <summary>
+    /// Deleted (2026-11-23): how (<paramref name="way"/>, the menu's own record: to the bin, for good with <paramref name="why"/>, or for good), or the link
+    /// removed; then whether the folder's trust was kept, and a note when this conversation already loaded the skill. Pinned.
+    /// </summary>
+    public static string ProjectDeletedNotice(string name, string label, NeonSidekick.Files.DeleteWay way, string? why, bool link, bool trusted, bool loaded)
+    {
+        string done = link ? $"removed the link {name} from {label}'s skills"
+            : way == NeonSidekick.Files.DeleteWay.Recycled ? $"moved {name} from {label}'s skills to the {NeonSidekick.Files.FileText.RecycleBinName}"
+            : $"deleted {name} from {label}'s skills for good" + (string.IsNullOrEmpty(why) ? "" : $" ({why})");
+        return $"({NoticeGlyphs.Skill}{done}"
+            + (trusted ? "; the folder's trust kept" : "; review the folder in /skills › project")
+            + (loaded ? "; already loaded here; /clear or a new session drops it" : "") + ")";
+    }
+
+    /// <summary>A delete that failed (the bin refused, a file held): nothing else changed. Pinned.</summary>
+    public static string ProjectDeleteFailedError(string name, string detail) => $"Could not delete skill '{name}': {detail}. Nothing else changed";
+
+    // ── A skill moved into the working folder (2026-11-23, the user's ask) ──
+
+    /// <summary>The scope page's <c>project</c> row: the word padded to nine, the working folder's <c>.agents\skills</c> dim after it. Escaped.</summary>
+    public static string ProjectMoveRow(string level)
+    {
+        ArgumentNullException.ThrowIfNull(level);
+        return Markup.Escape(SkillScopes.Name(SkillScope.Project).PadRight(9)) + Theme.DimMarkup(Path.Combine(level, ProjectSkillsFolder(claude: false)));
+    }
+
+    /// <summary>The move's yes/no. Pinned.</summary>
+    public static string MoveToProjectPrompt(string name, string label) =>
+        $"Move skill '{name}' into {label}'s {ProjectSkillsFolder(claude: false)}? It becomes the repo's skill, which the model never changes; its kept versions and records go.";
+
+    /// <summary>The move refused ahead of the question: the level's skills hold the folder's name, or (<paramref name="byName"/>) a skill of that name. Pinned.</summary>
+    public static string ProjectExistsError(string name, string folder, string label, bool byName) => byName
+        ? $"Could not move skill '{name}': {label}'s skills already have a skill named '{name}'"
+        : $"Could not move skill '{name}': {label}'s skills already hold '{folder}'";
+
+    /// <summary>Moved, with where it stands now (<paramref name="state"/>, read from the list after the move). Pinned.</summary>
+    public static string MovedToProjectNotice(string name, string label, ProjectMoveState state)
+    {
+        string tail = state switch
+        {
+            ProjectMoveState.Offered => "; offered here",
+            ProjectMoveState.Disabled => "; trusted, disabled as it was",
+            ProjectMoveState.Waiting => "; review it in /skills › project",
+            ProjectMoveState.OverCap => $"; past the {ProjectSkillTrust.ProjectSkillCap.ToString(System.Globalization.CultureInfo.InvariantCulture)}-skill cap, not offered",
+            ProjectMoveState.Shadowed => "; trusted",
+            _ => "",
+        };
+        return $"({NoticeGlyphs.Skill}moved: {name} → {label}'s {ProjectSkillsFolder(claude: false)}{tail})";
+    }
+
+    /// <summary>The copy landed in the repo but the old folder wouldn't go: both stay, yours hiding the repo's. Pinned.</summary>
+    public static string MovedButKeptError(string name, SkillScope from, string detail) =>
+        $"Copied skill '{name}' into the repo, but could not remove it from the {SkillScopes.Name(from)} skills: {detail}. Both are there; yours hides the repo's";
 
     // ── The notices at a turn ──
 
@@ -938,6 +1025,28 @@ public enum ProjectRowKind
 
     /// <summary>A trusted folder's untrust row.</summary>
     Untrust,
+}
+
+/// <summary>Where a skill moved into the working folder stands after the move (2026-11-23), as <see cref="SkillsText.MovedToProjectNotice"/> says it.</summary>
+public enum ProjectMoveState
+{
+    /// <summary>Not in the list (project skills off, or a broken <c>SKILL.md</c>): no tail.</summary>
+    Unlisted,
+
+    /// <summary>Trusted and offered.</summary>
+    Offered,
+
+    /// <summary>Trusted, and disabled as it was before the move.</summary>
+    Disabled,
+
+    /// <summary>The folder waits for a trust.</summary>
+    Waiting,
+
+    /// <summary>Past the 50-skill cap.</summary>
+    OverCap,
+
+    /// <summary>Trusted, but a skill of yours of the same name hides it.</summary>
+    Shadowed,
 }
 
 /// <summary>A project sub-tab row (2026-11-23): its markup, what it stands for, the skill and folder it acts on, a pending skill's reason.</summary>

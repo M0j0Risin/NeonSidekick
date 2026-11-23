@@ -1,4 +1,5 @@
 using NeonSidekick.App;
+using NeonSidekick.Files;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
@@ -41,6 +42,9 @@ public class SkillsMenuTests : IDisposable
     private ProjectSkillTrust? _projectTrust;
     private string? _working;
     private readonly List<string> _viewed = new();
+    /// <summary>The scope page's project row's level (2026-11-23): the working folder unless a test hides the row; the bin a project skill's delete uses.</summary>
+    private bool _projectTarget = true;
+    private FakeRecycleBin? _bin;
 
     /// <summary>A repo under the fixture's folder as the working folder, its skills read and trusted through the fixture's store.</summary>
     private string UseRepo()
@@ -52,11 +56,19 @@ public class SkillsMenuTests : IDisposable
         return _working;
     }
 
-    private static void PutProject(string level, string name, string description)
+    private static string PutProject(string level, string name, string description, bool claude = false)
     {
-        string folder = Path.Combine(level, ".agents", "skills", name);
+        string folder = Path.Combine(level, claude ? ".claude" : ".agents", "skills", name);
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, SkillCatalog.FileName), $"---\nname: {name}\ndescription: {description}\n---\n\nThe repo's steps.\n");
+        return folder;
+    }
+
+    /// <summary>Trusts <paramref name="level"/>'s skills as they stand, as the trust question would.</summary>
+    private void TrustRepo(string level)
+    {
+        var state = _catalog.ReadProjectFolder(level, _working);
+        Assert.Equal(ProjectTrustSave.Saved, _projectTrust!.Trust(level, state.Fingerprint, () => _catalog.ReadProjectFolder(level, _working)));
     }
 
     public SkillsMenuTests()
@@ -111,7 +123,8 @@ public class SkillsMenuTests : IDisposable
         if (_projectSource is not null)
         {
             _catalog.Scan(new SkillScan(_external, _projectSource));
-            return new SkillsFacts(true, _catalog.All, _catalog.Shadowed, _catalog.Problems, Roots, Pending: _catalog.ProjectPending, Folders: _catalog.ProjectFolders, WorkingFolder: _working, RepoRoot: _working);
+            return new SkillsFacts(true, _catalog.All, _catalog.Shadowed, _catalog.Problems, Roots, Pending: _catalog.ProjectPending, Folders: _catalog.ProjectFolders, WorkingFolder: _working, RepoRoot: _working,
+                ProjectTarget: _projectTarget ? _working : null);
         }
 
         _catalog.Scan(_external);
@@ -138,7 +151,8 @@ public class SkillsMenuTests : IDisposable
         var settings = Settings(pane, keys, menuPane);
         var menu = new SkillsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, _usage,
             versions: _versions, restore: _versions is null ? null : Restore, forget: _forget,
-            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, _, _) => { _viewed.Add(label); return Task.CompletedTask; });
+            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, _, _) => { _viewed.Add(label); return Task.CompletedTask; },
+            bin: _bin is null ? null : () => _bin);
         pane.Show();
         return (menu, pane, settings);
     }
@@ -496,6 +510,405 @@ public class SkillsMenuTests : IDisposable
         Assert.Contains(SettingsMenu.NotWhileReplyRunsNotice, Output);
         Assert.DoesNotContain(SkillsText.TrustTitle, Output);
         Assert.Null(_projectTrust!.Trusted(repo));
+    }
+
+    // ── A skill moved into the working folder, and a project skill's delete (2026-11-23, the user's asks) ──
+
+    /// <summary>The scope page's project row: down twice from profile (profile, global, project), then Yes.</summary>
+    private void PushMoveToProject() => Push(Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);
+
+    /// <summary>The project sub-tab's first skill's page, its delete row (edit, copy to profile, copy to global, disable, delete), then Yes or No.</summary>
+    private void PushDeleteFirstProjectSkill(bool yes = true)
+    {
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+        Push(yes ? [Keys.Down, Keys.Enter] : [Keys.Enter]);
+    }
+
+    /// <summary>The menu at 200 columns, so a delete's question and notice sit on one line each.</summary>
+    private SkillsMenu DeleteMenu()
+    {
+        _console.Profile.Width = 200;
+        return PaneMenu().Menu;
+    }
+
+    private string MovedRow(string repo) => Fitted("  " + Markup.Remove(SkillsText.ProjectMoveRow(repo)));
+
+    /// <summary>
+    /// A profile skill moved into a working folder with no skills (2026-11-23): the row names its .agents\skills, the question says what it becomes; Yes →
+    /// the folder there without the app's markers, gone from the profile, the folder trusted and the skill offered, the notice saying so.
+    /// </summary>
+    [Fact]
+    public async Task MoveToProject_IntoAFolderWithNoSkills_MovesIt_TrustsIt_ItIsOffered()
+    {
+        string repo = UseRepo();
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        File.WriteAllText(Path.Combine(_roots.Profile, "haiku", SkillProvenance.FileName), "{}");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);
+        PushMoveToProject();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string moved = Path.Combine(repo, ".agents", "skills", "haiku");
+        Assert.Contains(MovedRow(repo), Output);
+        Assert.Contains(SkillsText.MoveToProjectPrompt("haiku", SkillsText.ThisFolderLabel)[..60], Output);
+        Assert.True(File.Exists(Path.Combine(moved, SkillCatalog.FileName)));
+        Assert.False(File.Exists(Path.Combine(moved, SkillProvenance.FileName)));
+        Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "haiku")));
+        Assert.NotNull(_projectTrust!.Trusted(repo));
+        Assert.Contains(SkillsText.MovedToProjectNotice("haiku", SkillsText.ThisFolderLabel, ProjectMoveState.Offered), Output);
+        _catalog.Scan(new SkillScan(_external, _projectSource));
+        Assert.Equal(SkillScope.Project, _catalog.Find("haiku")!.Scope);
+    }
+
+    /// <summary>A global skill moved into a trusted folder nothing else changed in (2026-11-23): the trust is kept, both skills offered.</summary>
+    [Fact]
+    public async Task MoveToProject_AGlobalSkill_IntoATrustedUnchangedFolder_KeepsItTrusted()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        TrustRepo(repo);
+        Put(SkillScope.Global, "pdf", "Reads PDFs.");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Enter);      // the global sub-tab's pdf, its page on global
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // project, Yes
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([".agents/skills/deploy", ".agents/skills/pdf"], _projectTrust!.Trusted(repo)!.Skills.Keys.Order(StringComparer.Ordinal));
+        Assert.Contains(SkillsText.MovedToProjectNotice("pdf", SkillsText.ThisFolderLabel, ProjectMoveState.Offered), Output);
+        Assert.False(Exists(SkillScope.Global, "pdf"));
+    }
+
+    /// <summary>A folder holding a skill not trusted yet (2026-11-23): the move goes ahead, nothing is trusted, and the notice sends you to review it.</summary>
+    [Fact]
+    public async Task MoveToProject_IntoAnUntrustedFolder_TrustsNothing()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Enter);   // the profile sub-tab's haiku
+        PushMoveToProject();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_projectTrust!.Trusted(repo));
+        Assert.Contains(SkillsText.MovedToProjectNotice("haiku", SkillsText.ThisFolderLabel, ProjectMoveState.Waiting), Output);
+        Assert.True(File.Exists(Path.Combine(repo, ".agents", "skills", "haiku", SkillCatalog.FileName)));
+    }
+
+    /// <summary>A disabled skill arrives disabled (2026-11-23): its name in the folder's disabled list, since the marker isn't copied.</summary>
+    [Fact]
+    public async Task MoveToProject_ADisabledSkill_StaysDisabled()
+    {
+        string repo = UseRepo();
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        SkillDisable.Set(Path.Combine(_roots.Profile, "haiku"), true, _time.GetUtcNow());
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);
+        PushMoveToProject();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("haiku", _projectTrust!.DisabledIn(repo));
+        Assert.False(File.Exists(Path.Combine(repo, ".agents", "skills", "haiku", SkillDisable.FileName)));
+        Assert.Contains(SkillsText.MovedToProjectNotice("haiku", SkillsText.ThisFolderLabel, ProjectMoveState.Disabled), Output);
+    }
+
+    /// <summary>Past the cap (2026-11-23): fifty skills first, the moved one the fifty-first, trusted but not offered, and the notice says so.</summary>
+    [Fact]
+    public async Task MoveToProject_PastTheCap_SaysSo()
+    {
+        string repo = UseRepo();
+        for (int i = 0; i < ProjectSkillTrust.ProjectSkillCap; i++)
+        {
+            PutProject(repo, "a" + i.ToString("D2", System.Globalization.CultureInfo.InvariantCulture), "One of many.");
+        }
+
+        TrustRepo(repo);
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Enter);
+        PushMoveToProject();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.MovedToProjectNotice("haiku", SkillsText.ThisFolderLabel, ProjectMoveState.OverCap), Output);
+    }
+
+    /// <summary>A global twin of the moved skill (2026-11-23): yours win a clash, so the repo's is trusted but hidden, and the shadow notice names it.</summary>
+    [Fact]
+    public async Task MoveToProject_AGlobalTwin_HidesIt_TheShadowNoticeNamesIt()
+    {
+        UseRepo();
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        Put(SkillScope.Global, "haiku", "The global one.");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Enter);
+        PushMoveToProject();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ProjectShadowedNotice(SkillsText.ThisFolderLabel, ["haiku"]), Output);
+    }
+
+    /// <summary>Refused ahead of the question (2026-11-23): a twin by the folder's name in .agents\skills, or by the skill's name in .claude\skills.</summary>
+    [Fact]
+    public async Task MoveToProject_ATwinAtTheLevel_IsRefused_NothingMoves()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "haiku", "The repo's.");
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        Put(SkillScope.Profile, "poem", "Writes poems.");
+        string other = Path.Combine(repo, ".claude", "skills", "verse");
+        Directory.CreateDirectory(other);
+        File.WriteAllText(Path.Combine(other, SkillCatalog.FileName), "---\nname: poem\ndescription: The repo's poem.\n---\n\nSteps.\n");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Enter);           // haiku
+        Push(Keys.Down, Keys.Down, Keys.Enter); // refused: the list again
+        Push(Keys.Down, Keys.Enter);            // poem
+        Push(Keys.Down, Keys.Down, Keys.Enter);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ProjectExistsError("haiku", "haiku", SkillsText.ThisFolderLabel, byName: false), Output);
+        Assert.Contains(SkillsText.ProjectExistsError("poem", "poem", SkillsText.ThisFolderLabel, byName: true), Output);
+        Assert.True(Exists(SkillScope.Profile, "haiku") && Exists(SkillScope.Profile, "poem"));
+    }
+
+    /// <summary>A locked skill is refused at the row (2026-11-23), as the other moves are.</summary>
+    [Fact]
+    public async Task MoveToProject_ALockedSkill_IsRefused()
+    {
+        UseRepo();
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        SkillLock.Set(Path.Combine(_roots.Profile, "haiku"), true, _time.GetUtcNow());
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // refused: the list again
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillRecordText.LockedNotice("haiku"), Output);
+        Assert.True(Exists(SkillScope.Profile, "haiku"));
+    }
+
+    /// <summary>No level to move to (2026-11-23: a home, project skills off, the guard): no project row; an external skill never reaches the page.</summary>
+    [Fact]
+    public async Task MoveToProject_NoTarget_NoRow()
+    {
+        string repo = UseRepo();
+        _projectTarget = false;
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsMenu.ScopeTitle("haiku"), Output);
+        Assert.Contains("  move     send it to another profile's skills", Output);
+        Assert.DoesNotContain(MovedRow(repo), Output);
+    }
+
+    /// <summary>
+    /// A project skill's delete (2026-11-23, the user's ask): the row and the question say the Recycle bin; Yes → the folder in the bin, the folder's
+    /// other skill still offered and the trust kept. No keeps it.
+    /// </summary>
+    [Fact]
+    public async Task ProjectDelete_ToTheBin_KeepsTheFoldersTrust_NoKeepsIt()
+    {
+        string repo = UseRepo();
+        string deploy = PutProject(repo, "deploy", "Ships it.");
+        PutProject(repo, "lint", "Lints.");
+        TrustRepo(repo);
+        _bin = new FakeRecycleBin();
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill(yes: false);
+        Push(Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // the list again: the page, delete, Yes
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsMenu.KeptNotice, Output);
+        Assert.Contains("  " + Markup.Remove(SkillsText.ProjectDeleteRow(binned: true)), Output);
+        Assert.Contains(SkillsText.ProjectPageCaption(SkillsText.ThisFolderLabel), Output);
+        Assert.Contains(SkillsText.ProjectDeletePrompt("deploy", SkillsText.ThisFolderLabel, claude: false, binned: true, why: null)[..60], Output);
+        Assert.Equal([deploy], _bin.Moved);
+        Assert.False(Directory.Exists(deploy));
+        Assert.Equal([".agents/skills/lint"], _projectTrust!.Trusted(repo)!.Skills.Keys);
+        Assert.Contains(SkillsText.ProjectDeletedNotice("deploy", SkillsText.ThisFolderLabel, DeleteWay.Recycled, null, link: false, trusted: true, loaded: false), Output);
+        _catalog.Scan(new SkillScan(_external, _projectSource));
+        Assert.Equal(SkillScope.Project, _catalog.Find("lint")!.Scope);
+    }
+
+    /// <summary>With no bin in use (the setting off) the row and question say for good (2026-11-23); a disabled skill's name leaves the folder's list.</summary>
+    [Fact]
+    public async Task ProjectDelete_NoBin_ForGood_TheDisabledNameGoes()
+    {
+        string repo = UseRepo();
+        string deploy = PutProject(repo, "deploy", "Ships it.");
+        TrustRepo(repo);
+        _projectTrust!.SetDisabled(repo, "deploy", true);
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("  " + Markup.Remove(SkillsText.ProjectDeleteRow(binned: false)), Output);
+        Assert.Contains("This can't be undone.", Output);
+        Assert.False(Directory.Exists(deploy));
+        Assert.Empty(_projectTrust.DisabledIn(repo));
+        Assert.NotNull(_projectTrust.Trusted(repo));
+        Assert.Contains(SkillsText.ProjectDeletedNotice("deploy", SkillsText.ThisFolderLabel, DeleteWay.Deleted, null, link: false, trusted: true, loaded: false), Output);
+    }
+
+    /// <summary>A change that slips in before the delete (2026-11-23, here while the bin is probed): the folder isn't trusted again; it waits.</summary>
+    [Fact]
+    public async Task ProjectDelete_AnotherChange_TrustsNothing()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        string lint = PutProject(repo, "lint", "Lints.");
+        TrustRepo(repo);
+        _bin = new FakeRecycleBin { OnProbe = _ => File.AppendAllText(Path.Combine(lint, SkillCatalog.FileName), "A stranger's line.\n") };
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(".agents/skills/deploy", _projectTrust!.Trusted(repo)!.Skills.Keys);   // the old trust, not saved again
+        Assert.Contains(SkillsText.ProjectDeletedNotice("deploy", SkillsText.ThisFolderLabel, DeleteWay.Recycled, null, link: false, trusted: false, loaded: false), Output);
+    }
+
+    /// <summary>A .claude skill deletes from .claude\skills (2026-11-23), and its question names that folder.</summary>
+    [Fact]
+    public async Task ProjectDelete_AClaudeSkill_FromItsOwnFolder()
+    {
+        string repo = UseRepo();
+        string deploy = PutProject(repo, "deploy", "Ships it.", claude: true);
+        TrustRepo(repo);
+        _bin = new FakeRecycleBin();
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ProjectDeletePrompt("deploy", SkillsText.ThisFolderLabel, claude: true, binned: true, why: null)[..55], Output);
+        Assert.Equal([deploy], _bin.Moved);
+        Assert.False(Directory.Exists(deploy));
+    }
+
+    /// <summary>A bin that refuses (2026-11-23): the error, the folder still there, the trust as it was.</summary>
+    [Fact]
+    public async Task ProjectDelete_TheBinRefuses_NothingChanges()
+    {
+        string repo = UseRepo();
+        string deploy = PutProject(repo, "deploy", "Ships it.");
+        TrustRepo(repo);
+        string fingerprint = _projectTrust!.Trusted(repo)!.Fingerprint;
+        _bin = new FakeRecycleBin { Answer = new RecycleResult(RecycleOutcome.Failed, "it is busy") };
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ProjectDeleteFailedError("deploy", "it is busy"), Output);
+        Assert.True(Directory.Exists(deploy));
+        Assert.Equal(fingerprint, _projectTrust.Trusted(repo)!.Fingerprint);
+    }
+
+    /// <summary>
+    /// The bin's probe refuses (2026-11-23): no bin on the drive, or a reason of its own; the question says for good with that reason, and Yes deletes
+    /// for good, nothing handed to the bin, the notice giving the same reason.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ProjectDelete_TheProbeRefuses_AsksForGood_WithItsReason(bool noBin)
+    {
+        string repo = UseRepo();
+        string deploy = PutProject(repo, "deploy", "Ships it.");
+        TrustRepo(repo);
+        string why = noBin ? NeonSidekick.Files.FileText.RecycleNoBinHere : "paths too long";
+        _bin = new FakeRecycleBin { ProbeAnswer = noBin ? new RecycleResult(RecycleOutcome.NoBin) : new RecycleResult(RecycleOutcome.Failed, why) };
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("This can't be undone (" + why + ").", Output);
+        Assert.Empty(_bin.Moved);
+        Assert.False(Directory.Exists(deploy));
+        Assert.Contains(SkillsText.ProjectDeletedNotice("deploy", SkillsText.ThisFolderLabel, DeleteWay.DeletedNoBin, why, link: false, trusted: true, loaded: false), Output);
+    }
+
+    /// <summary>A drive with no bin found only at the move (2026-11-23): nothing went; asked again for good, and Yes deletes.</summary>
+    [Fact]
+    public async Task ProjectDelete_ALateNoBin_AsksAgain()
+    {
+        string repo = UseRepo();
+        string deploy = PutProject(repo, "deploy", "Ships it.");
+        TrustRepo(repo);
+        _bin = new FakeRecycleBin { Answer = new RecycleResult(RecycleOutcome.NoBin) };
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill();
+        Push(Keys.Down, Keys.Enter);   // the second question: Yes
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([deploy], _bin.Moved);
+        Assert.Contains("This can't be undone (" + NeonSidekick.Files.FileText.RecycleNoBinHere + ").", Output);
+        Assert.False(Directory.Exists(deploy));
+        Assert.Contains(SkillsText.ProjectDeletedNotice("deploy", SkillsText.ThisFolderLabel, DeleteWay.DeletedNoBin, NeonSidekick.Files.FileText.RecycleNoBinHere, link: false, trusted: true, loaded: false), Output);
+    }
+
+    /// <summary>A linked project skill (2026-11-23): only the link goes, never to the bin, and what it points at stays.</summary>
+    [Fact]
+    public async Task ProjectDelete_ALinkedSkill_LosesOnlyTheLink()
+    {
+        string repo = UseRepo();
+        string target = Path.Combine(repo, "shared", "linked");
+        Directory.CreateDirectory(target);
+        File.WriteAllText(Path.Combine(target, SkillCatalog.FileName), "---\nname: linked\ndescription: Shared.\n---\n\nSteps.\n");
+        string link = Path.Combine(repo, ".agents", "skills", "linked");
+        Directory.CreateDirectory(Path.GetDirectoryName(link)!);
+        if (OperatingSystem.IsWindows())
+        {
+            Junction.Make(link, target);
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(link, target);
+        }
+
+        TrustRepo(repo);
+        _bin = new FakeRecycleBin();
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ProjectDeletePrompt("linked", SkillsText.ThisFolderLabel, claude: false, binned: false, why: null, link: true)[..40], Output);
+        Assert.Empty(_bin.Moved);
+        Assert.False(Directory.Exists(link));
+        Assert.True(File.Exists(Path.Combine(target, SkillCatalog.FileName)));
+        Assert.Contains(SkillsText.ProjectDeletedNotice("linked", SkillsText.ThisFolderLabel, DeleteWay.Deleted, null, link: true, trusted: true, loaded: false), Output);
     }
 
     /// <summary>The pane: the three tabs under the strip, the Offered rows first; Enter or Space on a heading does nothing (the page re-shown); the Project file toggle is an Options row since 2026-10-01 (the one row of a Project tab of its own from later on 2026-09-19 until then) — Enter opens its page, off picked, the status line saying so; ESC closes with nothing in the transcript.</summary>

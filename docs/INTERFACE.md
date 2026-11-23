@@ -166,7 +166,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | **Skills** | |
 | `/skills` › a skill | Enter on a row: move (asks), copy (asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` or Delete removes it (asks) · `c` clear all (asks) |
-| `/skills` › `project` | Enter on a folder's `trust` row reviews its skills · `untrust` (asks) · on a trusted skill: edit, copy to profile or global (asks), disable/enable |
+| `/skills` › `project` | Enter on a folder's `trust` row reviews its skills · `untrust` (asks) · on a trusted skill: edit, copy to profile or global (asks), disable/enable, delete (asks) |
 | Its trust question | Enter on `trust` trusts what is shown · Enter on a skill views its `SKILL.md`, or the change since its trust · Esc cancels |
 | `/commands` | ←/→ all, profile, global · **new command…** asks a name and where, then opens the template · type to filter |
 | `/commands` › a command | Enter on a row: use (to the draft line), move (asks), copy, rename, edit, delete (asks) · a Shadowed file: rename, edit, delete, and for a hidden global one move to another profile · a Skipped file: edit, delete |

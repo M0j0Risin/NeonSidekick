@@ -102,6 +102,7 @@ internal sealed class SkillsMenu
     private readonly SkillCatalog? _catalog;
     private readonly ProjectSkillTrust? _trust;
     private readonly Func<string, IRenderable, CancellationToken, Task>? _view;
+    private readonly Func<IRecycleBin?>? _bin;
 
     /// <summary>
     /// The revert list's buttons (2026-10-07, the user's pick): the highlighted version removed, or every one, each after a yes. The remove
@@ -129,10 +130,13 @@ internal sealed class SkillsMenu
     /// <param name="catalog">The catalog (2026-11-23): the trust question reads a project folder through it, with the scan's rules. Null = no trust question.</param>
     /// <param name="trust">The profile's project trust store (2026-11-23): trust, untrust and a project skill's disable. Null = none of them.</param>
     /// <param name="view">Shows a read-only page in the info pane (2026-11-23): the trust question's View of a <c>SKILL.md</c> or its diff. Null = no view.</param>
+    /// <param name="bin">The bin a project skill's delete uses (2026-11-23, the user's ask), read at each delete: the screen's while <c>File deletes to
+    /// Recycle bin</c> is on. Null, or a null answer, deletes for good, and the row and the question say so.</param>
     public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null,
         Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null, Func<Skill, SkillRevision?, int>? forget = null, Llm.ConversationHistory? session = null,
-        SkillCatalog? catalog = null, ProjectSkillTrust? trust = null, Func<string, IRenderable, CancellationToken, Task>? view = null)
+        SkillCatalog? catalog = null, ProjectSkillTrust? trust = null, Func<string, IRenderable, CancellationToken, Task>? view = null, Func<IRecycleBin?>? bin = null)
     {
+        _bin = bin;
         _catalog = catalog;
         _trust = trust;
         _view = view;
@@ -740,7 +744,7 @@ internal sealed class SkillsMenu
         }
     }
 
-    /// <summary>The scope page under the list — the two roots, move (a profile skill's, 2026-10-13), rename, edit, delete —, the confirmation or the typed slot under that, then the act; true when the folder changed (the facts are stale).</summary>
+    /// <summary>The scope page under the list — the two roots, project (2026-11-23), move (a profile skill's, 2026-10-13), rename, edit, delete —, the confirmation or the typed slot under that, then the act; true when the folder changed (the facts are stale).</summary>
     private async Task<bool> PickScopeAsync(Skill skill, SkillsFacts facts, CancellationToken cancellationToken)
     {
         var roots = facts.Roots;
@@ -755,6 +759,14 @@ internal sealed class SkillsMenu
         // The page's own root rows (2026-10-13): one while Global skills is off, and every index below counts from them.
         var scopeRows = ScopeRowsFor(roots);
         var rows = scopeRows.Select(scope => ScopeRow(scope, roots)).ToList();
+        // The move into the working folder's .agents\skills (2026-11-23, the user's ask): right after the roots, while there's a level to move to and the
+        // trust store to keep it trusted; every row its own index since.
+        int projectRow = facts.ProjectTarget is not null && _catalog is not null && _trust is not null ? rows.Count : -1;
+        if (projectRow >= 0)
+        {
+            rows.Add(SkillsText.ProjectMoveRow(facts.ProjectTarget!));
+        }
+
         // The move to another profile (2026-10-13, the user's ask): a profile skill's alone, after the two roots; every row its own index since.
         int moveRow = skill.Scope == SkillScope.Profile ? rows.Count : -1;
         if (moveRow >= 0)
@@ -808,11 +820,16 @@ internal sealed class SkillsMenu
 
         // A locked skill (2026-10-07): rename, move and delete refused before any question; edit (the user's own editor) and the
         // revert list (its d and c) still open. A copy (2026-10-25) changes nothing here, so it copies a locked skill, the lock with it.
-        bool changes = row == renameRow || row == moveRow || row == deleteRow || (row < scopeRows.Count && scopeRows[row] != skill.Scope);
+        bool changes = row == renameRow || row == moveRow || row == deleteRow || row == projectRow || (row < scopeRows.Count && scopeRows[row] != skill.Scope);
         if (changes && skill.Locked)
         {
             Sink.Notice(SkillRecordText.LockedNotice(skill.Name));
             return false;
+        }
+
+        if (row == projectRow)
+        {
+            return await MoveToProjectAsync(skill, facts, cancellationToken).ConfigureAwait(false);
         }
 
         if (row == moveRow)
@@ -974,6 +991,175 @@ internal sealed class SkillsMenu
                 Sink.Error(MoveFailedError(moved.Detail));
                 return false;
         }
+    }
+
+    /// <summary>
+    /// The <c>project</c> row's act (2026-11-23, the user's ask): a profile or global skill moved into the working folder's <c>.agents\skills</c>, where it
+    /// becomes the repo's skill. Refused ahead of the question for a twin at that level (the folder's name or the skill's, in <c>.agents</c> or
+    /// <c>.claude</c>: a same-level twin would be shadowed); after a yes, copied without the app's markers and the source deleted
+    /// (<see cref="SkillEditor.MoveToProject"/>), its records with it. A disabled skill stays disabled (the trust store's list, by name). The folder is
+    /// trusted again only when that's safe (the user's call): it had no skills, or it was trusted and unchanged, and nothing but the moved skill changed by
+    /// the save (<see cref="SameButFor"/>). True when anything changed (the facts are stale).
+    /// </summary>
+    private async Task<bool> MoveToProjectAsync(Skill skill, SkillsFacts facts, CancellationToken cancellationToken)
+    {
+        if (facts.ProjectTarget is not { } level || _catalog is not { } catalog || _trust is not { } trust)
+        {
+            return false;
+        }
+
+        string label = SkillsText.FolderLabel(facts, level);
+        string root = Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: false));
+        var agents = SkillEditor.ProfileSkillNames(root);
+        var claude = SkillEditor.ProfileSkillNames(Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: true)));
+        string destination = Path.Combine(root, skill.FolderName);
+        if (Directory.Exists(destination) || File.Exists(destination) || agents.Folders.Contains(skill.FolderName) || claude.Folders.Contains(skill.FolderName))
+        {
+            Sink.Error(SkillsText.ProjectExistsError(skill.Name, skill.FolderName, label, byName: false));
+            return false;
+        }
+
+        if (agents.Names.Contains(skill.Name) || claude.Names.Contains(skill.Name))
+        {
+            Sink.Error(SkillsText.ProjectExistsError(skill.Name, skill.FolderName, label, byName: true));
+            return false;
+        }
+
+        if (!await ConfirmAsync(SkillsText.MoveToProjectPrompt(skill.Name, label), cancellationToken).ConfigureAwait(false))
+        {
+            Sink.Notice(KeptNotice);
+            return false;
+        }
+
+        var roots = facts.Roots;
+        string bound = facts.RepoRoot ?? facts.WorkingFolder ?? level;
+        string key = new ProjectSkillLevel(level, root, Claude: false).Kind + "/" + skill.FolderName;
+        bool disabled = skill.Disabled;
+        string? disableError = null;
+        string? trustError = null;
+        var moved = await Task.Run(() =>
+        {
+            // The folder as it stood before, and its trust: safe to trust again when it held nothing, or was trusted as it stands.
+            var before = catalog.ReadProjectFolder(level, bound);
+            var held = trust.Trusted(level);
+            bool safe = before.Order.Count == 0 || (held is not null && string.Equals(held.Fingerprint, before.Fingerprint, StringComparison.Ordinal));
+            var result = SkillEditor.MoveToProject(roots, skill, root, cancellationToken);
+            if (result.Outcome is not (SkillEditOutcome.Moved or SkillEditOutcome.Copied))
+            {
+                return result;
+            }
+
+            if (disabled)
+            {
+                // After the copy, not before: a name left by a failed copy would disable a later repo skill of that name.
+                try
+                {
+                    trust.SetDisabled(level, skill.Name, true);
+                }
+                catch (IOException ex)
+                {
+                    disableError = ex.Message;
+                }
+            }
+
+            if (safe && catalog.ReadProjectFolder(level, bound) is var after && SameButFor(before, after, key))
+            {
+                try
+                {
+                    // The save reads the folder again inside its hold: a change since refuses it (Changed), and the folder waits.
+                    trust.Trust(level, after.Fingerprint, () => catalog.ReadProjectFolder(level, bound));
+                }
+                catch (IOException ex)
+                {
+                    trustError = ex.Message;
+                }
+            }
+
+            return result;
+        }, cancellationToken).ConfigureAwait(false);
+
+        switch (moved.Outcome)
+        {
+            case SkillEditOutcome.Moved:
+                _records?.Deleted(skill.Scope, skill.FolderName);
+                var fresh = _facts();
+                Sink.Notice(SkillsText.MovedToProjectNotice(skill.Name, label, MovedState(fresh, level, key)));
+                ShadowNotice(fresh, level);
+                break;
+            case SkillEditOutcome.Copied:
+                Sink.Error(SkillsText.MovedButKeptError(skill.Name, skill.Scope, moved.Detail));
+                break;
+            case SkillEditOutcome.Exists:
+                Sink.Error(SkillsText.ProjectExistsError(skill.Name, skill.FolderName, label, byName: false));
+                return false;
+            case SkillEditOutcome.Missing:
+                Sink.Error(MissingError(skill.Name));
+                return true;
+            case SkillEditOutcome.GlobalOff:
+                Sink.Notice(SkillRecordText.GlobalOffNotice(skill.Name));
+                return true;
+            case SkillEditOutcome.Locked:
+                Sink.Notice(SkillRecordText.LockedNotice(skill.Name));
+                return false;
+            default:
+                Sink.Error(MoveFailedError(moved.Detail));
+                return false;
+        }
+
+        if (disableError is not null)
+        {
+            Sink.Error(SkillRecordText.DisableFailedError(skill.Name, disableError));
+        }
+
+        if (trustError is not null)
+        {
+            Sink.Error(SkillsText.TrustSaveFailedError(label, trustError));
+        }
+
+        return true;
+    }
+
+    /// <summary>Where a skill moved into <paramref name="level"/> under <paramref name="key"/> stands in <paramref name="facts"/> read after the move.</summary>
+    private static ProjectMoveState MovedState(SkillsFacts facts, string level, string key)
+    {
+        bool Here(Skill s) => s.Scope == SkillScope.Project && string.Equals(s.TrustFolder, level, StringComparison.Ordinal) && string.Equals(s.ProjectKey, key, StringComparison.Ordinal);
+        if (facts.Skills.FirstOrDefault(Here) is { } offered)
+        {
+            return offered.Disabled ? ProjectMoveState.Disabled : ProjectMoveState.Offered;
+        }
+
+        if (facts.ProjectPending.FirstOrDefault(p => Here(p.Skill)) is { } pending)
+        {
+            return pending.Reason switch
+            {
+                ProjectPendingReason.NotTrusted => ProjectMoveState.Waiting,
+                ProjectPendingReason.OverCap => ProjectMoveState.OverCap,
+                _ => ProjectMoveState.Unlisted,
+            };
+        }
+
+        return facts.Shadowed.Any(Here) ? ProjectMoveState.Shadowed : ProjectMoveState.Unlisted;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="after"/> is <paramref name="before"/> but for the one skill <paramref name="key"/> (2026-11-23): the same hashes apart from it, and
+    /// the same keys in the scan's order as a set apart from it (past the 50 cap a skill shows in the order alone). A stranger's change that slipped in
+    /// between the reads is never trusted unseen. Pure.
+    /// </summary>
+    public static bool SameButFor(ProjectFolderState before, ProjectFolderState after, string key)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        ArgumentNullException.ThrowIfNull(key);
+        var was = before.Hashes.Where(p => !string.Equals(p.Key, key, StringComparison.Ordinal)).ToList();
+        var now = after.Hashes.Where(p => !string.Equals(p.Key, key, StringComparison.Ordinal)).ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        if (was.Count != now.Count || was.Any(p => !now.TryGetValue(p.Key, out var hash) || !string.Equals(hash, p.Value, StringComparison.Ordinal)))
+        {
+            return false;
+        }
+
+        var wasKeys = before.Order.Where(k => !string.Equals(k, key, StringComparison.Ordinal)).ToHashSet(StringComparer.Ordinal);
+        return wasKeys.SetEquals(after.Order.Where(k => !string.Equals(k, key, StringComparison.Ordinal)));
     }
 
     /// <summary>
@@ -1449,8 +1635,9 @@ internal sealed class SkillsMenu
     }
 
     /// <summary>
-    /// A trusted project skill's page (2026-11-23): edit (the user's editor; a change asks for trust again), a copy into the profile or global skills, and
-    /// disable or enable, kept in the profile. No rename, move, lock, revert or delete: the skill is the repo's.
+    /// A trusted project skill's page (2026-11-23): edit (the user's editor; a change asks for trust again), a copy into the profile or global skills,
+    /// disable or enable, kept in the profile, and (later that day, the user's ask) delete, after a yes. No rename, move, lock or revert: the skill is the
+    /// repo's.
     /// </summary>
     private async Task<bool> ProjectPageAsync(Skill skill, SkillsFacts facts, CancellationToken cancellationToken)
     {
@@ -1460,6 +1647,13 @@ internal sealed class SkillsMenu
         rows.AddRange(copies.Select(SkillsText.ProjectCopyRow));
         int disableRow = rows.Count;
         rows.Add(SkillsText.ProjectDisableRow(skill.Disabled));
+        // The delete (2026-11-23, the user's ask): last, its own index; handled before the copy rows' fall-through below.
+        int deleteRow = skill.TrustFolder is not null && skill.ProjectKey is not null ? rows.Count : -1;
+        if (deleteRow >= 0)
+        {
+            rows.Add(SkillsText.ProjectDeleteRow(_bin?.Invoke() is not null));
+        }
+
         string label = SkillsText.FolderLabel(facts, skill.TrustFolder ?? skill.Directory);
         var page = new MenuPage(ScopeTitle(skill.Name), rows, ScopeKeys) { Caption = SkillsText.ProjectPageCaption(label) };
         if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var row })
@@ -1478,7 +1672,171 @@ internal sealed class SkillsMenu
             return await SetProjectDisabledAsync(skill, cancellationToken).ConfigureAwait(false);
         }
 
+        if (row == deleteRow)
+        {
+            return await DeleteProjectAsync(skill, facts, cancellationToken).ConfigureAwait(false);
+        }
+
         return row - 1 < copies.Count && await CopyProjectAsync(skill, copies[row - 1], roots, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// A project skill's delete (2026-11-23, the user's ask): the folder must sit right in its level's skills folder. The way is decided before the
+    /// question: the bin when one is in use and its probe takes the folder, else for good with the reason; a link is removed alone, never what it points
+    /// at. A drive that turns out to have no bin asks again, for good. After it, the folder stays trusted when that's safe (trusted and unchanged but for
+    /// this skill, <see cref="SameButFor"/>), and its name leaves the disabled list unless a twin of that name remains at the level. True when anything
+    /// may have changed (the facts are stale).
+    /// </summary>
+    private async Task<bool> DeleteProjectAsync(Skill skill, SkillsFacts facts, CancellationToken cancellationToken)
+    {
+        if (skill.TrustFolder is not { } level || skill.ProjectKey is not { } key)
+        {
+            return false;
+        }
+
+        string label = SkillsText.FolderLabel(facts, level);
+        string expected = Path.Combine(level, SkillsText.ProjectSkillsFolder(skill.ClaudeRules));
+        string directory = Path.TrimEndingDirectorySeparator(skill.Directory);
+        bool link;
+        try
+        {
+            var info = new DirectoryInfo(directory);
+            link = info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0;
+            if (!info.Exists || !string.Equals(Path.GetDirectoryName(directory), expected, CaseRule.Comparison(expected)))
+            {
+                Sink.Error(MissingError(skill.Name));
+                return true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            Sink.Error(MissingError(skill.Name));
+            return true;
+        }
+
+        // The way, decided once: the yes below is to this question, so the delete is handed this bin (or none), never the setting again.
+        IRecycleBin? bin = null;
+        string? why = null;
+        if (!link && _bin?.Invoke() is { } recycle)
+        {
+            if (await Task.Run(() => recycle.Probe(directory), cancellationToken).ConfigureAwait(false) is { } refused)
+            {
+                why = refused.Outcome == RecycleOutcome.NoBin || refused.Message.Length == 0 ? FileText.RecycleNoBinHere : refused.Message;
+            }
+            else
+            {
+                bin = recycle;
+            }
+        }
+
+        if (!await ConfirmAsync(SkillsText.ProjectDeletePrompt(skill.Name, label, skill.ClaudeRules, bin is not null, why, link), cancellationToken).ConfigureAwait(false))
+        {
+            Sink.Notice(KeptNotice);
+            return false;
+        }
+
+        var catalog = _catalog;
+        var trust = _trust;
+        string bound = facts.RepoRoot ?? facts.WorkingFolder ?? level;
+        ProjectFolderState? before = null;
+        ProjectTrustKind? held = null;
+        if (catalog is not null && trust is not null)
+        {
+            (before, held) = await Task.Run(() => (catalog.ReadProjectFolder(level, bound), trust.Trusted(level)), cancellationToken).ConfigureAwait(false);
+        }
+
+        var way = DeleteWay.Deleted;
+        try
+        {
+            if (bin is not null)
+            {
+                var moved = await Task.Run(() => bin.Move(directory), cancellationToken).ConfigureAwait(false);
+                switch (moved.Outcome)
+                {
+                    case RecycleOutcome.Recycled:
+                        way = DeleteWay.Recycled;
+                        break;
+                    case RecycleOutcome.NoBin:
+                        // No bin there after all: nothing went, and nothing is deleted for good behind the question's back.
+                        why = FileText.RecycleNoBinHere;
+                        if (!await ConfirmAsync(SkillsText.ProjectDeletePrompt(skill.Name, label, skill.ClaudeRules, binned: false, why), cancellationToken).ConfigureAwait(false))
+                        {
+                            Sink.Notice(KeptNotice);
+                            return false;
+                        }
+
+                        break;
+                    default:
+                        Sink.Error(SkillsText.ProjectDeleteFailedError(skill.Name, moved.Message.Length > 0 ? moved.Message : FileText.RecycleNoAnswer));
+                        return true;
+                }
+            }
+
+            if (way != DeleteWay.Recycled)
+            {
+                await Task.Run(() => FileDeletes.Remove(directory, isDirectory: true, isLink: link, bin: null), cancellationToken).ConfigureAwait(false);
+                way = why is null ? DeleteWay.Deleted : DeleteWay.DeletedNoBin;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Sink.Error(SkillsText.ProjectDeleteFailedError(skill.Name, ex.Message));
+            return true;
+        }
+
+        bool trusted = false;
+        string? trustError = null;
+        string? disableError = null;
+        bool twin = facts.Skills.Concat(facts.Shadowed).Concat(facts.ProjectPending.Select(p => p.Skill))
+            .Any(s => s.Scope == SkillScope.Project && string.Equals(s.TrustFolder, level, StringComparison.Ordinal)
+                && !string.Equals(s.ProjectKey, key, StringComparison.Ordinal) && string.Equals(s.Name, skill.Name, StringComparison.Ordinal));
+        if (catalog is not null && trust is not null)
+        {
+            await Task.Run(() =>
+            {
+                if (held is not null && before is not null && string.Equals(held.Fingerprint, before.Fingerprint, StringComparison.Ordinal)
+                    && catalog.ReadProjectFolder(level, bound) is var after && SameButFor(before, after, key))
+                {
+                    try
+                    {
+                        trusted = trust.Trust(level, after.Fingerprint, () => catalog.ReadProjectFolder(level, bound)) == ProjectTrustSave.Saved;
+                    }
+                    catch (IOException ex)
+                    {
+                        trustError = ex.Message;
+                    }
+                }
+
+                if (skill.Disabled && !twin)
+                {
+                    // Off the list, so a later skill of that name isn't born disabled.
+                    try
+                    {
+                        trust.SetDisabled(level, skill.Name, false);
+                    }
+                    catch (IOException ex)
+                    {
+                        disableError = ex.Message;
+                    }
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
+        // A loaded "x" is this skill's only when it was the one offered under that name (a shadowed one's was your own skill's).
+        bool offered = facts.Skills.Any(s => s.Scope == SkillScope.Project && string.Equals(s.ProjectKey, key, StringComparison.Ordinal) && string.Equals(s.TrustFolder, level, StringComparison.Ordinal));
+        bool loaded = offered && (_session?.LoadedSkills ?? []).Any(l => string.Equals(l.Name, skill.Name, StringComparison.OrdinalIgnoreCase));
+        Sink.Notice(SkillsText.ProjectDeletedNotice(skill.Name, label, way, why, link, trusted, loaded));
+        if (trustError is not null)
+        {
+            Sink.Error(SkillsText.TrustSaveFailedError(label, trustError));
+        }
+
+        if (disableError is not null)
+        {
+            Sink.Error(SkillRecordText.DisableFailedError(skill.Name, disableError));
+        }
+
+        return true;
     }
 
     /// <summary>

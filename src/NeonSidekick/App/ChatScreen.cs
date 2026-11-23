@@ -1876,7 +1876,9 @@ internal sealed partial class ChatScreen
         _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill, ForgetSkillVersions,
             session: _session.History,   // the loaded sub-tab (2026-10-12): the one history the session keeps, watched while the pane is open
             // The repo's skills (2026-11-23): the trust question reads through the catalog, saves to the profile's store, and views in the info pane.
-            catalog: _catalog, trust: _projectTrust, view: (label, content, ct) => _info.ShowAsync(label, [new InfoTab(label, () => content)], 0, ct));
+            catalog: _catalog, trust: _projectTrust, view: (label, content, ct) => _info.ShowAsync(label, [new InfoTab(label, () => content)], 0, ct),
+            // A project skill's delete (2026-11-23, the user's ask): the screen's bin under File deletes to Recycle bin, read at each delete.
+            bin: () => _effective().FileDeletesToRecycleBin ? _recycleBin : null);
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
         _toolsMenu = new ToolsMenu(ToolsFacts, settings, _menu, _flow, _menuPane);
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
@@ -3472,8 +3474,20 @@ internal sealed partial class ChatScreen
         bool project = ProjectSourceFor(effective) is not null;
         return new SkillsFacts(effective.AgentSkills, skills, effective.AgentSkills ? _catalog.Shadowed : [], effective.AgentSkills ? _catalog.Problems : [], _catalog.Roots, _skillRecords.Versions(),
             _skillRecords.ChangedAt(), _skillRecords.Zone,
-            project ? _catalog.ProjectPending : null, project ? _catalog.ProjectFolders : null, _files.Root, project ? ProjectRepoRoot() : null);
+            project ? _catalog.ProjectPending : null, project ? _catalog.ProjectFolders : null, _files.Root, project ? ProjectRepoRoot() : null,
+            project ? ProjectMoveTarget() : null);
     }
+
+    /// <summary>
+    /// Where the scope page's <c>project</c> row moves a skill (2026-11-23, the user's ask): the working folder, when the walk reads it as its first level and
+    /// the guard lets a write into its <c>.agents\skills</c> (not the install folder, nor a home folder the app keeps); null hides the row. The move writes
+    /// through the skill editor, not the file tools, so this is the one check.
+    /// </summary>
+    private string? ProjectMoveTarget() =>
+        ProjectSkillWalk.MoveTarget(_files.Root, _projectSource.UserHome, _projectSource.AppHome) is { } level
+        && WriteGuard.Judge(_files.Root, Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: false)), WriteRole.Write) is null
+            ? level
+            : null;
 
     /// <summary>The repo's skills as <paramref name="catalog"/>'s last scan read them (2026-11-23): trusted and offered, not trusted, past the cap. Shared with headless.</summary>
     public static (int Trusted, int NotTrusted, int OverCap) ProjectSkillCounts(SkillCatalog catalog)
