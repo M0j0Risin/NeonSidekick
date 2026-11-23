@@ -38,9 +38,10 @@ internal static class HelpToolCatalog
     public const string PlanGroup = "Plan";
     public const string AuditGroup = "Code audit";
     public const string RalphGroup = "Ralph loop";
+    public const string ProjectGroup = "Project notes";   // /project-init's (2026-11-23)
 
     /// <summary>The groups only a pass offers, listed last.</summary>
-    public static readonly IReadOnlyList<string> PassGroups = [PlanGroup, AuditGroup, RalphGroup];
+    public static readonly IReadOnlyList<string> PassGroups = [PlanGroup, AuditGroup, RalphGroup, ProjectGroup];
 
     /// <summary>The bare tool names that match only as the whole query, in backticks, or followed by "tool" (common English words).</summary>
     public static readonly IReadOnlySet<string> BareWords = new HashSet<string>(StringComparer.Ordinal)
@@ -304,7 +305,7 @@ internal static class HelpToolCatalog
         T(SaveMemoryTool.ToolName, MemoryGroup, SettingsField.MemoryMode, "Saves one lasting fact about the user, known in every later session; `here` keeps a fact about the project to the working folder.", needs: [SettingsField.MemoryMode], setup: "only while *Memory mode* is read-write"),
         T(RecallMemoryTool.ToolName, MemoryGroup, SettingsField.MemoryMode, "Gives back the facts saved for everywhere and for the working folder, oldest first."),
         // Skills
-        T(LoadSkillTool.ToolName, SkillsGroup, SettingsField.AgentSkills, "Loads a skill's full instructions by name.", setup: "needs a skill installed (`/skills`)"),
+        T(LoadSkillTool.ToolName, SkillsGroup, SettingsField.AgentSkills, "Loads a skill's full instructions by name.", setup: "needs a skill installed or a trusted project skill (`/skills`)"),
         T(SkillEditorTool.ToolName, SkillsGroup, SettingsField.AgentSkills, "Creates or updates a skill: a named folder of instructions kept for later sessions."),
         // Sessions
         T(SessionManagerTool.ToolName, SessionsGroup, SettingsField.SessionTool, "Finds and reads the user's earlier conversations in this profile."),
@@ -316,6 +317,7 @@ internal static class HelpToolCatalog
         T(PresentPlanTool.ToolName, PlanGroup, null, "Presents a plan for the user's approval and saves it in the working folder's `.neon` folder.", setup: "only while planning, under `/plan`"),
         T(PresentAuditTool.ToolName, AuditGroup, null, "Records a code audit pass's findings in the audit's report.", setup: "only during a `/code-audit` pass"),
         T(FinishStepTool.ToolName, RalphGroup, null, "Reports a Ralph loop pass's step as done, blocked or split.", setup: "only during a Ralph loop pass, under `/plan ralph`"),
+        T(PresentProjectNotesTool.ToolName, ProjectGroup, null, "Shows a draft of the working folder's `NEON.md` for the user to write, revise or cancel.", headless: false, pane: true, setup: "only during `/project-init`"),
     ];
 
     private const string SqliteSetup = "needs a database in `sqlite.json` ticked on `/tools sqlite`, or *SQLite sandbox files* on";

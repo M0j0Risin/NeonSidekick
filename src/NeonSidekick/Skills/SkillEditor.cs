@@ -148,7 +148,8 @@ public static class SkillEditor
             }
         }
 
-        return null;
+        // A trusted project skill's name (2026-11-23): only when the caller passed them (the editors), and never a folder to open.
+        return roots.ProjectNames.Contains(name, StringComparer.Ordinal) ? SkillScope.Project : null;
     }
 
     /// <summary>A new skill; refused when the folder is already there, or the name is a skill in any other root the catalog reads.</summary>
@@ -187,8 +188,8 @@ public static class SkillEditor
         // The name is one skill across the roots: a copy here would shadow the one there.
         switch (Find(roots, name, external))
         {
-            case SkillScope.External:
-                return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+            case SkillScope.External or SkillScope.Project:
+                return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, Find(roots, name, external)!.Value, Detail: Llm.Tools.SkillEditorTool.CreateAction);
             case { } elsewhere:
                 return new SkillEditResult(SkillDisable.IsDisabled(Path.Combine(roots.Of(elsewhere), name)) ? SkillEditOutcome.Disabled : SkillEditOutcome.ExistsElsewhere, name, elsewhere);
         }
@@ -224,8 +225,8 @@ public static class SkillEditor
             // Not here: where it lives, if anywhere — never a hint to create a copy of a skill that exists.
             switch (Find(roots, name, external))
             {
-                case SkillScope.External:
-                    return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+                case SkillScope.External or SkillScope.Project:
+                    return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, Find(roots, name, external)!.Value);
                 case { } found:
                     scope = found;
                     directory = Path.Combine(roots.Of(scope), name);
@@ -309,9 +310,9 @@ public static class SkillEditor
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(path);
-        if (scope == SkillScope.External)
+        if (SkillScopes.IsReadOnly(scope))
         {
-            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, scope);
         }
 
         if (roots.Hides(scope))
@@ -441,8 +442,8 @@ public static class SkillEditor
         {
             switch (Find(roots, name, external))
             {
-                case SkillScope.External:
-                    return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+                case SkillScope.External or SkillScope.Project:
+                    return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, Find(roots, name, external)!.Value);
                 case { } found:
                     scope = found;
                     break;
@@ -524,8 +525,8 @@ public static class SkillEditor
             // Not here: where it lives, if anywhere — a file never makes a skill.
             switch (Find(roots, name, external))
             {
-                case SkillScope.External:
-                    return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, SkillScope.External);
+                case SkillScope.External or SkillScope.Project:
+                    return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, name, Find(roots, name, external)!.Value);
                 case { } found:
                     scope = found;
                     break;
@@ -617,9 +618,9 @@ public static class SkillEditor
     {
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(skill);
-        if (skill.Scope == SkillScope.External || to == SkillScope.External)
+        if (SkillScopes.IsReadOnly(skill.Scope) || SkillScopes.IsReadOnly(to))
         {
-            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
+            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScopes.IsReadOnly(skill.Scope) ? skill.Scope : to);
         }
 
         if (roots.Hides(skill.Scope) || roots.Hides(to))
@@ -761,7 +762,13 @@ public static class SkillEditor
     /// would list a half-made skill) and moved into place, so a failure or a cancel (checked between files, then thrown) leaves nothing; a
     /// crash's leftover temp folder is swept at the next copy. The copy starts with no history: the revisions and events are keyed by profile.
     /// </summary>
-    public static SkillEditResult CopyFolder(string folder, string profileSkillsRoot, CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// A repo's skill copied into this profile or the global skills (2026-11-23, feature idea #16) passes <paramref name="dropMarkers"/>: its
+    /// <c>.neon-source.json</c>, lock and disable markers are a stranger's claims (a forged origin would let a later <c>/skills add</c> replace your copy),
+    /// so they're left out. <paramref name="rewriteSkill"/> rewrites the copy's <c>SKILL.md</c> in the temp folder before the move: a <c>.claude</c> skill
+    /// read with Claude Code's defaults gets them written in, so the profile's rules read it too. The repo's file is never touched.
+    /// </remarks>
+    public static SkillEditResult CopyFolder(string folder, string profileSkillsRoot, CancellationToken cancellationToken = default, bool dropMarkers = false, Func<string, string>? rewriteSkill = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         ArgumentException.ThrowIfNullOrWhiteSpace(profileSkillsRoot);
@@ -792,6 +799,10 @@ public static class SkillEditor
             var files = new List<string>();
             long bytes = 0;
             Collect(info, "", folders, files, ref bytes);
+            if (dropMarkers)
+            {
+                files.RemoveAll(f => f is SkillProvenance.FileName or SkillLock.FileName or SkillDisable.FileName);
+            }
             if (files.Count > WorkingDirectory.MaxTransferFiles || bytes > WorkingDirectory.MaxTransferBytes)
             {
                 return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: WorkingDirectory.TransferCapDetail(files.Count, bytes));
@@ -816,6 +827,13 @@ public static class SkillEditor
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 File.Copy(Path.Combine(source, relative), Path.Combine(staged, relative));
+            }
+
+            if (rewriteSkill is not null)
+            {
+                string skillFile = Path.Combine(staged, SkillCatalog.FileName);
+                string text = WorkingDirectory.Decode(File.ReadAllBytes(skillFile), out _);
+                File.WriteAllText(skillFile, rewriteSkill(text), new System.Text.UTF8Encoding(false));
             }
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -937,9 +955,9 @@ public static class SkillEditor
     {
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(skill);
-        if (skill.Scope == SkillScope.External)
+        if (SkillScopes.IsReadOnly(skill.Scope))
         {
-            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
+            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, skill.Scope);
         }
 
         if (roots.Hides(skill.Scope))
@@ -993,9 +1011,9 @@ public static class SkillEditor
         ArgumentNullException.ThrowIfNull(skill);
         ArgumentNullException.ThrowIfNull(newName);
         newName = newName.Trim();
-        if (skill.Scope == SkillScope.External)
+        if (SkillScopes.IsReadOnly(skill.Scope))
         {
-            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, SkillScope.External);
+            return new SkillEditResult(SkillEditOutcome.ExternalReadOnly, skill.Name, skill.Scope);
         }
 
         if (roots.Hides(skill.Scope))
@@ -1032,7 +1050,7 @@ public static class SkillEditor
 
         if (Find(roots, newName, external: true) is { } elsewhere)
         {
-            return new SkillEditResult(elsewhere == SkillScope.External ? SkillEditOutcome.ExternalReadOnly : SkillEditOutcome.ExistsElsewhere, newName, elsewhere);
+            return new SkillEditResult(SkillScopes.IsReadOnly(elsewhere) ? SkillEditOutcome.ExternalReadOnly : SkillEditOutcome.ExistsElsewhere, newName, elsewhere, Detail: SkillScopes.IsReadOnly(elsewhere) ? Llm.Tools.SkillEditorTool.CreateAction : "");
         }
 
         string text;

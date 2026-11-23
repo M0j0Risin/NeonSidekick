@@ -134,7 +134,7 @@ public sealed class SkillRecords
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(result);
         ArgumentNullException.ThrowIfNull(actor);
-        if (result.Scope == SkillScope.External || result.Name.Length == 0 || Hidden(roots, result.Scope, result.Name))
+        if (SkillScopes.IsReadOnly(result.Scope) || result.Name.Length == 0 || Hidden(roots, result.Scope, result.Name))
         {
             // The roots it was written under decide (2026-10-13): a reflection that wrote global in a profile with the switch on is
             // still recorded after a switch to one with it off.
@@ -273,7 +273,7 @@ public sealed class SkillRecords
     public void Installed(SkillInstallResult result)
     {
         ArgumentNullException.ThrowIfNull(result);
-        if (result.Scope == SkillScope.External || Hidden(result.Scope, result.Directory))
+        if (SkillScopes.IsReadOnly(result.Scope) || Hidden(result.Scope, result.Directory))
         {
             return;
         }
@@ -306,7 +306,7 @@ public sealed class SkillRecords
     public void Used(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        if (skill.Scope == SkillScope.External || Hidden(skill.Scope, skill.FolderName))
+        if (SkillScopes.IsReadOnly(skill.Scope) || Hidden(skill.Scope, skill.FolderName))
         {
             return;
         }
@@ -336,7 +336,7 @@ public sealed class SkillRecords
         var known = skills.Where(s => !roots.Hides(s.Scope)).ToList();
         foreach (var (name, errors) in trace.ErrorsAfterLoad)
         {
-            if (known.Find(s => string.Equals(s.Name, name, StringComparison.Ordinal)) is { Scope: not SkillScope.External } skill)
+            if (known.Find(s => string.Equals(s.Name, name, StringComparison.Ordinal)) is { Scope: not (SkillScope.External or SkillScope.Project) } skill)
             {
                 _store.AddEvent(skill.Scope, profile, skill.FolderName, SkillEventKinds.Used, SkillActors.Model, profile, now, sessionId, errors);
             }
@@ -350,7 +350,7 @@ public sealed class SkillRecords
     public SkillFacts? FactsOf(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        if (skill.Scope == SkillScope.External || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row)
+        if (SkillScopes.IsReadOnly(skill.Scope) || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row)
         {
             return null;
         }
@@ -400,7 +400,7 @@ public sealed class SkillRecords
         return skill =>
         {
             ArgumentNullException.ThrowIfNull(skill);
-            return skill.Scope == SkillScope.External ? null : 1 + counts.GetValueOrDefault((skill.Scope, skill.FolderName));
+            return SkillScopes.IsReadOnly(skill.Scope) ? null : 1 + counts.GetValueOrDefault((skill.Scope, skill.FolderName));
         };
     }
 
@@ -424,7 +424,7 @@ public sealed class SkillRecords
         return skill =>
         {
             ArgumentNullException.ThrowIfNull(skill);
-            DateTimeOffset? at = skill.Scope == SkillScope.External ? null
+            DateTimeOffset? at = SkillScopes.IsReadOnly(skill.Scope) ? null
                 : records.TryGetValue((skill.Scope, skill.FolderName), out var recorded) ? recorded : null;
             if (writes.GetOrAdd(skill.FilePath, WrittenOf) is { } written && (at is null || written > at))
             {
@@ -451,7 +451,7 @@ public sealed class SkillRecords
     public SkillRevision? LatestRevision(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        return skill.Scope == SkillScope.External || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row
+        return SkillScopes.IsReadOnly(skill.Scope) || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row
             ? null
             : _store.Revisions(row.Id).FirstOrDefault();
     }
@@ -463,7 +463,7 @@ public sealed class SkillRecords
     public IReadOnlyList<SkillRevision> Revisions(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        return skill.Scope == SkillScope.External || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row
+        return SkillScopes.IsReadOnly(skill.Scope) || _store.Find(skill.Scope, CurrentProfile, skill.FolderName) is not { } row
             ? []
             : _store.Revisions(row.Id);
     }
@@ -476,7 +476,7 @@ public sealed class SkillRecords
     public int ForgetVersions(Skill skill, SkillRevision? revision)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        if (skill.Scope == SkillScope.External || Hidden(skill.Scope, skill.FolderName))
+        if (SkillScopes.IsReadOnly(skill.Scope) || Hidden(skill.Scope, skill.FolderName))
         {
             return 0;
         }
@@ -597,7 +597,7 @@ public sealed class SkillRecords
             return 0;
         }
 
-        var known = skills.Where(s => s.Scope != SkillScope.External).ToList();
+        var known = skills.Where(s => !SkillScopes.IsReadOnly(s.Scope)).ToList();
         Skill? Of(string name) => known.Find(s => string.Equals(s.Name, name, StringComparison.Ordinal));
         int added = 0;
         foreach (var (at, name, action, sessionId) in sessions.LearnedReflections())
@@ -686,7 +686,7 @@ public sealed class SkillRecords
             return error;
         }
 
-        if (skill.Scope != SkillScope.External)
+        if (!SkillScopes.IsReadOnly(skill.Scope))
         {
             string profile = CurrentProfile;
             _store.AddEvent(skill.Scope, profile, skill.FolderName, locked ? SkillEventKinds.Locked : SkillEventKinds.Unlocked, SkillActors.User, profile, now);
@@ -716,7 +716,7 @@ public sealed class SkillRecords
             return error;
         }
 
-        if (skill.Scope != SkillScope.External)
+        if (!SkillScopes.IsReadOnly(skill.Scope))
         {
             string profile = CurrentProfile;
             _store.AddEvent(skill.Scope, profile, skill.FolderName, disabled ? SkillEventKinds.Disabled : SkillEventKinds.Enabled, SkillActors.User, profile, now);

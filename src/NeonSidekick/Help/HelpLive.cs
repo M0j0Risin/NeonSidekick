@@ -71,6 +71,12 @@ public sealed record HelpLive(
     /// <summary>The settings the needs are read in (<see cref="HelpToolCatalog.NeedMet"/>); null skips that last step.</summary>
     public AppSettingsData? Settings { get; init; }
 
+    /// <summary>
+    /// The repo's skills as the last scan read them (2026-11-23, feature idea #16): trusted and offered, not trusted, past the cap; null while
+    /// <c>Project skills</c> is off. <c>load_skill</c>'s offered line names them (<see cref="HelpText.LiveOfferedProjectSkills"/>).
+    /// </summary>
+    public Func<(int Trusted, int NotTrusted, int OverCap)?>? ProjectSkills { get; init; }
+
     /// <summary>An MCP tool's name looked up among the session's servers; null when there is no session to ask.</summary>
     public Func<string, HelpMcpLookup?>? Mcp { get; init; }
 
@@ -98,7 +104,9 @@ public sealed record HelpLive(
         ArgumentNullException.ThrowIfNull(entry);
         if (Offered.Contains(entry.Name))
         {
-            return HelpText.LiveOffered;
+            return entry.Name == Llm.Tools.LoadSkillTool.ToolName && ProjectSkills?.Invoke() is var (trusted, notTrusted, overCap)
+                ? HelpText.LiveOfferedProjectSkills(trusted, notTrusted, overCap)
+                : HelpText.LiveOffered;
         }
 
         string? why = !ToolsEnabled ? HelpText.LiveToolsOff
@@ -168,9 +176,15 @@ public sealed record HelpLive(
     /// tools (the web's under <c>Code audit web research</c>); a Ralph pass with nobody to ask (the checkpoint at 0, or headless) leaves out the
     /// tools that ask and confirm; a gap or audit pass under its ask switch off leaves out the asking tools. Null for none.
     /// </summary>
-    internal static string? PassReasonFor(string name, AppSettingsData effective, bool auditPass, bool ralphBarred, bool ralphHeadless, bool gapReviewing)
+    internal static string? PassReasonFor(string name, AppSettingsData effective, bool auditPass, bool ralphBarred, bool ralphHeadless, bool gapReviewing, bool projectInitPass = false)
     {
         ArgumentNullException.ThrowIfNull(effective);
+        if (projectInitPass && !ProjectInit.ProjectInitTools.Allowed.Contains(name))
+        {
+            // A /project-init pass (2026-11-23): its own reads alone.
+            return HelpText.LiveProjectInitPass;
+        }
+
         if (auditPass && !Audits.AuditTools.Allowed(effective).Contains(name))
         {
             return Audits.AuditTools.Web.Contains(name, StringComparer.Ordinal) && !effective.CodeAuditWebResearch ? HelpText.LiveAuditWeb : HelpText.LiveAuditPass;

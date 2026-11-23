@@ -1543,6 +1543,15 @@ public sealed class AppSettingsData
     public bool ExternalSkills { get; set; }
 
     /// <summary>
+    /// Whether a repo's own skills are read (2026-11-23, feature idea #16, the user's name and default): the <c>.agents/skills</c> and
+    /// <c>.claude/skills</c> folders from the working folder up to its repo root, nearest first, each folder's offered only after you trust it on
+    /// <c>/skills</c> › project (<see cref="Skills.ProjectSkillTrust"/>). Ranked last, so your own skills win a clash; at most 50 offered. Needs
+    /// <see cref="AgentSkills"/>; independent of <see cref="ProjectFile"/>. Off: no project scan, no sub-tab, no notice; saved trust is kept. No
+    /// variable or flag: a headless run already reads nothing without saved trust.
+    /// </summary>
+    public bool ProjectSkills { get; set; } = true;
+
+    /// <summary>
     /// Whether the working directory's <c>NEON.md</c> (else <c>AGENTS.md</c>, else <c>CLAUDE.md</c> since 2026-10-18, the user's ask)
     /// is read into the system prompt (later on 2026-09-19, the user's ask; always, under <see cref="AgentSkills"/>,
     /// until then). Off = the file is left alone whatever it holds; nothing either way while

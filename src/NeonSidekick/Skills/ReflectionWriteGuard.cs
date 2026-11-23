@@ -50,7 +50,7 @@ public sealed class ReflectionWriteGuard
     public static bool Updatable(Skill skill, ReflectionInstalledPolicy installed)
     {
         ArgumentNullException.ThrowIfNull(skill);
-        return skill.Scope != SkillScope.External
+        return !SkillScopes.IsReadOnly(skill.Scope)
             && !skill.Locked
             && !(installed == ReflectionInstalledPolicy.ReadOnly && SkillProvenance.Read(skill.Directory) is not null);
     }
@@ -77,7 +77,7 @@ public sealed class ReflectionWriteGuard
         ArgumentNullException.ThrowIfNull(name);
         name = name.Trim();
         var roots = _roots();
-        if (SkillEditor.Find(roots, name, _external) is not { } scope || scope == SkillScope.External)
+        if (SkillEditor.Find(roots, name, _external) is not { } scope || SkillScopes.IsReadOnly(scope))
         {
             return null;
         }

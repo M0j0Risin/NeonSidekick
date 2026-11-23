@@ -17,7 +17,7 @@ Elsewhere:
   - [Files and folders](#files-and-folders) · [Pictures, camera and screen](#pictures-camera-and-screen) · [Voice](#voice) · [Web and video](#web-and-video)
   - [Integrations](#integrations) · [Admin](#admin) · [Display and windows](#display-and-windows) · [Automation](#automation)
 - [Command details](#command-details)
-  - [Plan mode](#plan-mode) · [Ralph loop](#ralph-loop) · [Code audit](#code-audit) · [Bot conversations](#bot-conversations) · [Claude Code from the chat](#claude-code-from-the-chat)
+  - [Plan mode](#plan-mode) · [Ralph loop](#ralph-loop) · [Code audit](#code-audit) · [Project notes](#project-notes) · [Bot conversations](#bot-conversations) · [Claude Code from the chat](#claude-code-from-the-chat)
   - [Advisor](#advisor) · [Your own shell line](#your-own-shell-line) · [Loops](#loops) · [Custom commands](#custom-commands) · [Benchmark tests](#benchmark-tests) · [Imagine options](#imagine-options) · [Camera](#camera)
   - [Screen capture](#screen-capture) · [Profiles](#profiles) · [Moving settings](#moving-settings-to-another-computer) · [Desktop shortcuts](#desktop-shortcuts) · [Custom themes](#custom-themes) · [Voice presets](#voice-presets) · [Updating](#updating)
 - The app's windows, pasting a picture, the folder picker and the file browser: [Using the app](INTERFACE.md).
@@ -133,7 +133,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/tools` | Switches the model's tools on or off, each group's settings on its own tab. See [TOOLS.md](TOOLS.md). |
 | `/tools <group>` | Opens one group's page: `ask`, `shell`, `files`, `image`, `web`, `advisors`, `docker`, `eventlog`, `network`, `services`, `tasks` and `monitors` (Windows only), `directory`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print`, `shopping`, `timers`, `sessions`, `clock` or `help`. |
 | `/tools shell allowed`, `/tools shell police` | Opens *Shell allowed commands* (which also sets *Shell command policy*), or *Shell police* and its forbidden strings. |
-| `/skills` | Lists the skills, to move, copy, rename, edit, revert, lock, disable or delete, and their settings; the **loaded** tab shows this conversation's. |
+| `/skills` | Lists the skills, to move, copy, rename, edit, revert, lock, disable or delete, and their settings; the **loaded** tab shows this conversation's, the **project** tab a repo's own, to [trust](SETTINGS.md#project-skills-and-trust). |
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | Lists the skills unused for that long, or deletes them after a yes. See [Skill records](SETTINGS.md#skill-records-and-purging-unused-skills). |
 | `/mcp` | Connects [MCP servers](INTERFACE.md#words-used-here) (outside programs offering the model more tools) and switches their tools on or off. |
@@ -360,6 +360,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/code-audit open [<name>]` | Lists the reports, or shows one. |
 | `/code-audit fix [<name>]` | Starts plan mode on a report's open findings (the newest report without a name). Each step names the findings it closes, and the app ticks them as steps pass. |
 | `/code-audit resume [<name>] [model\|advisor\|any\|confirm] [<passes>]` | Runs more passes on a kept report (the newest without a name). |
+| `/project-init [<focus> ...]` | Drafts the working folder's `NEON.md` from a survey of it, shown on a pane before anything is written. See [Project notes](#project-notes). |
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
 | `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until Esc. See [Loops](#loops). |
@@ -466,6 +467,18 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Picking up again:** `/code-audit open` lists the reports (`stopped`, `fixing 3/7`, `fixed`…); `fix` and `resume` take the newest without a name, and say which. While `/botchat` runs, forms that start passes are refused (`open` waits for the chat to end).
 * **The audit's lock:** `<name>.lock` beside the report keeps a second Neon Sidekick from starting, resuming, fixing or discarding it while it's audited; there it lists as `running elsewhere`.
   * If the holder can't be checked, or another PC wrote it, the refusal names the lock to delete (and that PC) if nothing runs it.
+
+### Project notes
+
+`/project-init` drafts the notes file NeonSidekick (and other assistants) read into every conversation in the working folder. Words after it are a focus (`/project-init build and test`).
+
+* **Which file:** an existing `NEON.md` is improved. With only `AGENTS.md` or `CLAUDE.md`, it asks: update that file, or create `NEON.md` (which is then read in its place). With none, it creates `NEON.md`.
+* **The survey:** the app reads the folder first: its files, build files and CI workflows, the README, other assistants' rule files, recent commits and project skills. Secret-looking files are skipped and values that look like secrets are masked.
+* **One turn:** the model gets only the file and git reads and `ask_user`, never your memories. It starts a new conversation when one is under way; the last one stays in `/sessions`.
+* **The pane:** Write, View (the change, or the whole draft), Revise (with your words) or Cancel ([keys](INTERFACE.md#pane-keys)); on the Web UI page too. It shows the cost per turn and flags lines that look like secrets.
+  * With *Project file* or *Agent skills* off, a **Write and turn on** row turns them on as it writes.
+* **Taking it back:** `/undo` or `/rewind` removes or restores the file; a setting turned on stays on.
+* Needs *LLM offer tools*, `read_file` and the bottom pane; refused in plan mode, during a pass or `/botchat`, and headless.
 
 ### Bot conversations
 

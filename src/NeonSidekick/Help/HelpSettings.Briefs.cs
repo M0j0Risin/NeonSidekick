@@ -516,6 +516,7 @@ public static partial class HelpSettings
         SettingsField.AgentSkills => "Lists the skills in the prompt and gives the model load_skill and skill_editor. Off also turns off Project file.",
         SettingsField.GlobalSkills => "Also reads the global skills every profile shares. Off, this profile sees only its own. Needs Agent skills.",
         SettingsField.ExternalSkills => "Also reads, read-only, the skills in the .agents folder in your user folder.",
+        SettingsField.ProjectSkills => "Reads a repo's own skills once you trust its folder.",
         SettingsField.ProjectFile => "Reads NEON.md (else AGENTS.md, else CLAUDE.md) from the working directory into the prompt as project notes. Needs Agent skills.",
         SettingsField.SkillCompactMode => "protected keeps a loaded skill's instructions through a prune; unprotected prunes them like any tool result.",
         SettingsField.SkillHashMention => "Typing # and part of a name on the input line lists the loaded skills; a pick writes #name.",

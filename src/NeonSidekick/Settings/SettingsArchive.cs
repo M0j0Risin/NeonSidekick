@@ -170,7 +170,9 @@ public static class SettingsArchive
         if (Is(s[0], ConfigsName))
         {
             // The MCP sign-ins (2026-11-21) stay behind too: sealed for this user and computer, so sign in again on the other one.
-            return s.Length == 2 && HasExtension(s[1], ".json") && !Is(s[1], Viewer.BrowserHistory.FileName) && !Is(s[1], Mcp.McpTokenStore.FileName);
+            // The project skills' trust (2026-11-23): a decision about folders on this PC, never carried to another.
+            return s.Length == 2 && HasExtension(s[1], ".json") && !Is(s[1], Viewer.BrowserHistory.FileName) && !Is(s[1], Mcp.McpTokenStore.FileName)
+                && !Is(s[1], Skills.ProjectSkillTrust.FileName);
         }
 
         return IsCatalogItem(s);
@@ -380,7 +382,8 @@ public static class SettingsArchive
                 Add(file, relative, c, seen);
             }
             else if (configs && !IsJunk(file.Name) && !Is(file.Name, Viewer.BrowserHistory.FileName) && !Is(file.Name, Mcp.McpTokenStore.FileName)
-                && !Is(file.Name, Mcp.McpTokenStore.FileName + Mcp.McpTokenStore.BadSuffix))   // sealed tokens, moved aside (2026-11-22, the review's #19): never listed
+                && !Is(file.Name, Mcp.McpTokenStore.FileName + Mcp.McpTokenStore.BadSuffix)   // sealed tokens, moved aside (2026-11-22, the review's #19): never listed
+                && !Is(file.Name, Skills.ProjectSkillTrust.FileName) && !Is(file.Name, Skills.ProjectSkillTrust.FileName + Skills.ProjectSkillTrust.BadSuffix))   // 2026-11-23
             {
                 c.LeftOut.Add(relative);
             }
@@ -407,7 +410,8 @@ public static class SettingsArchive
         }
         else if (configs)
         {
-            foreach (var sub in dir.EnumerateDirectories().OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
+            // The trusted SKILL.md copies (2026-11-23) are the trust's, never exported or listed as left out.
+            foreach (var sub in dir.EnumerateDirectories().Where(d => !Is(d.Name, Skills.ProjectSkillTrust.CopiesFolderName)).OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
             {
                 c.LeftOut.Add(prefix + sub.Name + "/");
             }

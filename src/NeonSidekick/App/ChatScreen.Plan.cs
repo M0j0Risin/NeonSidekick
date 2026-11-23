@@ -5,6 +5,7 @@ using NeonSidekick.Files;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
+using NeonSidekick.ProjectInit;
 using NeonSidekick.Sessions;
 using NeonSidekick.Settings;
 using NeonSidekick.UI;
@@ -451,12 +452,16 @@ internal sealed partial class ChatScreen
     private IReadOnlySet<string> TurnDisabled(AppSettingsData effective)
     {
         var disabled = ToolsText.DisabledSet(effective.ToolsDisabled);
-        var turn = _plan.Active || _audit.InPass
+        var turn = _plan.Active || _audit.InPass || _projectInit.InPass
             ? PlanTools.Widen(disabled, _clockTools, _timerTools, _fileTools, _imageTools, _videoTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _duckDbTools, _postgresTools, _dockerTools, _eventLogTools, _comfyTools, _haTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _mcp.TurnTools())
             : disabled;
         // A code audit's pass (2026-10-18) keeps its own tools alone, as the turn's OnlyTools does.
         turn = _audit.InPass
             ? DisableAllBut(turn, AuditTools.Allowed(effective).Contains, _clockTools, _timerTools, _helpTools, _fileTools, _imageTools, _videoTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _duckDbTools, _postgresTools, _dockerTools, _eventLogTools, _networkTools, _serviceTools, _taskTools, _directoryTools, _comfyTools, _haTools, _printTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _cameraTools, _screenTools, _neonAdvisorTools, _mcp.TurnTools())
+            : turn;
+        // A /project-init pass (2026-11-23) keeps its own reads alone, as the turn's OnlyTools does.
+        turn = _projectInit.InPass
+            ? DisableAllBut(turn, ProjectInitTools.Allowed.Contains, _clockTools, _timerTools, _helpTools, _fileTools, _imageTools, _videoTools, _webTools, _gitTools, _shellTools, _vaultTools, _sqlTools, _oracleTools, _uncTools, _mysqlTools, _sqliteTools, _duckDbTools, _postgresTools, _dockerTools, _eventLogTools, _networkTools, _serviceTools, _taskTools, _directoryTools, _comfyTools, _haTools, _printTools, _youTubeTools, _shoppingTools, _memoryTools, _skillTools, _sessionTools, _askTools, _cameraTools, _screenTools, _neonAdvisorTools, _mcp.TurnTools())
             : turn;
         return WithheldForAsking(turn, effective);
     }
@@ -514,6 +519,13 @@ internal sealed partial class ChatScreen
             // present_audit's group during a code audit's pass (2026-10-18), so /usage says what the turn sends.
             var audit = new ToolGroup(SystemPromptSummary.GroupName(AuditGroupName, 1, 1), "", [_presentAudit], true) { Label = AuditGroupName };
             return SystemPromptSummary.SortedGroups([.. groups, audit]);
+        }
+
+        if (_projectInit.InPass && !_plan.Active)
+        {
+            // present_project_notes' group during a /project-init pass (2026-11-23), so /usage says what the turn sends.
+            var notes = new ToolGroup(SystemPromptSummary.GroupName(ProjectNotesGroupName, 1, 1), "", [_presentNotes], true) { Label = ProjectNotesGroupName };
+            return SystemPromptSummary.SortedGroups([.. groups, notes]);
         }
 
         if (!_plan.Active)

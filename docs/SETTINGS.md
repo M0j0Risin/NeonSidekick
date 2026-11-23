@@ -411,7 +411,7 @@ Skills are folders of instructions the model can load ([Skills](TOOLS.md#skills)
 
 ### Offered
 
-The loaded skills with scope (`profile`, `global` or `external`), version, last change and description, then shadowed duplicates and skipped folders with the reason. A second tab row narrows to one scope. Enter on a skill can:
+The loaded skills with scope (`profile`, `global`, `external` or `project`), version, last change and description, then shadowed duplicates and skipped folders with the reason. A second tab row narrows to one scope; the `project` tab holds a repo's own skills ([Project skills and trust](#project-skills-and-trust)). Enter on a skill can:
 
 * move it between the profile and global folders (while *Global skills* is on) or to another profile, copy it to another profile (with no history), or rename it;
 * edit its `SKILL.md` in your editor, or revert it to a kept version ([Skill history](#skill-history));
@@ -443,6 +443,7 @@ The loaded skills with scope (`profile`, `global` or `external`), version, last 
 | Agent skills | Lists the skills in the prompt and offers `load_skill` and `skill_editor`. Off also turns off *Project file*. | on |
 | Global skills | Reads the home folder's `skills` folder, shared by every profile. Off, this profile sees and writes only its own; `/skills add --global` is refused. | on |
 | External skills (.agents\skills) | Also reads `%USERPROFILE%\.agents\skills` (`~/.agents/skills` on a Mac), read-only. | off |
+| Project skills | Reads a repo's own `.agents/skills` and `.claude/skills` folders once you trust them ([Project skills and trust](#project-skills-and-trust)). Off, none are read; saved trust is kept. Needs *Agent skills*. | on |
 | Project file | Reads the working directory's `NEON.md`, else `AGENTS.md`, else `CLAUDE.md` (cut at 16,000 characters) into the prompt as project notes; never `.claude\CLAUDE.md` or `CLAUDE.local.md`, and `@path` imports read as plain text. Needs *Agent skills*. | on |
 | Skill compact mode | `protected` keeps a loaded skill's instructions through a prune; `unprotected` prunes them like any tool result. | `protected` |
 | #-mention enabled | `#` and part of a name lists the skills; a pick writes `#name`. | on |
@@ -458,7 +459,7 @@ The loaded skills with scope (`profile`, `global` or `external`), version, last 
 
 ### Skill records and purging unused skills
 
-* `skills.db`, in the home's `db\skills`, records every global and profile skill's scope and when it was created, last changed and last used. External skills are never recorded or purged.
+* `skills.db`, in the home's `db\skills`, records every global and profile skill's scope and when it was created, last changed and last used. External and project skills are never recorded or purged.
 * `/skills purge list <age>` lists skills unused that long; `/skills purge commit <age>` deletes them after a yes. The age is days (`30`) or a duration (`12h`, `1d 6h`).
 * Only global skills (under *Global skills*) and the loaded profile's count; a global skill used in any profile is used.
 
@@ -486,6 +487,20 @@ Enter on a skill, then `disable`, switches it off without removing it; `enable` 
 * Rename, move, copy, delete and `edit` still work (a copy arrives disabled); revert refuses with "enable it first"; `/skills purge` leaves it out.
 * It keeps its name, so a global skill of that name stays shadowed.
 * The switch is a `.neon-disabled` file in the skill's folder; a disabled global skill is off in every profile.
+
+### Project skills and trust
+
+A repo can carry its own skills. While *Project skills* is on, the app looks for them and offers them only once you trust them.
+
+* **Where:** each folder's `.agents/skills`, then `.claude/skills`, from the working folder up to the repo root, nearest first; outside a repo, the working folder alone. Never your user folder or the app's home.
+* **Trust per folder:** the `project` tab of `/skills` lists them dim under each folder. Enter on its `trust` row lists every skill with a **View** of its whole `SKILL.md`; trust saves exactly what you saw.
+* **Asked again on any change:** an edit, an added or removed skill or a changed bundled file stops it being offered. The next turn says so, and the question shows what changed, with a diff for a changed `SKILL.md`.
+* **Ranked last:** your profile, global and external skills win a name clash; the trust tells you which are hidden. At most 50 project skills are offered.
+* **At the PC only:** the Web UI page shows the notice but never asks. Headless uses saved trust and prints a `[notice]` for a folder not trusted.
+* **Claude Code's fields grant nothing:** `allowed-tools`, `hooks`, `model` and the like are ignored, and a skill marked `disable-model-invocation` isn't offered.
+* **Read only here:** the model and reflection never change a project skill. Enter on one can edit it in your editor (asking for trust again), copy it to your profile or global skills (your copy is the editable one) or disable it.
+* **Untrust** from the folder's row. A skill this conversation already loaded stays in it until `/clear` or a new session.
+* **Where trust is kept:** `configs/project-trust.json` and its `project-trust` copies in the profile, left out of the settings zip. The model's tools can't reach them, so it can't trust a folder for itself.
 
 ## Tools settings (`/tools`)
 

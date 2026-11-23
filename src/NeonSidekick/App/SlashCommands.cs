@@ -210,6 +210,13 @@ public enum SlashCommand
     /// </summary>
     CodeAudit,
 
+    /// <summary>
+    /// <c>/project-init [focus …]</c> (2026-11-23, the user's ask: Claude Code's <c>/init</c>, named by the user's call of 2026-11-22): a survey of the
+    /// working folder and one read-only turn, in a new conversation, that drafts its <c>NEON.md</c> (or improves the notes in play) and shows it
+    /// on the Write pane through <c>present_project_notes</c>; nothing is written until Write. Interactive only; waits for the idle line under a reply.
+    /// </summary>
+    ProjectInit,
+
     /// <summary><c>/expand</c>: every folded tool run, code block, diff (2026-10-04) and thinking block in the transcript unfolded, and the ones to come (2026-09-22, the user's ask: what <c>/tools expand</c> did that morning, as a root word). No argument; Ctrl+O flips the same state.</summary>
     Expand,
 
@@ -547,6 +554,7 @@ public static class SlashCommands
             new(Viewer.ProcessWindowText.Word, "watch the model's background processes"),
             new("/print", "print a file or the last reply"),
             new("/profile", "switch or manage profiles"),
+            new(ProjectInit.ProjectInitText.Word, ProjectInit.ProjectInitText.HelpSummary),
             new("/prompts", "saved prompts to send"),
             new("/queue", "manage the queued messages"),
             new("/reasoning", "pick or set the reasoning effort"),
@@ -674,7 +682,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/video", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/midi", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/update", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/video", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/midi", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/project-init", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/update", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -791,6 +799,7 @@ public static class SlashCommands
             "/loop" => SlashCommand.Loop,
             "/plan" => SlashCommand.Plan,
             "/code-audit" => SlashCommand.CodeAudit,
+            "/project-init" => SlashCommand.ProjectInit,
             "/botchat" => SlashCommand.BotChat,
             "/claude" => SlashCommand.Claude,
             "/advisor" => SlashCommand.Advisor,
@@ -873,7 +882,7 @@ public static class SlashCommands
         or SlashCommand.Sys
         or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Commands or SlashCommand.Custom or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
-        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
+        or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.ProjectInit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Midi or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Video or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo
         or SlashCommand.Log or SlashCommand.Process or SlashCommand.Tools or SlashCommand.Settings or SlashCommand.Find or SlashCommand.WebUi
         or SlashCommand.Splash or SlashCommand.Pasted   // 2026-10-18: view|thumbs|purge

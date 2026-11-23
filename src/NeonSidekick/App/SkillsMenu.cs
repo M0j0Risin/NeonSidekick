@@ -1,8 +1,10 @@
+using NeonSidekick.Files;
 using NeonSidekick.Sessions;
 using NeonSidekick.Settings;
 using NeonSidekick.Skills;
 using NeonSidekick.UI;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace NeonSidekick.App;
 
@@ -97,6 +99,9 @@ internal sealed class SkillsMenu
     private readonly Func<Skill, IReadOnlyList<SkillRevision>>? _versions;
     private readonly Func<Skill, SkillRevision, SkillRevert>? _restore;
     private readonly Func<Skill, SkillRevision?, int>? _forget;
+    private readonly SkillCatalog? _catalog;
+    private readonly ProjectSkillTrust? _trust;
+    private readonly Func<string, IRenderable, CancellationToken, Task>? _view;
 
     /// <summary>
     /// The revert list's buttons (2026-10-07, the user's pick): the highlighted version removed, or every one, each after a yes. The remove
@@ -121,9 +126,16 @@ internal sealed class SkillsMenu
     /// <param name="restore">The version picked put back (the screen's <see cref="SkillRecords.Restore"/>).</param>
     /// <param name="forget">A kept version forgotten, or every one for null (the screen's <see cref="SkillRecords.ForgetVersions"/>, 2026-10-07); null = no buttons on the list.</param>
     /// <param name="session">The session's history (2026-10-12): the loaded sub-tab's skills, read live and watched while the pane is open; null = no loaded sub-tab.</param>
+    /// <param name="catalog">The catalog (2026-11-23): the trust question reads a project folder through it, with the scan's rules. Null = no trust question.</param>
+    /// <param name="trust">The profile's project trust store (2026-11-23): trust, untrust and a project skill's disable. Null = none of them.</param>
+    /// <param name="view">Shows a read-only page in the info pane (2026-11-23): the trust question's View of a <c>SKILL.md</c> or its diff. Null = no view.</param>
     public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null,
-        Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null, Func<Skill, SkillRevision?, int>? forget = null, Llm.ConversationHistory? session = null)
+        Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null, Func<Skill, SkillRevision?, int>? forget = null, Llm.ConversationHistory? session = null,
+        SkillCatalog? catalog = null, ProjectSkillTrust? trust = null, Func<string, IRenderable, CancellationToken, Task>? view = null)
     {
+        _catalog = catalog;
+        _trust = trust;
+        _view = view;
         _session = session;
         _records = records;
         _versions = versions;
@@ -148,7 +160,8 @@ internal sealed class SkillsMenu
     {
         ArgumentNullException.ThrowIfNull(records);
         ArgumentNullException.ThrowIfNull(zone);
-        if (skill is null || skill.Scope == SkillScope.External)
+        // A read-only skill is never recorded: an external one, or a repo's (2026-11-23), which "never loaded" would misstate once loaded.
+        if (skill is null || SkillScopes.IsReadOnly(skill.Scope))
         {
             return null;
         }
@@ -445,9 +458,9 @@ internal sealed class SkillsMenu
         MenuTab Offered(string title, IReadOnlyList<(string Markup, Skill? Skill, bool Heading)> rows, SkillScope? scope) => new(title, rows.Select(r => r.Markup).ToList())
         {
             Headings = SkillsText.HeadingRows(rows),   // the catalog's, the shadowed and the skipped blocks' rules (2026-10-10), never a stop
-            Hint = MenuFilter.Hint(LoadedKeys, filter),
+            Hint = MenuFilter.Hint(scope == SkillScope.Project ? SkillsText.ProjectKeys : LoadedKeys, filter),   // the project sub-tab's own acts (2026-11-23)
             Filter = filter,
-            Caption = MenuFilter.CaptionOrNull(filter, rows.Count(r => r.Skill is not null), facts.Skills.Concat(facts.Shadowed).Count(s => scope is null || s.Scope == scope)),
+            Caption = MenuFilter.CaptionOrNull(filter, rows.Count(r => r.Skill is not null), SkillsText.ScopeCount(facts, scope)),
             Footer = row => row >= 0 && row < rows.Count && rows[row].Skill is { } skill ? new MenuFooter(skill.Description, LockedLast(skill)) : null,
             Placeholder = SkillsText.IsPlaceholder(rows),
         };
@@ -623,7 +636,39 @@ internal sealed class SkillsMenu
                     continue;
                 }
 
-                if (tab != 0 || cursor >= loaded.Count || loaded[cursor].Skill is not { } skill)
+                if (tab != 0 || cursor >= loaded.Count)
+                {
+                    continue;
+                }
+
+                // The project sub-tab (2026-11-23): its rows carry folders and acts a tuple can't, resolved through ProjectRows.
+                var shownScopes = SkillsText.ScopeTabs(facts);
+                if (sub >= 0 && sub < shownScopes.Count && shownScopes[sub] == SkillScope.Project)
+                {
+                    var projectRows = SkillsText.ProjectRows(facts, filter);
+                    if (cursor >= projectRows.Count || projectRows[cursor].Kind is ProjectRowKind.Text or ProjectRowKind.Heading)
+                    {
+                        continue;
+                    }
+
+                    if (reply.Running)
+                    {
+                        // A trust, untrust, copy or disable under a running turn could race the model's load_skill.
+                        Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
+                        continue;
+                    }
+
+                    var (projectChanged, trustedLevel) = await ProjectRowAsync(projectRows[cursor], facts, cancellationToken).ConfigureAwait(false);
+                    if (projectChanged)
+                    {
+                        facts = Refreshed(facts, ref sub, ref cursor, filter);
+                        ShadowNotice(facts, trustedLevel);
+                    }
+
+                    continue;
+                }
+
+                if (loaded[cursor].Skill is not { } skill)
                 {
                     continue;
                 }
@@ -631,6 +676,17 @@ internal sealed class SkillsMenu
                 if (reply.Running)
                 {
                     Sink.Notice(SettingsMenu.NotWhileReplyRunsNotice);
+                    continue;
+                }
+
+                if (skill.Scope == SkillScope.Project)
+                {
+                    // A repo's skill on the all or loaded sub-tab (2026-11-23): its own page, never the scope page's move, rename, lock or delete.
+                    if (await ProjectPageAsync(skill, facts, cancellationToken).ConfigureAwait(false))
+                    {
+                        facts = Refreshed(facts, ref sub, ref cursor, filter);
+                    }
+
                     continue;
                 }
 
@@ -652,6 +708,35 @@ internal sealed class SkillsMenu
         {
             _menu.Root = SettingsMenu.Title;
             _pane.Close();
+        }
+    }
+
+    /// <summary>The facts read again after a change (a rescan), the sub-tab back to all when the strip changed, the cursor clamped to the rows on show.</summary>
+    private SkillsFacts Refreshed(SkillsFacts before, ref int sub, ref int cursor, string filter)
+    {
+        var facts = _facts();
+        if (!SkillsText.ScopeTabs(before).SequenceEqual(SkillsText.ScopeTabs(facts)))
+        {
+            sub = 0;
+        }
+
+        var rows = OfferedRows(facts, filter);
+        cursor = Math.Max(0, Math.Min(cursor, rows[Math.Clamp(sub, 0, rows.Count - 1)].Count - 1));
+        return facts;
+    }
+
+    /// <summary>After a trust, the folder's skills your own hide (2026-11-23), named in one notice; nothing when none is.</summary>
+    private void ShadowNotice(SkillsFacts facts, string? level)
+    {
+        if (level is null)
+        {
+            return;
+        }
+
+        var hidden = facts.Shadowed.Where(s => s.Scope == SkillScope.Project && string.Equals(s.TrustFolder, level, StringComparison.Ordinal)).Select(s => s.Name).ToList();
+        if (hidden.Count > 0)
+        {
+            Sink.Notice(SkillsText.ProjectShadowedNotice(SkillsText.FolderLabel(facts, level), hidden));
         }
     }
 
@@ -1172,6 +1257,311 @@ internal sealed class SkillsMenu
         {
             Sink.Error(EditFailedError(ex.Message));
         }
+    }
+
+    // ── The repo's skills (2026-11-23, feature idea #16) ─────────────────────
+
+    /// <summary>
+    /// Enter on a project sub-tab row: a trust row, or a not-offered skill in a folder not trusted, asks to trust the folder; an untrust row takes the trust back;
+    /// a trusted skill opens its page; a skill not offered for another reason says why. Changed is true when the facts are stale; Trusted names the folder a
+    /// trust was saved for (the shadow notice after the rescan).
+    /// </summary>
+    private async Task<(bool Changed, string? Trusted)> ProjectRowAsync(ProjectRow row, SkillsFacts facts, CancellationToken cancellationToken)
+    {
+        switch (row.Kind)
+        {
+            case ProjectRowKind.Trust when row.Folder is { } folder:
+                return await TrustAsync(folder, facts, cancellationToken).ConfigureAwait(false);
+            case ProjectRowKind.Pending when row.Folder is { Trust: not ProjectFolderTrust.Trusted } folder:
+                return await TrustAsync(folder, facts, cancellationToken).ConfigureAwait(false);
+            case ProjectRowKind.Pending when row.Skill is { } skill && row.Reason is { } reason:
+                Sink.Notice(SkillsText.ProjectPendingNotice(skill.Name, reason));
+                return (false, null);
+            case ProjectRowKind.Untrust when row.Folder is { } folder:
+                return (await UntrustAsync(folder, facts, cancellationToken).ConfigureAwait(false), null);
+            case ProjectRowKind.Skill when row.Skill is { } skill:
+                return (await ProjectPageAsync(skill, facts, cancellationToken).ConfigureAwait(false), null);
+            default:
+                return (false, null);
+        }
+    }
+
+    /// <summary>One skill as the trust question shows it: its key, name, description, mark (new, changed…), file count, acting mark, the text read and the kept copy for a diff.</summary>
+    private sealed record TrustEntry(string Key, string Name, string Description, string Mark, string Files, bool Acting, string? Text, string? Old, string FilePath);
+
+    /// <summary>
+    /// The trust question (2026-11-23): the folder's skills as read now, each with a View of its whole <c>SKILL.md</c> (a diff against the kept copy when it
+    /// changed since a trust), the removed ones named; Trust saves what was shown, read again inside the save's hold: a folder changed meanwhile saves
+    /// nothing and the question opens again on the new content. The reads and the save run off the screen thread (an offline share, the hold's wait).
+    /// </summary>
+    private async Task<(bool Changed, string? Trusted)> TrustAsync(ProjectFolder folder, SkillsFacts facts, CancellationToken cancellationToken)
+    {
+        if (_catalog is not { } catalog || _trust is not { } trust)
+        {
+            return (false, null);
+        }
+
+        string label = SkillsText.FolderLabel(facts, folder.Level);
+        string bound = facts.RepoRoot ?? facts.WorkingFolder ?? folder.Level;
+        var known = facts.Skills.Concat(facts.Shadowed).Concat(facts.ProjectPending.Select(p => p.Skill))
+            .Where(s => s.Scope == SkillScope.Project && s.ProjectKey is not null && string.Equals(s.TrustFolder, folder.Level, StringComparison.Ordinal))
+            .GroupBy(s => s.ProjectKey!, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+        while (true)
+        {
+            var (state, held, entries, removed) = await Task.Run(() => ReadForTrust(catalog, trust, folder.Level, bound, known), cancellationToken).ConfigureAwait(false);
+            int width = Math.Max(4, entries.Select(e => SkillsText.ShownName(e.Name).Length).Concat(removed.Select(r => SkillsText.ShownName(r).Length)).DefaultIfEmpty(0).Max());
+            var rows = new List<string> { SkillsText.TrustQuestionRow(label) };
+            rows.AddRange(entries.Select(e => SkillsText.TrustViewRow(e.Name, width, e.Mark, e.Description, e.Files, e.Acting)));
+            rows.AddRange(removed.Select(r => SkillsText.TrustRemovedRow(r, width)));
+            rows.Add(SkillsText.CancelRow);
+            string caption = held is null ? SkillsText.TrustCaption(label)
+                : SkillsText.TrustChangedCaption(label, entries.Count(e => e.Mark == SkillsText.NewMark), entries.Count(e => e.Mark is SkillsText.ChangedMark or SkillsText.FilesChangedMark), removed.Count);
+            var page = new MenuPage(SkillsText.TrustTitle, rows, SkillsText.TrustKeys) { Caption = caption, CaptionGrows = true };
+            int cursor = entries.Count > 0 ? 1 : rows.Count - 1;
+            while (true)
+            {
+                if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { Row: var row })
+                {
+                    return (false, null);
+                }
+
+                if (row >= 1 && row <= entries.Count)
+                {
+                    // View: exactly what was read, never run or rendered as markdown (a stranger's link text can't hide where it goes).
+                    var entry = entries[row - 1];
+                    IRenderable content = entry.Text is null ? new Text(SkillsText.NothingToViewText)
+                        : entry.Old is not null && FileDiff.Of(entry.FilePath, entry.Old, entry.Text) is { } diff ? new DiffView(null, diff, int.MaxValue)
+                        : new Text(entry.Text);
+                    if (_view is not null)
+                    {
+                        await _view(SkillsText.ViewLabel(entry.Name), content, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    cursor = row;
+                    continue;
+                }
+
+                if (row != 0)
+                {
+                    return (false, null);   // a removed skill's row, or cancel
+                }
+
+                ProjectTrustSave saved;
+                try
+                {
+                    saved = await Task.Run(() => trust.Trust(folder.Level, state.Fingerprint, () => catalog.ReadProjectFolder(folder.Level, bound)), cancellationToken).ConfigureAwait(false);
+                }
+                catch (IOException ex)
+                {
+                    Sink.Error(SkillsText.TrustSaveFailedError(label, ex.Message));
+                    return (false, null);
+                }
+
+                if (saved == ProjectTrustSave.Changed)
+                {
+                    Sink.Notice(SkillsText.ChangedWhileReviewingNotice(label));
+                    break;   // the question again, on the new content
+                }
+
+                Sink.Notice(SkillsText.TrustedNotice(label, state.Order.Count));
+                return (true, folder.Level);
+            }
+        }
+    }
+
+    // The question's read, off the screen thread: the folder now, its trust, each skill's line (the file count walks its folder) and the removed ones.
+    private static (ProjectFolderState State, ProjectTrustKind? Held, IReadOnlyList<TrustEntry> Entries, IReadOnlyList<string> Removed) ReadForTrust(
+        SkillCatalog catalog, ProjectSkillTrust trust, string level, string bound, IReadOnlyDictionary<string, Skill> known)
+    {
+        var state = catalog.ReadProjectFolder(level, bound);
+        var held = trust.Trusted(level);
+        var entries = new List<TrustEntry>();
+        foreach (string key in state.Order)
+        {
+            known.TryGetValue(key, out var skill);
+            string directory = skill?.Directory ?? Path.Combine(level, key.Replace('/', Path.DirectorySeparatorChar));
+            string name = skill?.Name ?? Path.GetFileName(directory);
+            int files;
+            bool more;
+            try
+            {
+                files = SkillCatalog.ProjectResources(directory, out more).Count;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                files = 0;
+                more = false;
+            }
+
+            string? text = state.Copies.GetValueOrDefault(key);
+            string mark = "";
+            string? old = null;
+            if (held is not null)
+            {
+                if (!held.Skills.TryGetValue(key, out var was))
+                {
+                    mark = SkillsText.NewMark;
+                }
+                else if (!string.Equals(was, state.Hashes.GetValueOrDefault(key), StringComparison.Ordinal))
+                {
+                    old = trust.CopyOf(level, key);
+                    mark = old is not null && text is not null && string.Equals(old, text, StringComparison.Ordinal) ? SkillsText.FilesChangedMark : SkillsText.ChangedMark;
+                    old = mark == SkillsText.ChangedMark ? old : null;
+                }
+            }
+
+            entries.Add(new TrustEntry(key, name, skill?.Description ?? "", mark, SkillsText.FilesNote(files, more), skill?.Acting ?? false, text, old, Path.Combine(directory, SkillCatalog.FileName)));
+        }
+
+        var removed = held is null ? [] : held.Skills.Keys.Where(k => !state.Order.Contains(k, StringComparer.Ordinal)).Select(k => k[(k.LastIndexOf('/') + 1)..]).ToList();
+        return (state, held, entries, removed);
+    }
+
+    /// <summary>The untrust (2026-11-23), after a yes: new loads stop at once; a skill this conversation already loaded stays in it, and the notice says so.</summary>
+    private async Task<bool> UntrustAsync(ProjectFolder folder, SkillsFacts facts, CancellationToken cancellationToken)
+    {
+        if (_trust is not { } trust)
+        {
+            return false;
+        }
+
+        string label = SkillsText.FolderLabel(facts, folder.Level);
+        if (!await ConfirmAsync(SkillsText.UntrustPrompt(label), cancellationToken).ConfigureAwait(false))
+        {
+            Sink.Notice(KeptNotice);
+            return false;
+        }
+
+        try
+        {
+            await Task.Run(() => trust.Untrust(folder.Level), cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException ex)
+        {
+            Sink.Error(SkillsText.TrustSaveFailedError(label, ex.Message));
+            return false;
+        }
+
+        var names = facts.Skills.Concat(facts.Shadowed).Where(s => s.Scope == SkillScope.Project && string.Equals(s.TrustFolder, folder.Level, StringComparison.Ordinal)).Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var loaded = (_session?.LoadedSkills ?? []).Select(l => l.Name).Where(names.Contains).ToList();
+        Sink.Notice(SkillsText.UntrustedNotice(label, loaded));
+        return true;
+    }
+
+    /// <summary>
+    /// A trusted project skill's page (2026-11-23): edit (the user's editor; a change asks for trust again), a copy into the profile or global skills, and
+    /// disable or enable, kept in the profile. No rename, move, lock, revert or delete: the skill is the repo's.
+    /// </summary>
+    private async Task<bool> ProjectPageAsync(Skill skill, SkillsFacts facts, CancellationToken cancellationToken)
+    {
+        var roots = facts.Roots;
+        var copies = roots.WritableScopes;
+        var rows = new List<string> { SkillsText.ProjectEditRow };
+        rows.AddRange(copies.Select(SkillsText.ProjectCopyRow));
+        int disableRow = rows.Count;
+        rows.Add(SkillsText.ProjectDisableRow(skill.Disabled));
+        string label = SkillsText.FolderLabel(facts, skill.TrustFolder ?? skill.Directory);
+        var page = new MenuPage(ScopeTitle(skill.Name), rows, ScopeKeys) { Caption = SkillsText.ProjectPageCaption(label) };
+        if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var row })
+        {
+            return false;
+        }
+
+        if (row == 0)
+        {
+            Edit(skill);
+            return false;
+        }
+
+        if (row == disableRow)
+        {
+            return await SetProjectDisabledAsync(skill, cancellationToken).ConfigureAwait(false);
+        }
+
+        return row - 1 < copies.Count && await CopyProjectAsync(skill, copies[row - 1], roots, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The copy (2026-11-23): a name the editor could never take refused; a root holding the folder or the name refused ahead of the yes; then the folder
+    /// copied without the repo's markers, a <c>.claude</c> skill's defaults written into the copy. The copy shadows the repo's.
+    /// </summary>
+    private async Task<bool> CopyProjectAsync(Skill skill, SkillScope to, SkillRoots roots, CancellationToken cancellationToken)
+    {
+        if (!SkillFrontmatter.IsValidName(skill.Name))
+        {
+            Sink.Error(SkillsText.ProjectCopyBadNameError(skill.Name));
+            return false;
+        }
+
+        string root = roots.Of(to);
+        string destination = Path.Combine(root, skill.FolderName);
+        if (Directory.Exists(destination) || File.Exists(destination))
+        {
+            Sink.Error(ExistsError(skill.Name, skill.FolderName, to));
+            return false;
+        }
+
+        if (SkillEditor.ProfileSkillNames(root).Names.Contains(skill.Name))
+        {
+            Sink.Error(SkillsText.ProjectCopyNameTakenError(skill.Name, to));
+            return false;
+        }
+
+        if (!await ConfirmAsync(SkillsText.ProjectCopyPrompt(skill.Name, to), cancellationToken).ConfigureAwait(false))
+        {
+            Sink.Notice(KeptNotice);
+            return false;
+        }
+
+        Func<string, string>? rewrite = skill.ClaudeRules ? text => ClaudeDefaults(text, skill.FolderName) : null;
+        var copied = await Task.Run(() => SkillEditor.CopyFolder(skill.Directory, root, cancellationToken, dropMarkers: true, rewriteSkill: rewrite), cancellationToken).ConfigureAwait(false);
+        switch (copied.Outcome)
+        {
+            case SkillEditOutcome.Copied:
+                Sink.Notice(SkillsText.ProjectCopiedNotice(skill.Name, to));
+                return true;
+            case SkillEditOutcome.Exists:
+                Sink.Error(ExistsError(skill.Name, skill.FolderName, to));
+                return false;
+            case SkillEditOutcome.Missing:
+                Sink.Error(MissingError(skill.Name));
+                return true;
+            default:
+                Sink.Error(CopyFailedError(copied.Detail));
+                return false;
+        }
+    }
+
+    /// <summary>A <c>.claude</c> skill's text with Claude Code's defaults written in (the folder's name, the body's first line), so the profile's rules read it; unchanged when it won't parse.</summary>
+    public static string ClaudeDefaults(string text, string folderName)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return SkillFrontmatter.TryParseClaude(text, folderName, out var frontmatter, out var body, out _) && frontmatter is not null
+            ? SkillFrontmatter.Write(frontmatter.Name, frontmatter.Description, frontmatter.OtherLines, body)
+            : text;
+    }
+
+    /// <summary>A project skill disabled or enabled (2026-11-23): kept in the profile's trust file, never a marker in the repo; off the screen thread.</summary>
+    private async Task<bool> SetProjectDisabledAsync(Skill skill, CancellationToken cancellationToken)
+    {
+        if (_trust is not { } trust || skill.TrustFolder is not { } folder)
+        {
+            return false;
+        }
+
+        bool disabled = !skill.Disabled;
+        try
+        {
+            await Task.Run(() => trust.SetDisabled(folder, skill.Name, disabled), cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException ex)
+        {
+            Sink.Error(SkillRecordText.DisableFailedError(skill.Name, ex.Message));
+            return false;
+        }
+
+        Sink.Notice(SkillRecordText.DisableSetNotice(skill.Name, disabled));
+        return true;
     }
 
     private static int IndexOf(IReadOnlyList<SkillScope> scopes, SkillScope scope)

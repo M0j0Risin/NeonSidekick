@@ -21,6 +21,7 @@ using NeonSidekick.Obsidian;
 using NeonSidekick.Oracle;
 using NeonSidekick.Pdf;
 using NeonSidekick.Plans;
+using NeonSidekick.ProjectInit;
 using NeonSidekick.Printing;
 using NeonSidekick.Sessions;
 using NeonSidekick.Settings;
@@ -849,6 +850,12 @@ internal sealed partial class ChatScreen
     private readonly IReadOnlyList<AIFunction> _askTools;
     private readonly SkillCatalog _catalog;
 
+    /// <summary>The profile's trust in the repos' own skills (2026-11-23, feature idea #16): <c>configs/project-trust.json</c>, read live per profile.</summary>
+    private readonly ProjectSkillTrust _projectTrust;
+
+    /// <summary>Where the project skills come from: the live working folder, the user's home and the app's home, and <see cref="_projectTrust"/>.</summary>
+    private readonly ProjectSkillSource _projectSource;
+
     /// <summary>
     /// The skill records (2026-09-30, the user's ask): <c>&lt;home&gt;\db\skills\skills.db</c> (the home's root until 2026-10-10), shared by every profile, over the live roots.
     /// Told by the tools, the reflection, <c>/skills add</c> and the Skills pane; reconciled at every profile load
@@ -1643,9 +1650,14 @@ internal sealed partial class ChatScreen
         // project file with the sandbox's root.
         string external = externalSkills ?? SkillRoots.DefaultExternalDirectory();
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, external);
+        _skillRoots = roots;
         _catalog = new SkillCatalog(roots);
+        _projectTrust = new ProjectSkillTrust(() => Profiles.ConfigsDirectory(_settings.ProfileDirectory), _time);
+        _projectSource = new ProjectSkillSource(() => _files.Root, ProjectSkillSource.UserHomeOf(external), _settings.StorageDirectory, _projectTrust);
         // A refused path in a skill folder names load_skill (2026-10-17), while the skills are offered.
         _files.SkillFolders = () => { var e = _effective(); return roots().ReadFolders(e.AgentSkills, e.ExternalSkills); };
+        // A trusted project skills folder above the working folder (2026-11-23): the kept part's, nothing while off.
+        _files.ProjectSkillFolders = () => ProjectSourceFor(_effective()) is null ? [] : _catalog.TrustedProjectFolders;
         _skillRecords = new SkillRecords(new SkillRecordStore(_settings.StorageDirectory), roots, _time);
         _skillTools = SkillTools(_catalog, roots, () => { var e = _effective(); return e.AgentSkills && e.ExternalSkills; }, new SkillFileAccess(_time), _skillRecords);
         _project = new ProjectFile(() => _files.Root);
@@ -1834,6 +1846,9 @@ internal sealed partial class ChatScreen
         _ralphVerifier = ralphVerifier ?? new Plans.RalphVerifier(_runner, _interpreters.Locate, _random);
         _auditMenu = new AuditDoneMenu(_menuPane, AdvisorPassOffered);
         _presentAudit = new PresentAuditTool(_audit, _files, time, OnAuditReported);
+        // /project-init (2026-11-23): present_project_notes over the pass, its pane the Write pane.
+        _presentNotes = new PresentProjectNotesTool(_projectInit, _files, ReviewProjectNotesAsync, OnProjectNotesWritten);
+        _notesMenu = new ProjectNotesApprovalMenu(_menuPane, _input, ViewProjectNotesAsync);
         // Menus read console.Input themselves; over the key source they also see type-ahead.
         _flow = new FlowSink(this);
         _queuedClicks = new DoubleClick(_pane.Time);
@@ -1859,7 +1874,9 @@ internal sealed partial class ChatScreen
         _commandsMenu = new CustomCommandsMenu(_customCommands.Scan, () => CustomCommandRoots.For(_settings), settings, _flow, _menuPane, _input, _openFile,
             () => _effective().FileDeletesToRecycleBin ? _recycleBin : null);
         _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill, ForgetSkillVersions,
-            session: _session.History);   // the loaded sub-tab (2026-10-12): the one history the session keeps, watched while the pane is open
+            session: _session.History,   // the loaded sub-tab (2026-10-12): the one history the session keeps, watched while the pane is open
+            // The repo's skills (2026-11-23): the trust question reads through the catalog, saves to the profile's store, and views in the info pane.
+            catalog: _catalog, trust: _projectTrust, view: (label, content, ct) => _info.ShowAsync(label, [new InfoTab(label, () => content)], 0, ct));
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
         _toolsMenu = new ToolsMenu(ToolsFacts, settings, _menu, _flow, _menuPane);
         // The /mcp pane (2026-09-20): the servers and their tools over the session's snapshot, the Options rows through the settings menu.
@@ -3446,13 +3463,47 @@ internal sealed partial class ChatScreen
         IReadOnlyList<Skill> skills = [];
         if (effective.AgentSkills)
         {
-            _catalog.Scan(effective.ExternalSkills);
+            _catalog.Scan(SkillScanFor(effective, refreshProject: true));
             skills = _catalog.All;
         }
 
         // Each skill's version from the records (2026-10-07): the Offered tab's v column; and when it last changed (2026-10-12).
+        // The repo's skills (2026-11-23): the ones not offered, the walk's folders, and the folders their labels are told from.
+        bool project = ProjectSourceFor(effective) is not null;
         return new SkillsFacts(effective.AgentSkills, skills, effective.AgentSkills ? _catalog.Shadowed : [], effective.AgentSkills ? _catalog.Problems : [], _catalog.Roots, _skillRecords.Versions(),
-            _skillRecords.ChangedAt(), _skillRecords.Zone);
+            _skillRecords.ChangedAt(), _skillRecords.Zone,
+            project ? _catalog.ProjectPending : null, project ? _catalog.ProjectFolders : null, _files.Root, project ? ProjectRepoRoot() : null);
+    }
+
+    /// <summary>The repo's skills as <paramref name="catalog"/>'s last scan read them (2026-11-23): trusted and offered, not trusted, past the cap. Shared with headless.</summary>
+    public static (int Trusted, int NotTrusted, int OverCap) ProjectSkillCounts(SkillCatalog catalog)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        var pending = catalog.ProjectPending;
+        return (catalog.Skills.Count(s => s.Scope == SkillScope.Project), pending.Count(p => p.Reason == ProjectPendingReason.NotTrusted), pending.Count(p => p.Reason == ProjectPendingReason.OverCap));
+    }
+
+    /// <summary>The working folder's repo root as the project walk bounds it (2026-11-23): null outside a repo, or for one at or above a home.</summary>
+    private string? ProjectRepoRoot() => ProjectSkillWalk.RepoRoot(_files.Root, _projectSource.UserHome, _projectSource.AppHome);
+
+    /// <summary>What the trust notices said this run (2026-11-23): once per folder and fingerprint.</summary>
+    private readonly HashSet<string> _projectTrustNoted = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The trust notices after a turn's scan (2026-11-23, feature idea #16): a folder in the walk whose skills aren't trusted yet, or changed since their
+    /// trust, said once per folder and fingerprint in a run; never a blocking pane. The page's feed carries each notice as it carries every one.
+    /// </summary>
+    private void NoteProjectTrust(AppSettingsData effective)
+    {
+        if (ProjectSourceFor(effective) is null || _catalog.ProjectFolders is not { Count: > 0 } folders)
+        {
+            return;
+        }
+
+        foreach (string line in SkillsText.ProjectTrustNotices(folders, _catalog.ProjectPending, _files.Root, ProjectRepoRoot(), _projectTrustNoted))
+        {
+            _transcript.Notice(line);
+        }
     }
 
     /// <summary>The refusal for <c>/learn</c> while the setting <c>Agent skills</c> is off (<c>/skill &lt;name&gt;</c>'s too, until later on 2026-09-18). Pinned.</summary>
@@ -4697,7 +4748,7 @@ internal sealed partial class ChatScreen
         var guard = new ReflectionWriteGuard(SkillLearner.Live(pending.Roots, globalOn), pending.External, pending.Installed, create);
         // Its ask (2026-10-12, Reflection confirm mode): null under confirm-none, so a reflection writes as it always has.
         var confirm = LearnConfirm(pending.Confirm);
-        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard, confirm, globalOn, create), pending.Token);
+        var job = _session.StartLearning((a, token) => SkillLearner.RunAsync(a, pending.Material, pending.Roots, pending.External, pending.Effort, token, pending.MaxRequests, pending.Sessions, pending.Files, _skillRecords, guard, confirm, globalOn, create, ProjectSourceFor(_effective())), pending.Token);
         if (job is null)
         {
             return;
@@ -4959,7 +5010,7 @@ internal sealed partial class ChatScreen
             effective.ShellPreferNative,
             // Plan mode's advisors bullet (2026-10-10) as the turn would send it: neon_advisor offered and not off on /tools.
             // ...and its web research bullet (2026-10-17) with the research tools the turn offers.
-            (_plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled))?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null)
+            (_plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled) ?? ProjectInitTurn(effective, disabled))?.DirectiveFor(AdvisorsOffered(effective) && Without(_neonAdvisorTools, disabled).Count > 0 ? _neonAdvisor.Advisors : null, effective.WebTools ? PlanTurn.ResearchOf(web) : null)
                 ?? RalphPassTurn()?.Directive,   // a Ralph pass's directive (2026-10-18) in plan mode's place
             HomeAssistantOffered(effective),
             Without(HomeToolsFor(_haTools, HomeToolNotes()), disabled).Count,
@@ -4996,6 +5047,7 @@ internal sealed partial class ChatScreen
             Without(_shoppingTools, disabled).Count,
             // After Catalog(effective) above (arguments run in order): the switch as that scan read it (2026-10-13).
             GlobalSkills: _catalog.GlobalEnabled,
+            ProjectNotOffered: ProjectSourceFor(effective) is null ? 0 : _catalog.ProjectPending.Count,   // the repo's skills not offered (2026-11-23)
             EventLogEnabled: EventLogOffered(effective, _eventLog, _macLog),
             EventLogTools: Without(_eventLogTools, disabled).Count,
             TimersEnabled: TimersOffered(effective),
@@ -6739,9 +6791,20 @@ internal sealed partial class ChatScreen
             return [];
         }
 
-        _catalog.Scan(effective.ExternalSkills);
+        // The kept project part (2026-11-23): a completion rescans at each keystroke, and the walk would be round trips on a share.
+        _catalog.Scan(SkillScanFor(effective, refreshProject: false));
         return _catalog.Skills;
     }
+
+    /// <summary>
+    /// The repos' skills' source while <c>Agent skills</c> and <c>Project skills</c> are both on (2026-11-23, feature idea #16); null otherwise, so a scan
+    /// reads no project folder at all.
+    /// </summary>
+    private ProjectSkillSource? ProjectSourceFor(AppSettingsData effective) => effective.AgentSkills && effective.ProjectSkills ? _projectSource : null;
+
+    /// <summary>A scan as the settings say: the external root, the project skills, and whether the project part is read again or the kept one reused.</summary>
+    private SkillScan SkillScanFor(AppSettingsData effective, bool refreshProject) =>
+        new(effective.ExternalSkills, ProjectSourceFor(effective), refreshProject);
 
     /// <summary>The <c>/usage</c> Tools tab's groups: only what the next turn sends (<see cref="SystemPromptSummary.OfferedOnly"/>, 2026-09-26) — <c>/tools</c> builds its own full list (<see cref="ToolsFacts"/>).</summary>
     private IReadOnlyList<ToolGroup> ToolGroups() => ToolGroups(_effective());
@@ -6919,7 +6982,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>The skills as the next turn would take them (<see cref="PrepareTurn"/>), from the live settings.</summary>
     private SkillsForTurn SkillsFor(AppSettingsData effective) =>
-        new(_catalog, _skillTools, _project, effective.AgentSkills, effective.AgentSkills && effective.ExternalSkills, effective.ProjectFile);
+        new(_catalog, _skillTools, _project, effective.AgentSkills, effective.AgentSkills && effective.ExternalSkills, effective.ProjectFile, ProjectSourceFor(effective));
 
     /// <summary>
     /// Everything that lives in the profile's directory, built over <see cref="AppSettings.ProfileDirectory"/>:
@@ -6964,7 +7027,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void ReconcileSkills()
     {
-        _catalog.Scan(_effective().ExternalSkills);
+        _catalog.Scan(SkillScanFor(_effective(), refreshProject: true));
         var known = _catalog.All.Concat(_catalog.Shadowed).ToList();   // a disabled skill is still known (2026-10-09)
         _skillRecords.Reconcile(known);
         _skillRecords.ImportFrom(_sessions, known);
@@ -7183,7 +7246,7 @@ internal sealed partial class ChatScreen
             Headless: false,
             _plan.Active,
             disabled,
-            name => Help.HelpLive.PassReasonFor(name, effective, _audit.InPass, RalphAsksBarred(), ralphHeadless: false, _plan.Reviewing),
+            name => Help.HelpLive.PassReasonFor(name, effective, _audit.InPass, RalphAsksBarred(), ralphHeadless: false, _plan.Reviewing, _projectInit.InPass),
             Help.HelpLive.GroupReasons(groups, field => GroupOffReason(field, effective)),
             Help.HelpLive.ToolNotes(groups))
         {
@@ -7191,6 +7254,7 @@ internal sealed partial class ChatScreen
             Mcp = name => Help.HelpMcpLookup.Find(_mcp.Servers, name),
             McpAsksBarred = RalphAsksBarred(),
             McpAllowed = McpHeldForSession,
+            ProjectSkills = () => ProjectSourceFor(effective) is null ? null : ProjectSkillCounts(_catalog),
         };
     }
 
@@ -8060,6 +8124,7 @@ internal sealed partial class ChatScreen
         SkillEditorTool.ToolName,
         PresentPlanTool.ToolName,
         PresentAuditTool.ToolName,
+        PresentProjectNotesTool.ToolName,   // 2026-11-23: the draft is printed and shown on the pane, never as the call's arguments
         GitStatusTool.ToolName,
         GitLogTool.ToolName,
         GitShowTool.ToolName,
@@ -8238,12 +8303,20 @@ internal sealed partial class ChatScreen
         bool globalSkills = true;
         if (skills is { Enabled: true })
         {
-            skills.Catalog.Scan(skills.External);
+            // The turn's scan reads the project part again (2026-11-23): the kept one serves the completions between turns.
+            skills.Catalog.Scan(new SkillScan(skills.External, skills.ProjectSource));
             // The scan's own reading of the profile's Global skills switch (2026-10-13): the editor sentence never disagrees with the list.
             globalSkills = skills.Catalog.GlobalEnabled;
             project = skills.ProjectFile ? skills.Project.ReadNotes() : null;
             catalog = skills.Catalog.Skills;
             skillTools = SkillToolsUnscanned(skills);
+        }
+
+        if (inputs.ProjectNotesPass)
+        {
+            // A /project-init pass (2026-11-23): the survey carries the notes, and the skills can't be loaded in it.
+            project = null;
+            catalog = null;
         }
 
         ArgumentNullException.ThrowIfNull(persona);
@@ -8341,7 +8414,8 @@ internal sealed partial class ChatScreen
         Standing = [.. (ClockOffered(effective) ? _clockTools : []), .. (TimersOffered(effective) ? _timerTools : []), .. (HelpOffered(effective) ? _helpTools : [])],
         ToolsEnabled = effective.LlmOfferTools,
         Memory = _memoryTools,
-        MemoryEnabled = MemoryMode.Enabled(effective),
+        // Not during a /project-init pass (2026-11-23): the notes are often committed, and a memory could be copied into them.
+        MemoryEnabled = MemoryMode.Enabled(effective) && !_projectInit.InPass,
         MemorySave = MemoryMode.Saves(effective),
         Web = _webTools,
         WebEnabled = effective.WebTools,
@@ -8404,10 +8478,12 @@ internal sealed partial class ChatScreen
         // A gap pass that may not wait on the user (2026-10-18) loses the asking tools as a tool switched off on /tools is lost; so does a Ralph pass
         // with the checkpoint off (later that day: an unattended loop never stops on a question).
         Disabled = WithheldForAsking(disabled, effective),
-        Plan = _plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled),
+        Plan = _plan.Turn(_presentPlan, GapMayAsk(effective, disabled), PlanReferenceNames(effective)) ?? AuditTurn(effective, disabled) ?? ProjectInitTurn(effective, disabled),
         Pass = RalphPassTurn(),
         // A code audit's pass (2026-10-18): its read-only tools alone, the web's only under Code audit web research; an advisor asked in it the same.
-        OnlyTools = _audit.InPass ? AuditTools.Allowed(effective) : null,
+        // A /project-init pass (2026-11-23) the same, its own reads alone.
+        OnlyTools = _audit.InPass ? AuditTools.Allowed(effective) : _projectInit.InPass ? ProjectInitTools.Allowed : null,
+        ProjectNotesPass = _projectInit.InPass,
     }, effective);
 
     /// <summary>
@@ -8462,13 +8538,14 @@ internal sealed partial class ChatScreen
         : skills.Catalog.Skills.Count > 0 ? skills.Tools
         : skills.Tools.Where(t => !string.Equals(t.Name, LoadSkillTool.ToolName, StringComparison.Ordinal)).ToList();
 
-    public sealed record SkillsForTurn(SkillCatalog Catalog, IReadOnlyList<AIFunction> Tools, ProjectFile Project, bool Enabled, bool External, bool ProjectFile = true);
+    public sealed record SkillsForTurn(SkillCatalog Catalog, IReadOnlyList<AIFunction> Tools, ProjectFile Project, bool Enabled, bool External, bool ProjectFile = true, ProjectSkillSource? ProjectSource = null);
 
     /// <summary>The skill tools (2026-09-16): <c>load_skill</c> over the catalog and <c>skill_editor</c> over the live roots and the live external switch (whether <c>.agents\skills</c> is read, so a skill there blocks its name); <paramref name="files"/> gives the editor its <c>write_file</c> / <c>edit_file</c> (2026-09-27). Shared with headless.</summary>
     public static IReadOnlyList<AIFunction> SkillTools(SkillCatalog catalog, Func<SkillRoots> roots, Func<bool> external, SkillFileAccess? files = null, SkillRecords? records = null) => new AIFunction[]
     {
         new LoadSkillTool(catalog, used: records is null ? null : records.Used),
-        new SkillEditorTool(roots, external, files, records is null ? null : records.Edited),
+        // The trusted project skills' names (2026-11-23): a create or rename into one is refused, a copy would hide the repo's.
+        new SkillEditorTool(() => roots() with { ProjectNames = catalog.Skills.Where(s => s.Scope == SkillScope.Project).Select(s => s.Name).ToList() }, external, files, records is null ? null : records.Edited),
     };
 
     /// <summary>
@@ -15811,6 +15888,9 @@ internal sealed partial class ChatScreen
             case SlashCommand.CodeAudit:
                 return await HandleCodeAuditAsync(args, images, cancellationToken).ConfigureAwait(false);
 
+            case SlashCommand.ProjectInit:
+                return await HandleProjectInitAsync(args, images, cancellationToken).ConfigureAwait(false);
+
             case SlashCommand.BotChat:
                 return await HandleBotChatAsync(args, cancellationToken).ConfigureAwait(false);
 
@@ -17551,7 +17631,7 @@ internal sealed partial class ChatScreen
             return (null, null);
         }
 
-        _catalog.Scan(effective.ExternalSkills);
+        _catalog.Scan(SkillScanFor(effective, refreshProject: false));
         var only = new HashSet<string>(limited, StringComparer.OrdinalIgnoreCase);
         var named = _catalog.Skills.Where(s => only.Contains(s.Name)).ToList();
         return named.Count == 0 ? (null, null) : (named, new LoadSkillTool(_catalog, named.Select(s => s.Name).ToList(), _skillRecords.Used));
@@ -18351,7 +18431,7 @@ internal sealed partial class ChatScreen
         assistant.History.MaxTurns = TurnCapFor(_effective(), _session.ContextLength);
         // Never over the Claude CLI (2026-09-30): the CLI compacts the conversation it keeps; a summary here would change nothing it reads.
         // Room for the next reply too (2026-10-18): the largest so far, or the plan file's size while planning.
-        if (!ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl) && ConversationCompactor.ShouldAutoCompact(_session.Usage.LastRequest, _session.ContextLength, share, Math.Max(assistant.History.LargestReplyTokens, PlanReplyFloor(_plan, _files))))
+        if (!ClaudeCliEndpoint.IsClaudeCli(_session.Endpoint?.BaseUrl) && ConversationCompactor.ShouldAutoCompact(_session.Usage.LastRequest, _session.ContextLength, share, Math.Max(assistant.History.LargestReplyTokens, TurnReplyFloor())))
         {
             int percent = UsageText.Percent(_session.Usage.LastRequest.Total, _session.ContextLength) ?? share;
             await CompactAsync(focus: null, autoPercent: percent, cancellationToken).ConfigureAwait(false);
@@ -18384,7 +18464,8 @@ internal sealed partial class ChatScreen
             }
 
             // Whether this turn was an automated run's pass, read before the runs move on (2026-10-22): such a turn starts no reflection below.
-            bool passTurn = PassTurnNow;
+            // A /project-init pass (2026-11-23) too: a stranger's README must never become a skill; it keeps its file journal, so not PassTurnNow.
+            bool passTurn = PassTurnNow || _projectInit.InPass;
             // The gap-closing loop after the turn (2026-10-13), ahead of the approval: a converged loop is said and cleared before
             // the approval its pane gave goes ahead; otherwise the next pass, or the plan back on the pane, is acted on below.
             var gapPass = TakeGapPass(outcome);
@@ -18929,7 +19010,8 @@ internal sealed partial class ChatScreen
             // automation run's lasts the run (2026-10-23, DA8).
             ResetNetworkBudget();
             _turnPictures = images;   // the directive names a picture sent with this message too (2026-10-18)
-            PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength, replyFloor: PlanReplyFloor(_plan, _files)), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
+            PrepareTurn(assistant, TurnInputs(effective), _memory, _persona, _operata, _vocalia, speaker is not null, effective.LlmMaxToolIterations, ContextGuardFor(effective, _session.ContextLength, replyFloor: TurnReplyFloor()), SkillsFor(effective), markdown, _processes, effective.LlmPreserveThinking, LlmSampling.Resolve(effective, _session.Endpoint?.ModelId));
+            NoteProjectTrust(effective);   // the turn's scan read the walk again (2026-11-23)
             assistant.ThinkingInFlightOnly = Assistant.InFlightOnlyWire(_session.Endpoint?.BaseUrl);
             // An MCP result's pictures to a model that can't see them (2026-11-21, feature idea #31): the user's alone, judged at each turn.
             assistant.ToolPicturesUnseen = UnseenMcpPictures(_session.SeesPictures, assistant.Tools);
@@ -20092,6 +20174,14 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, PresentAuditTool.ToolName, StringComparison.Ordinal):
                 // The changes were printed as 🔎 notices as the call ran (OnAuditReported); only a refusal has a line of its own (2026-10-18).
+                if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
+                {
+                    _transcript.ToolNote(result.Text, time);
+                }
+
+                break;
+            case TurnEvent.ToolResult result when string.Equals(result.Name, PresentProjectNotesTool.ToolName, StringComparison.Ordinal):
+                // The draft and the answer were printed as it ran (ReviewProjectNotesAsync, OnProjectNotesWritten): no diff a second time, only a refusal.
                 if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
                 {
                     _transcript.ToolNote(result.Text, time);

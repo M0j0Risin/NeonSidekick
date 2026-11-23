@@ -13,6 +13,13 @@ namespace NeonSidekick.Skills;
 /// </summary>
 public sealed record SkillRoots(string Profile, string Global, string External, bool GlobalOn = true)
 {
+    /// <summary>
+    /// The names the trusted project skills hold right now (2026-11-23, feature idea #16): set only for the model's and a reflection's
+    /// <c>skill_editor</c>, so a create or a rename into one is refused (a copy would hide the repo's). The user's own acts (the pane's copy,
+    /// <c>/skills add</c>) leave it empty and may shadow on purpose.
+    /// </summary>
+    public IReadOnlyCollection<string> ProjectNames { get; init; } = [];
+
     /// <summary>The folder name under the home and under a profile: <c>skills</c>.</summary>
     public const string DirectoryName = "skills";
 
@@ -45,12 +52,17 @@ public sealed record SkillRoots(string Profile, string Global, string External, 
         return Path.Combine(home, ExternalDirectoryName, DirectoryName);
     }
 
-    /// <summary>The root for <paramref name="scope"/>.</summary>
+    /// <summary>
+    /// The root for <paramref name="scope"/>. A project skill has no one root (2026-11-23): its folder is the skill's own
+    /// (<see cref="Skill.Directory"/>), its level one of <see cref="ProjectSkillWalk.Levels"/>; asked for one, this throws rather than answer
+    /// with the external folder, so no caller writes or records a repo's skill by the wrong root.
+    /// </summary>
     public string Of(SkillScope scope) => scope switch
     {
         SkillScope.Profile => Profile,
         SkillScope.Global => Global,
-        _ => External,
+        SkillScope.External => External,
+        _ => throw new InvalidOperationException("A project skill has no single root; use ProjectSkillWalk.Levels and the skill's own folder."),
     };
 
     /// <summary>

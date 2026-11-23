@@ -59,6 +59,16 @@ public partial class SidekickAppTests
         Assert.Contains("[error] " + Updates.UpdateText.NotHeadless, output);
     }
 
+    [Theory]
+    [InlineData("/project-init\n")]
+    [InlineData("/project-init build and test\n")]
+    public async Task Headless_ProjectInit_IsTheScreensAlone(string typed)
+    {
+        // Interactive only (2026-11-23, the user's call): it asks before it writes, and would otherwise reach the model as text.
+        string output = await Headless(typed, exitCode: 4);
+        Assert.Contains("[error] " + ProjectInit.ProjectInitText.NotHeadlessError, output);
+    }
+
     [Fact]
     public async Task Headless_HelpTool_AToolThatNeedsTheScreen_SaysAHeadlessRunNeverOffersIt()
     {

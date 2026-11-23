@@ -92,6 +92,13 @@ public enum FileOutcome
     /// </summary>
     InSkillFolder,
 
+    /// <summary>
+    /// A path outside the working directory but inside a trusted project skills folder above it (2026-11-23, feature idea #16,
+    /// <see cref="WorkingDirectory.ProjectSkillFolders"/>): refused as <see cref="OutsideRoot"/> is, with a sentence naming <c>load_skill</c> and saying
+    /// the repo's skill isn't changed from here (never <c>skill_editor</c>, which doesn't write one).
+    /// </summary>
+    InProjectSkillFolder,
+
     /// <summary>A model write into <c>.neon</c>, whose plans, audits and loop files the app trusts (2026-10-22, review P4, <see cref="WriteGuard"/>).</summary>
     NeonFilesProtected,
 
@@ -932,6 +939,7 @@ public sealed class WorkingDirectory
             AdminFamilies = AdminFamilies,
             ImagesFolder = ImagesFolder,
             SkillFolders = SkillFolders,
+            ProjectSkillFolders = ProjectSkillFolders,
         };
     }
 
@@ -1013,6 +1021,13 @@ public sealed class WorkingDirectory
     /// or an empty answer, keeps every refusal <see cref="FileOutcome.OutsideRoot"/>.
     /// </summary>
     public Func<IReadOnlyList<string>>? SkillFolders { get; set; }
+
+    /// <summary>
+    /// The trusted project skills folders (2026-11-23, feature idea #16): a refused path inside one is <see cref="FileOutcome.InProjectSkillFolder"/>.
+    /// The catalog's kept part (<see cref="Skills.SkillCatalog.TrustedProjectFolders"/>), empty while project skills are off; read only on a refused
+    /// path, so it costs nothing on an allowed one.
+    /// </summary>
+    public Func<IReadOnlyList<string>>? ProjectSkillFolders { get; set; }
 
     /// <summary>The setting's meaning: blank is the profile's <see cref="DefaultFolderName"/> folder, anything else a full path.</summary>
     public static string Resolve(string configured, string profileDirectory)
@@ -1104,11 +1119,14 @@ public sealed class WorkingDirectory
     }
 
     // Whether a refused candidate lies in a skill root (SkillFolders); a bad hook answer is no root.
-    private bool InSkillFolderOf(string candidate)
+    private bool InSkillFolderOf(string candidate) => InFolderOf(SkillFolders, candidate);
+
+    // Whether a refused candidate lies in one of a hook's folders; a bad hook answer is no folder.
+    private static bool InFolderOf(Func<IReadOnlyList<string>>? folders, string candidate)
     {
         try
         {
-            return SkillFolders?.Invoke() is { } roots
+            return folders?.Invoke() is { } roots
                 && roots.Any(root => root.Length > 0 && IsInside(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)), candidate));
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
@@ -1219,6 +1237,7 @@ public sealed class WorkingDirectory
         {
             return InImagesFolderOf(candidate) ? FileOutcome.InImagesFolder
                 : InSkillFolderOf(candidate) ? FileOutcome.InSkillFolder
+                : InFolderOf(ProjectSkillFolders, candidate) ? FileOutcome.InProjectSkillFolder
                 : FileOutcome.OutsideRoot;
         }
 

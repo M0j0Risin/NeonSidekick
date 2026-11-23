@@ -315,7 +315,7 @@ public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs, IAcceptsA
         }
 
         bool external = _external();
-        if (_confirm is not null && SkillEditor.Find(roots, name.Trim(), external) is var found && (create ? found is null : found is { } at && at != SkillScope.External))
+        if (_confirm is not null && SkillEditor.Find(roots, name.Trim(), external) is var found && (create ? found is null : found is { } at && !SkillScopes.IsReadOnly(at)))
         {
             // The ask (2026-10-12): a create for a free name, an update for a skill that is there; a call the editor would refuse anyway
             // is refused unasked.
@@ -441,7 +441,7 @@ public sealed class SkillEditorTool : AIFunction, IRefusesPrunedStubs, IAcceptsA
             return refusal;
         }
 
-        if (_confirm is not null && SkillEditor.Find(_roots(), name.Trim(), _external()) is { } at && at != SkillScope.External)
+        if (_confirm is not null && SkillEditor.Find(_roots(), name.Trim(), _external()) is { } at && !SkillScopes.IsReadOnly(at))
         {
             if (await Declined(proposal, at, cancellationToken).ConfigureAwait(false) is { } no)
             {

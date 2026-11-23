@@ -35,6 +35,7 @@ Get-Content error.log | NeonSidekick.exe --prompt "Why did this fail?"   # the l
   - An old copy started during or just after an update runs nothing, and says on stderr to start it again ([exit codes](#exit-codes)).
 - **A fresh profile does little headless.** The model gets only the clock (*Clock tools*), help (*Help tools*), memory reading (*Memory mode* `read-only`), past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`).
   - Set up a server (or `--url`) and the tool groups the job needs first, in the TUI (`/settings`, `/tools`) or `profile.json`.
+- **Project skills use saved trust only.** A repo's `.agents/skills` and `.claude/skills` are offered once trusted in the TUI ([Project skills and trust](SETTINGS.md#project-skills-and-trust)); a folder not trusted, or changed since, gets a `[notice]` at the start.
 - **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, DuckDB, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`.
   - SQLite and DuckDB files, and DuckDB's data files, in the working directory need no ticking.
 - **In `profile.json`** the lists are `SqlConnectionsOffered`, `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `DuckDbDatabasesOffered`, `UncSharesOffered` and `ComfyWorkflowsOffered`.
@@ -145,6 +146,7 @@ They need no server unless the row says so.
 | `/webui …` | An error: the [Web UI](INTERFACE.md#web-ui) runs only with the full-screen app. |
 | `/midi …` | An error: MIDI buttons are heard only by the full-screen app. |
 | `/update …` | An error: [updates](COMMANDS.md#updating) run only in the full-screen app. |
+| `/project-init …` | An error: it asks before it writes, so it runs only in the full-screen app. |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`

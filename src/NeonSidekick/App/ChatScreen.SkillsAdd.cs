@@ -119,7 +119,7 @@ internal sealed partial class ChatScreen
             return await screen.ConfirmAsync(SkillInstallText.TypedQuestion(candidate.Name, scope), cancellationToken).ConfigureAwait(false) ? scope : null;
         }
 
-        public void Rescan() => screen._catalog.Scan(screen._effective().ExternalSkills);
+        public void Rescan() => screen._catalog.Scan(screen.SkillScanFor(screen._effective(), refreshProject: true));
 
         public void Installed(SkillInstallResult result) => screen._skillRecords.Installed(result);
 

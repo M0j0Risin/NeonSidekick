@@ -12,6 +12,9 @@ namespace NeonSidekick.App;
 /// is each skill's version from the records (<c>SkillRecords.Versions</c>), null for an external one; without it, no version column.
 /// <see cref="Changed"/> (2026-10-12) is when each last changed (<c>SkillRecords.ChangedAt</c>), shown in <see cref="Zone"/> (UTC without
 /// one); without it, no changed column.
+/// <para>The repo's skills (2026-11-23, feature idea #16): <see cref="Pending"/> the project skills listed but not offered (<see cref="SkillCatalog.ProjectPending"/>),
+/// <see cref="Folders"/> the walk's folders holding skills with their trust, <see cref="WorkingFolder"/> and <see cref="RepoRoot"/> for the folder labels
+/// (<see cref="SkillsText.FolderLabel"/>). All null while <c>Project skills</c> is off.</para>
 /// </summary>
 public sealed record SkillsFacts(
     bool Enabled,
@@ -21,7 +24,18 @@ public sealed record SkillsFacts(
     SkillRoots Roots,
     Func<Skill, int?>? Version = null,
     Func<Skill, DateTimeOffset?>? Changed = null,
-    TimeZoneInfo? Zone = null);
+    TimeZoneInfo? Zone = null,
+    IReadOnlyList<ProjectPendingSkill>? Pending = null,
+    IReadOnlyList<ProjectFolder>? Folders = null,
+    string? WorkingFolder = null,
+    string? RepoRoot = null)
+{
+    /// <summary>The project skills not offered, each with its reason; empty for none.</summary>
+    public IReadOnlyList<ProjectPendingSkill> ProjectPending => Pending ?? [];
+
+    /// <summary>The walk's folders that hold skills, nearest first; empty for none.</summary>
+    public IReadOnlyList<ProjectFolder> ProjectFolders => Folders ?? [];
+}
 
 /// <summary>
 /// The words for <c>/skills</c>: the pane's Offered tab — the catalog, what is shadowed and what was
@@ -154,7 +168,22 @@ public static class SkillsText
     public static int NameWidth(SkillsFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        return Math.Max(4, facts.Skills.Concat(facts.Shadowed).Select(s => s.Name.Length).DefaultIfEmpty(0).Max());
+        // A repo's unbounded name never widens the column (2026-11-23): it's shown cut (ShownName) and left out of the measure.
+        return Math.Max(4, facts.Skills.Concat(facts.Shadowed).Concat(facts.ProjectPending.Select(p => p.Skill))
+            .Where(s => SkillCatalog.IsBoundedName(s.Name)).Select(s => s.Name.Length).DefaultIfEmpty(0).Max());
+    }
+
+    /// <summary>A skill's name as a row shows it: a project skill's over 64 characters or with a control character cut to 64 printable ones and <c>…</c>.</summary>
+    public static string ShownName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (SkillCatalog.IsBoundedName(name))
+        {
+            return name;
+        }
+
+        string printable = new(name.Where(c => !char.IsControl(c)).Take(SkillFrontmatter.MaxNameLength).ToArray());
+        return printable + "…";
     }
 
     /// <summary>
@@ -170,7 +199,7 @@ public static class SkillsText
             return [OffLine];
         }
 
-        if (facts.Skills.Count == 0)
+        if (facts.Skills.Count == 0 && facts.ProjectPending.Count == 0)
         {
             return [NoneLine];
         }
@@ -197,6 +226,17 @@ public static class SkillsText
             }
         }
 
+        if (facts.ProjectPending.Count > 0)
+        {
+            // The repo's skills not offered (2026-11-23): trusted only on the pane, so a console without one just lists them.
+            lines.Add("");
+            lines.Add(ProjectPendingHeading);
+            foreach (var pending in facts.ProjectPending)
+            {
+                lines.Add("  " + ShownName(pending.Skill.Name).PadRight(width) + "  " + SkillText.PendingReason(pending.Reason));
+            }
+        }
+
         if (facts.Problems.Count > 0)
         {
             lines.Add("");
@@ -209,6 +249,9 @@ public static class SkillsText
 
         return lines;
     }
+
+    /// <summary>The plain lines' heading over the project skills not offered (2026-11-23). Pinned.</summary>
+    public const string ProjectPendingHeading = "Project skills not offered (/skills › project at the PC):";
 
     /// <summary>The catalog's heading on the Offered tab (2026-10-10, the user's ask: the <c>/settings</c> look). Pinned.</summary>
     public const string CatalogTitle = "Skills";
@@ -249,9 +292,15 @@ public static class SkillsText
             return [(Theme.DimMarkup(OffLine), null, false)];
         }
 
-        if (facts.Skills.Count == 0)
+        if (facts.Skills.Count == 0 && facts.ProjectPending.Count == 0 && facts.ProjectFolders.Count == 0)
         {
             return [(Theme.DimMarkup(NoneLine), null, false)];
+        }
+
+        if (scope == SkillScope.Project)
+        {
+            // The repo's skills (2026-11-23): grouped by folder, with the trust and untrust rows (ProjectRows); the pane resolves Enter through them.
+            return ProjectRows(facts, filter).Select(r => (r.Markup, r.Skill, r.Kind == ProjectRowKind.Heading)).ToList();
         }
 
         var rows = new List<(string, Skill?, bool)>();
@@ -283,7 +332,7 @@ public static class SkillsText
             }
         }
 
-        var inScope = facts.Problems.Where(p => scope is null || ProblemScope(facts.Roots, p) == scope).Select(ProblemLine).ToList();
+        var inScope = facts.Problems.Where(p => scope is null || ProblemScope(facts.Roots, p, facts.ProjectFolders) == scope).Select(ProblemLine).ToList();
         var problems = inScope.Where(line => MenuFilter.Matches(filter, line, null)).ToList();
         if (problems.Count > 0)
         {
@@ -296,7 +345,10 @@ public static class SkillsText
 
         if (rows.Count == 0)
         {
-            rows.Add(filter.Length == 0 && scope is { } empty ? (Theme.DimMarkup(ScopeNoneLine(empty)), null, false) : (MenuFilter.NoMatchRow(filter), null, false));
+            // Only the repo's untrusted skills (2026-11-23): the all tab says none is installed; they're on the project tab.
+            rows.Add(filter.Length > 0 ? (MenuFilter.NoMatchRow(filter), null, false)
+                : scope is { } empty ? (Theme.DimMarkup(ScopeNoneLine(empty)), null, false)
+                : (Theme.DimMarkup(NoneLine), null, false));
         }
 
         return rows;
@@ -341,7 +393,8 @@ public static class SkillsText
     public static IReadOnlyList<SkillScope?> ScopeTabs(SkillsFacts facts)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        if (!facts.Enabled || facts.Skills.Count == 0)
+        // A repo whose only skills are untrusted (2026-11-23) still gets the strip: the project sub-tab is where they're trusted.
+        if (!facts.Enabled || (facts.Skills.Count == 0 && facts.ProjectPending.Count == 0 && facts.ProjectFolders.Count == 0))
         {
             return [];
         }
@@ -358,6 +411,12 @@ public static class SkillsText
             tabs.Add(SkillScope.External);
         }
 
+        // The repo's skills (2026-11-23, feature idea #16): after external while any folder in the walk holds some, trusted or not.
+        if (facts.ProjectFolders.Count > 0 || facts.ProjectPending.Count > 0 || facts.Skills.Concat(facts.Shadowed).Any(s => s.Scope == SkillScope.Project))
+        {
+            tabs.Add(SkillScope.Project);
+        }
+
         return tabs;
     }
 
@@ -368,7 +427,15 @@ public static class SkillsText
     public static string? ScopeBadge(SkillsFacts facts, SkillScope? scope)
     {
         ArgumentNullException.ThrowIfNull(facts);
-        return SettingsMenu.ChangedBadge(facts.Skills.Concat(facts.Shadowed).Count(s => InScope(s, scope)));
+        return SettingsMenu.ChangedBadge(ScopeCount(facts, scope));
+    }
+
+    /// <summary>The skills a scope sub-tab lists: its offered and shadowed ones, and on the project tab those not offered too (2026-11-23).</summary>
+    public static int ScopeCount(SkillsFacts facts, SkillScope? scope)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        int count = facts.Skills.Concat(facts.Shadowed).Count(s => InScope(s, scope));
+        return scope == SkillScope.Project ? count + facts.ProjectPending.Count : count;
     }
 
     /// <summary>What a scope sub-tab says with no skill of that root (2026-10-10). Pinned.</summary>
@@ -423,12 +490,20 @@ public static class SkillsText
         foreach (var entry in loaded)
         {
             var skill = facts.Skills.Concat(facts.Shadowed).FirstOrDefault(s => string.Equals(s.Name, entry.Name, StringComparison.OrdinalIgnoreCase));
-            if (!MenuFilter.Matches(filter, entry.Name, skill?.Description))
+            var pending = skill is null ? facts.ProjectPending.FirstOrDefault(p => string.Equals(p.Skill.Name, entry.Name, StringComparison.OrdinalIgnoreCase)) : null;
+            if (!MenuFilter.Matches(filter, entry.Name, skill?.Description ?? pending?.Skill.Description))
             {
                 continue;
             }
 
             string count = entry.Loads > 1 ? " " + Theme.DimMarkup(LoadsNote(entry.Loads)) : "";
+            if (pending is not null)
+            {
+                // A repo's skill loaded, then untrusted or changed (2026-11-23): it stays in the conversation; the row says why it isn't offered now.
+                rows.Add((Theme.DimMarkup(ShownName(entry.Name).PadRight(width) + "  " + ProjectNotOfferedNote(pending.Reason)) + count, null, false));
+                continue;
+            }
+
             if (skill is null)
             {
                 rows.Add((Theme.DimMarkup(entry.Name.PadRight(width) + "  " + NotInCatalogNote) + count, null, false));
@@ -467,21 +542,364 @@ public static class SkillsText
     /// The root a skipped folder lies under (2026-10-10, the scope sub-tabs): the profile's, the global or the external one by its path,
     /// case aside; null for a folder under none. Pure.
     /// </summary>
-    public static SkillScope? ProblemScope(SkillRoots roots, SkillProblem problem)
+    public static SkillScope? ProblemScope(SkillRoots roots, SkillProblem problem, IReadOnlyList<ProjectFolder>? projectFolders = null)
     {
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(problem);
         foreach (var scope in new[] { SkillScope.Profile, SkillScope.Global, SkillScope.External })
         {
-            string root = roots.Of(scope).TrimEnd('\\', '/');
-            string dir = problem.Directory;
-            if (root.Length > 0 && dir.Length > root.Length && dir.StartsWith(root, StringComparison.OrdinalIgnoreCase) && dir[root.Length] is '\\' or '/')
+            if (Under(roots.Of(scope), problem.Directory))
             {
                 return scope;
             }
         }
 
-        return null;
+        // A repo's broken skill (2026-11-23): on the project sub-tab, under its folder's heading, trusted or not.
+        return ProjectFolderOf(problem, projectFolders ?? []) is not null ? SkillScope.Project : null;
+    }
+
+    /// <summary>The project folder whose <c>.agents/skills</c> or <c>.claude/skills</c> holds <paramref name="problem"/>'s folder, or null.</summary>
+    public static ProjectFolder? ProjectFolderOf(SkillProblem problem, IReadOnlyList<ProjectFolder> folders)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+        ArgumentNullException.ThrowIfNull(folders);
+        return folders.FirstOrDefault(f => f.SkillsFolders.Any(root => Under(root, problem.Directory)));
+    }
+
+    // Whether dir lies inside root, case aside: the roots' own spelling rule, a separator after the root.
+    private static bool Under(string root, string dir)
+    {
+        root = root.TrimEnd('\\', '/');
+        return root.Length > 0 && dir.Length > root.Length && dir.StartsWith(root, StringComparison.OrdinalIgnoreCase) && dir[root.Length] is '\\' or '/';
+    }
+
+    // ── Project skills (2026-11-23, feature idea #16) ──────────────────────
+    // Every folder label, skill name, description and problem here is the repo's: escaped into markup, never read as it.
+
+    /// <summary>The working folder's label (2026-11-23). Pinned.</summary>
+    public const string ThisFolderLabel = "This folder";
+
+    /// <summary>What follows an ancestor's label when it is the repo root. Pinned.</summary>
+    public const string RepoRootNote = " (repo root)";
+
+    /// <summary>
+    /// A project folder as every trust string names it (2026-11-23): the working folder as <see cref="ThisFolderLabel"/>, an ancestor by its path relative to
+    /// the working folder (the system's separator: <c>..\..</c>, <c>../..</c>) with <see cref="RepoRootNote"/> when it is the repo root; the full path with no
+    /// working folder. Pure apart from <see cref="Path.GetFullPath(string)"/>.
+    /// </summary>
+    public static string FolderLabel(string folder, string? workingFolder, string? repoRoot)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        string key = ProjectSkillTrust.KeyOf(folder);
+        bool root = repoRoot is not null && Same(key, ProjectSkillTrust.KeyOf(repoRoot));
+        if (workingFolder is null)
+        {
+            return key + (root ? RepoRootNote : "");
+        }
+
+        string working = ProjectSkillTrust.KeyOf(workingFolder);
+        return Same(key, working) ? ThisFolderLabel : Path.GetRelativePath(working, key) + (root ? RepoRootNote : "");
+
+        static bool Same(string a, string b) => string.Equals(a, b, NeonSidekick.Files.CaseRule.Comparison(a));
+    }
+
+    /// <summary><paramref name="folder"/>'s label from <paramref name="facts"/>' working folder and repo root.</summary>
+    public static string FolderLabel(SkillsFacts facts, string folder)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return FolderLabel(folder, facts.WorkingFolder, facts.RepoRoot);
+    }
+
+    /// <summary>A folder's group heading on the project sub-tab: <c>..\.. (repo root)'s skills</c>. Pinned.</summary>
+    public static string ProjectFolderTitle(string label) => label + "'s skills";
+
+    /// <summary>The group heading's note for each trust state. Pinned.</summary>
+    public static string ProjectTrustNote(ProjectFolderTrust trust) => trust switch
+    {
+        ProjectFolderTrust.Trusted => "trusted",
+        ProjectFolderTrust.Changed => "changed since you trusted them",
+        _ => "not trusted",
+    };
+
+    /// <summary>The trust row's word, and the untrust row's. Pinned.</summary>
+    public const string TrustWord = "trust";
+    public const string UntrustWord = "untrust";
+
+    /// <summary>What the trust row says after its word: a first trust, or one asked again after a change. Pinned.</summary>
+    public static string TrustRowNote(bool changed) => changed ? "review what changed, then offer them again" : "review these skills, then offer them to the model";
+
+    /// <summary>What the untrust row says after its word. Pinned.</summary>
+    public const string UntrustRowNote = "stop offering these skills; trusting them again asks first";
+
+    /// <summary>
+    /// The project sub-tab (2026-11-23): a group per folder holding skills, nearest first, under <see cref="ProjectFolderTitle"/> with its trust; in each, a trust
+    /// row while it isn't trusted, its offered skills, the ones a higher root hides, the ones not offered (dim, with the reason), its broken ones, and an untrust
+    /// row while it is. The <paramref name="filter"/> keeps the skills and problems that hold it, a folder's rows with them; <see cref="MenuFilter.NoMatchRow"/>
+    /// alone when none is left.
+    /// </summary>
+    public static IReadOnlyList<ProjectRow> ProjectRows(SkillsFacts facts, string filter = "")
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        ArgumentNullException.ThrowIfNull(filter);
+        var rows = new List<ProjectRow>();
+        int width = Math.Max(NameWidth(facts), UntrustWord.Length);
+        foreach (var folder in facts.ProjectFolders)
+        {
+            bool In(Skill s) => s.Scope == SkillScope.Project && string.Equals(s.TrustFolder, folder.Level, StringComparison.Ordinal);
+            var offered = facts.Skills.Where(In).ToList();
+            var shadowed = facts.Shadowed.Where(In).ToList();
+            var pending = facts.ProjectPending.Where(p => In(p.Skill)).ToList();
+            var problems = facts.Problems.Where(p => ReferenceEquals(ProjectFolderOf(p, [folder]), folder)).ToList();
+            var group = new List<ProjectRow>();
+            foreach (var skill in offered.Where(s => MenuFilter.Matches(filter, s.Name, s.Description)))
+            {
+                string rest = "  " + skill.Description;
+                group.Add(new ProjectRow(skill.Disabled ? Theme.DimMarkup(skill.Name.PadRight(width) + rest) : Styled(Theme.AccentSecondary, skill.Name.PadRight(width)) + Markup.Escape(rest), ProjectRowKind.Skill, skill, folder));
+            }
+
+            foreach (var skill in shadowed.Where(s => MenuFilter.Matches(filter, s.Name, s.Description)))
+            {
+                group.Add(new ProjectRow(Theme.DimMarkup(ShadowedLine(skill, width)), ProjectRowKind.Skill, skill, folder));
+            }
+
+            foreach (var item in pending.Where(p => MenuFilter.Matches(filter, p.Skill.Name, p.Skill.Description)))
+            {
+                string line = ShownName(item.Skill.Name).PadRight(width) + "  " + SkillText.PendingReason(item.Reason) + (item.Skill.Description.Length > 0 ? "  " + item.Skill.Description : "");
+                group.Add(new ProjectRow(Theme.DimMarkup(line), ProjectRowKind.Pending, item.Skill, folder, item.Reason));
+            }
+
+            foreach (var problem in problems.Where(p => MenuFilter.Matches(filter, ProblemLine(p), null)))
+            {
+                group.Add(new ProjectRow(Theme.DimMarkup(ProblemLine(problem)), ProjectRowKind.Text, null, folder));
+            }
+
+            if (group.Count == 0 && filter.Length > 0)
+            {
+                continue;
+            }
+
+            if (rows.Count > 0)
+            {
+                rows.Add(new ProjectRow("", ProjectRowKind.Text));
+            }
+
+            string label = FolderLabel(facts, folder.Level);
+            int count = offered.Count + shadowed.Count + pending.Count;
+            rows.Add(new ProjectRow(SectionRule.Markup(ProjectFolderTitle(label), count.ToString(System.Globalization.CultureInfo.InvariantCulture), ProjectTrustNote(folder.Trust)), ProjectRowKind.Heading, null, folder));
+            if (folder.Trust != ProjectFolderTrust.Trusted)
+            {
+                rows.Add(new ProjectRow(Styled(Theme.AccentSecondary, TrustWord.PadRight(width)) + Markup.Escape("  ") + Theme.DimMarkup(TrustRowNote(folder.Trust == ProjectFolderTrust.Changed)), ProjectRowKind.Trust, null, folder));
+            }
+
+            rows.AddRange(group);
+            if (folder.Trust == ProjectFolderTrust.Trusted)
+            {
+                rows.Add(new ProjectRow(Styled(Theme.AccentSecondary, UntrustWord.PadRight(width)) + Markup.Escape("  ") + Theme.DimMarkup(UntrustRowNote), ProjectRowKind.Untrust, null, folder));
+            }
+        }
+
+        if (rows.Count == 0)
+        {
+            rows.Add(new ProjectRow(filter.Length == 0 ? Theme.DimMarkup(ScopeNoneLine(SkillScope.Project)) : MenuFilter.NoMatchRow(filter), ProjectRowKind.Text));
+        }
+
+        return rows;
+    }
+
+    /// <summary>The loaded sub-tab's note on a loaded project skill that isn't offered now (2026-11-23): <c>(not trusted now)</c>, or its reason. Pinned.</summary>
+    public static string ProjectNotOfferedNote(ProjectPendingReason reason) =>
+        "(" + (reason == ProjectPendingReason.NotTrusted ? "not trusted now" : SkillText.PendingReason(reason)) + ")";
+
+    /// <summary>The project sub-tab's keys (2026-11-23). Pinned.</summary>
+    public const string ProjectKeys = "Enter = trust, untrust, edit, copy, disable · ←/→ tabs · " + MenuFilter.TypeAndCloseKeys;
+
+    // ── The trust question ──
+
+    /// <summary>The trust question's title: <c>Skills › trust</c> (no folder: a label is the repo's, unbounded; the caption names it). Pinned.</summary>
+    public const string TrustTitle = Label + " › " + TrustWord;
+
+    /// <summary>The trust question's keys. Pinned.</summary>
+    public const string TrustKeys = "Enter = trust, or view a skill · Esc = cancel";
+
+    /// <summary>The trust question's caption on a first trust (2026-11-23): what trusting does, read before the yes. Pinned.</summary>
+    public static string TrustCaption(string label) =>
+        $"Trust {label}'s skills? View each one first: once trusted, the model may load them and their files. Fields asking Claude Code for tools or hooks grant nothing here.";
+
+    /// <summary>The trust question's caption for a folder trusted before whose skills changed (2026-11-23): what changed, counted. Pinned.</summary>
+    public static string TrustChangedCaption(string label, int added, int changed, int removed) =>
+        $"{label}'s skills changed since you trusted them: {added} new, {changed} changed, {removed} removed. View shows each change. Trust them again?";
+
+    /// <summary>The question's view word, the cancel row and the status words. Pinned.</summary>
+    public const string ViewWord = "view";
+    public const string CancelWord = "cancel";
+    public const string NewMark = "new";
+    public const string ChangedMark = "changed";
+    public const string FilesChangedMark = "files changed";
+    public const string RemovedMark = "removed";
+
+    /// <summary>A skill's line in the trust question when its frontmatter asks Claude Code for tools, hooks or a model (2026-11-23). Pinned.</summary>
+    public const string ActingMark = "asks Claude Code for tools or hooks; ignored here";
+
+    /// <summary>A skill's bundled-file count in the trust question: <c>3 files</c>, <c>50+ files</c> past the listed 50. Pinned.</summary>
+    public static string FilesNote(int count, bool more) =>
+        count.ToString(System.Globalization.CultureInfo.InvariantCulture) + (more ? "+" : "") + (count == 1 && !more ? " file" : " files");
+
+    /// <summary>The trust question's trust row: the word, then the folder it trusts. Escaped.</summary>
+    public static string TrustQuestionRow(string label) =>
+        Markup.Escape(TrustWord.PadRight(9)) + Theme.DimMarkup("offer " + label + "'s skills to the model");
+
+    /// <summary>A skill's row in the trust question: view, its name, its mark (new, changed…), then dim its description, file count and acting mark. Escaped.</summary>
+    public static string TrustViewRow(string name, int nameWidth, string mark, string description, string files, bool acting)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        string tail = string.Join(" · ", new[] { description, files, acting ? ActingMark : "" }.Where(p => p.Length > 0));
+        return Markup.Escape(ViewWord.PadRight(9) + ShownName(name).PadRight(nameWidth) + "  " + mark.PadRight(FilesChangedMark.Length) + "  ") + Theme.DimMarkup(tail);
+    }
+
+    /// <summary>A skill gone since the trust, named in the question (no view: there's nothing left to read). Escaped.</summary>
+    public static string TrustRemovedRow(string name, int nameWidth) =>
+        Theme.DimMarkup(new string(' ', 9) + ShownName(name).PadRight(nameWidth) + "  " + RemovedMark);
+
+    /// <summary>The trust question's last row.</summary>
+    public static string CancelRow => Markup.Escape(CancelWord.PadRight(9)) + Theme.DimMarkup("trust nothing");
+
+    /// <summary>The info pane's label over a skill's <c>SKILL.md</c> or its diff in the trust question. Pinned.</summary>
+    public static string ViewLabel(string name) => Label + " › " + ShownName(name);
+
+    /// <summary>A skill the question can't show: no readable <c>SKILL.md</c> within the bound. Pinned.</summary>
+    public const string NothingToViewText = "(this skill's SKILL.md couldn't be read; it is listed under Skipped)";
+
+    /// <summary>Trusted (2026-11-23). Pinned.</summary>
+    public static string TrustedNotice(string label, int count) =>
+        $"({NoticeGlyphs.Skill}trusted: {label}'s skills, {count.ToString(System.Globalization.CultureInfo.InvariantCulture)} of them)";
+
+    /// <summary>The folder changed between the question's read and the yes (2026-11-23): nothing saved, and the question again on the new content. Pinned.</summary>
+    public static string ChangedWhileReviewingNotice(string label) => $"({NoticeGlyphs.Skill}{label}'s skills changed while you were reviewing them; nothing was trusted)";
+
+    /// <summary>A save that failed (the file held by the other copy, a disk error): nothing granted. Pinned.</summary>
+    public static string TrustSaveFailedError(string label, string reason) => $"Couldn't save the trust for {label}: {reason}. Nothing changed";
+
+    /// <summary>The untrust's yes/no. Pinned.</summary>
+    public static string UntrustPrompt(string label) => $"Stop offering {label}'s skills? Trusting them again asks first.";
+
+    /// <summary>Untrusted, naming the folder's skills this conversation already loaded (they stay in it). Pinned.</summary>
+    public static string UntrustedNotice(string label, IReadOnlyList<string> loaded)
+    {
+        ArgumentNullException.ThrowIfNull(loaded);
+        return $"({NoticeGlyphs.Skill}untrusted: {label}'s skills"
+            + (loaded.Count > 0 ? $"; already loaded here: {string.Join(", ", loaded)}; /clear or a new session drops it" : "") + ")";
+    }
+
+    /// <summary>After a trust, the folder's skills your own hide (2026-11-23). Pinned.</summary>
+    public static string ProjectShadowedNotice(string label, IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+        return $"({NoticeGlyphs.Skill}{names.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} of {label}'s skills are hidden by yours: {string.Join(", ", names)})";
+    }
+
+    /// <summary>Enter on a skill that isn't offered for a reason trust can't change (over the cap, linked outside, manual only, a bad name). Pinned.</summary>
+    public static string ProjectPendingNotice(string name, ProjectPendingReason reason) => $"({NoticeGlyphs.Skill}{ShownName(name)} isn't offered: {SkillText.PendingReason(reason)})";
+
+    // ── A trusted project skill's page ──
+
+    /// <summary>The project page's rows' words. Pinned.</summary>
+    public const string CopyToProfileWord = "copy to profile";
+    public const string CopyToGlobalWord = "copy to global";
+
+    /// <summary>The project page's caption (2026-11-23). Pinned.</summary>
+    public static string ProjectPageCaption(string label) => $"This repo's skill, from {label}: read only here. A copy in your skills is yours to change, and hides the repo's.";
+
+    /// <summary>The project page's edit row: the user's editor, and what a change does. Escaped.</summary>
+    public static string ProjectEditRow => Markup.Escape(SkillsMenu.EditWord.PadRight(16)) + Theme.DimMarkup("open its SKILL.md in your editor; a change asks for trust again");
+
+    /// <summary>The project page's copy rows. Escaped.</summary>
+    public static string ProjectCopyRow(SkillScope to) =>
+        Markup.Escape((to == SkillScope.Global ? CopyToGlobalWord : CopyToProfileWord).PadRight(16)) + Theme.DimMarkup($"a copy in the {SkillScopes.Name(to)} skills to change as yours; the repo's stays");
+
+    /// <summary>The project page's disable row (kept in the profile, never a marker in the repo). Escaped.</summary>
+    public static string ProjectDisableRow(bool disabled) => disabled
+        ? Markup.Escape(SkillsMenu.EnableWord.PadRight(16)) + Theme.DimMarkup("offer it to the model again")
+        : Markup.Escape(SkillsMenu.DisableWord.PadRight(16)) + Theme.DimMarkup("stop offering it; kept in your profile, nothing written to the repo");
+
+    /// <summary>The copy's yes/no. Pinned.</summary>
+    public static string ProjectCopyPrompt(string name, SkillScope to) => $"Copy the repo's skill '{name}' into the {SkillScopes.Name(to)} skills? Your copy will hide the repo's.";
+
+    /// <summary>Copied. Pinned.</summary>
+    public static string ProjectCopiedNotice(string name, SkillScope to) => $"({NoticeGlyphs.Skill}copied: {name} → {SkillScopes.Name(to)} skills; yours hides the repo's now)";
+
+    /// <summary>A copy refused for a name the editor could never take (2026-11-23). Pinned.</summary>
+    public static string ProjectCopyBadNameError(string name) =>
+        $"Could not copy skill '{ShownName(name)}': its name isn't a valid skill name here ({SkillFrontmatter.NameRule}); the repo's skill stays offered";
+
+    /// <summary>A copy refused because the root holds a skill of that name already. Pinned.</summary>
+    public static string ProjectCopyNameTakenError(string name, SkillScope to) => $"Could not copy skill '{name}': the {SkillScopes.Name(to)} skills already have a skill named '{name}'";
+
+    // ── The notices at a turn ──
+
+    /// <summary>A folder in the walk with skills not trusted yet (2026-11-23): once per folder and fingerprint in a run, at a turn; the page's feed shows it too. Pinned.</summary>
+    public static string ProjectNotTrustedNotice(string label, int count) =>
+        $"({NoticeGlyphs.Skill}{label} has {Skills(count)} not trusted yet: /skills › project at the PC to review)";
+
+    /// <summary>A trusted folder whose skills changed (2026-11-23): not offered until trusted again. Pinned.</summary>
+    public static string ProjectChangedNotice(string label) =>
+        $"({NoticeGlyphs.Skill}{label}'s skills changed since you trusted them: /skills › project at the PC to review)";
+
+    /// <summary>A trusted folder past the 50 cap. Pinned.</summary>
+    public static string ProjectOverCapNotice(string label, int count) =>
+        $"({NoticeGlyphs.Skill}{label} has {Skills(count)} past the {ProjectSkillTrust.ProjectSkillCap.ToString(System.Globalization.CultureInfo.InvariantCulture)} offered; /skills › project lists them)";
+
+    /// <summary>Headless's form of <see cref="ProjectNotTrustedNotice"/> (no glyph, no pane to point to). Pinned.</summary>
+    public static string HeadlessNotTrustedNotice(string label, int count) =>
+        $"{label} has {Skills(count)} not trusted yet; trust them in the app to use them here";
+
+    /// <summary>Headless's form of <see cref="ProjectChangedNotice"/>. Pinned.</summary>
+    public static string HeadlessChangedNotice(string label) =>
+        $"{label}'s skills changed since you trusted them; trust them again in the app to use them here";
+
+    private static string Skills(int count) => count.ToString(System.Globalization.CultureInfo.InvariantCulture) + (count == 1 ? " skill" : " skills");
+
+    /// <summary>
+    /// The trust notices for the walk's folders (2026-11-23): one per folder not trusted yet (counting its untrusted skills), changed since its trust, or past
+    /// the cap, each once per folder and fingerprint: <paramref name="noted"/> keeps what was said. <paramref name="headless"/> takes headless's forms. Pure
+    /// apart from <paramref name="noted"/>.
+    /// </summary>
+    public static IReadOnlyList<string> ProjectTrustNotices(IReadOnlyList<ProjectFolder> folders, IReadOnlyList<ProjectPendingSkill> pending, string? workingFolder, string? repoRoot, ISet<string> noted, bool headless = false)
+    {
+        ArgumentNullException.ThrowIfNull(folders);
+        ArgumentNullException.ThrowIfNull(pending);
+        ArgumentNullException.ThrowIfNull(noted);
+        var lines = new List<string>();
+        foreach (var folder in folders)
+        {
+            string label = FolderLabel(folder.Level, workingFolder, repoRoot);
+            var mine = pending.Where(p => string.Equals(p.Skill.TrustFolder, folder.Level, StringComparison.Ordinal)).ToList();
+            if (folder.Trust == ProjectFolderTrust.Trusted)
+            {
+                int over = mine.Count(p => p.Reason == ProjectPendingReason.OverCap);
+                if (over > 0 && !headless && noted.Add("cap\0" + folder.Level + "\0" + folder.Fingerprint))
+                {
+                    lines.Add(ProjectOverCapNotice(label, over));
+                }
+
+                continue;
+            }
+
+            if (!noted.Add(folder.Level + "\0" + folder.Fingerprint))
+            {
+                continue;
+            }
+
+            if (folder.Trust == ProjectFolderTrust.Changed)
+            {
+                lines.Add(headless ? HeadlessChangedNotice(label) : ProjectChangedNotice(label));
+                continue;
+            }
+
+            int count = Math.Max(1, mine.Count(p => p.Reason == ProjectPendingReason.NotTrusted));
+            lines.Add(headless ? HeadlessNotTrustedNotice(label, count) : ProjectNotTrustedNotice(label, count));
+        }
+
+        return lines;
     }
 
     private static bool InScope(Skill skill, SkillScope? scope) => scope is null || skill.Scope == scope;
@@ -499,3 +917,28 @@ public static class SkillsText
         }
     }
 }
+
+/// <summary>What a row of the <c>/skills</c> project sub-tab stands for (2026-11-23, feature idea #16).</summary>
+public enum ProjectRowKind
+{
+    /// <summary>A gap, a problem, the none line: Enter does nothing.</summary>
+    Text,
+
+    /// <summary>A folder's group heading: never a stop.</summary>
+    Heading,
+
+    /// <summary>A trusted skill, offered, disabled or shadowed: Enter opens its page.</summary>
+    Skill,
+
+    /// <summary>A skill not offered: Enter on one whose folder isn't trusted asks to trust it; otherwise says why.</summary>
+    Pending,
+
+    /// <summary>A folder's trust row: Enter asks to trust it.</summary>
+    Trust,
+
+    /// <summary>A trusted folder's untrust row.</summary>
+    Untrust,
+}
+
+/// <summary>A project sub-tab row (2026-11-23): its markup, what it stands for, the skill and folder it acts on, a pending skill's reason.</summary>
+public sealed record ProjectRow(string Markup, ProjectRowKind Kind, Skill? Skill = null, ProjectFolder? Folder = null, ProjectPendingReason? Reason = null);

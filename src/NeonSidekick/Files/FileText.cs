@@ -215,6 +215,14 @@ public static class FileText
     public static string InSkillFolder(string path) =>
         $"Error: '{path}' is a skill's file, outside the working directory; read it with load_skill (name: the skill's folder name, file: the path inside that folder) and change it with skill_editor";
 
+    /// <summary>
+    /// A path refused as outside that lies in a trusted project skills folder above the working folder (<see cref="FileOutcome.InProjectSkillFolder"/>,
+    /// 2026-11-23, feature idea #16): <see cref="InSkillFolder"/>'s pointer to <c>load_skill</c>, without its <c>skill_editor</c>, which never writes a
+    /// repo's skill. Pinned.
+    /// </summary>
+    public static string InProjectSkillFolder(string path) =>
+        $"Error: '{path}' is a file of this repo's skill, outside the working directory; read it with load_skill (name: the skill's name, file: the path inside its folder); it's the repo's skill and isn't changed from here";
+
     /// <summary><c>open</c> on a file in the images folder that is no picture (code review, 2026-10-11): the shell would run it. Pinned.</summary>
     /// <summary>
     /// <c>open</c> on a file it may not start (2026-10-22, review G1, the fix plan's D1: an allow-list of safe types): the kind, what does
@@ -565,6 +573,7 @@ public static class FileText
             FileOutcome.DatabaseProtected => DatabaseProtected(path),
             FileOutcome.InImagesFolder => InImagesFolder(path),
             FileOutcome.InSkillFolder => InSkillFolder(path),
+            FileOutcome.InProjectSkillFolder => InProjectSkillFolder(path),
             FileOutcome.NeonFilesProtected => NeonFilesProtected(path),
             FileOutcome.AppFilesProtected => AppFilesProtected(path),
             FileOutcome.InstallFilesProtected => InstallFilesProtected(path),

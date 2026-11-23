@@ -131,6 +131,12 @@ internal sealed record TurnToolInputs
     public PlanTurn? Pass { get; init; }
     public bool PlanReadOnly { get; init; }
     public IReadOnlySet<string>? OnlyTools { get; init; }
+
+    /// <summary>
+    /// A <c>/project-init</c> pass (2026-11-23): the prompt goes without the project notes (the survey carries them, so a 16k file isn't sent twice)
+    /// and without the skills section (<c>load_skill</c> isn't offered); the memories go through <see cref="MemoryEnabled"/>.
+    /// </summary>
+    public bool ProjectNotesPass { get; init; }
 }
 
 /// <summary>

@@ -60,7 +60,7 @@ public static class SkillInstaller
             return new SkillInstallCheck(SkillInstallOption.New);
         }
 
-        if (scope == SkillScope.External)
+        if (SkillScopes.IsReadOnly(scope))
         {
             return new SkillInstallCheck(SkillInstallOption.ExternalReadOnly, scope);
         }
@@ -82,7 +82,7 @@ public static class SkillInstaller
         ArgumentNullException.ThrowIfNull(archive);
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(provenance);
-        if (scope == SkillScope.External)
+        if (SkillScopes.IsReadOnly(scope))
         {
             throw new ArgumentException("The external root is never written.", nameof(scope));
         }

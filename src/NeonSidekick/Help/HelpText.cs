@@ -359,6 +359,31 @@ public static class HelpText
     // The live line (2026-10-25, the neon_help plan's Step 2), pinned: offered, or not offered and the one reason why.
     public const string LiveOffered = "Right now: offered.";
 
+    /// <summary>
+    /// <c>load_skill</c>'s live line with the repo's skills (2026-11-23, feature idea #16): <c>Right now: offered; project skills: 3 trusted, 2 not trusted,
+    /// over the cap: 10 not offered.</c>; <see cref="LiveOffered"/> when the walk holds none. Pinned.
+    /// </summary>
+    public static string LiveOfferedProjectSkills(int trusted, int notTrusted, int overCap)
+    {
+        var parts = new List<string>(3);
+        if (trusted > 0)
+        {
+            parts.Add(trusted.ToString(System.Globalization.CultureInfo.InvariantCulture) + " trusted");
+        }
+
+        if (notTrusted > 0)
+        {
+            parts.Add(notTrusted.ToString(System.Globalization.CultureInfo.InvariantCulture) + " not trusted");
+        }
+
+        if (overCap > 0)
+        {
+            parts.Add("over the cap: " + overCap.ToString(System.Globalization.CultureInfo.InvariantCulture) + " not offered");
+        }
+
+        return parts.Count == 0 ? LiveOffered : "Right now: offered; project skills: " + string.Join(", ", parts) + ".";
+    }
+
     /// <summary>An offered MCP tool that asks before each call (2026-11-19, feature idea #28). Pinned.</summary>
     public const string LiveOfferedAsks = "Right now: offered; each call asks the user first.";
 
@@ -385,6 +410,9 @@ public static class HelpText
     public const string LiveMcpOffByName = "switched off on /mcp › Tools";
     public const string LiveNoMcpServer = "no MCP server here offers it";
     public const string LiveAuditPass = "a code-audit pass offers only the tools that read";
+
+    /// <summary>A tool a <c>/project-init</c> pass doesn't offer (2026-11-23). Pinned.</summary>
+    public const string LiveProjectInitPass = "a /project-init pass offers only the file and git reads";
     public const string LiveAuditWeb = "a code-audit pass leaves the web tools out while Code audit web research is off";
     public const string LiveAuditAsk = "a code-audit pass leaves out the tools that ask while Code audit ask user is off";
     public const string LiveRalphAsk = "a Ralph loop pass leaves out the tools that ask the user while Ralph loop checkpoint is 0";

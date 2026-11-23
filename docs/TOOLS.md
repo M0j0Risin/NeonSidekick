@@ -26,6 +26,7 @@ Settings in *italics* are in [SETTINGS.md](SETTINGS.md), with their values and d
 * **Headless** leaves some tools out, and refuses anything that would stop to ask you unless `--allow` names it: [Before you start](HEADLESS.md#before-you-start).
 * **Plan mode** ([COMMANDS.md](COMMANDS.md#plan-mode)) keeps the reading tools, `ask_user`, `camera_capture`, the screen tools and `neon_advisor`, and adds `present_plan`. `gitlib_tag`, `gitlib_branch` and `gitlib_stash` stay for listing only. It drops the MCP tools but `mcp_read`, and every tool that changes or starts something (`start_timer`, `open`, `process`, `image_edit`…).
 * **Code audit** ([COMMANDS.md](COMMANDS.md#code-audit)) keeps the file, picture, PDF and git reads, `neon_advisor`, `neon_help`, `get_current_time`, `load_skill`, `recall_memory` and `ask_user`, and adds `present_audit`. The web's reads join under *Code audit web research*; an advisor in a pass gets the same set.
+* **/project-init** ([COMMANDS.md](COMMANDS.md#project-notes)) keeps `get_working_directory`, `search_files`, `file_info`, `read_file`, the git reads (`gitlib_status`, `gitlib_log`, `gitlib_show`, `gitlib_diff`, `gitlib_blame`) and `ask_user`, and adds `present_project_notes`. Nothing else, not even your memories.
 * **On a Mac:** what runs there is in [MAC.md](MAC.md#what-works); a group that behaves differently has its own "… on a Mac" section below.
 * **A misnamed argument is answered:** a call with an argument the tool doesn't take runs nothing and is told the likely name. A tool that takes no arguments runs, with a note; an MCP tool is checked only when its schema is closed.
 
@@ -1148,10 +1149,10 @@ Under *Agent skills*.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `load_skill` | `name, file?` | Loads a skill's instructions or one of its files, up to 64,000 characters; never one you [disabled](SETTINGS.md#disabling-a-skill). |
+| `load_skill` | `name, file?` | Loads a skill's instructions or one of its files, up to 64,000 characters; never one you [disabled](SETTINGS.md#disabling-a-skill), nor a [project skill](SETTINGS.md#project-skills-and-trust) not trusted or changed since. |
 | `skill_editor` | `action, scope?, name, description?, instructions?, path?, content?, old_text?, new_text?, replace_all?, summary?` | Creates or updates a skill in `profile` (default) or `global` scope (*Global skills*); `write_file` and `edit_file` change a supporting file, `edit_file` on `SKILL.md` part of its instructions. |
 
-* `skill_editor` never deletes, and never touches an external skill or one you [locked](SETTINGS.md#locking-a-skill) or disabled.
+* `skill_editor` never deletes, and never touches an external or project skill or one you [locked](SETTINGS.md#locking-a-skill) or disabled.
 * **Writes need their text:** `skill_editor`'s `write_file`, `write_file`, `unc_write` and `vault_write` refuse a call with no `content`; `edit_file`, `patch_file` and `unc_patch` one with no `new_text`, as does each item of `patch_file`'s and `unc_patch`'s `edits`. An empty `""` is allowed; a pruned stub copied from the history is not.
 * **A cut result isn't written back:** a write, command or MCP tool whose arguments hold a cut result's marker is refused; reads and searches pass it. A cut `read_file` no longer counts as read, so `write_file` without a mode won't replace that file.
 * **A skill's files by full path:** the file tools refuse a path inside a skill folder and name `load_skill` instead.
@@ -1192,6 +1193,16 @@ Offered only in a [Ralph loop](COMMANDS.md#ralph-loop)'s pass, beside every othe
 |---|---|---|
 | `finish_step` | `outcome, summary, verified?, notes?, learned?, substeps?` | Reports the pass once: `done`, `partial`, `blocked` or `split` (2–6 `substeps`, a `By hand:` check kept on one). `notes` go to the next pass, `learned` to every later one. |
 | `step_verdict` | `verdict, reason` | Offered only to the review after a pass: it judges the step `pass`, `fail` or `needs_user` (you're asked), in one sentence. |
+
+### Project notes
+
+Offered only during [`/project-init`](COMMANDS.md#project-notes), at the PC.
+
+| Tool | Arguments | What it does |
+|---|---|---|
+| `present_project_notes` | `content` | Shows the draft of the working folder's notes file and asks you: Write, View, Revise or Cancel. The app writes the file, and only after Write. |
+
+* Over 16,000 characters, blank, or a pruned stub is refused before anything is shown. One answer a run: after Write or Cancel, another call shows nothing.
 
 ## MCP servers
 

@@ -447,7 +447,7 @@ public static class SkillLearner
     /// decision normally stops it first; this one catches the skills changing in between.
     /// </summary>
     public static async Task<SkillLearnResult> RunAsync(Assistant assistant, ReflectionMaterial material, SkillRoots roots, bool external, ReasoningEffort effort, CancellationToken cancellationToken, int maxRequests, SessionEvidence? sessions, SkillFileAccess? files = null, SkillRecords? records = null, ReflectionWriteGuard? guard = null,
-        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null, Func<bool>? globalOn = null, bool create = true)
+        Func<SkillProposal, CancellationToken, Task<bool>>? confirm = null, Func<bool>? globalOn = null, bool create = true, ProjectSkillSource? project = null)
     {
         ArgumentNullException.ThrowIfNull(assistant);
         ArgumentNullException.ThrowIfNull(material);
@@ -456,7 +456,11 @@ public static class SkillLearner
 
         var live = Live(roots, globalOn);
         var catalog = new SkillCatalog(live);
-        catalog.Scan(external);
+        // The repo's trusted skills too (2026-11-23, feature idea #16): listed read only, so a reflection after a turn that loaded the repo's
+        // deploy never writes a profile deploy that would hide it from then on; the editor refuses their names.
+        catalog.Scan(new SkillScan(external, project));
+        var projectNames = catalog.All.Where(s => s.Scope == SkillScope.Project).Select(s => s.Name).ToList();
+        Func<SkillRoots> editorRoots = () => live() with { ProjectNames = projectNames };
         var installed = guard?.Installed ?? ReflectionInstalledPolicy.AllowAndMark;
         if (!create && !catalog.Skills.Any(skill => ReflectionWriteGuard.Updatable(skill, installed)))
         {
@@ -464,7 +468,7 @@ public static class SkillLearner
             return new SkillLearnResult(SkillLearnOutcome.Nothing, null, "", TokenUsage.Zero, 0);
         }
 
-        var editor = new SkillEditorTool(live, () => external, files, guard: guard, confirm: confirm, create: create);
+        var editor = new SkillEditorTool(editorRoots, () => external, files, guard: guard, confirm: confirm, create: create);
         var tools = new List<AIFunction>(3);
         if (catalog.Skills.Count > 0)
         {

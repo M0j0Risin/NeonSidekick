@@ -93,7 +93,62 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
     /// The name and description come back trimmed, the description flattened; neither is validated
     /// against the caps here — the catalog warns and loads, the specification's lenient path.
     /// </summary>
-    public static bool TryParse(string text, out SkillFrontmatter? frontmatter, out string body, out string? problem)
+    public static bool TryParse(string text, out SkillFrontmatter? frontmatter, out string body, out string? problem) =>
+        Parse(text, null, out frontmatter, out body, out problem);
+
+    /// <summary>
+    /// Reads <paramref name="text"/> by Claude Code's rules for a <c>.claude/skills</c> skill (2026-11-23, feature idea #16; code.claude.com's skills page,
+    /// checked 2026-11-22: "all fields are optional"): a missing <c>name</c> is <paramref name="folderName"/>, a missing <c>description</c> the body's
+    /// first non-empty line, the frontmatter itself may be absent, and <c>when_to_use</c> is joined to the description with a space (its listing
+    /// shows "the combined description and when_to_use text"). Every other key, the acting ones included (<see cref="ActingKeys"/>), is kept as
+    /// <see cref="OtherLines"/> and grants nothing here. False only for an unclosed fence, a line that is no pair, or a file with no words at all.
+    /// </summary>
+    public static bool TryParseClaude(string text, string folderName, out SkillFrontmatter? frontmatter, out string body, out string? problem)
+    {
+        ArgumentNullException.ThrowIfNull(folderName);
+        return Parse(text, folderName, out frontmatter, out body, out problem);
+    }
+
+    /// <summary>Claude Code's key whose text joins the description (<see cref="TryParseClaude"/>).</summary>
+    public const string WhenToUseKey = "when_to_use";
+
+    /// <summary>Claude Code's key for a skill only you start (<c>disable-model-invocation: true</c>): such a project skill is never offered here.</summary>
+    public const string ManualOnlyKey = "disable-model-invocation";
+
+    /// <summary>
+    /// Claude Code's keys that act (tools used "without asking permission", hooks, a model, a forked context, a shell; the skills page, checked
+    /// 2026-11-22), and the Agent Skills standard's <c>allowed-tools</c>: read as unknown keys and ignored, so a project skill never skips a question,
+    /// adds a hook, runs a command or switches a model. A trust question marks a skill holding any of them. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ActingKeys = ["allowed-tools", "disallowed-tools", "model", "effort", "context", "agent", "background", "hooks", "shell"];
+
+    /// <summary>The top-level keys of <paramref name="lines"/> (<see cref="OtherLines"/>): each column-0 <c>key:</c>, lower-cased. Pure.</summary>
+    public static IReadOnlyList<string> KeysOf(IReadOnlyList<string> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var keys = new List<string>();
+        foreach (string line in lines)
+        {
+            int colon = line.IndexOf(':', StringComparison.Ordinal);
+            if (line.Length > 0 && !char.IsWhiteSpace(line[0]) && line[0] != '#' && line[0] != '-' && colon > 0)
+            {
+                keys.Add(line[..colon].Trim().ToLowerInvariant());
+            }
+        }
+
+        return keys;
+    }
+
+    /// <summary>Whether this frontmatter says only the user starts the skill (<see cref="ManualOnlyKey"/> set to <c>true</c>).</summary>
+    public bool ManualOnly => OtherLines.Any(line =>
+        line.IndexOf(':', StringComparison.Ordinal) is var colon and > 0
+        && line[..colon].Trim().Equals(ManualOnlyKey, StringComparison.OrdinalIgnoreCase)
+        && line[(colon + 1)..].Trim().Trim('"', '\'').Equals("true", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Whether this frontmatter holds any of <see cref="ActingKeys"/> (the trust question's mark).</summary>
+    public bool HasActingKeys => KeysOf(OtherLines).Any(key => ActingKeys.Contains(key, StringComparer.Ordinal));
+
+    private static bool Parse(string text, string? claudeFolder, out SkillFrontmatter? frontmatter, out string body, out string? problem)
     {
         ArgumentNullException.ThrowIfNull(text);
         frontmatter = null;
@@ -109,6 +164,13 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
         string[] lines = folded.Split('\n');
         if (lines.Length == 0 || !IsFence(lines[0]))
         {
+            if (claudeFolder is not null)
+            {
+                // No frontmatter at all (Claude Code's rules): the folder's name, the first line's words, the whole file the body.
+                body = folded.Trim();
+                return Defaults(claudeFolder, null, null, null, [], body, out frontmatter, out problem);
+            }
+
             problem = NoFenceProblem;
             return false;
         }
@@ -136,6 +198,7 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
 
         string? name = null;
         string? description = null;
+        string? whenToUse = null;
         var other = new List<string>();
         foreach (var entry in entries)
         {
@@ -147,6 +210,10 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
             {
                 description = Flatten(entry.Value);
             }
+            else if (claudeFolder is not null && entry.Key.Equals(WhenToUseKey, StringComparison.OrdinalIgnoreCase))
+            {
+                whenToUse = Flatten(entry.Value);
+            }
             else
             {
                 for (int i = entry.Start; i < entry.End; i++)
@@ -156,13 +223,13 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
             }
         }
 
-        if (string.IsNullOrEmpty(name))
+        if (claudeFolder is null && string.IsNullOrEmpty(name))
         {
             problem = NoNameProblem;
             return false;
         }
 
-        if (string.IsNullOrEmpty(description))
+        if (claudeFolder is null && string.IsNullOrEmpty(description))
         {
             problem = NoDescriptionProblem;
             return false;
@@ -179,8 +246,37 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
             sb.Append(lines[i]);
         }
 
-        frontmatter = new SkillFrontmatter(name, description, other);
         body = sb.ToString().Trim();
+        if (claudeFolder is not null)
+        {
+            return Defaults(claudeFolder, name, description, whenToUse, other, body, out frontmatter, out problem);
+        }
+
+        frontmatter = new SkillFrontmatter(name!, description!, other);
+        return true;
+    }
+
+    // Claude Code's defaults (TryParseClaude): the folder's name, the body's first non-empty line, when_to_use joined on.
+    private static bool Defaults(string folder, string? name, string? description, string? whenToUse, List<string> other, string body, out SkillFrontmatter? frontmatter, out string? problem)
+    {
+        frontmatter = null;
+        problem = null;
+        string named = string.IsNullOrEmpty(name) ? folder : name;
+        string described = string.IsNullOrEmpty(description)
+            ? Flatten(body.Split('\n').Select(line => line.Trim().TrimStart('#').Trim()).FirstOrDefault(line => line.Length > 0) ?? "")
+            : description;
+        if (!string.IsNullOrEmpty(whenToUse))
+        {
+            described = described.Length == 0 ? whenToUse : described + " " + whenToUse;
+        }
+
+        if (described.Length == 0)
+        {
+            problem = NoDescriptionProblem;
+            return false;
+        }
+
+        frontmatter = new SkillFrontmatter(named, described, other);
         return true;
     }
 

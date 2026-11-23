@@ -142,4 +142,5 @@ public sealed class GitHubTree
 [JsonSerializable(typeof(SkillProvenance))]
 [JsonSerializable(typeof(SkillsShSearchResponse))]
 [JsonSerializable(typeof(GitHubTree))]
+[JsonSerializable(typeof(List<ProjectTrustEntry>))]
 internal sealed partial class SkillsJsonContext : JsonSerializerContext;

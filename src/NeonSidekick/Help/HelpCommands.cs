@@ -398,6 +398,10 @@ public static class HelpCommands
             new("/profile push|pull avatar user|model <name>", "Copy the *User avatar* (`user`) or the *Model avatar* (`model`) to another profile or from it, after a yes, replacing the target's. A profile with none has nothing to copy."),
             new("/profile edit|reload", "Open `profile.json` in your editor (`edit`), or read it back and reconnect only what changed (`reload`)."),
         ]),
+        new("/project-init",
+        [
+            new("/project-init [<focus> ...]", "Draft this folder's `NEON.md` for the model: the app surveys the folder (files, build files, README, other assistants' rule files, recent commits, project skills), then one read-only turn writes a draft, shown on a pane: Write, View the change, Revise or Cancel. An existing `NEON.md` is improved; with only `AGENTS.md` or `CLAUDE.md` it asks which to write. It starts a new conversation (the last one is in `/sessions`); the write can be taken back with `/undo`. Words after it are a focus."),
+        ]),
         new("/prompts",
         [
             new("/prompts", "Open your saved prompts, the messages you send often; Enter or a double-click sends one, or queues it while a reply runs. `d` puts one on the draft line instead, in place of what is there; the old draft goes to the history, so Up brings it back. `a` adds one, `s` saves the draft as one, `e` edits (a prompt of several lines in your draft editor), `m` saves one as a custom command, `r` or Delete removes and `c` clears the list (each removal after a yes); Shift+↑↓ and Shift+Home/End move a prompt. Type to filter. The toolbar's 📣 and Ctrl+Alt+P open it, keeping the draft for `s`. Works while a reply runs."),
@@ -495,7 +499,7 @@ public static class HelpCommands
         ]),
         new("/skills",
         [
-            new("/skills", "Open the Skills pane: the skills on Offered, then the Reflection and Options settings. Enter on a skill opens its page: move it (between the profile and global skills while *Global skills* is on, or to another profile), copy it to another profile, rename, edit, revert to a kept version, lock, disable or delete it, each change after a yes. A locked skill cannot be changed by the model, a reflection or an update until it is unlocked; a disabled one (⛔, its row dim) stays in its folder but is never offered to the model. On Offered, typing narrows the list; Backspace erases, Esc clears it, a second Esc closes."),
+            new("/skills", "Open the Skills pane: the skills on Offered, then the Reflection and Options settings. Enter on a skill opens its page: move it (between the profile and global skills while *Global skills* is on, or to another profile), copy it to another profile, rename, edit, revert to a kept version, lock, disable or delete it, each change after a yes. A locked skill cannot be changed by the model, a reflection or an update until it is unlocked; a disabled one (⛔, its row dim) stays in its folder but is never offered to the model. The project tab lists a repo's own skills: Enter on a folder's trust row reviews and trusts them, and a trusted one can be edited, copied to your skills or disabled. On Offered, typing narrows the list; Backspace erases, Esc clears it, a second Esc closes."),
             new("/skills add <source> [--global|--profile]", "Install an Agent Skill from the web after a preview: search words, `owner/repo[/skill]`, a GitHub URL (the repository, a `/tree/…` folder or a `SKILL.md`) or a `.zip` URL. A pane asks where it goes (the cursor on Cancel); `--global` and the global choice only while *Global skills* is on. Refused while a reply runs."),
             new("/skills purge list|commit <age>", "List the skills unused for that long (`list`; `30` days, `12h`, `90m`), deleting nothing, or delete them, folder and record, after a yes that lists them (`commit`)."),
         ]),

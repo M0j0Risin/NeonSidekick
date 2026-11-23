@@ -80,7 +80,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Memory:** facts you can edit, added to every conversation.
 * **Project notes:** reads the working directory's `NEON.md`, else `AGENTS.md`, else `CLAUDE.md`.
 * **Context control:** compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand.
-* **Skills:** the profile's own, global ones and the read-only `~/.agents/skills` other agents use; `/skills add` installs from [skills.sh](https://skills.sh) or GitHub.
+* **Skills:** the profile's own, global ones, the read-only `~/.agents/skills` other agents use, and a repo's own `.agents/skills` once you trust it; `/skills add` installs from [skills.sh](https://skills.sh) or GitHub.
 * **Managing skills:** edit, move, copy, lock, disable or revert (last 10 versions) on `/skills`; the model's `skill_editor` never deletes one.
 * **Self-learning:** a background reflection writes and improves skills from your work.
 
@@ -97,6 +97,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Closing gaps:** `/plan gaps` has the model or an advisor review a plan, pass after pass, until nothing would stall the work ([Closing gaps](docs/COMMANDS.md#closing-gaps)).
 * **Ralph loop:** carries out an approved plan one step at a time, each a fresh pass checked before the next ([Ralph loop](docs/COMMANDS.md#ralph-loop)).
 * **Code audit:** `/code-audit` reviews the code with read-only tools, pass after pass, into a report you can turn into a plan.
+* **Project notes:** `/project-init` surveys the folder and drafts its `NEON.md`, shown before it's written.
 
 ### Research & notes
 * **Web search & pages:** a built-in metasearch (Bing, Brave, DuckDuckGo, Startpage, Wikipedia) or your own SearXNG server; reads pages (in a real browser when needed) and downloads files.

@@ -374,6 +374,7 @@ internal sealed partial class ChatScreen
         return ParseLine(text) switch
         {
             (SlashCommand.CodeAudit, var args) when AuditCommand.StartsPasses(args) => AuditText.BotChatError,
+            (SlashCommand.ProjectInit, _) => ProjectInit.ProjectInitText.BotChatError,   // 2026-11-23
             (SlashCommand.Plan, var planArgs) when ParsePlanArgs(planArgs, planning: true) is PlanCommand.Ralph or PlanCommand.ApproveRalph => Plans.RalphText.UnderBotChatError,
             _ => null,
         };

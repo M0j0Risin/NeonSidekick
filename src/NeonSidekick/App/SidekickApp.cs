@@ -450,14 +450,24 @@ public sealed partial class SidekickApp
     {
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, _externalSkills);
         var catalog = new SkillCatalog(roots);
+        // The repos' skills (2026-11-23, feature idea #16): saved trust only, never asked here.
+        _headlessProjectSource = new ProjectSkillSource(() => files.Root, ProjectSkillSource.UserHomeOf(_externalSkills), _settings.StorageDirectory,
+            new ProjectSkillTrust(() => Profiles.ConfigsDirectory(_settings.ProfileDirectory), _time));
         if (records is not null)
         {
-            catalog.Scan(EffectiveSettings.ExternalSkills);
+            catalog.Scan(new SkillScan(EffectiveSettings.ExternalSkills, HeadlessProjectSource()));
             records.Reconcile(catalog.All.Concat(catalog.Shadowed));   // a disabled skill is still known (2026-10-09)
         }
 
-        return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, new Llm.Tools.SkillFileAccess(_time), records), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile);
+        return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, new Llm.Tools.SkillFileAccess(_time), records), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile, HeadlessProjectSource());
     }
+
+    /// <summary>A headless run's project skills source (2026-11-23): set by <see cref="BuildSkills"/>; null outside a run.</summary>
+    private ProjectSkillSource? _headlessProjectSource;
+
+    /// <summary>The project skills' source while <c>Agent skills</c> and <c>Project skills</c> are on; null otherwise (read per turn, as the screen does).</summary>
+    private ProjectSkillSource? HeadlessProjectSource() =>
+        EffectiveSettings.AgentSkills && EffectiveSettings.ProjectSkills ? _headlessProjectSource : null;
 
     /// <summary>The headless run's skill records (2026-09-30): what <c>/skills add</c>'s host tells of an install; null outside a run.</summary>
     private SkillRecords? _headlessSkillRecords;
@@ -1036,6 +1046,8 @@ public sealed partial class SidekickApp
         using var skillStore = new SkillRecordStore(_settings.StorageDirectory);
         _headlessSkillRecords = new SkillRecords(skillStore, () => SkillRoots.For(_settings, _externalSkills), _time);
         var skills = BuildSkills(files, _headlessSkillRecords);
+        // A trusted project skills folder above the working folder (2026-11-23): the load_skill wording, from the catalog's kept part.
+        files.ProjectSkillFolders = () => HeadlessProjectSource() is null ? [] : skills.Catalog.TrustedProjectFolders;
         // The custom commands (2026-10-30, the custom commands plan): the two commands folders, read at each scan, as the screen's.
         var customCommands = new CustomCommandCatalog(() => CustomCommandRoots.For(_settings), _time);
         // The web tools need no console either; the setting Web tools decides per turn.
@@ -1267,7 +1279,7 @@ public sealed partial class SidekickApp
         Help.HelpLive HeadlessLive()
         {
             var effective = EffectiveSettings;
-            var skillTools = ChatScreen.SkillToolsUnscanned(skills with { Enabled = effective.AgentSkills, External = effective.AgentSkills && effective.ExternalSkills });
+            var skillTools = ChatScreen.SkillToolsUnscanned(skills with { Enabled = effective.AgentSkills, External = effective.AgentSkills && effective.ExternalSkills, ProjectSource = HeadlessProjectSource() });
             var offered = ChatScreen.ComposeTurnTools(HeadlessInputs() with { Skills = skillTools }).Tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
             bool eventLogsHere = (OperatingSystem.IsWindows() && eventLog.System is not null) || macLog.Log is not null;
             var networkNotes = ChatScreen.NetworkToolNotes(effective, _pinger);
@@ -1286,6 +1298,7 @@ public sealed partial class SidekickApp
                 Settings = effective,
                 Mcp = name => Help.HelpMcpLookup.Find(mcp.Servers, name),
                 McpAllowed = name => Help.HelpMcpLookup.Find(mcp.Servers, name) is { } found && _headlessAllowances.AllowsMcp(found.Server),
+                ProjectSkills = () => HeadlessProjectSource() is null ? null : ChatScreen.ProjectSkillCounts(skills.Catalog),
             };
         }
         // The gap-closing loop's next pass (2026-10-13): sent as the next line without reading stdin, since headless has no pane to chain on.
@@ -1304,6 +1317,17 @@ public sealed partial class SidekickApp
             foreach (string notice in start.Notices)
             {
                 await HeadlessNoticeLineAsync("[notice] " + notice).ConfigureAwait(false);
+            }
+
+            // The repo's skills headless (2026-11-23): saved trust only, never asked; a folder not trusted, or changed since, said once at the start for the
+            // folder the run works in (--session's, taken above).
+            if (HeadlessProjectSource() is { } projectSource)
+            {
+                string? repoRoot = ProjectSkillWalk.RepoRoot(files.Root, projectSource.UserHome, projectSource.AppHome);
+                foreach (string notice in SkillsText.ProjectTrustNotices(skills.Catalog.ProjectFolders, skills.Catalog.ProjectPending, files.Root, repoRoot, new HashSet<string>(StringComparer.Ordinal), headless: true))
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + notice).ConfigureAwait(false);
+                }
             }
 
             // --allow mcp:<name> checked against every name the files hold, broken entries too, before the model or a server starts
@@ -1900,6 +1924,13 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
+                // /project-init (2026-11-23, the user's call): interactive only, or it went to the model as text.
+                if (LineParse(text) is (SlashCommand.ProjectInit, _))
+                {
+                    await HeadlessLineAsync("[error] " + ProjectInit.ProjectInitText.NotHeadlessError).ConfigureAwait(false);
+                    continue;
+                }
+
                 // /update (2026-11-04, review P5-12): the screen's alone too, or it went to the server check and then the model as text.
                 if (LineParse(text) is (SlashCommand.Update, _))
                 {
@@ -2253,7 +2284,7 @@ public sealed partial class SidekickApp
                 var turnInputs = HeadlessInputs();
                 // What the turn was made of (2026-10-10): kept, so an advisor is offered this turn's read-only tools.
                 lastInputs = turnInputs;
-                ChatScreen.PrepareTurn(assistant, turnInputs, memory, persona, operata, vocalia, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength, replyFloor: ChatScreen.PlanReplyFloor(plan, files)), skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills }, markdown: false, processes, EffectiveSettings.LlmPreserveThinking, LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId));
+                ChatScreen.PrepareTurn(assistant, turnInputs, memory, persona, operata, vocalia, speechOutput: false, EffectiveSettings.LlmMaxToolIterations, ChatScreen.ContextGuardFor(EffectiveSettings, session.ContextLength, replyFloor: ChatScreen.PlanReplyFloor(plan, files)), skills with { Enabled = EffectiveSettings.AgentSkills, External = EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, ProjectSource = HeadlessProjectSource() }, markdown: false, processes, EffectiveSettings.LlmPreserveThinking, LlmSampling.Resolve(EffectiveSettings, session.Endpoint?.ModelId));
                 assistant.ThinkingInFlightOnly = Assistant.InFlightOnlyWire(session.Endpoint?.BaseUrl);
                 // An MCP result's pictures to a model that can't see them (2026-11-21, feature idea #31), as the screen does.
                 assistant.ToolPicturesUnseen = ChatScreen.UnseenMcpPictures(session.SeesPictures, assistant.Tools);

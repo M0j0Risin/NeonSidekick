@@ -41,7 +41,11 @@ public static class SkillText
     /// <c>load_skill</c> with <c>file</c> reads one). The <c>filesFollow</c> form of 2026-09-30 went with <c>/botchat</c>'s
     /// preloaded skills on 2026-10-04.
     /// </summary>
-    public static string Content(string name, string body, string directory, IReadOnlyList<string> resources, bool more, bool truncated)
+    public static string Content(string name, string body, string directory, IReadOnlyList<string> resources, bool more, bool truncated) =>
+        Content(name, body, directory, resources, more, truncated, project: false);
+
+    /// <summary><see cref="Content(string, string, string, IReadOnlyList{string}, bool, bool)"/>; a <paramref name="project"/> skill's cut list says the rest can't be read (2026-11-23).</summary>
+    public static string Content(string name, string body, string directory, IReadOnlyList<string> resources, bool more, bool truncated, bool project)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(body);
@@ -67,7 +71,7 @@ public static class SkillText
 
             if (more)
             {
-                sb.Append("\n  ").Append(MoreResourcesNote);
+                sb.Append("\n  ").Append(project ? ProjectMoreResourcesNote : MoreResourcesNote);
             }
 
             sb.Append("\n</skill_resources>");
@@ -86,6 +90,44 @@ public static class SkillText
 
     public static string MoreResourcesNote =>
         "(and more: the first " + SkillCatalog.MaxResources.ToString(CultureInfo.InvariantCulture) + " files are listed)";
+
+    /// <summary>A project skill's cut list (2026-11-23): only the listed files were trusted, so the rest can't be asked for. Pinned.</summary>
+    public static string ProjectMoreResourcesNote =>
+        "(and more that can't be read: only the first " + SkillCatalog.MaxResources.ToString(CultureInfo.InvariantCulture) + " are trusted)";
+
+    /// <summary>
+    /// <c>load_skill</c> of a project skill listed but not offered (2026-11-23, feature idea #16): never the bare "no such skill" list. Names no
+    /// content and loads nothing. Pinned.
+    /// </summary>
+    public static string ProjectNotOffered(string name, ProjectPendingReason reason) =>
+        $"Error: '{name.Trim()}' is this repo's skill but isn't offered ({PendingReason(reason)}); the user can review it in /skills › project";
+
+    /// <summary>The words for why a project skill isn't offered, shared by <c>load_skill</c> and the <c>/skills</c> pane. Pinned.</summary>
+    public static string PendingReason(ProjectPendingReason reason) => reason switch
+    {
+        ProjectPendingReason.NotTrusted => "not trusted yet",
+        ProjectPendingReason.OverCap => "over the " + ProjectSkillTrust.ProjectSkillCap.ToString(CultureInfo.InvariantCulture) + "-skill cap",
+        ProjectPendingReason.LinkedOutside => "linked outside the repo",
+        ProjectPendingReason.ManualOnly => "only started by hand in Claude Code",
+        ProjectPendingReason.BadName => "name too long or unprintable",
+        _ => "not offered",
+    };
+
+    /// <summary><c>load_skill</c> of a trusted project skill whose files changed since the scan trusted them (2026-11-23). Pinned.</summary>
+    public static string ProjectChanged(string name) =>
+        $"Error: '{name}' changed since it was trusted; the user can review it in /skills › project";
+
+    /// <summary>A project skill's file that isn't one of its listed, trusted files (2026-11-23). Pinned.</summary>
+    public static string FileNotListed(string name, string relative) =>
+        $"Error: {relative} isn't one of the files trusted with skill '{name}'";
+
+    /// <summary>The editor's refusal for a project skill (2026-11-23): the repo's folder is no "external skills". Pinned.</summary>
+    public static string ProjectReadOnly(string name) =>
+        $"Error: skill '{name}' is this repo's skill, read only here; to keep a variation, create a skill with another name";
+
+    /// <summary>A create or rename into a trusted project skill's name (2026-11-23): a copy would hide the repo's. Pinned.</summary>
+    public static string ProjectNameTaken(string name) =>
+        $"Error: '{name}' is this repo's skill (read only); pick another name";
 
     /// <summary>A bundled file: the text in a tag that names the skill and the path.</summary>
     public static string File(string name, string relative, string text, bool truncated)
@@ -136,6 +178,7 @@ public static class SkillText
             SkillCatalog.ReadOutcome.NotText => FileNotText(skill.Name, relative ?? ""),
             SkillCatalog.ReadOutcome.TooBig => FileTooBig(skill.Name, relative ?? ""),
             SkillCatalog.ReadOutcome.Unparseable => BodyUnparseable(skill.Name, result.Detail),
+            SkillCatalog.ReadOutcome.NotListed => FileNotListed(skill.Name, relative ?? ""),
             _ => CouldNot(relative is null ? "read" : "read the file '" + relative + "' of", skill.Name, result.Detail),
         };
     }
@@ -412,6 +455,8 @@ public static class SkillText
             SkillEditOutcome.Exists => Exists(result.Name, result.Scope),
             SkillEditOutcome.Missing => Missing(result.Name, result.Scope),
             SkillEditOutcome.ExistsElsewhere => ExistsElsewhere(result.Name, result.Scope),
+            SkillEditOutcome.ExternalReadOnly when result.Scope == SkillScope.Project && string.Equals(result.Detail, Llm.Tools.SkillEditorTool.CreateAction, StringComparison.Ordinal) => ProjectNameTaken(result.Name),
+            SkillEditOutcome.ExternalReadOnly when result.Scope == SkillScope.Project => ProjectReadOnly(result.Name),
             SkillEditOutcome.ExternalReadOnly => ExternalReadOnly(result.Name),
             SkillEditOutcome.EmptyDescription => EmptyDescription,
             SkillEditOutcome.DescriptionTooLong => DescriptionTooLong(result.Length),

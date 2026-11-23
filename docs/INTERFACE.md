@@ -121,6 +121,8 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | Close gaps: who reviews? (after `g`, while advisors are offered) | `m` the model · `a` an advisor finds the gaps · `y` any (the model asks an advisor where one fits) · `c` the model, an advisor confirms · Esc back |
 | A Ralph loop's checkpoint | `k` keep · `r` redo with a note (typed below) · `v` view the changes · `s` stop the loop · Esc keeps |
 | A Ralph loop's by-hand check | `w` it works · `r` redo with a note (typed below) · `v` view the changes (where it opens, so Enter alone ticks nothing) · `s` stop the loop · Esc stops |
+| `/project-init`'s draft pane | `w` write · `t` write and turn on (when a setting keeps the notes out) · `v` view the change · `r` revise (typed below; Esc back) · `c` cancel · Esc cancels |
+| `/project-init`'s questions (which file, a long file, a new conversation) | Enter chooses · Esc cancels |
 | A code audit's done pane | `p` fix via plan (with a finding open) · `g` more passes… · `k` keep the report · `d` discard it · Esc keeps |
 | `/find` | type to find (a paste or right-click adds a first line) · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Ctrl+↑/↓ previous or next message · Esc, Ctrl+F or a double-click outside done |
 | Info panes (`/help`, `/usage`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
@@ -164,6 +166,8 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | **Skills** | |
 | `/skills` › a skill | Enter on a row: move (asks), copy (asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
 | `/skills` › a skill › `revert` | Enter puts the version back · `d` or Delete removes it (asks) · `c` clear all (asks) |
+| `/skills` › `project` | Enter on a folder's `trust` row reviews its skills · `untrust` (asks) · on a trusted skill: edit, copy to profile or global (asks), disable/enable |
+| Its trust question | Enter on `trust` trusts what is shown · Enter on a skill views its `SKILL.md`, or the change since its trust · Esc cancels |
 | `/commands` | ←/→ all, profile, global · **new command…** asks a name and where, then opens the template · type to filter |
 | `/commands` › a command | Enter on a row: use (to the draft line), move (asks), copy, rename, edit, delete (asks) · a Shadowed file: rename, edit, delete, and for a hidden global one move to another profile · a Skipped file: edit, delete |
 | **Shopping** | |

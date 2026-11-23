@@ -61,6 +61,35 @@ public static partial class ToolRedaction
         return result;
     }
 
+    /// <summary>
+    /// <see cref="Text"/> for prose and build files (2026-11-23, <c>/project-init</c>): every rule but the short command-line switches
+    /// (<c>-p x</c>, <c>-P x</c>, <c>-pX</c>, <c>/p:x</c>), which would mask <c>docker run -p 8080:80</c>, <c>mvn -P release</c> and
+    /// <c>pytest -p no:cacheprovider</c>, the very build lines project notes are about. The long secret flags (<c>--password x</c>) stay.
+    /// </summary>
+    public static string Prose(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (text.Length == 0)
+        {
+            return text;
+        }
+
+        string result = Pem().Replace(text, Placeholder);
+        result = Jwt().Replace(result, Placeholder);
+        result = Authorization().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = Url(result);
+        result = NetUser().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = NetUse().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = SchtasksPassword().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = SecureString().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = PsCredential().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = Assignment().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = XmlElement().Replace(result, m => m.Groups["head"].Value + Placeholder + m.Groups["tail"].Value);
+        result = KeyValue().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = DashFlag().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        return result;
+    }
+
     // The user part may be empty (2026-11-20, the mcp-ask review's #21): redis://:pw@host carries a password with no user name.
     /// <summary>The longest an audit line's text runs before its <c>…</c> (<see cref="AuditText"/>).</summary>
     public const int AuditChars = 2000;

@@ -36,6 +36,29 @@ public class SkillsMenuTests : IDisposable
 
     private void OpenFile(string path) => (_openFile ?? _opened.Add)(path);
 
+    /// <summary>A repo's own skills (2026-11-23): null, none read; the trust store the project sub-tab saves to, and every View it opened.</summary>
+    private ProjectSkillSource? _projectSource;
+    private ProjectSkillTrust? _projectTrust;
+    private string? _working;
+    private readonly List<string> _viewed = new();
+
+    /// <summary>A repo under the fixture's folder as the working folder, its skills read and trusted through the fixture's store.</summary>
+    private string UseRepo()
+    {
+        _working = Path.Combine(_dir, "repo");
+        Directory.CreateDirectory(Path.Combine(_working, ".git"));
+        _projectTrust = new ProjectSkillTrust(() => Path.Combine(_dir, "profile", "configs"), _time);
+        _projectSource = new ProjectSkillSource(() => _working, Path.Combine(_dir, "userhome"), null, _projectTrust);
+        return _working;
+    }
+
+    private static void PutProject(string level, string name, string description)
+    {
+        string folder = Path.Combine(level, ".agents", "skills", name);
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, SkillCatalog.FileName), $"---\nname: {name}\ndescription: {description}\n---\n\nThe repo's steps.\n");
+    }
+
     public SkillsMenuTests()
     {
         _console.Interactive();
@@ -85,6 +108,12 @@ public class SkillsMenuTests : IDisposable
             return new SkillsFacts(false, [], [], [], Roots);
         }
 
+        if (_projectSource is not null)
+        {
+            _catalog.Scan(new SkillScan(_external, _projectSource));
+            return new SkillsFacts(true, _catalog.All, _catalog.Shadowed, _catalog.Problems, Roots, Pending: _catalog.ProjectPending, Folders: _catalog.ProjectFolders, WorkingFolder: _working, RepoRoot: _working);
+        }
+
         _catalog.Scan(_external);
         return new SkillsFacts(true, _catalog.All, _catalog.Shadowed, _catalog.Problems, Roots);   // the screen's list: the disabled ones too (2026-10-09)
     }
@@ -108,7 +137,8 @@ public class SkillsMenuTests : IDisposable
         var menuPane = new MenuPane(pane, keys);
         var settings = Settings(pane, keys, menuPane);
         var menu = new SkillsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, _usage,
-            versions: _versions, restore: _versions is null ? null : Restore, forget: _forget);
+            versions: _versions, restore: _versions is null ? null : Restore, forget: _forget,
+            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, _, _) => { _viewed.Add(label); return Task.CompletedTask; });
         pane.Show();
         return (menu, pane, settings);
     }
@@ -179,7 +209,7 @@ public class SkillsMenuTests : IDisposable
     private static string ShadowedHead(int count) => "  \n" + Head(SkillsText.ShadowedTitle + " · " + count + " ── " + SkillsText.ShadowedNote);
 
     /// <summary>The Options tab's six rows at their defaults, padded to the tab's own column (38: the external-skills label), as the pane prints them; Project file third since 2026-10-01, Global skills second since 2026-10-13. Pinned.</summary>
-    private static readonly string OptionsRows = Head("Sources") + "\n▸ Agent skills                      on\n  Global skills                     on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project file                      on\n" + Head("Prompt and mentions") + "\n  Skill compact mode                protected\n  #-mention enabled                 on\n";   // under its two headings since 2026-10-10   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
+    private static readonly string OptionsRows = Head("Sources") + "\n▸ Agent skills                      on\n  Global skills                     on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project skills                    on\n  Project file                      on\n" + Head("Prompt and mentions") + "\n  Skill compact mode                protected\n  #-mention enabled                 on\n";   // under its two headings since 2026-10-10   // Allow skill delete, the fifth, went on 2026-09-23 (delete always offered)
 
     /// <summary>The Reflection tab's rows at their defaults (the confirm mode since 2026-10-12) (later on 2026-09-19), padded to its own column (33: the downloaded skills label since 2026-10-12). Pinned.</summary>
     private static readonly string ReflectionRows = Head("Learning") + "\n▸ Reflection (auto-learn)            on\n  Reflection reasoning               none\n" + Head("What it reads") + "\n  Reflection window                  3 turns\n  Reflection min tool calls          4 tool calls\n  Reflection max requests            4 requests\n  Reflection include sessions        on\n" + Head("Pace") + "\n  Reflection cooldown (min)          5 minutes\n  Reflection cooldown mode           last-written-skill\n  Reflection yield to turns          on\n" + Head("What it may change") + "\n  Reflection mode                    create-update\n  Reflection confirm mode            new\n  Reflection edit supporting files   off\n  Reflection edit downloaded skills  allow-and-mark\n";   // under its four headings since 2026-10-10, the sessions switch under What it reads
@@ -406,6 +436,68 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal("(↩️ removed 1 kept version of haiku)", SkillRecordText.VersionsClearedNotice("haiku", 1));
     }
 
+    /// <summary>
+    /// The project sub-tab (2026-11-23, feature idea #16): a repo whose only skills aren't trusted still gets the strip and the tab; Enter on the
+    /// folder's trust row asks, a View shows the skill's SKILL.md, and Trust saves it, after which the skill is offered.
+    /// </summary>
+    [Fact]
+    public async Task TheProjectSubTab_AnUntrustedFolder_EnterAsks_ViewShows_TrustSaves()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships [it].");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right);   // profile, global, project (no external skills, so no external tab)
+        Push(Keys.Enter);                           // the folder's trust row: the question, on the skill's View row
+        Push(Keys.Enter);                           // View deploy
+        Push(Keys.Up, Keys.Enter);                  // Trust
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.TrustTitle, Output);
+        Assert.Equal([SkillsText.ViewLabel("deploy")], _viewed);
+        Assert.Contains(SkillsText.TrustedNotice(SkillsText.ThisFolderLabel, 1), Output);
+        Assert.NotNull(_projectTrust!.Trusted(repo));
+        _catalog.Scan(new SkillScan(_external, _projectSource));
+        Assert.Equal(SkillScope.Project, _catalog.Find("deploy")!.Scope);
+        Assert.Equal("Ships [it].", _catalog.Find("deploy")!.Description);
+    }
+
+    /// <summary>The trust question's Cancel, and Esc, save nothing (2026-11-23).</summary>
+    [Fact]
+    public async Task TheTrustQuestion_CancelAndEsc_SaveNothing()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Enter);   // Cancel
+        Push(Keys.Enter, Keys.Escape);                                                  // asked again, Esc
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_projectTrust!.Trusted(repo));
+        Assert.DoesNotContain(SkillsText.TrustedNotice(SkillsText.ThisFolderLabel, 1), Output);
+        Assert.False(File.Exists(_projectTrust.FilePath));
+    }
+
+    /// <summary>Under a running reply a trust is refused (2026-11-23): it could race the model's load_skill.</summary>
+    [Fact]
+    public async Task TheProjectSubTab_UnderARunningReply_RefusesTheTrust()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: true);
+
+        Assert.Contains(SettingsMenu.NotWhileReplyRunsNotice, Output);
+        Assert.DoesNotContain(SkillsText.TrustTitle, Output);
+        Assert.Null(_projectTrust!.Trusted(repo));
+    }
+
     /// <summary>The pane: the three tabs under the strip, the Offered rows first; Enter or Space on a heading does nothing (the page re-shown); the Project file toggle is an Options row since 2026-10-01 (the one row of a Project tab of its own from later on 2026-09-19 until then) — Enter opens its page, off picked, the status line saying so; ESC closes with nothing in the transcript.</summary>
     [Fact]
     public async Task OnThePane_TheThreeTabs_EnterOnAHeadingDoesNothing_TheProjectFileRowFlips()
@@ -414,14 +506,14 @@ public class SkillsMenuTests : IDisposable
         Put(SkillScope.Global, "haiku", "The global one.");
         var (menu, pane) = PaneMenu();
         int flow = pane.FlowRow;
-        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Char(' '));   // Options (the strip wrapped), Project file (third since Global skills, 2026-10-13): Space flips it off (2026-10-04; nothing until then)
+        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Char(' '));   // Options (the strip wrapped), Project file (third since Global skills, 2026-10-13; fourth since Project skills, 2026-11-23): Space flips it off (2026-10-04; nothing until then)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         AssertPadded("\n" + Titled(Strip) + "\n" + Scopes + "\n \n" + SkillsHead(1) + "\n▸ haiku  profile  Writes haiku.\n" + ShadowedHead(1) + "\n  haiku  global   shadowed by the profile skills\n", Rule(100) + "\n" + SkillsMenu.LoadedKeys + "\n");
         Assert.DoesNotContain("\n" + Titled(SkillsText.Label + " › Project file") + "\n", Output);   // no page: Space saved at once
-        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n" + Head("Sources") + "\n  Agent skills                      on\n  Global skills                     on\n  " + SettingsMenu.ExternalSkillsName + "  off\n▸ Project file                      off\n", Output);   // the flip on the status line, the row re-read, the cursor kept
+        Assert.Contains("\n" + Titled(Strip) + "\n  · Project file: off\n" + Head("Sources") + "\n  Agent skills                      on\n  Global skills                     on\n  " + SettingsMenu.ExternalSkillsName + "  off\n  Project skills                    on\n▸ Project file                      off\n", Output);   // the flip on the status line, the row re-read, the cursor kept
         Assert.False(_settings.Current.ProjectFile);
         Assert.DoesNotContain("Project    ", Output);   // no Project tab in the strip
         Assert.DoesNotContain("Roots", Output);
@@ -578,7 +670,7 @@ public class SkillsMenuTests : IDisposable
     public async Task OnThePane_TheProjectFileRow_SavesOff_MidTurnToo()
     {
         var (menu, pane) = PaneMenu();
-        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Options (the strip wrapped), Project file (third since 2026-10-13): off
+        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);   // Options (the strip wrapped), Project file (third since 2026-10-13, fourth since 2026-11-23): off
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None, midTurn: true);
@@ -1122,7 +1214,7 @@ public class SkillsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         // In the strip's order: Offered, Reflection, Options last (2026-09-22; Options second from 2026-09-19, Reflection later that day), every row as `label: value`; the Project file row among the Options since 2026-10-01 (a Project section of its own until then), no Roots section.
-        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection include sessions: on\n  ·   Reflection cooldown (min): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yield to turns: on\n  ·   Reflection mode: create-update\n  ·   Reflection confirm mode: new\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   Global skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", Output);
+        Assert.Contains("  · Offered\n  ·   haiku  profile  Writes haiku.\n  · Reflection\n  ·   Reflection (auto-learn): on\n  ·   Reflection reasoning: none\n  ·   Reflection window: 3 turns\n  ·   Reflection min tool calls: 4 tool calls\n  ·   Reflection max requests: 4 requests\n  ·   Reflection include sessions: on\n  ·   Reflection cooldown (min): 5 minutes\n  ·   Reflection cooldown mode: last-written-skill\n  ·   Reflection yield to turns: on\n  ·   Reflection mode: create-update\n  ·   Reflection confirm mode: new\n  ·   Reflection edit supporting files: off\n  ·   Reflection edit downloaded skills: allow-and-mark\n  · Options\n  ·   Agent skills: on\n  ·   Global skills: on\n  ·   " + SettingsMenu.ExternalSkillsName + ": off\n  ·   Project skills: on\n  ·   Project file: on\n  ·   Skill compact mode: protected\n  ·   #-mention enabled: on\n", Output);
         Assert.DoesNotContain("Roots", Output);
     }
 
@@ -1162,7 +1254,7 @@ public class SkillsMenuTests : IDisposable
     {
         var (menu, pane, settings) = PaneMenuWithSettings();
         Push(Keys.Left);                                        // Options, the strip wrapped
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Skill compact mode (under Project file since 2026-10-01; one further down since Global skills, 2026-10-13): the picker
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Skill compact mode (under Project file since 2026-10-01; one further down since Global skills, 2026-10-13, and Project skills, 2026-11-23): the picker
         Push(Keys.Down, Keys.Enter);                            // unprotected
         Push(Keys.Escape);
 
@@ -1183,7 +1275,7 @@ public class SkillsMenuTests : IDisposable
         Put(SkillScope.Profile, "haiku", "Writes haiku.");
         var (menu, pane) = PaneMenu();
         Push(Keys.Enter);                                       // haiku: the scope page refused
-        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);    // Options (the strip wrapped), #-mention enabled (fifth since 2026-10-01, sixth since Global skills on 2026-10-13): the page (the cursor on the saved on row, the default), off picked — Allow skill delete, the row this used until it went on 2026-09-23
+        Push(Keys.Left, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);    // Options (the strip wrapped), #-mention enabled (fifth since 2026-10-01, sixth since Global skills on 2026-10-13, seventh since Project skills on 2026-11-23): the page (the cursor on the saved on row, the default), off picked — Allow skill delete, the row this used until it went on 2026-09-23
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None, midTurn: true);

@@ -1148,6 +1148,7 @@ public sealed class AppSettings : IDisposable
         AgentSkills = source.AgentSkills,
         GlobalSkills = source.GlobalSkills,
         ExternalSkills = source.ExternalSkills,
+        ProjectSkills = source.ProjectSkills,
         ProjectFile = source.ProjectFile,
         ReflectionAutoLearn = source.ReflectionAutoLearn,
         ReflectionCooldownMinutes = source.ReflectionCooldownMinutes,

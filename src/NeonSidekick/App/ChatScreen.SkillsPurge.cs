@@ -86,7 +86,7 @@ internal sealed partial class ChatScreen
             }
         }
 
-        _catalog.Scan(_effective().ExternalSkills);
+        _catalog.Scan(SkillScanFor(_effective(), refreshProject: true));
         DiagnosticLog.Info(SkillCatalog.Category, SkillRecordText.PurgeSummaryLogLine(deleted.Count, failed, age));
         if (deleted.Count > 0)
         {

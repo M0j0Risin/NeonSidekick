@@ -110,7 +110,19 @@ public sealed class LoadSkillTool : AIFunction
         var skill = _catalog.Find(name);
         if (skill is null || (_only is not null && !_only.Contains(skill.Name)) || !_catalog.Roots.Reads(skill.Scope))
         {
+            // A repo's skill listed but not offered (2026-11-23): said in its own words, never read, never "no such skill".
+            if (skill is null && _only is null && _catalog.FindPending(name) is { } pending)
+            {
+                return SkillText.ProjectNotOffered(pending.Skill.Name, pending.Reason);
+            }
+
             return SkillText.Unknown(name, Offered.Select(s => s.Name).ToList());
+        }
+
+        // Trust was judged at the turn's scan; a project skill's files are hashed again before anything is handed over (a pull mid-turn).
+        if (!_catalog.StillTrusted(skill))
+        {
+            return SkillText.ProjectChanged(skill.Name);
         }
 
         if (!string.IsNullOrWhiteSpace(file))
@@ -128,7 +140,7 @@ public sealed class LoadSkillTool : AIFunction
 
         var resources = SkillCatalog.Resources(skill, out bool more);
         _used?.Invoke(skill);
-        return SkillText.Content(skill.Name, body.Text, skill.Directory, resources, more, body.Truncated);
+        return SkillText.Content(skill.Name, body.Text, skill.Directory, resources, more, body.Truncated, project: skill.Scope == SkillScope.Project);
     }
 
     /// <summary>

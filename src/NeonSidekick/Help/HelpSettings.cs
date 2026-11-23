@@ -123,6 +123,7 @@ public static partial class HelpSettings
         SettingsField.GlobalSkills => "Reads the global skills, the home folder's `skills` folder that every profile shares. Off, this profile sees and writes only its own skills. Needs *Agent skills*.",
         SettingsField.AgentSkills => "Lists the skills in the prompt and offers `load_skill` and `skill_editor`. Off also turns off *Project file*.",
         SettingsField.ExternalSkills => "Also reads the skills in `%USERPROFILE%\\.agents\\skills`, read-only.",
+        SettingsField.ProjectSkills => "Reads the skills in the `.agents` and `.claude` folders from the working folder up to the repo root, once you trust them.",
         SettingsField.SkillCompactMode => "`protected` keeps a loaded skill's instructions through a prune; `unprotected` prunes them like any tool result.",
         SettingsField.TranscriptMarkdown => "Renders replies as Markdown instead of plain text. Code fences in C#, JavaScript/TypeScript, Python, Bash, PowerShell, JSON, YAML, TOML/INI, SQL, C/C++, Java, Kotlin, Go, Rust, CSS, XML/HTML and diff are syntax-highlighted. A single line break in a reply starts a new line.",
         SettingsField.PastePreviewLines => "How many lines of a long paste show dimmed under its `[Pasted text #n]` placeholder (0–200; 0 = placeholder only).",

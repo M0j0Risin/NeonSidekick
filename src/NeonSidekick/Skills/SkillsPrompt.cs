@@ -52,6 +52,12 @@ public static class SkillsPrompt
     public const string LockedTag = "<locked>the user locked this skill: it can be loaded, not changed</locked>";
 
     /// <summary>
+    /// A trusted project skill's tag (2026-11-23, feature idea #16): the repo's, read only here, said in the main prompt and the reflection's catalog
+    /// so neither spends a call on a refused update. A disabled one keeps the one disabled tag. Pinned.
+    /// </summary>
+    public const string ProjectTag = "<project>this repo's skill; read only here</project>";
+
+    /// <summary>
     /// A disabled skill's line in its catalog entry (2026-10-09, <see cref="SkillDisable"/>): only a reflection's catalog lists one (the main
     /// prompt's is the offered skills), so it knows the topic is taken and writes no second skill for it. Pinned.
     /// </summary>
@@ -117,6 +123,11 @@ public static class SkillsPrompt
             {
                 // The user's lock (2026-10-07, SkillLock): said up front, so neither the model nor a reflection spends a call finding out.
                 sb.Append("\n    ").Append(LockedTag);
+            }
+            else if (skill.Scope == SkillScope.Project)
+            {
+                // A repo's skill (2026-11-23, feature idea #16): read only here, said up front for the same reason as the lock.
+                sb.Append("\n    ").Append(ProjectTag);
             }
 
             if (usage is not null && usage.TryGetValue(skill.Name, out var line) && line.Length > 0)

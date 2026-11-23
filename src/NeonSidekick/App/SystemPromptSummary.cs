@@ -73,6 +73,7 @@ namespace NeonSidekick.App;
 /// <param name="TimersEnabled">The setting <c>Timer tools</c> (later on 2026-10-15): off, the rules carry no <see cref="Assistant.TimerRule"/>.</param>
 /// <param name="ClockEnabled">The setting <c>Clock tools</c> (2026-10-18): off, the rules carry no <see cref="Assistant.ClockRule"/>.</param>
 /// <param name="ShoppingTools">How many shopping tools the next turn offers (the ones switched off on <c>/tools</c> left out); the rules carry <see cref="Assistant.ShoppingRule"/> while any is.</param>
+/// <param name="ProjectNotOffered">The repo's skills listed but not offered (2026-11-23, <see cref="SkillCatalog.ProjectPending"/>): the skills status counts them; 0 while <c>Project skills</c> is off.</param>
 /// <param name="GlobalSkills">The profile's <c>Global skills</c> switch as the catalog's last scan read it (2026-10-13, <see cref="SkillCatalog.GlobalEnabled"/>): off, the skills block names no global scope and its status says <see cref="SystemPromptSummary.GlobalOffSuffix"/>.</param>
 /// <param name="Admin">The admin families' sentences the turn would carry (2026-10-15, the admin-tools plan): <see cref="AdminRules"/> as <c>ComposeTurnTools</c> works it out.</param>
 /// <param name="PlanDirective">Plan mode's directive while planning (2026-09-26, <see cref="Plans.PlanText.Directive"/>), else null: its own section, after the skills.</param>
@@ -150,7 +151,8 @@ public sealed record SystemPromptFacts(
     int DuckDbTools = 0,
     bool DuckDbWrite = false,
     IReadOnlyList<Mcp.McpServerNote>? McpNotes = null,
-    bool MemoryHere = false)
+    bool MemoryHere = false,
+    int ProjectNotOffered = 0)
 {
     /// <summary>
     /// These facts with the group <paramref name="group"/> switches turned off (2026-11-02, the review: the <c>/usage</c> Context tab's
@@ -631,10 +633,22 @@ public static class SystemPromptSummary
 
         var skills = facts.Skills ?? [];
         int external = skills.Count(s => s.Scope == SkillScope.External);
-        var notes = new List<string>(2);
+        int project = skills.Count(s => s.Scope == SkillScope.Project);
+        var notes = new List<string>(4);
         if (external > 0)
         {
             notes.Add($"{external.ToString(CultureInfo.InvariantCulture)} external");
+        }
+
+        // The repo's skills (2026-11-23, feature idea #16): the trusted ones offered, and those listed but not offered.
+        if (project > 0)
+        {
+            notes.Add($"{project.ToString(CultureInfo.InvariantCulture)} project");
+        }
+
+        if (facts.ProjectNotOffered > 0)
+        {
+            notes.Add($"{facts.ProjectNotOffered.ToString(CultureInfo.InvariantCulture)} project not offered");
         }
 
         if (!facts.GlobalSkills)

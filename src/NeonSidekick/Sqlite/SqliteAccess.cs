@@ -157,7 +157,7 @@ public sealed class SqliteAccess
                 return NotDuckDb(new SqliteTarget(wanted.Replace('\\', '/'), full), out refused);
             }
 
-            if (outcome is FileOutcome.OutsideRoot or FileOutcome.InImagesFolder or FileOutcome.InSkillFolder)
+            if (outcome is FileOutcome.OutsideRoot or FileOutcome.InImagesFolder or FileOutcome.InSkillFolder or FileOutcome.InProjectSkillFolder)
             {
                 refused = SqlRun.Refused(SqlOutcome.ConnectFailed, SqliteText.OutsideSandbox(wanted), wanted);
                 return null;

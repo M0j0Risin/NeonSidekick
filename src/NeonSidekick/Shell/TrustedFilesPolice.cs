@@ -266,7 +266,7 @@ public static class TrustedFilesPolice
             || (parts.Length > 0 && parts[^1].Equals(WriteGuard.ClaudeMcpFileName, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Whether <paramref name="value"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, the project file, the app's folder name, or a path under the home. It can't tell a read from a write, so a full path there is refused either way; a relative one from a working folder inside the home passes.</summary>
+    /// <summary>Whether <paramref name="value"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, the project file, the project skills' trust file or copies, the app's folder name, or a path under the home. It can't tell a read from a write, so a full path there is refused either way; a relative one from a working folder inside the home passes.</summary>
     private static bool NamesTrusted(string value, Guard guard, ShellKind shell, bool isScript)
     {
         if (IsClaudeValue(value))
@@ -286,6 +286,15 @@ public static class TrustedFilesPolice
         }
 
         if (parts.Length > 0 && Llm.ProjectFile.FileNames.Any(n => n.Equals(parts[^1], StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        // The project skills' trust (2026-11-23, feature idea #16): by name wherever it points, since a relative ../configs/project-trust.json from the
+        // default files folder passes the full-path check below. The model never trusts a folder for itself.
+        if (parts.Length > 0 && (parts[^1].Equals(Skills.ProjectSkillTrust.FileName, StringComparison.OrdinalIgnoreCase)
+            || parts[^1].Equals(Skills.ProjectSkillTrust.FileName + Skills.ProjectSkillTrust.BadSuffix, StringComparison.OrdinalIgnoreCase)
+            || parts.Any(part => part.Equals(Skills.ProjectSkillTrust.CopiesFolderName, StringComparison.OrdinalIgnoreCase))))
         {
             return true;
         }

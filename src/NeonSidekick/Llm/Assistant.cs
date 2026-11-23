@@ -3473,7 +3473,7 @@ public sealed class Assistant
         try
         {
             var answer = await InvokeWatchedAsync(call, journal, cancellationToken).ConfigureAwait(false);
-            refusedByGate = answer.Refused;
+            refusedByGate = answer.Refused || answer.NothingRan;   // NothingRan (2026-11-23, #64): the tool's or the project-file ask's own "nothing changed"
             return answer;
         }
         finally
@@ -3497,20 +3497,26 @@ public sealed class Assistant
             answer = await InvokeToolWithDiffAsync(_tools, call, cancellationToken).ConfigureAwait(false);
         }
 
-        if (slot.Path is not { } refused || ProjectFileAsk is not { } ask || FindTool(_tools, NeonSidekick.Llm.Tools.AskUserTool.ToolName) is null)
+        if (slot.Path is not { } refused)
         {
             return answer;
+        }
+
+        // The refused attempt wrote nothing (2026-11-23, #64): with nobody to ask, a pass the ask returns, or a no, the call is not journaled.
+        if (ProjectFileAsk is not { } ask || FindTool(_tools, NeonSidekick.Llm.Tools.AskUserTool.ToolName) is null)
+        {
+            return answer with { NothingRan = true };
         }
 
         bool? allowed = await ask(refused, cancellationToken).ConfigureAwait(false);
         if (allowed is null)
         {
-            return answer;
+            return answer with { NothingRan = true };
         }
 
         if (allowed == false)
         {
-            return new ToolInvocation(Files.FileText.ProjectFileDeclined(Path.GetFileName(refused)));
+            return new ToolInvocation(Files.FileText.ProjectFileDeclined(Path.GetFileName(refused))) { NothingRan = true };
         }
 
         using (Files.WriteGuard.AllowProjectFile())
@@ -3646,6 +3652,7 @@ public sealed class Assistant
                 ToolDiffResult changed => new ToolInvocation(changed.Text, Diff: changed.Diff),
                 ToolShownResult shown => new ToolInvocation(shown.Text, Shown: shown.Shown),
                 ToolSourcedResult sourced => new ToolInvocation(sourced.Text, Source: sourced.Source),
+                ToolNothingRanResult nothing => new ToolInvocation(nothing.Text) { NothingRan = true },
                 _ => new ToolInvocation(value.ToString() ?? "(no result)"),
             };
         }
