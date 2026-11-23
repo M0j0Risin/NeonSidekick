@@ -19,14 +19,31 @@ internal sealed partial class SettingsMenu
     /// <summary>The list editor's keys. Pinned.</summary>
     public const string AdvisorListKeys = "Enter = add, or change the advisor · Esc = back";
 
-    /// <summary>An entry's two choices, in order. Pinned.</summary>
-    public static readonly IReadOnlyList<string> AdvisorEntryRows = ["Change the role", "Remove"];
+    /// <summary>The list editor's second row (2026-11-22, the advisor templates). Pinned.</summary>
+    public const string NewAdvisorRow = "+ New advisor from a template…";
+
+    /// <summary>The add row's band: how it differs from the new row (2026-11-22, the user asked what adding an existing profile meant). Pinned.</summary>
+    public const string AddAdvisorBand = "Makes one of your other profiles an advisor: it answers on its own server and model, with its own avatar.";
+
+    /// <summary>The new row's band. Pinned.</summary>
+    public const string NewAdvisorBand = "Makes a new profile from a template, with its persona, role, description and avatar, and adds it as an advisor.";
+
+    /// <summary>An advisor row's band with no description. Pinned.</summary>
+    public const string NoDescriptionBand = "No description: Change the description adds one, so the model knows when to ask it.";
+
+    /// <summary>
+    /// An entry's choices, in order (the description and the persona since 2026-11-22). <see cref="RemoveAdvisorChoice"/> is Delete's. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> AdvisorEntryRows = ["Change the role", "Change the description", "Change the persona", "Remove"];
+
+    /// <summary>The row of <see cref="AdvisorEntryRows"/> a Delete on an advisor goes to.</summary>
+    public const int RemoveAdvisorChoice = 3;
 
     /// <summary>The profile picker's title when adding. Pinned.</summary>
     public const string AdvisorProfileTitle = "Which profile advises?";
 
     /// <summary>The notice when every other profile is already an advisor (or there is none). Pinned.</summary>
-    public const string NoAdvisorProfilesNotice = "(no other profile to add: make one with /profile add, or every one is an advisor already)";
+    public const string NoAdvisorProfilesNotice = "(no profile left to add: + New advisor from a template… or /profile add makes one)";
 
     /// <summary>A missing profile's mark on its row and in the value. Pinned.</summary>
     public const string MissingAdvisorMark = AdvisorText.MissingMark;
@@ -207,14 +224,15 @@ internal sealed partial class SettingsMenu
             var entries = AdvisorRoster.Entries(_settings.Current.AdvisorList);
             int width = entries.Count == 0 ? 0 : Math.Min(24, entries.Max(e => e.Profile.Length) + 2);
             int roleWidth = AdvisorRoleColumn(entries);
-            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), .. entries.Select(e =>
+            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), Markup.Escape(NewAdvisorRow), .. entries.Select(e =>
             {
                 var (exists, facts) = AdvisorFactsOf(e.Profile);
                 // Each advisor's avatar ahead of its name (later on 2026-10-10, the user's ask), as the profile pickers show theirs; a
                 // missing profile none (its file would read as the defaults, the robot).
                 return AdvisorRow(e, exists, width, facts, roleWidth, AdvisorMark(e), exists ? ProfileAvatar(e.Profile) : "");
             })];
-            var page = new MenuPage(Crumb(title), rows, AdvisorListKeys);
+            // Each row's band (2026-11-22): what the two add rows do, an advisor's description (or how to give it one).
+            var page = new MenuPage(Crumb(title), rows, AdvisorListKeys) { Footer = (_, row) => AdvisorRowBand(entries, row) };
             if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { Row: var index } pick)
             {
                 if (!changed)
@@ -226,19 +244,21 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = index;
-            if (index == 0)
+            if (index < AdvisorListLead)
             {
-                if (!pick.Remove)   // Delete on the add row: nothing to remove
+                if (!pick.Remove)   // Delete on an add row: nothing to remove
                 {
-                    changed |= await AddAdvisorAsync(entries, cancellationToken).ConfigureAwait(false);
+                    changed |= index == 0
+                        ? await AddAdvisorAsync(entries, page, cancellationToken).ConfigureAwait(false)
+                        : await NewAdvisorFromTemplateAsync(page, cancellationToken).ConfigureAwait(false);
                 }
 
                 continue;
             }
 
-            var entry = entries[index - 1];
+            var entry = entries[index - AdvisorListLead];
             var choice = new MenuPage(Crumb(title + " › " + entry.Profile), AdvisorEntryRows.Select(Markup.Escape).ToList(), PickKeys);
-            switch (pick.Remove ? 1 : await PickAsync(choice, 0, cancellationToken).ConfigureAwait(false))   // Delete is the removal, asked as ever
+            switch (pick.Remove ? RemoveAdvisorChoice : await PickAsync(choice, 0, cancellationToken).ConfigureAwait(false))   // Delete is the removal, asked as ever
             {
                 case 0:
                     if (await ReadAdvisorRoleAsync(page, entry.Profile, entry.Role, cancellationToken).ConfigureAwait(false) is { } role && role != entry.Role)
@@ -251,6 +271,22 @@ internal sealed partial class SettingsMenu
                     break;
 
                 case 1:
+                    // The description (2026-11-22): the role prompt's shape, prefilled; an unchanged one says nothing, as the role's.
+                    if (await ReadAdvisorTextAsync(page, AdvisorDescriptionPrompt(entry.Profile), entry.Description, cancellationToken).ConfigureAwait(false) is { } typed
+                        && AdvisorRoster.CleanDescription(typed) is var description && description != entry.Description)
+                    {
+                        _settings.Update(d => d.AdvisorList = AdvisorRoster.WithDescription(d.AdvisorList, entry.Profile, description));
+                        Sink.Notice(AdvisorDescriptionNotice(entry with { Description = description }));
+                        changed = true;
+                    }
+
+                    break;
+
+                case 2:
+                    changed |= await ChangeAdvisorPersonaAsync(entry, page, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                case RemoveAdvisorChoice:
                     // Asked first, as every list's remove (2026-10-07).
                     var removing = new MenuPage(RemoveAdvisorQuestion(entry.Profile), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
                     if (await PickAsync(removing, 0, cancellationToken).ConfigureAwait(false) != 1)
@@ -267,11 +303,17 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    /// <summary>The add row: a profile not yet listed, then its role (a blank role keeps none). True when one was added.</summary>
-    private async Task<bool> AddAdvisorAsync(IReadOnlyList<AdvisorEntry> entries, CancellationToken cancellationToken)
+    /// <summary>
+    /// The add row: a profile not yet listed, then its persona (2026-11-22: <see cref="KeepPersonaRow"/>, or a template), then its role (a
+    /// blank role keeps none), prefilled with the template's, or on Keep the role of the template its persona matches. The description
+    /// is the template's (or the matched one's), else none. A template's persona is written only after the role is confirmed, and over
+    /// the profile's own <c>persona.md</c> only after a yes. Esc anywhere adds and writes nothing. True when one was added.
+    /// </summary>
+    private async Task<bool> AddAdvisorAsync(IReadOnlyList<AdvisorEntry> entries, MenuPage listPage, CancellationToken cancellationToken)
     {
         string loaded = _settings.ProfileName;
-        var names = PickerNames(Profiles.List(_settings.StorageDirectory), loaded)
+        string home = _settings.StorageDirectory;
+        var names = PickerNames(Profiles.List(home), loaded)
             .Where(n => !AdvisorRoster.SameProfile(n, loaded) && !entries.Any(e => AdvisorRoster.SameProfile(e.Profile, n)))
             .ToList();
         if (names.Count == 0)
@@ -280,35 +322,57 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var page = new MenuPage(Crumb(FieldName(SettingsField.AdvisorList) + " › " + AdvisorProfileTitle), ProfilePickerRows(names), PickKeys) { JumpNames = names };   // avatars led (2026-10-10)
+        string crumb = FieldName(SettingsField.AdvisorList);
+        var page = new MenuPage(Crumb(crumb + " › " + AdvisorProfileTitle), ProfilePickerRows(names), PickKeys) { JumpNames = names };   // avatars led (2026-10-10)
         if (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } picked)
         {
             return false;
         }
 
         string profile = names[picked];
-        if (await ReadAdvisorRoleAsync(page, profile, "", cancellationToken).ConfigureAwait(false) is not { } role)
+        var persona = new Llm.PersonaFile(Profiles.Directory(home, profile));
+        string? own = persona.Read();
+        if (await PickAdvisorTemplateAsync(crumb + " › " + profile + " › " + AdvisorPersonaTitle, [(KeepPersonaRow, KeepPersonaBand)], [], own, cancellationToken).ConfigureAwait(false) is not { } choice)
+        {
+            return false;
+        }
+
+        var template = choice.Template;
+        var matched = template is null ? AdvisorTemplates.All(home).Matching(own) : null;
+        if (await ReadAdvisorRoleAsync(listPage, profile, template?.Role ?? matched?.Role ?? "", cancellationToken).ConfigureAwait(false) is not { } role)
         {
             return false;   // ESC at the role: nothing added
         }
 
-        var entry = new AdvisorEntry(profile, role);
+        if (template is not null && !await WriteAdvisorPersonaAsync(persona, profile, template, own is not null, cancellationToken).ConfigureAwait(false))
+        {
+            return false;
+        }
+
+        var entry = new AdvisorEntry(profile, role, template?.Description ?? matched?.Description ?? "");
         _settings.Update(d => d.AdvisorList = AdvisorRoster.Add(d.AdvisorList, entry));
         Sink.Notice(AdvisorAddedNotice(entry));
         return true;
     }
 
     /// <summary>The role, typed under <paramref name="page"/> (the pane's input row, or the prompt without it); null on ESC.</summary>
-    private async Task<string?> ReadAdvisorRoleAsync(MenuPage page, string profile, string initial, CancellationToken cancellationToken)
+    private Task<string?> ReadAdvisorRoleAsync(MenuPage page, string profile, string initial, CancellationToken cancellationToken) =>
+        ReadAdvisorTextAsync(page, AdvisorRolePrompt(profile), initial, cancellationToken);
+
+    /// <summary>
+    /// A line typed under <paramref name="page"/> titled <paramref name="prompt"/> (the role's shape, shared since 2026-11-22 with the
+    /// description, the new advisor's name and a template's name): the pane's input row, or the prompt without it; null on ESC.
+    /// </summary>
+    private async Task<string?> ReadAdvisorTextAsync(MenuPage page, string prompt, string initial, CancellationToken cancellationToken)
     {
         InputResult result;
         if (_pane.Enabled)
         {
-            result = await _pane.EditAsync(page with { Title = Crumb(AdvisorRolePrompt(profile)), Hint = EditKeys }, 0, _input, initial, allowEmpty: true, cancellationToken).ConfigureAwait(false);
+            result = await _pane.EditAsync(page with { Title = Crumb(prompt), Hint = EditKeys, Footer = null }, 0, _input, initial, allowEmpty: true, cancellationToken).ConfigureAwait(false);
         }
         else
         {
-            Flow.Notice(PromptTitle(AdvisorRolePrompt(profile), EditKeys));
+            Flow.Notice(PromptTitle(prompt, EditKeys));
             result = await _input.ReadAsync(initial, remember: false, allowEmpty: true, cancellationToken: cancellationToken, escapeCancels: true).ConfigureAwait(false);
         }
 

@@ -89,6 +89,21 @@ public partial class SidekickAppTests
         Assert.Contains("[error] \"nobody\" names no single advisor", output);
     }
 
+    /// <summary>Headless <c>/advisor templates</c> and <c>/advisor new</c> (2026-11-22): the list as notices, the first advisor made with none listed, a taken name an error (exit 4).</summary>
+    [Fact]
+    public async Task Headless_AdvisorTemplatesAndNew_ListAndMake_ATakenNameIsAnError()
+    {
+        string output = await Headless("/advisor templates\n/advisor new security\n/advisor new security\n", exitCode: 4);
+
+        Assert.Contains("[notice] " + AdvisorText.TemplatesHeading, output);
+        Assert.Contains("security — security engineer", output);
+        var security = AdvisorTemplates.BuiltIn.Find("security")!;
+        var entry = new AdvisorEntry("security", security.Role, security.Description);
+        Assert.Contains("[notice] " + AdvisorText.CreatedNotice(entry, advisorsOn: _settings.Current.Advisors), output);
+        Assert.Contains("[error] " + AdvisorText.TakenError("security", "security", listed: true), output);
+        Assert.Equal([entry], _settings.Current.AdvisorList);
+    }
+
     [Fact]
     public async Task Headless_AdvisorCommand_SendsTheRecentMessages_EvenUnderBrief()
     {

@@ -95,6 +95,47 @@ internal sealed partial class ChatScreen
         return await ConfirmBothAsync(AdvisorText.ConfirmQuestion(advisor, question), "The advisor's confirm pane failed: ", turnToken).ConfigureAwait(false);
     }
 
+    /// <summary>The note beside <c>/advisor templates</c> in completion (2026-11-22). Pinned.</summary>
+    public const string AdvisorTemplatesNote = "list the advisor templates";
+
+    /// <summary>The note beside <c>/advisor new</c> in completion (2026-11-22). Pinned.</summary>
+    public const string AdvisorNewNote = "make an advisor from a template";
+
+    /// <summary>The template ids <c>/advisor new</c> takes, read without reporting a broken file.</summary>
+    private IReadOnlySet<string> AdvisorTemplateIds() =>
+        AdvisorTemplates.All(_settings.StorageDirectory).Ids.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <c>/advisor templates</c> and <c>/advisor new &lt;template&gt; [&lt;name&gt;]</c> on the screen (2026-11-22): the list (the home's
+    /// problems said first), or the shared <see cref="AdvisorFromTemplate.Create"/>. Nothing joins the model's history or the store.
+    /// </summary>
+    private void RunAdvisorSetup(AdvisorSetup setup, Settings.AppSettingsData effective)
+    {
+        var scan = AdvisorTemplates.All(_settings.StorageDirectory);
+        if (setup.Kind == AdvisorSetupKind.Templates)
+        {
+            AdvisorTemplates.Report(scan);
+            DrainDiagnostics();
+            foreach (string line in AdvisorText.TemplateListLines(scan))
+            {
+                _transcript.Notice(line);
+            }
+
+            return;
+        }
+
+        var made = AdvisorFromTemplate.Create(_settings, scan.Find(setup.Template)!, setup.Name, advisorsOn: effective.Advisors);
+        if (made.Error is { } error)
+        {
+            _transcript.Error(error);
+        }
+
+        if (made.Notice is { } notice)
+        {
+            _transcript.Notice(notice);
+        }
+    }
+
     /// <summary><c>/advisor</c>'s names (2026-10-10): the advisor list as <c>/advisor</c> reads it, each profile with its role as the note.</summary>
     private IReadOnlyList<CompletionItem> AdvisorChoices() =>
         AdvisorRoster.Entries(_effective().AdvisorList).Select(entry => new CompletionItem(entry.Profile, entry.Role)).ToList();
@@ -124,6 +165,14 @@ internal sealed partial class ChatScreen
                 _transcript.Notice(AdvisorText.ListLine(entry, AdvisorServer.Read(_settings.StorageDirectory, entry.Profile), Profiles.Exists(_settings.StorageDirectory, entry.Profile)));
             }
 
+            return;
+        }
+
+        // templates and new <template> [<name>] (2026-11-22) ahead of the question's usage line and the no-advisors error: new is how the
+        // first one is made.
+        if (AdvisorText.ParseSetup(args, AdvisorTemplateIds()) is { } setup)
+        {
+            RunAdvisorSetup(setup, effective);
             return;
         }
 

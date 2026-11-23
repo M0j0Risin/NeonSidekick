@@ -22,10 +22,23 @@ public static class AdvisorRoster
                 continue;
             }
 
-            entries.Add(new AdvisorEntry(profile, (entry!.Role ?? "").Trim()));
+            entries.Add(new AdvisorEntry(profile, (entry!.Role ?? "").Trim(), CleanDescription(entry.Description)));
         }
 
         return entries;
+    }
+
+    /// <summary>
+    /// The most characters an advisor's description keeps (2026-11-22, the advisor templates): it lands in <c>neon_advisor</c>'s description
+    /// for every advisor, so about fifteen words each. Pinned.
+    /// </summary>
+    public const int DescriptionMax = 120;
+
+    /// <summary>A description as an entry keeps it: one line, trimmed, cut at <see cref="DescriptionMax"/>; "" for none. Pure.</summary>
+    public static string CleanDescription(string? description)
+    {
+        string text = AdvisorText.Flat(description ?? "");
+        return text.Length <= DescriptionMax ? text : text[..(DescriptionMax - 1)].TrimEnd() + "…";
     }
 
     /// <summary>Whether two profile names are one profile (case ignored, as <see cref="Profiles.Resolve"/> does).</summary>
@@ -34,16 +47,19 @@ public static class AdvisorRoster
     /// <summary>Whether <paramref name="saved"/> holds <paramref name="profile"/>.</summary>
     public static bool Contains(IReadOnlyList<AdvisorEntry>? saved, string profile) => Entries(saved).Any(e => SameProfile(e.Profile, profile));
 
-    /// <summary><paramref name="saved"/> with <paramref name="entry"/> last; a profile already there keeps its place and takes the new role.</summary>
+    /// <summary>
+    /// <paramref name="saved"/> with <paramref name="entry"/> last; a profile already there (a <c>(missing)</c> one whose name a new advisor
+    /// takes again) keeps its place and takes the new role and description.
+    /// </summary>
     public static List<AdvisorEntry> Add(IReadOnlyList<AdvisorEntry>? saved, AdvisorEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
         var entries = Entries(saved).ToList();
-        var clean = new AdvisorEntry(entry.Profile.Trim(), (entry.Role ?? "").Trim());
+        var clean = new AdvisorEntry(entry.Profile.Trim(), (entry.Role ?? "").Trim(), CleanDescription(entry.Description));
         int at = entries.FindIndex(e => SameProfile(e.Profile, clean.Profile));
         if (at >= 0)
         {
-            entries[at] = entries[at] with { Role = clean.Role };
+            entries[at] = entries[at] with { Role = clean.Role, Description = clean.Description };
         }
         else
         {
@@ -56,6 +72,10 @@ public static class AdvisorRoster
     /// <summary><paramref name="saved"/> with <paramref name="profile"/>'s role <paramref name="role"/>; unchanged when it is not there.</summary>
     public static List<AdvisorEntry> WithRole(IReadOnlyList<AdvisorEntry>? saved, string profile, string role) =>
         Entries(saved).Select(e => SameProfile(e.Profile, profile) ? e with { Role = (role ?? "").Trim() } : e).ToList();
+
+    /// <summary><paramref name="saved"/> with <paramref name="profile"/>'s description <paramref name="description"/> (cleaned); unchanged when it is not there.</summary>
+    public static List<AdvisorEntry> WithDescription(IReadOnlyList<AdvisorEntry>? saved, string profile, string? description) =>
+        Entries(saved).Select(e => SameProfile(e.Profile, profile) ? e with { Description = CleanDescription(description) } : e).ToList();
 
     /// <summary><paramref name="saved"/> without <paramref name="profile"/>; null when nothing is left (the file keeps no empty list).</summary>
     public static List<AdvisorEntry>? Without(IReadOnlyList<AdvisorEntry>? saved, string profile)
@@ -96,6 +116,16 @@ public static class AdvisorRoster
     {
         ArgumentNullException.ThrowIfNull(entry);
         return entry.Role.Length == 0 ? entry.Profile : entry.Profile + " (" + entry.Role + ")";
+    }
+
+    /// <summary>
+    /// One advisor as <c>neon_advisor</c>'s description names it (2026-11-22): <see cref="Label"/> and its description after a colon,
+    /// <c>dba (database administrator): schema design, query plans…</c>; <see cref="Label"/> alone with no description. Pinned.
+    /// </summary>
+    public static string ToolLabel(AdvisorEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        return entry.Description.Length == 0 ? Label(entry) : Label(entry) + ": " + entry.Description;
     }
 
     /// <summary>The settings row's value: <c>none</c>, or how many and their labels, cut at <paramref name="width"/>. Pinned.</summary>

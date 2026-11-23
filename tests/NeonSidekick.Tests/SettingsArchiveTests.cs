@@ -106,6 +106,13 @@ public sealed class SettingsArchiveTests : IDisposable
     [InlineData("configs/SQL.JSON", true)]
     [InlineData("configs/sub/sql.json", false)]
     [InlineData("configs/notes.txt", false)]
+    [InlineData("advisors/critic/persona.md", true)]   // your advisor templates (2026-11-22): the two files of a folder named as a profile
+    [InlineData("advisors/critic/advisor.json", true)]
+    [InlineData("advisors/critic/notes.txt", false)]
+    [InlineData("advisors/critic/deep/persona.md", false)]
+    [InlineData("advisors/my template/persona.md", false)]
+    [InlineData("advisors/persona.md", false)]
+    [InlineData("profiles/neon/advisors/critic/persona.md", false)]
     [InlineData("themes/a.json", true)]
     [InlineData("themes/cat/b.json", true)]
     [InlineData("themes/.hidden/b.json", false)]
@@ -215,6 +222,31 @@ public sealed class SettingsArchiveTests : IDisposable
         Assert.Equal(SettingsArchive.ThisOs, (string?)manifest["os"]);
         Assert.Equal("2026-11-13T09:30:00Z", (string?)manifest["created"]);
         Assert.Equal(["larry", "neon"], manifest["profiles"]!.AsArray().Select(n => (string)n!).ToArray());
+    }
+
+    /// <summary>Your advisor templates (2026-11-22): both files carried, a third and a deeper one left out, and an import round trip, a folder already there kept whole.</summary>
+    [Fact]
+    public void Export_CarriesYourAdvisorTemplates_AndAnImportKeepsAFolderAlreadyThereWhole()
+    {
+        Put(From, "advisors/critic/persona.md", "You are a critic.");
+        Put(From, "advisors/critic/advisor.json", "{ \"role\": \"critic\" }");
+        Put(From, "advisors/critic/notes.txt");
+        Put(From, "advisors/critic/deep/persona.md");
+        Put(From, "advisors/mine/persona.md", "theirs");
+        Put(From, "advisors/mine/advisor.json", "{ \"role\": \"theirs\" }");
+        Put(To, "advisors/mine/persona.md", "ours");
+
+        string zip = ExportedZip();
+        Assert.Equal(
+            new[] { "advisors/critic/advisor.json", "advisors/critic/persona.md", "advisors/mine/advisor.json", "advisors/mine/persona.md", SettingsArchive.ManifestName }.Order(StringComparer.Ordinal),
+            Entries(zip));
+
+        var outcome = Import(zip);
+        Assert.Null(outcome.Error);
+        Assert.Equal("You are a critic.", Read(To, "advisors/critic/persona.md"));
+        Assert.Equal("ours", Read(To, "advisors/mine/persona.md"));
+        Assert.False(File.Exists(Path.Combine(To, "advisors", "mine", "advisor.json")));   // never mixed into the folder kept
+        Assert.Equal("advisors/mine/", SettingsArchive.ItemOf("advisors/mine/persona.md"));
     }
 
     [Fact]

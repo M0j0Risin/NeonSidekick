@@ -279,6 +279,11 @@
     <!-- The default persona (2026-10-03, the user's ask): assets\prompts\persona.md is Assistant.DefaultPersona, what the
          prompt carries without a persona.md and what /sys persona seeds the file with. Edit the asset; the next build has it. -->
     <EmbeddedResource Include="..\..\assets\prompts\persona.md" LogicalName="prompts/persona.md" Visible="false" />
+    <!-- The advisor templates (2026-11-22, the user's ask): every assets\prompts\advisors\<id>\ holds persona.md and advisor.json, a
+         built-in template (Advisors/AdvisorTemplates), embedded as prompts/advisors/<id>/<file>. ** as the themes' line, since
+         RecursiveDir is defined for a ** include (with a backslash, which AdvisorTemplates turns into a slash). Only the two names
+         ship; a file deeper than one folder is embedded but left out. -->
+    <EmbeddedResource Include="..\..\assets\prompts\advisors\**\persona.md;..\..\assets\prompts\advisors\**\advisor.json" LogicalName="prompts/advisors/%(RecursiveDir)%(Filename)%(Extension)" Visible="false" />
     <!-- The fun verbs (2026-10-12, the user's ask): assets\verbs\verbs.txt, one verb per line, is App/ThinkingVerbs.All — the words the
          thinking spinner reads under LLM use fun verbs. Edit the file; the next build has the list. -->
     <EmbeddedResource Include="..\..\assets\verbs\verbs.txt" LogicalName="verbs/verbs.txt" Visible="false" />

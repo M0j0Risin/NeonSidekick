@@ -3446,12 +3446,12 @@ public partial class SettingsMenuTests : IDisposable
 
     /// <summary>The menu over a pane with geometry: every list is a level of the pane, the notices its status line.</summary>
     /// <param name="browseFolder">The folder picker the Working directory (cwd) row opens (2026-09-22); null leaves the row asking for a typed path, as it did before the picker.</param>
-    private (SettingsMenu Menu, ScreenPane Pane) PaneMenu(Func<CancellationToken, Task<string?>>? browseFolder = null, Func<IReadOnlyList<Skill>>? botChatSkills = null, Func<IReadOnlyList<ToolGroup>>? botChatTools = null)
+    private (SettingsMenu Menu, ScreenPane Pane) PaneMenu(Func<CancellationToken, Task<string?>>? browseFolder = null, Func<IReadOnlyList<Skill>>? botChatSkills = null, Func<IReadOnlyList<ToolGroup>>? botChatTools = null, Action<string>? openFile = null)
     {
         _console.Profile.Height = 59;   // 51 until the Ralph loop run on Common (2026-10-18), 50 until the Hints bar row (2026-10-14), 49 until the User avatar row (2026-10-12), 48 until the Hint bar row, 47 until the Tool bars heading (later on 2026-10-12), 46 until the Toolbar order row, 45 until the Show home bar row (2026-10-12); 44 until the Client group's second strip over Chat and Botchat (later still on 2026-10-10); 43 until the Avatar row (later on 2026-10-10); 42 until 2026-10-10 (the footer grew to five rows), 41 until 2026-10-07 (to four), 40 until 2026-10-05, when the footer's rule took a row and the LLM tab no longer fit
         var pane = new ScreenPane(_console, new ScreenGeometry(() => null), new ManualTimeProvider()) { Hint = () => "idle" };
         var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
-        var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder, botChatSkills: botChatSkills, botChatTools: botChatTools);
+        var menu = new SettingsMenu(new ConsoleWithInput(pane, keys), _settings, f => _overrides.GetValueOrDefault(f), new InputLine(pane, keys), new TranscriptRenderer(pane), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, browseFolder: browseFolder, openFile: openFile, botChatSkills: botChatSkills, botChatTools: botChatTools);
         menu.ToolbarItemHere = _ => true;   // every toolbar item listed, on a Mac too (2026-10-22): the pinned rows hold
         pane.Show();
         return (menu, pane);

@@ -229,6 +229,23 @@ public abstract class PromptFile
         return true;
     }
 
+    /// <summary>
+    /// Replaces the file with <paramref name="text"/> (2026-11-22, the advisor templates: <c>/sys persona template</c> and the Advisors
+    /// pane write a template's persona): trimmed, the platform's line endings and a final newline as <see cref="EnsureExists"/> writes,
+    /// UTF-8 without a BOM, through the one atomic replace (<see cref="Files.WorkingDirectory.WriteAtomically(string, byte[], bool)"/>),
+    /// its folder made. The next <see cref="Read"/> reads it. Throws <see cref="IOException"/> / <see cref="UnauthorizedAccessException"/>
+    /// like any write; the caller reports.
+    /// </summary>
+    public void WriteText(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        string body = text.Trim();
+        byte[] bytes = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+            .GetBytes(body.Length == 0 ? "" : body.ReplaceLineEndings() + Environment.NewLine);
+        Files.WorkingDirectory.WriteAtomically(FilePath, bytes);
+        Forget();
+    }
+
     /// <summary>The text as the prompt carries it: CRLF folded to LF, trimmed, cut at <paramref name="maxLength"/> with an ellipsis. Pure; pinned.</summary>
     protected static string Normalize(string raw, int maxLength, out bool truncated)
     {

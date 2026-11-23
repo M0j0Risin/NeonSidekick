@@ -190,11 +190,89 @@ public partial class ChatScreenTests
         var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false), _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false),
             Advisors: () => [new("dba", "database architect"), new("doug", "expert .NET solution architect"), new("pm", "")]);
 
-        Assert.Equal(["dba", "doug", "pm"], ChatScreen.ArgumentItems("/advisor", "", sources).Select(i => i.Text));
+        // templates beside the names (2026-11-22); new only with the templates source, which the Web UI page's snapshot leaves null.
+        Assert.Equal(["dba", "doug", "pm", "templates"], ChatScreen.ArgumentItems("/advisor", "", sources).Select(i => i.Text));
         Assert.Equal(["dba", "doug"], ChatScreen.ArgumentItems("/advisor", "D", sources).Select(i => i.Text));
         Assert.Equal(new CompletionItem("doug", "expert .NET solution architect"), Assert.Single(ChatScreen.ArgumentItems("/advisor", "do", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/advisor", "dba why", sources));
-        Assert.Empty(ChatScreen.ArgumentItems("/advisor", "", sources with { Advisors = null }));
+        Assert.Equal(["templates"], ChatScreen.ArgumentItems("/advisor", "", sources with { Advisors = null }).Select(i => i.Text));
+        Assert.Empty(ChatScreen.ArgumentItems("/advisor", "new ", sources));
+
+        var screen = sources with { AdvisorTemplates = () => [new("dba", "database administrator"), new("qa", "QA engineer")] };
+        Assert.Equal(["dba", "doug", "pm", "templates", "new"], ChatScreen.ArgumentItems("/advisor", "", screen).Select(i => i.Text));
+        Assert.Equal(["new "+ "dba", "new qa"], ChatScreen.ArgumentItems("/advisor", "new ", screen).Select(i => i.Text));
+        Assert.Equal(new CompletionItem("new qa", "QA engineer"), Assert.Single(ChatScreen.ArgumentItems("/advisor", "new q", screen)));
+        Assert.Empty(ChatScreen.ArgumentItems("/advisor", "new qa ", screen));   // the name is free
+    }
+
+    /// <summary>
+    /// <c>/advisor templates</c> and <c>/advisor new</c> (2026-11-22): with no advisor yet, new makes the first (no <c>NoAdvisorsError</c>), named
+    /// after the template or as given, no switch and nothing joining the history; a taken name is refused; words after new that name no
+    /// template still ask an advisor.
+    /// </summary>
+    [Fact]
+    public async Task AdvisorCommand_TemplatesAndNew_MakeAnAdvisorFromATemplate_WithNoSwitch()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("ok");
+        PushLine("/advisor templates");
+        PushLine("/advisor new qa");
+        PushLine("/advisor new qa reviewer");
+        PushLine("/advisor new qa");
+        PushLine("hello");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(AdvisorText.TemplatesHeading, output);
+        Assert.Contains("dba — database administrator", output);
+        var qa = AdvisorTemplates.BuiltIn.Find("qa")!;
+        Assert.Equal([new AdvisorEntry("qa", qa.Role, qa.Description), new AdvisorEntry("reviewer", qa.Role, qa.Description)], _settings.Current.AdvisorList);
+        Assert.Contains(AdvisorText.TakenError("qa", "qa", listed: true), output);
+        Assert.Equal("neon", _settings.ProfileName);
+        Assert.Same(qa, AdvisorTemplates.BuiltIn.Matching(new PersonaFile(Profiles.Directory(_settings.StorageDirectory, "reviewer")).Read()));
+        Assert.DoesNotContain(_chat.Requests[^1], m => m.Text.Contains("/advisor", StringComparison.Ordinal) || m.Text.Contains("[to ", StringComparison.Ordinal));
+    }
+
+    /// <summary><c>/sys persona template</c> (2026-11-22): the list, an unknown id, a yes that writes (the next reply carries it), a no that keeps.</summary>
+    [Fact]
+    public async Task SysPersonaTemplate_Lists_RefusesAnUnknownId_WritesAfterAYes_AndKeepsOnANo()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _chat.EnqueueText("ok");
+        PushLine("/sys persona template");
+        PushLine("/sys persona template nope");
+        PushLine("/sys persona template dba");
+        _console.Input.PushKey(Keys.Down);    // Yes
+        _console.Input.PushKey(Keys.Enter);
+        PushLine("/sys persona template qa");
+        _console.Input.PushKey(Keys.Enter);   // No is on the cursor
+        PushLine("/sys persona templates please");
+        PushLine("hello");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.PersonaTemplatesHeading, output);
+        Assert.Contains(ChatScreen.UnknownTemplateError("nope", AdvisorTemplates.BuiltIn.Ids), output);
+        Assert.Contains(ChatScreen.PersonaTemplatePrompt("dba", replacing: false), output);
+        Assert.Contains(ChatScreen.PersonaTemplateNotice("dba"), output);
+        Assert.Contains(ChatScreen.PersonaTemplatePrompt("qa", replacing: true), output);
+        Assert.Contains(ChatScreen.KeptNotice, output);
+        Assert.Contains(ChatScreen.PersonaUsageError, output);
+        var dba = AdvisorTemplates.BuiltIn.Find("dba")!;
+        Assert.Contains(PersonaFile.Normalize(dba.Persona), _chat.Requests[^1][0].Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SysPersona_ArgumentList_OffersTemplate_AndTheTemplatesAfterIt_TheOtherFilesDoNot()
+    {
+        var sources = new ChatScreen.ArgumentSources(() => [], "default", [], _ => [], _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false), _ => new Files.MentionResult(Files.FileOutcome.Ok, [], false),
+            AdvisorTemplates: () => [new("dba", "database administrator"), new("qa", "QA engineer")]);
+        Assert.Equal(["persona reset", "persona template"], ChatScreen.ArgumentItems("/sys", "persona ", sources).Select(i => i.Text));
+        Assert.Equal(["persona template dba", "persona template qa"], ChatScreen.ArgumentItems("/sys", "persona template ", sources).Select(i => i.Text));
+        Assert.Equal(["operata reset"], ChatScreen.ArgumentItems("/sys", "operata ", sources).Select(i => i.Text));
+        Assert.Equal(["vocalia reset"], ChatScreen.ArgumentItems("/sys", "vocalia ", sources).Select(i => i.Text));
     }
 
     /// <summary>

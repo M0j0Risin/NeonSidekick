@@ -97,6 +97,8 @@ Elsewhere:
 | `/sampling extra <json>\|clear`, `/sampling clear` | Sets or clears the extra request body, or clears every override of the connected model. |
 | `/advisor` | Lists the advisors with their roles, server kinds and models. See [Advisor](#advisor). |
 | `/advisor <name> <question>` | Asks one advisor, by profile name or a word of its role; the answer joins the conversation. |
+| `/advisor templates` | Lists the advisor templates, built in and your own. See [Advisor](#advisor). |
+| `/advisor new <template> [<name>]` | Makes a new profile from a template and adds it as an advisor. See [Advisor](#advisor). |
 
 ### Profiles and settings
 
@@ -134,7 +136,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | `/skills add <source> [--global\|--profile]` | Installs an [Agent Skill](https://agentskills.io) after a preview: search words, `owner/repo[/skill]`, a GitHub URL or a `.zip` URL. See [Installing skills](SETTINGS.md#installing-skills). |
 | `/skills purge list\|commit <age>` | Lists the skills unused for that long, or deletes them after a yes. See [Skill records](SETTINGS.md#skill-records-and-purging-unused-skills). |
 | `/mcp` | Connects [MCP servers](INTERFACE.md#words-used-here) (outside programs offering the model more tools) and switches their tools on or off. |
-| `/sys persona [reset]`, `/sys operata [reset]`, `/sys vocalia [reset]` | Edits `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (added to every spoken reply) in your editor, or resets it after a yes. |
+| `/sys persona [reset\|template [<id>]]`, `/sys operata [reset]`, `/sys vocalia [reset]` | Edits `persona.md`, `operata.md` (the operating rules) or `vocalia.md` (added to every spoken reply) in your editor, or resets it after a yes. `template` lists the advisor templates, or writes one's persona after a yes. |
 | `/avatar` | Opens the emoji picker for the *Model avatar* ([The avatar picker](INTERFACE.md#the-avatar-picker)). |
 | `/avatar <emoji>`, `/avatar <words>`, `/avatar clear` | Sets that emoji, opens the picker on the words, or clears it (replies open with ● again). |
 | `/avatar model [<emoji>\|<words>\|clear]` | The same, naming the *Model avatar*. |
@@ -494,7 +496,9 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * Your question goes with the conversation's last 10 messages, whatever *Advisor context* says.
 * The pair joins the conversation under its name (`[to dba]`, `[dba]`), and the advisor remembers it.
 * It works with *Advisors enabled* on or off and never asks first. Headless, the answer prints as `dba: …`.
-* A bare `/advisor` shows each one's server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`); a deleted profile is `(missing)`.
+* A bare `/advisor` shows each one's server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`) and its description; a deleted profile is `(missing)`.
+* `/advisor templates` lists the templates: the built-in ones and your own in `advisors/` in the home.
+* `/advisor new <template> [<name>]` makes a profile from the template (named after it unless you name it) with its persona, role, description and avatar, on this profile's saved server and model, and adds it. No switch; a taken name is refused. It runs at the PC only from the Web UI.
 
 ### Your own shell line
 

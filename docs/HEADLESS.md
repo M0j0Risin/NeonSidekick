@@ -120,7 +120,7 @@ They need no server unless the row says so.
 | `/plan …` | [Plan mode](COMMANDS.md#plan-mode), approved by typing (below). Needs a server and *LLM offer tools*. |
 | `/code-audit …` | [Code audit](COMMANDS.md#code-audit), every pass run without waiting (below). Needs a server, *LLM offer tools* and `read_file`. |
 | `/claude <message>` | Asks [Claude Code](COMMANDS.md#claude-code-from-the-chat): `Claude: ` and the reply, then the cost. Nothing is asked; what *Claude Code command permissions* doesn't allow is denied. |
-| `/advisor [<name> <question>]` | Lists the advisors, or prints one advisor's answer and adds it to the conversation. |
+| `/advisor [<name> <question>]`, `/advisor templates`, `/advisor new <template> [<name>]` | Lists the advisors, or prints one advisor's answer and adds it to the conversation; lists the advisor templates; makes an advisor from one. |
 | `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, listing several matches as ids to type back. |
 | `/ha …`, `/docker …` | Drive Home Assistant and Docker directly; *Home Assistant action policy* and *Docker writes* don't apply. `/ha camera [<name>]` saves the still in `home-cameras` and prints its path. |
 | `/eventlog …` | Prints a log's events, newest first, in full text, with the [event-log tools](TOOLS.md#event-logs)' filter words; ticked computers only. A Mac's logs: [`/eventlog`](COMMANDS.md#admin). |

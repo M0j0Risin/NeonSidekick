@@ -152,13 +152,16 @@ public static class AdvisorText
     /// <summary>A turn that ended well with no words. Pinned.</summary>
     public static string NoAnswer(string profile) => $"({profile} gave no answer)";
 
-    /// <summary>The tool's description, with the advisors as they are now. Pinned.</summary>
+    /// <summary>
+    /// The tool's description, with the advisors as they are now: each one's <see cref="AdvisorRoster.ToolLabel"/>, its description too since
+    /// 2026-11-22 (the advisor templates), so the model knows when to ask which. Pinned.
+    /// </summary>
     public static string Description(IReadOnlyList<AdvisorEntry> advisors) =>
         "Asks one of your advisors for its view: another assistant with its own model, in a role of its own. " +
         "Use it when a question falls in an advisor's role, or for a second opinion on a choice that matters. " +
         "The advisor can use your read-only tools but cannot change anything; it remembers your earlier questions to it in this conversation. " +
         "Send one self-contained question and put what it needs to know in context. Advisors: " +
-        (advisors.Count == 0 ? "none." : string.Join("; ", advisors.Select(AdvisorRoster.Label)) + ".");
+        (advisors.Count == 0 ? "none." : string.Join("; ", advisors.Select(AdvisorRoster.ToolLabel)) + ".");
 
     /// <summary>The <c>advisor</c> argument's description. Pinned.</summary>
     public const string AdvisorArgumentDescription = "Which advisor to ask: its name (before the parentheses in the list) or its role.";
@@ -185,13 +188,21 @@ public static class AdvisorText
     public const string UsageError = "Usage: /advisor <advisor> <question> — or /advisor alone to list the advisors";
 
     /// <summary>A bare <c>/advisor</c> with none listed. Pinned.</summary>
-    public const string NoAdvisorsNotice = "(no advisors: add one in /settings › Advisors)";
+    public const string NoAdvisorsNotice = "(no advisors: add one in /settings › Advisors, or make one from a template with /advisor new <template>)";
 
     /// <summary>The list's heading. Pinned.</summary>
     public const string ListHeading = "Advisors (/advisor <name> <question>):";
 
-    /// <summary>One advisor on the list: <see cref="Detail"/> indented (its server and model since 2026-10-10). Pinned.</summary>
-    public static string ListLine(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists) => "  " + Detail(advisor, facts, exists);
+    /// <summary>
+    /// One advisor on the list: <see cref="Detail"/> indented (its server and model since 2026-10-10), then <c> · </c> and its description
+    /// when it has one (2026-11-22). Plain text: the screen, the Web UI feed and headless's <c>[notice]</c> lines all take it. Pinned.
+    /// </summary>
+    public static string ListLine(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists)
+    {
+        ArgumentNullException.ThrowIfNull(advisor);
+        string line = "  " + Detail(advisor, facts, exists);
+        return advisor.Description.Length == 0 ? line : line + " · " + advisor.Description;
+    }
 
     /// <summary>The asking line as the model's history keeps it: the exchange read as one put to someone else (as <c>/claude</c>'s). Pinned.</summary>
     public static string HistoryUser(string profile, string question) => "[to " + profile + "] " + question.Trim();
@@ -213,7 +224,136 @@ public static class AdvisorText
         return space < 0 ? (text, "") : (text[..space], text[(space + 1)..].Trim());
     }
 
-    private static string Flat(string text) => (text ?? "").ReplaceLineEndings(" ").Trim();
+    /// <summary><paramref name="text"/> on one line, trimmed: what a role, a description or a failure from a file or a reply is folded to. Pure.</summary>
+    internal static string Flat(string text) => (text ?? "").ReplaceLineEndings(" ").Replace('\t', ' ').Trim();
 
     private static string Clip(string text, int max) => text.Length > max ? text[..(max - 1)] + "…" : text;
+
+    // ── Advisor templates (2026-11-22, the user's ask) ───────────────────────
+
+    /// <summary>A template resource loose at the root or deeper than one folder. Pinned.</summary>
+    public const string TemplateNotInFolder = "not in a template's own folder; skipped";
+
+    /// <summary>A template folder whose name is no profile name. Pinned.</summary>
+    public static readonly string TemplateBadId = "skipped: a template's folder name is the profile name an advisor made from it gets, so it " + Profiles.NameError;
+
+    /// <summary>A template folder with no <c>persona.md</c>, or a blank one. Pinned.</summary>
+    public const string TemplateNoPersona = "skipped: no persona.md, or a blank one";
+
+    /// <summary><c>advisor.json</c> isn't an object. Pinned.</summary>
+    public const string TemplateInfoNotObject = "not a JSON object";
+
+    /// <summary><c>advisor.json</c> could not be read. Pinned.</summary>
+    public static string TemplateInfoBroken(string detail) => "could not be read, so the template has no role, description or avatar: " + Flat(detail);
+
+    /// <summary>A folder or file that could not be read. Pinned.</summary>
+    public static string TemplateUnreadable(string detail) => "could not be read: " + Flat(detail);
+
+    /// <summary>A problem's warning: <c>Advisor template dba: …</c>. Pinned.</summary>
+    public static string TemplateProblem(string shown, string problem) => "Advisor template " + shown + ": " + problem;
+
+    /// <summary>Your own template's mark. Pinned.</summary>
+    public const string YoursMark = "(yours)";
+
+    /// <summary>
+    /// One template on a line (2026-11-22): the avatar and a space, or three blanks for none so the ids stand in a column (as a profile
+    /// picker's rows lead), then <c>dba — database administrator</c> (the id alone with no role), then <see cref="YoursMark"/> for yours.
+    /// Plain text: <c>/advisor templates</c>, <c>/sys persona template</c> and (escaped, the mark dimmed) the pane's rows. Pinned.
+    /// </summary>
+    public static string TemplateLine(AdvisorTemplate template)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        return TemplateLead(template) + TemplateName(template) + (template.Yours ? " " + YoursMark : "");
+    }
+
+    /// <summary>A template line's lead: the avatar and a space, or three blanks. Pure.</summary>
+    public static string TemplateLead(AdvisorTemplate template)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        return template.Avatar.Length == 0 ? "   " : template.Avatar + " ";
+    }
+
+    /// <summary>A template line's name part: <c>dba — database administrator</c>, or the id alone. Pure.</summary>
+    public static string TemplateName(AdvisorTemplate template)
+    {
+        ArgumentNullException.ThrowIfNull(template);
+        return template.Role.Length == 0 ? template.Id : template.Id + " — " + template.Role;
+    }
+
+    /// <summary><c>/advisor templates</c>' heading. Pinned.</summary>
+    public const string TemplatesHeading = "Advisor templates (/advisor new <template> [<name>]):";
+
+    /// <summary><c>/advisor templates</c>' lines: <see cref="TemplatesHeading"/>, then each <see cref="TemplateLine"/> indented. Pure.</summary>
+    public static IReadOnlyList<string> TemplateListLines(AdvisorTemplateScan scan)
+    {
+        ArgumentNullException.ThrowIfNull(scan);
+        return [TemplatesHeading, .. scan.Templates.Select(t => "  " + TemplateLine(t))];
+    }
+
+    /// <summary><c>/advisor templates</c>' word. Pinned.</summary>
+    public const string TemplatesWord = "templates";
+
+    /// <summary><c>/advisor new</c>'s word. Pinned.</summary>
+    public const string NewWord = "new";
+
+    /// <summary>
+    /// <c>/advisor</c>'s setup forms (2026-11-22): <c>templates</c> alone, or <c>new &lt;template&gt; [&lt;name&gt;]</c> with a template of
+    /// <paramref name="templateIds"/> and at most one more word; null for anything else, which stays a question to an advisor (one named
+    /// <c>new</c> or <c>templates</c> is still reachable by its role). Pure: the screen, headless and the Web UI page read a line one way.
+    /// </summary>
+    public static AdvisorSetup? ParseSetup(string? args, IReadOnlySet<string>? templateIds)
+    {
+        string[] words = (args ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 1 && string.Equals(words[0], TemplatesWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return new AdvisorSetup(AdvisorSetupKind.Templates, "", "");
+        }
+
+        if (words.Length is 2 or 3 && string.Equals(words[0], NewWord, StringComparison.OrdinalIgnoreCase)
+            && templateIds?.FirstOrDefault(id => string.Equals(id, words[1], StringComparison.OrdinalIgnoreCase)) is { } id)
+        {
+            return new AdvisorSetup(AdvisorSetupKind.New, id, words.Length == 3 ? words[2] : id);
+        }
+
+        return null;
+    }
+
+    /// <summary>A name a profile already has, in its own case. Pinned.</summary>
+    public static string TakenError(string existing, string template, bool listed) => listed
+        ? $"A profile named \"{existing}\" already exists and is an advisor; name the new one: /advisor new {template} <name>."
+        : $"A profile named \"{existing}\" already exists; add it in /settings › Advisors, or name the new one: /advisor new {template} <name>.";
+
+    /// <summary>A temporary name (<c>_…</c>): the pane's add row leaves those out, so an advisor never gets one. Pinned.</summary>
+    public const string TemporaryNameError = "An advisor can't be a temporary profile (a name starting with _); pick another name.";
+
+    /// <summary>The new profile could not be made. Pinned.</summary>
+    public static string CreateFailedError(string name, string detail) => $"Could not make advisor {name}: {Flat(detail)}";
+
+    /// <summary>The profile was made and listed, but its persona could not be written. Pinned.</summary>
+    public static string PersonaFailedError(string name, string detail) =>
+        $"Profile {name} was made and added as an advisor, but its persona wasn't written: {Flat(detail)}; set it with Change the persona in /settings › Advisors.";
+
+    /// <summary>
+    /// The notice after <c>/advisor new</c> or the pane's <c>+ New advisor from a template…</c>: the profile, its role, where it answers
+    /// (the server and model saved in the loaded profile, which the new one copies: never a flag or an environment override), and with
+    /// <c>Advisors enabled</c> off, that the model won't ask it until it is on. Pinned.
+    /// </summary>
+    public static string CreatedNotice(AdvisorEntry entry, bool advisorsOn)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        string text = "(made profile " + entry.Profile + " and added it as an advisor" + (entry.Role.Length == 0 ? "" : ", " + entry.Role)
+            + ". It answers on the server and model saved in this profile; /profile " + entry.Profile + " changes them, /settings › Advisors its role and description.";
+        return advisorsOn ? text + ")"
+            : text + " Advisors enabled is off, so the model won't ask it until you turn it on in /settings › Advisors; /advisor " + entry.Profile + " <question> asks it now.)";
+    }
 }
+
+/// <summary>Which <c>/advisor</c> setup form a line is (<see cref="AdvisorText.ParseSetup"/>).</summary>
+public enum AdvisorSetupKind
+{
+    Templates,
+    New,
+}
+
+/// <summary>A parsed <c>/advisor templates</c> or <c>/advisor new &lt;template&gt; [&lt;name&gt;]</c>: the template's id and the new profile's name for <c>new</c>.</summary>
+public sealed record AdvisorSetup(AdvisorSetupKind Kind, string Template, string Name);

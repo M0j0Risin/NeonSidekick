@@ -5408,7 +5408,7 @@ internal sealed partial class ChatScreen
         Func<string, IReadOnlyList<CompletionItem>>? BrowserLinks = null, Func<string, IReadOnlyList<CompletionItem>>? YouTubeSaved = null,
         Func<string, IReadOnlyList<CompletionItem>>? Cameras = null, Func<string, IReadOnlyList<CompletionItem>>? Midi = null,
         Func<string, MentionResult>? VideoFiles = null, Func<IReadOnlyList<string>>? SettingsZips = null,
-        Func<IReadOnlyList<CompletionItem>>? CustomThemes = null);
+        Func<IReadOnlyList<CompletionItem>>? CustomThemes = null, Func<IReadOnlyList<CompletionItem>>? AdvisorTemplates = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -5989,7 +5989,18 @@ internal sealed partial class ChatScreen
                     string head = word + " ";
                     if (argText.StartsWith(head, StringComparison.OrdinalIgnoreCase))
                     {
-                        return PromptFileChoices(file, argText[head.Length..]).Select(item => item with { Text = head + item.Text }).ToList();
+                        // The persona's template word and, after it, the templates (2026-11-22); the other two files keep reset alone.
+                        bool persona = word == SysPersonaWord;
+                        string rest = argText[head.Length..];
+                        string templateHead = PersonaTemplateWord + " ";
+                        if (persona && rest.StartsWith(templateHead, StringComparison.OrdinalIgnoreCase))
+                        {
+                            string idText = rest[templateHead.Length..];
+                            return idText.Contains(' ', StringComparison.Ordinal) ? []
+                                : MentionCompleter.Matches(sources.AdvisorTemplates?.Invoke() ?? [], idText).Select(item => item with { Text = head + templateHead + item.Text }).ToList();
+                        }
+
+                        return PromptFileChoices(file, rest, persona).Select(item => item with { Text = head + item.Text }).ToList();
                     }
                 }
 
@@ -6211,8 +6222,32 @@ internal sealed partial class ChatScreen
                 return CmdChoices(argText);
 
             case SlashCommand.Advisor:
+            {
                 // The advisors by profile name, each with its role (2026-10-10, the user's ask); the question after the name is free text.
-                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(sources.Advisors?.Invoke() ?? [], argText);
+                // templates and new (2026-11-22, the advisor templates), and after "new " the templates; the name after the template is free.
+                // new only where the templates source is set: the Web UI page leaves it null, since it refuses /advisor new.
+                bool canMake = sources.AdvisorTemplates is not null;
+                string newHead = Advisors.AdvisorText.NewWord + " ";
+                if (canMake && argText.StartsWith(newHead, StringComparison.OrdinalIgnoreCase))
+                {
+                    string idText = argText[newHead.Length..];
+                    return idText.Contains(' ', StringComparison.Ordinal) ? []
+                        : MentionCompleter.Matches(sources.AdvisorTemplates!.Invoke(), idText).Select(item => item with { Text = newHead + item.Text }).ToList();
+                }
+
+                if (argText.Contains(' ', StringComparison.Ordinal))
+                {
+                    return [];
+                }
+
+                List<CompletionItem> items = [.. sources.Advisors?.Invoke() ?? [], new(Advisors.AdvisorText.TemplatesWord, AdvisorTemplatesNote)];
+                if (canMake)
+                {
+                    items.Add(new(Advisors.AdvisorText.NewWord, AdvisorNewNote));
+                }
+
+                return MentionCompleter.Matches(items, argText);
+            }
 
             default:
                 return [];
@@ -6632,6 +6667,7 @@ internal sealed partial class ChatScreen
             Processes: ProcessChoices,
             MachineFolders: prefix => FolderCompleter.Complete(prefix, FileBrowserMode.Resolve(_effective())),
             Advisors: AdvisorChoices,
+            AdvisorTemplates: AdvisorTemplateChoices,
             Shopping: ShoppingChoices,
             EventLog: EventLogChoices,
             Net: NetChoices,
@@ -16002,11 +16038,9 @@ internal sealed partial class ChatScreen
                     // (a sandbox is the sidekick's own). The memories come along when they exist on disk (written
                     // synchronously, so the disk is current); the persona, operating rules and voice directive
                     // stay behind since 2026-10-10 (New profile mode retired, the user's call: /profile push|pull copies them).
-                    var seed = AppSettings.Copy(_settings.Current);
-                    seed.WorkingDirectory = "";
-                    seed.ModelAvatar = Emojis.AvatarRules.DefaultAvatar;   // 2026-10-10: a picked face is the profile's own, as its sandbox, so a new one starts on the default (none until later that day)
-                    seed.ShortcutOffered = null;   // 2026-10-16: a new profile is offered its own shortcut as the switch below lands on it
-                    seed.WebUiToken = "";          // 2026-10-20, the review: a Web UI token never travels between profiles (Profiles.CopySettings' rule); one is minted when it first serves
+                    // The seed's rules (its own sandbox, the default avatar, its own shortcut, no Web UI token) live in Profiles.NewProfileSeed
+                    // since 2026-11-22, shared with a new advisor from a template.
+                    var seed = Profiles.NewProfileSeed(_settings.Current);
                     Profiles.Create(home, action.Name, seed);
                     IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
                         _settings.ProfileDirectory, home, action.Name, Profiles.BasicSidekickFiles);

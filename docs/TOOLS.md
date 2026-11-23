@@ -1158,12 +1158,13 @@ Under *Agent skills*.
 
 ### Advisors
 
-Under *Advisors enabled*. Advisors are other profiles of this home, each in a role you give it ([SETTINGS.md](SETTINGS.md#advisors)); `/advisor` asks one yourself ([COMMANDS.md](COMMANDS.md#advisor)).
+Under *Advisors enabled*. Advisors are other profiles of this home, each in a role you give it, or one from a template ([SETTINGS.md](SETTINGS.md#advisors)); `/advisor` asks one yourself ([COMMANDS.md](COMMANDS.md#advisor)).
 
 | Tool | Arguments | What it does |
 |---|---|---|
 | `neon_advisor` | `advisor, question, context?` | Asks one advisor, by profile or role, on its own server and model; it may use this chat's read-only tools for up to *Advisor max tool iterations* round trips. |
 
+* Each advisor's description goes into `neon_advisor`'s description, so the model knows when to ask which one.
 * Offered while an advisor is listed; in plan mode the model consults fitting advisors before presenting a plan. Each advisor keeps one thread per conversation; during a gap review or code audit pass it answers without it.
 * An advisor on the Claude Code server runs its own `claude` process, until the conversation ends or this chat's server or model changes.
 * An answer drawn from web pages reaches the model fenced (`⟪ ⟫`).

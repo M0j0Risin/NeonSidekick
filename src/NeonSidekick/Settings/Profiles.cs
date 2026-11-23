@@ -252,6 +252,23 @@ public static class Profiles
     public static bool Exists(string home, string? name) => Resolve(home, name) is not null;
 
     /// <summary>
+    /// A new profile's settings from <paramref name="saved"/> (the loaded profile's saved values, never the effective ones: a flag or an
+    /// environment override isn't carried), shared by <c>/profile add</c> and a new advisor from a template (2026-11-22): its own files
+    /// folder, not this one's (a sandbox is the sidekick's own); the default avatar (2026-10-10: a picked face is the profile's own);
+    /// offered its own shortcut (2026-10-16); and no Web UI token (2026-10-20, the review: one never travels between profiles,
+    /// <see cref="CopySettings"/>' rule; one is minted when it first serves). Keys come along sealed as the rest.
+    /// </summary>
+    public static AppSettingsData NewProfileSeed(AppSettingsData saved)
+    {
+        var seed = AppSettings.Copy(saved);
+        seed.WorkingDirectory = "";
+        seed.ModelAvatar = Emojis.AvatarRules.DefaultAvatar;
+        seed.ShortcutOffered = null;
+        seed.WebUiToken = "";
+        return seed;
+    }
+
+    /// <summary>
     /// Creates the directory and writes <paramref name="seed"/> as its <c>profile.json</c> (a temp
     /// file then a move, like every settings write). The settings alone: the sidekick's files come
     /// along only through <see cref="CopySidekickFiles"/>, which the caller runs over <see cref="BasicSidekickFiles"/>. Throws <see cref="IOException"/> /

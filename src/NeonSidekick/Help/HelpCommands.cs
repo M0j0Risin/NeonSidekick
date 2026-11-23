@@ -40,7 +40,9 @@ public static class HelpCommands
         ]),
         new("/advisor",
         [
-        new("/advisor", "List the advisors from *Advisor list*: each profile, its role, and the kind of server and the model it is on, a missing one marked."),
+        new("/advisor", "List the advisors from *Advisor list*: each profile, its role, the kind of server and the model it is on, and its description, a missing one marked."),
+            new("/advisor templates", "List the advisor templates, the built-in ones and your own from `advisors/` in the home, each with its role."),
+            new("/advisor new <template> [<name>]", "Make a new profile from a template (named after it unless you give a name) with its persona, role, description and avatar, and add it as an advisor. It answers on this profile's saved server and model; no switch, and a taken name is refused."),
             new("/advisor <name> <question>", "Ask one advisor, named by its profile or a word of its role, on its own profile's server and model, with the last 10 messages of this conversation. It may use this chat's read-only tools, and its answer joins the conversation, so the model can build on it. Works whether or not *Advisors enabled* is on."),
         ]),
         new("/avatar",
@@ -512,6 +514,7 @@ public static class HelpCommands
         new("/sys",
         [
             new("/sys persona [reset]", "Edit `persona.md` (the persona) in your editor, or reset it to the default."),
+            new("/sys persona template [<id>]", "List the advisor templates, or write one's persona to `persona.md` after a yes."),
             new("/sys operata [reset]", "Edit `operata.md` (the operating rules) in your editor, or reset it to the default. A missing file is created with the rules in use now, the sentences for the tools that are on included."),
             new("/sys vocalia [reset]", "Edit `vocalia.md` (the spoken-reply directive, added last to every spoken reply; empty by default) in your editor, or remove it."),
         ]),

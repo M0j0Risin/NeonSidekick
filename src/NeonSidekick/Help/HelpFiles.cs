@@ -110,6 +110,7 @@ internal static class HelpFiles
             new(HelpFileScope.Home, "models/llm/" + EmbeddedLlm.EmbeddedModelCatalog.SharedFolderName + "/", "the projectors and drafters, one copy each for every model using it"),
             new(HelpFileScope.Home, "llama/<tag>-<backend>/", "the pinned llama.cpp runtime for each backend, downloaded on first use"),
             new(HelpFileScope.Home, UI.ThemeCatalog.DirectoryName + "/", "your own themes, a JSON file each, listed with the built-in ones", "`/theme`"),
+            new(HelpFileScope.Home, Advisors.AdvisorTemplates.DirectoryName + "/<id>/", "your own advisor templates: `persona.md` and `advisor.json`, listed with the built-in ones", "`/advisor templates`"),
             new(HelpFileScope.Home, Skills.SkillRoots.DirectoryName + "/", "the global skills, a folder each with its `SKILL.md`", "`/skills`"),
             new(HelpFileScope.Home, Join(Skills.SkillRecordStore.FolderName, Skills.SkillRecordStore.FileName), "the skills' records: when each was made, changed and last used", "`/skills`"),
             new(HelpFileScope.Home, Comfy.ComfyWorkflowCatalog.DirectoryName + "/", "the global ComfyUI workflows", "`/comfy`"),

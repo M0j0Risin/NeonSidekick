@@ -104,7 +104,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 ### Pane keys
 
 * **In every list** ↑/↓ move, Enter or a double-click picks, Esc closes; key letters act at once.
-* **Where rows can be removed**, Delete removes the highlighted one, asking where that list asks. So do the settings' lists: the Docker server match words, the Network host lists, the *Advisor list*.
+* **Where rows can be removed**, Delete removes the highlighted one, asking where that list asks. So do the settings' lists: the Docker server match words, the Network host lists, the *Advisor list*, your own advisor templates.
 
 | Pane | Keys |
 |---|---|
@@ -777,7 +777,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 | Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/timer …`, `/rename <name>`, `/sessions <id>`, `/sessions title <text>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/memory remember <text>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills` or `camera`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
-| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/sessions purge\|export`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue clear`, `/sampling`, `/server`, `/usage`, `/midi`, `/settings export\|import` | Refused: they run at the PC only |
+| Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/advisor new`, `/sessions purge\|export`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue clear`, `/sampling`, `/server`, `/usage`, `/midi`, `/settings export\|import` | Refused: they run at the PC only |
 | Page | bare `/prompts`, `/sessions`, `/queue` | Opens the [queue and prompts sheet](#queue-prompts-history-and-memory) on its Prompts or Queue tab, or the 🗂️ sheet on its Sessions tab (the sheets' buttons do too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC, and `/update`'s others, since installing happens at the PC (`/settings`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 

@@ -56,6 +56,20 @@ internal sealed partial class ChatScreen
         switch (word)
         {
             case SysPersonaWord:
+                // template [<id>] (2026-11-22), the persona's alone; any other words past reset are its own usage line, naming template too.
+                string[] words = rest.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (words.Length is 1 or 2 && words[0].Equals(PersonaTemplateWord, StringComparison.OrdinalIgnoreCase))
+                {
+                    await HandlePersonaTemplateAsync(words.Length == 2 ? words[1] : "", cancellationToken).ConfigureAwait(false);
+                    break;
+                }
+
+                if (words.Length > 0 && !(words.Length == 1 && words[0].Equals(ResetWord, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _flow.Error(PersonaUsageError);
+                    break;
+                }
+
                 await HandlePromptFileAsync(_persona, SysFileCommand(SysPersonaWord), rest, PersonaCreatedNotice, PersonaOpenedNotice, PersonaOpenFailedError, spoken: false, cancellationToken).ConfigureAwait(false);
                 break;
             case SysOperataWord:
@@ -74,6 +88,87 @@ internal sealed partial class ChatScreen
     /// A prompt file's argument list after its word (2026-09-21, <c>/persona</c>'s; <c>/sys persona</c>'s since 2026-10-09): reset (copy, its
     /// profiles and the force word too until 2026-10-10, when the copy became <c>/profile push|pull persona</c>).
     /// </summary>
-    private static IReadOnlyList<CompletionItem> PromptFileChoices(string fileName, string argText) =>
-        MentionCompleter.Matches([new(ResetWord, PromptFileResetNote(fileName))], argText);
+    private static IReadOnlyList<CompletionItem> PromptFileChoices(string fileName, string argText, bool persona = false) =>
+        MentionCompleter.Matches(persona
+            ? [new(ResetWord, PromptFileResetNote(fileName)), new(PersonaTemplateWord, PersonaTemplateNote)]
+            : [new(ResetWord, PromptFileResetNote(fileName))], argText);
+
+    // ── /sys persona template [<id>] (2026-11-22, the advisor templates) ──────
+
+    /// <summary><c>/sys persona template</c>'s word. Pinned.</summary>
+    public const string PersonaTemplateWord = "template";
+
+    /// <summary>Its completion note. Pinned.</summary>
+    public const string PersonaTemplateNote = "write persona.md from an advisor template";
+
+    /// <summary><c>/sys persona</c>'s usage line, the template form beside reset (the other two files keep <see cref="PromptFileUsageError"/>). Pinned.</summary>
+    public static readonly string PersonaUsageError =
+        SysFileCommand(SysPersonaWord) + " takes nothing (open " + PersonaFile.FileName + " in your editor), " + ResetWord + ", or " + PersonaTemplateWord + " [<id>].";
+
+    /// <summary>The list's heading. Pinned.</summary>
+    public const string PersonaTemplatesHeading = "Advisor templates (/sys persona template <id> writes one to persona.md):";
+
+    /// <summary>An id that is no template. Pinned.</summary>
+    public static string UnknownTemplateError(string id, IReadOnlyList<string> ids) =>
+        "No advisor template \"" + id + "\"; the templates are " + string.Join(", ", ids) + ".";
+
+    /// <summary>The yes/no before the write: a write, or a replace when the profile has its own persona. Pinned.</summary>
+    public static string PersonaTemplatePrompt(string id, bool replacing) => replacing
+        ? $"{NoticeGlyphs.PromptFile(PersonaFile.FileName)}Replace {PersonaFile.FileName} with the {id} template?"
+        : $"{NoticeGlyphs.PromptFile(PersonaFile.FileName)}Write {PersonaFile.FileName} from the {id} template?";
+
+    /// <summary>The notice after the write. Pinned.</summary>
+    public static string PersonaTemplateNotice(string id) =>
+        $"({NoticeGlyphs.PromptFile(PersonaFile.FileName)}wrote {PersonaFile.FileName} from the {id} template; the next reply uses it; /sys persona edits it)";
+
+    /// <summary>The write failed. Pinned.</summary>
+    public static string PersonaTemplateFailedError(string detail) => $"Could not write {PersonaFile.FileName}: {detail}";
+
+    /// <summary>
+    /// <c>/sys persona template [&lt;id&gt;]</c> (2026-11-22, the user's ask): no id lists the templates (<see cref="Advisors.AdvisorText.TemplateLine"/>,
+    /// yours marked, the home's problems said); an unknown id is an error naming them; else, after a yes every time (a write, or a replace
+    /// when the loaded profile has its own persona), the template's persona becomes the loaded profile's <c>persona.md</c>, its own from then on.
+    /// </summary>
+    private async Task HandlePersonaTemplateAsync(string id, CancellationToken cancellationToken)
+    {
+        var scan = Advisors.AdvisorTemplates.All(_settings.StorageDirectory);
+        if (id.Length == 0)
+        {
+            Advisors.AdvisorTemplates.Report(scan);
+            DrainDiagnostics();
+            _flow.Notice(PersonaTemplatesHeading);
+            foreach (var each in scan.Templates)
+            {
+                _flow.Notice("  " + Advisors.AdvisorText.TemplateLine(each));
+            }
+
+            return;
+        }
+
+        if (scan.Find(id) is not { } template)
+        {
+            _flow.Error(UnknownTemplateError(id, scan.Ids));
+            return;
+        }
+
+        if (!await ConfirmAsync(PersonaTemplatePrompt(template.Id, _persona.Read() is not null), cancellationToken).ConfigureAwait(false))
+        {
+            _flow.Notice(KeptNotice);
+            return;
+        }
+
+        try
+        {
+            _persona.WriteText(template.Persona);
+            _flow.Notice(PersonaTemplateNotice(template.Id));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _flow.Error(PersonaTemplateFailedError(ex.Message));
+        }
+    }
+
+    /// <summary>The templates for completion: each id noted with its role (2026-11-22). Read without reporting a broken file.</summary>
+    private IReadOnlyList<CompletionItem> AdvisorTemplateChoices() =>
+        Advisors.AdvisorTemplates.All(_settings.StorageDirectory).Templates.Select(t => new CompletionItem(t.Id, t.Role)).ToList();
 }

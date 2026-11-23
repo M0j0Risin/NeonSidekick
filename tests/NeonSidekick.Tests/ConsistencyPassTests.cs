@@ -49,6 +49,7 @@ public class ConsistencyPassTests
         NeonSidekick.Monitors.MonitorText.Keys, NeonSidekick.Monitors.MonitorText.NamesKeys, NeonSidekick.Monitors.MonitorText.EditKeys,   // the monitors pane (2026-10-23)
         NeonSidekick.Monitors.MonitorText.PcKeys,   // its This PC's input… list (later on 2026-10-23)
         SettingsMenu.WizardSchemaKeys,   // the Oracle and PostgreSQL wizards' Schemas page, with its move keys (2026-11-15)
+        SettingsMenu.AdvisorListKeys, SettingsMenu.AdvisorTemplateKeys,   // the advisor list and its template pages (2026-11-22)
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }
             .Select(field => SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(field)!)),   // the setting buttons' pages (2026-10-09)
     ];

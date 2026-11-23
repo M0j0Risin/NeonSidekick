@@ -53,8 +53,10 @@ public sealed record WebCommandVerdict(WebCommandKind Kind, string? Reason = nul
 /// Video tab, for <c>/youtube list</c> (and the bare <c>/youtube</c> since 2026-10-18). <see cref="CustomNames"/> (2026-10-30, the custom
 /// commands plan): the names of the custom commands that run, any case, without their <c>/</c>; null is none (no settings wired).
 /// <see cref="HomeTab"/> (2026-11-13): whether the page has its Home tab, for <c>/ha camera</c>'s pointer (the tab's cameras, or the setting).
+/// <see cref="AdvisorTemplateIds"/> (2026-11-22, the advisor templates): the template ids, any case, so <c>/advisor new &lt;template&gt;</c> is told
+/// from a question (<see cref="Advisors.AdvisorText.ParseSetup"/>); null is none, and every <c>/advisor</c> line is a question.
 /// </summary>
-public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false, IReadOnlySet<string>? CustomNames = null, bool HomeTab = false);
+public readonly record struct WebCommandSettings(bool Commands, bool FileTools, bool ObsidianTools, bool ShoppingTab = true, bool YouTubeTab = false, IReadOnlySet<string>? CustomNames = null, bool HomeTab = false, IReadOnlySet<string>? AdvisorTemplateIds = null);
 
 /// <summary>
 /// Which slash commands the Web UI's page may run (later on 2026-10-14, the user's calls): a phone has no PC pane to answer and no PC window to
@@ -171,6 +173,10 @@ public static class WebCommands
             SlashCommand.Overloaded => Refused(ChatScreen.NoArgumentError(word)),
             SlashCommand.Help => text.Length > 0 ? WebCommandVerdict.Run : Pane(word, "/help <words>"),
             SlashCommand.Splash when text.Length > 0 => Pane(word, "/splash"),   // 2026-10-18: view|thumbs|purge are a window or a question on the PC
+            // 2026-11-22 (the advisor templates): /advisor new makes a profile under the home, which the page never does (/profile's and
+            // /commands' rule); templates and the questions run.
+            SlashCommand.Advisor when Advisors.AdvisorText.ParseSetup(args, settings.AdvisorTemplateIds) is { Kind: Advisors.AdvisorSetupKind.New } =>
+                Refused(WebUiText.PcOnly(word + " " + Advisors.AdvisorText.NewWord)),
             SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Timer or SlashCommand.Mark
                 or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Imagine => WebCommandVerdict.Run,
             // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.

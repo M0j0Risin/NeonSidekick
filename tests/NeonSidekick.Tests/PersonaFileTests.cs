@@ -20,6 +20,23 @@ public class PersonaFileTests : IDisposable
         File.WriteAllText(FilePath, text);
     }
 
+    /// <summary><c>WriteText</c> (2026-11-22, the advisor templates): replaces the file whole, the platform's line endings and a final newline, read at once.</summary>
+    [Fact]
+    public void WriteText_ReplacesTheFile_InThePlatformsLineEndings_AndTheNextReadSeesIt()
+    {
+        var persona = new PersonaFile(_dir);
+        WriteFile("You are Rex.");
+        Assert.Equal("You are Rex.", persona.Read());
+
+        persona.WriteText("  You are Ada.\nShe counts.\r\n  ");
+        Assert.Equal("You are Ada." + Environment.NewLine + "She counts." + Environment.NewLine, File.ReadAllText(FilePath));
+        Assert.Equal("You are Ada.\nShe counts.", persona.Read());
+
+        var fresh = new PersonaFile(Path.Combine(_dir, "new"));
+        fresh.WriteText("Made.");
+        Assert.Equal("Made.", fresh.Read());
+    }
+
     [Fact]
     public void TerminalArguments_ANewWindowInTheFolder_QuotedByTheArgvRules_TheSemicolonsEscaped()
     {

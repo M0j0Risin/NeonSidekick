@@ -262,6 +262,15 @@ public sealed class WebCommandsTests
         Assert.Equal(WebCommandKind.Run, WebCommands.Check("/shopping add milk", On with { ShoppingTab = false }).Kind);   // adds from the chat whatever the tab
         Assert.Equal(WebUiText.PcOnly("/cwd <path>"), WebCommands.Check("/cwd D:\\work", On).Reason);
 
+        // /advisor new (2026-11-22, the advisor templates) makes a profile under the home: the PC's. templates runs, and words after new that
+        // name no template are still a question to an advisor.
+        var advisorIds = new HashSet<string>(["qa"], StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(WebUiText.PcOnly("/advisor new"), WebCommands.Check("/advisor new qa", On with { AdvisorTemplateIds = advisorIds }).Reason);
+        Assert.Equal(WebUiText.PcOnly("/advisor new"), WebCommands.Check("/advisor new QA reviewer", On with { AdvisorTemplateIds = advisorIds }).Reason);
+        Assert.Equal(WebCommandKind.Run, WebCommands.Check("/advisor templates", On with { AdvisorTemplateIds = advisorIds }).Kind);
+        Assert.Equal(WebCommandKind.Run, WebCommands.Check("/advisor new hires should start where?", On with { AdvisorTemplateIds = advisorIds }).Kind);
+        Assert.Equal(WebCommandKind.Run, WebCommands.Check("/advisor dba Which index?", On with { AdvisorTemplateIds = advisorIds }).Kind);
+
         // /settings export|import (2026-11-14, the review's #49): the zip lives in the PC's Downloads, so the PC's only, as the docs' Never row says.
         Assert.Equal(WebUiText.PcOnly("/settings export"), WebCommands.Check("/settings export", On).Reason);
         Assert.Equal(WebUiText.PcOnly("/settings import"), WebCommands.Check("/settings import neon.zip", On).Reason);

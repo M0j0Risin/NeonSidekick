@@ -81,18 +81,20 @@ public partial class SettingsMenuTests
         Push(Keys.Enter);                       // the list: + Add an advisor…
         Push(Keys.Enter);                       // the profiles: dba, ux (not neon, the loaded one)
         Push(Keys.Enter);                       // dba
+        Push(Keys.Enter);                       // the persona page: Keep its persona (2026-11-22)
         _console.Input.PushText("database architect");
         Push(Keys.Enter);
         Push(Keys.Enter);                       // + Add again (the cursor stays on it): ux alone left
         Push(Keys.Enter);
+        Push(Keys.Enter);                       // Keep its persona
         _console.Input.PushText("UX designer");
         Push(Keys.Enter);
-        Push(Keys.Down, Keys.Enter);            // dba: change the role
+        Push(Keys.Down, Keys.Down, Keys.Enter); // dba (under the two add rows): change the role
         Push(Keys.Enter, Keys.Ctrl(ConsoleKey.A), Keys.Backspace);
         _console.Input.PushText("data modeller");
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Enter);            // ux: remove
-        Push(Keys.Down, Keys.Enter);            // Remove
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Remove, under the role, the description and the persona
         Push(Keys.Char('y'), Keys.Enter);       // yes
         Push(Keys.Escape, Keys.Escape);
 
@@ -121,6 +123,7 @@ public partial class SettingsMenuTests
         Down(1);
         Push(Keys.Enter);                       // the list: + Add an advisor…
         Push(Keys.Delete);                      // nothing
+        Push(Keys.Down, Keys.Delete);           // + New advisor from a template…: nothing too
         Push(Keys.Down, Keys.Delete);           // dba: the Remove question at once
         Push(Keys.Char('y'), Keys.Enter);       // yes
         Push(Keys.Escape, Keys.Escape);

@@ -3587,6 +3587,36 @@ public sealed partial class SidekickApp
             return null;
         }
 
+        // templates and new <template> [<name>] (2026-11-22), as the screen's: ahead of the usage line and the no-advisors error, never a
+        // side turn saved. A problem with a home template is a warning, which headless forwards.
+        var scan = Advisors.AdvisorTemplates.All(_settings.StorageDirectory);
+        if (Advisors.AdvisorText.ParseSetup(args, scan.Ids.ToHashSet(StringComparer.OrdinalIgnoreCase)) is { } setup)
+        {
+            if (setup.Kind == Advisors.AdvisorSetupKind.Templates)
+            {
+                Advisors.AdvisorTemplates.Report(scan);
+                foreach (string line in Advisors.AdvisorText.TemplateListLines(scan))
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
+                }
+
+                return null;
+            }
+
+            var made = Advisors.AdvisorFromTemplate.Create(_settings, scan.Find(setup.Template)!, setup.Name, advisorsOn: effective.Advisors);
+            if (made.Error is { } madeError)
+            {
+                await HeadlessNoticeLineAsync("[error] " + madeError).ConfigureAwait(false);
+            }
+
+            if (made.Notice is { } madeNotice)
+            {
+                await HeadlessNoticeLineAsync("[notice] " + madeNotice).ConfigureAwait(false);
+            }
+
+            return null;
+        }
+
         var (words, question) = Advisors.AdvisorText.Split(args);
         string? problem = question.Length == 0 ? Advisors.AdvisorText.UsageError
             : advisors.Count == 0 ? Advisors.AdvisorText.ForUser(Advisors.AdvisorText.NoAdvisorsError)

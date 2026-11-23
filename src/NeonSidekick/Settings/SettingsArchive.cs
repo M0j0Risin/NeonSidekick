@@ -116,6 +116,7 @@ public static class SettingsArchive
     private const string ComfyName = Comfy.ComfyWorkflowCatalog.DirectoryName;
     private const string ThemesName = UI.ThemeCatalog.DirectoryName;
     private const string VoicesName = Speech.VoicePresets.DirectoryName;
+    private const string AdvisorsName = Advisors.AdvisorTemplates.DirectoryName;
 
     // ─── the allowlist ───────────────────────────────────────────────────────────
 
@@ -147,6 +148,13 @@ public static class SettingsArchive
         if (Is(s[0], ThemesName) || Is(s[0], VoicesName))
         {
             return (s.Length == 2 && HasExtension(s[1], ".json")) || (s.Length == 3 && !s[1].StartsWith('.') && HasExtension(s[2], ".json"));
+        }
+
+        // Your advisor templates (2026-11-22): a folder each, named as a profile, with its two files and nothing deeper.
+        if (Is(s[0], AdvisorsName))
+        {
+            return s.Length == 3 && Profiles.IsValidName(s[1])
+                && (Is(s[2], Advisors.AdvisorTemplates.PersonaFileName) || Is(s[2], Advisors.AdvisorTemplates.InfoFileName));
         }
 
         return IsCatalogItem(s);
@@ -260,7 +268,7 @@ public static class SettingsArchive
                     }
                 }
             }
-            else if (Is(name, ConfigsName) || Is(name, ThemesName) || Is(name, VoicesName) || Is(name, SkillsName) || Is(name, CommandsName) || Is(name, ComfyName))
+            else if (Is(name, ConfigsName) || Is(name, ThemesName) || Is(name, VoicesName) || Is(name, AdvisorsName) || Is(name, SkillsName) || Is(name, CommandsName) || Is(name, ComfyName))
             {
                 CollectFolder(dir, name + "/", c, seen);
             }
@@ -378,7 +386,7 @@ public static class SettingsArchive
             }
         }
 
-        if (Is(kind, ThemesName) || Is(kind, VoicesName))
+        if (Is(kind, ThemesName) || Is(kind, VoicesName) || Is(kind, AdvisorsName))
         {
             foreach (var sub in dir.EnumerateDirectories().Where(d => !d.Name.StartsWith('.')).OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
             {
@@ -591,10 +599,18 @@ public static class SettingsArchive
             .Select(g => $"{g.Name} ({FileText.Size(g.Bytes)})")
             .ToList();
 
-    /// <summary>The item a file belongs to: its skill folder (<c>skills/x/</c> or <c>profiles/p/skills/x/</c>), else itself.</summary>
-    private static string ItemOf(string relative)
+    /// <summary>
+    /// The item a file belongs to: its skill folder (<c>skills/x/</c> or <c>profiles/p/skills/x/</c>), an advisor template's folder
+    /// (<c>advisors/x/</c>, 2026-11-22), else itself.
+    /// </summary>
+    internal static string ItemOf(string relative)
     {
         string[] s = relative.Split('/');
+        if (s.Length == 3 && Is(s[0], AdvisorsName))
+        {
+            return s[0] + "/" + s[1] + "/";
+        }
+
         int at = Is(s[0], Profiles.DirectoryName) ? 2 : 0;
         return s.Length > at + 2 && Is(s[at], SkillsName) ? string.Join('/', s[..(at + 2)]) + "/" : relative;
     }
@@ -1148,11 +1164,24 @@ public static class SettingsArchive
             stagedSkills.Add(skill.Key);
         }
 
+        var keptTemplates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, entry) in entries.Where(e => !Is(e.Name.Split('/')[0], SkillsName)))
         {
             cancellationToken.ThrowIfCancellationRequested();
             string[] s = name.Split('/');
             string stem = Path.GetFileNameWithoutExtension(s[^1]);
+
+            // An advisor template is one item (2026-11-22): a folder already here keeps both its files, so a zip's never mixes in.
+            if (Is(s[0], AdvisorsName) && s.Length == 3 && listings.Exists(root, s[0] + "/" + s[1]))
+            {
+                if (keptTemplates.Add(s[1]))
+                {
+                    report.Skipped.Add(ItemOf(name));
+                }
+
+                continue;
+            }
+
             if (listings.Exists(root, name))
             {
                 report.Skipped.Add(name);
