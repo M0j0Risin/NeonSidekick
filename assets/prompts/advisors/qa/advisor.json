@@ -1,3 +1,5 @@
 {
-  "role": "QA engineer"
+  "role": "QA engineer",
+  "description": "test strategy and cases, edge cases, bug reproduction, flaky tests, regressions",
+  "avatar": "🧪"
 }

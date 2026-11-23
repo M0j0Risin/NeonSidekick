@@ -1,3 +1,5 @@
 {
-  "role": "senior software engineer"
+  "role": "senior software engineer",
+  "description": "code review, code design, correctness, performance, secure coding, dependencies",
+  "avatar": "🧑‍💻"
 }

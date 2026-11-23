@@ -1,3 +1,5 @@
 {
-  "role": "database administrator"
+  "role": "database administrator",
+  "description": "schema design, query plans and indexes, migrations, data safety, database security",
+  "avatar": "🗄️"
 }
