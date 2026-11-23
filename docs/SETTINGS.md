@@ -500,7 +500,7 @@ A repo can carry its own skills. While *Project skills* is on, the app looks for
 * **Ranked last:** your profile, global and external skills win a name clash; the trust tells you which are hidden. At most 50 project skills are offered.
 * **A linked `SKILL.md`** is listed, never offered.
 * **At the PC only:** the Web UI page shows the notice but never asks. Headless uses saved trust and prints a `[notice]` for a folder not trusted.
-* **Claude Code's fields grant nothing:** `allowed-tools`, `hooks`, `model` and the like are ignored, and a skill marked `disable-model-invocation` isn't offered.
+* **Claude Code's fields grant nothing:** `allowed-tools`, `hooks`, `model` and the like are ignored. A `.claude/skills` skill marked `disable-model-invocation` is listed, never offered; in `.agents/skills` that field is ignored too.
 * **The model never changes one:** nor does reflection.
 * **Enter on one** can edit it in your editor (asking for trust again), copy it to your profile or global skills, disable it, or delete it after a yes (to the Recycle bin while *File deletes to Recycle bin* is on, else for good). A copy is refused when the skill changed since you trusted it.
 * **Untrust** from the folder's row. A skill this conversation already loaded stays in it until `/clear` or a new session.
