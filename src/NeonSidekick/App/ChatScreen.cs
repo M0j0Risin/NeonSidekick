@@ -1874,6 +1874,8 @@ internal sealed partial class ChatScreen
         _menu.EmbeddedLlm = _session.Embedded;
         // The Docker tab's container checklist (2026-10-02): the screen's engine door, the pipe the settings name.
         _menu.DockerContainers = _docker.ContainersAsync;
+        // An advisor's Change the server (2026-11-22): /server's look-around under the advisor profile's own saved settings.
+        _menu.AdvisorServerProbe = _session.ProbeServersAsync;
         // The Docker tools page's manage button (2026-10-11, the user's ask): the bare /docker's list, ESC back to the page.
         _menu.ManageDocker = ct => DockerMenuFor(closeWhenDone: false).ShowAsync(ct);
         _menu.Cameras = _camera.Available ? _camera.List : null;
@@ -15738,7 +15740,11 @@ internal sealed partial class ChatScreen
                 }
                 else if (ToolsText.SwitchFieldHere(args) is { } switchField)
                 {
-                    await _toolsMenu.ShowSwitchAsync(switchField, cancellationToken).ConfigureAwait(false);
+                    if ((await _toolsMenu.ShowSwitchAsync(switchField, cancellationToken).ConfigureAwait(false)).HasFlag(SettingsChanges.Profile))
+                    {
+                        // The Advisors page's list switched profiles (2026-11-22): as after /profile <name>.
+                        await AfterProfileSwitchAsync(cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 else
                 {
@@ -15750,7 +15756,18 @@ internal sealed partial class ChatScreen
             case SlashCommand.Tools:
                 // The Tools pane (2026-09-19): every tool on or off by name, the Ask / Files / Web rows after it; the four tabs as lines without the pane.
                 // A reconnect row saved there reconnects once it closes, as /settings would (the Anthropic API's, 2026-09-29 to 2026-10-03; none since).
-                await ApplySettingsChangesAsync(await _toolsMenu.ShowAsync(cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                // A profile switch from the Advisor list (2026-11-22) reconnects everything, as after /profile <name>; not ApplyMenuChangesAsync,
+                // whose voice-preview reset /tools never had.
+                var toolsChanges = await _toolsMenu.ShowAsync(cancellationToken).ConfigureAwait(false);
+                if (toolsChanges.HasFlag(SettingsChanges.Profile))
+                {
+                    await AfterProfileSwitchAsync(cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    await ApplySettingsChangesAsync(toolsChanges, cancellationToken).ConfigureAwait(false);
+                }
+
                 return false;
 
             case SlashCommand.Mcp:

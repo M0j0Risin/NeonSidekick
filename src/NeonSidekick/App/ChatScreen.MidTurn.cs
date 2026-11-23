@@ -588,7 +588,11 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Comfy when ToolsText.SwitchField(ToolbarItems.Comfy) is { } comfyField:
                 // The bare /comfy (2026-10-18, the user's ask): /tools comfy's page, as below.
-                await _toolsMenu.ShowSwitchAsync(comfyField, cancellationToken).ConfigureAwait(false);
+                {
+                    var reply = Reply;
+                    HandOver(reply, await _toolsMenu.ShowSwitchAsync(comfyField, cancellationToken, reply).ConfigureAwait(false));
+                }
+
                 break;
             case SlashCommand.Tools when args.Trim().Length > 0:
                 // /tools <group> (2026-10-03, the toolbar's tool switches): the switch alone, which /tools edits under a reply already;
@@ -600,7 +604,10 @@ internal sealed partial class ChatScreen
                 }
                 else if (ToolsText.SwitchFieldHere(args) is { } field)
                 {
-                    await _toolsMenu.ShowSwitchAsync(field, cancellationToken).ConfigureAwait(false);
+                    // The reply handed in (2026-11-22): the Advisors page's Switch to profile is refused under it, and one made after it
+                    // ended is handed over as the bare /tools' changes are.
+                    var reply = Reply;
+                    HandOver(reply, await _toolsMenu.ShowSwitchAsync(field, cancellationToken, reply).ConfigureAwait(false));
                 }
                 else
                 {

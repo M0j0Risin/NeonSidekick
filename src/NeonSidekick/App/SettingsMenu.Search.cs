@@ -202,6 +202,11 @@ internal sealed partial class SettingsMenu
                     }
                 }
 
+                if (TakeProfileSwitched())
+                {
+                    return changes | SettingsChanges.Profile;   // an advisor's Switch to profile (2026-11-22): its settings now, so the search ends
+                }
+
                 if (_embeddedLlmCleared)
                 {
                     _embeddedLlmCleared = false;
@@ -264,6 +269,11 @@ internal sealed partial class SettingsMenu
                 if (pick.Button >= 0 ? ResetToDefault(field) : await EditAsync(field, saved, page, pick.Row, cancellationToken).ConfigureAwait(false))
                 {
                     changes |= ChangesOf(field);
+                }
+
+                if (TakeProfileSwitched())
+                {
+                    return changes | SettingsChanges.Profile;   // an advisor's Switch to profile (2026-11-22): another profile's changes now
                 }
             }
         }

@@ -2387,6 +2387,21 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
+    /// <see cref="PickServerAsync"/>'s lead row (2026-11-22): the sentinel the picker returns for it, compared by reference. Its URL names no
+    /// place and is never asked; its label and band are the caller's.
+    /// </summary>
+    public static readonly LlmServer LeadServerRow = new(new Uri("http://lead.invalid/v1"), "", new ProbeResult(false, [], "", null, null));
+
+    /// <summary>
+    /// The picker's rows: <see cref="ServerLabels"/> over the servers, with <paramref name="lead"/>'s label first when <paramref name="servers"/>
+    /// starts with <see cref="LeadServerRow"/> (2026-11-22). The servers' columns are sized over the servers alone, never the lead's text.
+    /// </summary>
+    private static IReadOnlyList<string> ServerRows(IReadOnlyList<LlmServer> servers, (string Row, string Band)? lead, Func<LlmServer, NeonSidekick.EmbeddedLlm.FitMark?>? fit) =>
+        lead is { } first && servers.Count > 0 && ReferenceEquals(servers[0], LeadServerRow)
+            ? [Markup.Escape(first.Row), .. ServerLabels(servers.Skip(1).ToList(), fit)]
+            : ServerLabels(servers, fit);
+
+    /// <summary>
     /// The picker's rows with the URL-or-model column as wide as its widest entry, and the details as wide as the widest one; an embedded
     /// row led by <paramref name="fit"/>'s mark for it when given (2026-11-16, #43).
     /// </summary>
@@ -4585,6 +4600,7 @@ internal sealed partial class SettingsMenu
         int tab = 0;   // a SettingsTab: SettingsTabs places it on the strip (2026-10-10)
         int cursor = 0;
         _reply = reply;
+        _profileSwitched = false;   // an advisor's Switch to profile never carries over from another visit (2026-11-22)
         _stripSubs = new int[StripTabs.Count];   // every visit finds each group on its first tab
         try
         {
@@ -4661,6 +4677,15 @@ internal sealed partial class SettingsMenu
                 {
                     Root = root;
                 }
+
+                if (TakeProfileSwitched())
+                {
+                    // An advisor's Switch to profile (2026-11-22, the user's ask): the pane closes and the screen does the rest, as
+                    // after /profile <name> — unlike the Profile row, which stays on the list.
+                    changes |= SettingsChanges.Profile;
+                    return ReferenceEquals(Theme.Current, themeBefore) ? changes : changes | SettingsChanges.Theme;
+                }
+
                 if (_embeddedLlmCleared)
                 {
                     // The model in use removed from the catalog (2026-09-29): its URL and model cleared, so the LLM reconnects — to none.
@@ -5174,16 +5199,20 @@ internal sealed partial class SettingsMenu
     /// The model picker alone (later on 2026-10-14): the pane's filtered list, or the menus' page without it; the id chosen, or null on ESC. Saves
     /// nothing (<see cref="SaveModelChoice"/> does): the Web UI races it against its card.
     /// </summary>
-    public async Task<string?> ChooseModelFromListAsync(IReadOnlyList<string> ids, int cursor, CancellationToken cancellationToken)
+    /// <param name="title">The page's title, <see cref="ModelTitle"/> when null (2026-11-22: an advisor's Change the server crumbs its own).</param>
+    /// <param name="close">False keeps the pane open for the visit it came from (2026-11-22, an advisor's Change the server), as <see cref="ConfirmAsync"/>'s.</param>
+    public async Task<string?> ChooseModelFromListAsync(IReadOnlyList<string> ids, int cursor, CancellationToken cancellationToken, string? title = null, bool close = true)
     {
         ArgumentNullException.ThrowIfNull(ids);
         if (_pane.Enabled)
         {
-            return await PickFilteredModelAsync(ids, cursor, cancellationToken).ConfigureAwait(false);
+            return await PickFilteredModelAsync(ids, cursor, cancellationToken, title ?? ModelTitle, close).ConfigureAwait(false);
         }
 
-        var page = new MenuPage(ModelTitle, ids.Select(Markup.Escape).ToList(), KeepKeys);
-        int? picked = await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+        var page = new MenuPage(title ?? ModelTitle, ids.Select(Markup.Escape).ToList(), KeepKeys);
+        int? picked = close
+            ? await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false)
+            : await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
         return picked is { } i ? ids[i] : null;
     }
 
@@ -5224,7 +5253,7 @@ internal sealed partial class SettingsMenu
     /// the next keeps the model. The cursor opens on <paramref name="cursor"/>, the model in use. The pick, or null on ESC; the
     /// pane closes as it lands.
     /// </summary>
-    private async Task<string?> PickFilteredModelAsync(IReadOnlyList<string> ids, int cursor, CancellationToken cancellationToken)
+    private async Task<string?> PickFilteredModelAsync(IReadOnlyList<string> ids, int cursor, CancellationToken cancellationToken, string title, bool close)
     {
         string filter = "";
         int inUse = cursor;
@@ -5234,7 +5263,7 @@ internal sealed partial class SettingsMenu
             {
                 var shown = Enumerable.Range(0, ids.Count).Where(i => MenuFilter.Matches(filter, ids[i], null)).ToList();
                 List<string> rows = shown.Count > 0 ? shown.Select(i => Markup.Escape(ids[i])).ToList() : [MenuFilter.NoMatchNameRow(filter)];
-                var page = new MenuPage(ModelTitle, rows, MenuFilter.Hint(ModelKeys, filter))
+                var page = new MenuPage(title, rows, MenuFilter.Hint(ModelKeys, filter))
                 {
                     Filter = filter,
                     Caption = MenuFilter.CaptionOrNull(filter, shown.Count, ids.Count),
@@ -5260,7 +5289,10 @@ internal sealed partial class SettingsMenu
         }
         finally
         {
-            _pane.Close();
+            if (close)
+            {
+                _pane.Close();
+            }
         }
     }
 
@@ -5273,7 +5305,13 @@ internal sealed partial class SettingsMenu
     /// (<see cref="SaveServer"/>): the startup path and <c>/server</c> connect differently.
     /// </summary>
     /// <param name="currentModel">The model in use: every embedded row shares one URL, so the cursor finds the embedded model by its id (2026-09-29).</param>
-    public async Task<LlmServer?> PickServerAsync(IReadOnlyList<LlmServer> servers, Uri? current, string title, CancellationToken cancellationToken, string? currentModel = null)
+    /// <param name="lead">
+    /// A row above the servers and its band (2026-11-22, an advisor's Change the server: <see cref="AdvisorBorrowServerRow"/>): picked, it returns
+    /// <see cref="LeadServerRow"/>; the cursor opens on it when <paramref name="current"/> is null. Shown even with no server.
+    /// </param>
+    /// <param name="close">False keeps the pane open for the visit it came from (2026-11-22), as <see cref="ConfirmAsync"/>'s.</param>
+    public async Task<LlmServer?> PickServerAsync(IReadOnlyList<LlmServer> servers, Uri? current, string title, CancellationToken cancellationToken, string? currentModel = null,
+        (string Row, string Band)? lead = null, bool close = true)
     {
         ArgumentNullException.ThrowIfNull(servers);
         ArgumentNullException.ThrowIfNull(title);
@@ -5293,10 +5331,28 @@ internal sealed partial class SettingsMenu
             }
         }
 
+        if (lead is not null)
+        {
+            // The caller's row first (2026-11-22): the sentinel at index 0, so both branches and the cursor see it as a row.
+            servers = [LeadServerRow, .. servers];
+            cursor = cursor >= 0 ? cursor + 1 : current is null ? 0 : -1;
+        }
+
         string keys = title == StartupServerTitle ? StartupServerKeys : KeepKeys;
-        LlmServer? chosen = _pane.Enabled
-            ? await PickFilteredServerAsync(servers, title, keys, cursor, cancellationToken).ConfigureAwait(false)
-            : await PickOnceAsync(new MenuPage(title, ServerLabels(servers).ToList(), keys), cursor, cancellationToken).ConfigureAwait(false) is { } index ? servers[index] : null;
+        LlmServer? chosen;
+        if (_pane.Enabled)
+        {
+            chosen = await PickFilteredServerAsync(servers, title, keys, cursor, cancellationToken, lead, close).ConfigureAwait(false);
+        }
+        else
+        {
+            var page = new MenuPage(title, ServerRows(servers, lead, null).ToList(), keys);
+            int? index = close
+                ? await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false)
+                : await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
+            chosen = index is { } i ? servers[i] : null;
+        }
+
         if (chosen is null && title == ServerTitle)
         {
             Unchanged();
@@ -5312,7 +5368,8 @@ internal sealed partial class SettingsMenu
     /// the cursor on its row while it is still shown. Every visit starts with none lit. The pane closes as the pick lands.
     /// Sort size (2026-09-30, the user's ask) orders the embedded rows by size among themselves, the others in their places.
     /// </summary>
-    private async Task<LlmServer?> PickFilteredServerAsync(IReadOnlyList<LlmServer> servers, string title, string keys, int cursor, CancellationToken cancellationToken)
+    private async Task<LlmServer?> PickFilteredServerAsync(IReadOnlyList<LlmServer> servers, string title, string keys, int cursor, CancellationToken cancellationToken,
+        (string Row, string Band)? lead, bool close)
     {
         // Uncensored lit when the row the pane opens on is an uncensored build (later on 2026-09-30, the user's pick), so it shows.
         var filter = NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.For(
@@ -5329,14 +5386,14 @@ internal sealed partial class SettingsMenu
         bool marked = servers.Any(s => MarkOf(s) is not null);
         string? legend = marked ? marks.Caption : embedded ? NeonSidekick.EmbeddedLlm.EmbeddedLlmText.CapabilityLegend : null;
         string? legendNote = marked ? marks.Note : null;
-        var labels = ServerLabels(servers, MarkOf);
+        var labels = ServerRows(servers, lead, MarkOf);
         string baseHint = embedded ? keys.Replace(" · Esc", " · " + NeonSidekick.EmbeddedLlm.EmbeddedModelFilter.Keys + " · Esc", StringComparison.Ordinal) : keys;
         string text = "";
         try
         {
             while (true)
             {
-                var shown = filter.Arrange(Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i]) && ServerMatches(text, servers[i])).ToList(), i => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[i].BaseUrl) ? EmbeddedRowModel(servers[i]) : null);
+                var shown = filter.Arrange(Enumerable.Range(0, servers.Count).Where(i => Passes(servers[i]) && Matches(servers[i])).ToList(), i => NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(servers[i].BaseUrl) ? EmbeddedRowModel(servers[i]) : null);
                 var page = new MenuPage(title, text.Length > 0 && shown.Count == 0 ? [MenuFilter.NoMatchRow(text)] : FilteredRows(labels, shown), MenuFilter.HintBeforeEsc(baseHint, text, letteredButtons: embedded))
                 {
                     Filter = text,
@@ -5345,7 +5402,7 @@ internal sealed partial class SettingsMenu
                     // The legend's lines kept apart and its note over them (MenuPane.CaptionLines, 2026-11-20); the typed filter's caption takes over both.
                     CaptionKeepLines = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) is null,
                     CaptionNote = MenuFilter.CaptionOrNull(text, shown.Count, servers.Count) is null ? legendNote : null,
-                    Footer = (_, row) => row < shown.Count ? ServerFooter(servers[shown[row]]) : null,
+                    Footer = (_, row) => row < shown.Count ? (ReferenceEquals(servers[shown[row]], LeadServerRow) && lead is { } first ? new MenuFooter(first.Band) : ServerFooter(servers[shown[row]])) : null,
                 };
                 if (await _pane.PickAsync(page with { Buttons = embedded ? filter.Buttons() : null }, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
@@ -5378,8 +5435,15 @@ internal sealed partial class SettingsMenu
         }
         finally
         {
-            _pane.Close();
+            if (close)
+            {
+                _pane.Close();
+            }
         }
+
+        // The lead row (2026-11-22) matched on its own label, as any row on its name and URL.
+        bool Matches(LlmServer server) =>
+            ReferenceEquals(server, LeadServerRow) && lead is { } first ? MenuFilter.Matches(text, first.Row, null) : ServerMatches(text, server);
 
         bool Passes(LlmServer server) =>
             !NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(server.BaseUrl)
@@ -7631,11 +7695,15 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The reasoning picker alone (later on 2026-10-14): the level chosen, or null on ESC. Saves nothing (<see cref="SaveReasoningChoice"/>).</summary>
-    public async Task<string?> ChooseReasoningAsync(string current, CancellationToken cancellationToken)
+    /// <param name="title">The page's title, <see cref="ReasoningTitle"/> when null (2026-11-22: an advisor's Change the server crumbs its own).</param>
+    /// <param name="close">False keeps the pane open for the visit it came from (2026-11-22), as <see cref="ConfirmAsync"/>'s.</param>
+    public async Task<string?> ChooseReasoningAsync(string current, CancellationToken cancellationToken, string? title = null, bool close = true)
     {
         ArgumentNullException.ThrowIfNull(current);
-        var page = new MenuPage(ReasoningTitle, ReasoningRows(), KeepKeys);
-        int? picked = await PickOnceAsync(page, ReasoningCursor(current), cancellationToken).ConfigureAwait(false);
+        var page = new MenuPage(title ?? ReasoningTitle, ReasoningRows(), KeepKeys);
+        int? picked = close
+            ? await PickOnceAsync(page, ReasoningCursor(current), cancellationToken).ConfigureAwait(false)
+            : await PickAsync(page, ReasoningCursor(current), cancellationToken).ConfigureAwait(false);
         return picked is { } index ? Llm.ReasoningLevel.Levels[index] : null;
     }
 
@@ -8379,6 +8447,11 @@ internal sealed partial class SettingsMenu
                 {
                     cursor = button.Row;
                     modeChanged |= await EditFromButtonAsync(settingButtons[button.Button].Target, cancellationToken).ConfigureAwait(false);
+                    if (_profileSwitched)
+                    {
+                        return true;   // an advisor's Switch to profile (2026-11-22): the visit ends; the caller takes the flag
+                    }
+
                     continue;
                 }
 

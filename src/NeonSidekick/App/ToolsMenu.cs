@@ -220,6 +220,9 @@ internal sealed class ToolsMenu
         string filter = "";
         IReadOnlyList<int>? subs = null;   // each group's menu on show (2026-10-10)
         _menu.Root = ToolsText.Label;
+        // The reply under the settings rows edited here (2026-11-22): the Advisor list's Switch to profile is refused under it.
+        var outerReply = _menu.UnderReply(reply);
+        _menu.TakeProfileSwitched();   // never one left from another visit
         try
         {
             while (true)
@@ -285,10 +288,16 @@ internal sealed class ToolsMenu
                 {
                     _menu.Root = ToolsText.Label;
                 }
+
+                if (_menu.TakeProfileSwitched())
+                {
+                    return changes | SettingsChanges.Profile;   // an advisor's Switch to profile (2026-11-22): the pane closes, the screen switches
+                }
             }
         }
         finally
         {
+            _menu.UnderReply(outerReply);
             _menu.Root = SettingsMenu.Title;
             _pane.Close();
         }
@@ -454,7 +463,9 @@ internal sealed class ToolsMenu
     /// switches <c>Web browser mode</c> (2026-10-04, the user's ask: <see cref="SettingsMenu.WebModeButtons"/>, M steps it since later on
     /// 2026-10-13) and opens the Browser window (O).
     /// </summary>
-    public async Task ShowSwitchAsync(SettingsField field, CancellationToken cancellationToken)
+    /// <param name="reply">The reply under the pane (2026-11-22): the Advisors page's list refuses its Switch to profile while it runs.</param>
+    /// <returns><see cref="SettingsChanges.Profile"/> when the Advisors page's list switched profiles (2026-11-22), else none.</returns>
+    public async Task<SettingsChanges> ShowSwitchAsync(SettingsField field, CancellationToken cancellationToken, ReplyRun reply = default)
     {
         if (!_pane.Enabled)
         {
@@ -468,18 +479,22 @@ internal sealed class ToolsMenu
                 }
             }
 
-            return;
+            return SettingsChanges.None;
         }
 
         _menu.Root = ToolsText.Label;
+        var outerReply = _menu.UnderReply(reply);
+        _menu.TakeProfileSwitched();   // never one left from another visit
         try
         {
             _ = field == SettingsField.ShellCommandPolicy
                 ? await _menu.EditCommandPolicyAsync(cancellationToken).ConfigureAwait(false)
                 : await _menu.EditToggleAsync(field, cancellationToken).ConfigureAwait(false);
+            return _menu.TakeProfileSwitched() ? SettingsChanges.Profile : SettingsChanges.None;
         }
         finally
         {
+            _menu.UnderReply(outerReply);
             _menu.Root = SettingsMenu.Title;
             _pane.Close();
         }

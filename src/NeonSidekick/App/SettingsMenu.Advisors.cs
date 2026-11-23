@@ -32,12 +32,13 @@ internal sealed partial class SettingsMenu
     public const string NoDescriptionBand = "No description: Change the description adds one, so the model knows when to ask it.";
 
     /// <summary>
-    /// An entry's choices, in order (the description and the persona since 2026-11-22). <see cref="RemoveAdvisorChoice"/> is Delete's. Pinned.
+    /// An entry's choices, in order (the description and the persona since 2026-11-22; the server and the switch later that day, from UI
+    /// testing: <see cref="ChangeAdvisorServerChoice"/>, <see cref="SwitchToAdvisorChoice"/>). <see cref="RemoveAdvisorChoice"/> is Delete's. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> AdvisorEntryRows = ["Change the role", "Change the description", "Change the persona", "Remove"];
+    public static readonly IReadOnlyList<string> AdvisorEntryRows = ["Change the role", "Change the description", "Change the persona", "Change the server", "Switch to profile", "Remove"];
 
     /// <summary>The row of <see cref="AdvisorEntryRows"/> a Delete on an advisor goes to.</summary>
-    public const int RemoveAdvisorChoice = 3;
+    public const int RemoveAdvisorChoice = 5;
 
     /// <summary>The profile picker's title when adding. Pinned.</summary>
     public const string AdvisorProfileTitle = "Which profile advises?";
@@ -284,6 +285,18 @@ internal sealed partial class SettingsMenu
 
                 case 2:
                     changed |= await ChangeAdvisorPersonaAsync(entry, page, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                case ChangeAdvisorServerChoice:
+                    changed |= await ChangeAdvisorServerAsync(entry, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                case SwitchToAdvisorChoice:
+                    if (await SwitchToAdvisorAsync(entry, cancellationToken).ConfigureAwait(false))
+                    {
+                        return true;   // another profile now: the visit ends, the pane closes and the screen switches (2026-11-22)
+                    }
+
                     break;
 
                 case RemoveAdvisorChoice:

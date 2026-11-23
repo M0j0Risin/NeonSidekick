@@ -94,7 +94,7 @@ public partial class SettingsMenuTests
         _console.Input.PushText("data modeller");
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Enter);            // ux: remove
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Remove, under the role, the description and the persona
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Remove, under the role, the description, the persona, the server and the switch
         Push(Keys.Char('y'), Keys.Enter);       // yes
         Push(Keys.Escape, Keys.Escape);
 
