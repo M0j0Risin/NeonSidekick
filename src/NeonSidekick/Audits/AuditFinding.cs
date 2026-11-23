@@ -79,7 +79,8 @@ public sealed partial record AuditFinding(
     /// The ids a fix plan's step line says it closes (2026-11-22, the session review: the app ticks them as the step passes): <c>(closes A7)</c>,
     /// <c>(closes A1, A3)</c>, <c>closes A2 and A5</c>, a range <c>closes A3–A5</c> or <c>A3-A5</c> (expanded, a reversed one in order), case-insensitive,
     /// in order without repeats. Only the ids right after the word <c>closes</c> count, so an "(see A9)" elsewhere on the line is never one;
-    /// emphasis around them is no matter.
+    /// emphasis (<c>*</c>, <c>_</c>, backticks) around any id, a range's ends too, is no matter (2026-11-23, review #1: only the first id's was).
+    /// ASCII digits only (review #43: <c>\d</c> took other scripts' digits, which the invariant parse threw on).
     /// </summary>
     public static IReadOnlyList<string> ClosedBy(string stepText)
     {
@@ -107,11 +108,11 @@ public sealed partial record AuditFinding(
         return ids;
     }
 
-    // "closes" then a list: ids or ranges, joined by commas, "and" or "&".
-    [System.Text.RegularExpressions.GeneratedRegex(@"\bcloses\s*:?\s*((?:\*|_)*A\d{1,6}(?:\s*(?:[-–—]|to)\s*A\d{1,6})?(?:\s*(?:,\s*and|,|and|&)\s*A\d{1,6}(?:\s*(?:[-–—]|to)\s*A\d{1,6})?)*)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    // "closes" then a list: ids or ranges, joined by commas, "and" or "&"; each id may sit in emphasis.
+    [System.Text.RegularExpressions.GeneratedRegex(@"\bcloses\s*:?\s*([*_`]*A[0-9]{1,6}[*_`]*(?:\s*(?:[-–—]|to)\s*[*_`]*A[0-9]{1,6}[*_`]*)?(?:\s*(?:,\s*and|,|and|&)\s*[*_`]*A[0-9]{1,6}[*_`]*(?:\s*(?:[-–—]|to)\s*[*_`]*A[0-9]{1,6}[*_`]*)?)*)", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
     private static partial System.Text.RegularExpressions.Regex ClosesList();
 
-    [System.Text.RegularExpressions.GeneratedRegex(@"A(\d{1,6})(?:\s*(?:[-–—]|to)\s*A(\d{1,6}))?", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    [System.Text.RegularExpressions.GeneratedRegex(@"A([0-9]{1,6})[*_`]*(?:\s*(?:[-–—]|to)\s*[*_`]*A([0-9]{1,6}))?", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
     private static partial System.Text.RegularExpressions.Regex ClosesItem();
 
     /// <summary>The severity's word: <c>critical</c>, <c>high</c>, <c>medium</c>, <c>low</c>.</summary>

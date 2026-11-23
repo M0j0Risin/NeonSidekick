@@ -121,6 +121,12 @@ public enum FileOutcome
     ClaudeFilesProtected,
 
     /// <summary>
+    /// A model write into a repo's own skills, <c>.agents/skills</c> at any depth (2026-11-23, review #25, <see cref="WriteGuard"/>): the user's,
+    /// trusted by their hash; the file tools and skill_editor never change them.
+    /// </summary>
+    ProjectSkillsProtected,
+
+    /// <summary>
     /// A model write to the project file the system prompt reads (2026-10-22, review P1, the fix plan's D2): the turn asks the user and runs the
     /// call again on a yes; with nobody to ask, refused.
     /// </summary>
@@ -4698,8 +4704,15 @@ public sealed class WorkingDirectory
                     return new ZipResult(FileOutcome.OutsideRoot, display, folderDisplay, 0, 0, entry.FullName);
                 }
 
-                // A repository's data and the guarded files are left out and said (D17): no hooks or config planted by an archive.
-                if (IsGitPath(Path.GetRelativePath(folder, target)) || WriteGuard.Judge(root, target, WriteRole.Write, ShoppingListGuard, Databases) is not null)
+                // A repository's data and the guarded files are left out and said (D17): no hooks or config planted by an archive. Unwatched
+                // (2026-11-23, review #4): a project file left out is never asked about.
+                bool guarded;
+                using (WriteGuard.Unwatched())
+                {
+                    guarded = IsGitPath(Path.GetRelativePath(folder, target)) || WriteGuard.Judge(root, target, WriteRole.Write, ShoppingListGuard, Databases) is not null;
+                }
+
+                if (guarded)
                 {
                     leftOut.Add(Relative(target, isFolderEntry));
                     continue;
@@ -5207,7 +5220,13 @@ public sealed class WorkingDirectory
                     continue;
                 }
 
-                if (WriteGuard.Judge(to.Root, target, WriteRole.Write, to.ShoppingListGuard, to.Databases) is not null)
+                bool guarded;
+                using (WriteGuard.Unwatched())   // 2026-11-23, review #4: left out and said, never asked about
+                {
+                    guarded = WriteGuard.Judge(to.Root, target, WriteRole.Write, to.ShoppingListGuard, to.Databases) is not null;
+                }
+
+                if (guarded)
                 {
                     leftOut.Add(to.Relative(target, isFolder));
                     continue;

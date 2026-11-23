@@ -41,6 +41,10 @@ public sealed partial class SidekickApp
         public IReadOnlyList<PlanStep> Lines { get; set; } = [];
         public bool Headed { get; set; }
         public bool HadPictures { get; set; }
+
+        /// <summary>The pass's own turn, kept at its nudge (2026-11-23, review #34): the judge reads it when the nudge's turn failed. Null otherwise.</summary>
+        public HeadlessTurn? PassTurn { get; set; }
+
         public string Line { get; set; } = "";
         public string Title { get; set; } = "";
 
@@ -591,9 +595,10 @@ public sealed partial class SidekickApp
 
             loop.DropPicturesNext = false;
             ralph.HadPictures = images.Count > 0;
+            ralph.PassTurn = null;
             ralph.Line = step is null ? RalphText.FinalFixLine(loop.Pass) : RalphText.TranscriptLine(loop.Pass, index, total, step.Text);
             ralph.Title = RalphText.SessionTitle(snapshot.Title, index, total, loop.Pass);
-            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, $"ralph: pass {loop.Pass}, step {index} of {total}: {step?.Text ?? RalphText.FinalFixStep}");
+            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ralph: pass {loop.Pass}, step {index} of {total}: {step?.Text ?? RalphText.FinalFixStep}"));
             state.Next = new HeadlessNext(message, ralph.Line, images);
             return;
         }
@@ -607,12 +612,23 @@ public sealed partial class SidekickApp
         var files = ralph.Files;
         // A pass that ended on its own without finish_step (2026-11-22, the screen's twin): asked once to report, in the pass's own conversation and
         // row, judged once after that turn (the loop stays in its pass).
-        if (loop.Report is null && !turn.Cancelled && (!turn.Failed || turn.Failure == Llm.TurnFailure.ToolCap) && loop.TakeNudge())
+        // Never once the run's token budget is spent, this pass's tokens counted (2026-11-23, review #29).
+        if (loop.Report is null && !turn.Cancelled && (!turn.Failed || turn.Failure == Llm.TurnFailure.ToolCap)
+            && !loop.BudgetSpent(HeadlessPlanMeter(state.RalphContext!.Session)) && loop.TakeNudge())
         {
-            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, $"ralph: pass {loop.Pass} nudged: no finish_step");
+            Diagnostics.DiagnosticLog.Info(ChatScreen.AppCategory, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ralph: pass {loop.Pass} nudged: no finish_step"));
+            ralph.PassTurn = turn;
             state.Next = new HeadlessNext(RalphText.NudgeMessage, RalphText.NudgeLine(loop.Pass), [], Fresh: false);
             return;
         }
+
+        // A nudge that failed (2026-11-23, review #34): the pass is judged by its own turn, not the nudge's failure.
+        if (ralph.PassTurn is { } passTurn && turn.Failed && !turn.Cancelled)
+        {
+            turn = passTurn;
+        }
+
+        ralph.PassTurn = null;
 
         var notices = new List<string>();
         var host = new HeadlessRalphHost(this, ralph, state.RalphContext!, notices, state.Audit);
@@ -723,10 +739,12 @@ public sealed partial class SidekickApp
 
     /// <summary>
     /// A headless loop dropped with the conversation or the run (its lock let go; the file keeps everything). A pass under way is not judged: what it did
-    /// to the plan's boxes and words is put back first, its own tick too (2026-10-19, the third review).
+    /// to the plan's boxes and words is put back first, its own tick too (2026-10-19, the third review). Then the report is brought in step with the
+    /// steps, before the lock goes (2026-11-23, review #74, the screen's twin); the lines to say.
     /// </summary>
-    private static void HeadlessRalphDrop(HeadlessPlanState state, WorkingDirectory files)
+    private List<string> HeadlessRalphDrop(HeadlessPlanState state)
     {
+        var lines = new List<string>();
         if (state.Ralph is { } ralph)
         {
             if (ralph.Loop.InPass)
@@ -734,10 +752,13 @@ public sealed partial class SidekickApp
                 RalphJudge.PutBackUnjudged(ralph.Files, ralph.Loop.Snapshot.Path, ralph.Lines, ralph.Step, ralph.Headed, new PlanChecks(ralph.Loop.Snapshot.Verify, ralph.Loop.Snapshot.Final));
             }
 
+            lines.AddRange(HeadlessSyncAuditTicks(state, ralph.Files, ralph.Loop.Snapshot.Path));
             RalphLog.Unlock(ralph.Files, ralph.Loop.Snapshot.Path, RalphLog.Me);
             state.Ralph = null;
             state.Next = null;
         }
+
+        return lines;
     }
 
     /// <summary>

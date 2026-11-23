@@ -322,6 +322,16 @@ public static class AdvisorText
     /// <summary>A template folder with no <c>persona.md</c>, or a blank one. Pinned.</summary>
     public const string TemplateNoPersona = "skipped: no persona.md, or a blank one";
 
+    /// <summary>A template folder named like a temporary profile (2026-11-23, review #19): an advisor can't take that name. Pinned.</summary>
+    public const string TemplateTemporaryId = "skipped: a template's folder name is the profile name an advisor made from it gets, and a name starting with _ is a temporary profile's";
+
+    /// <summary>A template file over the cap (2026-11-23, review #89). Pinned.</summary>
+    public static string TemplateTooBig(string file, int maxBytes) =>
+        $"skipped: {file} is over {(maxBytes / 1024).ToString(System.Globalization.CultureInfo.InvariantCulture)} KB";
+
+    /// <summary>A template file that is a link (2026-11-23, review #89). Pinned.</summary>
+    public static string TemplateLinkedFile(string file) => $"skipped: {file} is a link; a template's files are its own";
+
     /// <summary><c>advisor.json</c> isn't an object. Pinned.</summary>
     public const string TemplateInfoNotObject = "not a JSON object";
 
@@ -387,8 +397,9 @@ public static class AdvisorText
     /// <summary>
     /// <c>/advisor</c>'s setup forms (2026-11-22): <c>templates</c> alone, <c>list</c> alone (2026-11-23, the user's ask: it opens the
     /// Advisor list), or <c>new &lt;template&gt; [&lt;name&gt;]</c> with a template of <paramref name="templateIds"/> and at most one more
-    /// word; null for anything else, which stays a question to an advisor (one named <c>new</c>, <c>list</c> or <c>templates</c> is still
-    /// reachable by its role, and <c>/advisor list why?</c> is a question). Pure: the screen, headless and the Web UI page read a line one way.
+    /// word; with more, <see cref="AdvisorSetupKind.NewUsage"/> (2026-11-23, review #76: it went down the question path silently). Null for
+    /// anything else, which stays a question to an advisor (one named <c>new</c>, <c>list</c> or <c>templates</c> is still reachable by its
+    /// role, an unknown template too, and <c>/advisor list why?</c> is a question). Pure: the screen, headless and the Web UI page read a line one way.
     /// </summary>
     public static AdvisorSetup? ParseSetup(string? args, IReadOnlySet<string>? templateIds)
     {
@@ -409,8 +420,25 @@ public static class AdvisorText
             return new AdvisorSetup(AdvisorSetupKind.New, id, words.Length == 3 ? words[2] : id);
         }
 
+        if (words.Length > 3 && string.Equals(words[0], NewWord, StringComparison.OrdinalIgnoreCase)
+            && templateIds?.FirstOrDefault(id => string.Equals(id, words[1], StringComparison.OrdinalIgnoreCase)) is { } known)
+        {
+            return new AdvisorSetup(AdvisorSetupKind.NewUsage, known, "");
+        }
+
         return null;
     }
+
+    /// <summary><c>/advisor new &lt;template&gt;</c> with a name of more than one word (2026-11-23, review #76). Pinned.</summary>
+    public static string NewUsageError(string template) =>
+        $"An advisor's name is one word: /advisor new {template} <name>, for example /advisor new {template} {template}-2.";
+
+    /// <summary>A template the scan listed but no longer finds (2026-11-23, review #18). Pinned.</summary>
+    public static string TemplateGoneError(string template) => $"Template {template} isn't there any more; /advisor templates lists them.";
+
+    /// <summary>The crumbs Change the server adds for its model and reasoning pages (2026-11-23, review #88).</summary>
+    public const string ModelCrumb = " › model";
+    public const string ReasoningCrumb = " › reasoning";
 
     /// <summary>A name a profile already has, in its own case. Pinned.</summary>
     public static string TakenError(string existing, string template, bool listed) => listed
@@ -456,6 +484,12 @@ public enum AdvisorSetupKind
 
     /// <summary><c>/advisor list</c>: opens the Advisor list (2026-11-23).</summary>
     List,
+
+    /// <summary>
+    /// <c>/advisor new &lt;template&gt;</c> with a known template and more than one name word (2026-11-23, review #76): an error naming the
+    /// one-word rule, never a question.
+    /// </summary>
+    NewUsage,
 }
 
 /// <summary>A parsed <c>/advisor templates</c> or <c>/advisor new &lt;template&gt; [&lt;name&gt;]</c>: the template's id and the new profile's name for <c>new</c>.</summary>

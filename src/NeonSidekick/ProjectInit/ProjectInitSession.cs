@@ -23,6 +23,12 @@ public sealed class ProjectInitSession
     /// <summary>Whether <c>present_project_notes</c> showed the pane at least once this pass.</summary>
     public bool Presented { get; private set; }
 
+    /// <summary>
+    /// Whether the last <c>present_project_notes</c> call's Write failed (2026-11-23, review #97/#91): its own error was shown, so the pass says
+    /// nothing more, and its model-facing result isn't shown again. Cleared by <see cref="Begin"/> and at the start of every call.
+    /// </summary>
+    public bool WriteFailed { get; private set; }
+
     /// <summary>Whether this turn offers <c>ask_user</c>, as the directive was last built (a Revise with no words reads it).</summary>
     public bool AskUser { get; private set; }
 
@@ -32,7 +38,11 @@ public sealed class ProjectInitSession
         Start = start ?? throw new ArgumentNullException(nameof(start));
         Answer = ProjectInitAnswer.None;
         Presented = false;
+        WriteFailed = false;
     }
+
+    /// <summary>A call's Write failed (true), or a call began (false).</summary>
+    public void MarkWriteFailed(bool failed) => WriteFailed = failed;
 
     /// <summary>The pass is over (the turn ended, however): nothing narrowed after it.</summary>
     public void End() => Start = null;
@@ -48,9 +58,10 @@ public sealed class ProjectInitSession
 
     /// <summary>
     /// The least room the turn leaves for the draft (2026-11-23), in tokens: the larger of the file in play and the directive's 8k aim, so the
-    /// reads a pass makes are pruned before the draft runs out of room; 0 outside a pass.
+    /// reads a pass makes are pruned before the draft runs out of room; 0 outside a pass. The file counts up to the notes' cap (review #48): a
+    /// draft is never longer, and a long AGENTS.md reserved more than the window.
     /// </summary>
-    public long ReplyFloor => Start is { } start ? Math.Max(start.InPlayLength, ProjectInitText.AimChars) / ConversationCompactor.CharsPerToken : 0;
+    public long ReplyFloor => Start is { } start ? Math.Max(Math.Min(start.InPlayLength, ProjectFile.MaxLength), ProjectInitText.AimChars) / ConversationCompactor.CharsPerToken : 0;
 
     /// <summary>
     /// The turn's part while a pass runs, else null: the directive (<see cref="ProjectInitText.Directive"/>) and <paramref name="tool"/>,

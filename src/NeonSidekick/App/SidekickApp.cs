@@ -1445,8 +1445,11 @@ public sealed partial class SidekickApp
                     audit.Stop();
                 }
 
-                // A Ralph loop goes with it (2026-10-18), its lock let go.
-                HeadlessRalphDrop(planState, files);
+                // A Ralph loop goes with it (2026-10-18), its lock let go, its report synced (2026-11-23, review #74).
+                foreach (string line in HeadlessRalphDrop(planState))
+                {
+                    await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
+                }
             }
 
             // A fresh conversation (2026-10-18, one reset since 2026-11-22, the review's #144: /plan approve --fresh kept the resumed row's mark
@@ -2483,8 +2486,11 @@ public sealed partial class SidekickApp
         finally
         {
             _liveSession = null;
-            // A Ralph loop's lock goes with the run (2026-10-18).
-            HeadlessRalphDrop(planState, files);
+            // A Ralph loop's lock goes with the run (2026-10-18), its report synced first (2026-11-23, review #74).
+            foreach (string line in HeadlessRalphDrop(planState))
+            {
+                await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
+            }
             // A code audit's lock too (2026-10-29): the report lists as stopped, and resume picks it up.
             audit.Stop();
             // Docker server stop on exit (2026-10-02): off by default, the container keeps running.
@@ -3644,7 +3650,16 @@ public sealed partial class SidekickApp
                 return null;
             }
 
-            var made = Advisors.AdvisorFromTemplate.Create(_settings, scan.Find(setup.Template)!, setup.Name, advisorsOn: effective.Advisors);
+            // A name of more than one word (2026-11-23, review #76), and a template the scan no longer finds (review #18): an error line each.
+            if (setup.Kind == Advisors.AdvisorSetupKind.NewUsage || scan.Find(setup.Template) is not { } template)
+            {
+                await HeadlessNoticeLineAsync("[error] " + (setup.Kind == Advisors.AdvisorSetupKind.NewUsage
+                    ? Advisors.AdvisorText.NewUsageError(setup.Template)
+                    : Advisors.AdvisorText.TemplateGoneError(setup.Template))).ConfigureAwait(false);
+                return null;
+            }
+
+            var made = Advisors.AdvisorFromTemplate.Create(_settings, template, setup.Name, advisorsOn: effective.Advisors);
             if (made.Error is { } madeError)
             {
                 await HeadlessNoticeLineAsync("[error] " + madeError).ConfigureAwait(false);

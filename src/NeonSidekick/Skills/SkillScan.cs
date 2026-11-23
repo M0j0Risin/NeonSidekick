@@ -39,8 +39,17 @@ public enum ProjectPendingReason
     /// <summary>A <c>.claude</c> skill marked <c>disable-model-invocation</c>: only started by hand in Claude Code.</summary>
     ManualOnly,
 
-    /// <summary>A name over 64 characters or holding a control character.</summary>
+    /// <summary>A name over 64 characters or holding a control, format or separator character.</summary>
     BadName,
+
+    /// <summary>Its <c>SKILL.md</c> is itself a link (2026-11-23, review #73), even one inside the repo: never read or offered.</summary>
+    LinkedFile,
+
+    /// <summary>
+    /// Past its folder's first 50 skill folders (2026-11-23, review #70): never hashed, so never trusted. <see cref="OverCap"/> is the repo-wide count
+    /// of offered skills.
+    /// </summary>
+    PastFolderCap,
 }
 
 /// <summary>A project skill listed but not offered, and why.</summary>

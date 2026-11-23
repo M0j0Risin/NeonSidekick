@@ -2525,8 +2525,12 @@ public sealed class Assistant
                 }
                 else
                 {
-                    var timed = await InvokeTimedAsync(() => InvokeGuardedAsync(call, cancellationToken)).ConfigureAwait(false);
-                    (invoked, took, asked) = (timed.Result, timed.Took, timed.Asked);
+                    // A round the length limit cut off closes no open list (2026-11-23, review #87): its whole arguments may still hold a cut one.
+                    using (cutOff ? NeonSidekick.Llm.Tools.LooseJson.Strict() : null)
+                    {
+                        var timed = await InvokeTimedAsync(() => InvokeGuardedAsync(call, cancellationToken)).ConfigureAwait(false);
+                        (invoked, took, asked) = (timed.Result, timed.Took, timed.Asked);
+                    }
                 }
 
                 var (result, _, diff, shown, refused, argumentError, source) = invoked;
@@ -3246,7 +3250,8 @@ public sealed class Assistant
 
     /// <summary>
     /// Takes every <see cref="FunctionCallContent"/> out of <paramref name="messages"/>, and a message left with nothing, so the
-    /// history keeps no call without its result (2026-11-21, <see cref="LastRoundAnswers"/>). Whether any was taken.
+    /// history keeps no call without its result (2026-11-21, <see cref="LastRoundAnswers"/>). Whether any was taken. A message left with only
+    /// reasoning or blank text goes too (2026-11-23, review #17: it reached history as an empty assistant turn).
     /// </summary>
     internal static bool DropNativeCalls(IList<ChatMessage> messages)
     {
@@ -3266,7 +3271,7 @@ public sealed class Assistant
             if (contents.Count < before)
             {
                 dropped = true;
-                if (contents.Count == 0)
+                if (contents.All(c => c is TextReasoningContent || (c is TextContent text && string.IsNullOrWhiteSpace(text.Text))))
                 {
                     messages.RemoveAt(i);
                 }

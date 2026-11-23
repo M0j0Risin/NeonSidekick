@@ -178,6 +178,47 @@ public partial class ChatScreenTests
         Assert.Contains(ProjectInitText.NeedsReadFileError, output);
     }
 
+    /// <summary>A Revise, then a turn with no new draft (2026-11-23, review #79/#97): the no-revised-draft notice, not silence.</summary>
+    [Fact]
+    public async Task ProjectInit_AReviseWithNoNewDraft_SaysSo()
+    {
+        ProjectInitFixture([[Keys.Char('r'), Keys.Enter, Keys.Enter]], Line("/project-init"), Line("/exit"));
+        _chat.Enqueue(NotesCall("n1"));
+        _chat.EnqueueText("I'll leave it there.");
+
+        string output = await RunAsync();
+
+        Assert.False(File.Exists(NotesPath));
+        Assert.Contains(ProjectInitText.NoRevisedDraftNotice, output);
+        Assert.DoesNotContain(ProjectInitText.NoDraftNotice, output);
+    }
+
+    /// <summary>A failed write (2026-11-23, review #91/#97) shows its own error once: no model-facing twin, no no-draft notice after it.</summary>
+    [Fact]
+    public async Task ProjectInit_AFailedWrite_ShowsItsErrorOnce()
+    {
+        ProjectInitFixture([[Keys.Char('w'), Keys.Enter]], Line("/project-init"), Line("/exit"));
+        File.WriteAllText(NotesPath, "# Old\n");
+        File.SetAttributes(NotesPath, FileAttributes.ReadOnly);
+        try
+        {
+            _chat.Enqueue(NotesCall("n1"));
+            _chat.EnqueueText("Could not write it.");
+
+            string output = await RunAsync();
+
+            Assert.Equal("# Old\n", File.ReadAllText(NotesPath));
+            Assert.Contains("/project-init couldn't write the notes:", output);
+            Assert.DoesNotContain("Tell the user in one line and stop.", output);
+            Assert.DoesNotContain(ProjectInitText.NoRevisedDraftNotice, output);
+            Assert.DoesNotContain(ProjectInitText.NoDraftNotice, output);
+        }
+        finally
+        {
+            File.SetAttributes(NotesPath, FileAttributes.Normal);
+        }
+    }
+
     /// <summary>Every tool result's text in a request, joined.</summary>
     private static string ToolResultText(IReadOnlyList<ChatMessage> request) =>
         string.Join("\n", request.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Select(r => r.Result?.ToString() ?? ""));}

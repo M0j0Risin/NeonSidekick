@@ -84,6 +84,28 @@ public partial class ChatScreenTests
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
 
+    /// <summary>
+    /// A nudge whose own turn failed (2026-11-23, review #34): the pass is judged by its own turn, which ended cleanly, so no retry notice; it is
+    /// judged as no report and the step runs again.
+    /// </summary>
+    [Fact]
+    public async Task Ralph_AFailedNudge_JudgesThePassByItsOwnTurn()
+    {
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _chat.EnqueueText("\n\n");     // the pass: no finish_step
+        _chat.EnqueueText("unused");     // the nudge: fails before its first update
+        _chat.BeforeUpdateOf = (request, _, _) => request == 1 ? throw new InvalidOperationException("the nudge failed") : Task.CompletedTask;
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.Equal(RalphText.NudgeMessage, LastUserText(_chat.Requests[1]));
+        Assert.DoesNotContain(RalphText.RetryNotice, output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
     [Fact]
     public async Task Ralph_ASecondEndingWithoutFinishStep_IsNotAskedAgain()
     {
@@ -129,6 +151,22 @@ public partial class ChatScreenTests
         Assert.Contains(AuditText.TickedNotice(["A1"], "tree-2026-11-22", 1, 2), output);
         Assert.Contains(AuditText.TickedNotice(["A2"], "tree-2026-11-22", 2, 2), output);
         Assert.Contains(AuditText.ReauditHint("tree-2026-11-22"), output);
+    }
+
+    [Fact]
+    public async Task CodeAudit_OnAnEmptyConversation_DrawsNoRuleOrNotice()
+    {
+        // 2026-11-23, review #9: nothing to leave behind, so nothing said.
+        _settings.Update(d => d.CodeAuditCleanPasses = 1);
+        AuditFixture(Line("/code-audit src security"), Key(Keys.Enter), Line("/exit"));
+        _chat.Enqueue(FindingCall("a1"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.Enqueue(CleanCall("a2"));
+        _chat.EnqueueText("Pass 2 done.");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(ChatScreen.NewConversationNotice, output);
     }
 
     [Fact]

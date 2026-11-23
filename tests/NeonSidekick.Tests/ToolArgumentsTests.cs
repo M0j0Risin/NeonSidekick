@@ -287,6 +287,23 @@ public class ToolArgumentsTests
         Assert.Null(LooseJson.TryParse("[\"a\", \"b\"", closeOpen: true));
     }
 
+    /// <summary>Inside <see cref="LooseJson.Strict"/> (2026-11-23, review #87) a list left open is never closed; a whole one still reads, and the scope ends.</summary>
+    [Fact]
+    public void Strict_ClosesNoOpenList_AndEnds()
+    {
+        const string open = "[{\"q\": \"A?\"}, {\"q\": \"B?\"}";
+        using (LooseJson.Strict())
+        {
+            Assert.Null(LooseJson.TryParse(open, closeOpen: true));
+            Assert.False(ToolArguments.TryReadObjectList(Args(open), "x", out _, out _));
+            Assert.True(ToolArguments.TryReadObjectList(Args(open + "]"), "x", out var whole, out _));
+            Assert.Equal(2, whole.Count);
+        }
+
+        Assert.True(ToolArguments.TryReadObjectList(Args(open), "x", out var closed, out _));
+        Assert.Equal(2, closed.Count);
+    }
+
     /// <summary>
     /// A list of strings written as text (2026-11-15, the tool-arguments review's #39, #92): a second list after the first is one odd string,
     /// never the first alone; a lone backslash in a Windows path is read as a backslash; a string's escaped quotes stay quotes.

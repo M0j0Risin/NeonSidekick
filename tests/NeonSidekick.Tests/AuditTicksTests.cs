@@ -66,6 +66,10 @@ public sealed class AuditTicksTests : IDisposable
     [InlineData("Fix it (see A9) (closes A2)", "A2")]
     [InlineData("Nothing to close here (see A9)", "")]
     [InlineData("closes A1 and adds tests", "A1")]
+    [InlineData("Fix (closes **A1**, **A3**)", "A1,A3")]                 // 2026-11-23, review #1: emphasis on every id
+    [InlineData("Fix (closes `A2` and `A4`)", "A2,A4")]
+    [InlineData("Fix, closes **A3**–**A5**", "A3,A4,A5")]                // and on a range's ends
+    [InlineData("Fix, closes A１２", "")]                                 // review #43: other digits are no id, and never throw
     public void ClosedBy_ReadsTheIdsAfterCloses(string step, string ids) =>
         Assert.Equal(ids, string.Join(",", AuditFinding.ClosedBy(step)));
 
@@ -159,6 +163,73 @@ public sealed class AuditTicksTests : IDisposable
 
         // Again: nothing left to change, nothing said.
         Assert.Empty(AuditTicks.Sync(_box.Files, PlanPath, Save).Notices);
+    }
+
+    /// <summary>A finding two steps close (2026-11-23, review #26): the first step's tick waits; the second's settles it.</summary>
+    [Fact]
+    public void Tick_AFindingTwoStepsClose_WaitsForTheSecond()
+    {
+        SaveReport(Finding("A1"), Finding("A2"));
+        SavePlan("- [x] One (closes A1, A2)\n  Done when: x\n- [ ] Two (closes A2)\n  Done when: x\n");
+        var first = PlanSteps.Parse(PlanDocument.Body(File.ReadAllText(_box.Full(PlanPath))))[0];
+
+        AuditTicks.Tick(_box.Files, PlanPath, [first], Save);
+        Assert.Equal([true, false], Report().Findings.Select(f => f.Settled));
+
+        SavePlan("- [x] One (closes A1, A2)\n  Done when: x\n- [x] Two (closes A2)\n  Done when: x\n");
+        var second = PlanSteps.Parse(PlanDocument.Body(File.ReadAllText(_box.Full(PlanPath))))[1];
+        AuditTicks.Tick(_box.Files, PlanPath, [second], Save);
+        Assert.True(Report().Findings[1].Settled);
+        Assert.Equal(AuditText.SettledNote("fix-audit-findings-a1-a4", 2), Report().Findings[1].Notes[^1]);
+    }
+
+    /// <summary>The sync's twin of the rule above (2026-11-23, review #26): a finding a ticked and an unticked step name stays open.</summary>
+    [Fact]
+    public void Sync_AFindingAnUntickedStepAlsoNames_StaysOpen()
+    {
+        SaveReport(Finding("A1"), Finding("A2"));
+        SavePlan("- [x] One (closes A1, A2)\n  Done when: x\n- [ ] Two (closes A2)\n  Done when: x\n");
+
+        AuditTicks.Sync(_box.Files, PlanPath, Save);
+
+        Assert.Equal([true, false], Report().Findings.Select(f => f.Settled));
+    }
+
+    /// <summary>A finding this plan ticked that someone reopened since (2026-11-23, review #80): a sync leaves it open.</summary>
+    [Fact]
+    public void Sync_LeavesOpen_AFindingReopenedAfterThisPlansTick()
+    {
+        string plan = "fix-audit-findings-a1-a4";
+        SaveReport(Finding("A1", notes: [AuditText.SettledNote(plan, 1), "reopened: still broken"]), Finding("A2", notes: [AuditText.UnsettledNote(plan, 1)]));
+        SavePlan("- [x] One (closes A1, A2)\n  Done when: x\n");
+
+        AuditTicks.Sync(_box.Files, PlanPath, Save);
+
+        Assert.Equal([false, true], Report().Findings.Select(f => f.Settled));   // A2, unticked by this plan's redo, is ticked again
+    }
+
+    /// <summary>A parent step naming a finding (2026-11-23, review #96): its note names the parent's last leaf, never step 0.</summary>
+    [Fact]
+    public void Tick_AParentsNote_NamesItsLastLeaf()
+    {
+        SaveReport(Finding("A1"));
+        SavePlan("- [x] Parent (closes A1)\n  - [x] One\n    Done when: x\n  - [x] Two\n    Done when: x\n");
+        var parent = PlanSteps.Parse(PlanDocument.Body(File.ReadAllText(_box.Full(PlanPath))))[0];
+
+        AuditTicks.Tick(_box.Files, PlanPath, [parent], Save);
+
+        Assert.Equal(AuditText.SettledNote("fix-audit-findings-a1-a4", parent.Children[^1].Index), Report().Findings[0].Notes[^1]);
+        Assert.NotEqual(0, parent.Children[^1].Index);
+    }
+
+    /// <summary>A note of another plan whose name ends in this one's (2026-11-23, review #81): not this plan's.</summary>
+    [Fact]
+    public void IsSettledNoteOf_NeedsAStepNumber()
+    {
+        Assert.True(AuditText.IsSettledNoteOf(AuditText.SettledNote("fix", 1234), "fix"));
+        Assert.False(AuditText.IsSettledNoteOf("ticked when step 2 of review of fix passed", "fix"));
+        Assert.True(AuditText.IsUnsettledNoteOf(AuditText.UnsettledNote("fix", 3), "fix"));
+        Assert.False(AuditText.IsUnsettledNoteOf("unticked: step 3 of review of fix was redone", "fix"));
     }
 
     [Fact]

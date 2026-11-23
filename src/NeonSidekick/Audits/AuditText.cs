@@ -309,9 +309,22 @@ public static class AuditText
     /// <summary>The note under a finding the app unticked: its step was redone. Pinned.</summary>
     public static string UnsettledNote(string plan, int step) => $"unticked: step {N(step)} of {plan} was redone";
 
-    /// <summary>Whether <paramref name="note"/> is a <see cref="SettledNote"/> of <paramref name="plan"/> (any step).</summary>
-    public static bool IsSettledNoteOf(string note, string plan) =>
-        note.StartsWith("ticked when step ", StringComparison.Ordinal) && note.EndsWith($" of {plan} passed", StringComparison.Ordinal);
+    /// <summary>
+    /// Whether <paramref name="note"/> is a <see cref="SettledNote"/> of <paramref name="plan"/> (any step): a step number between the two halves
+    /// (2026-11-23, review #81: by the suffix alone, plan <c>fix</c> matched a note of plan <c>review of fix</c>).
+    /// </summary>
+    public static bool IsSettledNoteOf(string note, string plan) => IsStepNote(note, "ticked when step ", $" of {plan} passed");
+
+    /// <summary>Whether <paramref name="note"/> is an <see cref="UnsettledNote"/> of <paramref name="plan"/> (any step; 2026-11-23, review #80).</summary>
+    public static bool IsUnsettledNoteOf(string note, string plan) => IsStepNote(note, "unticked: step ", $" of {plan} was redone");
+
+    private static bool IsStepNote(string note, string lead, string tail)
+    {
+        ArgumentNullException.ThrowIfNull(note);
+        return note.Length > lead.Length + tail.Length
+            && note.StartsWith(lead, StringComparison.Ordinal) && note.EndsWith(tail, StringComparison.Ordinal)
+            && int.TryParse(note.AsSpan(lead.Length, note.Length - lead.Length - tail.Length), NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out _);
+    }
 
     /// <summary>
     /// After a fix plan is done (2026-11-22, the session review: new audits were run instead, which never recheck a fix): the resume that does. The

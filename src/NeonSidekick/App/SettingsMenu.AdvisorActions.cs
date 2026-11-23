@@ -52,8 +52,8 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public const string AdvisorBorrowServerRow = "Your session's server (none saved)";
 
-    /// <summary>Its band. Pinned.</summary>
-    public const string AdvisorBorrowServerBand = "Answers on whatever server your own session is connected to, with this advisor's model when that server has it.";
+    /// <summary>Its band. The saved model is cleared with the URL (2026-11-23, review #61, the user's pick), as <c>/server</c> clears it on a new URL. Pinned.</summary>
+    public const string AdvisorBorrowServerBand = "Answers on whatever server your own session is connected to, with that server's own model.";
 
     /// <summary>A write of the advisor's <c>profile.json</c> that failed (the server's, model's or reasoning's since 2026-11-22). Pinned.</summary>
     public static string AdvisorSaveFailedError(string profile, string detail) => $"Could not save {profile}'s profile: {detail}";
@@ -71,7 +71,10 @@ internal sealed partial class SettingsMenu
     /// <summary>The advisor's URL changed between the list and the write: the pick was the old server's, so nothing is written (2026-11-22). Pinned.</summary>
     public static string AdvisorChangedMeanwhileNotice(string profile) => $"({profile}'s server changed while you picked; open Change the model again)";
 
-    /// <summary>The notice after Change the reasoning: the advisor's line shows no reasoning (2026-11-22). Pinned.</summary>
+    /// <summary>
+    /// The notice after Change the reasoning (2026-11-22), naming the level in words: the advisor's line shows only its disc (since 48c838fd;
+    /// 2026-11-23, review #32). Pinned.
+    /// </summary>
     public static string AdvisorReasoningNotice(string profile, string level) => FieldName(SettingsField.AdvisorList) + ": " + profile + "'s reasoning: " + level;
 
     /// <summary>
@@ -172,7 +175,8 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// <c>Change the server</c> on an advisor (2026-11-22, the user's ask): the servers the advisor's own saved settings offer, looked for as
     /// <c>/server</c> typed in that profile would (<see cref="AdvisorServerProbe"/>), with <see cref="AdvisorBorrowServerRow"/> first; then the
-    /// model and the reasoning, as <c>/server</c> asks them, on pages that keep the pane open. Nothing is written until the last pick; then
+    /// model and the reasoning, as <c>/server</c> asks them, on pages that keep the pane open. Nothing is written until the last pick (Esc on the
+    /// reasoning page keeps the saved level and still writes the server and model, as <c>/server</c>'s does; 2026-11-23, review #13); then
     /// the advisor's <c>profile.json</c> read again (it may be loaded in another instance) and its server, model and reasoning written
     /// over it, as <c>/profile push</c> writes another profile (<see cref="WriteAdvisorProfile"/>). The loaded profile and the session are
     /// never touched. True when written.
@@ -184,7 +188,8 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        string savedUrl = saved.LlmUrl?.Trim() ?? "";
+        // Normalized (2026-11-23, review #14): a hand-typed http://box:8000 is the server listed as http://box:8000/v1/, never the borrow row.
+        string savedUrl = NormalizedUrl(saved.LlmUrl);
         Uri? inUse = savedUrl.Length > 0 && Uri.TryCreate(savedUrl, UriKind.Absolute, out var parsed) ? parsed : null;
         IReadOnlyList<LlmServer> servers = [];
         if (AdvisorServerProbe is { } probe)
@@ -205,7 +210,7 @@ internal sealed partial class SettingsMenu
         }
 
         string url = "";
-        string? model = null;   // null keeps the saved model
+        string? model = "";   // the borrow row: blank, the session's server's own model (2026-11-23, review #61); null keeps the saved model
         string? reasoning = null;   // null keeps the saved level
         if (!ReferenceEquals(choice, LeadServerRow))
         {
@@ -224,7 +229,7 @@ internal sealed partial class SettingsMenu
                 {
                     model = "";   // a Docker container or a server that listed none: its own default
                 }
-                else if (await ChooseModelFromListAsync(ids, cursor, cancellationToken, crumb + " › model", close: false).ConfigureAwait(false) is { } id)
+                else if (await ChooseModelFromListAsync(ids, cursor, cancellationToken, crumb + AdvisorText.ModelCrumb, close: false).ConfigureAwait(false) is { } id)
                 {
                     model = id;
                 }
@@ -234,7 +239,7 @@ internal sealed partial class SettingsMenu
                 }
             }
 
-            reasoning = await ChooseReasoningAsync(AdvisorReasoningOf(saved).Level, cancellationToken, crumb + " › reasoning", close: false).ConfigureAwait(false);
+            reasoning = await ChooseReasoningAsync(AdvisorReasoningOf(saved).Level, cancellationToken, crumb + AdvisorText.ReasoningCrumb, close: false).ConfigureAwait(false);
         }
 
         if (WriteAdvisorProfile(entry, fresh =>
@@ -256,6 +261,25 @@ internal sealed partial class SettingsMenu
 
         Sink.Notice(AdvisorServerNotice(entry, AdvisorServer.Of(written, AdvisorLinkedModel)) + SharedModelNoteFor(written));
         return true;
+    }
+
+    /// <summary>A saved URL as the server lists spell it (2026-11-23, review #14); the text as typed when it won't parse, "" for none.</summary>
+    private static string NormalizedUrl(string? saved)
+    {
+        string text = saved?.Trim() ?? "";
+        if (text.Length == 0)
+        {
+            return "";
+        }
+
+        try
+        {
+            return LlmEndpoint.NormalizeBaseUrl(text).ToString();
+        }
+        catch (ArgumentException)
+        {
+            return text;
+        }
     }
 
     /// <summary>

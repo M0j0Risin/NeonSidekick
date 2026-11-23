@@ -985,6 +985,15 @@ public static class RalphText
     /// <summary><see cref="AppCheckLine"/> when the plan has no check command. Pinned.</summary>
     public const string NoAppCheckLine = "What the app ran itself: nothing (the plan has no check command)";
 
+    /// <summary>
+    /// <see cref="AppCheckLine"/> when the plan's check runs only once every step stands (2026-11-23, review #35: the reviewer was told there was
+    /// no check command). Pinned.
+    /// </summary>
+    public const string FinalOnlyAppCheckLine = "What the app ran itself: nothing after this step (the plan's check runs once, after the last step)";
+
+    /// <summary><see cref="AppCheckLine"/> when the user started the run with its checks off (2026-11-23, review #35). Pinned.</summary>
+    public const string ChecksOffAppCheckLine = "What the app ran itself: nothing (the user turned the checks off for this run)";
+
     /// <summary>A by-hand step's review request (2026-10-21): the reviewer need not judge what only the user can. Pinned.</summary>
     public const string ByHandReviewLine =
         "This step's Done when is checked by hand by the user after you: judge everything else; pass when nothing you can see is wrong.";

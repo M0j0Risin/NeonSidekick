@@ -34,6 +34,8 @@ public static class CodeLaunch
     /// <c>PYTHONPATH</c> set to the working directory (2026-11-22, the session review: its <c>sys.path[0]</c> is the run folder, so a script could not
     /// import the working folder's modules), put ahead of an inherited one (<see cref="ChildEnvironment.Apply"/>), as for a script that sits in the
     /// working folder; the others have no environment of their own (Node's <c>require('./x')</c> resolves from the script's folder either way).
+    /// A module in the working folder named as a standard one (a <c>json.py</c>) shadows it for this child alone, as running the script from that
+    /// folder would; the child already runs the model's code there (2026-11-23, review #3: kept).
     /// </summary>
     public static ProcessLaunch For(CodeLanguage language, string executable, string runFolder, string scriptName, string workingDirectory, string label)
     {

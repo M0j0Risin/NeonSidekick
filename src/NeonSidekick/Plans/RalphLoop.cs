@@ -330,6 +330,23 @@ public sealed class RalphLoop
     private bool _nudged;
 
     /// <summary>
+    /// Whether the run's token budget is spent counting the pass under way (2026-11-23, review #29): <see cref="RunTokens"/> grows only as a pass is
+    /// judged, so the nudge's check adds this pass's tokens since <see cref="BeginPass"/>, worked out as <see cref="EndPass"/> does. False with no budget.
+    /// </summary>
+    public bool BudgetSpent(PlanPassMeter? now)
+    {
+        if (Snapshot.TokenBudget <= 0)
+        {
+            return false;
+        }
+
+        long pass = _passStart is { } start && now is { } end
+            ? Math.Max(0, end.Tokens - start.Tokens) + Math.Max(0, end.AdvisorTokens - start.AdvisorTokens)
+            : 0;
+        return RunTokens + pass >= Snapshot.TokenBudget;
+    }
+
+    /// <summary>
     /// Whether the pass under way may be nudged to call <c>finish_step</c> (2026-11-22, the session review: a pass that replied two blank lines was
     /// judged "no report"): true once a pass, then false until the next begins.
     /// </summary>

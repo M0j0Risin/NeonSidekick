@@ -746,12 +746,14 @@ internal sealed partial class ChatScreen
             _transcript.Notice(PlanText.ReferencesAttachedNotice(images.Count));
         }
 
-        DiagnosticLog.Info(AppCategory, $"ralph: pass {loop.Pass}, step {index} of {total}: {step?.Text ?? RalphText.FinalFixStep}");
+        DiagnosticLog.Info(AppCategory, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ralph: pass {loop.Pass}, step {index} of {total}: {step?.Text ?? RalphText.FinalFixStep}"));
         bool exit;
         // The flags the judge reads are this pass's (2026-10-20, a review: a message refused before its turn ran — no assistant, a picture the model
-        // cannot see — left the last turn's, so a pass that sent nothing was judged as an ordinary one, or as stopped by an earlier Esc).
+        // cannot see — left the last turn's, so a pass that sent nothing was judged as an ordinary one, or as stopped by an earlier Esc). The failure's
+        // kind too (2026-11-23, review #78: a refused pass kept an earlier ToolCap, and was nudged on a step never sent).
         _lastTurnCancelled = false;
         _lastTurnFailed = true;
+        _lastTurnFailure = TurnFailure.None;
         try
         {
             exit = await RunMessageAsync(message, images, cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
@@ -763,15 +765,21 @@ internal sealed partial class ChatScreen
 
         // A pass that ended on its own without finish_step (2026-11-22, the session review: a reply of two blank lines was judged "no report"): asked
         // once, in the same conversation, to report — never after an Esc, a failure, a /exit, or a line the user typed or spoke meanwhile.
+        // Never once the run's token budget is spent, this pass's tokens counted (2026-11-23, review #29).
         if (loop.Report is null && !exit && ReferenceEquals(_ralph, loop) && !_lastTurnCancelled && (!_lastTurnFailed || _lastTurnFailure == TurnFailure.ToolCap)
-            && _ralphSpoken is null && !userSpoke() && loop.TakeNudge())
+            && _ralphSpoken is null && !userSpoke() && !loop.BudgetSpent(PlanMeter()) && loop.TakeNudge())
         {
             string nudge = RalphText.NudgeLine(loop.Pass);
-            DiagnosticLog.Info(AppCategory, $"ralph: pass {loop.Pass} nudged: no finish_step");
+            DiagnosticLog.Info(AppCategory, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ralph: pass {loop.Pass} nudged: no finish_step"));
             _ralphPass = (nudge, RalphText.SessionTitle(snapshot.Title, index, total, loop.Pass));
             _transcript.User(nudge);
+            // The pass's own outcome, put back when the nudge fails (2026-11-23, review #34: the judge read the nudge's failure as the pass's, dropping
+            // its pictures and saying the retry notice).
+            bool passFailed = _lastTurnFailed;
+            var passFailure = _lastTurnFailure;
             _lastTurnCancelled = false;
             _lastTurnFailed = true;
+            _lastTurnFailure = TurnFailure.None;
             try
             {
                 exit = await RunMessageAsync(RalphText.NudgeMessage, [], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
@@ -779,6 +787,12 @@ internal sealed partial class ChatScreen
             finally
             {
                 _ralphPass = null;
+            }
+
+            if (_lastTurnFailed && !_lastTurnCancelled)
+            {
+                _lastTurnFailed = passFailed;
+                _lastTurnFailure = passFailure;
             }
         }
 
@@ -790,9 +804,12 @@ internal sealed partial class ChatScreen
             // a resume passed the step by).
             if (RalphJudge.PutBackUnjudged(files, path, lines, step, headed, new PlanChecks(snapshot.Verify, snapshot.Final)))
             {
-                DiagnosticLog.Info(AppCategory, $"ralph: pass {loop.Pass} ended with its loop; its plan edits put back");
+                DiagnosticLog.Info(AppCategory, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ralph: pass {loop.Pass} ended with its loop; its plan edits put back"));
             }
 
+            // The report in step with the steps as put back (2026-11-23, review #74: EndRalph, which syncs, never runs for a dropped loop), the lock
+            // still held: RunRalphAsync's finally lets it go.
+            SyncAuditTicks(files, path);
             return (exit, RalphStop.Stopped);
         }
 
@@ -995,14 +1012,19 @@ internal sealed partial class ChatScreen
     /// landed in sessions titled "Ralph: … pass N"): the rule and <paramref name="notice"/>, the history, the traces, the conversation's usage, the
     /// session row, the title, the files seen and the conversation's number (a <c>/cmd --bg</c> started before it ends shown, never kept) — never the
     /// queue, plan or audit state, the advisors' links, the picture strip, the <c>/mark</c> mark or the allows. A pass's start, a loop's end and a code
-    /// audit's start; <c>/new</c> is <see cref="StartNewConversation"/>, which drops the queue and a paused plan too.
+    /// audit's start; <c>/new</c> is <see cref="StartNewConversation"/>, which drops the queue and a paused plan too. <paramref name="quiet"/> leaves
+    /// the rule and the notice out (2026-11-23, review #9: a code audit's start on a conversation with nothing in it); the rest still runs, since the
+    /// session row or files seen can outlive an empty history.
     /// </summary>
-    private void ResetConversationLight(string notice)
+    private void ResetConversationLight(string notice, bool quiet = false)
     {
-        using (_pane.Batch())
+        if (!quiet)
         {
-            _transcript.Rule();
-            _transcript.Notice(notice);
+            using (_pane.Batch())
+            {
+                _transcript.Rule();
+                _transcript.Notice(notice);
+            }
         }
 
         _files.ForgetSeen();
@@ -1108,6 +1130,8 @@ internal sealed partial class ChatScreen
             // plan before RalphPassAsync's PutBackUnjudged rewrote it and cleared the in-pass mark): the driver lets it go then (RunRalphAsync's finally).
             if (!loop.InPass)
             {
+                // Between passes, the report brought in step first (2026-11-23, review #74), under the lock; a pass under way syncs after its put-back.
+                SyncAuditTicks(RalphFiles, loop.Snapshot.Path);
                 RalphLog.Unlock(RalphFiles, loop.Snapshot.Path, RalphLog.Me);
             }
 

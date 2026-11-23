@@ -353,7 +353,50 @@ public class ProjectSkillsTests : IDisposable
         Scan();
 
         Assert.Equal(ProjectSkillTrust.ProjectSkillCap, _catalog.Skills.Count);
+
+        // One folder's 51st on are past its own first 50 (review #70), not the repo-wide count.
+        Assert.Equal(10, _catalog.ProjectPending.Count(p => p.Reason == ProjectPendingReason.PastFolderCap));
+        Assert.DoesNotContain(_catalog.ProjectPending, p => p.Reason == ProjectPendingReason.OverCap);
+    }
+
+    [Fact]
+    public void Past50AcrossTheRepo_TheRestAreOverTheCap()
+    {
+        string sub = Path.Combine(_repo, "sub");
+        _working = sub;
+        for (int i = 0; i < 30; i++)
+        {
+            string n = i.ToString("00", System.Globalization.CultureInfo.InvariantCulture);
+            PutProject(sub, "near" + n, Skill("near" + n));
+            PutProject(_repo, "far" + n, Skill("far" + n));
+        }
+
+        Scan();
+        TrustFolder(sub);
+        TrustFolder(_repo);
+        Scan();
+
+        Assert.Equal(ProjectSkillTrust.ProjectSkillCap, _catalog.Skills.Count);
         Assert.Equal(10, _catalog.ProjectPending.Count(p => p.Reason == ProjectPendingReason.OverCap));
+    }
+
+    /// <summary>Review #70: 52 folders at one level with 3 of the first 50 unparseable: 47 offered, 51-52 past the folder's cap, none over the repo's.</summary>
+    [Fact]
+    public void FiftyTwoFolders_ThreeUnparseable_47Offered_TheLastTwoPastTheFolderCap()
+    {
+        for (int i = 0; i < 52; i++)
+        {
+            string n = "s" + i.ToString("00", System.Globalization.CultureInfo.InvariantCulture);
+            PutProject(_repo, n, i is 3 or 9 or 27 ? "no frontmatter here\n" : Skill(n));
+        }
+
+        Scan();
+        TrustFolder(_repo);
+        Scan();
+
+        Assert.Equal(47, _catalog.Skills.Count);
+        Assert.Equal(["s50", "s51"], _catalog.ProjectPending.Where(p => p.Reason == ProjectPendingReason.PastFolderCap).Select(p => p.Skill.Name).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(_catalog.ProjectPending, p => p.Reason == ProjectPendingReason.OverCap);
     }
 
     [Fact]
@@ -415,6 +458,151 @@ public class ProjectSkillsTests : IDisposable
 
         Assert.Equal(ProjectPendingReason.BadName, Assert.Single(_catalog.ProjectPending).Reason);
         Assert.Equal(new string('a', 64) + "…", SkillsText.ShownName(name));
+    }
+
+    /// <summary>Review #45: a right-to-left override (a format character, no control) makes the name pending, and the row drops it.</summary>
+    [Fact]
+    public void ANameWithAnRtlOverride_IsBadName_AndTheRowDropsIt()
+    {
+        string name = "deploy\u202Eexe.sh";
+        PutProject(_repo, "rtl", Skill(name));
+        Scan();
+        TrustFolder(_repo);
+
+        Scan();
+
+        Assert.Equal(ProjectPendingReason.BadName, Assert.Single(_catalog.ProjectPending).Reason);
+        Assert.Equal("deployexe.sh…", SkillsText.ShownName(name));
+        Assert.False(SkillCatalog.IsBoundedName("a\u2028b"));
+    }
+
+    /// <summary>Review #60: each file is framed by its length, so bytes moved across a file's edge hash differently.</summary>
+    [Fact]
+    public void ShiftedByteLayouts_HashDifferently()
+    {
+        string one = PutProject(_repo, "one", Skill("x"));
+        File.WriteAllText(Path.Combine(one, "a.md"), "x");
+        File.WriteAllText(Path.Combine(one, "b.md"), "y");
+        string two = PutProject(_repo, "two", Skill("x"));
+        File.WriteAllText(Path.Combine(two, "a.md"), "xb.md\0y");
+
+        Assert.NotEqual(_catalog.ProjectSkillHash(one), _catalog.ProjectSkillHash(two));
+    }
+
+    /// <summary>Review #40/#25b: a same-size edit with its write time put back is refused at the load; the stamp cache never answers the load's check.</summary>
+    [Fact]
+    public void ASameSizeEdit_WithTheWriteTimePutBack_IsRefusedAtTheLoad()
+    {
+        string directory = PutProject(_repo, "deploy", Skill("deploy", "Does AAAA."));
+        Scan();
+        TrustFolder(_repo);
+        Scan();
+        var skill = _catalog.Find("deploy")!;
+        string file = Path.Combine(directory, SkillCatalog.FileName);
+        var written = File.GetLastWriteTimeUtc(file);
+
+        File.WriteAllText(file, Skill("deploy", "Does BBBB."));
+        File.SetLastWriteTimeUtc(file, written);
+
+        Assert.False(_catalog.StillTrusted(skill));
+    }
+
+    /// <summary>Review #25b: a SKILL.md past the old 128 KB budget is hashed by its bytes, so a touch alone changes nothing, even on a cold cache.</summary>
+    [Fact]
+    public void ALargeSkillMd_OnlyTouched_HashesTheSame_OnAColdCache()
+    {
+        string directory = PutProject(_repo, "big", Skill("big") + new string('x', 200 * 1024));
+        string before = _catalog.ProjectSkillHash(directory);
+        File.SetLastWriteTimeUtc(Path.Combine(directory, SkillCatalog.FileName), DateTime.UtcNow.AddHours(1));
+
+        Assert.Equal(before, new SkillCatalog(() => _roots).ProjectSkillHash(directory));
+    }
+
+    /// <summary>Review #54: Retain keeps only the folders it's given.</summary>
+    [Fact]
+    public void Retain_KeepsOnlyTheFoldersGiven()
+    {
+        var hasher = new ProjectSkillHasher();
+        string a = PutProject(_repo, "a", Skill("a"));
+        string b = PutProject(_repo, "b", Skill("b"));
+        hasher.SkillHash(a);
+        hasher.SkillHash(b);
+        hasher.SkillHash(b, fresh: true);
+
+        hasher.Retain([a]);
+
+        Assert.Equal([a], hasher.CachedFolders);
+    }
+
+    /// <summary>Review #46: a project SKILL.md stays in the parse cache, so a second scan logs no new "read from" line.</summary>
+    [Fact]
+    public void ASecondScan_LogsNoNewReadFromLine()
+    {
+        PutProject(_repo, "deploy", Skill("deploy"));
+        Scan();
+        var lines = new List<string>();
+        void Capture(NeonSidekick.Diagnostics.DiagnosticEvent e) => lines.Add(e.Message);
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += Capture;
+        try
+        {
+            Scan();
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= Capture;
+        }
+
+        Assert.DoesNotContain(lines, l => l.Contains("read from", StringComparison.Ordinal));
+    }
+
+    /// <summary>Review #73: a SKILL.md that is a link, even to a file inside the repo, is listed and never offered.</summary>
+    [SymlinkFact]
+    public void ALinkedSkillMd_IsPending_NeverOffered()
+    {
+        string real = Path.Combine(_repo, "docs");
+        Directory.CreateDirectory(real);
+        File.WriteAllText(Path.Combine(real, "deploy.md"), Skill("deploy"));
+        string directory = Path.Combine(_repo, ".agents", "skills", "deploy");
+        Directory.CreateDirectory(directory);
+        File.CreateSymbolicLink(Path.Combine(directory, SkillCatalog.FileName), Path.Combine(real, "deploy.md"));
+        Scan();
+        TrustFolder(_repo);
+
+        Scan();
+
+        Assert.Null(_catalog.Find("deploy"));
+        Assert.Equal(ProjectPendingReason.LinkedFile, Assert.Single(_catalog.ProjectPending).Reason);
+    }
+
+    /// <summary>Review #84: on a case-sensitive volume, REF.md is another file than the listed ref.md.</summary>
+    [Fact]
+    public void ReadResource_OnACaseSensitiveVolume_RefusesAnotherCaseOfAListedFile()
+    {
+        string directory = PutProject(_repo, "deploy", Skill("deploy"));
+        File.WriteAllText(Path.Combine(directory, "ref.md"), "the notes");
+        Scan();
+        TrustFolder(_repo);
+        Scan();
+        var skill = _catalog.Find("deploy")!;
+
+        using (NeonSidekick.Files.CaseRule.Override(_ => true))
+        {
+            Assert.Equal(SkillCatalog.ReadOutcome.NotListed, SkillCatalog.ReadResource(skill, "REF.md").Outcome);
+            Assert.Equal(SkillCatalog.ReadOutcome.Ok, SkillCatalog.ReadResource(skill, "ref.md").Outcome);
+        }
+    }
+
+    /// <summary>Review #57: a SKILL.md over the read cap says so by the skill's name, not an empty path.</summary>
+    [Fact]
+    public void ASkillMdOverTheCap_AtTheLoad_SaysBodyTooBig()
+    {
+        string directory = PutProject(_repo, "deploy", Skill("deploy") + new string('x', (int)ProjectSkillTrust.MaxSkillFileBytes));
+        var skill = new Skill("deploy", "", SkillScope.Project, directory);
+
+        var read = SkillCatalog.ReadBody(skill);
+
+        Assert.Equal(SkillCatalog.ReadOutcome.TooBig, read.Outcome);
+        Assert.Equal(SkillText.BodyTooBig("deploy"), SkillText.ReadError(skill, null, read));
     }
 
     [Fact]
@@ -504,7 +692,8 @@ public class ProjectSkillsTests : IDisposable
         PutProject(_repo, "deploy", Skill("../../x"));
         TrustFolder(_repo);
 
-        string copies = Path.Combine(_trust.CopiesPath, ProjectSkillTrust.FolderHash(ProjectSkillTrust.KeyOf(_repo)));
+        string copies = Path.Combine(_trust.CopiesPath, ProjectSkillTrust.CopiesFolderFor(ProjectSkillTrust.KeyOf(_repo), _trust.Trusted(_repo)!.Fingerprint));
+        Assert.True(Directory.Exists(copies));
         Assert.Equal(Skill("../../x"), _trust.CopyOf(_repo, ".agents/skills/deploy"));
         Assert.All(Directory.EnumerateFiles(copies), f => Assert.StartsWith(copies, f, StringComparison.Ordinal));
 
@@ -528,6 +717,151 @@ public class ProjectSkillsTests : IDisposable
 
         Assert.Null(_trust.Trusted(gone));
         Assert.NotNull(_trust.Trusted(_repo));
+    }
+
+    /// <summary>Review #7/#68: a re-trust whose save fails leaves the old entry with its own copies, for a Trust and for an Untrust.</summary>
+    [Fact]
+    public void ASaveThatFails_KeepsTheOldEntrysCopies_ForATrustAndAnUntrust()
+    {
+        string directory = PutProject(_repo, "deploy", Skill("deploy"));
+        TrustFolder(_repo);
+        File.WriteAllText(Path.Combine(directory, SkillCatalog.FileName), Skill("deploy", "Edited since."));
+        var state = _catalog.ReadProjectFolder(_repo, _repo);
+        File.SetAttributes(_trust.FilePath, FileAttributes.ReadOnly);
+        try
+        {
+            Assert.ThrowsAny<IOException>(() => _trust.Trust(_repo, state.Fingerprint, () => _catalog.ReadProjectFolder(_repo, _repo)));
+            Assert.Equal(Skill("deploy"), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+
+            Assert.ThrowsAny<IOException>(() => _trust.Untrust(_repo));
+            Assert.Equal(Skill("deploy"), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+        }
+        finally
+        {
+            File.SetAttributes(_trust.FilePath, FileAttributes.Normal);
+        }
+
+        // The next save that lands takes the new copies and sweeps the old and the failed try's.
+        Assert.Equal(ProjectTrustSave.Saved, _trust.Trust(_repo, state.Fingerprint, () => _catalog.ReadProjectFolder(_repo, _repo)));
+        Assert.Equal(Skill("deploy", "Edited since."), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+        Assert.Single(Directory.EnumerateDirectories(_trust.CopiesPath));
+    }
+
+    /// <summary>Review #47: copies are named by the entry's own spelling, so a re-trust through another case still finds them.</summary>
+    [Fact]
+    public void ARetrust_UnderAnotherCase_KeepsCopyOfWorking()
+    {
+        using var rule = NeonSidekick.Files.CaseRule.Override(_ => false);
+        string directory = PutProject(_repo, "deploy", Skill("deploy"));
+        TrustFolder(_repo);
+        File.WriteAllText(Path.Combine(directory, SkillCatalog.FileName), Skill("deploy", "Edited since."));
+        string other = _repo.ToUpperInvariant();
+        var state = _catalog.ReadProjectFolder(_repo, _repo);
+
+        Assert.Equal(ProjectTrustSave.Saved, _trust.Trust(other, state.Fingerprint, () => _catalog.ReadProjectFolder(_repo, _repo)));
+
+        Assert.Equal(Skill("deploy", "Edited since."), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+        Assert.Equal(Skill("deploy", "Edited since."), _trust.CopyOf(other, ".agents/skills/deploy"));
+    }
+
+    /// <summary>Review #7: copies kept before the per-fingerprint names still give the re-ask its diff, and go once the entry is saved again.</summary>
+    [Fact]
+    public void CopiesUnderTheBareFolderName_AreReadUntilTheEntryIsSavedAgain()
+    {
+        string directory = PutProject(_repo, "deploy", Skill("deploy"));
+        TrustFolder(_repo);
+        string key = ProjectSkillTrust.KeyOf(_repo);
+        string named = Path.Combine(_trust.CopiesPath, ProjectSkillTrust.CopiesFolderFor(key, _trust.Trusted(_repo)!.Fingerprint));
+        string bare = Path.Combine(_trust.CopiesPath, ProjectSkillTrust.FolderHash(key));
+        Directory.Move(named, bare);
+
+        Assert.Equal(Skill("deploy"), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+
+        File.WriteAllText(Path.Combine(directory, SkillCatalog.FileName), Skill("deploy", "Edited since."));
+        TrustFolder(_repo);
+
+        Assert.False(Directory.Exists(bare));
+        Assert.Equal(Skill("deploy", "Edited since."), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+    }
+
+    /// <summary>Review #94/#95: a hand-edited file's null folder, malformed folder, null lists and bad fingerprints are left out; the good entry stays.</summary>
+    [Fact]
+    public void AFileWithNullsAndBadFingerprints_ReadsSafely_KeepingItsGoodEntries()
+    {
+        PutProject(_repo, "deploy", Skill("deploy"));
+        TrustFolder(_repo);
+        string good = File.ReadAllText(_trust.FilePath).Trim();
+        string other = Path.Combine(_dir, "other").Replace("\\", "\\\\", StringComparison.Ordinal);
+        string json = "[" + good.TrimStart('[').TrimEnd(']') + ","
+            + "{\"folder\": null},"
+            + "{\"folder\": \"a\\u0000b\"},"
+            + "{\"folder\": \"" + other + "\", \"kinds\": null, \"disabled\": null},"
+            + "{\"folder\": \"" + other + "x\", \"kinds\": {\"skills\": {\"fingerprint\": null, \"trustedAt\": null, \"skills\": null}}},"
+            + "{\"folder\": \"" + other + "y\", \"kinds\": {\"skills\": {\"fingerprint\": \"abc\"}}}]";
+        File.WriteAllText(_trust.FilePath, json);
+
+        Assert.NotNull(_trust.Trusted(_repo));
+        Assert.Null(_trust.Trusted(Path.Combine(_dir, "otherx")));
+        Assert.Null(_trust.Trusted(Path.Combine(_dir, "othery")));
+        Assert.Empty(_trust.DisabledIn(Path.Combine(_dir, "other")));
+        Assert.Null(_trust.CopyOf(Path.Combine(_dir, "othery"), ".agents/skills/deploy"));
+        Assert.Equal(Skill("deploy"), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+
+        // A save reads the same file and sweeps without throwing.
+        _trust.SetDisabled(_repo, "deploy", true);
+        Assert.Contains("deploy", _trust.DisabledIn(_repo));
+        Assert.Equal(Skill("deploy"), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+    }
+
+    /// <summary>Review #93: disabling a name already listed writes nothing.</summary>
+    [Fact]
+    public void ASecondDisable_OfTheSameName_LeavesTheFileAsItWas()
+    {
+        _trust.SetDisabled(_repo, "deploy", true);
+        byte[] before = File.ReadAllBytes(_trust.FilePath);
+        var written = new DateTime(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(_trust.FilePath, written);
+
+        _trust.SetDisabled(_repo, "deploy", true);
+
+        Assert.Equal(before, File.ReadAllBytes(_trust.FilePath));
+        Assert.Equal(written, File.GetLastWriteTimeUtc(_trust.FilePath));
+    }
+
+    /// <summary>Review #11: untrusting a folder never trusted logs no "untrusted" line.</summary>
+    [Fact]
+    public void AnUntrust_OfAFolderNeverTrusted_LogsNothing()
+    {
+        var lines = new List<string>();
+        void Capture(NeonSidekick.Diagnostics.DiagnosticEvent e) => lines.Add(e.Message);
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += Capture;
+        try
+        {
+            _trust.Untrust(_repo);
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= Capture;
+        }
+
+        Assert.DoesNotContain(lines, l => l.Contains("untrusted", StringComparison.Ordinal));
+    }
+
+    /// <summary>Review #62: a kept copy is whole, so a long skill whose resource alone changed is told apart from its SKILL.md's.</summary>
+    [Fact]
+    public void ALongSkill_WithOnlyAResourceEdited_IsMarkedFilesChanged()
+    {
+        string body = Skill("deploy", extra: "") + new string('x', 60_000) + "\n";
+        string directory = PutProject(_repo, "deploy", body);
+        File.WriteAllText(Path.Combine(directory, "ref.md"), "one");
+        TrustFolder(_repo);
+        File.WriteAllText(Path.Combine(directory, "ref.md"), "two");
+
+        var state = _catalog.ReadProjectFolder(_repo, _repo);
+
+        // The re-ask marks "files changed" exactly when the kept copy equals the SKILL.md read now (SkillsMenu's ReadForTrust).
+        Assert.NotEqual(_trust.Trusted(_repo)!.Fingerprint, state.Fingerprint);
+        Assert.Equal(state.Copies[".agents/skills/deploy"], _trust.CopyOf(_repo, ".agents/skills/deploy"));
     }
 
     [WindowsFact]
@@ -730,5 +1064,31 @@ public class ProjectSkillsTests : IDisposable
         Assert.NotNull(TrustedFilesPolice.Find("del ..\\configs\\project-trust.json.bad", guard));
         Assert.NotNull(TrustedFilesPolice.Find("copy x ../configs/project-trust/abc/def.md", guard));
         Assert.Null(TrustedFilesPolice.Find("type project-notes.md", guard));
+    }
+
+    /// <summary>The copies folder's arm needs configs right before it (2026-11-23, review #10): a repo's own src/project-trust passes.</summary>
+    [Fact]
+    public void TheTripwire_TheCopiesArm_NeedsConfigsBeforeIt()
+    {
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home-app"), _repo);
+
+        Assert.Null(TrustedFilesPolice.Find("type src/project-trust/x.txt", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("type configs/project-trust/abc/SKILL.md", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("type configs/project-trust.json", guard));
+    }
+
+    /// <summary>A folder whose only skill is manual-only (review #56): a trust would offer nothing, so no notice; one that would offer a skill still has one.</summary>
+    [Fact]
+    public void ProjectTrustNotices_AManualOnlySkillAlone_GivesNone()
+    {
+        PutProject(_repo, "b", Skill("b", "By hand.", "disable-model-invocation: true\n"), claude: true);
+        Scan();
+
+        Assert.Empty(SkillsText.ProjectTrustNotices(_catalog.ProjectFolders, _catalog.ProjectPending, _repo, _repo, new HashSet<string>(StringComparer.Ordinal)));
+
+        PutProject(_repo, "a", Skill("a"));
+        Scan();
+
+        Assert.Single(SkillsText.ProjectTrustNotices(_catalog.ProjectFolders, _catalog.ProjectPending, _repo, _repo, new HashSet<string>(StringComparer.Ordinal)));
     }
 }

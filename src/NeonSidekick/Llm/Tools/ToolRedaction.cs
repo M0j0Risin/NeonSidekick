@@ -86,6 +86,7 @@ public static partial class ToolRedaction
         result = Assignment().Replace(result, m => m.Groups["head"].Value + Placeholder);
         result = XmlElement().Replace(result, m => m.Groups["head"].Value + Placeholder + m.Groups["tail"].Value);
         result = KeyValue().Replace(result, m => m.Groups["head"].Value + Placeholder);
+        result = LongSlashSwitch().Replace(result, m => m.Groups["head"].Value + Placeholder);
         result = DashFlag().Replace(result, m => m.Groups["head"].Value + Placeholder);
         return result;
     }
@@ -156,6 +157,10 @@ public static partial class ToolRedaction
 
     [GeneratedRegex(@"(?<head>(?<![\w/])/(?:password|pass|pwd|p):)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex SlashSwitch();
+
+    // SlashSwitch's long names alone (2026-11-23, review #42): Prose drops the short /p:, a build switch, but /password:x, /pass:x and /pwd:x are secrets.
+    [GeneratedRegex(@"(?<head>(?<![\w/])/(?:password|pass|pwd):)" + Value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex LongSlashSwitch();
 
     // A flag of a secret's name with its value after a space or =; - and _ alike (2026-10-23, A3: --api_key=, --client_secret=,
     // --account-key, --access-key and --auth-token passed).

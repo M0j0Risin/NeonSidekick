@@ -370,7 +370,7 @@ public sealed class RalphJudgeTests
 
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
 
-        public ByHandRun(string words, RalphReviewer reviewer, int checkpoint = 0, string? verify = null, string requirement = "Guide", string body = ByHandBody)
+        public ByHandRun(string words, RalphReviewer reviewer, int checkpoint = 0, string? verify = null, string requirement = "Guide", string body = ByHandBody, bool finalOnly = false, bool checksOff = false)
         {
             Files = new WorkingDirectory(() => _dir, Time);
             Host = new FakeRalphHost(Files, Time);
@@ -381,7 +381,7 @@ public sealed class RalphJudgeTests
             Step = PlanSteps.Leaves(steps).Single(s => s.Text == words);
             Lines = PlanSteps.Flat(steps);
             Before = RalphChanges.Snapshot(Files, null);
-            Loop = new RalphLoop(new RalphSnapshot(Plan, _dir, "Guide", verify, null, false, "pwsh", reviewer, checkpoint, 0, 3, 60, 0, 1), 3);
+            Loop = new RalphLoop(new RalphSnapshot(Plan, _dir, "Guide", verify, null, finalOnly, "pwsh", reviewer, checkpoint, 0, 3, 60, 0, 1, Unchecked: checksOff), 3);
             Loop.BeginPass(Step, new PlanPassMeter(Time.GetUtcNow(), 0, 0));
             Assert.Null(Loop.Record(new FinishReport(RalphOutcome.Done, "the pass did it", ["ran it"], null, [], [])));
             Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => Files.WriteText("hello.py", "print('hi')\n", overwrite: true)).Outcome);
@@ -644,6 +644,19 @@ public sealed class RalphJudgeTests
         {
             await run.JudgeAsync();
             Assert.Equal([RalphText.NoAppCheckLine], run.Host.AppChecks);
+        }
+
+        // Why none ran, as it is (2026-11-23, review #35): a check kept for the end, or checks the user turned off.
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Model, verify: "python hello.py", finalOnly: true))
+        {
+            await run.JudgeAsync();
+            Assert.Equal([RalphText.FinalOnlyAppCheckLine], run.Host.AppChecks);
+        }
+
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Model, verify: "python hello.py", checksOff: true))
+        {
+            await run.JudgeAsync();
+            Assert.Equal([RalphText.ChecksOffAppCheckLine], run.Host.AppChecks);
         }
     }
 

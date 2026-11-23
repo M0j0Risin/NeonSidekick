@@ -1454,7 +1454,7 @@ internal sealed partial class LlmSession : IDisposable
             var result = await _probe.ProbeAsync(v1, key, cancellationToken, OpenAIApi.HeadersFor(profile, v1)).ConfigureAwait(false);
             if (!result.Exists)
             {
-                return (null, $"{v1} did not answer ({result.Detail})");
+                return (null, EmbeddedLlmText.DidNotAnswer(v1, result.Detail));
             }
 
             endpoint = LlmEndpointProbe.Endpoint(LlmServer.From(v1, result), key, model, configured: true);
@@ -1597,7 +1597,7 @@ internal sealed partial class LlmSession : IDisposable
             }
 
             var installed = embedded.Catalog.Where(m => embedded.State(m).IsInstalled).Select(m => m.Id).ToList();
-            string detail = installed.Count == 1 ? "1 embedded model" : $"{installed.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} embedded models";
+            string detail = EmbeddedLlmText.InstalledCount(installed.Count);
             return Task.FromResult<ProbeResult?>(new ProbeResult(installed.Count > 0, installed, detail));
         }
 
@@ -1684,7 +1684,7 @@ internal sealed partial class LlmSession : IDisposable
             }
 
             var installed = embedded.Catalog.Where(m => embedded.State(m).IsInstalled).Select(m => m.Id).ToList();
-            string detail = installed.Count == 1 ? "1 embedded model" : $"{installed.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} embedded models";
+            string detail = EmbeddedLlmText.InstalledCount(installed.Count);
             return (new ProbeResult(installed.Count > 0, installed, detail), null);
         }
 
@@ -1699,13 +1699,15 @@ internal sealed partial class LlmSession : IDisposable
         }
 
         var result = await _probe.ProbeAsync(v1, ApiKeys.For(saved, v1), cancellationToken, OpenAIApi.HeadersFor(saved, v1)).ConfigureAwait(false);
-        return result.Exists ? (result, null) : (null, $"{v1} did not answer ({result.Detail})");
+        return result.Exists ? (result, null) : (null, EmbeddedLlmText.DidNotAnswer(v1, result.Detail));
     }
 
     /// <summary>
     /// The model an advisor's <paramref name="saved"/> settings would answer on, where that is known without asking a server (2026-11-22,
     /// the user's screenshot of a Docker advisor's <c>default model</c>): <see cref="LinkAsync(AppSettingsData, BotEmbeddedMode, ExtraOwner, CancellationToken)"/>'s
-    /// branches, read and never acted on. Null where only a server could say (a URL with no model saved) or the link would fail.
+    /// branches, read and never acted on. Null where only a server could say (a URL with no model saved) or the link would fail: Claude Code
+    /// its profile doesn't offer, or an embedded model that can't run here or is switched off (2026-11-23, review #36). A Docker advisor and a
+    /// borrowed one-model server keep their running model: only their list can't be shown, the link works.
     /// </summary>
     public string? LinkedModelOf(AppSettingsData saved)
     {
@@ -1730,12 +1732,17 @@ internal sealed partial class LlmSession : IDisposable
 
         if (ClaudeCliEndpoint.IsClaudeCli(saved.LlmUrl))
         {
-            return ClaudeCliEndpoint.ModelOf(model);
+            return _claudeCliOffered(saved) ? ClaudeCliEndpoint.ModelOf(model) : null;
         }
 
         if (EmbeddedEndpoint.IsEmbedded(saved.LlmUrl))
         {
-            if (_embedded?.Running is { } running)
+            if (_embedded is null || !EmbeddedEndpoint.Offered || !_embeddedEnabled)
+            {
+                return null;
+            }
+
+            if (_embedded.Running is { } running)
             {
                 // Under Advisor embedded mode parent-server (the default) the link shares the running model whatever is saved.
                 BotChatMultiEmbedded.TryParse((SettingsNow?.Invoke() ?? _effective).AdvisorEmbedded, out var mode);

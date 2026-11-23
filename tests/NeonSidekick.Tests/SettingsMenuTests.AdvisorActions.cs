@@ -328,9 +328,37 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
-    /// <summary>The borrow row: first, offered when no server answers, and a pick saves a blank URL with the model and reasoning kept.</summary>
+    /// <summary>
+    /// A URL saved by hand with no <c>/v1</c> (2026-11-23, review #14): the cursor lands on the server listed for it, and its saved model on the
+    /// model page, never on the borrow row.
+    /// </summary>
     [Fact]
-    public async Task OnThePane_ChangeTheServer_TheBorrowRow_SavesABlankUrl_KeepingTheModel_AndStandsWithNoServer()
+    public async Task OnThePane_ChangeTheServer_AHandTypedUrl_LandsOnItsServer_AndItsModel()
+    {
+        Profiles.Create(_dir, "dba", new AppSettingsData { LlmUrl = "http://box1:8000", LlmModel = "m-b", LlmReasoning = "high" });
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("dba", "architect")]);
+        var (menu, pane) = PaneMenu();
+        menu.AdvisorServerProbe = (_, _, _) => Task.FromResult<IReadOnlyList<LlmServer>>([ListedServer(Box2, "x"), ListedServer(Box1, "m-a", "m-b")]);
+        OpenAdvisorList();
+        FirstAdvisorAction(SettingsMenu.ChangeAdvisorServerChoice);
+        Push(Keys.Enter);                       // the server on the cursor
+        Push(Keys.Enter);                       // the model on the cursor
+        Push(Keys.Enter);                       // the reasoning on the cursor
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var saved = AdvisorFile("dba");
+        Assert.Equal((Box1, "m-b", "high"), (saved.LlmUrl, saved.LlmModel, saved.LlmReasoning));
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// The borrow row: first, offered when no server answers, and a pick saves a blank URL and a blank model (2026-11-23, review #61, the
+    /// user's pick: the session's server answers with its own model, as <c>/server</c> clears the model on a new URL), the reasoning kept.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ChangeTheServer_TheBorrowRow_SavesABlankUrlAndModel_AndStandsWithNoServer()
     {
         Profiles.Create(_dir, "dba", new AppSettingsData { LlmUrl = Box1, LlmModel = "m-a", LlmReasoning = "high" });
         _settings.Update(d => d.AdvisorList = [new AdvisorEntry("dba", "architect")]);
@@ -344,7 +372,7 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         var saved = AdvisorFile("dba");
-        Assert.Equal(("", "m-a", "high"), (saved.LlmUrl, saved.LlmModel, saved.LlmReasoning));
+        Assert.Equal(("", "", "high"), (saved.LlmUrl, saved.LlmModel, saved.LlmReasoning));
         Assert.Contains(SettingsMenu.AdvisorNoServerNotice("dba"), Output);
         Assert.Contains(SettingsMenu.AdvisorBorrowServerRow, Output);
         Assert.Contains(SettingsMenu.AdvisorBorrowServerBand, Output);

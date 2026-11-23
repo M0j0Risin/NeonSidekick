@@ -174,4 +174,15 @@ public class SkillFrontmatterTests
         Assert.False(SkillFrontmatter.TryParse("---\n" + key + ":\n- a\n---\nBody.", out _, out _, out var problem));
         Assert.StartsWith("frontmatter line ", problem, StringComparison.Ordinal);
     }
+
+    /// <summary>Review #82: only a top-level <c>disable-model-invocation: true</c> makes a skill manual-only, as Claude Code reads it.</summary>
+    [Fact]
+    public void ManualOnly_ReadsATopLevelKey_NeverANestedOne()
+    {
+        var nested = Parse("---\nname: x\ndescription: Does x.\nmetadata:\n  disable-model-invocation: true\n---\nBody.", out _);
+        var top = Parse("---\nname: x\ndescription: Does x.\ndisable-model-invocation: true\n---\nBody.", out _);
+
+        Assert.False(nested.ManualOnly);
+        Assert.True(top.ManualOnly);
+    }
 }

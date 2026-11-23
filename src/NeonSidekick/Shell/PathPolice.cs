@@ -147,10 +147,11 @@ public static partial class PathPolice
             for (int i = 0; i < tokens.Count; i++)
             {
                 string token = tokens[i];
-                if (i > 0 && IsBareDrive(token) && PythonColonWords.Contains(tokens[i - 1]))
+                if (i > 0 && IsBareDrive(token) && PythonColonWords.Contains(tokens[i - 1]) && tokens.Take(i).Any(IsPython))
                 {
-                    // Python's except E as e:, lambda x:, if x: in a python -c line (2026-11-22, the session review: refused as drive e:). No
-                    // command passes a drive after these words; cmd's for … in (d:) does, so "in" stays judged.
+                    // Python's except E as e:, lambda x:, if x: in a python -c line (2026-11-22, the session review: refused as drive e:); cmd's
+                    // for … in (d:) names a drive, so "in" stays judged. Only in a segment a Python interpreter runs (2026-11-23, review #2 and #12:
+                    // robocopy if d: /e passed a drive through).
                     continue;
                 }
 
@@ -344,9 +345,30 @@ public static partial class PathPolice
         && token.Length >= 2 && token[0] == '/' && char.IsAsciiLetter(token[1])
         && (token.Length == 2 ? !isScript && shell == ShellKind.Bash : token[2] == '/');
 
-    /// <summary>The tokens of <paramref name="text"/>: cut on whitespace and <see cref="Delimiters"/>, trailing punctuation off, the empty ones dropped.</summary>
     /// <summary>A bare drive, <c>X:</c> (rule 9's shape).</summary>
     private static bool IsBareDrive(string token) => token.Length == 2 && char.IsAsciiLetter(token[0]) && token[1] == ':';
+
+    /// <summary>
+    /// Whether <paramref name="token"/> names a Python interpreter (2026-11-23, review #2): its file name, <c>.exe</c> off, is <c>python</c>,
+    /// <c>python3</c>, <c>python3.N</c>, <c>pythonw</c> or <c>py</c>, in any folder, so <c>py -3 -c</c> and <c>uv run python -c</c> count.
+    /// </summary>
+    private static bool IsPython(string token)
+    {
+        string name = token[(token.LastIndexOfAny(['/', '\\']) + 1)..];
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            name = name[..^4];
+        }
+
+        if (name.Equals("python", StringComparison.OrdinalIgnoreCase) || name.Equals("python3", StringComparison.OrdinalIgnoreCase)
+            || name.Equals("pythonw", StringComparison.OrdinalIgnoreCase) || name.Equals("py", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return name.StartsWith("python3.", StringComparison.OrdinalIgnoreCase) && name.Length > "python3.".Length
+            && name["python3.".Length..].All(char.IsAsciiDigit);
+    }
 
     /// <summary>
     /// The Python words a bare <c>X:</c> after which is Python's colon, never a drive (2026-11-22, the session review, the user's yes to all five):
@@ -354,6 +376,7 @@ public static partial class PathPolice
     /// </summary>
     private static readonly HashSet<string> PythonColonWords = new(["as", "lambda", "if", "elif", "while"], StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>The tokens of <paramref name="text"/>: cut on whitespace and <see cref="Delimiters"/>, trailing punctuation off, the empty ones dropped.</summary>
     public static IReadOnlyList<string> Tokens(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

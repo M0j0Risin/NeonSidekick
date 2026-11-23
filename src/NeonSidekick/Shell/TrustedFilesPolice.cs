@@ -266,10 +266,32 @@ public static class TrustedFilesPolice
             || (parts.Length > 0 && parts[^1].Equals(WriteGuard.ClaudeMcpFileName, StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>Whether <paramref name="value"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, the project file, the project skills' trust file or copies, the app's folder name, or a path under the home. It can't tell a read from a write, so a full path there is refused either way; a relative one from a working folder inside the home passes.</summary>
+    /// <summary>Whether <paramref name="word"/> names a repo's own skills, an <c>.agents</c> segment followed by <c>skills</c> (2026-11-23, review #25).</summary>
+    public static bool IsProjectSkillsFile(string word)
+    {
+        ArgumentNullException.ThrowIfNull(word);
+        return ValuesOf(word).Any(IsProjectSkillsValue);
+    }
+
+    private static bool IsProjectSkillsValue(string value)
+    {
+        var parts = PartsOf(value);
+        for (int i = 1; i < parts.Length; i++)
+        {
+            if (parts[i - 1].TrimEnd('.', ' ').Equals(Skills.SkillRoots.ExternalDirectoryName, StringComparison.OrdinalIgnoreCase)
+                && parts[i].TrimEnd('.', ' ').Equals(Skills.SkillRoots.DirectoryName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="value"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, a repo's own skills, the project file, the project skills' trust file or copies, the app's folder name, or a path under the home. It can't tell a read from a write, so a full path there is refused either way; a relative one from a working folder inside the home passes.</summary>
     private static bool NamesTrusted(string value, Guard guard, ShellKind shell, bool isScript)
     {
-        if (IsClaudeValue(value))
+        if (IsClaudeValue(value) || IsProjectSkillsValue(value))
         {
             return true;
         }
@@ -294,12 +316,28 @@ public static class TrustedFilesPolice
         // default files folder passes the full-path check below. The model never trusts a folder for itself.
         if (parts.Length > 0 && (parts[^1].Equals(Skills.ProjectSkillTrust.FileName, StringComparison.OrdinalIgnoreCase)
             || parts[^1].Equals(Skills.ProjectSkillTrust.FileName + Skills.ProjectSkillTrust.BadSuffix, StringComparison.OrdinalIgnoreCase)
-            || parts.Any(part => part.Equals(Skills.ProjectSkillTrust.CopiesFolderName, StringComparison.OrdinalIgnoreCase))))
+            || IsCopiesFolder(parts)))
         {
             return true;
         }
 
         return IsRooted(value) && guard.Home is { Length: > 0 } home && Full(value, guard, shell, isScript) is { } full && WorkingDirectory.IsInside(Path.GetFullPath(home), Path.TrimEndingDirectorySeparator(full));
+    }
+
+    // The trust's copies folder: a project-trust segment right under configs (2026-11-23, review #10: any segment of that name tripped it, a repo's
+    // src/project-trust among them).
+    private static bool IsCopiesFolder(string[] parts)
+    {
+        for (int i = 1; i < parts.Length; i++)
+        {
+            if (parts[i].Equals(Skills.ProjectSkillTrust.CopiesFolderName, StringComparison.OrdinalIgnoreCase)
+                && parts[i - 1].Equals(Settings.Profiles.ConfigsDirectoryName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // The word on disk, from the folder the command runs in. Null for one no path can be made of.

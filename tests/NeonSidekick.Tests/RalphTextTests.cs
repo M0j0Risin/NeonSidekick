@@ -419,6 +419,8 @@ public sealed class RalphTextTests
         string line = RalphText.AppCheckLine("python hello.py --test", "passed", TimeSpan.FromSeconds(0.4));
         Assert.Equal("What the app ran itself: `python hello.py --test`, passed in 0.4 s", line);
         Assert.Equal("What the app ran itself: nothing (the plan has no check command)", RalphText.NoAppCheckLine);
+        Assert.Equal("What the app ran itself: nothing after this step (the plan's check runs once, after the last step)", RalphText.FinalOnlyAppCheckLine);
+        Assert.Equal("What the app ran itself: nothing (the user turned the checks off for this run)", RalphText.ChecksOffAppCheckLine);
         string request = RalphText.ReviewRequest("One", "one.md exists", "did it", ["built: ok"], ["no file changed"], ["one.md"], "+x", appCheck: line);
         Assert.Contains("What it checked: ⟪built: ok⟫\n" + line + "\nThe app noticed: no file changed\n", request);
         Assert.DoesNotContain("What the app ran itself", RalphText.ReviewRequest("One", null, "did it", [], [], [], ""));

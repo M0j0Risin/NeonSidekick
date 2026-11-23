@@ -395,6 +395,7 @@ internal sealed partial class SettingsMenu
 
         if (template is not null && !await WriteAdvisorPersonaAsync(persona, profile, template, own is not null, cancellationToken).ConfigureAwait(false))
         {
+            Sink.Notice(AdvisorNotAddedNotice(profile));   // 2026-11-23, review #69: its Kept notice read as success
             return false;
         }
 

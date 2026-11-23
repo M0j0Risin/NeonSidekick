@@ -673,4 +673,85 @@ public class SkillEditorTests : IDisposable
         Assert.Equal(SkillText.GlobalSkillsOff, SkillText.Edited(new SkillEditResult(SkillEditOutcome.GlobalOff, "haiku", SkillScope.Global)));   // its own sentence, not the fallback
         Assert.Equal(SkillEditOutcome.Created, SkillEditor.Create(Off, SkillScope.Profile, "fresh", "d", "i", external: false).Outcome);   // the profile's as ever
     }
+
+    // ── The review fixes (2026-11-23, the last-10 review) ──
+
+    // A move whose skill holds a linked folder: refused before anything is staged, the source and what the link points at kept (review #33).
+    private void AssertALinkRefusesTheMove(string outside)
+    {
+        string repoSkills = Path.Combine(_dir, "repo", ".agents", "skills");
+
+        var moved = SkillEditor.MoveToProject(_roots, Scanned(SkillScope.Profile, "haiku"), repoSkills);
+
+        Assert.Equal((SkillEditOutcome.Failed, SkillText.CopyHoldsLinks(1)), (moved.Outcome, moved.Detail));
+        Assert.True(File.Exists(FileOf(SkillScope.Profile, "haiku")));
+        Assert.True(File.Exists(Path.Combine(outside, "run.py")));
+        Assert.False(Directory.Exists(Path.Combine(repoSkills, "haiku")));
+    }
+
+    [WindowsFact]
+    public void MoveToProject_AJunctionedScriptsFolder_IsRefused_TheSourceStays()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "run.py"), "p");
+        Put(SkillScope.Profile, "haiku");
+        try
+        {
+            Junction.Make(Path.Combine(_roots.Profile, "haiku", "scripts"), outside);
+            AssertALinkRefusesTheMove(outside);
+        }
+        finally
+        {
+            Junction.DeleteTree(_dir);
+        }
+    }
+
+    [UnixFact]
+    public void MoveToProject_ASymlinkedScriptsFolder_IsRefused_TheSourceStays_Unix()
+    {
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "run.py"), "p");
+        Put(SkillScope.Profile, "haiku");
+        Directory.CreateSymbolicLink(Path.Combine(_roots.Profile, "haiku", "scripts"), outside);
+
+        AssertALinkRefusesTheMove(outside);
+    }
+
+    /// <summary>A <c>SKILL.md</c> that is a link refuses the copy (review #67): it used to land without one.</summary>
+    [SymlinkFact]
+    public void CopyFolder_ALinkedSkillMd_IsRefused()
+    {
+        string folder = Path.Combine(_roots.Profile, "haiku");
+        Directory.CreateDirectory(folder);
+        string real = Path.Combine(_dir, "real.md");
+        File.WriteAllText(real, "---\nname: haiku\ndescription: d\n---\n\ni\n");
+        File.CreateSymbolicLink(Path.Combine(folder, SkillCatalog.FileName), real);
+
+        var copied = SkillEditor.CopyFolder(folder, WorkSkills);
+
+        Assert.Equal((SkillEditOutcome.Failed, SkillText.CopyLinkedSkillFile), (copied.Outcome, copied.Detail));
+        Assert.False(Directory.Exists(Path.Combine(WorkSkills, "haiku")));
+    }
+
+    /// <summary>Markers in another case are left out too (review #64), and the byte count is what was copied (review #104).</summary>
+    [Fact]
+    public void CopyFolder_DroppingMarkers_LeavesOutAnyCase_AndCountsOnlyTheCopiedBytes()
+    {
+        Put(SkillScope.Profile, "haiku");
+        string haiku = Path.Combine(_roots.Profile, "haiku");
+        File.WriteAllText(Path.Combine(haiku, SkillLock.FileName.ToUpperInvariant()), new string('x', 1000));
+        File.WriteAllText(Path.Combine(haiku, SkillProvenance.FileName), new string('y', 500));
+        Directory.CreateDirectory(Path.Combine(haiku, "scripts"));
+        File.WriteAllText(Path.Combine(haiku, "scripts", SkillDisable.FileName), "kept: not at the top");
+
+        var copied = SkillEditor.CopyFolder(haiku, WorkSkills, dropMarkers: true);
+
+        Assert.Equal(SkillEditOutcome.Copied, copied.Outcome);
+        string landed = Path.Combine(WorkSkills, "haiku");
+        Assert.Equal([SkillCatalog.FileName], Directory.GetFiles(landed).Select(Path.GetFileName));
+        Assert.True(File.Exists(Path.Combine(landed, "scripts", SkillDisable.FileName)));
+        Assert.Equal(Directory.GetFiles(landed, "*", SearchOption.AllDirectories).Sum(f => new FileInfo(f).Length), copied.Bytes);
+    }
 }

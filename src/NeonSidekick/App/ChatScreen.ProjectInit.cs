@@ -30,6 +30,12 @@ internal sealed partial class ChatScreen
     private readonly Func<SkillRoots> _skillRoots;
 
     /// <summary>
+    /// The survey's own catalog (2026-11-23, review #58: one made per run logged the shadow and change notes again), over the same live roots as
+    /// <see cref="_catalog"/>, so it follows a profile switch as that one does. Its own, so project skills are listed while the setting is off.
+    /// </summary>
+    private readonly SkillCatalog _projectInitCatalog;
+
+    /// <summary>
     /// The least room the turn's compact checks leave for the reply (2026-11-23): plan mode's (<see cref="PlanReplyFloor"/>) or, during a
     /// <c>/project-init</c> pass, the draft's (<see cref="ProjectInitSession.ReplyFloor"/>), whichever is larger.
     /// </summary>
@@ -132,10 +138,19 @@ internal sealed partial class ChatScreen
             return false;
         }
 
-        // The file in play's length: a long one is asked about (only its first 16k are read, and Write replaces it whole).
-        int inPlayLength = target.InPlay is { } inPlay && _files.ReadText(inPlay, null, null, WorkingDirectory.MaxWriteChars) is { Outcome: FileOutcome.Ok } read ? read.Text.Length : 0;
+        // The file in play's length: a long one is asked about (only its first 16k are read, and Write replaces it whole). One that won't read
+        // whole as text is refused (2026-11-23, review #28): it read as no file, and Write replaced it unseen.
+        var inPlayRead = target.InPlay is { } inPlay ? _files.ReadText(inPlay, null, null, WorkingDirectory.MaxWriteChars) : null;
+        if (inPlayRead is not null && (inPlayRead.Outcome != FileOutcome.Ok || inPlayRead.Truncated || inPlayRead.LineCut))
+        {
+            _transcript.Error(ProjectInitText.UnreadableNotice(target.InPlay!));
+            return false;
+        }
+
+        int inPlayLength = inPlayRead?.Text.Length ?? 0;
         if (inPlayLength > ProjectFile.MaxLength
-            && await ProjectInitAskAsync(ProjectInitText.LongTitle, ProjectInitText.LongCaption(target.InPlay!, inPlayLength), [ProjectInitText.ContinueRow, ProjectInitText.CancelRow], ["continue", "cancel"], 1, cancellationToken).ConfigureAwait(false) != 0)
+            && await ProjectInitAskAsync(ProjectInitText.LongTitle, ProjectInitText.LongCaption(target.InPlay!, inPlayLength, beside: target.Mode == ProjectInitMode.CreateBeside),
+                [ProjectInitText.ContinueRow, ProjectInitText.CancelRow], ["continue", "cancel"], 1, cancellationToken).ConfigureAwait(false) != 0)
         {
             _transcript.Notice(ProjectInitText.CanceledBeforeNotice);
             return false;
@@ -182,10 +197,15 @@ internal sealed partial class ChatScreen
         _customCommandTitle = typed;   // the new session's title is the typed line (LogTurn), not the generated message
         try
         {
+            // The flags from this turn alone (2026-11-23, review #79): an earlier turn's cancel or failure hid the notice.
+            _lastTurnCancelled = false;
+            _lastTurnFailed = false;
             bool exit = await RunMessageAsync(ProjectInitText.Message(start.Focus), images, cancellationToken, new TurnMark(typed, AppWritten: true), putBack: false).ConfigureAwait(false);
-            if (!_projectInit.Presented && !_lastTurnCancelled && !_lastTurnFailed)
+
+            // No answer: no draft, or a Revise with no new one (review #97); a failed write said so itself.
+            if (_projectInit.Answer == ProjectInitAnswer.None && !_projectInit.WriteFailed && !_lastTurnCancelled && !_lastTurnFailed)
             {
-                _transcript.Notice(ProjectInitText.NoDraftNotice);
+                _transcript.Notice(_projectInit.Presented ? ProjectInitText.NoRevisedDraftNotice : ProjectInitText.NoDraftNotice);
             }
 
             return exit;
@@ -276,7 +296,7 @@ internal sealed partial class ChatScreen
     private IReadOnlyList<ProjectDigestSkill> ProjectInitSkills(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var catalog = new SkillCatalog(_skillRoots);
+        var catalog = _projectInitCatalog;
         catalog.Scan(new SkillScan(false, _projectSource));
         string working = _files.Root;
         string? repoRoot = ProjectRepoRoot();
@@ -337,12 +357,22 @@ internal sealed partial class ChatScreen
         }
 
         string? turnedOn = null;
-        if (verdict.Choice == ProjectNotesChoice.WriteAndTurnOn && NotesOff(_effective()) is { } off)
+        var effective = _effective();
+        if (verdict.Choice == ProjectNotesChoice.WriteAndTurnOn && NotesOff(effective) is { } off)
         {
+            // Only what is off now (2026-11-23, review #101): one on through a flag or an env var keeps its saved value.
+            var fields = NotesOffFields(effective).ToList();
             _settings.Update(d =>
             {
-                d.AgentSkills = true;
-                d.ProjectFile = true;
+                if (fields.Contains(SettingsField.AgentSkills))
+                {
+                    d.AgentSkills = true;
+                }
+
+                if (fields.Contains(SettingsField.ProjectFile))
+                {
+                    d.ProjectFile = true;
+                }
             });
             turnedOn = off;
         }
@@ -354,7 +384,7 @@ internal sealed partial class ChatScreen
     private Task ViewProjectNotesAsync(ProjectNotesDraft draft, CancellationToken cancellationToken)
     {
         IRenderable content = draft.Diff is { } diff ? new DiffView(null, diff, int.MaxValue)
-            : new Text(draft.Unchanged ? $"No changes to {draft.Target}." : draft.Content);
+            : new Text(draft.Unchanged ? ProjectInitText.NoChanges(draft.Target) : draft.Content);
         string label = ProjectInitText.ViewLabel(draft.Target);
         return _info.ShowAsync(label, [new InfoTab(label, () => content)], 0, cancellationToken);
     }
@@ -362,7 +392,7 @@ internal sealed partial class ChatScreen
     /// <summary>What keeps NeonSidekick from reading the notes: <c>Agent skills</c>, <c>Project file</c>, both, or null.</summary>
     private static string? NotesOff(AppSettingsData effective) => (effective.AgentSkills, effective.ProjectFile) switch
     {
-        (false, false) => ProjectInitText.AgentSkillsSetting + " and " + ProjectInitText.ProjectFileSetting,
+        (false, false) => ProjectInitText.BothOff,
         (false, true) => ProjectInitText.AgentSkillsSetting,
         (true, false) => ProjectInitText.ProjectFileSetting,
         _ => null,

@@ -1187,6 +1187,21 @@ public class AssistantTests
         Assert.False(Assistant.DropNativeCalls(messages));
     }
 
+    /// <summary>A message left with only reasoning or blank text (2026-11-23, review #17): taken out with its calls; one without calls is untouched.</summary>
+    [Fact]
+    public void DropNativeCalls_TakesAMessageLeftWithOnlyReasoningOrBlankText()
+    {
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.Assistant, [new TextReasoningContent("thinking"), new FunctionCallContent("a", "echo")]),
+            new(ChatRole.Assistant, [new TextContent("  \n"), new FunctionCallContent("b", "echo")]),
+            new(ChatRole.Assistant, [new TextReasoningContent("only thought")]),
+        };
+
+        Assert.True(Assistant.DropNativeCalls(messages));
+        Assert.Equal("only thought", Assert.IsType<TextReasoningContent>(Assert.Single(Assert.Single(messages).Contents)).Text);
+    }
+
     /// <summary>The same markup in a round that offers the tools runs as a real call.</summary>
     [Fact]
     public async Task TextToolCalls_On_ATaggedCall_Runs()
@@ -2489,6 +2504,25 @@ public class AssistantTests
         {
             FinishReason = ChatFinishReason.Length,
         };
+
+    /// <summary>
+    /// A round the length limit cut off (2026-11-23, review #87): a list its whole arguments left open is the tool's bad-list error, never a
+    /// shorter list; the same call in a finished round is closed and read.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ACutOffRound_ClosesNoOpenList(bool cutOff)
+    {
+        var (client, _, assistant) = Build(new AIFunction[] { new CountItemsTool() });
+        var call = new FunctionCallContent("c1", "count_items", new Dictionary<string, object?> { ["items"] = "[{\"a\": 1}, {\"a\": 2}" });
+        client.Enqueue(new ChatResponseUpdate(ChatRole.Assistant, new List<AIContent> { call }) { FinishReason = cutOff ? ChatFinishReason.Length : ChatFinishReason.ToolCalls });
+        client.EnqueueText("ok");
+
+        var events = await Run(assistant, "x");
+
+        Assert.Equal(cutOff ? "Error: items is not a list" : "items: 2", Assert.Single(events.OfType<TurnEvent.ToolResult>()).Text);
+    }
 
     [Fact]
     public void CutOffResults_ArePinned()

@@ -219,6 +219,20 @@ public sealed class WriteGuardTests : IDisposable
         Assert.Equal(FileOutcome.Ok, Write(Path.Combine(".agents", "notes.md")));
     }
 
+    /// <summary>A repo's own skills are refused at any depth with their own refusal (2026-11-23, review #25); another .agents folder writes.</summary>
+    [Fact]
+    public void ARepoSkillsFolder_IsRefused_WithNoSkillRootThere()
+    {
+        using var _ = WriteGuard.Configure(Facts());
+        Assert.Equal(FileOutcome.ProjectSkillsProtected, Write(Path.Combine(".agents", "skills", "x", "SKILL.md")));
+        Assert.Equal(FileOutcome.ProjectSkillsProtected, Write(Path.Combine("src", ".Agents", "Skills. ", "x", "run.py")));
+        Assert.Equal(FileOutcome.Ok, Write(Path.Combine(".agents", "notes.md")));
+        Assert.Equal(FileOutcome.Ok, Write(Path.Combine("skills", ".agents", "x.md")));
+        Assert.True(WriteGuard.IsRefusal(FileOutcome.ProjectSkillsProtected));
+        Assert.StartsWith("Error: ", FileText.ProjectSkillsProtected("x"), StringComparison.Ordinal);
+        Assert.Contains(".agents/skills", FileText.GuardedPathsSentence, StringComparison.Ordinal);
+    }
+
     /// <summary>Both commands folders are in the home, so a model write to either is refused, a working folder inside one too (2026-10-31, review P2-2).</summary>
     [Fact]
     public void TheCommandsFolders_AreTheApps()
@@ -294,6 +308,37 @@ public sealed class WriteGuardTests : IDisposable
         }
 
         Assert.Equal(FileOutcome.Ok, Write(Path.Combine("sub", "AGENTS.md")));
+    }
+
+    /// <summary>
+    /// An archive holding a project file (2026-11-23, review #4): the unzip leaves it out and says so, and never reports it to the watching turn,
+    /// which would ask about it and run the whole call again.
+    /// </summary>
+    [Fact]
+    public void AnUnzip_LeavesAProjectFileOut_WithoutAsking()
+    {
+        using var _ = WriteGuard.Configure(Facts(cwd: _root));
+        using (var archive = System.IO.Compression.ZipFile.Open(Path.Combine(_root, "pack.zip"), System.IO.Compression.ZipArchiveMode.Create))
+        {
+            foreach (string name in new[] { "AGENTS.md", "a.txt" })
+            {
+                using var writer = new StreamWriter(archive.CreateEntry(name).Open());
+                writer.Write("x");
+            }
+        }
+
+        var slot = new ProjectFileSlot();
+        ZipResult unzipped;
+        using (WriteGuard.Watch(slot))
+        {
+            unzipped = _files.Unzip("pack.zip", ".", overwrite: false);
+        }
+
+        Assert.Equal(FileOutcome.Ok, unzipped.Outcome);
+        Assert.Contains("AGENTS.md", unzipped.LeftOut);
+        Assert.Null(slot.Path);
+        Assert.True(File.Exists(Path.Combine(_root, "a.txt")));
+        Assert.False(File.Exists(Path.Combine(_root, "AGENTS.md")));
     }
 
     /// <summary>Unset (a screen test, a check mode): the path's own rules hold, the facts' stay off.</summary>

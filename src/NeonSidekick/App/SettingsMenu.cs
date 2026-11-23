@@ -4629,11 +4629,11 @@ internal sealed partial class SettingsMenu
             while (true)
             {
                 var saved = _settings.Current;
-                var picked = open is { } first && Locate(first, saved) is { } located
-                    ? located
-                    : await PickSettingAsync(saved, tab, cursor, cancellationToken).ConfigureAwait(false);
-                // The opened row alone (2026-11-23, /advisor list): taken before open is spent, so its edit's end closes the menu.
-                _openOnly = only && open is not null && picked is not null;
+                var located = open is { } first ? Locate(first, saved) : null;
+                var picked = located ?? await PickSettingAsync(saved, tab, cursor, cancellationToken).ConfigureAwait(false);
+                // The opened row alone (2026-11-23, /advisor list): taken before open is spent, so its edit's end closes the menu. Only when the row
+                // was found (review #99): a pick from the tab it fell back to is an ordinary visit.
+                _openOnly = only && located is not null;
                 open = null;
                 if (picked is not var (field, page, row, flip, search))
                 {

@@ -577,6 +577,8 @@ public class LlmSessionEmbeddedTests
         using var off = Session();
         await off.ConnectAsync(new AppSettingsData { EmbeddedLlmServer = false }, CancellationToken.None);
         Assert.Equal((null, EmbeddedLlmText.SwitchedOffError), await off.ListModelsForAsync(Embedded(), CancellationToken.None));
+        Assert.Null(off.LinkedModelOf(Embedded("gemma-4-e2b")));   // 2026-11-23, review #36: switched off, the link fails, so no model
+        Assert.Equal(["1 embedded model", "0 embedded models"], new[] { EmbeddedLlmText.InstalledCount(1), EmbeddedLlmText.InstalledCount(0) });
     }
 
     [Fact]

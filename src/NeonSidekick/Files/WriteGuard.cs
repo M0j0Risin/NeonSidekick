@@ -140,6 +140,17 @@ public static class WriteGuard
     }
 
     /// <summary>
+    /// The call inside reports no project-file refusal to the watching turn (2026-11-23, review #4): the copy and unzip planners leave a guarded
+    /// entry out and say so, so an <c>AGENTS.md</c> in an archive was asked about, and the whole call run again, for a file it never writes.
+    /// </summary>
+    public static IDisposable Unwatched()
+    {
+        var previous = s_slot.Value;
+        s_slot.Value = null;
+        return new Closer(new Scope(), () => s_slot.Value = previous);
+    }
+
+    /// <summary>
     /// The refusal for a <paramref name="role"/> write onto <paramref name="full"/> by an instance rooted at <paramref name="root"/>, or
     /// null to let it through. Both full and normalized; <paramref name="full"/> inside <paramref name="root"/> by its spelling and links.
     /// <paramref name="shoppingGuarded"/> and <paramref name="databases"/> are the instance's own hooks when it has them (else the facts').
@@ -158,7 +169,11 @@ public static class WriteGuard
         string relative = WorkingDirectory.IsInside(judgedRoot, judged) ? WorkingDirectory.Under(judgedRoot, judged) : "";
         if (GuardedFolder(relative) is { } folder)
         {
-            return folder;
+            // A configured skill root keeps its own refusal (2026-11-23, review #25): the External skills root is %USERPROFILE%\.agents\skills, and
+            // skill_editor does change that one.
+            return folder == FileOutcome.ProjectSkillsProtected && s_facts?.SkillRoots() is { } roots && roots.Any(skill => Trusted(skill, judgedRoot, judged))
+                ? FileOutcome.SkillFilesProtected
+                : folder;
         }
 
         var facts = s_facts;
@@ -224,13 +239,22 @@ public static class WriteGuard
     /// (2026-10-29, review P5-3: <c>OutputNames</c> asked only the first folder, so <c>app/.neon/plans/x.md</c> wrote beside itself).
     /// <c>.claude</c> since 2026-11-02 (review P12-2): <c>/claude</c> runs <c>claude -p</c> in the working folder, which loads that folder's
     /// <c>.claude/settings.json</c> hooks and commands, so a model that wrote one there ran a command of its own choosing on the next <c>/claude</c>.
+    /// <c>.agents/skills</c> since 2026-11-23 (review #25): a repo's own skills, which the user trusts by their hash.
     /// </summary>
     public static FileOutcome? GuardedFolder(string relative)
     {
         ArgumentNullException.ThrowIfNull(relative);
+        string previous = "";
         foreach (string part in relative.Split(WorkingDirectory.Separators, StringSplitOptions.RemoveEmptyEntries))
         {
             string bare = part.TrimEnd('.', ' ');
+            if (string.Equals(previous, Skills.SkillRoots.ExternalDirectoryName, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(bare, Skills.SkillRoots.DirectoryName, StringComparison.OrdinalIgnoreCase))
+            {
+                return FileOutcome.ProjectSkillsProtected;
+            }
+
+            previous = bare;
             if (string.Equals(bare, WorkingDirectory.GitFolderName, StringComparison.OrdinalIgnoreCase))
             {
                 return FileOutcome.GitProtected;
@@ -253,7 +277,7 @@ public static class WriteGuard
     /// <summary>Whether <paramref name="outcome"/> is one of the guard's refusals (rather than a path that is outside or missing).</summary>
     public static bool IsRefusal(FileOutcome outcome) => outcome is FileOutcome.GitProtected or FileOutcome.NeonFilesProtected or FileOutcome.AppFilesProtected
         or FileOutcome.SkillFilesProtected or FileOutcome.CommandFilesProtected or FileOutcome.ProjectFileAsk or FileOutcome.DatabaseProtected or FileOutcome.ShoppingList
-        or FileOutcome.ClaudeFilesProtected or FileOutcome.InstallFilesProtected;
+        or FileOutcome.ClaudeFilesProtected or FileOutcome.InstallFilesProtected or FileOutcome.ProjectSkillsProtected;
 
     /// <summary>Claude Code's folder of settings, hooks and commands (2026-11-02, review P12-2), refused at any depth.</summary>
     public const string ClaudeFolderName = ".claude";

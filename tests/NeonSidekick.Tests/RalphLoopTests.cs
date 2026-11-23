@@ -383,6 +383,23 @@ public sealed class RalphLoopTests
     /// A pass that ended without finish_step after changing files tells the next what it left (2026-11-22, the session review), after the judge's own
     /// note; none with no files, nor when the step stood (the model ticked its box: the next pass is another step's). One nudge a pass.
     /// </summary>
+    /// <summary>
+    /// The nudge's budget check (2026-11-23, review #29): the pass's own tokens since it began count on top of <see cref="RalphLoop.RunTokens"/>,
+    /// which grows only as a pass is judged; no budget is never spent.
+    /// </summary>
+    [Fact]
+    public void BudgetSpent_CountsThePassesTokens_OnTopOfTheRuns()
+    {
+        var start = DateTimeOffset.UnixEpoch;
+        var loop = new RalphLoop(Snapshot(budget: 1000), 3);
+        Assert.False(loop.BudgetSpent(null));
+        loop.BeginPass(loop.Next(Steps(Three), userSpoke: false).Step, new PlanPassMeter(start, 100, 0));
+        Assert.Equal(0, loop.RunTokens);
+        Assert.False(loop.BudgetSpent(new PlanPassMeter(start, 900, 50)));    // 850 so far
+        Assert.True(loop.BudgetSpent(new PlanPassMeter(start, 1000, 100)));   // 1,000: the budget
+        Assert.False(new RalphLoop(Snapshot(), 3).BudgetSpent(new PlanPassMeter(start, 1_000_000, 0)));
+    }
+
     [Fact]
     public void ANoReportPass_ThatChangedFiles_LeavesTheNextANote_AndIsNudgedOnce()
     {

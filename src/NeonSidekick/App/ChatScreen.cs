@@ -1652,6 +1652,7 @@ internal sealed partial class ChatScreen
         Func<SkillRoots> roots = () => SkillRoots.For(_settings, external);
         _skillRoots = roots;
         _catalog = new SkillCatalog(roots);
+        _projectInitCatalog = new SkillCatalog(roots);
         _projectTrust = new ProjectSkillTrust(() => Profiles.ConfigsDirectory(_settings.ProfileDirectory), _time);
         _projectSource = new ProjectSkillSource(() => _files.Root, ProjectSkillSource.UserHomeOf(external), _settings.StorageDirectory, _projectTrust);
         // A refused path in a skill folder names load_skill (2026-10-17), while the skills are offered.
@@ -1852,7 +1853,7 @@ internal sealed partial class ChatScreen
         // Menus read console.Input themselves; over the key source they also see type-ahead.
         _flow = new FlowSink(this);
         _queuedClicks = new DoubleClick(_pane.Time);
-        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(_effective().ExternalSkills); return _catalog.Skills; }, testHomeAssistant: _ha.TestAsync, printers: _print.Printers, botChatTools: BotChatToolGroups)
+        _menu = new SettingsMenu(new ConsoleWithInput(_pane, keys), settings, overriddenBy, _input, _transcript, speech, _menuPane, _web.Browser.Locate, () => _interpreters.AvailableShells().Select(ShellKinds.Name).ToHashSet(StringComparer.Ordinal), () => _interpreters.AvailableLanguages([CodeLanguage.PowerShell, CodeLanguage.Python, CodeLanguage.Node]).Select(CodeLanguages.Name).ToHashSet(StringComparer.Ordinal), BrowseWorkingDirectoryAsync, BrowseVaultAsync, _openFile, comfyClient: _comfy.Client, botChatSkills: () => { _catalog.Scan(SkillScanFor(_effective(), refreshProject: false)); return _catalog.Skills; }, testHomeAssistant: _ha.TestAsync, printers: _print.Printers, botChatTools: BotChatToolGroups)
         {
             // A picker opened mid-turn closes on the watcher task: its saved line waits for the turn task.
             Flow = _flow,
@@ -3481,11 +3482,14 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// Where the scope page's <c>project</c> row moves a skill (2026-11-23, the user's ask): the working folder, when the walk reads it as its first level and
     /// the guard lets a write into its <c>.agents\skills</c> (not the install folder, nor a home folder the app keeps); null hides the row. The move writes
-    /// through the skill editor, not the file tools, so this is the one check.
+    /// through the skill editor, not the file tools, so this is the one check. The guard's own refusal of <c>.agents\skills</c> (2026-11-23, review
+    /// #25: the model's tools never write there) is the model's, not this move's, so it's let through; <c>.agents</c> is judged too, since that
+    /// refusal comes before the home, install and skill-root checks and would hide them.
     /// </summary>
     private string? ProjectMoveTarget() =>
         ProjectSkillWalk.MoveTarget(_files.Root, _projectSource.UserHome, _projectSource.AppHome) is { } level
-        && WriteGuard.Judge(_files.Root, Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: false)), WriteRole.Write) is null
+        && WriteGuard.Judge(_files.Root, Path.Combine(level, ProjectSkillWalk.AgentsFolderName), WriteRole.Write) is null
+        && WriteGuard.Judge(_files.Root, Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: false)), WriteRole.Write) is null or FileOutcome.ProjectSkillsProtected
             ? level
             : null;
 
@@ -3494,7 +3498,7 @@ internal sealed partial class ChatScreen
     {
         ArgumentNullException.ThrowIfNull(catalog);
         var pending = catalog.ProjectPending;
-        return (catalog.Skills.Count(s => s.Scope == SkillScope.Project), pending.Count(p => p.Reason == ProjectPendingReason.NotTrusted), pending.Count(p => p.Reason == ProjectPendingReason.OverCap));
+        return (catalog.Skills.Count(s => s.Scope == SkillScope.Project), pending.Count(p => p.Reason == ProjectPendingReason.NotTrusted), pending.Count(p => p.Reason is ProjectPendingReason.OverCap or ProjectPendingReason.PastFolderCap));
     }
 
     /// <summary>The working folder's repo root as the project walk bounds it (2026-11-23): null outside a repo, or for one at or above a home.</summary>
@@ -8559,7 +8563,7 @@ internal sealed partial class ChatScreen
     {
         new LoadSkillTool(catalog, used: records is null ? null : records.Used),
         // The trusted project skills' names (2026-11-23): a create or rename into one is refused, a copy would hide the repo's.
-        new SkillEditorTool(() => roots() with { ProjectNames = catalog.Skills.Where(s => s.Scope == SkillScope.Project).Select(s => s.Name).ToList() }, external, files, records is null ? null : records.Edited),
+        new SkillEditorTool(() => roots() with { ProjectNames = catalog.All.Where(s => s.Scope == SkillScope.Project).Select(s => s.Name).ToList() }, external, files, records is null ? null : records.Edited),
     };
 
     /// <summary>
@@ -17629,7 +17633,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The skills a bot sees and the one skill tool it is offered (2026-09-27): the skills <c>Botchat limited skills</c> names
-    /// (2026-10-04, the user's ask) among the main chat's catalog, rescanned as a turn's is — the starting profile's, the global
+    /// (2026-10-04, the user's ask) among the main chat's catalog, rescanned as a turn's is, the project skills as last read (a trust change in
+    /// /skills reads them again; 2026-11-23, review #100) — the starting profile's, the global
     /// and (with <c>Use external skills</c>) the external skills; a bot's own profile's are never read (the user's call) — in the
     /// catalog's order, and a <c>load_skill</c> that serves those alone, never <c>skill_editor</c> (a bot must not write the
     /// parent's skills). <c>Botchat skills enabled</c>, the whole catalog and the main chat's own <c>load_skill</c>, went on
@@ -20196,7 +20201,8 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, PresentProjectNotesTool.ToolName, StringComparison.Ordinal):
                 // The draft and the answer were printed as it ran (ReviewProjectNotesAsync, OnProjectNotesWritten): no diff a second time, only a refusal.
-                if (result.Text.StartsWith("Error:", StringComparison.Ordinal))
+                // A failed write's own error was shown (2026-11-23, review #91): not its model-facing twin too.
+                if (result.Text.StartsWith("Error:", StringComparison.Ordinal) && !_projectInit.WriteFailed)
                 {
                     _transcript.ToolNote(result.Text, time);
                 }

@@ -171,7 +171,17 @@ public sealed class PathPoliceTests
     [InlineData("python -c \"a = 0\nif a: pass\nelif b: print(b)\"")]
     [InlineData("python -c \"n = 3\nwhile n: n -= 1\"")]
     [InlineData("python -c \"except E AS e: pass\"")]   // any case
+    [InlineData("py -3 -c \"f = lambda x: x\"")]       // 2026-11-23, review #2: the interpreters by name
+    [InlineData("python3.12 -c \"f = lambda x: x\"")]
+    [InlineData("uv run python.exe -c \"f = lambda x: x\"")]
     public void APythonColon_AfterItsKeyword_IsNoDrive(string command) => Assert.Null(Command(command));
+
+    /// <summary>The keyword's skip outside a Python interpreter's segment (2026-11-23, review #2 and #12): the drive is judged.</summary>
+    [WindowsTheory]
+    [InlineData("robocopy if e: /e", "e:")]   // the root is on D:, so the finding's d: is its own drive here
+    [InlineData("dir as e:", "e:")]
+    [InlineData("python -c \"x = 1\" && dir as e:", "e:")]   // another segment
+    public void AKeywordDrive_OutsideAPythonSegment_IsRefused(string command, string token) => Assert.Equal(token, Command(command));
 
     /// <summary>A real bare drive is still refused: after any other word, and after <c>in</c> (cmd's <c>for … in (e:)</c>).</summary>
     [WindowsTheory]

@@ -1176,7 +1176,10 @@ public static class SettingsArchive
             string stem = Path.GetFileNameWithoutExtension(s[^1]);
 
             // An advisor template is one item (2026-11-22): a folder already here keeps both its files, so a zip's never mixes in.
-            if (Is(s[0], AdvisorsName) && s.Length == 3 && listings.Exists(root, s[0] + "/" + s[1]))
+            // Only a folder holding one of its files counts (2026-11-23, review #23): an empty or broken one took the zip's template away.
+            if (Is(s[0], AdvisorsName) && s.Length == 3
+                && (listings.Exists(root, s[0] + "/" + s[1] + "/" + Advisors.AdvisorTemplates.PersonaFileName)
+                    || listings.Exists(root, s[0] + "/" + s[1] + "/" + Advisors.AdvisorTemplates.InfoFileName)))
             {
                 if (keptTemplates.Add(s[1]))
                 {

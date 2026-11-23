@@ -139,9 +139,13 @@ public sealed record SkillFrontmatter(string Name, string Description, IReadOnly
         return keys;
     }
 
-    /// <summary>Whether this frontmatter says only the user starts the skill (<see cref="ManualOnlyKey"/> set to <c>true</c>).</summary>
+    /// <summary>
+    /// Whether this frontmatter says only the user starts the skill (<see cref="ManualOnlyKey"/> set to <c>true</c>), as a top-level key only, as
+    /// <see cref="KeysOf"/> reads them (2026-11-23, review #82: a nested <c>disable-model-invocation: true</c> under another key isn't Claude Code's).
+    /// </summary>
     public bool ManualOnly => OtherLines.Any(line =>
-        line.IndexOf(':', StringComparison.Ordinal) is var colon and > 0
+        line.Length > 0 && !char.IsWhiteSpace(line[0]) && line[0] != '#' && line[0] != '-'
+        && line.IndexOf(':', StringComparison.Ordinal) is var colon and > 0
         && line[..colon].Trim().Equals(ManualOnlyKey, StringComparison.OrdinalIgnoreCase)
         && line[(colon + 1)..].Trim().Trim('"', '\'').Equals("true", StringComparison.OrdinalIgnoreCase));
 

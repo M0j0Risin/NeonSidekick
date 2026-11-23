@@ -110,6 +110,8 @@ public static class SkillText
         ProjectPendingReason.LinkedOutside => "linked outside the repo",
         ProjectPendingReason.ManualOnly => "only started by hand in Claude Code",
         ProjectPendingReason.BadName => "name too long or unprintable",
+        ProjectPendingReason.LinkedFile => "its " + SkillCatalog.FileName + " is a link",
+        ProjectPendingReason.PastFolderCap => "past this folder's first " + ProjectSkillTrust.ProjectSkillCap.ToString(CultureInfo.InvariantCulture) + " skill folders",
         _ => "not offered",
     };
 
@@ -163,6 +165,9 @@ public static class SkillText
 
     public static string FileTooBig(string name, string relative) => $"Error: '{relative}' in skill '{name}' is too large to handle as text";
 
+    /// <summary>A skill whose own <c>SKILL.md</c> is over the read cap (2026-11-23, review #57: it named an empty path). Pinned.</summary>
+    public static string BodyTooBig(string name) => $"Error: the {SkillCatalog.FileName} of '{name}' is too large to read";
+
     public static string CouldNot(string verb, string name, string detail) => $"Error: could not {verb} skill '{name}': {detail}";
 
     /// <summary>The sentence for a <see cref="SkillCatalog.ReadResult"/> that is not Ok; <paramref name="relative"/> null for the body.</summary>
@@ -176,7 +181,7 @@ public static class SkillText
             SkillCatalog.ReadOutcome.Outside => FileOutside(skill.Name, relative ?? ""),
             SkillCatalog.ReadOutcome.IsDirectory => FileIsDirectory(skill.Name, relative ?? ""),
             SkillCatalog.ReadOutcome.NotText => FileNotText(skill.Name, relative ?? ""),
-            SkillCatalog.ReadOutcome.TooBig => FileTooBig(skill.Name, relative ?? ""),
+            SkillCatalog.ReadOutcome.TooBig => relative is null ? BodyTooBig(skill.Name) : FileTooBig(skill.Name, relative),
             SkillCatalog.ReadOutcome.Unparseable => BodyUnparseable(skill.Name, result.Detail),
             SkillCatalog.ReadOutcome.NotListed => FileNotListed(skill.Name, relative ?? ""),
             _ => CouldNot(relative is null ? "read" : "read the file '" + relative + "' of", skill.Name, result.Detail),
@@ -477,6 +482,18 @@ public static class SkillText
 
     /// <summary>A skill folder that is itself a junction or link (2026-10-25, <see cref="SkillEditor.CopyFolder"/>): never followed, so never copied. Pinned.</summary>
     public const string CopyLinkedFolder = "the skill's folder is a link, which a copy never follows";
+
+    /// <summary>
+    /// A skill whose own <c>SKILL.md</c> is a link (2026-11-23, review #67): a copy skips links, so it would have landed with no <c>SKILL.md</c>. Pinned.
+    /// </summary>
+    public const string CopyLinkedSkillFile = "the skill's " + SkillCatalog.FileName + " is a link, which a copy never follows";
+
+    /// <summary>
+    /// A move into a repo of a skill holding links (2026-11-23, review #33): a copy skips them, so the repo's copy would be missing what they lead to,
+    /// and the source is deleted after. Pinned.
+    /// </summary>
+    public static string CopyHoldsLinks(int count) =>
+        $"the skill holds {count.ToString(CultureInfo.InvariantCulture)} {(count == 1 ? "link" : "links")}, which a move into the repo would leave behind";
 
     /// <summary>The <c>Skills</c> log line when a copy's temp folder would not go (2026-10-25): the next copy's sweep tries again.</summary>
     public static string CopyTempLeftLogLine(string folder, string detail) => $"Could not delete the skill copy's temp folder {folder}; the next copy tries again: {detail}";

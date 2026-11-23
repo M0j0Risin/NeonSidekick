@@ -55,8 +55,18 @@ public static class ProjectInitText
     public const string QuestionKeys = "Enter = choose · Esc = cancel";
 
     public const string LongTitle = "/project-init › a long notes file";
-    public static string LongCaption(string file, int length) =>
-        $"{file} is {length.ToString("N0", CultureInfo.InvariantCulture)} characters; only the first 16,000 are read, and Write replaces the whole file.";
+
+    /// <summary>
+    /// The long file's question and caption line. <paramref name="beside"/>: NEON.md is written beside it (2026-11-23, review #98), so Write
+    /// leaves it as it is.
+    /// </summary>
+    public static string LongCaption(string file, int length, bool beside = false) =>
+        $"{file} is {length.ToString("N0", CultureInfo.InvariantCulture)} characters; only the first 16,000 are read, and "
+        + (beside ? "Write creates NEON.md beside it, leaving it as it is." : "Write replaces the whole file.");
+
+    /// <summary>The file in play there but not readable whole as text (2026-11-23, review #28): refused before anything is sent.</summary>
+    public static string UnreadableNotice(string file) =>
+        $"/project-init can't read {file} as text (too big, or not text); nothing was sent. Fix or move it, then run /project-init again.";
 
     public const string LoggingTitle = "/project-init › a new conversation";
     public const string LoggingCaption = "This starts a new conversation, and the current one isn't saved (Session logging is off).";
@@ -138,6 +148,14 @@ public static class ProjectInitText
     public const string UnchangedResult = "The notes already say this; nothing was written. Reply in one line and stop.";
     public static string WrittenResult(string file) => $"Written to {file}. Reply in one line and stop.";
     public static string WriteFailedResult(string sentence) => "Error: " + TrimError(sentence) + " Tell the user in one line and stop.";
+    /// <summary>The notes file there but not readable whole as text (2026-11-23, review #28). Pinned.</summary>
+    public static string UnreadableResult(string file) =>
+        $"Error: {file} is there but can't be read as text (too big, or not text), so it isn't replaced; nothing was written. Tell the user in one line and stop.";
+
+    /// <summary>The notes file changed while the user looked at the draft (2026-11-23, review #22). Pinned.</summary>
+    public static string ChangedMeanwhileResult(string file) =>
+        $"Error: {file} changed while the user was reviewing the draft; nothing was written. Read it again, fold its changes into the draft, and call present_project_notes again.";
+
     public const string NoPaneResult = "The user can't be asked here, so nothing was written; the draft is in the transcript. Reply in one line and stop.";
 
     /// <summary>A Revise's result: with the user's words; without, ask with <c>ask_user</c>, or (not offered) suggest the command and stop. Pinned.</summary>
@@ -152,6 +170,9 @@ public static class ProjectInitText
     // ── After the turn ──
 
     public const string NoDraftNotice = "(📝 /project-init ended without a draft; try again with a narrower focus, like /project-init build and test)";
+
+    /// <summary>A Revise asked for, and the turn ended without a new draft (2026-11-23, review #97).</summary>
+    public const string NoRevisedDraftNotice = "(📝 /project-init ended without a revised draft; nothing was written. Run /project-init again with what to change)";
     public static string CanceledNotice(string file) => $"(📝 {file} left as it was)";
     public static string WroteNotice(string file, int chars, string? turnedOn) =>
         $"(📝 wrote {file}, {chars.ToString("N0", CultureInfo.InvariantCulture)} characters" + (turnedOn is { } on ? $"; turned on {on} (/skills › Options)" : "") + ")";
@@ -175,6 +196,12 @@ public static class ProjectInitText
     public const string ProjectFileSetting = "Project file";
     public const string AgentSkillsSetting = "Agent skills";
 
+    /// <summary>Both settings off (2026-11-23, review #90).</summary>
+    public const string BothOff = AgentSkillsSetting + " and " + ProjectFileSetting;
+
+    /// <summary>The caption and the View with nothing to change (2026-11-23, review #66: the View said it inline).</summary>
+    public static string NoChanges(string file) => $"No changes to {file}.";
+
     /// <summary>The page's choice ids.</summary>
     public const string WriteId = "write";
     public const string WriteOnId = "writeon";
@@ -192,7 +219,7 @@ public static class ProjectInitText
         var lines = new List<string>();
         if (draft.Unchanged)
         {
-            lines.Add($"No changes to {draft.Target}.");
+            lines.Add(NoChanges(draft.Target));
         }
         else
         {
@@ -205,9 +232,11 @@ public static class ProjectInitText
             lines.Add($"NEON.md will hide {hidden} from NeonSidekick's prompt; other tools still read {hidden}.");
         }
 
+        // The file in play is the hidden one when NEON.md is written beside it (2026-11-23, review #98).
+        string inPlay = start.Hidden ?? start.Target;
         if (start.InPlayLength > ProjectFile.MaxLength)
         {
-            lines.Add(LongCaption(start.Target, start.InPlayLength));
+            lines.Add(LongCaption(inPlay, start.InPlayLength, beside: start.Hidden is not null));
         }
 
         if (start.Subfolder && folder is { Length: > 0 })
@@ -217,7 +246,7 @@ public static class ProjectInitText
 
         if (start.InPlayMasked)
         {
-            lines.Add($"Values in {start.Target} were hidden from the model as {ToolRedaction.Placeholder}.");
+            lines.Add($"Values in {inPlay} were hidden from the model as {ToolRedaction.Placeholder}.");
         }
 
         foreach (var secret in draft.SecretLines.Take(5))
@@ -232,7 +261,8 @@ public static class ProjectInitText
 
         if (off is { Length: > 0 })
         {
-            lines.Add($"{off} {(off.Contains(" and ", StringComparison.Ordinal) ? "are" : "is")} off: NeonSidekick won't read this until {(off.Contains(" and ", StringComparison.Ordinal) ? "they're" : "it's")} on.");
+            bool both = string.Equals(off, BothOff, StringComparison.Ordinal);
+            lines.Add($"{off} {(both ? "are" : "is")} off: NeonSidekick won't read this until {(both ? "they're" : "it's")} on.");
         }
 
         return lines;
@@ -275,6 +305,16 @@ public static class ProjectInitText
     public static string WriteFailedLogLine(string reason) => "present_project_notes: write failed: " + reason;
 
     // ── The survey's labels ──
+
+    // The digest's section titles (2026-11-23, review #77).
+    public const string NotesNowTitle = "The notes now";
+    public const string FilesTitle = "Files";
+    public const string ListingCutNote = " (the listing was cut)";
+    public const string BuildTitle = "Build and project files";
+    public const string ReadmeTitle = "README";
+    public const string RulesTitle = "Other assistants' rule files";
+    public const string CommitsTitle = "Recent commits";
+    public const string SkillsTitle = "Project skills";
 
     public const string NoRepoNote = "(not a git repository: no index or log)";
     public const string AboveNote = "(the repo's root is above this folder: no index or log here)";

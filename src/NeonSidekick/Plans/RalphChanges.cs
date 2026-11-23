@@ -245,9 +245,11 @@ public static class RalphChanges
     private static List<string> UnnamedNewFiles(List<string> fresh, RalphSnapshotOfFiles before, RalphSnapshotOfFiles after, WorkingDirectory files, GitAccess? git, List<string> named)
     {
         var found = new List<string>();
+        // The folder's own case rule (2026-11-23, review #39): a name in another case names the file where the disk ignores case.
+        var compare = CaseRule.Comparison(files.Root);
         foreach (string path in fresh)
         {
-            if (Skipped(path) || named.Any(n => string.Equals(n, path, StringComparison.Ordinal) || path.StartsWith(n.TrimEnd('/') + "/", StringComparison.Ordinal)))
+            if (Skipped(path) || named.Any(n => string.Equals(n, path, compare) || path.StartsWith(n.TrimEnd('/') + "/", compare)))
             {
                 continue;
             }
@@ -258,9 +260,10 @@ public static class RalphChanges
                 continue;
             }
 
-            if (after.Git || before.Git)
+            // A repository with no commit yet (2026-11-23, review #30): no HEAD holds any file, so every fresh one is new.
+            if ((after.Git || before.Git) && before.Head is { } head)
             {
-                if (git?.Show(before.Head ?? "HEAD", path) is not { Outcome: GitOutcome.Missing })
+                if (git?.Show(head, path) is not { Outcome: GitOutcome.Missing })
                 {
                     continue;
                 }

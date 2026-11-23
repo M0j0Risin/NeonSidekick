@@ -152,4 +152,39 @@ public partial class ChatScreenTests
         var editor = _chat.Options[0]!.Tools!.Cast<AIFunction>().Single(t => t.Name == SkillEditorTool.ToolName);
         Assert.Equal(["profile"], editor.JsonSchema.GetProperty("properties").GetProperty("scope").GetProperty("enum").EnumerateArray().Select(e => e.GetString()));
     }
+
+    /// <summary>skill_editor refuses a disabled trusted project skill's name too (2026-11-23, review #8): the names come from every project skill, not the offered ones.</summary>
+    [Fact]
+    public async Task SkillEditor_ADisabledTrustedProjectSkillsName_IsRefused()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string outer = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        string repo = Path.Combine(outer, "repo");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(repo, ".git"));
+            string skill = Path.Combine(repo, ".agents", "skills", "deploy");
+            Directory.CreateDirectory(skill);
+            File.WriteAllText(Path.Combine(skill, SkillCatalog.FileName), "---\nname: deploy\ndescription: Ships it.\n---\n\nSteps.\n");
+            var trust = new ProjectSkillTrust(() => NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory), _time);
+            var catalog = new SkillCatalog(() => new SkillRoots(ProfileSkills, GlobalSkills, Path.Combine(outer, "external")));
+            var state = catalog.ReadProjectFolder(repo, repo);
+            Assert.Equal(ProjectTrustSave.Saved, trust.Trust(repo, state.Fingerprint, () => catalog.ReadProjectFolder(repo, repo)));
+            trust.SetDisabled(repo, "deploy", true);
+            _settings.Update(d => d.WorkingDirectory = repo);
+            _chat.Enqueue(FakeChatClient.Call("c1", SkillEditorTool.ToolName, CreateSkillArgs("deploy")));
+            _chat.EnqueueText("Done.");
+            PushLine("make a deploy skill");
+            PushLine("/exit");
+
+            await RunAsync();
+
+            Assert.Contains(SkillText.ProjectNameTaken("deploy"), ResultOf(_chat.Requests[1], "c1").Result?.ToString());
+            Assert.False(Directory.Exists(Path.Combine(ProfileSkills, "deploy")));
+        }
+        finally
+        {
+            try { Directory.Delete(outer, recursive: true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+    }
 }

@@ -39,7 +39,7 @@ public static class AuditTicks
 
     /// <summary>
     /// The findings <paramref name="stood"/> (the step the judge stood, and the parent it ticked) close, settled in the report the plan at
-    /// <paramref name="planPath"/> names.
+    /// <paramref name="planPath"/> names; one that another unticked step also names waits for it (2026-11-23, review #26).
     /// </summary>
     public static AuditTickOutcome Tick(WorkingDirectory files, string planPath, IReadOnlyList<PlanStep> stood, Func<string, AuditReport, string?> save)
     {
@@ -51,14 +51,17 @@ public static class AuditTicks
         }
 
         string plan = PlanName(planPath);
+        var others = PlanSteps.Flat(PlanSteps.Parse(PlanDocument.Body(text)))
+            .Where(s => !s.Ticked && !stood.Any(t => t.Line == s.Line && string.Equals(t.Text, s.Text, StringComparison.Ordinal)))
+            .ToList();
         var ticks = new List<AuditTick>();
         foreach (var step in stood)
         {
             foreach (string id in AuditFinding.ClosedBy(step.Text))
             {
-                if (!ticks.Any(t => string.Equals(t.Id, id, StringComparison.OrdinalIgnoreCase)))
+                if (!ticks.Any(t => string.Equals(t.Id, id, StringComparison.OrdinalIgnoreCase)) && !others.Any(s => Names(s, id)))
                 {
-                    ticks.Add(new AuditTick(id, true, AuditText.SettledNote(plan, step.Index)));
+                    ticks.Add(new AuditTick(id, true, AuditText.SettledNote(plan, NoteIndex(step))));
                 }
             }
         }
@@ -66,9 +69,23 @@ public static class AuditTicks
         return ticks.Count == 0 ? AuditTickOutcome.None : Apply(files, report, ticks, save);
     }
 
+    private static bool Names(PlanStep step, string id) => AuditFinding.ClosedBy(step.Text).Contains(id, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The step number a note names: a parent's is its last leaf's (2026-11-23, review #96: a parent's Index is 0).</summary>
+    private static int NoteIndex(PlanStep step) => step.IsLeaf ? step.Index : NoteIndex(step.Children[^1]);
+
     /// <summary>
-    /// The report the plan at <paramref name="planPath"/> names brought in step with its steps: every id a ticked step names settled; an id only unticked
-    /// steps name unsettled when its last note is this plan's <see cref="AuditText.SettledNote"/> (a tick the app made for this plan, never one the
+    /// Whether this plan ticked <paramref name="finding"/> and it was opened again since (2026-11-23, review #80): its last note of this plan's is a
+    /// <see cref="AuditText.SettledNote"/>, yet it's open, so someone reopened it; a sync leaves it so.
+    /// </summary>
+    private static bool ReopenedSince(AuditFinding finding, string plan) =>
+        finding.Notes.LastOrDefault(n => AuditText.IsSettledNoteOf(n, plan) || AuditText.IsUnsettledNoteOf(n, plan)) is { } last
+        && AuditText.IsSettledNoteOf(last, plan);
+
+    /// <summary>
+    /// The report the plan at <paramref name="planPath"/> names brought in step with its steps: an id only ticked steps name settled, unless this plan
+    /// ticked it before and it was reopened since (2026-11-23, review #80); an id any unticked step names (review #26: a finding two steps close waits
+    /// for both) unsettled when its last note is this plan's <see cref="AuditText.SettledNote"/> (a tick the app made for this plan, never one the
     /// user made by hand). Covers a Redo, a resume's Keep, a plain execute and a tick refused under a lock.
     /// </summary>
     public static AuditTickOutcome Sync(WorkingDirectory files, string planPath, Func<string, AuditReport, string?> save)
@@ -99,14 +116,14 @@ public static class AuditTicks
             }
         }
 
-        foreach (var (id, step) in settledBy)
+        foreach (var (id, step) in settledBy.Where(s => !unsettledBy.ContainsKey(s.Key)))
         {
-            ticks.Add(new AuditTick(id, true, AuditText.SettledNote(plan, step.Index)));
+            ticks.Add(new AuditTick(id, true, AuditText.SettledNote(plan, NoteIndex(step)), f => !ReopenedSince(f, plan)));
         }
 
-        foreach (var (id, step) in unsettledBy.Where(u => !settledBy.ContainsKey(u.Key)))
+        foreach (var (id, step) in unsettledBy)
         {
-            ticks.Add(new AuditTick(id, false, AuditText.UnsettledNote(plan, step.Index), f => f.Notes.Count > 0 && AuditText.IsSettledNoteOf(f.Notes[^1], plan)));
+            ticks.Add(new AuditTick(id, false, AuditText.UnsettledNote(plan, NoteIndex(step)), f => f.Notes.Count > 0 && AuditText.IsSettledNoteOf(f.Notes[^1], plan)));
         }
 
         return ticks.Count == 0 ? AuditTickOutcome.None : Apply(files, report, ticks, save);

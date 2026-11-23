@@ -702,9 +702,8 @@ internal sealed class SkillsMenu
 
                 if (await PickScopeAsync(skill, facts, cancellationToken).ConfigureAwait(false))
                 {
-                    facts = _facts();
-                    var rows = OfferedRows(facts, filter);
-                    cursor = Math.Max(0, Math.Min(cursor, rows[Math.Clamp(sub, 0, rows.Count - 1)].Count - 1));
+                    // As the other acts do (2026-11-23, review #51): a move into a repo can add the project sub-tab, and the tab on show is kept.
+                    facts = Refreshed(facts, ref sub, ref cursor, filter);
                 }
             }
         }
@@ -715,18 +714,52 @@ internal sealed class SkillsMenu
         }
     }
 
-    /// <summary>The facts read again after a change (a rescan), the sub-tab back to all when the strip changed, the cursor clamped to the rows on show.</summary>
+    /// <summary>
+    /// The facts read again after a change (a rescan), the sub-tab on show kept where the strip changed (<see cref="RemapSub"/>), the cursor clamped to
+    /// the rows on show.
+    /// </summary>
     private SkillsFacts Refreshed(SkillsFacts before, ref int sub, ref int cursor, string filter)
     {
         var facts = _facts();
-        if (!SkillsText.ScopeTabs(before).SequenceEqual(SkillsText.ScopeTabs(facts)))
-        {
-            sub = 0;
-        }
-
+        sub = RemapSub(SkillsText.ScopeTabs(before), SkillsText.ScopeTabs(facts), sub);
         var rows = OfferedRows(facts, filter);
         cursor = Math.Max(0, Math.Min(cursor, rows[Math.Clamp(sub, 0, rows.Count - 1)].Count - 1));
         return facts;
+    }
+
+    /// <summary>
+    /// The sub-tab <paramref name="sub"/> of the strip <paramref name="before"/>, found in <paramref name="after"/> (2026-11-23, review #51: a changed
+    /// strip sent every act back to all): a scope's tab by its scope, the loaded sub-tab (past the scopes) to the new strip's loaded one, all when the
+    /// tab is gone. Pure.
+    /// </summary>
+    public static int RemapSub(IReadOnlyList<SkillScope?> before, IReadOnlyList<SkillScope?> after, int sub)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+        if (before.SequenceEqual(after))
+        {
+            return sub;
+        }
+
+        if (before.Count == 0 || after.Count == 0 || sub < 0)
+        {
+            return 0;
+        }
+
+        if (sub >= before.Count)
+        {
+            return after.Count;
+        }
+
+        for (int i = 0; i < after.Count; i++)
+        {
+            if (after[i] == before[sub])
+            {
+                return i;
+            }
+        }
+
+        return 0;
     }
 
     /// <summary>After a trust, the folder's skills your own hide (2026-11-23), named in one notice; nothing when none is.</summary>
@@ -1011,7 +1044,8 @@ internal sealed class SkillsMenu
         string label = SkillsText.FolderLabel(facts, level);
         string root = Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: false));
         var agents = SkillEditor.ProfileSkillNames(root);
-        var claude = SkillEditor.ProfileSkillNames(Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: true)));
+        // The .claude level read by Claude Code's rules (2026-11-23, review #49): a nameless skill there is named by its folder.
+        var claude = SkillEditor.ProfileSkillNames(Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: true)), claude: true);
         string destination = Path.Combine(root, skill.FolderName);
         if (Directory.Exists(destination) || File.Exists(destination) || agents.Folders.Contains(skill.FolderName) || claude.Folders.Contains(skill.FolderName))
         {
@@ -1087,7 +1121,7 @@ internal sealed class SkillsMenu
                 ShadowNotice(fresh, level);
                 break;
             case SkillEditOutcome.Copied:
-                Sink.Error(SkillsText.MovedButKeptError(skill.Name, skill.Scope, moved.Detail));
+                Sink.Error(SkillsText.MovedButKeptError(skill.Name, skill.Scope, moved.Detail, MovedState(_facts(), level, key) is not (ProjectMoveState.Waiting or ProjectMoveState.Unlisted)));
                 break;
             case SkillEditOutcome.Exists:
                 Sink.Error(SkillsText.ProjectExistsError(skill.Name, skill.FolderName, label, byName: false));
@@ -1133,7 +1167,7 @@ internal sealed class SkillsMenu
             return pending.Reason switch
             {
                 ProjectPendingReason.NotTrusted => ProjectMoveState.Waiting,
-                ProjectPendingReason.OverCap => ProjectMoveState.OverCap,
+                ProjectPendingReason.OverCap or ProjectPendingReason.PastFolderCap => ProjectMoveState.OverCap,
                 _ => ProjectMoveState.Unlisted,
             };
         }
@@ -1527,9 +1561,16 @@ internal sealed class SkillsMenu
                     continue;
                 }
 
+                if (row > entries.Count && row <= entries.Count + removed.Count)
+                {
+                    // A removed skill's row has nothing to view (2026-11-23, review #75): the question stays open.
+                    cursor = row;
+                    continue;
+                }
+
                 if (row != 0)
                 {
-                    return (false, null);   // a removed skill's row, or cancel
+                    return (false, null);   // cancel
                 }
 
                 ProjectTrustSave saved;
@@ -1549,13 +1590,16 @@ internal sealed class SkillsMenu
                     break;   // the question again, on the new content
                 }
 
-                Sink.Notice(SkillsText.TrustedNotice(label, state.Order.Count));
+                // The skills the trust covers: the hashed ones, within the folder's cap (2026-11-23, review #6/#52).
+                Sink.Notice(SkillsText.TrustedNotice(label, state.Hashes.Count));
                 return (true, folder.Level);
             }
         }
     }
 
     // The question's read, off the screen thread: the folder now, its trust, each skill's line (the file count walks its folder) and the removed ones.
+    // Each skill's name, description and acting mark come from the SKILL.md read now (2026-11-23, review #44: after "changed while reviewing" the
+    // rows kept the first read's), by Claude Code's rules for a .claude one; the facts', then the folder name, when it won't parse.
     private static (ProjectFolderState State, ProjectTrustKind? Held, IReadOnlyList<TrustEntry> Entries, IReadOnlyList<string> Removed) ReadForTrust(
         SkillCatalog catalog, ProjectSkillTrust trust, string level, string bound, IReadOnlyDictionary<string, Skill> known)
     {
@@ -1566,7 +1610,20 @@ internal sealed class SkillsMenu
         {
             known.TryGetValue(key, out var skill);
             string directory = skill?.Directory ?? Path.Combine(level, key.Replace('/', Path.DirectorySeparatorChar));
-            string name = skill?.Name ?? Path.GetFileName(directory);
+            string? text = state.Copies.GetValueOrDefault(key);
+            SkillFrontmatter? read = null;
+            if (text is not null)
+            {
+                bool claude = key.StartsWith(new ProjectSkillLevel(level, "", Claude: true).Kind + "/", StringComparison.Ordinal);
+                bool parsed = claude
+                    ? SkillFrontmatter.TryParseClaude(text, Path.GetFileName(directory), out read, out _, out _)
+                    : SkillFrontmatter.TryParse(text, out read, out _, out _);
+                read = parsed ? read : null;
+            }
+
+            string name = read?.Name ?? skill?.Name ?? Path.GetFileName(directory);
+            string description = read is not null ? SkillCatalog.Cap(read.Description) : skill?.Description ?? "";
+            bool acting = read?.HasActingKeys ?? skill?.Acting ?? false;
             int files;
             bool more;
             try
@@ -1579,10 +1636,12 @@ internal sealed class SkillsMenu
                 more = false;
             }
 
-            string? text = state.Copies.GetValueOrDefault(key);
             string mark = "";
             string? old = null;
-            if (held is not null)
+
+            // Only a skill within the folder's cap is hashed, so only one can be new or changed (2026-11-23, review #6/#52): one past it was marked
+            // new on every re-ask.
+            if (held is not null && state.Hashes.ContainsKey(key))
             {
                 if (!held.Skills.TryGetValue(key, out var was))
                 {
@@ -1596,7 +1655,7 @@ internal sealed class SkillsMenu
                 }
             }
 
-            entries.Add(new TrustEntry(key, name, skill?.Description ?? "", mark, SkillsText.FilesNote(files, more), skill?.Acting ?? false, text, old, Path.Combine(directory, SkillCatalog.FileName)));
+            entries.Add(new TrustEntry(key, name, description, mark, SkillsText.FilesNote(files, more), acting, text, old, Path.Combine(directory, SkillCatalog.FileName)));
         }
 
         var removed = held is null ? [] : held.Skills.Keys.Where(k => !state.Order.Contains(k, StringComparer.Ordinal)).Select(k => k[(k.LastIndexOf('/') + 1)..]).ToList();
@@ -1628,7 +1687,8 @@ internal sealed class SkillsMenu
             return false;
         }
 
-        var names = facts.Skills.Concat(facts.Shadowed).Where(s => s.Scope == SkillScope.Project && string.Equals(s.TrustFolder, folder.Level, StringComparison.Ordinal)).Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // Only the folder's offered skills (2026-11-23, review #5): a shadowed one's name is another scope's skill, which stays loaded.
+        var names = facts.Skills.Where(s => s.Scope == SkillScope.Project && string.Equals(s.TrustFolder, folder.Level, StringComparison.Ordinal)).Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var loaded = (_session?.LoadedSkills ?? []).Select(l => l.Name).Where(names.Contains).ToList();
         Sink.Notice(SkillsText.UntrustedNotice(label, loaded));
         return true;
@@ -1851,11 +1911,19 @@ internal sealed class SkillsMenu
             return false;
         }
 
+        // Only what was trusted is copied (2026-11-23, review #102): a skill edited since its trust is refused here and again just before the copy.
+        if (_catalog is { } catalog && !catalog.StillTrusted(skill))
+        {
+            Sink.Error(SkillsText.ProjectCopyChangedError(skill.Name));
+            return true;
+        }
+
+        // The copy is named by its skill (review #55): a repo folder named apart from its skill would land under a name the profile's rules refuse.
         string root = roots.Of(to);
-        string destination = Path.Combine(root, skill.FolderName);
+        string destination = Path.Combine(root, skill.Name);
         if (Directory.Exists(destination) || File.Exists(destination))
         {
-            Sink.Error(ExistsError(skill.Name, skill.FolderName, to));
+            Sink.Error(ExistsError(skill.Name, skill.Name, to));
             return false;
         }
 
@@ -1872,14 +1940,24 @@ internal sealed class SkillsMenu
         }
 
         Func<string, string>? rewrite = skill.ClaudeRules ? text => ClaudeDefaults(text, skill.FolderName) : null;
-        var copied = await Task.Run(() => SkillEditor.CopyFolder(skill.Directory, root, cancellationToken, dropMarkers: true, rewriteSkill: rewrite), cancellationToken).ConfigureAwait(false);
+        var copied = await Task.Run(
+            () => _catalog is { } again && !again.StillTrusted(skill)
+                ? null
+                : SkillEditor.CopyFolder(skill.Directory, root, cancellationToken, dropMarkers: true, rewriteSkill: rewrite, destinationName: skill.Name),
+            cancellationToken).ConfigureAwait(false);
+        if (copied is null)
+        {
+            Sink.Error(SkillsText.ProjectCopyChangedError(skill.Name));
+            return true;
+        }
+
         switch (copied.Outcome)
         {
             case SkillEditOutcome.Copied:
                 Sink.Notice(SkillsText.ProjectCopiedNotice(skill.Name, to));
                 return true;
             case SkillEditOutcome.Exists:
-                Sink.Error(ExistsError(skill.Name, skill.FolderName, to));
+                Sink.Error(ExistsError(skill.Name, skill.Name, to));
                 return false;
             case SkillEditOutcome.Missing:
                 Sink.Error(MissingError(skill.Name));

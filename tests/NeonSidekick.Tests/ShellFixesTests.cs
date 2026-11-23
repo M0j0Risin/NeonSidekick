@@ -150,4 +150,16 @@ public sealed class ShellFixesTests : IDisposable
         Assert.Null(TrustedFilesPolice.Find("cat .claudeignore claude.json", guard));
         Assert.Equal(ShellText.TrustedPoliced, ShellText.TrustedPolicedFor(".git/config"));
     }
+
+    /// <summary>A repo's own skills are on the tripwire (2026-11-23, review #25) with a refusal that sends the change to the user; another .agents path passes.</summary>
+    [Fact]
+    public void ARepoSkillsFolder_IsATripwire_WithItsOwnRefusal()
+    {
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home"), _root);
+        string? named = TrustedFilesPolice.Find("echo x > .agents/skills/x/SKILL.md", guard);
+        Assert.Equal(".agents/skills/x/SKILL.md", named);
+        Assert.Equal(ShellText.ProjectSkillsPoliced, ShellText.TrustedPolicedFor(named!));
+        Assert.Equal(ShellText.ProjectSkillsPoliced, ShellText.TrustedPolicedFor(".agents/skills/x/SKILL.md"));
+        Assert.Null(TrustedFilesPolice.Find("cat .agents/notes.md", guard));
+    }
 }

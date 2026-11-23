@@ -94,6 +94,12 @@ internal sealed partial class SettingsMenu
 
     public static readonly string TemplateNameError = "Template name " + Profiles.NameError + ".";
 
+    /// <summary>A template name starting with _ (2026-11-23, review #19): an advisor made from it would get a temporary profile's name. Pinned.</summary>
+    public const string TemplateTemporaryNameError = "A template's name can't start with _: an advisor made from it takes that name, and _ names a temporary profile.";
+
+    /// <summary>+ Add an advisor stopped at the persona (2026-11-23, review #69): a No to replacing it, or a failed write, adds nothing. Pinned.</summary>
+    public static string AdvisorNotAddedNotice(string profile) => $"({profile} was not added as an advisor)";
+
     public static string NothingToSaveNotice(string profile) => $"({profile} answers under the default persona: nothing to save as a template)";
 
     public static string ReplaceYourTemplateQuestion(string id) => $"Replace your {id} template?";
@@ -334,7 +340,8 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        var made = AdvisorFromTemplate.Create(_settings, template, name, role, writePersona: AdvisorPersonaWriter);
+        // The effective switch (2026-11-23, review #16): Advisors on through a flag or an env var is on.
+        var made = AdvisorFromTemplate.Create(_settings, template, name, role, writePersona: AdvisorPersonaWriter, advisorsOn: EffectiveNow().Advisors);
         if (made.Error is { } error)
         {
             Sink.Error(error);
@@ -472,13 +479,13 @@ internal sealed partial class SettingsMenu
                 return false;
             }
 
-            if (Profiles.IsValidName(typed))
+            if (Profiles.IsValidName(typed) && !Profiles.IsTemporary(typed))
             {
                 id = typed;
                 break;
             }
 
-            Sink.Error(TemplateNameError);
+            Sink.Error(Profiles.IsValidName(typed) ? TemplateTemporaryNameError : TemplateNameError);
             initial = typed;
         }
 

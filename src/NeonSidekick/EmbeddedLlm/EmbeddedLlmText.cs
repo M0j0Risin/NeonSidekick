@@ -25,6 +25,13 @@ public static class EmbeddedLlmText
     /// <summary>The note after a cancelled download: what is on disk stays.</summary>
     public const string PausedNotice = "download paused; pick the model again to resume where it stopped";
 
+    /// <summary>A model list's detail: how many embedded models are installed (2026-11-23, review #38).</summary>
+    public static string InstalledCount(int count) =>
+        count == 1 ? "1 embedded model" : $"{count.ToString(CultureInfo.InvariantCulture)} embedded models";
+
+    /// <summary>A server asked for its models that didn't answer (2026-11-23, review #38).</summary>
+    public static string DidNotAnswer(Uri server, string detail) => $"{server} did not answer ({detail})";
+
     /// <summary>The refusal when the embedded model is asked for while <c>Embedded servers enabled</c> is off (2026-09-29).</summary>
     public const string SwitchedOffError = "the embedded LLM is off; set Embedded servers enabled to on in /settings › Servers › Embedded to use it";
 

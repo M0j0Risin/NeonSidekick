@@ -527,13 +527,42 @@ public static class ToolArguments
 /// escapes respected and no closer mismatched, parsed again with the missing closers added — only when it ends in a value just closed
 /// (<c>]</c> or <c>}</c>), never a string, a <c>,</c> or a <c>:</c>, so a value cut mid-way, or a list cut after a string item, stays refused. Only the list readers ask
 /// (<see cref="ToolArguments.ParseEncodedList"/>, so every list argument: ask_user's questions, patch_file's edits, finish_step's lists and the
-/// others; <c>AskUserTool</c>): an inner list arrives only when the call's outer arguments parsed whole, so the call was finished, not cut off by
-/// the stream, and a missing closer is the model's slip. A table's data and the compactor stay strict, so a cut-off table is never a shorter one.
+/// others; <c>AskUserTool</c>): an inner list arrives only when the call's outer arguments parsed whole, which usually means the call was finished
+/// and a missing closer is the model's slip. Not always (2026-11-23, review #87): a server can close the outer arguments under a length finish, and
+/// patch_file then applied 3 of 5 edits; every call of a round cut off that way runs inside <see cref="Strict"/>, where nothing is closed. A
+/// table's data and the compactor stay strict, so a cut-off table is never a shorter one.
 /// Pure; never throws.
 /// </summary>
 public static class LooseJson
 {
     private static readonly JsonDocumentOptions Tolerant = new() { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip };
+
+    private static readonly AsyncLocal<bool> s_strict = new();
+
+    /// <summary>
+    /// The calls inside never close an open list (2026-11-23, review #87): <c>closeOpen</c> is ignored, so a list a cut-off reply left open is the
+    /// tool's usual bad-list error and nothing is applied. The turn loop enters it around a round whose reply ended on the length limit.
+    /// </summary>
+    public static IDisposable Strict()
+    {
+        bool previous = s_strict.Value;
+        s_strict.Value = true;
+        return new StrictScope(previous);
+    }
+
+    private sealed class StrictScope(bool previous) : IDisposable
+    {
+        private bool _done;
+
+        public void Dispose()
+        {
+            if (!_done)
+            {
+                _done = true;
+                s_strict.Value = previous;
+            }
+        }
+    }
 
     /// <summary>The text as a document — as sent, normalised, or either over its first complete value — or null when nothing parses. The caller disposes it.</summary>
     public static JsonDocument? TryParse(string text, bool closeOpen = false)
@@ -551,7 +580,7 @@ public static class LooseJson
             return Parse(first) ?? Parse(Normalize(first));
         }
 
-        if (closeOpen && MissingClosers(text) is { } closers)
+        if (closeOpen && !s_strict.Value && MissingClosers(text) is { } closers)
         {
             string closed = text.TrimEnd() + closers;
             return Parse(closed) ?? Parse(Normalize(closed));

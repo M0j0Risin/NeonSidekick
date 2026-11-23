@@ -247,6 +247,9 @@ public partial class ChatScreenTests
     public async Task SysPersonaTemplate_Lists_RefusesAnUnknownId_WritesAfterAYes_AndKeepsOnANo()
     {
         _settings.Update(d => d.TtsOutput = false);
+        string broken = Path.Combine(AdvisorTemplates.Directory(_settings.StorageDirectory), "My Template");
+        Directory.CreateDirectory(broken);
+        File.WriteAllText(Path.Combine(broken, "persona.md"), "x");
         _chat.EnqueueText("ok");
         PushLine("/sys persona template");
         PushLine("/sys persona template nope");
@@ -262,6 +265,9 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(ChatScreen.PersonaTemplatesHeading, output);
+        // The home's problem, said ahead of the heading (2026-11-23, review #15: drained through RunOrPost, in order with the list).
+        int problem = output.IndexOf("Advisor template My Template", StringComparison.Ordinal);
+        Assert.InRange(problem, 0, output.IndexOf(ChatScreen.PersonaTemplatesHeading, StringComparison.Ordinal));
         Assert.Contains(ChatScreen.UnknownTemplateError("nope", AdvisorTemplates.BuiltIn.Ids), output);
         Assert.Contains(ChatScreen.PersonaTemplatePrompt("dba", replacing: false), output);
         Assert.Contains(ChatScreen.PersonaTemplateNotice("dba"), output);

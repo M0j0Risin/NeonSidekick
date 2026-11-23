@@ -64,6 +64,7 @@ public sealed class PresentProjectNotesTool : AIFunction, IRefusesPrunedStubs, I
             return new ToolNothingRanResult(ProjectInitText.NotInPassResult);
         }
 
+        _session.MarkWriteFailed(false);
         if (_session.Answer != ProjectInitAnswer.None)
         {
             return new ToolNothingRanResult(ProjectInitText.AlreadyDoneResult(_session.Answer == ProjectInitAnswer.Written));
@@ -91,6 +92,11 @@ public sealed class PresentProjectNotesTool : AIFunction, IRefusesPrunedStubs, I
         }
 
         var draft = Draft(_files, start.Target, content);
+        if (draft.Unreadable)
+        {
+            return new ToolNothingRanResult(ProjectInitText.UnreadableResult(start.Target));
+        }
+
         _session.MarkPresented();
         var verdict = await _review(draft, cancellationToken).ConfigureAwait(false);
         if (verdict is null)
@@ -115,6 +121,16 @@ public sealed class PresentProjectNotesTool : AIFunction, IRefusesPrunedStubs, I
             return new ToolNothingRanResult(ProjectInitText.MovedResult);
         }
 
+        // And the file (2026-11-23, review #22): an edit made while the pane waited would be overwritten unseen. The answer stays open, so the
+        // model presents again over the file as it is now.
+        var now = Draft(_files, start.Target, content);
+        if (now.Unreadable || !string.Equals(now.OldText, draft.OldText, StringComparison.Ordinal))
+        {
+            return new ToolNothingRanResult(ProjectInitText.ChangedMeanwhileResult(start.Target));
+        }
+
+        draft = now;
+
         if (draft.Unchanged)
         {
             _session.Finish(ProjectInitAnswer.Written);
@@ -133,6 +149,7 @@ public sealed class PresentProjectNotesTool : AIFunction, IRefusesPrunedStubs, I
             // Not an answer: the user can fix the cause and run /project-init again.
             string sentence = FileText.Wrote(wrote);
             DiagnosticLog.Info(ProjectFile.Category, ProjectInitText.WriteFailedLogLine(sentence));
+            _session.MarkWriteFailed(true);
             _written?.Invoke(verdict, draft, wrote);
             return new ToolNothingRanResult(ProjectInitText.WriteFailedResult(sentence));
         }
@@ -144,16 +161,17 @@ public sealed class PresentProjectNotesTool : AIFunction, IRefusesPrunedStubs, I
 
     /// <summary>
     /// The draft against the file as it is now (2026-11-23): its text (null when there is none), what would change, whether nothing would (line
-    /// endings aside, <see cref="FileDiff.Of"/>), and the lines that look like secrets.
+    /// endings aside, <see cref="FileDiff.Of"/>), and the lines that look like secrets. A file there that doesn't read whole as text is
+    /// <see cref="ProjectNotesDraft.Unreadable"/> (review #28), never a new file.
     /// </summary>
     public static ProjectNotesDraft Draft(WorkingDirectory files, string target, string content)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(content);
-        string? old = File.Exists(Path.Combine(files.Root, target)) && files.ReadText(target, null, null, WorkingDirectory.MaxWriteChars) is { Outcome: FileOutcome.Ok } read
-            ? read.Text
-            : null;
+        var read = File.Exists(Path.Combine(files.Root, target)) ? files.ReadText(target, null, null, WorkingDirectory.MaxWriteChars) : null;
+        bool unreadable = read is not null && (read.Outcome != FileOutcome.Ok || read.Truncated || read.LineCut);
+        string? old = read is not null && !unreadable ? read.Text : null;
         // Both sides with \n endings and no final newline: Write keeps the file's own endings, and ReadText's lines come back without the
         // last one, so a CRLF file and an LF draft saying the same are no change.
         static string Lines(string text) => text.ReplaceLineEndings("\n").TrimEnd('\n');
@@ -161,6 +179,7 @@ public sealed class PresentProjectNotesTool : AIFunction, IRefusesPrunedStubs, I
         return new ProjectNotesDraft(target, content, old, diff, Unchanged: old is not null && diff is null)
         {
             SecretLines = ProjectSecrets.Lines(content),
+            Unreadable = unreadable,
         };
     }
 }

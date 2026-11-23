@@ -148,6 +148,12 @@ public static class AdvisorTemplates
                 continue;
             }
 
+            if (Profiles.IsTemporary(id))
+            {
+                problems.Add(new AdvisorTemplateProblem(id, AdvisorText.TemplateTemporaryId));   // 2026-11-23, review #19
+                continue;
+            }
+
             if (!personas.TryGetValue(id, out string? persona) || persona.Trim().Length == 0)
             {
                 problems.Add(new AdvisorTemplateProblem(id, AdvisorText.TemplateNoPersona));
@@ -198,6 +204,11 @@ public static class AdvisorTemplates
             throw new ArgumentException(Profiles.NameError, nameof(id));
         }
 
+        if (Profiles.IsTemporary(id))
+        {
+            throw new ArgumentException(AdvisorText.TemplateTemporaryId, nameof(id));   // 2026-11-23, review #19
+        }
+
         string folder = Path.Combine(Directory(home), id);
         var info = new AdvisorTemplateFile
         {
@@ -206,9 +217,46 @@ public static class AdvisorTemplates
             Avatar = Emojis.AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face : null,
         };
         var utf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-        WorkingDirectory.WriteAtomically(Path.Combine(folder, PersonaFileName), utf8.GetBytes(persona.Trim().ReplaceLineEndings() + Environment.NewLine));
+        string personaPath = Path.Combine(folder, PersonaFileName);
+        bool made = !System.IO.Directory.Exists(folder);
+        byte[]? before = File.Exists(personaPath) ? File.ReadAllBytes(personaPath) : null;
+        WorkingDirectory.WriteAtomically(personaPath, utf8.GetBytes(persona.Trim().ReplaceLineEndings() + Environment.NewLine));
         string json = JsonSerializer.Serialize(info, AdvisorTemplateJsonContext.Default.AdvisorTemplateFile);
-        WorkingDirectory.WriteAtomically(Path.Combine(folder, InfoFileName), utf8.GetBytes(json.ReplaceLineEndings("\n") + "\n"));
+        try
+        {
+            WorkingDirectory.WriteAtomically(Path.Combine(folder, InfoFileName), utf8.GetBytes(json.ReplaceLineEndings("\n") + "\n"));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // advisor.json failed (2026-11-23, review #20): persona.md put back as it was, so no template is left half saved.
+            UndoPersona(folder, personaPath, before, made);
+            throw;
+        }
+    }
+
+    // persona.md back to its bytes, or gone when there was none; the folder too when this save made it and nothing else is in it. Best effort.
+    private static void UndoPersona(string folder, string personaPath, byte[]? before, bool made)
+    {
+        try
+        {
+            if (before is not null)
+            {
+                WorkingDirectory.WriteAtomically(personaPath, before);
+            }
+            else if (File.Exists(personaPath))
+            {
+                File.Delete(personaPath);
+            }
+
+            if (made && System.IO.Directory.Exists(folder) && !System.IO.Directory.EnumerateFileSystemEntries(folder).Any())
+            {
+                System.IO.Directory.Delete(folder);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Warn(AdvisorText.Category, AdvisorText.TemplateUnreadable(ex.Message));
+        }
     }
 
     /// <summary>Whether your template <paramref name="id"/> has a folder in <paramref name="home"/>.</summary>
@@ -271,7 +319,23 @@ public static class AdvisorTemplates
             yours);
     }
 
-    /// <summary>The home folder's templates: each first-level folder with a <c>persona.md</c>, the problems added. A missing folder is none.</summary>
+    /// <summary>The most a home template's <c>persona.md</c> or <c>advisor.json</c> may hold (2026-11-23, review #89).</summary>
+    public const int MaxFileBytes = 64 * 1024;
+
+    // Each home template as last read, by its folder (2026-11-23, review #89): read again only when a file's path, write time or length changed,
+    // since /advisor's completion and the Web UI's settings read them on every keystroke and build.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Stamp, AdvisorTemplate Template, AdvisorTemplateProblem[] Problems)> s_read =
+        new(StringComparer.Ordinal);
+
+    private static string Stamp(FileInfo file) => file.Exists
+        ? file.FullName + "|" + file.LastWriteTimeUtc.Ticks.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|" + file.Length.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        : file.FullName + "|-";
+
+    /// <summary>
+    /// The home folder's templates: each first-level folder with a <c>persona.md</c>, the problems added. A missing folder is none. A file over
+    /// <see cref="MaxFileBytes"/>, or one that is a link, is skipped as a problem (2026-11-23, review #89); a linked folder is read, as
+    /// <see cref="DeleteYours"/> handles one.
+    /// </summary>
     private static List<AdvisorTemplate> ReadHome(string directory, List<AdvisorTemplateProblem> problems)
     {
         var templates = new List<AdvisorTemplate>();
@@ -303,17 +367,54 @@ public static class AdvisorTemplates
                 continue;
             }
 
+            if (Profiles.IsTemporary(id))
+            {
+                problems.Add(new AdvisorTemplateProblem(id, AdvisorText.TemplateTemporaryId));   // 2026-11-23, review #19
+                continue;
+            }
+
             try
             {
-                string personaPath = Path.Combine(folder, PersonaFileName);
-                if (!File.Exists(personaPath) || File.ReadAllText(personaPath) is not { } persona || persona.Trim().Length == 0)
+                var personaFile = new FileInfo(Path.Combine(folder, PersonaFileName));
+                var infoFile = new FileInfo(Path.Combine(folder, InfoFileName));
+                if (!personaFile.Exists)
                 {
                     problems.Add(new AdvisorTemplateProblem(id, AdvisorText.TemplateNoPersona));
                     continue;
                 }
 
-                string infoPath = Path.Combine(folder, InfoFileName);
-                templates.Add(Build(id, persona, File.Exists(infoPath) ? File.ReadAllText(infoPath) : null, yours: true, problems));
+                if (new[] { personaFile, infoFile }.FirstOrDefault(f => f.Exists && f.LinkTarget is not null) is { } linked)
+                {
+                    problems.Add(new AdvisorTemplateProblem(id + "/" + linked.Name, AdvisorText.TemplateLinkedFile(linked.Name)));
+                    continue;
+                }
+
+                if (new[] { personaFile, infoFile }.FirstOrDefault(f => f.Exists && f.Length > MaxFileBytes) is { } big)
+                {
+                    problems.Add(new AdvisorTemplateProblem(id + "/" + big.Name, AdvisorText.TemplateTooBig(big.Name, MaxFileBytes)));
+                    continue;
+                }
+
+                string stamp = Stamp(personaFile) + "\n" + Stamp(infoFile);
+                if (s_read.TryGetValue(folder, out var known) && string.Equals(known.Stamp, stamp, StringComparison.Ordinal))
+                {
+                    templates.Add(known.Template);
+                    problems.AddRange(known.Problems);
+                    continue;
+                }
+
+                string persona = File.ReadAllText(personaFile.FullName);
+                if (persona.Trim().Length == 0)
+                {
+                    problems.Add(new AdvisorTemplateProblem(id, AdvisorText.TemplateNoPersona));
+                    continue;
+                }
+
+                var own = new List<AdvisorTemplateProblem>();
+                var template = Build(id, persona, infoFile.Exists ? File.ReadAllText(infoFile.FullName) : null, yours: true, own);
+                s_read[folder] = (stamp, template, own.ToArray());
+                templates.Add(template);
+                problems.AddRange(own);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

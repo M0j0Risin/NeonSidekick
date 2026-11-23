@@ -112,9 +112,14 @@ internal sealed partial class ChatScreen
     /// <c>/advisor templates</c> and <c>/advisor new &lt;template&gt; [&lt;name&gt;]</c> on the screen (2026-11-22): the list (the home's
     /// problems said first), or the shared <see cref="AdvisorFromTemplate.Create"/>. Nothing joins the model's history or the store.
     /// </summary>
-    private void RunAdvisorSetup(AdvisorSetup setup, Settings.AppSettingsData effective)
+    private void RunAdvisorSetup(AdvisorSetup setup, Settings.AppSettingsData effective, AdvisorTemplateScan scan)
     {
-        var scan = AdvisorTemplates.All(_settings.StorageDirectory);
+        if (setup.Kind == AdvisorSetupKind.NewUsage)
+        {
+            _transcript.Error(AdvisorText.NewUsageError(setup.Template));
+            return;
+        }
+
         if (setup.Kind == AdvisorSetupKind.Templates)
         {
             AdvisorTemplates.Report(scan);
@@ -127,7 +132,14 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var made = AdvisorFromTemplate.Create(_settings, scan.Find(setup.Template)!, setup.Name, advisorsOn: effective.Advisors);
+        // The scan the line was read by (2026-11-23, review #18: a second scan could miss the template, and the ! threw).
+        if (scan.Find(setup.Template) is not { } template)
+        {
+            _transcript.Error(AdvisorText.TemplateGoneError(setup.Template));
+            return;
+        }
+
+        var made = AdvisorFromTemplate.Create(_settings, template, setup.Name, advisorsOn: effective.Advisors);
         if (made.Error is { } error)
         {
             _transcript.Error(error);
@@ -176,7 +188,8 @@ internal sealed partial class ChatScreen
 
         // templates and new <template> [<name>] (2026-11-22) ahead of the question's usage line and the no-advisors error: new is how the
         // first one is made.
-        if (AdvisorText.ParseSetup(args, AdvisorTemplateIds()) is { } setup)
+        var scan = AdvisorTemplates.All(_settings.StorageDirectory);
+        if (AdvisorText.ParseSetup(args, scan.Ids.ToHashSet(StringComparer.OrdinalIgnoreCase)) is { } setup)
         {
             if (setup.Kind == AdvisorSetupKind.List)
             {
@@ -186,7 +199,7 @@ internal sealed partial class ChatScreen
                 return;
             }
 
-            RunAdvisorSetup(setup, effective);
+            RunAdvisorSetup(setup, effective, scan);
             return;
         }
 

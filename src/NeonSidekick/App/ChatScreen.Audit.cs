@@ -165,7 +165,7 @@ internal sealed partial class ChatScreen
         // A code audit starts in a new conversation (2026-11-22, the user's call: audits ran on a Ralph pass's or a chat's history), every line of its
         // start under the rule; a refused start leaves the conversation alone.
         DropUndoNote();
-        ResetConversationLight(NewConversationNotice);
+        ResetConversationLight(NewConversationNotice, quiet: _session.History.TurnCount == 0);
         string path = _audit.Path!;
         if (unlocked is not null)
         {
@@ -309,7 +309,7 @@ internal sealed partial class ChatScreen
         if (fresh)
         {
             DropUndoNote();
-            ResetConversationLight(NewConversationNotice);
+            ResetConversationLight(NewConversationNotice, quiet: _session.History.TurnCount == 0);   // 2026-11-23, review #9
         }
 
         if (unlocked is not null)

@@ -60,7 +60,8 @@ public static class ProjectDigest
 
     private static readonly string[] ManifestExtensions = [".sln", ".slnx", ".csproj", ".fsproj", ".vbproj", ".sh"];
 
-    private static readonly string[] ReadmeNames = ["README.md", "README.rst", "README.txt", "README", "readme.md"];
+    // Matched in any case (2026-11-23, review #72: a Readme.md was never found), the name found read.
+    private static readonly string[] ReadmeNames = ["README.md", "README.rst", "README.txt", "README"];
 
     private static readonly string[] RuleFiles = [".cursorrules", ".windsurfrules", ".github/copilot-instructions.md"];
 
@@ -79,7 +80,7 @@ public static class ProjectDigest
         // The notes in play, whole up to the prompt's cap: the starting point, outside the shared budget.
         bool masked = false;
         int inPlayLength = 0;
-        sb.Append("### The notes now");
+        sb.Append("### ").Append(ProjectInitText.NotesNowTitle);
         if (input.InPlay is { } inPlay && files.ReadText(inPlay, null, null, WorkingDirectory.MaxWriteChars) is { Outcome: FileOutcome.Ok } notes)
         {
             inPlayLength = notes.Text.Length;
@@ -136,9 +137,10 @@ public static class ProjectDigest
             left -= kept.Length;
         }
 
-        // The tree.
+        // The tree: the repo's names on one line each, fenced as one block (2026-11-23, review #27: a name is the repo's text), the note outside.
         string treeNote = repo ? "" : subfolder ? ProjectInitText.AboveNote + "\n" : ProjectInitText.NoRepoNote + "\n";
-        Section("Files" + (listCut ? " (the listing was cut)" : ""), treeNote + Tree(paths, skipped), int.MaxValue);
+        string tree = Tree(paths.Select(UntrustedText.OneLine).ToList(), skipped.Select(UntrustedText.OneLine).ToList());
+        Section(ProjectInitText.FilesTitle + (listCut ? ProjectInitText.ListingCutNote : ""), tree.Length == 0 ? "" : treeNote + UntrustedText.Fenced(tree), int.MaxValue, fenced: true);
         cancellationToken.ThrowIfCancellationRequested();
 
         // The build and project files: names at the root and one level down, the root ones' text cut; the first CI workflow's text.
@@ -146,9 +148,10 @@ public static class ProjectDigest
         var workflows = paths.Where(p => p.StartsWith(".github/workflows/", StringComparison.OrdinalIgnoreCase) && (p.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)))
             .Order(StringComparer.Ordinal).ToList();
         var build = new StringBuilder();
-        foreach (string name in manifests.Concat(workflows))
+        string listed = string.Join("\n", manifests.Concat(workflows).Select(name => "- " + UntrustedText.OneLine(name)));
+        if (listed.Length > 0)
         {
-            build.Append("- ").Append(name).Append('\n');
+            build.Append(UntrustedText.Fenced(listed)).Append('\n');
         }
 
         foreach (string name in manifests.Where(p => Depth(p) == 0).Concat(workflows.Take(1)))
@@ -156,15 +159,15 @@ public static class ProjectDigest
             cancellationToken.ThrowIfCancellationRequested();
             if (Read(files, name, ManifestChars) is { } text)
             {
-                build.Append(name).Append(":\n").Append(text).Append('\n');
+                build.Append(UntrustedText.Fenced(UntrustedText.OneLine(name))).Append(":\n").Append(text).Append('\n');
             }
         }
 
-        Section("Build and project files", build.ToString().TrimEnd(), int.MaxValue, fenced: true);
+        Section(ProjectInitText.BuildTitle, build.ToString().TrimEnd(), int.MaxValue, fenced: true);
 
         // The README's head.
-        string? readme = ReadmeNames.FirstOrDefault(n => paths.Contains(n, StringComparer.Ordinal));
-        Section("README" + (readme is null ? "" : ": " + readme), readme is not null && Read(files, readme, ReadmeChars) is { } head ? head : "", ReadmeChars + 200, fenced: true);
+        string? readme = ReadmeNames.Select(n => paths.FirstOrDefault(p => p.Equals(n, StringComparison.OrdinalIgnoreCase))).FirstOrDefault(p => p is not null);
+        Section(ProjectInitText.ReadmeTitle + (readme is null ? "" : ": " + readme), readme is not null && Read(files, readme, ReadmeChars) is { } head ? head : "", ReadmeChars + 200, fenced: true);
         cancellationToken.ThrowIfCancellationRequested();
 
         // Other assistants' rule files, and the project files not in play (they often hold the build commands).
@@ -181,7 +184,7 @@ public static class ProjectDigest
             }
         }
 
-        Section("Other assistants' rule files", rules.ToString().TrimEnd(), int.MaxValue, fenced: true);
+        Section(ProjectInitText.RulesTitle, rules.ToString().TrimEnd(), int.MaxValue, fenced: true);
 
         // The last commit subjects, inside a repo with commits.
         if (repo && input.Git is { } git)
@@ -190,7 +193,7 @@ public static class ProjectDigest
             string commits = log.Outcome == GitOutcome.Ok && log.Commits.Count > 0
                 ? string.Join("\n", log.Commits.Select(c => "- " + UntrustedText.Fenced(ProjectSecrets.Mask(UntrustedText.OneLine(c.Subject)))))
                 : ProjectInitText.UnbornNote;
-            Section("Recent commits", commits, int.MaxValue);
+            Section(ProjectInitText.CommitsTitle, commits, int.MaxValue, fenced: true);   // review #27: a cut never leaves a fence open
         }
 
         // The folder's project skills, trusted or not: names and descriptions, so the notes can point to them.
@@ -198,7 +201,7 @@ public static class ProjectDigest
         {
             string skills = (input.SkillsOff is { } off ? ProjectInitText.SkillsOffNote(off) + "\n" : "")
                 + string.Join("\n", input.Skills.Select(s => "- " + UntrustedText.Fenced(UntrustedText.OneLine(s.Name)) + " (" + s.Folder + "): " + UntrustedText.Fenced(ProjectSecrets.Mask(UntrustedText.OneLine(s.Description)))));
-            Section("Project skills", skills, int.MaxValue, fenced: true);
+            Section(ProjectInitText.SkillsTitle, skills, int.MaxValue, fenced: true);
         }
 
         return new ProjectDigestResult(sb.ToString().TrimEnd(), cut, masked, inPlayLength, subfolder);

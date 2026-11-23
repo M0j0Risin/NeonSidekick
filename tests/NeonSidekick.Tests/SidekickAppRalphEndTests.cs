@@ -62,6 +62,25 @@ public partial class SidekickAppTests
         Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
     }
 
+    /// <summary>The screen's twin (2026-11-23, review #34): a failed nudge leaves the pass judged by its own clean turn, with no retry notice.</summary>
+    [Fact]
+    public async Task Headless_PlanRalph_AFailedNudge_JudgesThePassByItsOwnTurn()
+    {
+        ServerOn1234("llama");
+        HeadlessRalphPlan();
+        _chat.EnqueueText("\n\n");
+        _chat.EnqueueText("unused");
+        _chat.BeforeUpdateOf = (request, _, _) => request == 1 ? throw new InvalidOperationException("the nudge failed") : Task.CompletedTask;
+        HeadlessRalphPass("1");
+        HeadlessRalphPass("2");
+
+        string output = await Headless("/plan ralph add-guide\n");
+
+        Assert.Equal(RalphText.NudgeMessage, HeadlessLastUser(_chat.Requests[1]));
+        Assert.DoesNotContain(RalphText.RetryNotice, output);
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
+    }
+
     [Fact]
     public async Task Headless_PlanRalph_AFixPlan_TicksItsFindings_AndPointsAtAResume()
     {

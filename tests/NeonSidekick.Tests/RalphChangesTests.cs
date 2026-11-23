@@ -427,6 +427,42 @@ public sealed class RalphChangesTests : IDisposable
         Assert.Equal(["other.txt"], RalphChanges.Delta(before, RalphChanges.Snapshot(files, git), files, git, ["named.txt", "src/"]).UnnamedNew);
     }
 
+    /// <summary>A repository with no commit yet (2026-11-23, review #30): no HEAD holds the file, so a new unnamed one is flagged.</summary>
+    [Fact]
+    public void AnUnbornRepository_FlagsANewUnnamedFile()
+    {
+        string repo = GitAccessTests.Init(Path.Combine(_dir, "unborn"));
+        var files = new WorkingDirectory(() => repo, _time);
+        var git = new GitAccess(files, _time);
+        var before = RalphChanges.Snapshot(files, git);
+        Assert.Null(before.Head);
+        Write(repo, "scratch.py", "print(1)");
+
+        Assert.Equal(["scratch.py"], RalphChanges.Delta(before, RalphChanges.Snapshot(files, git), files, git, []).UnnamedNew);
+    }
+
+    /// <summary>A name in another case (2026-11-23, review #39): it names the file where the folder ignores case, and not where it doesn't.</summary>
+    [Fact]
+    public void ANameInAnotherCase_NamesTheFile_WhereTheFolderIgnoresCase()
+    {
+        string root = Path.Combine(_dir, "cased");
+        Directory.CreateDirectory(root);
+        var files = new WorkingDirectory(() => root, _time);
+        var before = RalphChanges.Snapshot(files, null);
+        Write(root, "Notes.md", "x");
+        var after = RalphChanges.Snapshot(files, null);
+
+        using (CaseRule.Override(_ => false))
+        {
+            Assert.Empty(RalphChanges.Delta(before, after, files, null, ["notes.md"]).UnnamedNew!);
+        }
+
+        using (CaseRule.Override(_ => true))
+        {
+            Assert.Equal(["Notes.md"], RalphChanges.Delta(before, after, files, null, ["notes.md"]).UnnamedNew);
+        }
+    }
+
     /// <summary>Outside a repository a file the snapshot before didn't hold is new; past a cut nothing is known to be new, so nothing is flagged.</summary>
     [Fact]
     public void APlainFolder_FlagsANewUnnamedFile_ButNeverPastACut()

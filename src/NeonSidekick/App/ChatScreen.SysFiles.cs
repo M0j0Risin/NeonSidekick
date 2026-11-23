@@ -135,7 +135,7 @@ internal sealed partial class ChatScreen
         if (id.Length == 0)
         {
             Advisors.AdvisorTemplates.Report(scan);
-            DrainDiagnostics();
+            RunOrPost(DrainDiagnostics);   // 2026-11-23, review #15: under a reply, posted as _flow's lines are, so it stays in order
             _flow.Notice(PersonaTemplatesHeading);
             foreach (var each in scan.Templates)
             {

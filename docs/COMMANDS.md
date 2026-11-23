@@ -513,7 +513,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * A bare `/advisor` shows each one's server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`) and its description; a deleted profile is `(missing)`.
 * `/advisor list` opens *Advisor list* ([SETTINGS.md](SETTINGS.md#advisors)) to add, change or remove advisors; from the Web UI it runs at the PC only.
 * `/advisor templates` lists the templates: the built-in ones and your own in `advisors/` in the home.
-* `/advisor new <template> [<name>]` makes a profile from the template (named after it unless you name it) with its persona, role, description and avatar, on this profile's saved server and model, and adds it. No switch; a taken name is refused. It runs at the PC only from the Web UI.
+* `/advisor new <template> [<name>]` makes a profile from the template (named after it unless you give a one-word name) with its persona, role, description and avatar, on this profile's saved server and model, and adds it. No switch; a taken name is refused. It runs at the PC only from the Web UI.
 
 ### Your own shell line
 

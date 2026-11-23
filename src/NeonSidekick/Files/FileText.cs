@@ -425,6 +425,10 @@ public static class FileText
     public static string ClaudeFilesProtected(string path) =>
         $"Error: '{path}' is Claude Code's settings, hooks or servers, which /claude loads and the file tools never change; the user changes them";
 
+    /// <summary>A write into a repo's <c>.agents/skills</c> (2026-11-23, review #25). Prompt text.</summary>
+    public static string ProjectSkillsProtected(string path) =>
+        $"Error: '{path}' is in the repo's own skills (.agents/skills), which the user changes; the file tools and skill_editor never do";
+
     /// <summary>The project file with nobody to ask (review P1, D2): headless, a bot, an advisor, a script, a pass that may not ask. Prompt text.</summary>
     public static string ProjectFileRefused(string path) =>
         $"Error: '{path}' is the project file the system prompt reads every turn; it changes only when the user allows it on the screen, and nobody can be asked now: tell the user the change, and they can make it";
@@ -438,7 +442,7 @@ public static class FileText
     /// Prompt text.
     /// </summary>
     public const string GuardedPathsSentence =
-        " .git, .neon, .claude, a root .mcp.json and the app's own settings are never written; the project file (NEON.md, AGENTS.md, CLAUDE.md) changes only when the user allows it.";
+        " .git, .neon, .claude, .agents/skills, a root .mcp.json and the app's own settings are never written; the project file (NEON.md, AGENTS.md, CLAUDE.md) changes only when the user allows it.";
 
     /// <summary>The project file's allow pane's title (review P1, D2).</summary>
     public const string ProjectFileAllowTitle = "Change the project file?";
@@ -580,6 +584,7 @@ public static class FileText
             FileOutcome.SkillFilesProtected => SkillFilesProtected(path),
             FileOutcome.CommandFilesProtected => CommandFilesProtected(path),
             FileOutcome.ClaudeFilesProtected => ClaudeFilesProtected(path),
+            FileOutcome.ProjectSkillsProtected => ProjectSkillsProtected(path),
             FileOutcome.ProjectFileAsk => ProjectFileRefused(path),
             FileOutcome.ShoppingList => Shopping.ShoppingText.NotAFile(path),
             FileOutcome.StreamName => StreamName(path),

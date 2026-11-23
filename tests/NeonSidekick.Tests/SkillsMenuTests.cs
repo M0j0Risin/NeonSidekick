@@ -42,6 +42,10 @@ public class SkillsMenuTests : IDisposable
     private ProjectSkillTrust? _projectTrust;
     private string? _working;
     private readonly List<string> _viewed = new();
+    /// <summary>What a View does besides recording it (2026-11-23, review #44: an edit made while the question is open).</summary>
+    private Action<string>? _onView;
+    /// <summary>The conversation the menu reads loaded skills from (2026-11-23, review #5); null, none.</summary>
+    private ConversationHistory? _session;
     /// <summary>The scope page's project row's level (2026-11-23): the working folder unless a test hides the row; the bin a project skill's delete uses.</summary>
     private bool _projectTarget = true;
     private FakeRecycleBin? _bin;
@@ -151,8 +155,8 @@ public class SkillsMenuTests : IDisposable
         var settings = Settings(pane, keys, menuPane);
         var menu = new SkillsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, _usage,
             versions: _versions, restore: _versions is null ? null : Restore, forget: _forget,
-            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, _, _) => { _viewed.Add(label); return Task.CompletedTask; },
-            bin: _bin is null ? null : () => _bin);
+            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, _, _) => { _viewed.Add(label); _onView?.Invoke(label); return Task.CompletedTask; },
+            bin: _bin is null ? null : () => _bin, session: _session);
         pane.Show();
         return (menu, pane, settings);
     }
@@ -1747,5 +1751,186 @@ public class SkillsMenuTests : IDisposable
         Assert.Contains("\n" + Markup.Remove(InfoPane.SubStripRows(SkillsText.Label, ["all", "profile"], 0, 100)[0]) + "\n", after);
         Assert.DoesNotContain("Reads PDFs.", after);
         pane.Dispose();
+    }
+
+    // ── The review fixes over the project sub-tab (2026-11-23, the last-10 review) ──
+
+    /// <summary>A trust past the cap (review #6/#52): 51 skills, one edited; only that one is marked, and the notice counts the 50 the trust covers.</summary>
+    [Fact]
+    public async Task TheTrustQuestion_PastTheCap_MarksOnlyTheEditedSkill_AndCountsFifty()
+    {
+        string repo = UseRepo();
+        for (int i = 0; i <= ProjectSkillTrust.ProjectSkillCap; i++)
+        {
+            PutProject(repo, "a" + i.ToString("D2", System.Globalization.CultureInfo.InvariantCulture), "One of many.");
+        }
+
+        TrustRepo(repo);
+        File.WriteAllText(Path.Combine(repo, ".agents", "skills", "a00", SkillCatalog.FileName), "---\nname: a00\ndescription: Edited.\n---\n\nNew steps.\n");
+        _console.Profile.Width = 200;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row
+        Push(Keys.Up, Keys.Enter);                              // Trust
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.TrustChangedCaption(SkillsText.ThisFolderLabel, 0, 1, 0), Output);
+        Assert.Contains(SkillsText.TrustedNotice(SkillsText.ThisFolderLabel, ProjectSkillTrust.ProjectSkillCap), Output);
+    }
+
+    /// <summary>Enter on a removed skill's row (review #75) keeps the question open: the Trust after it still saves.</summary>
+    [Fact]
+    public async Task TheTrustQuestion_EnterOnARemovedRow_KeepsItOpen()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        string lint = PutProject(repo, "lint", "Lints.");
+        TrustRepo(repo);
+        Directory.Delete(lint, recursive: true);
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row: View deploy on the cursor
+        Push(Keys.Down, Keys.Enter);                            // lint's removed row: nothing
+        Push(Keys.Up, Keys.Up, Keys.Enter);                     // Trust
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.TrustedNotice(SkillsText.ThisFolderLabel, 1), Output);
+        Assert.Equal([".agents/skills/deploy"], _projectTrust!.Trusted(repo)!.Skills.Keys);
+    }
+
+    /// <summary>A skill that gains acting keys while the question is open (review #44): the save finds the change, and the question asked again shows the acting mark.</summary>
+    [Fact]
+    public async Task TheTrustQuestion_AskedAgain_ShowsTheActingMarkReadNow()
+    {
+        string repo = UseRepo();
+        string deploy = PutProject(repo, "deploy", "Ships it.");
+        _onView = _ => File.WriteAllText(Path.Combine(deploy, SkillCatalog.FileName), "---\nname: deploy\ndescription: Ships it.\nallowed-tools: Bash\n---\n\nThe repo's steps.\n");
+        _console.Profile.Width = 200;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row
+        Push(Keys.Enter);                                       // View deploy: the edit lands
+        Push(Keys.Up, Keys.Enter);                              // Trust: changed meanwhile, asked again
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ChangedWhileReviewingNotice(SkillsText.ThisFolderLabel), Output);
+        Assert.Contains(SkillsText.ActingMark, Output);
+        Assert.Null(_projectTrust!.Trusted(repo));
+    }
+
+    /// <summary>An untrust (review #5) names only the folder's offered skills as still loaded: a shadowed "x" is the profile's, which stays.</summary>
+    [Fact]
+    public async Task Untrust_AShadowedName_IsNotNamedAsStillLoaded()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        PutProject(repo, "x", "The repo's x.");
+        Put(SkillScope.Profile, "x", "Mine.");
+        TrustRepo(repo);
+        _session = new ConversationHistory("system");
+        Load(_session, "x");
+        _console.Profile.Width = 200;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter);   // deploy, x (hidden), untrust
+        Push(Keys.Down, Keys.Enter);                                                   // Yes
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Null(_projectTrust!.Trusted(repo));
+        Assert.Contains(SkillsText.UntrustedNotice(SkillsText.ThisFolderLabel, []), Output);
+        Assert.DoesNotContain(SkillsText.UntrustedNotice(SkillsText.ThisFolderLabel, ["x"]), Output);
+    }
+
+    /// <summary>A copy is named by its skill (review #55): <c>.agents/skills/Foo-Dir</c>, named "foo", lands as <c>skills/foo</c>.</summary>
+    [Fact]
+    public async Task ProjectCopy_NamesTheCopyByItsSkill()
+    {
+        string repo = UseRepo();
+        string folder = Path.Combine(repo, ".agents", "skills", "Foo-Dir");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, SkillCatalog.FileName), "---\nname: foo\ndescription: The repo's foo.\n---\n\nSteps.\n");
+        TrustRepo(repo);
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // foo's page
+        Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);     // copy to profile, Yes
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.True(Exists(SkillScope.Profile, "foo"));
+        Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "Foo-Dir")));
+    }
+
+    /// <summary>A skill edited after the facts were read (review #102) is refused for copying, and nothing is written.</summary>
+    [Fact]
+    public async Task ProjectCopy_ASkillEditedSinceItsTrust_IsRefused()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        TrustRepo(repo);
+        _openFile = path => File.AppendAllText(path, "\nMore steps.\n");
+        _console.Profile.Width = 200;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Enter);   // deploy's page, edit: the file changes, the list is as it was
+        Push(Keys.Enter, Keys.Down, Keys.Enter);                            // deploy's page, copy to profile
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ProjectCopyChangedError("deploy"), Output);
+        Assert.False(Directory.Exists(Path.Combine(_roots.Profile, "deploy")));
+    }
+
+    /// <summary>A nameless <c>.claude</c> skill takes its folder's name (review #49): it blocks a profile "foo" kept in a folder named apart from it.</summary>
+    [Fact]
+    public async Task MoveToProject_ANamelessClaudeSkill_BlocksItsFoldersName()
+    {
+        string repo = UseRepo();
+        string mine = Path.Combine(_roots.Profile, "foo-dir");
+        Directory.CreateDirectory(mine);
+        File.WriteAllText(Path.Combine(mine, SkillCatalog.FileName), "---\nname: foo\ndescription: Mine.\n---\n\nbody\n");
+        string claude = Path.Combine(repo, ".claude", "skills", "foo");
+        Directory.CreateDirectory(claude);
+        File.WriteAllText(Path.Combine(claude, SkillCatalog.FileName), "---\ndescription: The repo's.\n---\n\nSteps.\n");
+        _console.Profile.Width = 200;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Enter);             // the profile sub-tab's foo
+        Push(Keys.Down, Keys.Down, Keys.Enter);   // project: refused
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ProjectExistsError("foo", "foo-dir", SkillsText.ThisFolderLabel, byName: true), Output);
+        Assert.True(File.Exists(Path.Combine(mine, SkillCatalog.FileName)));
+    }
+
+    /// <summary>A changed strip keeps the tab on show (review #51): a scope by its scope, the loaded sub-tab to the new strip's, all when the tab went.</summary>
+    [Fact]
+    public void RemapSub_KeepsTheTabOnShow()
+    {
+        SkillScope?[] before = [null, SkillScope.Profile, SkillScope.Global];
+        SkillScope?[] after = [null, SkillScope.Profile, SkillScope.Global, SkillScope.Project];
+
+        Assert.Equal(2, SkillsMenu.RemapSub(before, after, 2));
+        Assert.Equal(4, SkillsMenu.RemapSub(before, after, 3));   // the loaded sub-tab, past the scopes
+        Assert.Equal(1, SkillsMenu.RemapSub(after, before, 1));
+        Assert.Equal(0, SkillsMenu.RemapSub(after, before, 3));   // project went
+        Assert.Equal(3, SkillsMenu.RemapSub(before, before, 3));
+    }
+
+    /// <summary>The kept-both error says where the repo's copy stands (review #92).</summary>
+    [Fact]
+    public void MovedButKeptError_NamesTheReposTrust()
+    {
+        string trusted = SkillsText.MovedButKeptError("haiku", SkillScope.Profile, "in use", repoTrusted: true);
+        string waiting = SkillsText.MovedButKeptError("haiku", SkillScope.Profile, "in use", repoTrusted: false);
+
+        Assert.NotEqual(trusted, waiting);
+        Assert.Contains("/skills › project", waiting);
+        Assert.DoesNotContain("/skills › project", trusted);
     }
 }

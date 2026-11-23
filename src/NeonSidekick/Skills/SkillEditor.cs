@@ -745,7 +745,8 @@ public static class SkillEditor
             return new SkillEditResult(SkillEditOutcome.Missing, skill.Name, skill.Scope);
         }
 
-        var copied = CopyFolder(skill.Directory, destinationRoot, cancellationToken, dropMarkers: true);
+        // A link inside refuses the move (2026-11-23, review #33): the copy would skip it, then the source and what it held would be deleted.
+        var copied = CopyFolder(skill.Directory, destinationRoot, cancellationToken, dropMarkers: true, refuseLinks: true);
         if (copied.Outcome != SkillEditOutcome.Copied)
         {
             return copied with { Name = skill.Name, Scope = SkillScope.Project };
@@ -765,8 +766,10 @@ public static class SkillEditor
     /// <summary>
     /// The folder names and the frontmatter names of the profile skills under <paramref name="root"/>, any case (2026-10-25: a copy into it
     /// refuses either twin, since a same-scope twin would be shadowed). Empty for a missing root; a <c>SKILL.md</c> that won't parse gives its folder alone.
+    /// <paramref name="claude"/> reads them by Claude Code's rules (2026-11-23, review #49: a <c>.claude\skills</c> folder, where a nameless skill is
+    /// named by its folder).
     /// </summary>
-    public static (IReadOnlySet<string> Folders, IReadOnlySet<string> Names) ProfileSkillNames(string root)
+    public static (IReadOnlySet<string> Folders, IReadOnlySet<string> Names) ProfileSkillNames(string root, bool claude = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
         var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -774,7 +777,7 @@ public static class SkillEditor
         foreach (string folder in SkillCatalog.Folders(root))
         {
             folders.Add(Path.GetFileName(folder));
-            if (FrontmatterName(folder) is { } name)
+            if (FrontmatterName(folder, claude) is { } name)
             {
                 names.Add(name);
             }
@@ -783,14 +786,20 @@ public static class SkillEditor
         return (folders, names);
     }
 
-    /// <summary>The <c>name</c> in <paramref name="folder"/>'s <c>SKILL.md</c> frontmatter, or null when it can't be read or parsed.</summary>
-    public static string? FrontmatterName(string folder)
+    /// <summary>
+    /// The <c>name</c> in <paramref name="folder"/>'s <c>SKILL.md</c> frontmatter, or null when it can't be read or parsed; under
+    /// <paramref name="claude"/> by Claude Code's rules (<see cref="SkillFrontmatter.TryParseClaude"/>), so a nameless skill gives its folder's name.
+    /// </summary>
+    public static string? FrontmatterName(string folder, bool claude = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         try
         {
-            return SkillFrontmatter.TryParse(File.ReadAllText(Path.Combine(folder, SkillCatalog.FileName)), out var frontmatter, out _, out _)
-                && frontmatter!.Name.Length > 0 ? frontmatter.Name : null;
+            string text = File.ReadAllText(Path.Combine(folder, SkillCatalog.FileName));
+            bool parsed = claude
+                ? SkillFrontmatter.TryParseClaude(text, Path.GetFileName(Path.TrimEndingDirectorySeparator(folder)), out var frontmatter, out _, out _)
+                : SkillFrontmatter.TryParse(text, out frontmatter, out _, out _);
+            return parsed && frontmatter!.Name.Length > 0 ? frontmatter.Name : null;
         }
         catch (Exception ex) when (IsFileFailure(ex))
         {
@@ -818,13 +827,18 @@ public static class SkillEditor
     /// <c>.neon-source.json</c>, lock and disable markers are a stranger's claims (a forged origin would let a later <c>/skills add</c> replace your copy),
     /// so they're left out. <paramref name="rewriteSkill"/> rewrites the copy's <c>SKILL.md</c> in the temp folder before the move: a <c>.claude</c> skill
     /// read with Claude Code's defaults gets them written in, so the profile's rules read it too. The repo's file is never touched.
+    /// <para>2026-11-23 (review #33/#64/#67/#102/#104): a <c>SKILL.md</c> that is a link is refused (skipped, the copy would land without one); the
+    /// dropped markers are matched in any case and their bytes aren't counted; <paramref name="refuseLinks"/> (a move into a repo, whose source is
+    /// deleted after) refuses any link inside rather than skip it; <paramref name="destinationName"/> names the copy (a project skill's copy is
+    /// named by its skill, not its repo folder).</para>
     /// </remarks>
-    public static SkillEditResult CopyFolder(string folder, string profileSkillsRoot, CancellationToken cancellationToken = default, bool dropMarkers = false, Func<string, string>? rewriteSkill = null)
+    public static SkillEditResult CopyFolder(string folder, string profileSkillsRoot, CancellationToken cancellationToken = default, bool dropMarkers = false, Func<string, string>? rewriteSkill = null,
+        bool refuseLinks = false, string? destinationName = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(folder);
         ArgumentException.ThrowIfNullOrWhiteSpace(profileSkillsRoot);
         string source = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
-        string name = Path.GetFileName(source);
+        string name = destinationName ?? Path.GetFileName(source);
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(profileSkillsRoot));
         string destination = Path.Combine(root, name);
         string? temp = null;
@@ -841,6 +855,11 @@ public static class SkillEditor
                 return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: SkillText.CopyLinkedFolder);
             }
 
+            if (new FileInfo(Path.Combine(source, SkillCatalog.FileName)).LinkTarget is not null)
+            {
+                return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: SkillText.CopyLinkedSkillFile);
+            }
+
             if (Directory.Exists(destination) || File.Exists(destination))
             {
                 return new SkillEditResult(SkillEditOutcome.Exists, name, SkillScope.Profile);
@@ -849,11 +868,13 @@ public static class SkillEditor
             var folders = new List<string>();
             var files = new List<string>();
             long bytes = 0;
-            Collect(info, "", folders, files, ref bytes);
-            if (dropMarkers)
+            int links = 0;
+            Collect(info, "", folders, files, ref bytes, ref links, dropMarkers);
+            if (refuseLinks && links > 0)
             {
-                files.RemoveAll(f => f is SkillProvenance.FileName or SkillLock.FileName or SkillDisable.FileName);
+                return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: SkillText.CopyHoldsLinks(links));
             }
+
             if (files.Count > WorkingDirectory.MaxTransferFiles || bytes > WorkingDirectory.MaxTransferBytes)
             {
                 return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: WorkingDirectory.TransferCapDetail(files.Count, bytes));
@@ -919,12 +940,19 @@ public static class SkillEditor
         }
     }
 
-    // The folders and files under directory, relative to the copy's top, links skipped and never followed; bytes summed.
-    private static void Collect(DirectoryInfo directory, string relative, List<string> folders, List<string> files, ref long bytes)
+    // The folders and files under directory, relative to the copy's top, links skipped (and counted) and never followed; bytes summed. Under
+    // dropMarkers the top's app markers are left out in any case, their bytes uncounted (2026-11-23, review #64/#104).
+    private static void Collect(DirectoryInfo directory, string relative, List<string> folders, List<string> files, ref long bytes, ref int links, bool dropMarkers)
     {
         foreach (var entry in directory.EnumerateFileSystemInfos())
         {
             if ((entry.Attributes & FileAttributes.ReparsePoint) != 0)
+            {
+                links++;
+                continue;
+            }
+
+            if (dropMarkers && relative.Length == 0 && entry is FileInfo && IsMarker(entry.Name))
             {
                 continue;
             }
@@ -933,7 +961,7 @@ public static class SkillEditor
             if (entry is DirectoryInfo sub)
             {
                 folders.Add(path);
-                Collect(sub, path, folders, files, ref bytes);
+                Collect(sub, path, folders, files, ref bytes, ref links, dropMarkers);
             }
             else if (entry is FileInfo file)
             {
@@ -942,6 +970,11 @@ public static class SkillEditor
             }
         }
     }
+
+    private static bool IsMarker(string name) =>
+        string.Equals(name, SkillProvenance.FileName, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, SkillLock.FileName, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(name, SkillDisable.FileName, StringComparison.OrdinalIgnoreCase);
 
     // Any temp folder an earlier copy left beside root (a crash), deleted; one that won't go is logged and tried again next time.
     private static void SweepCopyTemps(string root)

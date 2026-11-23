@@ -584,19 +584,21 @@ public class LlmSessionTests
     public async Task ListModelsFor_ClaudeCode_IsItsAliases_WhereItsProfileOffersIt()
     {
         var claude = new AppSettingsData { LlmUrl = "claude-code" };
+        var opus = new AppSettingsData { LlmUrl = "claude-code", LlmModel = " opus " };
         using var off = Session();
         using var on = new LlmSession(
             new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
             new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
             (_, _) => new FakeChatClient(),
-            claudeCliOffered: saved => ReferenceEquals(saved, claude));
+            claudeCliOffered: saved => ReferenceEquals(saved, claude) || ReferenceEquals(saved, opus));
 
         Assert.Equal((null, NeonSidekick.Advisors.AdvisorText.ModelListClaudeNotOffered), await off.ListModelsForAsync(claude, CancellationToken.None));
+        Assert.Null(off.LinkedModelOf(claude));   // 2026-11-23, review #36: no model where the link would fail
         var (listed, problem) = await on.ListModelsForAsync(claude, CancellationToken.None);
         Assert.Null(problem);
         Assert.Equal(NeonSidekick.Claude.ClaudeCliEndpoint.Models, listed!.Value.ModelIds);
         Assert.Equal(NeonSidekick.Claude.ClaudeCliEndpoint.DefaultModel, on.LinkedModelOf(claude));
-        Assert.Equal("opus", on.LinkedModelOf(new AppSettingsData { LlmUrl = "claude-code", LlmModel = " opus " }));
+        Assert.Equal("opus", on.LinkedModelOf(opus));
         Assert.Empty(_http.Requests);
     }
 

@@ -113,6 +113,13 @@ public static partial class ShellText
     public const string ClaudePoliced =
         "Error: refused by the shell police: the command names Claude Code's settings (.claude or .mcp.json), which /claude loads and only the user changes; tell the user the change, and they can make it";
 
+    /// <summary>
+    /// The tripwire's sentence for a repo's own skills (2026-11-23, review #25): <see cref="TrustedPoliced"/>'s "only the app's tools change" would be
+    /// false there. Prompt text.
+    /// </summary>
+    public const string ProjectSkillsPoliced =
+        "Error: refused by the shell police: the command names the repo's own skills (.agents/skills), which only the user changes; tell the user the change, and they can make it";
+
     /// <summary>The tripwire's sentence for the install (2026-11-04, review P14-3): "use the app's tools" sent the model to tools that refuse it too. Prompt text.</summary>
     public const string InstallPoliced =
         "Error: refused by the shell police: the command names the app's install folder or its update files, which only the app's own update changes; no tool here changes them, so tell the user the change, and they can make it";
@@ -126,7 +133,7 @@ public static partial class ShellText
     {
         TrustedFinding.Install => InstallPoliced,
         TrustedFinding.HoldsAppFolder => HoldsAppFolderPoliced,
-        _ => TrustedFilesPolice.IsClaudeFile(token) ? ClaudePoliced : TrustedPoliced,
+        _ => TrustedFilesPolice.IsClaudeFile(token) ? ClaudePoliced : TrustedFilesPolice.IsProjectSkillsFile(token) ? ProjectSkillsPoliced : TrustedPoliced,
     };
 
     /// <summary>The transcript's line for it: the word that tripped it, and the script it was in.</summary>

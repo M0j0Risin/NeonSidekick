@@ -140,13 +140,14 @@ public sealed class SkillCatalog
 
     /// <summary>
     /// Whether <paramref name="skill"/> may be handed over now: always for the user's own scopes; for a project skill, only while its files still hash
-    /// to what was trusted (a <c>git pull</c> between the scan and the load would otherwise hand over text nobody trusted).
+    /// to what was trusted (a <c>git pull</c> between the scan and the load would otherwise hand over text nobody trusted). The bytes are read again,
+    /// never the stamp cache (2026-11-23, review #40): a same-size edit with its write time put back would pass a stamp check.
     /// </summary>
     public bool StillTrusted(Skill skill)
     {
         ArgumentNullException.ThrowIfNull(skill);
         return skill.Scope != SkillScope.Project
-            || (skill.TrustedHash is { } trusted && string.Equals(_hasher.SkillHash(skill.Directory), trusted, StringComparison.Ordinal));
+            || (skill.TrustedHash is { } trusted && string.Equals(_hasher.SkillHash(skill.Directory, fresh: true), trusted, StringComparison.Ordinal));
     }
 
     /// <summary>One project skill's hash now (the trust question's per-skill compare), from the stamp cache.</summary>
@@ -248,7 +249,7 @@ public sealed class SkillCatalog
                 if (seen.TryGetValue(skill.Name, out var winner))
                 {
                     shadowed.Add(skill with { ShadowedBy = winner.Scope });
-                    if (_shadowNoted.Add(skill.FilePath))
+                    if (NoteOnce(_shadowNoted, skill.FilePath))
                     {
                         DiagnosticLog.Info(Category, ShadowedNote(skill, winner));
                     }
@@ -267,6 +268,9 @@ public sealed class SkillCatalog
         if (part is not null)
         {
             problems.AddRange(part.Problems);
+
+            // The project SKILL.md files this part loaded stay in the parse cache (2026-11-23, review #46): pruned, each scan read and logged them again.
+            live.UnionWith(part.Files);
             int offered = 0;
             foreach (var (candidate, reason) in part.Candidates)
             {
@@ -279,7 +283,7 @@ public sealed class SkillCatalog
                 if (seen.TryGetValue(candidate.Name, out var winner))
                 {
                     shadowed.Add(candidate with { ShadowedBy = winner.Scope, ShadowedByDirectory = winner.Directory });
-                    if (_shadowNoted.Add(candidate.FilePath))
+                    if (NoteOnce(_shadowNoted, candidate.FilePath))
                     {
                         DiagnosticLog.Info(Category, ShadowedNote(candidate, winner));
                     }
@@ -308,6 +312,7 @@ public sealed class SkillCatalog
                 _cache.Remove(stale);
             }
 
+            _hasher.Retain(part?.Hashed ?? []);
             string names = string.Join("\n", skills.Select(s => s.Name));
             if (!string.Equals(names, _names, StringComparison.Ordinal))
             {
@@ -330,8 +335,12 @@ public sealed class SkillCatalog
 
     // ── Project skills (2026-11-23, feature idea #16) ──────────────────────────
 
-    /// <summary>The project part of a scan: the folder it was read from, each candidate with its reason not to offer it (null: trusted), the problems, the folders.</summary>
-    private sealed record ProjectPart(string Root, IReadOnlyList<(Skill Skill, ProjectPendingReason? Reason)> Candidates, IReadOnlyList<SkillProblem> Problems, IReadOnlyList<ProjectFolder> Folders);
+    /// <summary>
+    /// The project part of a scan: the folder it was read from, each candidate with its reason not to offer it (null: trusted), the problems, the
+    /// folders, the <c>SKILL.md</c> files it parsed (kept in the parse cache, review #46) and the skill folders it hashed (kept in the hasher's, #54).
+    /// </summary>
+    private sealed record ProjectPart(string Root, IReadOnlyList<(Skill Skill, ProjectPendingReason? Reason)> Candidates, IReadOnlyList<SkillProblem> Problems, IReadOnlyList<ProjectFolder> Folders,
+        IReadOnlyList<string> Files, IReadOnlyList<string> Hashed);
 
     /// <summary>The problem for a project <c>SKILL.md</c> over the read bound. Pinned.</summary>
     public static string TooLargeProblem(long bytes) =>
@@ -360,6 +369,8 @@ public sealed class SkillCatalog
         var candidates = new List<(Skill, ProjectPendingReason?)>();
         var problems = new List<SkillProblem>();
         var folders = new List<ProjectFolder>();
+        var files = new List<string>();
+        var hashed = new List<string>();
         string bound = ProjectSkillWalk.RepoRoot(root, source.UserHome, source.AppHome) ?? root;
         foreach (var group in ProjectSkillWalk.Levels(root, source.UserHome, source.AppHome).GroupBy(l => l.Level))
         {
@@ -386,12 +397,13 @@ public sealed class SkillCatalog
             }
 
             var (keys, hashes, _) = ReadLevel(level, bound, found, copies: false);
+            hashed.AddRange(found.Where(f => hashes.ContainsKey(f.Key)).Select(f => f.Directory));
             string fingerprint = ProjectSkillHasher.FolderFingerprint(keys.Select(k => new KeyValuePair<string, string?>(k, hashes.GetValueOrDefault(k))));
             var held = source.Trust.Trusted(level);
             var trust = held is null ? ProjectFolderTrust.Untrusted
                 : string.Equals(held.Fingerprint, fingerprint, StringComparison.Ordinal) ? ProjectFolderTrust.Trusted
                 : ProjectFolderTrust.Changed;
-            if (trust == ProjectFolderTrust.Changed && _changedNoted.Add(level + "\0" + fingerprint))
+            if (trust == ProjectFolderTrust.Changed && NoteOnce(_changedNoted, level + "\0" + fingerprint))
             {
                 DiagnosticLog.Info(Category, $"Project skills in {level} changed since they were trusted; not offered until trusted again.");
             }
@@ -408,6 +420,15 @@ public sealed class SkillCatalog
                     continue;
                 }
 
+                // A SKILL.md that is itself a link, even one inside the repo (2026-11-23, review #73): listed, never read or offered. Its size below
+                // would be the link's own, and the trust would follow a link a later edit can re-point.
+                if (WorkingDirectory.RealLinkTarget(file) is not null)
+                {
+                    var linkedFile = new Skill(Path.GetFileName(directory), "", SkillScope.Project, directory) { TrustFolder = level, ProjectKey = key, ClaudeRules = kind.Claude };
+                    candidates.Add((linkedFile, ProjectPendingReason.LinkedFile));
+                    continue;
+                }
+
                 long length = SafeLength(file);
                 if (length > ProjectSkillTrust.MaxSkillFileBytes)
                 {
@@ -415,6 +436,7 @@ public sealed class SkillCatalog
                     continue;
                 }
 
+                files.Add(file);
                 var entry = Load(file, kind.Claude ? Path.GetFileName(directory) : null);
                 if (entry.Frontmatter is null)
                 {
@@ -436,18 +458,35 @@ public sealed class SkillCatalog
                 ProjectPendingReason? reason = !IsBoundedName(frontmatter.Name) ? ProjectPendingReason.BadName
                     : kind.Claude && frontmatter.ManualOnly ? ProjectPendingReason.ManualOnly
                     : !trusted ? ProjectPendingReason.NotTrusted
-                    : skill.TrustedHash is null ? ProjectPendingReason.OverCap   // past the level's 50th folder: never hashed, so never trusted, and over the cap anyway
+                    : skill.TrustedHash is null ? ProjectPendingReason.PastFolderCap   // past the level's 50th folder: never hashed, so never trusted (review #70)
                     : null;
                 candidates.Add((skill, reason));
             }
         }
 
-        return new ProjectPart(root, candidates, problems, folders);
+        return new ProjectPart(root, candidates, problems, folders, files, hashed);
     }
 
-    /// <summary>Whether a project skill's name may be offered: at most 64 characters and no control character (a stranger's 5,000 would widen every row).</summary>
+    /// <summary>
+    /// Whether a project skill's name may be offered: at most 64 characters and no control, format (a right-to-left override, a zero-width joiner) or
+    /// line or paragraph separator character (2026-11-23, review #45): a stranger's 5,000 would widen every row, and an invisible one would pass for
+    /// another skill's name.
+    /// </summary>
     public static bool IsBoundedName(string name) =>
-        name.Length <= SkillFrontmatter.MaxNameLength && !name.Any(char.IsControl);
+        name.Length <= SkillFrontmatter.MaxNameLength && !name.Any(IsUnprintable);
+
+    /// <summary>A control, format, line separator or paragraph separator character: one a skill's name never shows.</summary>
+    public static bool IsUnprintable(char c) =>
+        char.IsControl(c) || char.GetUnicodeCategory(c) is UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
+
+    // A note set's Add under the gate (2026-11-23, review #53): two scans at once (the screen's and a turn's) shared the set unlocked.
+    private bool NoteOnce(HashSet<string> noted, string key)
+    {
+        lock (_gate)
+        {
+            return noted.Add(key);
+        }
+    }
 
     // The level's skill folders in order (.agents before .claude, each by name), each one's hash for the first 50 (null past them), and the SKILL.md copies.
     private (IReadOnlyList<string> Keys, Dictionary<string, string> Hashes, Dictionary<string, string> Copies) ReadLevel(string level, string bound)
@@ -576,7 +615,7 @@ public sealed class SkillCatalog
         return notes.Count == 0 ? null : string.Join("; ", notes);
     }
 
-    private static string Cap(string description) =>
+    internal static string Cap(string description) =>
         description.Length <= SkillFrontmatter.MaxDescriptionLength ? description : description[..(SkillFrontmatter.MaxDescriptionLength - 1)].TrimEnd() + "…";
 
     /// <summary>The subfolders of <paramref name="root"/> that hold a <see cref="FileName"/>, by name; none for a missing or unreadable root.</summary>
@@ -839,7 +878,8 @@ public sealed class SkillCatalog
             {
                 // Only a listed file (what the trust hashed), and nothing through a link on the way (2026-11-23).
                 string asListed = Path.GetRelativePath(root, full).Replace('\\', '/');
-                if (!ProjectResources(skill.Directory, out _).Contains(asListed, StringComparer.OrdinalIgnoreCase))
+                // By the volume's own case rule (2026-11-23, review #84): on a case-sensitive one REF.md is another file than the listed ref.md.
+                if (!ProjectResources(skill.Directory, out _).Contains(asListed, CaseRule.Comparer(root)))
                 {
                     return new ReadResult(ReadOutcome.NotListed, "", false);
                 }

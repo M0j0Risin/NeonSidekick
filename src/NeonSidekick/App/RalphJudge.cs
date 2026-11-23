@@ -237,7 +237,10 @@ internal static class RalphJudge
                     break;
                 }
 
-                string appCheck = RalphText.NoAppCheckLine;
+                // Why no check ran, as it is (2026-11-23, review #35): checks off, a check kept for the end, or none in the plan.
+                string appCheck = snapshot.Unchecked ? RalphText.ChecksOffAppCheckLine
+                    : snapshot.FinalOnly && !string.IsNullOrWhiteSpace(snapshot.Verify) ? RalphText.FinalOnlyAppCheckLine
+                    : RalphText.NoAppCheckLine;
                 if (snapshot.StepCheck is { } verify)
                 {
                     var result = await host.CheckAsync(verify, ShellOf(snapshot), RalphText.CheckLabel(verify), cancellationToken).ConfigureAwait(false);

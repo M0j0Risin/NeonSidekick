@@ -249,6 +249,21 @@ public sealed class SettingsArchiveTests : IDisposable
         Assert.Equal("advisors/mine/", SettingsArchive.ItemOf("advisors/mine/persona.md"));
     }
 
+    /// <summary>An empty local template folder (2026-11-23, review #23): not a template, so the zip's files land in it.</summary>
+    [Fact]
+    public void Import_AnEmptyTemplateFolderHere_TakesTheZipsTemplate()
+    {
+        Put(From, "advisors/qa/persona.md", "You are QA.");
+        Put(From, "advisors/qa/advisor.json", "{ \"role\": \"qa\" }");
+        Directory.CreateDirectory(Path.Combine(To, "advisors", "qa"));
+
+        var outcome = Import(ExportedZip());
+
+        Assert.Null(outcome.Error);
+        Assert.Equal("You are QA.", Read(To, "advisors/qa/persona.md"));
+        Assert.True(File.Exists(Path.Combine(To, "advisors", "qa", "advisor.json")));
+    }
+
     [Fact]
     public void Export_OfAFreshHome_WritesNothing()
     {

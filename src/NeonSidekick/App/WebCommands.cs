@@ -264,6 +264,8 @@ public static class WebCommands
             // 2026-11-12 (plan what-would-it-take-tingly-ullman): every form runs; the chat mirrors to the page (its voices on that page under Web UI voice, 2026-11-13), and a
             // chat the page starts never turns on the PC's webcam (HandleBotChatAsync). Usage errors land on the page as notices.
             SlashCommand.BotChat => WebCommandVerdict.Run,
+            // 2026-11-23 (review #41): /project-init's questions and its Write pane are asked on the page and the PC (ProjectInitAskAsync, AskBothAsync).
+            SlashCommand.ProjectInit => WebCommandVerdict.Run,
             // 2026-11-13 (settings transfer): the zip is written to and read from the PC's Downloads; never from the page.
             SlashCommand.Settings when SettingsTransferCommand.Parse(args) is { } transfer => Refused(WebUiText.PcOnly(word + " " + transfer.Verb)),
             _ => Pane(word, null),

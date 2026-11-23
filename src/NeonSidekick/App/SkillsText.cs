@@ -177,7 +177,7 @@ public static class SkillsText
             .Where(s => SkillCatalog.IsBoundedName(s.Name)).Select(s => s.Name.Length).DefaultIfEmpty(0).Max());
     }
 
-    /// <summary>A skill's name as a row shows it: a project skill's over 64 characters or with a control character cut to 64 printable ones and <c>…</c>.</summary>
+    /// <summary>A skill's name as a row shows it: a project skill's over 64 characters or with an unprintable character (control, format, separator) cut to 64 printable ones and <c>…</c>.</summary>
     public static string ShownName(string name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -186,7 +186,7 @@ public static class SkillsText
             return name;
         }
 
-        string printable = new(name.Where(c => !char.IsControl(c)).Take(SkillFrontmatter.MaxNameLength).ToArray());
+        string printable = new(name.Where(c => !SkillCatalog.IsUnprintable(c)).Take(SkillFrontmatter.MaxNameLength).ToArray());
         return printable + "…";
     }
 
@@ -838,6 +838,10 @@ public static class SkillsText
     /// <summary>A copy refused because the root holds a skill of that name already. Pinned.</summary>
     public static string ProjectCopyNameTakenError(string name, SkillScope to) => $"Could not copy skill '{name}': the {SkillScopes.Name(to)} skills already have a skill named '{name}'";
 
+    /// <summary>A project skill changed since its folder was trusted (2026-11-23, review #102): only what you trusted is copied.</summary>
+    public static string ProjectCopyChangedError(string name) =>
+        $"Could not copy skill '{name}': it changed since you trusted it; review it in /skills › project first";
+
     /// <summary>
     /// A level's skills folder as the strings name it (2026-11-23): <c>.agents\skills</c>, or <c>.claude\skills</c> for a Claude Code one, in the system's
     /// separator (<c>.agents/skills</c> on a Mac).
@@ -917,9 +921,13 @@ public static class SkillsText
         return $"({NoticeGlyphs.Skill}moved: {name} → {label}'s {ProjectSkillsFolder(claude: false)}{tail})";
     }
 
-    /// <summary>The copy landed in the repo but the old folder wouldn't go: both stay, yours hiding the repo's. Pinned.</summary>
-    public static string MovedButKeptError(string name, SkillScope from, string detail) =>
-        $"Copied skill '{name}' into the repo, but could not remove it from the {SkillScopes.Name(from)} skills: {detail}. Both are there; yours hides the repo's";
+    /// <summary>
+    /// The copy landed in the repo but the old folder wouldn't go: both stay, yours hiding the repo's. Says whether the repo's copy is trusted
+    /// (2026-11-23, review #92), so you know which copy a later untrust or delete leaves.
+    /// </summary>
+    public static string MovedButKeptError(string name, SkillScope from, string detail, bool repoTrusted) =>
+        $"Copied skill '{name}' into the repo, but could not remove it from the {SkillScopes.Name(from)} skills: {detail}. Both are there; yours hides the repo's"
+        + (repoTrusted ? ", which is trusted" : ", which waits for your trust in /skills › project");
 
     // ── The notices at a turn ──
 
@@ -962,7 +970,7 @@ public static class SkillsText
             var mine = pending.Where(p => string.Equals(p.Skill.TrustFolder, folder.Level, StringComparison.Ordinal)).ToList();
             if (folder.Trust == ProjectFolderTrust.Trusted)
             {
-                int over = mine.Count(p => p.Reason == ProjectPendingReason.OverCap);
+                int over = mine.Count(p => p.Reason is ProjectPendingReason.OverCap or ProjectPendingReason.PastFolderCap);
                 if (over > 0 && !headless && noted.Add("cap\0" + folder.Level + "\0" + folder.Fingerprint))
                 {
                     lines.Add(ProjectOverCapNotice(label, over));
@@ -982,7 +990,13 @@ public static class SkillsText
                 continue;
             }
 
-            int count = Math.Max(1, mine.Count(p => p.Reason == ProjectPendingReason.NotTrusted));
+            // Nothing a trust would offer (a manual-only or unparseable skill alone, 2026-11-23, review #56): no notice.
+            int count = mine.Count(p => p.Reason == ProjectPendingReason.NotTrusted);
+            if (count == 0)
+            {
+                continue;
+            }
+
             lines.Add(headless ? HeadlessNotTrustedNotice(label, count) : ProjectNotTrustedNotice(label, count));
         }
 

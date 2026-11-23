@@ -139,14 +139,37 @@ public sealed class ProjectSkillTrust
         }
     }
 
-    /// <summary>The kept copy of the trusted <c>SKILL.md</c> for <paramref name="key"/> (<c>.agents/skills/x</c>) in <paramref name="folder"/>, or null.</summary>
+    /// <summary>
+    /// The kept copy of the trusted <c>SKILL.md</c> for <paramref name="key"/> (<c>.agents/skills/x</c>) in <paramref name="folder"/>, or null. Read under
+    /// the trusted entry's own copies folder (2026-11-23, review #7/#47: named by the entry's spelling and its fingerprint), falling back to the bare
+    /// <see cref="FolderHash"/> folder a copy kept before that naming still sits in, until the entry is saved again.
+    /// </summary>
     public string? CopyOf(string folder, string key)
     {
         ArgumentNullException.ThrowIfNull(folder);
         ArgumentNullException.ThrowIfNull(key);
         try
         {
-            string file = Path.Combine(CopiesPath, FolderHash(KeyOf(folder)), FileHash(key));
+            Refresh();
+            ProjectTrustEntry? entry;
+            lock (_gate)
+            {
+                entry = Find(_entries, KeyOf(folder));
+            }
+
+            if (entry is null || CopiesFolderOf(entry) is not { } named)
+            {
+                return null;
+            }
+
+            string root = CopiesPath;
+            string held = Path.Combine(root, named);
+            if (!Directory.Exists(held))
+            {
+                held = Path.Combine(root, FolderHash(entry.Folder));
+            }
+
+            string file = Path.Combine(held, FileHash(key));
             return File.Exists(file) ? File.ReadAllText(file) : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -158,8 +181,9 @@ public sealed class ProjectSkillTrust
     /// <summary>
     /// Trusts <paramref name="folder"/>'s skills as the question showed them (<paramref name="shown"/>). Inside the hold, <paramref name="read"/> reads the
     /// folder again: when its fingerprint differs nothing is saved (<see cref="ProjectTrustSave.Changed"/>), so a version nobody saw is never trusted.
-    /// Otherwise the copies are written into a temp folder swapped in, then the entry. Synchronous; throws <see cref="IOException"/> when the file
-    /// can't be held or written, and nothing is trusted.
+    /// Otherwise the copies are written into a new folder of their own (named by the fingerprint, so the old entry keeps pointing at its own copies until
+    /// the entry is saved), then the entry; the old copies go only after the save. Synchronous; throws <see cref="IOException"/> when the file can't be
+    /// held or written, and nothing is trusted.
     /// </summary>
     public ProjectTrustSave Trust(string folder, string shown, Func<ProjectFolderState> read)
     {
@@ -179,8 +203,8 @@ public sealed class ProjectSkillTrust
                 return false;
             }
 
-            WriteCopies(key, state.Copies);
             var entry = Find(entries, key) ?? Add(entries, key);
+            WriteCopies(CopiesFolderFor(entry.Folder, state.Fingerprint), state.Copies);
             entry.Kinds[SkillsKind] = new ProjectTrustKind
             {
                 Fingerprint = state.Fingerprint,
@@ -198,20 +222,21 @@ public sealed class ProjectSkillTrust
         return result;
     }
 
-    /// <summary>Takes back <paramref name="folder"/>'s trust and deletes its copies; its disabled list stays for a later trust. Throws as a save does.</summary>
+    /// <summary>
+    /// Takes back <paramref name="folder"/>'s trust; its copies go once the entry is saved, and its disabled list stays for a later trust. Throws as a
+    /// save does. Logs only when there was a trust to take back (2026-11-23, review #11).
+    /// </summary>
     public void Untrust(string folder)
     {
         ArgumentNullException.ThrowIfNull(folder);
         string key = KeyOf(folder);
-        Write(entries =>
+        bool wrote = Write(entries =>
         {
-            if (Find(entries, key) is not { } entry)
+            if (Find(entries, key) is not { } entry || !entry.Kinds.Remove(SkillsKind))
             {
                 return false;
             }
 
-            entry.Kinds.Remove(SkillsKind);
-            DeleteCopies(key);
             if (entry.Kinds.Count == 0 && entry.Disabled.Count == 0)
             {
                 entries.Remove(entry);
@@ -219,10 +244,16 @@ public sealed class ProjectSkillTrust
 
             return true;
         });
-        DiagnosticLog.Info(SkillCatalog.Category, $"Project skills untrusted: {key}.");
+        if (wrote)
+        {
+            DiagnosticLog.Info(SkillCatalog.Category, $"Project skills untrusted: {key}.");
+        }
     }
 
-    /// <summary>Disables or enables the project skill <paramref name="name"/> in <paramref name="folder"/>, kept in the profile. Throws as a save does.</summary>
+    /// <summary>
+    /// Disables or enables the project skill <paramref name="name"/> in <paramref name="folder"/>, kept in the profile. Throws as a save does. A name
+    /// already listed (or already off the list) writes nothing (2026-11-23, review #93).
+    /// </summary>
     public void SetDisabled(string folder, string name, bool disabled)
     {
         ArgumentNullException.ThrowIfNull(folder);
@@ -233,12 +264,13 @@ public sealed class ProjectSkillTrust
             var entry = Find(entries, key);
             if (disabled)
             {
-                entry ??= Add(entries, key);
-                if (!entry.Disabled.Contains(name, StringComparer.Ordinal))
+                if (entry is not null && entry.Disabled.Contains(name, StringComparer.Ordinal))
                 {
-                    entry.Disabled.Add(name);
+                    return false;
                 }
 
+                entry ??= Add(entries, key);
+                entry.Disabled.Add(name);
                 return true;
             }
 
@@ -293,6 +325,21 @@ public sealed class ProjectSkillTrust
 
     /// <summary>A skill key's copy file name: the first 32 hex of its SHA-256, <c>.md</c> (never the skill's name: a repo's <c>name: ../x</c> is no path).</summary>
     public static string FileHash(string key) => ProjectSkillHasher.Hex(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..32] + ".md";
+
+    /// <summary>
+    /// One trust's copies folder name (2026-11-23, review #7/#47): <see cref="FolderHash"/> of the entry's own spelling of its folder, a dash and the
+    /// first 16 hex of the trusted fingerprint. A new trust writes a new folder, so a save that fails leaves the old entry with its own copies.
+    /// </summary>
+    public static string CopiesFolderFor(string entryFolder, string fingerprint)
+    {
+        ArgumentNullException.ThrowIfNull(entryFolder);
+        ArgumentNullException.ThrowIfNull(fingerprint);
+        return FolderHash(entryFolder) + "-" + fingerprint[..Math.Min(16, fingerprint.Length)];
+    }
+
+    /// <summary>The copies folder name of <paramref name="entry"/>'s trust of skills, or null when it trusts none.</summary>
+    private static string? CopiesFolderOf(ProjectTrustEntry entry) =>
+        entry.Kinds.GetValueOrDefault(SkillsKind) is { } kind ? CopiesFolderFor(entry.Folder, kind.Fingerprint) : null;
 
     // ── The file ─────────────────────────────────────────────────────────
 
@@ -376,7 +423,7 @@ public sealed class ProjectSkillTrust
             }
 
             var read = JsonSerializer.Deserialize(File.ReadAllText(path), SkillsJsonContext.Default.ListProjectTrustEntry);
-            return ((read ?? []).Where(e => e is not null && e.Folder.Length > 0).ToList(), ReadKind.Ok);
+            return (Clean(read, path), ReadKind.Ok);
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)
         {
@@ -389,6 +436,61 @@ public sealed class ProjectSkillTrust
             return (null, ReadKind.Unreadable);
         }
     }
+
+    /// <summary>
+    /// The entries a hand-edited or older file can be trusted with (2026-11-23, review #94/#95): an entry whose folder is null, empty or no path is
+    /// dropped, null lists read as empty, and a skills trust whose fingerprint isn't 64 hex characters is dropped (it can never match a folder, and
+    /// its copies folder's name is cut from it). Each drop is warned once a read.
+    /// </summary>
+    private static List<ProjectTrustEntry> Clean(List<ProjectTrustEntry>? read, string path)
+    {
+        var kept = new List<ProjectTrustEntry>();
+        foreach (var entry in read ?? [])
+        {
+            if (entry is null || string.IsNullOrEmpty(entry.Folder))
+            {
+                DiagnosticLog.Warn(SkillCatalog.Category, $"{path} holds an entry with no folder; it was left out.");
+                continue;
+            }
+
+            try
+            {
+                _ = KeyOf(entry.Folder);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                DiagnosticLog.Warn(SkillCatalog.Category, $"{path} holds an entry whose folder is no path ({LogText.Excerpt(entry.Folder)}); it was left out.");
+                continue;
+            }
+
+            entry.Kinds ??= new Dictionary<string, ProjectTrustKind>(StringComparer.Ordinal);
+            entry.Disabled ??= [];
+            entry.Disabled.RemoveAll(n => n is null);
+            foreach (string kindName in entry.Kinds.Keys.ToList())
+            {
+                var kind = entry.Kinds[kindName];
+                if (kind is null)
+                {
+                    entry.Kinds.Remove(kindName);
+                    continue;
+                }
+
+                kind.Skills ??= new Dictionary<string, string>(StringComparer.Ordinal);
+                kind.TrustedAt ??= "";
+                if (string.Equals(kindName, SkillsKind, StringComparison.Ordinal) && !IsFingerprint(kind.Fingerprint))
+                {
+                    DiagnosticLog.Warn(SkillCatalog.Category, $"{path} holds a trust of {LogText.Excerpt(entry.Folder)} with no valid fingerprint; it was left out.");
+                    entry.Kinds.Remove(kindName);
+                }
+            }
+
+            kept.Add(entry);
+        }
+
+        return kept;
+    }
+
+    private static bool IsFingerprint(string? text) => text is { Length: 64 } && text.All(char.IsAsciiHexDigit);
 
     private static void MoveAside(string path)
     {
@@ -410,13 +512,14 @@ public sealed class ProjectSkillTrust
     }
 
     // One read-modify-write under the hold: the file read again strictly (an IO failure throws), change applied, twins merged, gone folders pruned,
-    // written atomically; nothing written when change says so.
-    private void Write(Func<List<ProjectTrustEntry>, bool> change)
+    // written atomically, then the copies no entry names swept (after the save: a failed save leaves every entry's copies). Nothing written when change
+    // says so; returns whether it asked to write (2026-11-23, review #11).
+    private bool Write(Func<List<ProjectTrustEntry>, bool> change)
     {
         string path = FilePath;
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         try
         {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             using (ConnectionsFileEdit.Hold(path))
             {
                 var (read, kind) = TryRead(path);
@@ -433,11 +536,10 @@ public sealed class ProjectSkillTrust
                 var entries = read ?? [];
                 if (!change(entries))
                 {
-                    return;
+                    return false;
                 }
 
                 entries = Tidy(entries);
-                SweepOrphanCopies(entries);
                 string json = JsonSerializer.Serialize(entries, SkillsJsonContext.Default.ListProjectTrustEntry);
                 WorkingDirectory.WriteAtomically(path, Encoding.UTF8.GetBytes(json));
                 lock (_gate)
@@ -447,6 +549,9 @@ public sealed class ProjectSkillTrust
                     _stamp = Stamp(path);
                     _loaded = true;
                 }
+
+                SweepOrphanCopies(entries);
+                return true;
             }
         }
         catch (IOException ex)
@@ -461,8 +566,8 @@ public sealed class ProjectSkillTrust
         }
     }
 
-    // One entry per folder (a case twin merged, the newest trust kept, the dropped twin's copies deleted), and a folder gone from a volume that is
-    // there pruned with its copies. Runs inside the save's hold, off the screen thread (an offline share's Exists may wait out SMB's timeout).
+    // One entry per folder (a case twin merged, the newest trust kept), and a folder gone from a volume that is there pruned. Their copies go in the
+    // sweep after the save. Runs inside the save's hold, off the screen thread (an offline share's probe may wait out SMB's timeout).
     private List<ProjectTrustEntry> Tidy(List<ProjectTrustEntry> entries)
     {
         var kept = new List<ProjectTrustEntry>();
@@ -473,14 +578,9 @@ public sealed class ProjectSkillTrust
             {
                 var newer = Newer(entry, twin);
                 var older = ReferenceEquals(newer, entry) ? twin : entry;
-                foreach (string name in older.Disabled.Where(n => !newer.Disabled.Contains(n, StringComparer.Ordinal)))
+                foreach (string name in older.Disabled.Where(n => !newer.Disabled.Contains(n, StringComparer.Ordinal)).ToList())
                 {
                     newer.Disabled.Add(name);
-                }
-
-                if (!string.Equals(older.Folder, newer.Folder, StringComparison.Ordinal))
-                {
-                    DeleteCopies(older.Folder);
                 }
 
                 kept.Remove(twin);
@@ -490,7 +590,6 @@ public sealed class ProjectSkillTrust
 
             if (Gone(entry.Folder))
             {
-                DeleteCopies(entry.Folder);
                 continue;
             }
 
@@ -507,31 +606,44 @@ public sealed class ProjectSkillTrust
         return string.CompareOrdinal(at, bt) >= 0 ? a : b;
     }
 
+    // Gone only when the folder's own probe says it isn't there on a volume that is (2026-11-23, review #71): Directory.Exists also says false on a
+    // denied or failing read, which would have pruned a trust the user still holds.
     private static bool Gone(string folder)
     {
         try
         {
-            return Directory.Exists(VolumeOf(folder)) && !Directory.Exists(folder);
+            if (!Directory.Exists(VolumeOf(folder)))
+            {
+                return false;
+            }
+
+            return (File.GetAttributes(folder) & FileAttributes.Directory) == 0;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             return false;
         }
     }
 
-    // The copies go into a temp folder swapped in, inside the save's hold, before the entry is written: an entry never points at copies that aren't there.
-    private void WriteCopies(string key, IReadOnlyDictionary<string, string> copies)
+    // The copies go into a temp folder moved to a name of their own, inside the save's hold, before the entry is written: an entry never points at
+    // copies that aren't there, and the old entry's copies stay until the save (2026-11-23, review #7). Kept whole: a copy is a SKILL.md, read only
+    // up to MaxSkillFileBytes (review #62).
+    private void WriteCopies(string name, IReadOnlyDictionary<string, string> copies)
     {
         string root = CopiesPath;
-        string final = Path.Combine(root, FolderHash(key));
+        string final = Path.Combine(root, name);
         string temp = final + ".tmp-" + Guid.NewGuid().ToString("N")[..8];
         Directory.CreateDirectory(temp);
         foreach (var (skillKey, text) in copies)
         {
-            string capped = text.Length <= SkillCatalog.MaxBodyChars ? text : text[..SkillCatalog.MaxBodyChars];
-            WorkingDirectory.WriteAtomically(Path.Combine(temp, FileHash(skillKey)), Encoding.UTF8.GetBytes(capped));
+            WorkingDirectory.WriteAtomically(Path.Combine(temp, FileHash(skillKey)), Encoding.UTF8.GetBytes(text));
         }
 
+        // The same name is the same fingerprint, so the same texts: the folder is replaced, never another entry's.
         if (Directory.Exists(final))
         {
             Directory.Delete(final, recursive: true);
@@ -544,7 +656,9 @@ public sealed class ProjectSkillTrust
         }
     }
 
-    // Copies with no trusted entry (a crash between the swap and the entry's write) go at the next save.
+    // The one place copies are deleted (2026-11-23, review #68), after a save: every folder no entry names goes (an untrusted or pruned folder's, a
+    // case twin's, a replaced trust's, a crash's leftovers). An entry whose named folder isn't there keeps the bare FolderHash folder a copy kept
+    // before the naming sits in (CopyOf's fallback), until that entry is saved again.
     private void SweepOrphanCopies(List<ProjectTrustEntry> entries)
     {
         string root = CopiesPath;
@@ -555,7 +669,21 @@ public sealed class ProjectSkillTrust
                 return;
             }
 
-            var wanted = entries.Where(e => e.Kinds.ContainsKey(SkillsKind)).Select(e => FolderHash(e.Folder)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var wanted = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in entries)
+            {
+                if (CopiesFolderOf(entry) is not { } named)
+                {
+                    continue;
+                }
+
+                wanted.Add(named);
+                if (!Directory.Exists(Path.Combine(root, named)))
+                {
+                    wanted.Add(FolderHash(entry.Folder));
+                }
+            }
+
             foreach (string folder in Directory.EnumerateDirectories(root))
             {
                 string name = Path.GetFileName(folder);
@@ -570,8 +698,6 @@ public sealed class ProjectSkillTrust
             DiagnosticLog.Debug(SkillCatalog.Category, $"Could not tidy {root}: {LogText.Excerpt(ex.Message)}");
         }
     }
-
-    private void DeleteCopies(string key) => TryDelete(Path.Combine(CopiesPath, FolderHash(key)));
 
     private static void TryDelete(string folder)
     {

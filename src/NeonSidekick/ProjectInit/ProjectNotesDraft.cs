@@ -61,6 +61,12 @@ public sealed record ProjectNotesDraft(string Target, string Content, string? Ol
 {
     /// <summary>The draft's lines a secret rule would change, or that hold the mask already.</summary>
     public IReadOnlyList<ProjectSecretLine> SecretLines { get; init; } = [];
+
+    /// <summary>
+    /// Whether the file is there but couldn't be read whole as text (2026-11-23, review #28): too big, binary-looking or cut. It read as a new
+    /// file, so Write replaced it with no diff; such a file is refused.
+    /// </summary>
+    public bool Unreadable { get; init; }
 }
 
 /// <summary>One line of a draft that looks like a secret (2026-11-23): its 1-based number, the line masked, and whether it holds the mask already.</summary>

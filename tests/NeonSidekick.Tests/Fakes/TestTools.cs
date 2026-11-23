@@ -36,6 +36,24 @@ internal static class ToolSchema
     }
 }
 
+/// <summary>Counts its <c>items</c> list as the list tools read one (2026-11-23, review #87): "items: N", or the bad-list error.</summary>
+public sealed class CountItemsTool : AIFunction
+{
+    private static readonly JsonElement Schema = ToolSchema.Parse(
+        """{"type":"object","properties":{"items":{"type":"array","description":"The items.","items":{"type":"object"}}},"required":["items"]}""");
+
+    public override string Name => "count_items";
+
+    public override string Description => "Counts the items.";
+
+    public override JsonElement JsonSchema => Schema;
+
+    protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) =>
+        new(ToolArguments.TryReadObjectList(arguments, "items", out var objects, out _)
+            ? "items: " + objects.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : "Error: items is not a list");
+}
+
 /// <summary>Echoes its <c>text</c> argument and remembers what it saw.</summary>
 public sealed class EchoTool : AIFunction
 {

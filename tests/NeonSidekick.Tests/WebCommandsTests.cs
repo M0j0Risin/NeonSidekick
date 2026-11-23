@@ -362,6 +362,14 @@ public sealed class WebCommandsTests
 
     private static readonly WebCommandSettings WithReview = On with { CustomNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "review", "frontend:test" } };
 
+    /// <summary>/project-init runs from the page (2026-11-23, review #41): its questions and its Write pane are asked there too.</summary>
+    [Fact]
+    public void ProjectInit_Runs()
+    {
+        Assert.Equal(WebCommandVerdict.Run, WebCommands.Check("/project-init", On));
+        Assert.Equal(WebCommandVerdict.Run, WebCommands.Check("/project-init build and test", On));
+    }
+
     [Fact]
     public void ACustomCommand_TheSettingsName_Runs()
     {

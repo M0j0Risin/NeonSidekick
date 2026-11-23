@@ -38,7 +38,8 @@ public static class AdvisorRoster
     public static string CleanDescription(string? description)
     {
         string text = AdvisorText.Flat(description ?? "");
-        return text.Length <= DescriptionMax ? text : text[..(DescriptionMax - 1)].TrimEnd() + "…";
+        // Cut by TextCut.Safe (2026-11-23, review #21): an index cut could split an emoji's surrogate pair.
+        return text.Length <= DescriptionMax ? text : Files.TextCut.Safe(text, DescriptionMax - 1).TrimEnd() + "…";
     }
 
     /// <summary>Whether two profile names are one profile (case ignored, as <see cref="Profiles.Resolve"/> does).</summary>

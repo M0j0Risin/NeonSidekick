@@ -121,7 +121,7 @@ They need no server unless the row says so.
 | `/plan …` | [Plan mode](COMMANDS.md#plan-mode), approved by typing (below). Needs a server and *LLM offer tools*. |
 | `/code-audit …` | [Code audit](COMMANDS.md#code-audit), every pass run without waiting (below). Needs a server, *LLM offer tools* and `read_file`. |
 | `/claude <message>` | Asks [Claude Code](COMMANDS.md#claude-code-from-the-chat): `Claude: ` and the reply, then the cost. Nothing is asked; what *Claude Code command permissions* doesn't allow is denied. |
-| `/advisor [<name> <question>]`, `/advisor templates`, `/advisor new <template> [<name>]` | Lists the advisors, or prints one advisor's answer and adds it to the conversation; lists the advisor templates; makes an advisor from one. |
+| `/advisor [<name> <question>]`, `/advisor templates`, `/advisor new <template> [<name>]` | Lists the advisors, or prints one advisor's answer and adds it to the conversation; lists the advisor templates; makes an advisor from one (a one-word name). `/advisor list` is an `[error]`: it opens a pane. |
 | `/skills add <source> [--global\|--profile] [--yes]` | [Installs a skill](SETTINGS.md#installing-skills); without `--yes` it only previews, listing several matches as ids to type back. |
 | `/ha …`, `/docker …` | Drive Home Assistant and Docker directly; *Home Assistant action policy* and *Docker writes* don't apply. `/ha camera [<name>]` saves the still in `home-cameras` and prints its path. |
 | `/eventlog …` | Prints a log's events, newest first, in full text, with the [event-log tools](TOOLS.md#event-logs)' filter words; ticked computers only. A Mac's logs: [`/eventlog`](COMMANDS.md#admin). |
@@ -178,7 +178,7 @@ Any other `/…` line is sent to the model as a message, so `/model gemma` switc
 |---|---|
 | `/server`, `/model`, `/cwd`, `/profile` | `--url`, `--model`, `--cwd`, `--profile` (or their variables). |
 | `/reasoning`, `/sampling` | `NEONSIDEKICK_LLM_REASONING`, `NEONSIDEKICK_LLM_SAMPLING`. |
-| `/settings` (other forms), `/advisor list`, `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json` (an API key typed there in plain text is encrypted at the next load). |
+| `/settings` (other forms), `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json` (an API key typed there in plain text is encrypted at the next load). |
 | `/sessions <id>` | `--session <id>\|last` ([Carrying on a session](#carrying-on-a-session)). |
 | `/memory`, `/sessions`, `/imagine`, `/process`, `/tree`, `/vault` | Ask the model: it has the memory, session, ComfyUI, `process`, file and Obsidian tools when they're on ([which](#before-you-start)). `/sessions export` is an `[error]`: it works on the screen only. |
 | `/loop` | Repeat the line, or loop in the script. |
@@ -226,7 +226,7 @@ The run's shell policy comes from `--yolo`, then `NEONSIDEKICK_COMMAND_POLICY` (
 - `yolo`: every `run_command` command and `execute_code` script runs without asking. Use it only when you trust the job and the folder.
 - **`yolo` does not turn off the shell police.** With *Shell police* on (the default), these are still refused and count toward exit code 3:
   - a path outside the working directory;
-  - `.git`, `.neon`, `.claude`, a `.mcp.json`, the project file, the app's home or a release package's install folder, and deleting or moving a folder holding the install or the home ([TOOLS.md](TOOLS.md));
+  - `.git`, `.neon`, `.claude`, `.agents/skills`, a `.mcp.json`, the project file, the app's home or a release package's install folder, and deleting or moving a folder holding the install or the home ([TOOLS.md](TOOLS.md));
   - the *Shell police forbidden strings* (disk wipes, shutdown, `push --force`, `reset --hard`…; see [Shell guards](SETTINGS.md#shell-guards));
   - reaching a database some other way while its tools are on.
 

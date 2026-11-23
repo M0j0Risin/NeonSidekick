@@ -85,6 +85,86 @@ public sealed class AdvisorTemplatesTests : IDisposable
         Assert.Contains(scan.Problems, p => p.Shown == "empty" && p.Problem == AdvisorText.TemplateNoPersona);
     }
 
+    /// <summary>A template named as a temporary profile (2026-11-23, review #19): reported and left off, in the home and in the app's own; never saved.</summary>
+    [Fact]
+    public void ATemporaryId_IsAProblem_AndNeverSaved()
+    {
+        Write("_x/persona.md", "You are temporary.");
+        var scan = AdvisorTemplates.All(_home);
+        Assert.Null(scan.Find("_x"));
+        Assert.Contains(scan.Problems, p => p.Shown == "_x" && p.Problem == AdvisorText.TemplateTemporaryId);
+
+        var bundled = AdvisorTemplates.Load([new("prompts/advisors/_y/persona.md", "x")]);
+        Assert.Empty(bundled.Templates);
+        Assert.Contains(bundled.Problems, p => p.Shown == "_y" && p.Problem == AdvisorText.TemplateTemporaryId);
+
+        Assert.Throws<ArgumentException>(() => AdvisorTemplates.SaveYours(_home, "_z", "x", "", null, null));
+        Assert.False(Directory.Exists(Path.Combine(_home, "advisors", "_z")));
+    }
+
+    /// <summary>
+    /// advisor.json failing to write (2026-11-23, review #20): persona.md goes back to its old bytes, or away when there was none, and the
+    /// save throws. Made fail by a folder standing where advisor.json goes.
+    /// </summary>
+    [Fact]
+    public void SaveYours_AFailedAdvisorJson_PutsThePersonaBack()
+    {
+        Write("mine/persona.md", "You are mine.");
+        Directory.CreateDirectory(Path.Combine(_home, "advisors", "mine", "advisor.json"));
+        byte[] before = File.ReadAllBytes(Path.Combine(_home, "advisors", "mine", "persona.md"));
+        Assert.True(Record.Exception(() => AdvisorTemplates.SaveYours(_home, "mine", "You are new.", "role", null, null)) is IOException or UnauthorizedAccessException);
+        Assert.Equal(before, File.ReadAllBytes(Path.Combine(_home, "advisors", "mine", "persona.md")));
+
+        Directory.CreateDirectory(Path.Combine(_home, "advisors", "fresh", "advisor.json"));
+        Assert.True(Record.Exception(() => AdvisorTemplates.SaveYours(_home, "fresh", "You are fresh.", "role", null, null)) is IOException or UnauthorizedAccessException);
+        Assert.False(File.Exists(Path.Combine(_home, "advisors", "fresh", "persona.md")));
+    }
+
+    /// <summary>
+    /// A home template's file over the cap, or a link (2026-11-23, review #89): skipped as a problem. A second read with nothing changed is
+    /// the same template; one after an edit reads the new text.
+    /// </summary>
+    [Fact]
+    public void ReadHome_CapsAFile_AndRereadsOnlyAChangedOne()
+    {
+        Write("big/persona.md", "You are big. " + new string('x', AdvisorTemplates.MaxFileBytes));
+        Write("small/persona.md", "You are small.");
+        var scan = AdvisorTemplates.All(_home);
+        Assert.Null(scan.Find("big"));
+        Assert.Contains(scan.Problems, p => p.Problem == AdvisorText.TemplateTooBig("persona.md", AdvisorTemplates.MaxFileBytes));
+
+        var first = scan.Find("small")!;
+        Assert.Same(first, AdvisorTemplates.All(_home).Find("small"));
+        Write("small/persona.md", "You are smaller now.");
+        Assert.Equal("You are smaller now.", AdvisorTemplates.All(_home).Find("small")!.Persona.Trim());
+        Assert.Contains("64 KB", AdvisorText.TemplateTooBig("persona.md", AdvisorTemplates.MaxFileBytes));
+    }
+
+    /// <summary>A linked persona.md (2026-11-23, review #89): skipped as a problem; a template's files are its own.</summary>
+    [SymlinkFact]
+    public void ReadHome_SkipsALinkedPersona()
+    {
+        string outside = Path.Combine(_home, "outside.md");
+        Directory.CreateDirectory(_home);
+        File.WriteAllText(outside, "You are elsewhere.");
+        Directory.CreateDirectory(Path.Combine(_home, "advisors", "linked"));
+        File.CreateSymbolicLink(Path.Combine(_home, "advisors", "linked", "persona.md"), outside);
+        var scan = AdvisorTemplates.All(_home);
+        Assert.Null(scan.Find("linked"));
+        Assert.Contains(scan.Problems, p => p.Problem == AdvisorText.TemplateLinkedFile("persona.md"));
+    }
+
+    /// <summary>A description cut at an emoji (2026-11-23, review #21): never a lone surrogate.</summary>
+    [Fact]
+    public void CleanDescription_NeverSplitsAnEmoji()
+    {
+        string text = new string('a', AdvisorRoster.DescriptionMax - 2) + "🦉🦉 and more";
+        string cut = AdvisorRoster.CleanDescription(text);
+        Assert.EndsWith("…", cut);
+        Assert.False(cut.Any(char.IsSurrogate) && cut.Count(char.IsHighSurrogate) != cut.Count(char.IsLowSurrogate));
+        Assert.False(char.IsHighSurrogate(cut[^2]));
+    }
+
     [Fact]
     public void YourTemplates_WinOnAnId_ABrokenOneReadsRoleless_AndNothingIsWarnedUntilReport()
     {
@@ -186,14 +266,16 @@ public sealed class AdvisorTemplatesTests : IDisposable
     }
 
     [Fact]
-    public void ParseSetup_TakesTemplatesAndNewWithAKnownTemplate_AndLeavesTheRestAQuestion()
+    public void ParseSetup_TakesTemplatesAndNewWithAKnownTemplate_AMultiWordNameIsUsage_AndLeavesTheRestAQuestion()
     {
         var ids = new HashSet<string>(["dba", "qa"], StringComparer.OrdinalIgnoreCase);
         Assert.Equal(new AdvisorSetup(AdvisorSetupKind.Templates, "", ""), AdvisorText.ParseSetup(" Templates ", ids));
         Assert.Equal(new AdvisorSetup(AdvisorSetupKind.New, "qa", "qa"), AdvisorText.ParseSetup("new QA", ids));
         Assert.Equal(new AdvisorSetup(AdvisorSetupKind.New, "qa", "reviewer"), AdvisorText.ParseSetup("new qa reviewer", ids));
         Assert.Null(AdvisorText.ParseSetup("new hires should start where?", ids));   // no template "hires": a question to an advisor named new
-        Assert.Null(AdvisorText.ParseSetup("new qa reviewer please", ids));
+        // A known template and a name of more than one word (2026-11-23, review #76): the usage error, never a question.
+        Assert.Equal(new AdvisorSetup(AdvisorSetupKind.NewUsage, "qa", ""), AdvisorText.ParseSetup("new QA reviewer please", ids));
+        Assert.Contains("/advisor new qa <name>", AdvisorText.NewUsageError("qa"));
         Assert.Null(AdvisorText.ParseSetup("templates of what?", ids));
         Assert.Null(AdvisorText.ParseSetup("new qa", null));
         Assert.Null(AdvisorText.ParseSetup("", ids));

@@ -98,6 +98,7 @@ public partial class SettingsMenuTests
         Assert.Equal([new AdvisorEntry("rex", qa.Role, qa.Description)], _settings.Current.AdvisorList);
         Assert.Contains(SettingsMenu.ReplaceAdvisorPersonaQuestion("rex", "qa"), Output);
         Assert.Contains(ChatScreen.KeptNotice, Output);
+        Assert.Contains(SettingsMenu.AdvisorNotAddedNotice("rex"), Output);   // 2026-11-23, review #69: the No added nothing, and says so
         Assert.Equal(PersonaFile.Normalize(qa.Persona), PersonaFile.Normalize(PersonaOf("rex")));
         pane.Dispose();
     }
@@ -317,6 +318,32 @@ public partial class SettingsMenuTests
         var dba = BuiltInTemplate("dba");
         Assert.Equal([new AdvisorEntry("dba", dba.Role, dba.Description)], _settings.Current.AdvisorList);
         Assert.True(Profiles.Exists(_dir, "dba"));
+    }
+
+    /// <summary>Advisors saved off but on through a flag or an env var (2026-11-23, review #16): the notice says it is in use, not off.</summary>
+    [Fact]
+    public async Task WithThePaneOff_ANewAdvisor_UnderAdvisorsOnInEffect_SaysItIsInUse()
+    {
+        _menu.Effective = () =>
+        {
+            var effective = AppSettings.Copy(_settings.Current);
+            effective.Advisors = true;
+            return effective;
+        };
+        _console.Input.PushKey(ConsoleKey.DownArrow);   // + New advisor from a template…
+        _console.Input.PushKey(ConsoleKey.Enter);
+        _console.Input.PushKey(ConsoleKey.DownArrow);   // dba
+        _console.Input.PushKey(ConsoleKey.Enter);
+        _console.Input.PushKey(ConsoleKey.Enter);       // its name
+        _console.Input.PushKey(ConsoleKey.Enter);       // its role
+        _console.Input.PushKey(ConsoleKey.Escape);
+
+        await _menu.EditAdvisorListAsync(CancellationToken.None);
+
+        Assert.False(_settings.Current.Advisors);
+        var entry = Assert.Single(_settings.Current.AdvisorList!);
+        Assert.Contains(AdvisorText.CreatedNotice(entry, advisorsOn: true)[^40..], Output);
+        Assert.DoesNotContain("Advisors enabled is off", Output);
     }
 
     [Fact]
