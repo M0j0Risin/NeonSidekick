@@ -160,9 +160,12 @@ internal sealed partial class ChatScreen
             }
 
             _transcript.Notice(AdvisorText.ListHeading);
-            foreach (var entry in advisors)
+            // In columns, with the model each answers on where the session knows it (2026-11-22, the user's asks from the screenshot).
+            string home = _settings.StorageDirectory;
+            var lines = advisors.Select(entry => (entry, AdvisorServer.Read(home, entry.Profile, _session.LinkedModelOf), Profiles.Exists(home, entry.Profile))).ToList();
+            foreach (string listed in AdvisorText.ListLines(lines))
             {
-                _transcript.Notice(AdvisorText.ListLine(entry, AdvisorServer.Read(_settings.StorageDirectory, entry.Profile), Profiles.Exists(_settings.StorageDirectory, entry.Profile)));
+                _transcript.Notice(listed);
             }
 
             return;

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using NeonSidekick.Settings;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Advisors;
 
@@ -107,13 +108,53 @@ public static class AdvisorText
     /// left out when there is none, a missing profile marked in place of its server, an unreadable one said so. What
     /// <c>Advisor list</c>'s band and a bare <c>/advisor</c> print. Pinned.
     /// </summary>
-    public static string Detail(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists)
+    public static string Detail(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists, AdvisorColumns? columns = null)
     {
         ArgumentNullException.ThrowIfNull(advisor);
-        string head = advisor.Profile + (advisor.Role.Length == 0 ? "" : " — " + advisor.Role);
-        return !exists ? head + "  " + MissingMark
-            : facts is null ? head + " · " + UnreadableMark
-            : head + " · " + facts.Kind + " · " + facts.Model;
+        if (columns is null)
+        {
+            string head = advisor.Profile + (advisor.Role.Length == 0 ? "" : " — " + advisor.Role);
+            return !exists ? head + "  " + MissingMark
+                : facts is null ? head + " · " + UnreadableMark
+                : head + " · " + facts.Kind + " · " + facts.Model;
+        }
+
+        // In columns (2026-11-22, the user's ask from the screenshot): the name, the role and the kind padded, in cells, so each part
+        // starts where the line above's does. Nothing is cut: a longer name or role pushes that one line's later parts right.
+        string name = PadCells(advisor.Profile, columns.Name);
+        string role = columns.Role == 0 ? ""
+            : advisor.Role.Length == 0 ? new string(' ', RoleLead.Length + columns.Role)
+            : RoleLead + PadCells(advisor.Role, columns.Role);
+        return !exists ? name + role + "   " + MissingMark   // the mark where the kind would start
+            : facts is null ? name + role + " · " + UnreadableMark
+            : name + role + " · " + PadCells(facts.Kind, columns.Kind) + " · " + facts.Model;
+    }
+
+    /// <summary>What leads a role on a line. Pinned.</summary>
+    private const string RoleLead = " — ";
+
+    /// <summary>
+    /// The columns of a list of advisor lines (2026-11-22, the user's ask: "line up in neat columns", everywhere they are listed),
+    /// measured in cells (<see cref="TextCells.Width"/>, so a role with an emoji or CJK text lines up): the widest name, the widest role,
+    /// the widest kind among the advisors whose facts were read, and the widest model among those with a description (the bare
+    /// <c>/advisor</c>'s descriptions start in one column). Pure.
+    /// </summary>
+    public static AdvisorColumns Columns(IReadOnlyList<(AdvisorEntry Advisor, AdvisorServerFacts? Facts, bool Exists)> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var read = lines.Where(l => l.Exists && l.Facts is not null).ToList();
+        return new AdvisorColumns(
+            lines.Select(l => TextCells.Width(l.Advisor.Profile)).DefaultIfEmpty(0).Max(),
+            lines.Select(l => TextCells.Width(l.Advisor.Role)).DefaultIfEmpty(0).Max(),
+            read.Select(l => TextCells.Width(l.Facts!.Kind)).DefaultIfEmpty(0).Max(),
+            read.Where(l => l.Advisor.Description.Length > 0).Select(l => TextCells.Width(l.Facts!.Model)).DefaultIfEmpty(0).Max());
+    }
+
+    /// <summary><paramref name="text"/> and the spaces that bring it to <paramref name="cells"/> cells; as it is when it is that wide already. Pure.</summary>
+    public static string PadCells(string text, int cells)
+    {
+        int width = TextCells.Width(text);
+        return width >= cells ? text : text + new string(' ', cells - width);
     }
 
     /// <summary>The confirm pane's title (<c>Advisor confirm</c> on). Pinned.</summary>
@@ -197,12 +238,41 @@ public static class AdvisorText
     /// One advisor on the list: <see cref="Detail"/> indented (its server and model since 2026-10-10), then <c> · </c> and its description
     /// when it has one (2026-11-22). Plain text: the screen, the Web UI feed and headless's <c>[notice]</c> lines all take it. Pinned.
     /// </summary>
-    public static string ListLine(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists)
+    public static string ListLine(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists, AdvisorColumns? columns = null)
     {
         ArgumentNullException.ThrowIfNull(advisor);
-        string line = "  " + Detail(advisor, facts, exists);
-        return advisor.Description.Length == 0 ? line : line + " · " + advisor.Description;
+        string line = "  " + Detail(advisor, facts, exists, columns);
+        if (advisor.Description.Length == 0)
+        {
+            return line;   // no trailing spaces
+        }
+
+        // In columns, the model padded so the descriptions start in one column (2026-11-22).
+        string pad = columns is not null && exists && facts is not null ? new string(' ', Math.Max(0, columns.Model - TextCells.Width(facts.Model))) : "";
+        return line + pad + " · " + advisor.Description;
     }
+
+    /// <summary>A bare <c>/advisor</c>'s lines, the screen's and headless's (2026-11-22): <see cref="ListLine"/> each, in the list's <see cref="Columns"/>. Pure.</summary>
+    public static IReadOnlyList<string> ListLines(IReadOnlyList<(AdvisorEntry Advisor, AdvisorServerFacts? Facts, bool Exists)> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        var columns = Columns(lines);
+        return lines.Select(l => ListLine(l.Advisor, l.Facts, l.Exists, columns)).ToList();
+    }
+
+    // ── Change the model's reasons (2026-11-22, the user's ask) ────────────────
+
+    /// <summary>A borrowing advisor while the session runs an embedded model or a Docker container: it gets that one model. Pinned.</summary>
+    public const string ModelListBorrowedOne = "it borrows your session's server, which runs one model; Change the server to give it its own";
+
+    /// <summary>An advisor on its own Docker container, which answers with its one model whatever is saved. Pinned.</summary>
+    public const string ModelListDockerOne = "its Docker container runs one model; Change the server to pick another";
+
+    /// <summary>An embedded advisor where no embedded model can run. Pinned.</summary>
+    public const string ModelListNoEmbedded = "no embedded models here";
+
+    /// <summary>A Claude Code advisor whose own profile doesn't offer the Claude Code server. Pinned.</summary>
+    public const string ModelListClaudeNotOffered = "its profile doesn't offer the Claude Code server; Switch to profile to turn it on";
 
     /// <summary>The asking line as the model's history keeps it: the exchange read as one put to someone else (as <c>/claude</c>'s). Pinned.</summary>
     public static string HistoryUser(string profile, string question) => "[to " + profile + "] " + question.Trim();
@@ -347,6 +417,12 @@ public static class AdvisorText
             : text + " Advisors enabled is off, so the model won't ask it until you turn it on in /settings › Advisors; /advisor " + entry.Profile + " <question> asks it now.)";
     }
 }
+
+/// <summary>
+/// The cell widths a list of advisor lines pads to (2026-11-22, <see cref="AdvisorText.Columns"/>): the name, the role, the server's kind,
+/// and the model on the lines that go on to a description.
+/// </summary>
+public sealed record AdvisorColumns(int Name, int Role, int Kind, int Model);
 
 /// <summary>Which <c>/advisor</c> setup form a line is (<see cref="AdvisorText.ParseSetup"/>).</summary>
 public enum AdvisorSetupKind

@@ -59,22 +59,32 @@ public static class AdvisorServer
         return string.IsNullOrWhiteSpace(saved.LlmModel) ? DefaultModel : saved.LlmModel.Trim();
     }
 
-    /// <summary>The kind and model of <paramref name="saved"/>.</summary>
-    public static AdvisorServerFacts Of(AppSettingsData saved)
+    /// <summary>
+    /// The kind and model of <paramref name="saved"/>. Since 2026-11-22 (the user's screenshot of a Docker advisor's <c>default model</c>)
+    /// the model is the one its link would answer on when <paramref name="linkedModel"/> (the session's <c>LlmSession.LinkedModelOf</c>)
+    /// knows it without asking a server, else the saved one; either by its short name (<see cref="Llm.ModelNames.Short"/>), as the
+    /// status bar names a model. <see cref="DefaultModel"/> stays only where only the server could say.
+    /// </summary>
+    public static AdvisorServerFacts Of(AppSettingsData saved, Func<AppSettingsData, string?>? linkedModel = null)
     {
         ArgumentNullException.ThrowIfNull(saved);
-        return new AdvisorServerFacts(Kind(saved.LlmUrl), Model(saved));
+        string model = linkedModel?.Invoke(saved) is { Length: > 0 } linked ? linked.Trim() : Model(saved);
+        return new AdvisorServerFacts(Kind(saved.LlmUrl), Llm.ModelNames.Short(model));
     }
 
     /// <summary>
     /// <paramref name="profile"/>'s facts as saved under <paramref name="home"/>: null when it is not there or its <c>profile.json</c>
     /// cannot be read (a corrupt one is never overwritten here, only not described).
     /// </summary>
-    public static AdvisorServerFacts? Read(string home, string profile)
+    public static AdvisorServerFacts? Read(string home, string profile, Func<AppSettingsData, string?>? linkedModel = null) =>
+        ReadSaved(home, profile) is { } saved ? Of(saved, linkedModel) : null;
+
+    /// <summary><paramref name="profile"/>'s saved settings under <paramref name="home"/>: null when it is not there or cannot be read.</summary>
+    public static AppSettingsData? ReadSaved(string home, string profile)
     {
         try
         {
-            return Profiles.Resolve(home, profile) is { } onDisk ? Of(Profiles.ReadProfileFile(Profiles.ProfileFile(home, onDisk))) : null;
+            return Profiles.Resolve(home, profile) is { } onDisk ? Profiles.ReadProfileFile(Profiles.ProfileFile(home, onDisk)) : null;
         }
         catch (Exception ex) when (ex is System.Text.Json.JsonException or IOException or UnauthorizedAccessException)
         {

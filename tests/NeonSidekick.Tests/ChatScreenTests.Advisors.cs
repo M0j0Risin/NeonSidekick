@@ -162,7 +162,10 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(AdvisorText.ListHeading, output);
-        Assert.Contains(AdvisorText.ListLine(new AdvisorEntry("dba", "database architect"), new AdvisorServerFacts(AdvisorServer.Scan, AdvisorServer.DefaultModel), exists: true), output);
+        // The model it answers on, the session's llama it borrows (2026-11-22: LinkedModelOf), in the list's columns.
+        var dba = (new AdvisorEntry("dba", "database architect"), (AdvisorServerFacts?)new AdvisorServerFacts(AdvisorServer.Scan, "llama"), true);
+        Assert.Contains(AdvisorText.ListLines([dba])[0], output);
+        Assert.Contains("  dba — database architect · scan · llama", output);
         Assert.Contains(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", output);
         Assert.Contains("\"nobody\" names no single advisor", output);
         Assert.Contains(AdvisorText.UsageError, output);

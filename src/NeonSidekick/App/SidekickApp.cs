@@ -3579,9 +3579,12 @@ public sealed partial class SidekickApp
             }
 
             await HeadlessNoticeLineAsync("[notice] " + Advisors.AdvisorText.ListHeading).ConfigureAwait(false);
-            foreach (var entry in advisors)
+            // In columns, with the model each answers on where the session knows it (2026-11-22), as the screen's.
+            string home = _settings.StorageDirectory;
+            var lines = advisors.Select(entry => (entry, Advisors.AdvisorServer.Read(home, entry.Profile, session.LinkedModelOf), Profiles.Exists(home, entry.Profile))).ToList();
+            foreach (string line in Advisors.AdvisorText.ListLines(lines))
             {
-                await HeadlessNoticeLineAsync("[notice] " + Advisors.AdvisorText.ListLine(entry, Advisors.AdvisorServer.Read(_settings.StorageDirectory, entry.Profile), Profiles.Exists(_settings.StorageDirectory, entry.Profile))).ConfigureAwait(false);
+                await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
             }
 
             return null;

@@ -107,4 +107,69 @@ public partial class ChatScreenTests
         Assert.Equal(loadedUrl, _settings.Current.LlmUrl);
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
     }
+
+    /// <summary>
+    /// Change the model over the session's listing (2026-11-22): the advisor's own server is asked, so its <c>llama</c> is listed beside
+    /// the saved <c>other</c> (the cursor's); Up, Enter writes it to the advisor's file alone.
+    /// </summary>
+    [Fact]
+    public async Task Settings_AnAdvisorsChangeTheModel_ListsItsServersModels_AndWritesTheAdvisorsFile()
+    {
+        ArchitectAdvisor(new AppSettingsData { LlmUrl = "http://127.0.0.1:1234/v1", LlmModel = "other", LlmReasoning = "low" });
+        string loadedModel = _settings.Current.LlmModel;
+        PushLine("/settings advisor list");
+        _console.Input.PushKey(Keys.Enter);
+        PushFirstAdvisorAction(SettingsMenu.ChangeAdvisorModelChoice);
+        _console.Input.PushKey(Keys.Up);        // llama, above other
+        _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Escape);    // the list
+        _console.Input.PushKey(Keys.Escape);    // the search
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var saved = Profiles.ReadProfileFile(Profiles.ProfileFile(_settings.StorageDirectory, "architect"));
+        Assert.Equal(("http://127.0.0.1:1234/v1", "llama", "low"), (saved.LlmUrl, saved.LlmModel, saved.LlmReasoning));
+        Assert.DoesNotContain("(no models for architect", output);
+        Assert.Equal(loadedModel, _settings.Current.LlmModel);
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+    }
+
+    [Fact]
+    public async Task Settings_AnAdvisorsChangeTheReasoning_WritesTheAdvisorsFile_AndLeavesYoursAlone()
+    {
+        ArchitectAdvisor(new AppSettingsData { LlmUrl = "http://127.0.0.1:1234/v1", LlmModel = "llama", LlmReasoning = "low" });
+        string loaded = _settings.Current.LlmReasoning;
+        PushLine("/settings advisor list");
+        _console.Input.PushKey(Keys.Enter);
+        PushFirstAdvisorAction(SettingsMenu.ChangeAdvisorReasoningChoice);
+        _console.Input.PushKey(Keys.Down);      // medium, under low
+        _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Escape);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        await RunAsync();
+
+        var saved = Profiles.ReadProfileFile(Profiles.ProfileFile(_settings.StorageDirectory, "architect"));
+        Assert.Equal(("llama", "medium"), (saved.LlmModel, saved.LlmReasoning));
+        Assert.Equal(loaded, _settings.Current.LlmReasoning);
+    }
+
+    /// <summary>The rows name the model a borrowing advisor answers on, the session's <c>llama</c> (the screen's <c>AdvisorLinkedModel</c> line).</summary>
+    [Fact]
+    public async Task Settings_ABorrowingAdvisorsRow_NamesTheSessionsModel()
+    {
+        ArchitectAdvisor(new AppSettingsData());
+        PushLine("/settings advisor list");
+        _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Escape);
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("· " + AdvisorServer.Scan + " · llama", output);
+        Assert.DoesNotContain("· " + AdvisorServer.Scan + " · " + AdvisorServer.DefaultModel, output);
+    }
 }

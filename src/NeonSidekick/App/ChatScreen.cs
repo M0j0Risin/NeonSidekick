@@ -1876,6 +1876,9 @@ internal sealed partial class ChatScreen
         _menu.DockerContainers = _docker.ContainersAsync;
         // An advisor's Change the server (2026-11-22): /server's look-around under the advisor profile's own saved settings.
         _menu.AdvisorServerProbe = _session.ProbeServersAsync;
+        // An advisor's Change the model and the real model on its line (2026-11-22, the user's asks): its link's own list and model.
+        _menu.AdvisorModelLister = _session.ListModelsForAsync;
+        _menu.AdvisorLinkedModel = _session.LinkedModelOf;
         // The Docker tools page's manage button (2026-10-11, the user's ask): the bare /docker's list, ESC back to the page.
         _menu.ManageDocker = ct => DockerMenuFor(closeWhenDone: false).ShowAsync(ct);
         _menu.Cameras = _camera.Available ? _camera.List : null;
@@ -2907,16 +2910,7 @@ internal sealed partial class ChatScreen
     /// The hint row's trailer: the model id's last path segment (LM Studio's <c>lyf/Qwen…</c>,
     /// llama.cpp's file path) — <c>Qwen3-30B</c>; empty while no server is connected. Pinned.
     /// </summary>
-    public static string ModelLabel(string? modelId)
-    {
-        if (string.IsNullOrEmpty(modelId))
-        {
-            return "";
-        }
-
-        int cut = modelId.LastIndexOfAny(['/', '\\']);
-        return cut >= 0 && cut < modelId.Length - 1 ? modelId[(cut + 1)..] : modelId;
-    }
+    public static string ModelLabel(string? modelId) => ModelNames.Short(modelId);   // the rule shared with the advisor lines (2026-11-22)
 
     /// <summary>
     /// The mark after the trailer: the reasoning level's glyph (<see cref="ReasoningLevel.Glyph"/>,

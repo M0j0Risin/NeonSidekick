@@ -94,7 +94,7 @@ public partial class SettingsMenuTests
         _console.Input.PushText("data modeller");
         Push(Keys.Enter);
         Push(Keys.Down, Keys.Enter);            // ux: remove
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Remove, under the role, the description, the persona, the server and the switch
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Remove, under the role, the description, the persona, the server, the model, the reasoning and the switch
         Push(Keys.Char('y'), Keys.Enter);       // yes
         Push(Keys.Escape, Keys.Escape);
 
@@ -173,7 +173,12 @@ public partial class SettingsMenuTests
         var (menu, pane) = PaneMenu();
         var footer = menu.FieldFooter(SettingsField.AdvisorList, _settings.Current);
         Assert.True(footer.KeepLines);
-        Assert.Equal(AdvisorText.Detail(new AdvisorEntry("doug", "expert .NET solution architect"), doug, true) + "\n" + AdvisorText.Detail(new AdvisorEntry("einstein", "UX designer"), einstein, true), footer.Text);
+        // In columns (2026-11-22, the user's ask): the names, the roles and the kinds padded, so the models start in one column.
+        Assert.Equal(
+            "doug     — expert .NET solution architect · docker     · Qwen3.8-27B-NVFP4-RTX5090\n" +
+            "einstein — UX designer                    · claudecode · sonnet", footer.Text);
+        var columns = AdvisorText.Columns([(new AdvisorEntry("doug", "expert .NET solution architect"), doug, true), (new AdvisorEntry("einstein", "UX designer"), einstein, true)]);
+        Assert.Equal(AdvisorText.Detail(new AdvisorEntry("doug", "expert .NET solution architect"), doug, true, columns) + "\n" + AdvisorText.Detail(new AdvisorEntry("einstein", "UX designer"), einstein, true, columns), footer.Text);
         Assert.Equal(SettingsMenu.FieldFooter(SettingsField.AdvisorList).Last + SettingsMenu.ChangedNote, footer.Last);
 
         GoTo(SettingsTab.Advisors);
@@ -182,9 +187,9 @@ public partial class SettingsMenuTests
         Push(Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("doug — expert .NET solution architect · docker · Qwen3.8-27B", Output);
-        Assert.Contains("einstein — UX designer · claudecode · sonnet", Output);
-        Assert.Contains("doug      expert .NET solution architect · docker · Qwen3.8-27B", Output);
+        Assert.Contains("doug     — expert .NET solution architect · docker     · Qwen3.8-27B", Output);
+        Assert.Contains("einstein — UX designer                    · claudecode · sonnet", Output);
+        Assert.Contains("doug      expert .NET solution architect · docker     · Qwen3.8-27B", Output);   // the kind padded on the rows too
         Assert.Contains("einstein  " + "UX designer".PadRight("expert .NET solution architect".Length) + " · claudecode · sonnet", Output);
         Assert.DoesNotContain("· tools", Output);   // no tools/text-only mark since 2026-10-13: every Claude Code advisor has its own process
         // Each led by its profile's avatar (later on 2026-10-10): doug wears the default robot, einstein its owl.

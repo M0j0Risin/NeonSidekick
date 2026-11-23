@@ -559,4 +559,53 @@ public class LlmSessionEmbeddedTests
 
         public void Dispose() => DiagnosticLog.Emitted -= OnEmitted;
     }
+
+    // ── An advisor's models (2026-11-22, Change the model; the lines' linked model) ──
+
+    [Fact]
+    public async Task ListModelsFor_TheEmbeddedUrl_IsTheInstalledModels_OrTheSwitchedOffRefusal()
+    {
+        _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");
+        using var session = Session();
+
+        var (listed, problem) = await session.ListModelsForAsync(Embedded(), CancellationToken.None);
+        Assert.Null(problem);
+        Assert.Equal(["gemma-4-e2b", "gemma-4-e4b-qat"], listed!.Value.ModelIds);
+        Assert.Equal("2 embedded models", listed.Value.Detail);
+        Assert.Empty(_embedded.Starts);   // nothing started to list them
+
+        using var off = Session();
+        await off.ConnectAsync(new AppSettingsData { EmbeddedLlmServer = false }, CancellationToken.None);
+        Assert.Equal((null, EmbeddedLlmText.SwitchedOffError), await off.ListModelsForAsync(Embedded(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ListModelsFor_TheEmbeddedUrl_WithNoneInstalled_IsAnEmptyList()
+    {
+        using var session = Session();
+        var (listed, problem) = await session.ListModelsForAsync(Embedded(), CancellationToken.None);
+        Assert.Null(problem);
+        Assert.Empty(listed!.Value.ModelIds);
+        Assert.False(listed.Value.Exists);
+        Assert.Null(session.LinkedModelOf(Embedded()));   // none saved, none running, none installed
+    }
+
+    [Fact]
+    public async Task LinkedModelOf_TheEmbeddedUrl_IsTheSaved_TheRunning_OrTheFirstInstalled()
+    {
+        _embedded.Installed("gemma-4-e2b", "gemma-4-e4b-qat");
+        using var session = Session();
+        Assert.Equal("gemma-4-e2b", session.LinkedModelOf(Embedded()));                  // none running: the one the link would start
+        Assert.Equal("gemma-4-e4b-qat", session.LinkedModelOf(Embedded("gemma-4-e4b-qat")));
+
+        await session.ConnectAsync(Embedded("gemma-4-e4b-qat"), CancellationToken.None);
+        Assert.Equal("gemma-4-e4b-qat", session.LinkedModelOf(Embedded()));              // none saved: the running one
+
+        // Another saved model: under parent-server (the default) the link shares the running one; under multi-server its own.
+        Assert.Equal("gemma-4-e4b-qat", session.LinkedModelOf(Embedded("gemma-4-e2b")));
+        session.SettingsNow = () => new AppSettingsData { AdvisorEmbedded = "multi-server" };
+        Assert.Equal("gemma-4-e2b", session.LinkedModelOf(Embedded("gemma-4-e2b")));
+        session.SettingsNow = () => new AppSettingsData { AdvisorEmbedded = "parent-server" };
+        Assert.Equal("gemma-4-e4b-qat", session.LinkedModelOf(Embedded("gemma-4-e2b")));
+    }
 }

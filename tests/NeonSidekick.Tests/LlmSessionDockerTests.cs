@@ -1451,4 +1451,19 @@ public sealed class LlmSessionDockerTests
 
         public int GetHashCode(DockerLeftover? obj) => 0;
     }
+
+    /// <summary>An advisor on a container (2026-11-22, the lines' linked model): the running one's model, and none while it doesn't run.</summary>
+    [WindowsFact]
+    public async Task LinkedModelOf_ADockerUrl_IsTheRunningContainersModel()
+    {
+        using var session = Session();
+        Assert.Null(session.LinkedModelOf(new AppSettingsData { LlmUrl = "docker:sglang_a", LlmModel = "saved" }));
+
+        await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
+
+        Assert.Equal("sglang-model", session.LinkedModelOf(new AppSettingsData { LlmUrl = "docker:sglang_a", LlmModel = "saved" }));
+        Assert.Null(session.LinkedModelOf(new AppSettingsData { LlmUrl = "docker:vllm_b" }));
+        Assert.Equal("sglang-model", session.LinkedModelOf(new AppSettingsData { LlmModel = "ignored" }));   // borrowed: the container's one model
+        Assert.Equal((null, NeonSidekick.Advisors.AdvisorText.ModelListBorrowedOne), await session.ListModelsForAsync(new AppSettingsData(), CancellationToken.None));
+    }
 }

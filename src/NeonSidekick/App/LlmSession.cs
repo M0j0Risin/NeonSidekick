@@ -1632,6 +1632,122 @@ internal sealed partial class LlmSession : IDisposable
     private async Task<ProbeResult?> ProbeAsync(Uri url, CancellationToken cancellationToken) =>
         await _probe.ProbeAsync(url, ApiKeys.IsHostedApi(url) ? ApiKeys.For(_effective, url) : _apiKey, cancellationToken, OpenAIApi.HeadersFor(_effective, url)).ConfigureAwait(false);
 
+    /// <summary>
+    /// The models an advisor's <paramref name="saved"/> settings would answer on (2026-11-22, an advisor's Change the model, the user's
+    /// ask), as <c>/model</c> lists the session's: <see cref="LinkAsync(AppSettingsData, BotEmbeddedMode, ExtraOwner, CancellationToken)"/>'s
+    /// branches in its order, so the list is the link's. A blank URL borrows this session's server: its own list, unless it runs one model
+    /// (embedded or a Docker container), which the advisor gets whatever it saves. Its own Docker container likewise. Claude Code's aliases;
+    /// the installed embedded models; any other URL asked with the advisor's own key and headers. Never both halves null.
+    /// </summary>
+    public async Task<(ProbeResult? Listed, string? Problem)> ListModelsForAsync(AppSettingsData saved, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        if (string.IsNullOrWhiteSpace(saved.LlmUrl))
+        {
+            if (Endpoint is not { } starter)
+            {
+                return (null, BotLinkNoServer);
+            }
+
+            bool one = EmbeddedEndpoint.IsEmbedded(starter.BaseUrl) || DockerEndpoint.IsDocker(starter.BaseUrl);
+            if (one)
+            {
+                return (null, starter.LiveUrl is null ? BotLinkNoServer : Advisors.AdvisorText.ModelListBorrowedOne);
+            }
+
+            return await ListModelsAsync(cancellationToken).ConfigureAwait(false) is { } listed ? (listed, null) : (null, BotLinkNoServer);
+        }
+
+        if (DockerEndpoint.IsDocker(saved.LlmUrl))
+        {
+            return (null, Advisors.AdvisorText.ModelListDockerOne);   // the link shares the running container as it is: nothing asked
+        }
+
+        if (ClaudeCliEndpoint.IsClaudeCli(saved.LlmUrl))
+        {
+            return _claudeCliOffered(saved)
+                ? (new ProbeResult(true, ClaudeCliEndpoint.Models, ClaudeCliText.RowDetail), null)
+                : (null, Advisors.AdvisorText.ModelListClaudeNotOffered);
+        }
+
+        if (EmbeddedEndpoint.IsEmbedded(saved.LlmUrl))
+        {
+            // Refused where LinkEmbeddedAsync refuses: none can run here, or the loaded profile's switch is off.
+            if (_embedded is not { } embedded || !EmbeddedEndpoint.Offered)
+            {
+                return (null, Advisors.AdvisorText.ModelListNoEmbedded);
+            }
+
+            if (!_embeddedEnabled)
+            {
+                return (null, EmbeddedLlmText.SwitchedOffError);
+            }
+
+            var installed = embedded.Catalog.Where(m => embedded.State(m).IsInstalled).Select(m => m.Id).ToList();
+            string detail = installed.Count == 1 ? "1 embedded model" : $"{installed.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)} embedded models";
+            return (new ProbeResult(installed.Count > 0, installed, detail), null);
+        }
+
+        Uri v1;
+        try
+        {
+            v1 = LlmEndpoint.NormalizeBaseUrl(saved.LlmUrl);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UriFormatException)
+        {
+            return (null, ex.Message);
+        }
+
+        var result = await _probe.ProbeAsync(v1, ApiKeys.For(saved, v1), cancellationToken, OpenAIApi.HeadersFor(saved, v1)).ConfigureAwait(false);
+        return result.Exists ? (result, null) : (null, $"{v1} did not answer ({result.Detail})");
+    }
+
+    /// <summary>
+    /// The model an advisor's <paramref name="saved"/> settings would answer on, where that is known without asking a server (2026-11-22,
+    /// the user's screenshot of a Docker advisor's <c>default model</c>): <see cref="LinkAsync(AppSettingsData, BotEmbeddedMode, ExtraOwner, CancellationToken)"/>'s
+    /// branches, read and never acted on. Null where only a server could say (a URL with no model saved) or the link would fail.
+    /// </summary>
+    public string? LinkedModelOf(AppSettingsData saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        string? model = string.IsNullOrWhiteSpace(saved.LlmModel) ? null : saved.LlmModel.Trim();
+        if (string.IsNullOrWhiteSpace(saved.LlmUrl))
+        {
+            if (Endpoint is not { } starter)
+            {
+                return null;
+            }
+
+            bool one = EmbeddedEndpoint.IsEmbedded(starter.BaseUrl) || DockerEndpoint.IsDocker(starter.BaseUrl);
+            return one ? (starter.LiveUrl is null ? null : starter.ModelId) : model ?? starter.ModelId;
+        }
+
+        if (DockerEndpoint.IsDocker(saved.LlmUrl))
+        {
+            string? wanted = DockerEndpoint.ContainerOf(saved.LlmUrl);
+            return Runs.FirstOrDefault(run => run.Live is { LiveUrl: not null } && string.Equals(run.Name, wanted, StringComparison.Ordinal))?.Live?.ModelId;
+        }
+
+        if (ClaudeCliEndpoint.IsClaudeCli(saved.LlmUrl))
+        {
+            return ClaudeCliEndpoint.ModelOf(model);
+        }
+
+        if (EmbeddedEndpoint.IsEmbedded(saved.LlmUrl))
+        {
+            if (_embedded?.Running is { } running)
+            {
+                // Under Advisor embedded mode parent-server (the default) the link shares the running model whatever is saved.
+                BotChatMultiEmbedded.TryParse((SettingsNow?.Invoke() ?? _effective).AdvisorEmbedded, out var mode);
+                return model is null || mode == BotEmbeddedMode.ParentServer ? running.ModelId : model;
+            }
+
+            return model ?? EmbeddedModelFor(null)?.Id;   // the one the link would start: the first installed
+        }
+
+        return model;
+    }
+
     /// <summary>The skill-learning reflection now running, if one is (<see cref="StartLearning"/>); the screen never awaits it here.</summary>
     public Task<SkillLearnResult>? Learning { get; private set; }
 

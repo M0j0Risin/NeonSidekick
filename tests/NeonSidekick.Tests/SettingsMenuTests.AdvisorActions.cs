@@ -109,10 +109,10 @@ public partial class SettingsMenuTests
         Assert.False(changes.HasFlag(SettingsChanges.Profile));
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
         Assert.Contains(SettingsMenu.MissingAdvisorProfileNotice("gone"), Output);
-        Assert.Contains(SettingsMenu.MissingAdvisorServerNotice("gone"), Output);
+        Assert.Contains(SettingsMenu.MissingAdvisorChangeNotice("gone"), Output);
         Assert.Equal(0, probes);
         Assert.Equal("(gone's profile no longer exists, so there is nothing to switch to)", SettingsMenu.MissingAdvisorProfileNotice("gone"));
-        Assert.Equal("(gone's profile no longer exists, so it has no server to change)", SettingsMenu.MissingAdvisorServerNotice("gone"));
+        Assert.Equal("(gone's profile no longer exists, so there is nothing to change)", SettingsMenu.MissingAdvisorChangeNotice("gone"));
         pane.Dispose();
     }
 
@@ -414,7 +414,7 @@ public partial class SettingsMenuTests
         if (delete)
         {
             Assert.False(File.Exists(file));
-            Assert.Contains(SettingsMenu.MissingAdvisorServerNotice("dba"), Output);
+            Assert.Contains(SettingsMenu.MissingAdvisorChangeNotice("dba"), Output);
         }
         else
         {

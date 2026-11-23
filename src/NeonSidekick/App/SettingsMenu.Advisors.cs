@@ -33,12 +33,14 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// An entry's choices, in order (the description and the persona since 2026-11-22; the server and the switch later that day, from UI
-    /// testing: <see cref="ChangeAdvisorServerChoice"/>, <see cref="SwitchToAdvisorChoice"/>). <see cref="RemoveAdvisorChoice"/> is Delete's. Pinned.
+    /// testing: <see cref="ChangeAdvisorServerChoice"/>, <see cref="SwitchToAdvisorChoice"/>; then the model and the reasoning alone, the
+    /// user's ask: <see cref="ChangeAdvisorModelChoice"/>, <see cref="ChangeAdvisorReasoningChoice"/>). <see cref="RemoveAdvisorChoice"/> is Delete's. Pinned.
     /// </summary>
-    public static readonly IReadOnlyList<string> AdvisorEntryRows = ["Change the role", "Change the description", "Change the persona", "Change the server", "Switch to profile", "Remove"];
+    public static readonly IReadOnlyList<string> AdvisorEntryRows =
+        ["Change the role", "Change the description", "Change the persona", "Change the server", "Change the model", "Change the reasoning", "Switch to profile", "Remove"];
 
     /// <summary>The row of <see cref="AdvisorEntryRows"/> a Delete on an advisor goes to.</summary>
-    public const int RemoveAdvisorChoice = 5;
+    public const int RemoveAdvisorChoice = 7;
 
     /// <summary>The profile picker's title when adding. Pinned.</summary>
     public const string AdvisorProfileTitle = "Which profile advises?";
@@ -87,30 +89,33 @@ internal sealed partial class SettingsMenu
     /// <paramref name="mark"/> — <see cref="AdvisorText.UnreadableMark"/> (and until 2026-10-13 a Claude Code advisor's <c>tools</c> or
     /// <c>text only</c>). A profile no longer in the home says so in their place. With <paramref name="avatar"/>
     /// (later on 2026-10-10, the user's ask) the profile's avatar leads the row as it leads a profile picker's
-    /// (<see cref="ProfilePickerRow"/>): the emoji and a space, or three blanks for "" so the names stand in one column; null leads with nothing. Pinned.
+    /// (<see cref="ProfilePickerRow"/>): the emoji and a space, or three blanks for "" so the names stand in one column; null leads with nothing.
+    /// Since 2026-11-22 (the user's ask: "line up in neat columns") the kind is padded to <paramref name="kindWidth"/> so the models start in
+    /// one column, and every width is in cells (<see cref="AdvisorText.PadCells"/>), so a role with an emoji lines up. Pinned.
     /// </summary>
-    public static string AdvisorRow(AdvisorEntry entry, bool exists, int width, AdvisorServerFacts? facts = null, int roleWidth = 0, string? mark = null, string? avatar = null)
+    public static string AdvisorRow(AdvisorEntry entry, bool exists, int width, AdvisorServerFacts? facts = null, int roleWidth = 0, string? mark = null, string? avatar = null, int kindWidth = 0)
     {
         ArgumentNullException.ThrowIfNull(entry);
         string role = entry.Role.Length == 0 ? "(no role)" : entry.Role;
-        string name = avatar is null ? Markup.Escape(entry.Profile.PadRight(width)) : ProfilePickerRow(entry.Profile.PadRight(width), avatar);
+        string padded = AdvisorText.PadCells(entry.Profile, width);
+        string name = avatar is null ? Markup.Escape(padded) : ProfilePickerRow(padded, avatar);
         if (!exists)
         {
             return name + Theme.DimMarkup(Markup.Escape(role + "  " + MissingAdvisorMark));
         }
 
-        string tail = (facts is null ? "" : " · " + facts.Kind + " · " + facts.Model) + (mark is null ? "" : " · " + mark);
+        string tail = (facts is null ? "" : " · " + AdvisorText.PadCells(facts.Kind, kindWidth) + " · " + facts.Model) + (mark is null ? "" : " · " + mark);
         if (tail.Length > 0 && roleWidth > 0)
         {
-            role = ScreenPane.Fit(role, roleWidth).PadRight(roleWidth);
+            role = AdvisorText.PadCells(ScreenPane.Fit(role, roleWidth), roleWidth);
         }
 
         return name + Theme.DimMarkup(Markup.Escape(role + tail));
     }
 
-    /// <summary>The editor's role column: the longest role (or <c>(no role)</c>), at most <see cref="AdvisorRoleWidth"/>.</summary>
+    /// <summary>The editor's role column: the longest role (or <c>(no role)</c>) in cells, at most <see cref="AdvisorRoleWidth"/>.</summary>
     public static int AdvisorRoleColumn(IReadOnlyList<AdvisorEntry> entries) =>
-        entries.Count == 0 ? 0 : Math.Min(AdvisorRoleWidth, entries.Max(e => e.Role.Length == 0 ? "(no role)".Length : e.Role.Length));
+        entries.Count == 0 ? 0 : Math.Min(AdvisorRoleWidth, entries.Max(e => TextCells.Width(e.Role.Length == 0 ? "(no role)" : e.Role)));
 
     /// <summary>
     /// The mark of a listed advisor (2026-10-10): an unreadable profile said so; null for the rest. (Until 2026-10-13 a Claude Code
@@ -119,12 +124,15 @@ internal sealed partial class SettingsMenu
     private string? AdvisorMark(AdvisorEntry entry) =>
         AdvisorFactsOf(entry.Profile) is { Exists: true, Facts: null } ? AdvisorText.UnreadableMark : null;
 
-    /// <summary>Each advisor's profile as last read, with the write time it was read at (2026-10-10).</summary>
-    private readonly Dictionary<string, (DateTime Written, bool Exists, AdvisorServerFacts? Facts)> _advisorFacts = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Each advisor's profile as last read, with the write time it was read at (2026-10-10). Its saved settings, not its facts, since
+    /// 2026-11-22: the model it answers on (<see cref="AdvisorLinkedModel"/>) moves with no write, as a container starts or stops.
+    /// </summary>
+    private readonly Dictionary<string, (DateTime Written, bool Exists, AppSettingsData? Saved)> _advisorFacts = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Whether advisor <paramref name="profile"/> is in the home and what it runs on (null when its file cannot be read), read again
-    /// only when its <c>profile.json</c> was written since: <c>Advisor list</c>'s band asks on every move of the cursor.
+    /// Whether advisor <paramref name="profile"/> is in the home and what it runs on (null when its file cannot be read), its file read
+    /// again only when its <c>profile.json</c> was written since: <c>Advisor list</c>'s band asks on every move of the cursor.
     /// </summary>
     private (bool Exists, AdvisorServerFacts? Facts) AdvisorFactsOf(string profile)
     {
@@ -139,22 +147,39 @@ internal sealed partial class SettingsMenu
             written = DateTime.MinValue;
         }
 
+        (bool Exists, AppSettingsData? Saved) read = default;
+        bool cached;
         lock (_advisorFacts)
         {
-            if (_advisorFacts.TryGetValue(profile, out var kept) && kept.Written == written)
+            cached = _advisorFacts.TryGetValue(profile, out var kept) && kept.Written == written;
+            if (cached)
             {
-                return (kept.Exists, kept.Facts);
+                read = (kept.Exists, kept.Saved);
             }
         }
 
-        bool exists = Profiles.Exists(home, profile);
-        var facts = exists ? AdvisorServer.Read(home, profile) : null;
-        lock (_advisorFacts)
+        if (!cached)
         {
-            _advisorFacts[profile] = (written, exists, facts);
+            bool exists = Profiles.Exists(home, profile);
+            read = (exists, exists ? AdvisorServer.ReadSaved(home, profile) : null);
+            lock (_advisorFacts)
+            {
+                _advisorFacts[profile] = (written, read.Exists, read.Saved);
+            }
         }
 
-        return (exists, facts);
+        return (read.Exists, read.Saved is { } saved ? AdvisorServer.Of(saved, AdvisorLinkedModel) : null);
+    }
+
+    /// <summary>The listed advisors' lines' columns (2026-11-22, <see cref="AdvisorText.Columns"/>), with each one's facts.</summary>
+    private (List<(AdvisorEntry Advisor, AdvisorServerFacts? Facts, bool Exists)> Lines, AdvisorColumns Columns) AdvisorLines(IReadOnlyList<AdvisorEntry> entries)
+    {
+        var lines = entries.Select(e =>
+        {
+            var (exists, facts) = AdvisorFactsOf(e.Profile);
+            return (e, facts, exists);
+        }).ToList();
+        return (lines, AdvisorText.Columns(lines));
     }
 
     /// <summary>
@@ -169,12 +194,8 @@ internal sealed partial class SettingsMenu
             return null;
         }
 
-        var lines = entries.Select(e =>
-        {
-            var (exists, facts) = AdvisorFactsOf(e.Profile);
-            return AdvisorText.Detail(e, facts, exists);
-        });
-        return new MenuFooter(string.Join("\n", lines), FieldFooter(SettingsField.AdvisorList).Last) { KeepLines = true };
+        var (lines, columns) = AdvisorLines(entries);   // in columns (2026-11-22, the user's ask)
+        return new MenuFooter(string.Join("\n", lines.Select(l => AdvisorText.Detail(l.Advisor, l.Facts, l.Exists, columns))), FieldFooter(SettingsField.AdvisorList).Last) { KeepLines = true };
     }
 
     /// <summary>The advisor-context picker (2026-10-10): the Claude Code advisor's rows, this setting's value under the cursor.</summary>
@@ -223,15 +244,14 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var entries = AdvisorRoster.Entries(_settings.Current.AdvisorList);
-            int width = entries.Count == 0 ? 0 : Math.Min(24, entries.Max(e => e.Profile.Length) + 2);
+            int width = entries.Count == 0 ? 0 : Math.Min(24, entries.Max(e => TextCells.Width(e.Profile)) + 2);
             int roleWidth = AdvisorRoleColumn(entries);
-            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), Markup.Escape(NewAdvisorRow), .. entries.Select(e =>
-            {
-                var (exists, facts) = AdvisorFactsOf(e.Profile);
+            var (lines, columns) = AdvisorLines(entries);
+            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), Markup.Escape(NewAdvisorRow), .. lines.Select(l =>
                 // Each advisor's avatar ahead of its name (later on 2026-10-10, the user's ask), as the profile pickers show theirs; a
-                // missing profile none (its file would read as the defaults, the robot).
-                return AdvisorRow(e, exists, width, facts, roleWidth, AdvisorMark(e), exists ? ProfileAvatar(e.Profile) : "");
-            })];
+                // missing profile none (its file would read as the defaults, the robot). The kind padded so the models line up (2026-11-22).
+                AdvisorRow(l.Advisor, l.Exists, width, l.Facts, roleWidth, AdvisorMark(l.Advisor),
+                    l.Exists ? ProfileAvatar(l.Advisor.Profile) : "", columns.Kind))];
             // Each row's band (2026-11-22): what the two add rows do, an advisor's description (or how to give it one).
             var page = new MenuPage(Crumb(title), rows, AdvisorListKeys) { Footer = (_, row) => AdvisorRowBand(entries, row) };
             if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { Row: var index } pick)
@@ -289,6 +309,14 @@ internal sealed partial class SettingsMenu
 
                 case ChangeAdvisorServerChoice:
                     changed |= await ChangeAdvisorServerAsync(entry, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                case ChangeAdvisorModelChoice:
+                    changed |= await ChangeAdvisorModelAsync(entry, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                case ChangeAdvisorReasoningChoice:
+                    changed |= await ChangeAdvisorReasoningAsync(entry, cancellationToken).ConfigureAwait(false);
                     break;
 
                 case SwitchToAdvisorChoice:

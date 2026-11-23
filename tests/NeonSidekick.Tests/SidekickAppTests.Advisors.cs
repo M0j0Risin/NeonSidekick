@@ -84,7 +84,8 @@ public partial class SidekickAppTests
         string output = await Headless("/advisor\n/advisor dba Which index?\n/advisor nobody q\n", exitCode: 4);
 
         Assert.Contains("[notice] " + AdvisorText.ListHeading, output);
-        Assert.Contains("[notice] " + AdvisorText.ListLine(new AdvisorEntry("dba", "database architect"), new AdvisorServerFacts(AdvisorServer.Scan, AdvisorServer.DefaultModel), exists: true), output);
+        // The model it answers on, the session's llama it borrows (2026-11-22: LinkedModelOf), in the list's columns.
+        Assert.Contains("[notice]   dba — database architect · scan · llama", output);
         Assert.Contains("dba: The foreign key.", output);
         Assert.Contains("[error] \"nobody\" names no single advisor", output);
     }

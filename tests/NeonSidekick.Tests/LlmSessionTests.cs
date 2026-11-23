@@ -533,4 +533,100 @@ public class LlmSessionTests
         Assert.False(session.PicturesRefused);
         Assert.Equal(sees, session.SeesPictures);
     }
+
+    // ── An advisor's models (2026-11-22, Change the model; the lines' linked model) ──
+
+    [Fact]
+    public async Task ListModelsFor_ABlankUrl_IsTheSessionsList_OrNoServer()
+    {
+        using var session = Session();
+        Assert.Equal((null, LlmSession.BotLinkNoServer), await session.ListModelsForAsync(new AppSettingsData(), CancellationToken.None));
+        Assert.Null(session.LinkedModelOf(new AppSettingsData { LlmModel = "m" }));   // nothing connected: the link would fail
+
+        ServerOn1234("x", "y");
+        await session.ConnectAsync(Scanning, CancellationToken.None);
+        var (listed, problem) = await session.ListModelsForAsync(new AppSettingsData { LlmModel = "y" }, CancellationToken.None);
+
+        Assert.Null(problem);
+        Assert.Equal(["x", "y"], listed!.Value.ModelIds);
+        Assert.Equal("y", session.LinkedModelOf(new AppSettingsData { LlmModel = " y " }));   // its own model on the borrowed server
+        Assert.Equal("x", session.LinkedModelOf(new AppSettingsData()));                     // else the session's
+    }
+
+    [Fact]
+    public async Task ListModelsFor_ItsOwnUrl_IsAskedWithItsOwnKey_AndSaysWhenItDoesNotAnswer()
+    {
+        _http.Map("http://127.0.0.1:8000/v1/models", HttpStatusCode.OK, StubHttpMessageHandler.ModelsJson("qwen"));
+        using var session = Session();
+
+        var (listed, problem) = await session.ListModelsForAsync(new AppSettingsData { LlmUrl = "http://127.0.0.1:8000", LlmApiKey = "advisor-key" }, CancellationToken.None);
+        var (dead, why) = await session.ListModelsForAsync(new AppSettingsData { LlmUrl = "http://127.0.0.1:9/v1" }, CancellationToken.None);
+
+        Assert.Null(problem);
+        Assert.Equal(["qwen"], listed!.Value.ModelIds);
+        Assert.Contains(_http.Requests, r => r.Uri.Port == 8000 && r.Authorization == "Bearer advisor-key");
+        Assert.Null(dead);
+        Assert.StartsWith("http://127.0.0.1:9/v1 did not answer (", why, StringComparison.Ordinal);
+        Assert.Equal("org/qwen", session.LinkedModelOf(new AppSettingsData { LlmUrl = "http://127.0.0.1:8000/v1", LlmModel = " org/qwen " }));
+        Assert.Null(session.LinkedModelOf(new AppSettingsData { LlmUrl = "http://127.0.0.1:8000/v1" }));   // only the server could say
+    }
+
+    [Fact]
+    public async Task ListModelsFor_ADockerUrl_IsItsOneModel_WithNothingAsked()
+    {
+        using var session = Session();
+        Assert.Equal((null, NeonSidekick.Advisors.AdvisorText.ModelListDockerOne), await session.ListModelsForAsync(new AppSettingsData { LlmUrl = "docker:vllm" }, CancellationToken.None));
+        Assert.Null(session.LinkedModelOf(new AppSettingsData { LlmUrl = "docker:vllm", LlmModel = "saved" }));   // not running: the link would fail
+        Assert.Empty(_http.Requests);
+    }
+
+    [Fact]
+    public async Task ListModelsFor_ClaudeCode_IsItsAliases_WhereItsProfileOffersIt()
+    {
+        var claude = new AppSettingsData { LlmUrl = "claude-code" };
+        using var off = Session();
+        using var on = new LlmSession(
+            new LlmEndpointProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
+            new ContextLengthProbe(new HttpClient(_http), TimeSpan.FromMilliseconds(500)),
+            (_, _) => new FakeChatClient(),
+            claudeCliOffered: saved => ReferenceEquals(saved, claude));
+
+        Assert.Equal((null, NeonSidekick.Advisors.AdvisorText.ModelListClaudeNotOffered), await off.ListModelsForAsync(claude, CancellationToken.None));
+        var (listed, problem) = await on.ListModelsForAsync(claude, CancellationToken.None);
+        Assert.Null(problem);
+        Assert.Equal(NeonSidekick.Claude.ClaudeCliEndpoint.Models, listed!.Value.ModelIds);
+        Assert.Equal(NeonSidekick.Claude.ClaudeCliEndpoint.DefaultModel, on.LinkedModelOf(claude));
+        Assert.Equal("opus", on.LinkedModelOf(new AppSettingsData { LlmUrl = "claude-code", LlmModel = " opus " }));
+        Assert.Empty(_http.Requests);
+    }
+
+    /// <summary>A blank URL on a session running one model (embedded or a container) gets that one, or nothing with its live URL gone.</summary>
+    [Theory]
+    [InlineData("embedded")]
+    [InlineData("docker")]
+    public async Task ListModelsFor_ABlankUrl_OnAOneModelSession_IsThatModel(string kind)
+    {
+        using var session = Session();
+        Uri baseUrl = kind == "embedded" ? NeonSidekick.EmbeddedLlm.EmbeddedEndpoint.BaseUrl : NeonSidekick.Docker.DockerEndpoint.BaseUrl("vllm");
+        var gone = new LlmEndpoint(baseUrl, "one-model", "k", "test");
+        await session.ConnectAsync(new AppSettingsData(), gone, CancellationToken.None);
+
+        Assert.Equal((null, LlmSession.BotLinkNoServer), await session.ListModelsForAsync(new AppSettingsData { LlmModel = "other" }, CancellationToken.None));
+        Assert.Null(session.LinkedModelOf(new AppSettingsData { LlmModel = "other" }));
+
+        await session.ConnectAsync(new AppSettingsData(), gone with { LiveUrl = new Uri("http://127.0.0.1:59999/v1") }, CancellationToken.None);
+
+        Assert.Equal((null, NeonSidekick.Advisors.AdvisorText.ModelListBorrowedOne), await session.ListModelsForAsync(new AppSettingsData { LlmModel = "other" }, CancellationToken.None));
+        Assert.Equal("one-model", session.LinkedModelOf(new AppSettingsData { LlmModel = "other" }));
+    }
+
+    [Fact]
+    public async Task ListModelsFor_ABadUrl_SaysWhy_AndAsksNothing()
+    {
+        using var session = Session();
+        var (listed, problem) = await session.ListModelsForAsync(new AppSettingsData { LlmUrl = "http://" }, CancellationToken.None);
+        Assert.Null(listed);
+        Assert.False(string.IsNullOrWhiteSpace(problem));
+        Assert.Empty(_http.Requests);
+    }
 }
