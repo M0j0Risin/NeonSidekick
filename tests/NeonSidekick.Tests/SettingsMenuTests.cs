@@ -469,7 +469,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("Plan gap clean passes " + SettingsMenu.PlanGapCleanPassesRangeError + "; keeping 1.", Output);
     }
 
-    /// <summary>Whether a gap pass may ask (2026-10-18): a toggle right under the clean passes in the Plan mode run, on by default; its on/off picker turns it off, no reconnect.</summary>
+    /// <summary>Whether a gap pass may ask (2026-10-18): a toggle right under the clean passes in the Gap review run (Plan mode until 2026-11-23), on by default; its on/off picker turns it off, no reconnect.</summary>
     [Fact]
     public async Task ThePlanGapAskUserRow_IsAToggle_UnderTheCleanPasses_ThePickerTurnsItOff()
     {
@@ -479,8 +479,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.PlanGapAskUser, new AppSettingsData(), _settings.ProfileDirectory));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.PlanGapAskUser, new AppSettingsData { PlanGapAskUser = false }, _settings.ProfileDirectory));
         var automation = SettingsMenu.TabFields[(int)SettingsTab.Automation].ToList();   // Servers › Common until 2026-10-21
-        Assert.Equal(automation.IndexOf(SettingsField.ConfirmFocusByChange) + 1, automation.IndexOf(SettingsField.PlanGapAskUser));   // Confirm focus by change between since 2026-11-18
-        var plan = SettingsMenu.TabSections[SettingsTab.Automation].Single(s => s.Title == "Plan mode");
+        Assert.Equal(automation.IndexOf(SettingsField.PlanGapCleanPasses) + 1, automation.IndexOf(SettingsField.PlanGapAskUser));   // Confirm focus by change between from 2026-11-18 to 2026-11-23
+        var plan = SettingsMenu.TabSections[SettingsTab.Automation].Single(s => s.Title == "Gap review");
         Assert.Equal(SettingsField.PlanGapPasses, plan.First);
 
         Down((int)SettingsField.PlanGapAskUser);
@@ -492,11 +492,12 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// Confirm focus by change (2026-11-18, Phase 3 item 3, the user's call: one row for gap reviews and code audits, off by default): a toggle right
-    /// under the clean passes in the Plan mode run; its on/off picker turns it on, no reconnect.
+    /// Confirm focus by change (2026-11-18, Phase 3 item 3, the user's call: one row for gap reviews and code audits, off by default): a toggle, last on
+    /// Automation under a heading of its own since 2026-11-23 (the user's ask; under the clean passes in Plan mode until then); its on/off picker turns
+    /// it on, no reconnect.
     /// </summary>
     [Fact]
-    public async Task TheConfirmFocusByChangeRow_IsAToggle_UnderTheCleanPasses_OffByDefault_ThePickerTurnsItOn()
+    public async Task TheConfirmFocusByChangeRow_IsAToggle_InASectionOfItsOwn_AfterCodeAudit_OffByDefault_ThePickerTurnsItOn()
     {
         Assert.Equal("Confirm focus by change", SettingsMenu.FieldName(SettingsField.ConfirmFocusByChange));
         Assert.True(SettingsMenu.IsToggle(SettingsField.ConfirmFocusByChange));
@@ -505,8 +506,9 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ConfirmFocusByChange, new AppSettingsData(), _settings.ProfileDirectory));
         Assert.Equal("on", SettingsMenu.FieldValue(SettingsField.ConfirmFocusByChange, new AppSettingsData { ConfirmFocusByChange = true }, _settings.ProfileDirectory));
         var automation = SettingsMenu.TabFields[(int)SettingsTab.Automation].ToList();
-        Assert.Equal(automation.IndexOf(SettingsField.PlanGapCleanPasses) + 1, automation.IndexOf(SettingsField.ConfirmFocusByChange));
-        Assert.Equal("Plan mode", SettingsMenu.TabSections[SettingsTab.Automation].Last(s => automation.IndexOf(s.First) <= automation.IndexOf(SettingsField.ConfirmFocusByChange)).Title);
+        Assert.Equal(automation.IndexOf(SettingsField.CodeAuditStopTone) + 1, automation.IndexOf(SettingsField.ConfirmFocusByChange));
+        Assert.Equal(SettingsField.ConfirmFocusByChange, automation[^1]);
+        Assert.Equal("Gap reviews and audits", SettingsMenu.TabSections[SettingsTab.Automation].Last(s => automation.IndexOf(s.First) <= automation.IndexOf(SettingsField.ConfirmFocusByChange)).Title);
 
         Down((int)SettingsField.ConfirmFocusByChange);
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // the on/off picker: off under the cursor, on picked
@@ -1182,8 +1184,9 @@ public partial class SettingsMenuTests : IDisposable
         // The Common tab (2026-10-10, the user's call: the LLM tab less the six rows only an OpenAI-compatible HTTP server reads) in the LLM tab's five runs (2026-10-01, the user's call):
         // the connection, how it answers, tools and limits, the context, the pictures and fun verbs; the tools toggle still ABOVE the tool-compact picker (the user's order, 2026-09-15).
         Assert.Equal(new[] { SettingsField.LlmUrl, SettingsField.LlmModel, SettingsField.LlmOneLocalModel, SettingsField.LlmReasoning, SettingsField.LlmShowThinking, SettingsField.LlmOfferTools, SettingsField.LlmMaxToolIterations, SettingsField.LlmRequestTimeoutSeconds, SettingsField.LlmTurnTimeoutSeconds, SettingsField.LlmContextLength, SettingsField.LlmMidTurnUsage, SettingsField.LlmMaxTurns, SettingsField.LlmAutoCompactPercent, SettingsField.LlmCompactType, SettingsField.LlmCompactKeepRecent, SettingsField.LlmCompactShowSummary, SettingsField.LlmToolCompactType, SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes, SettingsField.LlmUseFunVerbs }, SettingsMenu.TabFields[(int)SettingsTab.Common]);
-        // The Automation tab (2026-10-21, the user's ask): plan mode's gap review, the Ralph loop and code audits, the three runs as they stood on Common.
-        Assert.Equal(new[] { SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.ConfirmFocusByChange, SettingsField.PlanGapAskUser, SettingsField.PlanGapStopTone, SettingsField.RalphLoopReviewer, SettingsField.RalphLoopCheckpoint, SettingsField.RalphLoopPasses, SettingsField.RalphLoopPassesPerStep, SettingsField.RalphLoopCheckTimeoutSeconds, SettingsField.RalphLoopTokenBudget, SettingsField.RalphLoopStopTone, SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditLowKeepsStreak, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone }, SettingsMenu.TabFields[(int)SettingsTab.Automation]);
+        // The Automation tab (2026-10-21, the user's ask): plan mode's gap review, the Ralph loop and code audits, the three runs as they stood on Common;
+        // Confirm focus by change last since 2026-11-23 (the user's ask), under its own heading.
+        Assert.Equal(new[] { SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.PlanGapAskUser, SettingsField.PlanGapStopTone, SettingsField.RalphLoopReviewer, SettingsField.RalphLoopCheckpoint, SettingsField.RalphLoopPasses, SettingsField.RalphLoopPassesPerStep, SettingsField.RalphLoopCheckTimeoutSeconds, SettingsField.RalphLoopTokenBudget, SettingsField.RalphLoopStopTone, SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditLowKeepsStreak, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone, SettingsField.ConfirmFocusByChange }, SettingsMenu.TabFields[(int)SettingsTab.Automation]);
         // The Http tab: those six, in the order they had on the LLM tab (the scan mode and the key, the thinking rows, the sampling door and its switch).
         Assert.Equal(new[] { SettingsField.LlmScanMode, SettingsField.LlmApiKey, SettingsField.LlmPreserveThinking, SettingsField.LlmReasoningEstimate, SettingsField.LlmSampling, SettingsField.LlmSamplingFromHuggingFace }, SettingsMenu.TabFields[(int)SettingsTab.Http]);   // before that: LLM reasoning estimate under preserve thinking since 2026-09-29;   // LLM sampling last (2026-09-28)
         // The tool-compact row (2026-09-15): a picker under LLM offer tools, no reconnect, read at each turn.
@@ -3623,7 +3626,7 @@ public partial class SettingsMenuTests : IDisposable
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM server scan mode            local\n  LLM API key                     em•••\n" + MenuLayout.Heading("Thinking", 120) + "\n  LLM preserve thinking           off\n  LLM reasoning estimate          chars\n" + MenuLayout.Heading("Sampling", 120) + "\n  LLM sampling                    (server defaults)\n  LLM sampling from Hugging Face  off\n", 120);
         // The Automation tab (2026-10-21, the user's ask): plan mode's gap review, the Ralph loop and code audits, off Common, padded to 29 (28 until Code audit low keeps streak, 2026-11-17; 32 until the rows lost "LLM " later on 2026-10-21).
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Plan mode", 120) + "\n▸ Plan gap max passes          5 passes\n  Plan gap clean passes        1 pass\n  Confirm focus by change      off\n  Plan gap ask user            on\n  Plan gap stop tone           silent\n" + MenuLayout.Heading("Ralph loop", 120) + "\n  Ralph loop reviewer          any\n  Ralph loop checkpoint        off\n  Ralph loop max passes        auto (3 a step)\n  Ralph loop max step passes   4 passes\n  Ralph loop check timeout     600 s\n  Ralph loop token budget      no budget\n  Ralph loop stop tone         silent\n" + MenuLayout.Heading("Code audit", 120) + "\n  Code audit max passes        5 passes\n  Code audit clean passes      1 pass\n  Code audit low keeps streak  off\n  Code audit ask user          on\n  Code audit focus             all\n  Code audit web research      off\n  Code audit pass tool calls   40 tool calls\n  Code audit stop tone         silent\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Gap review", 120) + "\n▸ Plan gap max passes          5 passes\n  Plan gap clean passes        1 pass\n  Plan gap ask user            on\n  Plan gap stop tone           silent\n" + MenuLayout.Heading("Ralph loop", 120) + "\n  Ralph loop reviewer          any\n  Ralph loop checkpoint        off\n  Ralph loop max passes        auto (3 a step)\n  Ralph loop max step passes   4 passes\n  Ralph loop check timeout     600 s\n  Ralph loop token budget      no budget\n  Ralph loop stop tone         silent\n" + MenuLayout.Heading("Code audit", 120) + "\n  Code audit max passes        5 passes\n  Code audit clean passes      1 pass\n  Code audit low keeps streak  off\n  Code audit ask user          on\n  Code audit focus             all\n  Code audit web research      off\n  Code audit pass tool calls   40 tool calls\n  Code audit stop tone         silent\n" + MenuLayout.Heading("Gap reviews and audits", 120) + "\n  Confirm focus by change      off\n", 120);
         AssertTabEnds("\n \n" + MenuLayout.Heading("Text-to-speech", 120) + "\n▸ Output         on\n  Source         http\n  HTTP URL       http://localhost:8880/v1\n" + MenuLayout.Heading("Voices", 120) + "\n  Voice preview  on\n  Voice preset   neon\n  Voice          af_heart\n  Voice 2        am_eric\n  Voice mix (%)  80 % / 20 %\n  Speed          1.2\n", 120);
         AssertTabEnds("\n \n" + MenuLayout.Heading("Speech-to-text", 120) + "\n▸ Input                     off\n  Destination               chat\n  Push-to-talk key          F4\n  Whisper model             ggml-base.en.bin\n" + MenuLayout.Heading("Wake word", 120) + "\n  Wake                      off\n  Wake phrase               hey neon\n  Vosk model                vosk-model-small-en-us-0.15\n" + MenuLayout.Heading("Interruptions", 120) + "\n  Interrupt                 off\n  Interrupt echo guard (%)  100 %\n  Interrupt hold (ms)       200 ms\n", 120);
         Assert.DoesNotContain("Ask user", Output);   // /tools' since 2026-09-19
@@ -5902,8 +5905,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(["Bars", "Order"], SettingsMenu.TabSections[SettingsTab.Toolbars].Select(s => s.Title));   // 2026-11-21, the user's headings
         Assert.Equal([SettingsField.HintsBar, SettingsField.BarOrder], SettingsMenu.TabSections[SettingsTab.Toolbars].Select(s => s.First));
         Assert.Equal(["Connection", "How it answers", "Tools and limits", "Context", "Pictures and verbs"], SettingsMenu.TabSections[SettingsTab.Common].Select(s => s.Title));   // Plan mode, Ralph loop and Code audit on Automation since 2026-10-21
-        Assert.Equal(["Plan mode", "Ralph loop", "Code audit"], SettingsMenu.TabSections[SettingsTab.Automation].Select(s => s.Title));
-        Assert.Equal(SettingsField.PlanGapPasses, SettingsMenu.TabSections[SettingsTab.Automation][0].First);   // Plan mode over the tab's first row   // the LLM tab's runs, on Common since 2026-10-10; Plan mode since 2026-10-17; Ralph loop since 2026-10-18
+        Assert.Equal(["Gap review", "Ralph loop", "Code audit", "Gap reviews and audits"], SettingsMenu.TabSections[SettingsTab.Automation].Select(s => s.Title));   // Plan mode and no fourth until 2026-11-23
+        Assert.Equal(SettingsField.PlanGapPasses, SettingsMenu.TabSections[SettingsTab.Automation][0].First);   // Gap review over the tab's first row   // the LLM tab's runs, on Common since 2026-10-10; Plan mode since 2026-10-17; Ralph loop since 2026-10-18
         Assert.Equal(["Connection", "Thinking", "Sampling"], SettingsMenu.TabSections[SettingsTab.Http].Select(s => s.Title));   // 2026-10-10
         Assert.Equal(SettingsField.LlmUrl, SettingsMenu.TabSections[SettingsTab.Common][0].First);   // Connection over the URL (over the scan mode until 2026-10-10)
         Assert.Equal(SettingsField.LlmScanMode, SettingsMenu.TabSections[SettingsTab.Http][0].First);

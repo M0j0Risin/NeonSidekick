@@ -177,6 +177,9 @@ public static class WebCommands
             // /commands' rule); templates and the questions run.
             SlashCommand.Advisor when Advisors.AdvisorText.ParseSetup(args, settings.AdvisorTemplateIds) is { Kind: Advisors.AdvisorSetupKind.New } =>
                 Refused(WebUiText.PcOnly(word + " " + Advisors.AdvisorText.NewWord)),
+            // 2026-11-23: /advisor list opens the Advisor list, a pane at the PC; the page is pointed at the bare /advisor, which lists here.
+            SlashCommand.Advisor when Advisors.AdvisorText.ParseSetup(args, settings.AdvisorTemplateIds) is { Kind: Advisors.AdvisorSetupKind.List } =>
+                Pane(word + " " + Advisors.AdvisorText.ListWord, Advisors.AdvisorText.Word),
             SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Timer or SlashCommand.Mark
                 or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Imagine => WebCommandVerdict.Run,
             // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.

@@ -19,6 +19,12 @@ internal sealed partial class SettingsMenu
     /// <summary>The list editor's keys. Pinned.</summary>
     public const string AdvisorListKeys = "Enter = add, or change the advisor · Esc = back";
 
+    /// <summary>
+    /// The list editor's keys when <c>/advisor list</c> opened it alone (2026-11-23, the user's pick: one Esc closes the pane, so the
+    /// hint says close, not back). Pinned.
+    /// </summary>
+    public const string AdvisorListCloseKeys = "Enter = add, or change the advisor · Esc = close";
+
     /// <summary>The list editor's second row (2026-11-22, the advisor templates). Pinned.</summary>
     public const string NewAdvisorRow = "+ New advisor from a template…";
 
@@ -104,7 +110,8 @@ internal sealed partial class SettingsMenu
             return name + Theme.DimMarkup(Markup.Escape(role + "  " + MissingAdvisorMark));
         }
 
-        string tail = (facts is null ? "" : " · " + AdvisorText.PadCells(facts.Kind, kindWidth) + " · " + facts.Model) + (mark is null ? "" : " · " + mark);
+        // The model ends on its reasoning disc (2026-11-23, the user's pick: the status bar's, ○ for none).
+        string tail = (facts is null ? "" : " · " + AdvisorText.PadCells(facts.Kind, kindWidth) + " · " + facts.Model + AdvisorText.ReasoningMark(facts)) + (mark is null ? "" : " · " + mark);
         if (tail.Length > 0 && roleWidth > 0)
         {
             role = AdvisorText.PadCells(ScreenPane.Fit(role, roleWidth), roleWidth);
@@ -253,7 +260,8 @@ internal sealed partial class SettingsMenu
                 AdvisorRow(l.Advisor, l.Exists, width, l.Facts, roleWidth, AdvisorMark(l.Advisor),
                     l.Exists ? ProfileAvatar(l.Advisor.Profile) : "", columns.Kind))];
             // Each row's band (2026-11-22): what the two add rows do, an advisor's description (or how to give it one).
-            var page = new MenuPage(Crumb(title), rows, AdvisorListKeys) { Footer = (_, row) => AdvisorRowBand(entries, row) };
+            // Under /advisor list's lone visit one Esc closes the pane, and the hint says so (2026-11-23).
+            var page = new MenuPage(Crumb(title), rows, _openOnly ? AdvisorListCloseKeys : AdvisorListKeys) { Footer = (_, row) => AdvisorRowBand(entries, row) };
             if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { Row: var index } pick)
             {
                 if (!changed)

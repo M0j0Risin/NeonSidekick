@@ -201,8 +201,13 @@ public partial class ChatScreenTests
         Assert.Equal(["templates"], ChatScreen.ArgumentItems("/advisor", "", sources with { Advisors = null }).Select(i => i.Text));
         Assert.Empty(ChatScreen.ArgumentItems("/advisor", "new ", sources));
 
-        var screen = sources with { AdvisorTemplates = () => [new("dba", "database administrator"), new("qa", "QA engineer")] };
-        Assert.Equal(["dba", "doug", "pm", "templates", "new"], ChatScreen.ArgumentItems("/advisor", "", screen).Select(i => i.Text));
+        // list (2026-11-23) only with AdvisorPane, which the screen's sources set and the Web UI page's (ChatScreen.WebCommands.cs) leave off: the
+        // page refuses /advisor list, and its dropdown would offer it, since "/advisor list x" (a question) runs there. The pins above are the page's.
+        Assert.DoesNotContain(ChatScreen.ArgumentItems("/advisor", "", sources), i => i.Text == "list");
+        var screen = sources with { AdvisorTemplates = () => [new("dba", "database administrator"), new("qa", "QA engineer")], AdvisorPane = true };
+        Assert.Equal(["dba", "doug", "pm", "list", "templates", "new"], ChatScreen.ArgumentItems("/advisor", "", screen).Select(i => i.Text));
+        Assert.Equal(new CompletionItem("list", ChatScreen.AdvisorListNote), Assert.Single(ChatScreen.ArgumentItems("/advisor", "li", screen)));
+        Assert.Equal(["list", "templates"], ChatScreen.ArgumentItems("/advisor", "", screen with { Advisors = null, AdvisorTemplates = null }).Select(i => i.Text));
         Assert.Equal(["new "+ "dba", "new qa"], ChatScreen.ArgumentItems("/advisor", "new ", screen).Select(i => i.Text));
         Assert.Equal(new CompletionItem("new qa", "QA engineer"), Assert.Single(ChatScreen.ArgumentItems("/advisor", "new q", screen)));
         Assert.Empty(ChatScreen.ArgumentItems("/advisor", "new qa ", screen));   // the name is free

@@ -423,6 +423,99 @@ public partial class SettingsMenuTests
         string emoji = Spectre.Console.Markup.Remove(SettingsMenu.AdvisorRow(new AdvisorEntry("ux", "🎨 art"), true, 4, facts, 6));
         string plain = Spectre.Console.Markup.Remove(SettingsMenu.AdvisorRow(new AdvisorEntry("qa", "tests"), true, 4, facts, 6));
         Assert.Equal(TextCells.Width(plain[..plain.IndexOf(" · ", StringComparison.Ordinal)]), TextCells.Width(emoji[..emoji.IndexOf(" · ", StringComparison.Ordinal)]));
-        Assert.Equal("qa  tests  · docker     · m", Spectre.Console.Markup.Remove(SettingsMenu.AdvisorRow(new AdvisorEntry("qa", "tests"), true, 4, facts with { Kind = "docker" }, 6, kindWidth: 10)));
+        Assert.Equal("qa  tests  · docker     · m ○", Spectre.Console.Markup.Remove(SettingsMenu.AdvisorRow(new AdvisorEntry("qa", "tests"), true, 4, facts with { Kind = "docker" }, 6, kindWidth: 10)));
+    }
+
+    // ── /advisor list: the list alone, and the reasoning disc (2026-11-23) ────────────
+
+    /// <summary>
+    /// <c>only</c> (2026-11-23, <c>/advisor list</c>, the user's pick): the list opened alone closes on one Esc, its hint saying so; each row ends
+    /// its model on the reasoning disc, and the band under an advisor names the level in words on a row of its own.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheListOpenedAlone_ClosesOnOneEsc_AndShowsEachAdvisorsReasoning()
+    {
+        OneAdvisor(new AppSettingsData { LlmUrl = Box1, LlmModel = "m-a", LlmReasoning = "high" });
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Down, Keys.Down);             // the advisor: its band
+        Push(Keys.Escape);                      // one Esc: the pane closes
+
+        var changes = await menu.ShowAsync(CancellationToken.None, midTurn: false, open: SettingsField.AdvisorList, only: true);
+
+        Assert.Equal(SettingsChanges.None, changes);
+        Assert.False(pane.OverlayOpen);
+        Assert.Contains(SettingsMenu.AdvisorListCloseKeys, Output);
+        Assert.DoesNotContain(SettingsMenu.AdvisorListKeys, Output);
+        Assert.Contains("· http · m-a ◕", Output);   // the row's disc, the status bar's
+        Assert.Contains(SettingsMenu.AdvisorReasoningBand("high"), Output);
+        Assert.Equal("Reasoning: ◕ high (extensive thinking)", SettingsMenu.AdvisorReasoningBand("high"));
+        Assert.Equal("Reasoning: ○ none (thinking off)", SettingsMenu.AdvisorReasoningBand("none"));
+        Assert.Equal("Enter = add, or change the advisor · Esc = close", SettingsMenu.AdvisorListCloseKeys);
+        pane.Dispose();
+    }
+
+    /// <summary>An action inside the lone list still writes, the row's disc follows the new level, and one Esc then closes.</summary>
+    [Fact]
+    public async Task OnThePane_TheListOpenedAlone_ChangeTheReasoningWrites_TheDiscFollows_ThenOneEscCloses()
+    {
+        OneAdvisor(new AppSettingsData { LlmUrl = Box1, LlmModel = "m-a", LlmReasoning = "high" });
+        var (menu, pane) = PaneMenu();
+        FirstAdvisorAction(SettingsMenu.ChangeAdvisorReasoningChoice);
+        Push(Keys.Down, Keys.Enter);            // xhigh, under high
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: false, open: SettingsField.AdvisorList, only: true);
+
+        Assert.Equal("xhigh", AdvisorFile("dba").LlmReasoning);
+        Assert.Contains("· m-a ●", Output[Output.LastIndexOf(SettingsMenu.AdvisorReasoningNotice("dba", "xhigh"), StringComparison.Ordinal)..]);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>The next visit without <c>only</c> keeps today's path: the list's hint says back, and Esc goes back to the tab.</summary>
+    [Fact]
+    public async Task OnThePane_AVisitAfterTheLoneList_GoesBackAgain()
+    {
+        OneAdvisor(new AppSettingsData { LlmUrl = Box1, LlmModel = "m-a" });
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Escape);
+        await menu.ShowAsync(CancellationToken.None, midTurn: false, open: SettingsField.AdvisorList, only: true);
+        int second = Output.Length;
+        Push(Keys.Escape, Keys.Escape);         // the list, then the tab
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: false, open: SettingsField.AdvisorList);
+
+        Assert.Contains(SettingsMenu.AdvisorListKeys, Output[second..]);
+        Assert.DoesNotContain(SettingsMenu.AdvisorListCloseKeys, Output[second..]);
+        pane.Dispose();
+    }
+
+    /// <summary>Off the pane (typed picks) the lone list closes on one Esc too.</summary>
+    [Fact]
+    public async Task OffThePane_TheListOpenedAlone_ClosesOnOneEsc()
+    {
+        OneAdvisor(new AppSettingsData { LlmUrl = Box1, LlmModel = "m-a" });
+        Push(Keys.Escape);
+
+        var changes = await _menu.ShowAsync(CancellationToken.None, midTurn: false, open: SettingsField.AdvisorList, only: true);
+
+        Assert.Equal(SettingsChanges.None, changes);
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+    }
+
+    /// <summary>A missing advisor's band has its description and no reasoning line; its row no disc.</summary>
+    [Fact]
+    public async Task OnThePane_AMissingAdvisorsBand_HasNoReasoningLine()
+    {
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("gone", "critic")]);
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Down, Keys.Down);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: false, open: SettingsField.AdvisorList, only: true);
+
+        Assert.Contains(SettingsMenu.NoDescriptionBand, Output);
+        Assert.DoesNotContain("Reasoning: ", Output);
+        pane.Dispose();
     }
 }

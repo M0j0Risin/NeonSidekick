@@ -352,7 +352,7 @@ public partial class SettingsMenuTests
         Assert.EndsWith("Advisors: dba (architect): schema; ux (designer).", AdvisorText.Description([new AdvisorEntry("dba", "architect", "schema"), new AdvisorEntry("ux", "designer")]));
 
         var facts = new AdvisorServerFacts(AdvisorServer.Docker, "m");
-        Assert.Equal("  dba — architect · docker · m · schema", AdvisorText.ListLine(new AdvisorEntry("dba", "architect", "schema"), facts, exists: true));
+        Assert.Equal("  dba — architect · docker · m ○ · schema", AdvisorText.ListLine(new AdvisorEntry("dba", "architect", "schema"), facts, exists: true));
         Assert.Equal("  " + AdvisorText.Detail(new AdvisorEntry("dba", "architect"), facts, true), AdvisorText.ListLine(new AdvisorEntry("dba", "architect"), facts, exists: true));
 
         // An old profile.json with no description reads it blank.

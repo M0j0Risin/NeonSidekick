@@ -845,7 +845,7 @@ public sealed class AppSettingsData
     /// the plan's approval pane, and <c>/plan gaps</c>, review the plan pass after pass until one finds no gaps). With gaps still
     /// reported after the last pass, the loop stops and the plan goes back to the pane. <see cref="MinPlanGapPasses"/> to
     /// <see cref="MaxPlanGapPasses"/>; 0 is no limit on the screen (ESC stops it) and <see cref="MaxPlanGapPasses"/> headless, which
-    /// has no ESC. Read when a loop starts. The first row of <c>/settings</c> › Automation, heading its Plan mode section (on Servers › Common,
+    /// has no ESC. Read when a loop starts. The first row of <c>/settings</c> › Automation, heading its Gap review section (Plan mode until 2026-11-23; on Servers › Common,
     /// under <see cref="LlmMaxToolIterations"/>, until 2026-10-21, the user's ask). No variable.
     /// The most went 20 → 50 on 2026-10-18 (the user's ask: long reviews lean on 43e4cfae's compaction) and 50 → 100 on 2026-10-21 (the user's
     /// ask; the row reads <c>Plan gap max passes</c> since, "LLM plan gap max passes" until later that day); <see cref="MaxCodeAuditPasses"/> follows. The default went 5 → 50 on 2026-10-21
@@ -865,7 +865,7 @@ public sealed class AppSettingsData
     /// none and pointed at an area no earlier pass covered. Every pass counts toward <see cref="PlanGapPasses"/>; a clean pass at
     /// that limit stops the loop unconfirmed, and a limit below this count lowers it to the limit for that review. <c>/plan gaps
     /// confirm</c> raises it to at least 2. <see cref="MinPlanGapCleanPasses"/> to <see cref="MaxPlanGapCleanPasses"/>. Read when a
-    /// loop starts. The Plan mode section of <c>/settings</c> › Automation (Servers › Common until 2026-10-21), under <see cref="PlanGapPasses"/>. No variable.
+    /// loop starts. The Gap review section of <c>/settings</c> › Automation (Plan mode until 2026-11-23; Servers › Common until 2026-10-21), under <see cref="PlanGapPasses"/>. No variable.
     /// </summary>
     public int PlanGapCleanPasses { get; set; } = DefaultPlanGapCleanPasses;
 
@@ -879,7 +879,8 @@ public sealed class AppSettingsData
     /// focus goes in turn, and most reviews confirm once, so they only ever got the first. On, a plan's revision is weighed by area
     /// (<see cref="Plans.PlanFocusAreas"/>) and an audit's pass by the dimensions of the findings it made, reopened or revised; the pick takes the most-changed
     /// area not yet looked at (<see cref="Plans.ConfirmFocusPick"/>). Read when a review or an audit starts (a resumed gap review keeps its start's value,
-    /// an audit resume reads it again). The Plan mode section of <c>/settings</c> › Automation, under <see cref="PlanGapCleanPasses"/>. No variable.
+    /// an audit resume reads it again). Last on <c>/settings</c> › Automation, under its own Gap reviews and audits heading since 2026-11-23 (the user's
+    /// ask; in Plan mode under <see cref="PlanGapCleanPasses"/> until then). No variable.
     /// </summary>
     public bool ConfirmFocusByChange { get; set; }
 
@@ -888,8 +889,8 @@ public sealed class AppSettingsData
     /// stopped on a question). On, the default, a pass is offered <c>ask_user</c>, <c>camera_capture</c> and <c>screen_capture</c>
     /// as any plan-mode turn is; off, it is offered none of the three (whatever <see cref="AskUser"/> and the camera and screen
     /// settings say, during a pass only), and a decision only the user can make goes into the plan's <c>## Risks</c> as an open
-    /// question, which is not a gap. Read every turn, so turning it off mid-review applies from the next pass. The Plan mode
-    /// section of <c>/settings</c> › Automation, under <see cref="PlanGapCleanPasses"/>. No variable.
+    /// question, which is not a gap. Read every turn, so turning it off mid-review applies from the next pass. The Gap review
+    /// section of <c>/settings</c> › Automation (Plan mode until 2026-11-23), under <see cref="PlanGapCleanPasses"/>. No variable.
     /// </summary>
     public bool PlanGapAskUser { get; set; } = true;
 
@@ -897,8 +898,8 @@ public sealed class AppSettingsData
     /// The tone plan mode's gap review ends with (2026-10-21, the user's ask: the Ralph loop's stop tone for a review left to run): one of
     /// <see cref="Timers.TimerTones.Names"/>, <c>silent</c> by default (opt in). A converged review rings as its approval pane opens; every other
     /// stop the user didn't cause (at the limit, stalled, no revision, a failed pass; <see cref="Plans.PlanGapLoop.Rings"/>) rings at the stop,
-    /// never Esc, the page's Stop or a message, and only where audio exists. An unknown value reads as <c>silent</c>. The Plan mode section of
-    /// <c>/settings</c> › Automation, under <see cref="PlanGapAskUser"/>. No variable.
+    /// never Esc, the page's Stop or a message, and only where audio exists. An unknown value reads as <c>silent</c>. The Gap review section of
+    /// <c>/settings</c> › Automation (Plan mode until 2026-11-23), under <see cref="PlanGapAskUser"/>. No variable.
     /// </summary>
     public string PlanGapStopTone { get; set; } = Timers.TimerTones.Silent;
 

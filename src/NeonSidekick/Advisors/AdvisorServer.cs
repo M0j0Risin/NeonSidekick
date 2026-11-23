@@ -2,8 +2,11 @@ using NeonSidekick.Settings;
 
 namespace NeonSidekick.Advisors;
 
-/// <summary>What an advisor's saved profile answers on: its server's kind (<see cref="AdvisorServer.Kind"/>) and its model.</summary>
-public sealed record AdvisorServerFacts(string Kind, string Model);
+/// <summary>
+/// What an advisor's saved profile answers on: its server's kind (<see cref="AdvisorServer.Kind"/>), its model, and since 2026-11-23
+/// (the user's ask: the reasoning shown in the Advisor list) the reasoning level it answers with (<see cref="AdvisorServer.Reasoning"/>).
+/// </summary>
+public sealed record AdvisorServerFacts(string Kind, string Model, string Reasoning = Llm.ReasoningLevel.Default);
 
 /// <summary>
 /// An advisor's server and model as the lists name them (2026-10-10, the user's ask: <c>Advisor list</c>'s band, its editor and a bare
@@ -69,7 +72,18 @@ public static class AdvisorServer
     {
         ArgumentNullException.ThrowIfNull(saved);
         string model = linkedModel?.Invoke(saved) is { Length: > 0 } linked ? linked.Trim() : Model(saved);
-        return new AdvisorServerFacts(Kind(saved.LlmUrl), Llm.ModelNames.Short(model));
+        return new AdvisorServerFacts(Kind(saved.LlmUrl), Llm.ModelNames.Short(model), Reasoning(saved).Level);
+    }
+
+    /// <summary>
+    /// The reasoning level <paramref name="saved"/> answers with (2026-11-23): its <c>LLM reasoning</c> as one of the levels, else
+    /// <see cref="Llm.ReasoningLevel.Default"/> with <c>Known</c> false — what <see cref="Llm.ReasoningLevel.Resolve"/> gives the
+    /// advisor's link. One home for the rows, the band and Change the reasoning's cursor. Pure.
+    /// </summary>
+    public static (string Level, bool Known) Reasoning(AppSettingsData saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        return Llm.ReasoningLevel.TryParse(saved.LlmReasoning, out var effort) ? (Llm.ReasoningLevel.Name(effort), true) : (Llm.ReasoningLevel.Default, false);
     }
 
     /// <summary>

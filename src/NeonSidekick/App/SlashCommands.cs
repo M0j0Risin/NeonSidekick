@@ -405,6 +405,7 @@ public enum SlashCommand
     /// <summary>
     /// <c>/advisor [&lt;name&gt; &lt;question&gt;]</c> (2026-10-10, the profile advisors): bare, the advisors listed; with a name and a
     /// question, the question put to that advisor (another profile, on its own server) and the pair added to the history, tagged.
+    /// <c>templates</c> and <c>new &lt;template&gt; [&lt;name&gt;]</c> since 2026-11-22; <c>list</c> (2026-11-23) opens the Advisor list.
     /// </summary>
     Advisor,
 

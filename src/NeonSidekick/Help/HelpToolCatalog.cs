@@ -334,7 +334,7 @@ internal static class HelpToolCatalog
 
     // The headless --allow pointers (2026-11-20, the mcp-ask review's #57), in DockerWriteSetup's shape.
     private const string PrintSetup = "asks under *Print action policy* ask; a headless run refuses it unless it has --allow print";
-    private const string AdvisorSetup = "needs a profile in *Advisor list*, or one from a template: `/advisor new <template>`; with *Advisor confirm* on, a headless run refuses it unless it has --allow advisor";
+    private const string AdvisorSetup = "needs a profile in *Advisor list* (`/advisor list`), or one from a template: `/advisor new <template>`; with *Advisor confirm* on, a headless run refuses it unless it has --allow advisor";
     private const string VideoSetup = "needs a video player here";
 
     private static string Conn(string file, string word) => string.Format(System.Globalization.CultureInfo.InvariantCulture, ConnectionSetup, file, word);

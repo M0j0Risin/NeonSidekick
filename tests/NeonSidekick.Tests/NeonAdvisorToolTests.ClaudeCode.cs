@@ -47,7 +47,7 @@ public partial class NeonAdvisorToolTests
     public void TheListEditorsRow_NamesAClaudeCodeAdvisor_WithNoMark()
     {
         // No `tools` or `text only` since 2026-10-13: every Claude Code advisor runs with the tools on a process of its own.
-        Assert.Equal(Spectre.Console.Markup.Escape("dba  ") + NeonSidekick.UI.Theme.DimMarkup("architect    · claudecode · sonnet"),
+        Assert.Equal(Spectre.Console.Markup.Escape("dba  ") + NeonSidekick.UI.Theme.DimMarkup("architect    · claudecode · sonnet ○"),
             SettingsMenu.AdvisorRow(new AdvisorEntry("dba", "architect"), exists: true, 5, new AdvisorServerFacts(AdvisorServer.ClaudeCode, "sonnet"), 12));
     }
 }

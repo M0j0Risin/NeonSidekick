@@ -9,7 +9,7 @@ namespace NeonSidekick.Tests;
 public partial class SettingsMenuTests
 {
     [Fact]
-    public void TheCodeAuditRows_AreASectionAfterPlanMode_LabeledLLM()
+    public void TheCodeAuditRows_AreASectionAfterGapReview_LabeledLLM()
     {
         var automation = SettingsMenu.TabFields[(int)SettingsTab.Automation].ToList();   // Servers › Common until 2026-10-21
         Assert.Equal(automation.IndexOf(SettingsField.RalphLoopStopTone) + 1, automation.IndexOf(SettingsField.CodeAuditPasses));   // the Ralph loop's seven rows between since later on 2026-10-18

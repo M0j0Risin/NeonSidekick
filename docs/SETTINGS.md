@@ -349,7 +349,6 @@ Plan mode's gap review, the Ralph loop and code audits: jobs the model runs pass
 |---|---|---|
 | Plan gap max passes | The most passes [plan mode](COMMANDS.md#plan-mode)'s **Close gaps…** review runs (0–100; 0 is no cap, 100 headless). Esc stops it; a count on `/plan gaps` overrides it. | 50 |
 | Plan gap clean passes | Passes in a row with no gaps that end the review (1–5); a lower pass limit lowers it. `/plan gaps confirm` needs at least 2. | 1 |
-| Confirm focus by change | On, a pass after a clean one looks hardest at what the last change touched, in gap reviews and code audits alike; off, it takes the next area in turn. Read when a review or audit starts. | off |
 | Plan gap ask user | Whether a pass may use `ask_user`, `camera_capture` and `screen_capture`. Off, or without `ask_user` (headless), a call only you can make goes into `## Risks`. | on |
 | Plan gap stop tone | Rung when a review stops on its own (done, at the limit, stalled, a failed pass), never on Esc or a message: silent, chime, bell, beep or alarm. | silent |
 | Ralph loop reviewer | Who reviews a [Ralph loop](COMMANDS.md#ralph-loop) step once its check passes: `off`, `model` (one request), `advisor` (the first, its thread untouched) or `any` (an advisor if offered, else the model). A fail unticks the step. | `any` |
@@ -367,6 +366,7 @@ Plan mode's gap review, the Ralph loop and code audits: jobs the model runs pass
 | Code audit web research | Gives passes `web_search`, `web_fetch` and `web_links`. Off by default: audited code may carry instructions that send code out. Off, an advisor asked in a pass gets none either. | off |
 | Code audit pass tool calls | Tool calls a pass is asked to report within (0–500; 0 is no budget). Guidance, not a cut-off: the next pass reads what one leaves. A lower *LLM max tool iterations* is named instead. | 40 |
 | Code audit stop tone | Rung when an audit stops on its own (done, at the limit, stalled, a failed pass), never on Esc or a message: silent, chime, bell, beep or alarm. | silent |
+| Confirm focus by change | On, a pass after a clean one looks hardest at what the last change touched, in gap reviews and code audits alike; off, it takes the next area in turn. Read when a review or audit starts. | off |
 
 ### Voice
 

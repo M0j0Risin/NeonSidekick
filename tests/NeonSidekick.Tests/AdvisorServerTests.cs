@@ -65,9 +65,11 @@ public class AdvisorServerTests
     public void TheLine_NamesTheRoleTheKindAndTheModel_OrSaysWhyNot()
     {
         var facts = new AdvisorServerFacts("docker", "Qwen3.8-27B-NVFP4-RTX5090");
-        Assert.Equal("doug — expert .NET solution architect · docker · Qwen3.8-27B-NVFP4-RTX5090",
+        Assert.Equal("doug — expert .NET solution architect · docker · Qwen3.8-27B-NVFP4-RTX5090 ○",
             AdvisorText.Detail(new AdvisorEntry("doug", "expert .NET solution architect"), facts, exists: true));
-        Assert.Equal("qa · docker · Qwen3.8-27B-NVFP4-RTX5090", AdvisorText.Detail(new AdvisorEntry("qa"), facts, exists: true));
+        Assert.Equal("qa · docker · Qwen3.8-27B-NVFP4-RTX5090 ○", AdvisorText.Detail(new AdvisorEntry("qa"), facts, exists: true));
+        // The model ends on its reasoning disc (2026-11-23, the user's pick), the status bar's.
+        Assert.Equal("qa · docker · m ◕", AdvisorText.Detail(new AdvisorEntry("qa"), new AdvisorServerFacts("docker", "m", "high"), exists: true));
         Assert.Equal("gone — critic  " + AdvisorText.MissingMark, AdvisorText.Detail(new AdvisorEntry("gone", "critic"), null, exists: false));
         Assert.Equal("bad — critic · " + AdvisorText.UnreadableMark, AdvisorText.Detail(new AdvisorEntry("bad", "critic"), null, exists: true));
         Assert.Equal("  " + AdvisorText.Detail(new AdvisorEntry("qa"), facts, true), AdvisorText.ListLine(new AdvisorEntry("qa"), facts, true));
@@ -110,16 +112,16 @@ public class AdvisorServerTests
 
         Assert.Equal(
         [
-            "  dba       — database administrator · claudecode · opus        · When a query is slow.",
-            "  architect — software architect     · docker     · Qwen3.8-27B · Before a big change.",
-            "  qa                                 · http       · m",
+            "  dba       — database administrator · claudecode · opus ○        · When a query is slow.",
+            "  architect — software architect     · docker     · Qwen3.8-27B ○ · Before a big change.",
+            "  qa                                 · http       · m ○",
             "  gone      — critic                   " + AdvisorText.MissingMark,
             "  bad       — critic                 · " + AdvisorText.UnreadableMark,
         ], AdvisorText.ListLines([dba, architect, qa, gone, bad]));
         Assert.Equal(new AdvisorColumns(9, 22, 10, 11), AdvisorText.Columns([dba, architect, qa, gone, bad]));
 
         // No roles at all: no role column. A role past the rows' cap is left whole here.
-        Assert.Equal(["  qa · http · m"], AdvisorText.ListLines([qa]));
+        Assert.Equal(["  qa · http · m ○"], AdvisorText.ListLines([qa]));
         string longRole = new('r', SettingsMenuRoleCap + 8);
         Assert.Contains(longRole, AdvisorText.ListLines([(new AdvisorEntry("x", longRole), (AdvisorServerFacts?)new AdvisorServerFacts("http", "m"), true)])[0]);
 
@@ -140,5 +142,35 @@ public class AdvisorServerTests
         Assert.Equal(["1", "2", "3", "4", "5"], MenuPane.FooterLines(new MenuFooter("1\r\n2\n3\n4\n5") { KeepLines = true }, 8));
         Assert.Equal(["one two two"], MenuPane.FooterLines(new MenuFooter("one\ntwo two"), 20));   // a plain footer still reads a break as a space
         Assert.Equal("+2 more", MenuPane.MoreLines(2));
+    }
+
+    /// <summary>
+    /// The reasoning an advisor answers with (2026-11-23, the user's ask): its saved level as <c>ReasoningLevel.Resolve</c> reads it, a
+    /// blank or unknown word <c>none</c> and not known, in <see cref="AdvisorServer.Of"/>'s facts.
+    /// </summary>
+    [Theory]
+    [InlineData("high", "high", true)]
+    [InlineData(" XHIGH ", "xhigh", true)]
+    [InlineData("none", "none", true)]
+    [InlineData("", "none", false)]
+    [InlineData("lots", "none", false)]
+    public void TheReasoning_IsTheSavedLevel_ABlankOrUnknownOneNone(string saved, string level, bool known)
+    {
+        var data = new AppSettingsData { LlmUrl = "docker:vllm", LlmModel = "m", LlmReasoning = saved };
+        Assert.Equal((level, known), AdvisorServer.Reasoning(data));
+        Assert.Equal(new AdvisorServerFacts("docker", "m", level), AdvisorServer.Of(data));
+        Assert.Equal(level, AdvisorServer.Of(data, _ => "linked").Reasoning);   // a linked model doesn't change it
+    }
+
+    /// <summary>The discs are one cell each, so the columns hold whatever level a line has; the descriptions still start in one column.</summary>
+    [Fact]
+    public void TheDiscs_AreOneCellEach_SoTheDescriptionsStillLineUp()
+    {
+        Assert.All(ReasoningLevel.Levels, level => Assert.Equal(1, TextCells.Width(ReasoningLevel.Glyph(level))));
+        var low = (new AdvisorEntry("a", "", "first"), (AdvisorServerFacts?)new AdvisorServerFacts("http", "m", "low"), true);
+        var xhigh = (new AdvisorEntry("bb", "", "second"), (AdvisorServerFacts?)new AdvisorServerFacts("http", "model", "xhigh"), true);
+        var lines = AdvisorText.ListLines([low, xhigh]);
+        Assert.Equal(["  a  · http · m ◔     · first", "  bb · http · model ● · second"], lines);
+        Assert.Equal(TextCells.Width(lines[0][..lines[0].LastIndexOf(" · ", StringComparison.Ordinal)]), TextCells.Width(lines[1][..lines[1].LastIndexOf(" · ", StringComparison.Ordinal)]));
     }
 }

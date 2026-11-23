@@ -297,6 +297,8 @@ internal sealed partial class ChatScreen
         // review's #94). Every other /settings is the pane, as before.
         SlashCommand.Settings when SettingsTransferCommand.Parse(args) is { } transfer
             => transfer.Verb == SettingsTransferText.ImportWord && transfer.Path.Length == 0 ? MidTurnClass.Quick : MidTurnClass.Deferred,
+        // /advisor list (2026-11-23, the user's ask): the Advisor list over the reply, as /settings is; every other /advisor waits.
+        SlashCommand.Advisor when Advisors.AdvisorText.ParseSetup(args, null) is { Kind: Advisors.AdvisorSetupKind.List } => MidTurnClass.Pane,
         _ => MidTurnPolicy(command, args.Length > 0),
     };
 
@@ -643,6 +645,16 @@ internal sealed partial class ChatScreen
                 {
                     var reply = Reply;
                     var changes = await _menu.ShowAsync(cancellationToken, reply, words: args).ConfigureAwait(false);
+                    HandOver(reply, changes, reply.Running ? null : _menu.TakePendingEmbeddedModel());
+                }
+
+                break;
+            case SlashCommand.Advisor:
+                // /advisor list alone reaches here (2026-11-23, MidTurnPolicy's string form): the Advisor list over the reply, one Esc
+                // closing it, its changes handed over as /settings' are (Switch to profile is refused while the reply runs).
+                {
+                    var reply = Reply;
+                    var changes = await _menu.ShowAsync(cancellationToken, reply, open: SettingsField.AdvisorList, only: true).ConfigureAwait(false);
                     HandOver(reply, changes, reply.Running ? null : _menu.TakePendingEmbeddedModel());
                 }
 

@@ -197,6 +197,11 @@ public sealed class AdvisorTemplatesTests : IDisposable
         Assert.Null(AdvisorText.ParseSetup("templates of what?", ids));
         Assert.Null(AdvisorText.ParseSetup("new qa", null));
         Assert.Null(AdvisorText.ParseSetup("", ids));
+        // list alone (2026-11-23): opens the Advisor list, with or without templates; with more words it is a question.
+        Assert.Equal(new AdvisorSetup(AdvisorSetupKind.List, "", ""), AdvisorText.ParseSetup("list", ids));
+        Assert.Equal(new AdvisorSetup(AdvisorSetupKind.List, "", ""), AdvisorText.ParseSetup(" LIST ", null));
+        Assert.Null(AdvisorText.ParseSetup("list why?", ids));
+        Assert.Equal("list", AdvisorText.ListWord);
     }
 
     [Fact]

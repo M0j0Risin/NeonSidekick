@@ -3606,6 +3606,13 @@ public sealed partial class SidekickApp
                 return null;
             }
 
+            if (setup.Kind == Advisors.AdvisorSetupKind.List)
+            {
+                // /advisor list (2026-11-23) opens a pane on the PC's screen; headless names the bare form instead, an error line (exit 4).
+                await HeadlessNoticeLineAsync("[error] " + Advisors.AdvisorText.ListNeedsScreen).ConfigureAwait(false);
+                return null;
+            }
+
             var made = Advisors.AdvisorFromTemplate.Create(_settings, scan.Find(setup.Template)!, setup.Name, advisorsOn: effective.Advisors);
             if (made.Error is { } madeError)
             {

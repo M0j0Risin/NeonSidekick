@@ -101,6 +101,9 @@ internal sealed partial class ChatScreen
     /// <summary>The note beside <c>/advisor new</c> in completion (2026-11-22). Pinned.</summary>
     public const string AdvisorNewNote = "make an advisor from a template";
 
+    /// <summary>The note beside <c>/advisor list</c> in completion (2026-11-23). Pinned.</summary>
+    public const string AdvisorListNote = "open the Advisor list in /settings";
+
     /// <summary>The template ids <c>/advisor new</c> takes, read without reporting a broken file.</summary>
     private IReadOnlySet<string> AdvisorTemplateIds() =>
         AdvisorTemplates.All(_settings.StorageDirectory).Ids.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -175,6 +178,14 @@ internal sealed partial class ChatScreen
         // first one is made.
         if (AdvisorText.ParseSetup(args, AdvisorTemplateIds()) is { } setup)
         {
+            if (setup.Kind == AdvisorSetupKind.List)
+            {
+                // /advisor list (2026-11-23, the user's ask): the Advisor list alone, one Esc closing the pane, its changes carried out as
+                // after /settings. It opens with none listed too: its add rows are how the first one is made.
+                await OpenSettingsAsync(cancellationToken, SettingsField.AdvisorList, only: true).ConfigureAwait(false);
+                return;
+            }
+
             RunAdvisorSetup(setup, effective);
             return;
         }

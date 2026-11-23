@@ -176,7 +176,7 @@ Any other `/…` line is sent to the model as a message, so `/model gemma` switc
 |---|---|
 | `/server`, `/model`, `/cwd`, `/profile` | `--url`, `--model`, `--cwd`, `--profile` (or their variables). |
 | `/reasoning`, `/sampling` | `NEONSIDEKICK_LLM_REASONING`, `NEONSIDEKICK_LLM_SAMPLING`. |
-| `/settings` (other forms), `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json` (an API key typed there in plain text is encrypted at the next load). |
+| `/settings` (other forms), `/advisor list`, `//`, `/tools`, `/skills`, `/mcp`, `/profile push\|pull`, `/cmd`, `/msgclear` | Set things up in the TUI, or edit `profile.json` and `mcp.json` (an API key typed there in plain text is encrypted at the next load). |
 | `/sessions <id>` | `--session <id>\|last` ([Carrying on a session](#carrying-on-a-session)). |
 | `/memory`, `/sessions`, `/imagine`, `/process`, `/tree`, `/vault` | Ask the model: it has the memory, session, ComfyUI, `process`, file and Obsidian tools when they're on ([which](#before-you-start)). `/sessions export` is an `[error]`: it works on the screen only. |
 | `/loop` | Repeat the line, or loop in the script. |

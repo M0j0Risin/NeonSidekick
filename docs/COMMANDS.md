@@ -97,6 +97,7 @@ Elsewhere:
 | `/sampling extra <json>\|clear`, `/sampling clear` | Sets or clears the extra request body, or clears every override of the connected model. |
 | `/advisor` | Lists the advisors with their roles, server kinds and models. See [Advisor](#advisor). |
 | `/advisor <name> <question>` | Asks one advisor, by profile name or a word of its role; the answer joins the conversation. |
+| `/advisor list` | Opens *Advisor list* in `/settings`. See [Advisor](#advisor). |
 | `/advisor templates` | Lists the advisor templates, built in and your own. See [Advisor](#advisor). |
 | `/advisor new <template> [<name>]` | Makes a new profile from a template and adds it as an advisor. See [Advisor](#advisor). |
 
@@ -497,6 +498,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * The pair joins the conversation under its name (`[to dba]`, `[dba]`), and the advisor remembers it.
 * It works with *Advisors enabled* on or off and never asks first. Headless, the answer prints as `dba: …`.
 * A bare `/advisor` shows each one's server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`) and its description; a deleted profile is `(missing)`.
+* `/advisor list` opens *Advisor list* ([SETTINGS.md](SETTINGS.md#advisors)) to add, change or remove advisors; from the Web UI it runs at the PC only.
 * `/advisor templates` lists the templates: the built-in ones and your own in `advisors/` in the home.
 * `/advisor new <template> [<name>]` makes a profile from the template (named after it unless you name it) with its persona, role, description and avatar, on this profile's saved server and model, and adds it. No switch; a taken name is refused. It runs at the PC only from the Web UI.
 

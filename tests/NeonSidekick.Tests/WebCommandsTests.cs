@@ -270,6 +270,11 @@ public sealed class WebCommandsTests
         Assert.Equal(WebCommandKind.Run, WebCommands.Check("/advisor templates", On with { AdvisorTemplateIds = advisorIds }).Kind);
         Assert.Equal(WebCommandKind.Run, WebCommands.Check("/advisor new hires should start where?", On with { AdvisorTemplateIds = advisorIds }).Kind);
         Assert.Equal(WebCommandKind.Run, WebCommands.Check("/advisor dba Which index?", On with { AdvisorTemplateIds = advisorIds }).Kind);
+        // /advisor list (2026-11-23) opens the Advisor list, a pane at the PC: refused, naming the bare /advisor, which lists here.
+        Assert.Equal(WebUiText.OpensPane("/advisor list", "/advisor"), WebCommands.Check("/advisor list", On with { AdvisorTemplateIds = advisorIds }).Reason);
+        Assert.Equal(WebUiText.OpensPane("/advisor list", "/advisor"), WebCommands.Check("/advisor LIST", On).Reason);
+        Assert.Equal(WebCommandKind.Run, WebCommands.Check("/advisor list why?", On).Kind);
+        Assert.Equal(WebCommandKind.Run, WebCommands.Check("/advisor", On).Kind);
 
         // /settings export|import (2026-11-14, the review's #49): the zip lives in the PC's Downloads, so the PC's only, as the docs' Never row says.
         Assert.Equal(WebUiText.PcOnly("/settings export"), WebCommands.Check("/settings export", On).Reason);

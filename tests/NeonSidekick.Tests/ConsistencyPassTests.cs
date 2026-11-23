@@ -50,6 +50,7 @@ public class ConsistencyPassTests
         NeonSidekick.Monitors.MonitorText.PcKeys,   // its This PC's input… list (later on 2026-10-23)
         SettingsMenu.WizardSchemaKeys,   // the Oracle and PostgreSQL wizards' Schemas page, with its move keys (2026-11-15)
         SettingsMenu.AdvisorListKeys, SettingsMenu.AdvisorTemplateKeys,   // the advisor list and its template pages (2026-11-22)
+        SettingsMenu.AdvisorListCloseKeys,   // the advisor list under /advisor list (2026-11-23)
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }
             .Select(field => SettingsMenu.SettingButtonKeys(SettingsMenu.SettingButtonsFor(field)!)),   // the setting buttons' pages (2026-10-09)
     ];

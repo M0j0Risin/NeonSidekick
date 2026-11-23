@@ -175,8 +175,8 @@ public partial class SettingsMenuTests
         Assert.True(footer.KeepLines);
         // In columns (2026-11-22, the user's ask): the names, the roles and the kinds padded, so the models start in one column.
         Assert.Equal(
-            "doug     — expert .NET solution architect · docker     · Qwen3.8-27B-NVFP4-RTX5090\n" +
-            "einstein — UX designer                    · claudecode · sonnet", footer.Text);
+            "doug     — expert .NET solution architect · docker     · Qwen3.8-27B-NVFP4-RTX5090 ○\n" +
+            "einstein — UX designer                    · claudecode · sonnet ○", footer.Text);
         var columns = AdvisorText.Columns([(new AdvisorEntry("doug", "expert .NET solution architect"), doug, true), (new AdvisorEntry("einstein", "UX designer"), einstein, true)]);
         Assert.Equal(AdvisorText.Detail(new AdvisorEntry("doug", "expert .NET solution architect"), doug, true, columns) + "\n" + AdvisorText.Detail(new AdvisorEntry("einstein", "UX designer"), einstein, true, columns), footer.Text);
         Assert.Equal(SettingsMenu.FieldFooter(SettingsField.AdvisorList).Last + SettingsMenu.ChangedNote, footer.Last);

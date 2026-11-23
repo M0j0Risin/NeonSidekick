@@ -74,9 +74,10 @@ internal sealed partial class SettingsMenu
             ],
             [SettingsTab.Automation] =
             [
-                (SettingsField.PlanGapPasses, "Plan mode"),   // 2026-10-17, the user's ask: the gap review's two rows under a heading of their own (three since 2026-10-18, Plan gap ask user; four since 2026-10-21, Plan gap stop tone; "LLM plan gap …" until 2026-10-21); on Common until 2026-10-21
+                (SettingsField.PlanGapPasses, "Gap review"),   // "Plan mode" until 2026-11-23 (the user's ask: its rows are all Plan gap …, Confirm focus by change gone to its own heading); 2026-10-17, the user's ask: the gap review's two rows under a heading of their own (three since 2026-10-18, Plan gap ask user; four since 2026-10-21, Plan gap stop tone; "LLM plan gap …" until 2026-10-21); on Common until 2026-10-21
                 (SettingsField.RalphLoopReviewer, "Ralph loop"),   // later on 2026-10-18: the loop's seven rows, a section of their own (they would swamp Plan mode's three, four since 2026-10-21)
                 (SettingsField.CodeAuditPasses, "Code audit"),   // 2026-10-18, /code-audit's six rows after Plan mode (seven since 2026-10-21, Code audit stop tone; "LLM code audit …" until 2026-10-21)
+                (SettingsField.ConfirmFocusByChange, "Gap reviews and audits"),   // 2026-11-23, the user's ask: the one row both read, out of Plan mode, under a heading that says so
             ],
             [SettingsTab.Tts] =
             [

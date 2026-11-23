@@ -1058,7 +1058,7 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Web.OpenLinksIn.Names"/>: where a link the model opens goes, the default browser or the Browser window (<see cref="Settings.AppSettingsData.WebOpenLinksIn"/>). The Web tab, right under <see cref="BrowserPrivacy"/> (later still on 2026-10-13, the user's ask and name); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     WebOpenLinksIn,
 
-    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 100 (50 until 2026-10-21, 20 until 2026-10-18; <c>Plan gap max passes</c> since 2026-10-21 (<c>LLM plan gap max passes</c> earlier that day, <c>LLM plan gap passes</c> before)), 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). The first row of the Automation tab, heading its Plan mode section (on the Common tab under <see cref="LlmMaxToolIterations"/> from 2026-10-13 until 2026-10-21), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
+    /// <summary>Typed: the most passes plan mode's gap-closing loop runs, 0 to 100 (50 until 2026-10-21, 20 until 2026-10-18; <c>Plan gap max passes</c> since 2026-10-21 (<c>LLM plan gap max passes</c> earlier that day, <c>LLM plan gap passes</c> before)), 0 for no limit (<see cref="Settings.AppSettingsData.PlanGapPasses"/>). The first row of the Automation tab, heading its Gap review section (Plan mode until 2026-11-23; on the Common tab under <see cref="LlmMaxToolIterations"/> from 2026-10-13 until 2026-10-21), last here so the flat list's rows above keep their places; read when a loop starts. It opens the Plan mode section since 2026-10-17, <see cref="PlanGapCleanPasses"/> under it.</summary>
     PlanGapPasses,
 
     /// <summary>A toggle: whether this profile hosts the Web UI (<see cref="Settings.AppSettingsData.WebUi"/>). The Web UI tab under Client (2026-10-14, the user's ask); a flip starts or stops the server (<see cref="SettingsChanges.WebUi"/>), so it is refused mid-turn. Last in the enum, as every newcomer.</summary>
@@ -1216,10 +1216,10 @@ public enum SettingsField
     /// <summary>A toggle: whether a Web UI page may see and drive the Browser window during a bot check (<see cref="Settings.AppSettingsData.WebUiBotCheckControl"/>). The Web UI tab's Guardrails run under <see cref="WebUiConnectionDetails"/> (2026-10-17, the user's ask); read at each request. Last in the enum, as every newcomer.</summary>
     WebUiBotCheckControl,
 
-    /// <summary>Typed: how many passes in a row must find no gaps before plan mode's gap review ends, 1 to 5 (<see cref="Settings.AppSettingsData.PlanGapCleanPasses"/>). The Plan mode section of Automation (Servers › Common until 2026-10-21), right under <see cref="PlanGapPasses"/> (2026-10-17, the user's report and pick); no reconnect (read when a loop starts). Last in the enum, as every newcomer.</summary>
+    /// <summary>Typed: how many passes in a row must find no gaps before plan mode's gap review ends, 1 to 5 (<see cref="Settings.AppSettingsData.PlanGapCleanPasses"/>). The Gap review section of Automation (Plan mode until 2026-11-23; Servers › Common until 2026-10-21), right under <see cref="PlanGapPasses"/> (2026-10-17, the user's report and pick); no reconnect (read when a loop starts). Last in the enum, as every newcomer.</summary>
     PlanGapCleanPasses,
 
-    /// <summary>A toggle: whether a gap pass may ask the user, take a photo or capture the screen (<see cref="Settings.AppSettingsData.PlanGapAskUser"/>). The Plan mode section of Automation, right under <see cref="PlanGapCleanPasses"/> (2026-10-18, the user's ask); no reconnect (read every turn). Last in the enum, as every newcomer.</summary>
+    /// <summary>A toggle: whether a gap pass may ask the user, take a photo or capture the screen (<see cref="Settings.AppSettingsData.PlanGapAskUser"/>). The Gap review section of Automation (Plan mode until 2026-11-23), right under <see cref="PlanGapCleanPasses"/> (2026-10-18, the user's ask); no reconnect (read every turn). Last in the enum, as every newcomer.</summary>
     PlanGapAskUser,
 
     /// <summary>A picker over <see cref="Timers.TimerTones.Names"/>: the tone a countdown rings with when it goes off, and at each repeat (<see cref="Settings.AppSettingsData.TimerTone"/>). The Timers menu on <c>/tools</c> › Core, under <see cref="TimerTools"/> (2026-10-18, the user's ask); no reconnect (read at each alert). Last in the enum, as every newcomer.</summary>
@@ -1270,7 +1270,7 @@ public enum SettingsField
     /// <summary>A picker over the timer tones: what a Ralph loop ends with (<see cref="Settings.AppSettingsData.RalphLoopStopTone"/>, 2026-10-18), the Timer tone picker's preview.</summary>
     RalphLoopStopTone,
 
-    /// <summary>A picker over the timer tones: what plan mode's gap review ends with (<see cref="Settings.AppSettingsData.PlanGapStopTone"/>, 2026-10-21), last in the Plan mode section; the Timer tone picker's preview.</summary>
+    /// <summary>A picker over the timer tones: what plan mode's gap review ends with (<see cref="Settings.AppSettingsData.PlanGapStopTone"/>, 2026-10-21), last in the Gap review section (Plan mode until 2026-11-23); the Timer tone picker's preview.</summary>
     PlanGapStopTone,
 
     /// <summary>A picker over the timer tones: what a code audit ends with (<see cref="Settings.AppSettingsData.CodeAuditStopTone"/>, 2026-10-21), last in the Code audit section; the Timer tone picker's preview.</summary>
@@ -1403,8 +1403,9 @@ public enum SettingsField
 
     /// <summary>
     /// A toggle: whether a confirming pass of a gap review or a code audit looks hardest at what the last change touched
-    /// (<see cref="Settings.AppSettingsData.ConfirmFocusByChange"/>, 2026-11-18, Phase 3 item 3). Under <see cref="PlanGapCleanPasses"/>, one row for
-    /// both; read when a review or an audit starts.
+    /// (<see cref="Settings.AppSettingsData.ConfirmFocusByChange"/>, 2026-11-18, Phase 3 item 3). One row for both; read when a review or an audit
+    /// starts. Under <see cref="PlanGapCleanPasses"/> until 2026-11-23 (the user's ask), last on Automation since, under a heading of its own
+    /// (Gap reviews and audits).
     /// </summary>
     ConfirmFocusByChange,
 
@@ -1943,9 +1944,10 @@ internal sealed partial class SettingsMenu
         [SettingsField.Advisors, SettingsField.AdvisorList,
          SettingsField.AdvisorContext, SettingsField.AdvisorCallsPerTurn, SettingsField.AdvisorMaxToolIterations, SettingsField.AdvisorConfirm,
          SettingsField.AdvisorThreadPairs, SettingsField.AdvisorEmbedded],
-        [SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.ConfirmFocusByChange, SettingsField.PlanGapAskUser, SettingsField.PlanGapStopTone,
+        [SettingsField.PlanGapPasses, SettingsField.PlanGapCleanPasses, SettingsField.PlanGapAskUser, SettingsField.PlanGapStopTone,
          SettingsField.RalphLoopReviewer, SettingsField.RalphLoopCheckpoint, SettingsField.RalphLoopPasses, SettingsField.RalphLoopPassesPerStep, SettingsField.RalphLoopCheckTimeoutSeconds, SettingsField.RalphLoopTokenBudget, SettingsField.RalphLoopStopTone,
-         SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditLowKeepsStreak, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone],
+         SettingsField.CodeAuditPasses, SettingsField.CodeAuditCleanPasses, SettingsField.CodeAuditLowKeepsStreak, SettingsField.CodeAuditAskUser, SettingsField.CodeAuditFocus, SettingsField.CodeAuditWebResearch, SettingsField.CodeAuditPassToolCalls, SettingsField.CodeAuditStopTone,
+         SettingsField.ConfirmFocusByChange],
         [SettingsField.TtsOutput, SettingsField.TtsSource, SettingsField.TtsHttpUrl, SettingsField.TtsVoicePreview, SettingsField.TtsVoicePreset, SettingsField.TtsVoice, SettingsField.TtsVoice2, SettingsField.TtsVoiceMix, SettingsField.TtsSpeed],
         [SettingsField.SttInput, SettingsField.SttDestination, SettingsField.SttPushToTalkKey, SettingsField.SttWhisperModel,
          SettingsField.SttWake, SettingsField.SttWakePhrase, SettingsField.SttVoskModel,
@@ -4575,17 +4577,18 @@ internal sealed partial class SettingsMenu
     /// are refused with <see cref="NotWhileReplyRunsNotice"/> on the status line (<see cref="RefusedMidTurn"/>),
     /// so the result never carries a flag the screen would act on mid-turn; the other rows edit as ever.
     /// <paramref name="open"/> (2026-09-30) starts on that row's tab with the cursor on it and runs its edit at once, as Enter
-    /// would: the app's start opens Embedded models so. ESC from the edit leaves the pane on the settings list at that row.
+    /// would: the app's start opens Embedded models so. ESC from the edit leaves the pane on the settings list at that row, unless
+    /// <paramref name="only"/> (2026-11-23, <c>/advisor list</c>, the user's pick): the opened row alone, so when its edit ends the menu closes.
     /// </summary>
-    public Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn, SettingsField? open = null, string? words = null) =>
-        ShowAsync(cancellationToken, ReplyRun.Of(midTurn), open, words);
+    public Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, bool midTurn, SettingsField? open = null, string? words = null, bool only = false) =>
+        ShowAsync(cancellationToken, ReplyRun.Of(midTurn), open, words, only);
 
     /// <summary>
     /// <see cref="ShowAsync(CancellationToken, bool, SettingsField?, string?)"/> under a reply asked live (2026-10-12, <see cref="ReplyRun"/>): the
     /// rows refused while it runs open when it ends, the pane saying so (<see cref="ReplyEndedNotice"/>), and the changes come back for the
     /// screen to carry out as at the idle line.
     /// </summary>
-    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, ReplyRun reply, SettingsField? open = null, string? words = null)
+    public async Task<SettingsChanges> ShowAsync(CancellationToken cancellationToken, ReplyRun reply, SettingsField? open = null, string? words = null, bool only = false)
     {
         if (!CanShowMenus())
         {
@@ -4600,6 +4603,7 @@ internal sealed partial class SettingsMenu
         int tab = 0;   // a SettingsTab: SettingsTabs places it on the strip (2026-10-10)
         int cursor = 0;
         _reply = reply;
+        _openOnly = false;
         _profileSwitched = false;   // an advisor's Switch to profile never carries over from another visit (2026-11-22)
         _stripSubs = new int[StripTabs.Count];   // every visit finds each group on its first tab
         try
@@ -4619,6 +4623,8 @@ internal sealed partial class SettingsMenu
                 var picked = open is { } first && Locate(first, saved) is { } located
                     ? located
                     : await PickSettingAsync(saved, tab, cursor, cancellationToken).ConfigureAwait(false);
+                // The opened row alone (2026-11-23, /advisor list): taken before open is spent, so its edit's end closes the menu.
+                _openOnly = only && open is not null && picked is not null;
                 open = null;
                 if (picked is not var (field, page, row, flip, search))
                 {
@@ -4737,14 +4743,26 @@ internal sealed partial class SettingsMenu
                         changes |= SettingsChanges.WebUi;
                     }
                 }
+
+                if (_openOnly)
+                {
+                    return ReferenceEquals(Theme.Current, themeBefore) ? changes : changes | SettingsChanges.Theme;
+                }
             }
         }
         finally
         {
             _reply = ReplyRun.Idle;
+            _openOnly = false;
             _pane.Close();
         }
     }
+
+    /// <summary>
+    /// Whether this visit opened one row alone (<c>ShowAsync</c>'s <c>only</c>, 2026-11-23, <c>/advisor list</c>): its edit's end closes
+    /// the menu, and the Advisor list's hint says Esc closes (<see cref="AdvisorListCloseKeys"/>). Cleared as every visit ends.
+    /// </summary>
+    private bool _openOnly;
 
     /// <summary>Whether <paramref name="field"/> is refused while a reply runs: the profile, the working directory, every reconnecting row, the tools flip, the theme (a change redraws the screen, 2026-11-16) and the Web UI's rows (2026-10-14: a reply's hand-over drops the restart's flag). Pure.</summary>
     public static bool RefusedMidTurn(SettingsField field) =>

@@ -105,7 +105,8 @@ public static class AdvisorText
 
     /// <summary>
     /// One advisor on a line (2026-10-10, the user's ask): <c>doug — expert .NET solution architect · docker · Qwen3-32B</c>, the role
-    /// left out when there is none, a missing profile marked in place of its server, an unreadable one said so. What
+    /// left out when there is none, a missing profile marked in place of its server, an unreadable one said so; since 2026-11-23 the
+    /// model ends on its reasoning disc (<see cref="ReasoningMark"/>), <c>· docker · Qwen3-32B ◕</c>. What
     /// <c>Advisor list</c>'s band and a bare <c>/advisor</c> print. Pinned.
     /// </summary>
     public static string Detail(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists, AdvisorColumns? columns = null)
@@ -116,7 +117,7 @@ public static class AdvisorText
             string head = advisor.Profile + (advisor.Role.Length == 0 ? "" : " — " + advisor.Role);
             return !exists ? head + "  " + MissingMark
                 : facts is null ? head + " · " + UnreadableMark
-                : head + " · " + facts.Kind + " · " + facts.Model;
+                : head + " · " + facts.Kind + " · " + facts.Model + ReasoningMark(facts);
         }
 
         // In columns (2026-11-22, the user's ask from the screenshot): the name, the role and the kind padded, in cells, so each part
@@ -127,7 +128,18 @@ public static class AdvisorText
             : RoleLead + PadCells(advisor.Role, columns.Role);
         return !exists ? name + role + "   " + MissingMark   // the mark where the kind would start
             : facts is null ? name + role + " · " + UnreadableMark
-            : name + role + " · " + PadCells(facts.Kind, columns.Kind) + " · " + facts.Model;
+            : name + role + " · " + PadCells(facts.Kind, columns.Kind) + " · " + facts.Model + ReasoningMark(facts);
+    }
+
+    /// <summary>
+    /// The reasoning disc after an advisor's model (2026-11-23, the user's pick: the status bar's, <see cref="Llm.ReasoningLevel.Glyph"/>,
+    /// <c>○</c> for none and always shown): a space and the disc. On every advisor line, the rows, the bands, a bare <c>/advisor</c> and
+    /// headless's, so they look one way. Pure.
+    /// </summary>
+    public static string ReasoningMark(AdvisorServerFacts facts)
+    {
+        ArgumentNullException.ThrowIfNull(facts);
+        return " " + Llm.ReasoningLevel.Glyph(facts.Reasoning);
     }
 
     /// <summary>What leads a role on a line. Pinned.</summary>
@@ -229,7 +241,7 @@ public static class AdvisorText
     public const string UsageError = "Usage: /advisor <advisor> <question> — or /advisor alone to list the advisors";
 
     /// <summary>A bare <c>/advisor</c> with none listed. Pinned.</summary>
-    public const string NoAdvisorsNotice = "(no advisors: add one in /settings › Advisors, or make one from a template with /advisor new <template>)";
+    public const string NoAdvisorsNotice = "(no advisors: add one with /advisor list, or make one from a template with /advisor new <template>)";
 
     /// <summary>The list's heading. Pinned.</summary>
     public const string ListHeading = "Advisors (/advisor <name> <question>):";
@@ -366,10 +378,17 @@ public static class AdvisorText
     /// <summary><c>/advisor new</c>'s word. Pinned.</summary>
     public const string NewWord = "new";
 
+    /// <summary><c>/advisor list</c>'s word (2026-11-23, the user's ask: the Advisor list in one command). Pinned.</summary>
+    public const string ListWord = "list";
+
+    /// <summary>Headless <c>/advisor list</c> (2026-11-23): the pane is the PC screen's, so the bare form is named instead. Pinned.</summary>
+    public const string ListNeedsScreen = "/advisor list opens the Advisor list on the PC's screen; it needs the screen. /advisor alone lists the advisors here.";
+
     /// <summary>
-    /// <c>/advisor</c>'s setup forms (2026-11-22): <c>templates</c> alone, or <c>new &lt;template&gt; [&lt;name&gt;]</c> with a template of
-    /// <paramref name="templateIds"/> and at most one more word; null for anything else, which stays a question to an advisor (one named
-    /// <c>new</c> or <c>templates</c> is still reachable by its role). Pure: the screen, headless and the Web UI page read a line one way.
+    /// <c>/advisor</c>'s setup forms (2026-11-22): <c>templates</c> alone, <c>list</c> alone (2026-11-23, the user's ask: it opens the
+    /// Advisor list), or <c>new &lt;template&gt; [&lt;name&gt;]</c> with a template of <paramref name="templateIds"/> and at most one more
+    /// word; null for anything else, which stays a question to an advisor (one named <c>new</c>, <c>list</c> or <c>templates</c> is still
+    /// reachable by its role, and <c>/advisor list why?</c> is a question). Pure: the screen, headless and the Web UI page read a line one way.
     /// </summary>
     public static AdvisorSetup? ParseSetup(string? args, IReadOnlySet<string>? templateIds)
     {
@@ -377,6 +396,11 @@ public static class AdvisorText
         if (words.Length == 1 && string.Equals(words[0], TemplatesWord, StringComparison.OrdinalIgnoreCase))
         {
             return new AdvisorSetup(AdvisorSetupKind.Templates, "", "");
+        }
+
+        if (words.Length == 1 && string.Equals(words[0], ListWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return new AdvisorSetup(AdvisorSetupKind.List, "", "");
         }
 
         if (words.Length is 2 or 3 && string.Equals(words[0], NewWord, StringComparison.OrdinalIgnoreCase)
@@ -391,7 +415,7 @@ public static class AdvisorText
     /// <summary>A name a profile already has, in its own case. Pinned.</summary>
     public static string TakenError(string existing, string template, bool listed) => listed
         ? $"A profile named \"{existing}\" already exists and is an advisor; name the new one: /advisor new {template} <name>."
-        : $"A profile named \"{existing}\" already exists; add it in /settings › Advisors, or name the new one: /advisor new {template} <name>.";
+        : $"A profile named \"{existing}\" already exists; add it with /advisor list, or name the new one: /advisor new {template} <name>.";
 
     /// <summary>A temporary name (<c>_…</c>): the pane's add row leaves those out, so an advisor never gets one. Pinned.</summary>
     public const string TemporaryNameError = "An advisor can't be a temporary profile (a name starting with _); pick another name.";
@@ -401,7 +425,7 @@ public static class AdvisorText
 
     /// <summary>The profile was made and listed, but its persona could not be written. Pinned.</summary>
     public static string PersonaFailedError(string name, string detail) =>
-        $"Profile {name} was made and added as an advisor, but its persona wasn't written: {Flat(detail)}; set it with Change the persona in /settings › Advisors.";
+        $"Profile {name} was made and added as an advisor, but its persona wasn't written: {Flat(detail)}; set it with Change the persona in /advisor list.";
 
     /// <summary>
     /// The notice after <c>/advisor new</c> or the pane's <c>+ New advisor from a template…</c>: the profile, its role, where it answers
@@ -412,7 +436,7 @@ public static class AdvisorText
     {
         ArgumentNullException.ThrowIfNull(entry);
         string text = "(made profile " + entry.Profile + " and added it as an advisor" + (entry.Role.Length == 0 ? "" : ", " + entry.Role)
-            + ". It answers on the server and model saved in this profile; /profile " + entry.Profile + " changes them, /settings › Advisors its role and description.";
+            + ". It answers on the server and model saved in this profile; its actions in the Advisor list (/advisor list) change them, its role and its description.";
         return advisorsOn ? text + ")"
             : text + " Advisors enabled is off, so the model won't ask it until you turn it on in /settings › Advisors; /advisor " + entry.Profile + " <question> asks it now.)";
     }
@@ -429,6 +453,9 @@ public enum AdvisorSetupKind
 {
     Templates,
     New,
+
+    /// <summary><c>/advisor list</c>: opens the Advisor list (2026-11-23).</summary>
+    List,
 }
 
 /// <summary>A parsed <c>/advisor templates</c> or <c>/advisor new &lt;template&gt; [&lt;name&gt;]</c>: the template's id and the new profile's name for <c>new</c>.</summary>

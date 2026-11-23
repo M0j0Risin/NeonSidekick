@@ -5404,7 +5404,8 @@ internal sealed partial class ChatScreen
         Func<string, IReadOnlyList<CompletionItem>>? BrowserLinks = null, Func<string, IReadOnlyList<CompletionItem>>? YouTubeSaved = null,
         Func<string, IReadOnlyList<CompletionItem>>? Cameras = null, Func<string, IReadOnlyList<CompletionItem>>? Midi = null,
         Func<string, MentionResult>? VideoFiles = null, Func<IReadOnlyList<string>>? SettingsZips = null,
-        Func<IReadOnlyList<CompletionItem>>? CustomThemes = null, Func<IReadOnlyList<CompletionItem>>? AdvisorTemplates = null);
+        Func<IReadOnlyList<CompletionItem>>? CustomThemes = null, Func<IReadOnlyList<CompletionItem>>? AdvisorTemplates = null,
+        bool AdvisorPane = false);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -6221,7 +6222,9 @@ internal sealed partial class ChatScreen
             {
                 // The advisors by profile name, each with its role (2026-10-10, the user's ask); the question after the name is free text.
                 // templates and new (2026-11-22, the advisor templates), and after "new " the templates; the name after the template is free.
-                // new only where the templates source is set: the Web UI page leaves it null, since it refuses /advisor new.
+                // new only where the templates source is set: the Web UI page leaves it null, since it refuses /advisor new. list
+                // (2026-11-23) only where AdvisorPane is: the page refuses /advisor list, and its dropdown would offer it since
+                // "/advisor list x" (a question) runs there.
                 bool canMake = sources.AdvisorTemplates is not null;
                 string newHead = Advisors.AdvisorText.NewWord + " ";
                 if (canMake && argText.StartsWith(newHead, StringComparison.OrdinalIgnoreCase))
@@ -6236,7 +6239,13 @@ internal sealed partial class ChatScreen
                     return [];
                 }
 
-                List<CompletionItem> items = [.. sources.Advisors?.Invoke() ?? [], new(Advisors.AdvisorText.TemplatesWord, AdvisorTemplatesNote)];
+                List<CompletionItem> items = [.. sources.Advisors?.Invoke() ?? []];
+                if (sources.AdvisorPane)
+                {
+                    items.Add(new(Advisors.AdvisorText.ListWord, AdvisorListNote));
+                }
+
+                items.Add(new(Advisors.AdvisorText.TemplatesWord, AdvisorTemplatesNote));
                 if (canMake)
                 {
                     items.Add(new(Advisors.AdvisorText.NewWord, AdvisorNewNote));
@@ -6664,6 +6673,7 @@ internal sealed partial class ChatScreen
             MachineFolders: prefix => FolderCompleter.Complete(prefix, FileBrowserMode.Resolve(_effective())),
             Advisors: AdvisorChoices,
             AdvisorTemplates: AdvisorTemplateChoices,
+            AdvisorPane: true,
             Shopping: ShoppingChoices,
             EventLog: EventLogChoices,
             Net: NetChoices,
@@ -15046,9 +15056,10 @@ internal sealed partial class ChatScreen
     /// </summary>
     /// <param name="open">A row whose edit runs as the pane opens (2026-09-30: the app's start opens Embedded models with it).</param>
     /// <param name="words">What followed <c>/settings</c> (2026-10-04): the settings search's words, or <c>changed</c>.</param>
-    private async Task OpenSettingsAsync(CancellationToken cancellationToken, SettingsField? open = null, string? words = null)
+    /// <param name="only"><paramref name="open"/>'s row alone (2026-11-23, <c>/advisor list</c>): the menu closes when its edit ends.</param>
+    private async Task OpenSettingsAsync(CancellationToken cancellationToken, SettingsField? open = null, string? words = null, bool only = false)
     {
-        var changes = await _menu.ShowAsync(cancellationToken, midTurn: false, open, words).ConfigureAwait(false);
+        var changes = await _menu.ShowAsync(cancellationToken, midTurn: false, open, words, only).ConfigureAwait(false);
         await ApplyMenuChangesAsync(changes, _menu.TakePendingEmbeddedModel(), cancellationToken).ConfigureAwait(false);
     }
 

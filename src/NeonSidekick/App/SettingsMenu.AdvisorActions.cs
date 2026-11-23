@@ -345,9 +345,9 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The level <paramref name="saved"/> has in force, by its canonical name (the cursor's lookup is exact, and a hand-edited
     /// <c> Medium </c> parses), and whether it was one of the levels at all; an unknown word is <see cref="ReasoningLevel.Default"/>, not known.
+    /// <see cref="AdvisorServer.Reasoning"/> since 2026-11-23, the rows' disc read the same way.
     /// </summary>
-    private static (string Level, bool Known) AdvisorReasoningOf(AppSettingsData saved) =>
-        ReasoningLevel.TryParse(saved.LlmReasoning, out var effort) ? (ReasoningLevel.Name(effort), true) : (ReasoningLevel.Default, false);
+    private static (string Level, bool Known) AdvisorReasoningOf(AppSettingsData saved) => AdvisorServer.Reasoning(saved);
 
     /// <summary>
     /// The advisor's saved settings for a change, or null with why said: a profile that is gone, the profile in use (its file written

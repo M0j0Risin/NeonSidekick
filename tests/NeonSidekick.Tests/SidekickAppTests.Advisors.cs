@@ -85,7 +85,7 @@ public partial class SidekickAppTests
 
         Assert.Contains("[notice] " + AdvisorText.ListHeading, output);
         // The model it answers on, the session's llama it borrows (2026-11-22: LinkedModelOf), in the list's columns.
-        Assert.Contains("[notice]   dba — database architect · scan · llama", output);
+        Assert.Contains("[notice]   dba — database architect · scan · llama ○", output);   // its reasoning disc (2026-11-23)
         Assert.Contains("dba: The foreign key.", output);
         Assert.Contains("[error] \"nobody\" names no single advisor", output);
     }
@@ -103,6 +103,18 @@ public partial class SidekickAppTests
         Assert.Contains("[notice] " + AdvisorText.CreatedNotice(entry, advisorsOn: _settings.Current.Advisors), output);
         Assert.Contains("[error] " + AdvisorText.TakenError("security", "security", listed: true), output);
         Assert.Equal([entry], _settings.Current.AdvisorList);
+    }
+
+    /// <summary>Headless <c>/advisor list</c> (2026-11-23): the pane is the PC screen's, so an error naming the bare form (exit 4), nothing saved.</summary>
+    [Fact]
+    public async Task Headless_AdvisorList_NeedsTheScreen_AnError()
+    {
+        HeadlessAdvisor();
+
+        string output = await Headless("/advisor list\n", exitCode: 4);
+
+        Assert.Contains("[error] " + AdvisorText.ListNeedsScreen, output);
+        Assert.Empty(_chat.Requests);
     }
 
     [Fact]

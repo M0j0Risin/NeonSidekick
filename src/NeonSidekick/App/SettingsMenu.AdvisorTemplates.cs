@@ -124,15 +124,27 @@ internal sealed partial class SettingsMenu
     /// <summary>A template page's pick: a lead row (<see cref="Lead"/>), a template, or a tail row (<see cref="Tail"/>); −1 for neither.</summary>
     private sealed record AdvisorTemplatePick(int Lead, AdvisorTemplate? Template, int Tail);
 
-    /// <summary><c>Advisor list</c>'s band for <paramref name="row"/>: the add rows' texts, then each advisor's description.</summary>
-    private static MenuFooter? AdvisorRowBand(IReadOnlyList<AdvisorEntry> entries, int row) => row switch
+    /// <summary>
+    /// <c>Advisor list</c>'s band for <paramref name="row"/>: the add rows' texts, then each advisor's description, and since 2026-11-23
+    /// (the user's ask) its reasoning level in words on a last row of its own (<see cref="AdvisorReasoningBand"/>), which a long
+    /// description never pushes off; none for a missing or unreadable profile.
+    /// </summary>
+    private MenuFooter? AdvisorRowBand(IReadOnlyList<AdvisorEntry> entries, int row) => row switch
     {
         0 => new MenuFooter(AddAdvisorBand),
         1 => new MenuFooter(NewAdvisorBand),
         _ when row - AdvisorListLead is var at && at >= 0 && at < entries.Count =>
-            new MenuFooter(entries[at].Description.Length == 0 ? NoDescriptionBand : entries[at].Description),
+            new MenuFooter(entries[at].Description.Length == 0 ? NoDescriptionBand : entries[at].Description,
+                AdvisorFactsOf(entries[at].Profile) is { Exists: true, Facts: { } facts } ? AdvisorReasoningBand(facts.Reasoning) : null),
         _ => null,
     };
+
+    /// <summary>
+    /// An advisor's reasoning in the band (2026-11-23, the user's ask): <c>Reasoning: ◕ high (extensive thinking)</c>, the row's disc
+    /// beside the level and <c>/reasoning</c>'s words for it, so the disc reads. Pinned.
+    /// </summary>
+    public static string AdvisorReasoningBand(string level) =>
+        "Reasoning: " + Llm.ReasoningLevel.Glyph(level) + " " + level + " (" + Llm.ReasoningLevel.Describe(level) + ")";
 
     /// <summary>
     /// One template's row (2026-11-22): <see cref="AdvisorText.TemplateLine"/>'s lead and name escaped, then dim <see cref="AdvisorText.YoursMark"/>
