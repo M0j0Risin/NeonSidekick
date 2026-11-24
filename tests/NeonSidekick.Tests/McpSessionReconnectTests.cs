@@ -151,6 +151,10 @@ public class McpSessionReconnectTests : IAsyncDisposable
         await using var session = await ConnectedAsync();
         var first = _servers.Server("docker");
         _servers.Steady.Add("docker");
+        // Earlier tests' faulted tasks finalized first (2026-11-24: TailscaleServeTests' deliberate out-of-memory rethrow, an unobserved task by
+        // design, was collected inside the watch below when the two classes ran together), so the watch sees only this test's own.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
         var unobserved = new List<Exception>();
         EventHandler<UnobservedTaskExceptionEventArgs> watch = (_, e) => { lock (unobserved) { unobserved.Add(e.Exception); } };
         TaskScheduler.UnobservedTaskException += watch;

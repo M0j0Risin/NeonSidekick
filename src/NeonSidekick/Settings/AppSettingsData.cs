@@ -1877,6 +1877,14 @@ public sealed class AppSettingsData
     /// </summary>
     public bool AskUser { get; set; } = true;
 
+    /// <summary>
+    /// Whether <c>ask_user</c> refuses a repeat (2026-11-24, the ask_user plan's F, the user's call): on, the same questions asked
+    /// again in one turn after the user declined them (Esc, or a decline with a note) are not shown, and the model reads that
+    /// the user declined them (<c>AskUserText.AlreadyDeclined</c>); off (the default), every call shows the pane, as before.
+    /// The current turn only, so a later message can ask them again. Read at each call, no reconnect. No variable.
+    /// </summary>
+    public bool AskRepeatGuard { get; set; }
+
     // ─── Camera (2026-10-02) ────────────────────────────────────────────────────
     // A USB camera's pictures for the model (the user's ask): /camera, the model's camera_capture, a botchat that sees the
     // user, watch mode. Media Foundation in-process; /tools' Camera tab. None of these has a variable.

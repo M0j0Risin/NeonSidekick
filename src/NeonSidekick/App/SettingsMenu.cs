@@ -1424,9 +1424,16 @@ public enum SettingsField
     /// <summary>
     /// Toggle: whether a repo's own <c>.agents/skills</c> and <c>.claude/skills</c> are read once trusted (<see cref="Settings.AppSettingsData.ProjectSkills"/>,
     /// 2026-11-23, feature idea #16, the user's name). <c>/skills</c> › Options, after <see cref="ExternalSkills"/> and before <see cref="ProjectFile"/>;
-    /// read at each scan, no reconnect. Last in the enum, as every newcomer.
+    /// read at each scan, no reconnect.
     /// </summary>
     ProjectSkills,
+
+    /// <summary>
+    /// Toggle: whether <c>ask_user</c> refuses the same questions asked again in one turn after the user declined them
+    /// (<see cref="Settings.AppSettingsData.AskRepeatGuard"/>, 2026-11-24, the ask_user plan's F, the user's name). <c>/tools</c> › Ask, under
+    /// <see cref="AskUser"/>; read at each call, no reconnect. Last in the enum, as every newcomer.
+    /// </summary>
+    AskRepeatGuard,
 }
 
 /// <summary>The tabs of <c>/settings</c> on the pane, in strip order (Chat, Sessions, Botchat, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Advisors — General renamed Chat and Sessions and Botchat moved beside it under the Client group, the user's call, later on 2026-10-10; General, Common, Http, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat, Advisors — the LLM tab split in two, Common and Http, the user's call, 2026-10-10; General, LLM, Embedded, Docker, Anthropic, OpenAI, TTS, STT, Sessions, Botchat — LLM second, the user's order, 2026-10-04; General, Embedded, Docker, Claude, OpenAI, LLM, TTS, STT, Sessions, Botchat — the Claude and OpenAI tabs after Docker, the user's place, 2026-10-03; General, Embedded, LLM, TTS, STT, Sessions, Botchat — the user's order, 2026-09-29; Sessions right after General — the user's order, 2026-09-18 — until then; STT last since 2026-09-19, when the Ask, Files and Web tabs moved to <c>/tools</c> — <see cref="SettingsMenu.ToolsTabFields"/> — and, later that day, the Skills tab to <c>/skills</c> as its Options tab — <see cref="SettingsMenu.SkillsTabFields"/>); the value is the index into <see cref="SettingsMenu.TabTitles"/> and <see cref="SettingsMenu.TabFields"/>.</summary>
@@ -2008,7 +2015,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<IReadOnlyList<SettingsField>> ToolsTabFields =
     [
-        [SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
+        [SettingsField.AskUser, SettingsField.AskRepeatGuard, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices],
         [SettingsField.WebTools, SettingsField.WebBrowserMode, SettingsField.WebBrowserPath, SettingsField.WebBrowserBotcheckWindow, SettingsField.WebBrowserHomePage, SettingsField.BrowserPrivacy, SettingsField.WebOpenLinksIn, SettingsField.WebBrowserNetworkMode, SettingsField.WebSearchMethod, SettingsField.WebSearchMaxResults, SettingsField.WebMetasearchEngines, SettingsField.WebMetasearchSafeSearch, SettingsField.WebMetasearchBraveApiKey, SettingsField.WebSearxngUrl, SettingsField.WebDownloadMaxMegabytes],
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds],
         [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileCheckpoints, SettingsField.FileCheckpointKeepDays, SettingsField.FileCheckpointMaxMegabytes, SettingsField.FileCheckpointLargestFileMegabytes, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
@@ -2484,7 +2491,7 @@ internal sealed partial class SettingsMenu
         field is SettingsField.TtsOutput or SettingsField.SttInput or SettingsField.SttWake or SettingsField.SttInterrupt
             or SettingsField.CopyUserPrompt or SettingsField.ShowImageThumbnails
             or SettingsField.FileTreeShowSizes or SettingsField.LlmOfferTools or SettingsField.LlmOneLocalModel or SettingsField.LlmUseFunVerbs or SettingsField.LlmShowThinking or SettingsField.LlmPreserveThinking or SettingsField.LlmSamplingFromHuggingFace
-            or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser
+            or SettingsField.WebTools or SettingsField.TtsVoicePreview or SettingsField.FileTools or SettingsField.AskUser or SettingsField.AskRepeatGuard
             or SettingsField.AgentSkills or SettingsField.GlobalSkills or SettingsField.ExternalSkills or SettingsField.ProjectSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.MidiInput or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules or SettingsField.ReplyFooter or SettingsField.WebFooter or SettingsField.CheckForUpdatesAtStart
@@ -2889,6 +2896,7 @@ internal sealed partial class SettingsMenu
         SettingsField.EmbeddedLlmServer => "Embedded servers enabled",
         SettingsField.EmbeddedDrafter => "Embedded drafter",
         SettingsField.AskUser => "Ask user",
+        SettingsField.AskRepeatGuard => "Ask repeat guard",
         SettingsField.AskMaxQuestions => "Ask max questions",
         SettingsField.AskMaxChoices => "Ask max choices per question",
         SettingsField.FileMentionFolderMode => "File @-mention folder mode",
@@ -3311,6 +3319,7 @@ internal sealed partial class SettingsMenu
             SettingsField.ShoppingList => NeonSidekick.Shopping.ShoppingText.ManageListLabel,
             SettingsField.WebSearchMethod => data.WebSearchMethod,
             SettingsField.AskUser => OnOff(data.AskUser),
+            SettingsField.AskRepeatGuard => OnOff(data.AskRepeatGuard),
             SettingsField.AskMaxQuestions => Questions(data.AskMaxQuestions),
             SettingsField.AskMaxChoices => Choices(data.AskMaxChoices),
             SettingsField.FileMentionFolderMode => data.FileMentionFolderMode,
@@ -8857,6 +8866,7 @@ internal sealed partial class SettingsMenu
             SettingsField.TaskWrites => data.TaskWrites,
             SettingsField.DirectoryTools => data.DirectoryTools,
             SettingsField.AskUser => data.AskUser,
+            SettingsField.AskRepeatGuard => data.AskRepeatGuard,
             SettingsField.AgentSkills => data.AgentSkills,
             SettingsField.GlobalSkills => data.GlobalSkills,
             SettingsField.WebUi => data.WebUi,
@@ -9005,6 +9015,7 @@ internal sealed partial class SettingsMenu
             case SettingsField.TaskWrites: data.TaskWrites = on; break;
             case SettingsField.DirectoryTools: data.DirectoryTools = on; break;
             case SettingsField.AskUser: data.AskUser = on; break;
+            case SettingsField.AskRepeatGuard: data.AskRepeatGuard = on; break;
             case SettingsField.AgentSkills: data.AgentSkills = on; break;
             case SettingsField.GlobalSkills: data.GlobalSkills = on; break;
             case SettingsField.WebUi: data.WebUi = on; break;
@@ -9077,6 +9088,7 @@ internal sealed partial class SettingsMenu
         SettingsField.SttWake => on ? "saying the wake phrase at the idle line starts listening" : "only the push-to-talk key listens",
         SettingsField.SttInterrupt => on ? "the wake phrase during a spoken reply stops it" : "a spoken reply plays to its end",
         SettingsField.AskUser => on ? "ask user enabled" : "ask user disabled",
+        SettingsField.AskRepeatGuard => on ? "a repeated ask after a decline is refused" : "a repeated ask is shown again",
         SettingsField.FileTools => on ? "file tools enabled" : "file tools disabled",
         SettingsField.ImageTools => on ? "image tools enabled" : "image tools disabled",
         SettingsField.ShoppingTools => on ? "shopping tools enabled" : "shopping tools disabled",

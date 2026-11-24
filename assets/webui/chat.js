@@ -1019,6 +1019,8 @@ function updateTitle() {
 
 // The asks' folded details opened by the user (2026-10-17: the reflection's proposal under View), kept by ask id across the rebuilds below.
 const openDetails = new Set();
+// ask_user's forms as the user left them (2026-11-24), by ask id: the picks, the typed words, the decline's note (questionForm).
+const questionDrafts = new Map();
 
 function renderAsks(list) {
   asks = list || [];
@@ -1027,6 +1029,7 @@ function renderAsks(list) {
   stopBotViews(new Set(asks.filter(a => a.live).map(a => a.id)));
   const live = new Set(asks.map(a => a.id));
   for (const id of [...openDetails]) if (!live.has(id)) openDetails.delete(id);
+  for (const id of [...questionDrafts.keys()]) if (!live.has(id)) questionDrafts.delete(id);
   if (asks.length > lastAskCount) {
     // One footer panel at a time (later on 2026-10-15): the question the PC waits on closes the drawer. Under the overlay the drawer goes at
     // once (it can't be seen) and its entry is stepped over when the overlay closes, so the picture isn't pulled away.
@@ -1368,59 +1371,155 @@ function textAnswer(card, ask, choice) {
   box.focus();
 }
 
+// ask_user's form (2026-11-24, the ask_user plan): single, multi and text questions; an option's description under it and the model's
+// recommended tag (never checked for you); Submit never disabled, unanswered questions going back as skipped, with a count beside it; a
+// second tap on a checked radio clears it, as Space does on the PC; Enter in a text box moves on rather than sending the rest as skipped;
+// Decline (a note if you like) declines them all. What is picked and typed is kept by ask id (questionDrafts) across the rebuilds
+// renderAsks makes on every asks event and a reconnect's snapshot; a reload starts afresh.
 function questionForm(card, ask) {
   const form = el('form');
+  const draft = questionDrafts.get(ask.id) || { answers: [], note: null };
+  questionDrafts.set(ask.id, draft);
   const parts = [];
   ask.questions.forEach((q, qi) => {
     const set = el('fieldset');
     set.appendChild(el('legend', null, q.title ? q.title + ': ' + q.question : q.question));
     const name = ask.id + '-' + qi;
+    const saved = draft.answers[qi] || (draft.answers[qi] = { picked: [], other: '', otherOn: false });
+    const multi = q.kind === 'multi';
     const inputs = [];
-    q.options.forEach((option, oi) => {
-      const label = el('label');
-      const input = el('input');
-      input.type = q.multi ? 'checkbox' : 'radio';
-      input.name = name;
-      input.value = String(oi);
-      label.appendChild(input);
-      label.appendChild(document.createTextNode(option));
-      set.appendChild(label);
-      inputs.push(input);
-    });
-    const otherLabel = el('label');
-    const otherPick = el('input');
-    otherPick.type = q.multi ? 'checkbox' : 'radio';
-    otherPick.name = name;
-    otherPick.value = 'other';
-    const other = el('input');
-    other.type = 'text';
-    other.placeholder = 'Other';
-    other.addEventListener('input', () => { if (other.value.trim()) otherPick.checked = true; update(); });
-    otherLabel.appendChild(otherPick);
-    otherLabel.appendChild(other);
-    set.appendChild(otherLabel);
+    const part = { inputs, otherPick: null, other: null, text: q.kind === 'text', last: null };
+    if (part.text) {
+      const box = el('input', 'q-text');
+      box.type = 'text';
+      box.placeholder = words.askTyped || 'Type an answer…';
+      box.value = saved.other;
+      set.appendChild(box);
+      part.other = box;
+    } else {
+      q.options.forEach((option, oi) => {
+        const label = el('label');
+        const input = el('input');
+        input.type = multi ? 'checkbox' : 'radio';
+        input.name = name;
+        input.value = String(oi);
+        input.checked = saved.picked.includes(oi);
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(option.label));
+        if (option.recommended) label.appendChild(el('span', 'q-rec', words.askRecommended || 'recommended'));
+        set.appendChild(label);
+        if (option.description) set.appendChild(el('div', 'q-desc', option.description));
+        inputs.push(input);
+      });
+      const otherLabel = el('label');
+      const otherPick = el('input');
+      otherPick.type = multi ? 'checkbox' : 'radio';
+      otherPick.name = name;
+      otherPick.value = 'other';
+      otherPick.checked = saved.otherOn;
+      const other = el('input');
+      other.type = 'text';
+      other.placeholder = 'Other';
+      other.value = saved.other;
+      other.addEventListener('input', () => {
+        if (other.value.trim()) {
+          otherPick.checked = true;
+          part.last = otherPick;
+        }
+      });
+      otherLabel.appendChild(otherPick);
+      otherLabel.appendChild(other);
+      set.appendChild(otherLabel);
+      part.otherPick = otherPick;
+      part.other = other;
+      if (!multi) {
+        // A second tap on the checked radio clears it: the question goes back to skipped.
+        const radios = [...inputs, otherPick];
+        part.last = radios.find(r => r.checked) || null;
+        for (const r of radios) {
+          r.addEventListener('click', () => {
+            if (part.last === r) {
+              r.checked = false;
+              part.last = null;
+            } else {
+              part.last = r;
+            }
+            keep();
+          });
+        }
+      }
+    }
     form.appendChild(set);
-    parts.push({ inputs, otherPick, other });
+    parts.push(part);
   });
+
+  const row = el('div', 'choices');
   const submit = el('button', 'primary', ask.submitLabel || 'Submit');
   submit.type = 'submit';
-  form.appendChild(submit);
+  const decline = el('button', null, words.askDecline || 'Decline');
+  decline.type = 'button';
+  const count = el('span', 'q-count');
+  row.appendChild(submit);
+  row.appendChild(decline);
+  row.appendChild(count);
+  form.appendChild(row);
+
+  const noteRow = el('div', 'q-note');
+  const note = el('input');
+  note.type = 'text';
+  note.placeholder = words.askDeclineNote || 'A note for the model (optional)';
+  const send = el('button', null, words.askSend || 'Send');
+  send.type = 'button';
+  noteRow.appendChild(note);
+  noteRow.appendChild(send);
+
+  function openNote(text) {
+    if (!noteRow.isConnected) form.appendChild(noteRow);
+    note.value = text;
+    draft.note = text;
+  }
+  function sendDecline() {
+    answer(card, { askId: ask.id, choice: 'decline', text: note.value.trim() });
+  }
+  decline.addEventListener('click', () => { openNote(note.value); note.focus(); });
+  send.addEventListener('click', sendDecline);
+  note.addEventListener('input', () => { draft.note = note.value; });
 
   function collect() {
     return parts.map(p => ({
       picked: p.inputs.filter(i => i.checked).map(i => Number(i.value)),
-      other: p.otherPick.checked ? p.other.value.trim() : '',
+      other: p.text || (p.otherPick && p.otherPick.checked) ? p.other.value.trim() : '',
     }));
   }
-  function update() {
-    submit.disabled = !collect().every(a => a.picked.length > 0 || a.other.length > 0);
+  function keep() {
+    parts.forEach((p, i) => {
+      draft.answers[i] = {
+        picked: p.inputs.filter(x => x.checked).map(x => Number(x.value)),
+        other: p.other.value,
+        otherOn: !!(p.otherPick && p.otherPick.checked),
+      };
+    });
+    const answered = collect().filter(a => a.picked.length > 0 || a.other.length > 0).length;
+    count.textContent = (words.askAnswered || '{0} of {1} answered').replace('{0}', String(answered)).replace('{1}', String(parts.length));
   }
-  form.addEventListener('change', update);
+  form.addEventListener('change', keep);
+  form.addEventListener('input', keep);
+  // Enter in a text box: the browser would send the form, every question after it skipped. It moves on instead; in the note it sends the decline.
+  form.addEventListener('keydown', ev => {
+    if (ev.key !== 'Enter' || !(ev.target instanceof HTMLInputElement) || ev.target.type !== 'text') return;
+    ev.preventDefault();
+    if (ev.target === note) { sendDecline(); return; }
+    const sets = [...form.querySelectorAll('fieldset')];
+    const at = sets.findIndex(s => s.contains(ev.target));
+    const next = at >= 0 && at + 1 < sets.length ? sets[at + 1].querySelector('input') : null;
+    (next || submit).focus();
+  });
   form.addEventListener('submit', ev => {
     ev.preventDefault();
     answer(card, { askId: ask.id, questions: collect() });
   });
-  update();
+  if (draft.note !== null) openNote(draft.note);
+  keep();
   return form;
 }
 

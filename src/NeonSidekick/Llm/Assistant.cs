@@ -564,13 +564,15 @@ public sealed class Assistant
     /// on, the bottom pane on): appended after <see cref="WebRule"/> by
     /// <see cref="SystemPrompt(bool, IReadOnlyList{string}?, string?, string?, string?, bool, bool, bool, AskLimits?)"/>;
     /// a custom <c>operata.md</c> stands verbatim. Quotes the caps the tool the model sees works under
-    /// (<see cref="AskLimits"/>, the two Ask-tab rows; 2026-09-15). Pinned.
+    /// (<see cref="AskLimits"/>, the two Ask-tab rows; 2026-09-15), and since 2026-11-24 names text questions, the recommended mark and the result's two tags in one sentence. Pinned.
     /// </summary>
     public static string AskRule(AskLimits limits) =>
         "When you need the user to decide between a few possibilities — a choice, a preference, a clarification with a short list of answers — call " + AskUserTool.ToolName +
         " with the options and wait for the result instead of guessing or asking in prose; up to " + limits.MaxQuestions.ToString(CultureInfo.InvariantCulture) +
         " questions in one call, " + AskUserTool.MinOptions.ToString(CultureInfo.InvariantCulture) + " to " + limits.MaxChoices.ToString(CultureInfo.InvariantCulture) +
         " options each, and the user can type their own answer. " +
+        "A question may also be free text (type text, no options), and options may be marked recommended (at most one on a single question); " +
+        "in the result, (skipped) leaves that choice to you and (typed) marks the user's own words. " +
         "If the result says the questions were not answered, go on without them.";
 
     /// <summary>

@@ -145,7 +145,10 @@ public sealed record WebHeard(string Text, string? Message = null);
 /// <summary>A page's speaker as its snapshot carries it (2026-11-13): its turn and the clips made, so a page back from a blip fetches what it missed.</summary>
 public sealed record WebSpeaking(string Turn, long Clips);
 
-/// <summary>An answer to an open ask: the choice's id, the typed text of a text choice, or one answer per question (<c>ask_user</c>).</summary>
+/// <summary>
+/// An answer to an open ask: the choice's id, the typed text of a text choice, or one answer per question (<c>ask_user</c>); for
+/// <c>ask_user</c> also the decline (2026-11-24, <see cref="WebAskBroker.DeclineChoice"/>), its note in <see cref="Text"/>.
+/// </summary>
 public sealed class WebAnswerRequest
 {
     public string? AskId { get; set; }
@@ -157,7 +160,7 @@ public sealed class WebAnswerRequest
     public List<WebQuestionAnswer>? Questions { get; set; }
 }
 
-/// <summary>One question's answer: the options picked, by index, and a typed answer of the user's own.</summary>
+/// <summary>One question's answer: the options picked, by index, and a typed answer of the user's own (a text question's whole answer); neither is a skip.</summary>
 public sealed class WebQuestionAnswer
 {
     public List<int>? Picked { get; set; }
@@ -514,8 +517,14 @@ public sealed record WebChoice(string Id, string Label);
 /// <summary>One row of a pick card (later on 2026-10-14): a made-up id (<c>i0</c>, <c>i1</c>…), the row's words and a note under them.</summary>
 public sealed record WebPickItem(string Id, string Label, string? Note = null);
 
-/// <summary>One <c>ask_user</c> question: the text, its short title, single or multi-choice, its options.</summary>
-public sealed record WebQuestion(string Question, string? Title, bool Multi, IReadOnlyList<string> Options);
+/// <summary>
+/// One <c>ask_user</c> question: the text, its short title, its kind (<c>single</c>, <c>multi</c> or <c>text</c>, 2026-11-24, the ask_user
+/// plan), its options (none for text).
+/// </summary>
+public sealed record WebQuestion(string Question, string? Title, string Kind, IReadOnlyList<WebQuestionOption> Options);
+
+/// <summary>An <c>ask_user</c> option (2026-11-24): its label, a one-sentence description (null for none), and the model's recommended mark.</summary>
+public sealed record WebQuestionOption(string Label, string? Description, bool Recommended);
 
 /// <summary>
 /// An open ask as the page shows it: <see cref="Body"/> plain text, <see cref="Lines"/> a command or a statement in monospace,
@@ -658,7 +667,8 @@ public sealed record WebWords(string PictureGone, string PictureTooLarge, string
     string FilesNone = "", string FilesTrimmed = "", string FilesHint = "",
     string AttachButton = "", string AttachRemove = "", string AttachWaiting = "", string AttachTooBig = "", string AttachRoom = "", string AttachStopped = "",
     string AttachLeftOut = "", string AttachPdf = "", string ManageReadFailed = "",
-    string MemoryHere = "", string MemoryElsewhere = "", string SessionsNoneHere = "");
+    string MemoryHere = "", string MemoryElsewhere = "", string SessionsNoneHere = "",
+    string AskRecommended = "", string AskTyped = "", string AskAnswered = "", string AskDecline = "", string AskDeclineNote = "", string AskSend = "");
 
 /// <summary>
 /// The 📣 sheet's Queue tab (the 🗂️ sheet's until 2026-11-21) (2026-11-16, plan lucid-roaming-lantern #42): the PC's queued lines (<see cref="Pc"/>, the <c>/queue</c> pane's), the

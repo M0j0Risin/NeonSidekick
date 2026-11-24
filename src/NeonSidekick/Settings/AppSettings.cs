@@ -1184,6 +1184,7 @@ public sealed class AppSettings : IDisposable
         AskMaxChoices = source.AskMaxChoices,
         AskMaxQuestions = source.AskMaxQuestions,
         AskUser = source.AskUser,
+        AskRepeatGuard = source.AskRepeatGuard,
         CameraTools = source.CameraTools,
         CameraShutter = source.CameraShutter,
         CameraPreview = source.CameraPreview,

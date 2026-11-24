@@ -668,7 +668,7 @@ public class SystemPromptSummaryTests : IDisposable
     {
         var (clock, timers, files, memory) = Tools();
         var web = ChatScreen.WebTools(new WebAccess(new HttpClient(new StubHttpMessageHandler()), new FakeHeadlessBrowser(), _time), new Files.WorkingDirectory(() => Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", "unused"), _time), () => new AppSettingsData());
-        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => new AppSettingsData());
+        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<AskReply?>(null), () => new AppSettingsData());
         var catalog = new SkillCatalog(() => new SkillRoots(Path.Combine(_dir, "p"), Path.Combine(_dir, "g"), Path.Combine(_dir, "x")));
         var skills = ChatScreen.SkillTools(catalog, () => catalog.Roots, () => false);
 
@@ -736,7 +736,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Files (16) — not offered: file tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: false), "Files").Title);
 
         // The questions group (2026-09-15): last, after memory, marked when the setting Ask user is off, else when the bottom pane is (its own reasons first); nothing when no list is given.
-        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => new AppSettingsData());
+        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<AskReply?>(null), () => new AppSettingsData());
         var withQuestions = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true);
         Assert.Equal(["Clock (3)", "Files (16)", "Memory (2)", "Questions (1)", "Timers (3)", "Web (4)"], withQuestions.Select(g => g.Title));
         Assert.Equal([AskUserTool.ToolName], G(withQuestions, "Questions").Tools.Select(t => t.Name));
@@ -861,7 +861,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal("Files (16) — not offered: file tools is off", G(SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: false, web, webEnabled: true, filesEnabled: false), "Files").Title);
 
         // The questions group (2026-09-15): last, after memory, marked when the setting Ask user is off, else when the bottom pane is (its own reasons first); nothing when no list is given.
-        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => new AppSettingsData());
+        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<AskReply?>(null), () => new AppSettingsData());
         var withQuestions = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true);
         Assert.Equal(["Clock (3)", "Files (16)", "Memory (2)", "Questions (1)", "Timers (3)", "Web (4)"], withQuestions.Select(g => g.Title));
         Assert.Equal([AskUserTool.ToolName], G(withQuestions, "Questions").Tools.Select(t => t.Name));

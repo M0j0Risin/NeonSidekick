@@ -1304,34 +1304,39 @@ internal sealed partial class ChatScreen
     /// <see cref="QuestionMenu.AskAsync"/> on its own task with the keys — the third thing that
     /// runs there, after a line's pane and its acts — under a token linked to the turn's and the
     /// pane-close signal, so the wake phrase, the app token or the turn's end close the pane; ESC
-    /// (or Ctrl+C, since 2026-09-17) inside it closes the pane alone (null: not answered) and the
+    /// (or Ctrl+C, since 2026-09-17) inside it is the user's decline (a note with it from the decline row, 2026-11-24) and the
     /// reply runs on. The wait itself is
-    /// under the turn token: cancelled, the tool's cancellation ends the turn as ESC does. Null
-    /// too when no watcher could run the pane (never mid-turn on the screen; a guard). A pane that
-    /// fails is one error line and null, never the turn's end.
+    /// under the turn token: cancelled, the tool's cancellation ends the turn as ESC does.
+    /// <see cref="AskReply.NotShown"/> when no watcher could run the pane (never mid-turn on the screen; a guard), when the pane
+    /// closed under the user (the wake phrase), and when it failed (one error line, never the turn's end): the model reads the
+    /// same "not answered", but the repeat guard never counts them as the user's decline.
     /// </summary>
-    private async Task<IReadOnlyList<AskAnswer>?> AskUserAsync(IReadOnlyList<AskQuestion> questions, CancellationToken turnToken)
+    private async Task<AskReply?> AskUserAsync(IReadOnlyList<AskQuestion> questions, CancellationToken turnToken)
     {
         // On the PC's pane and the Web UI's page at once (2026-10-14, AskBothAsync), the first answer winning.
-        var outcome = await AskBothAsync<IReadOnlyList<AskAnswer>?>(QuestionSpec(questions), token => _questionMenu.AskAsync(questions, token),
+        var outcome = await AskBothAsync<AskReply?>(QuestionSpec(questions), token => _questionMenu.AskAsync(questions, token),
             answer => QuestionAnswers(questions, answer), "The question pane failed: ", turnToken).ConfigureAwait(false);
         if (outcome.NeverAsked)
         {
             // No watcher to run the pane: never asked.
             DiagnosticLog.Info(AppCategory, AskUserNotAskedLogLine);
-            return null;
+            return AskReply.NotShown;
         }
 
-        var answers = outcome.Value;
-        DiagnosticLog.Info(AppCategory, answers is null ? AskUserNotAnsweredLogLine : AskUserAnsweredLogLine(questions.Count));
-        return answers;
+        var reply = outcome.Value ?? AskReply.NotShown;
+        DiagnosticLog.Info(AppCategory, reply.Answers is { } answers ? AskUserAnsweredLogLine(answers.Count(a => !a.Skipped), answers.Count(a => a.Skipped))
+            : reply.DeclineNote is not null ? AskUserDeclinedNoteLogLine : AskUserNotAnsweredLogLine);
+        return reply;
     }
 
-    /// <summary><c>ask_user: 2 questions answered</c>. Pinned.</summary>
-    public static string AskUserAnsweredLogLine(int questions) =>
-        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ask_user: {questions} question{(questions == 1 ? "" : "s")} answered");
+    /// <summary><c>ask_user: 2 questions answered</c>, and since 2026-11-24 <c>, 1 skipped</c> when any were. Pinned.</summary>
+    public static string AskUserAnsweredLogLine(int answered, int skipped = 0) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ask_user: {answered} question{(answered == 1 ? "" : "s")} answered{(skipped > 0 ? $", {skipped} skipped" : "")}");
 
     public const string AskUserNotAnsweredLogLine = "ask_user: not answered (Esc).";
+
+    /// <summary>A decline with a note (2026-11-24): the note itself never logged, the user's words. Pinned.</summary>
+    public const string AskUserDeclinedNoteLogLine = "ask_user: declined with a note";
     public const string AskUserNotAskedLogLine = "ask_user: never asked (no watcher to run the pane).";
 
     /// <summary>

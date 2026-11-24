@@ -28,7 +28,7 @@ public class ToolsTextTests : IDisposable
         Directory.CreateDirectory(_dir);
         var files = new NeonSidekick.Files.WorkingDirectory(() => _dir, _time);
         var web = ChatScreen.WebTools(new WebAccess(new HttpClient(new StubHttpMessageHandler()), new FakeHeadlessBrowser(), _time), files, () => new AppSettingsData());
-        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => new AppSettingsData());
+        var questions = ChatScreen.AskTools((_, _) => Task.FromResult<AskReply?>(null), () => new AppSettingsData());
         var catalog = new SkillCatalog(() => new SkillRoots(Path.Combine(_dir, "p"), Path.Combine(_dir, "g"), Path.Combine(_dir, "x")));
         var skills = ChatScreen.SkillTools(catalog, () => catalog.Roots, () => false);
         using var store = new NeonSidekick.Sessions.SessionStore(Path.Combine(_dir, "sessions"));

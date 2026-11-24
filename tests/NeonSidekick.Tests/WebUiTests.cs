@@ -438,27 +438,72 @@ public sealed partial class WebUiTests : IDisposable
     [Fact]
     public void AnAnswer_MustFitTheAsk()
     {
-        var questions = new WebAskSpec("question", "Questions", [], Questions: [new WebQuestion("Color?", null, false, ["red", "blue"]), new WebQuestion("Toppings?", null, true, ["cheese", "ham"])]);
+        static WebQuestionOption O(string label) => new(label, null, false);
+        var questions = new WebAskSpec("question", "Questions", [], Questions: [
+            new WebQuestion("Color?", null, "single", [O("red"), O("blue")]),
+            new WebQuestion("Toppings?", null, "multi", [O("cheese"), O("ham")]),
+            new WebQuestion("Name?", null, "text", [])]);
 
         Assert.Equal(WebOutcome.Refused, WebAskBroker.Check(YesNo(), new WebAnswerRequest { Choice = "maybe" })!.Value.Outcome);
         Assert.Null(WebAskBroker.Check(YesNo(), new WebAnswerRequest { Choice = "no" }));
-        // Every question answered, by a pick or typed words; one pick for a single choice.
+        // One answer per question; one pick at most for a single choice, none on a text question.
         Assert.Equal(WebUiText.AskIncomplete, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [1] }] })!.Value.Message);
-        Assert.Equal(WebUiText.AskIncomplete, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [1] }, new() { Picked = [] }] })!.Value.Message);
-        Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [0, 1] }, new() { Picked = [0] }] })!.Value.Message);
-        Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [5] }, new() { Picked = [0] }] })!.Value.Message);
-        Assert.Null(WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Other = "green" }, new() { Picked = [0, 1], Other = "olives" }] }));
+        Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [0, 1] }, new() { Picked = [0] }, new()] })!.Value.Message);
+        Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [5] }, new() { Picked = [0] }, new()] })!.Value.Message);
+        Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new(), new(), new() { Picked = [0] }] })!.Value.Message);
+        Assert.Null(WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Other = "green" }, new() { Picked = [0, 1], Other = "olives" }, new() { Other = "notes" }] }));
+        // A question with nothing picked and nothing typed is a skip (2026-11-24): every one of them, too.
+        Assert.Null(WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [1] }, new() { Picked = [] }, new() { Other = " " }] }));
+        Assert.Null(WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new(), new(), new()] }));
+        // The decline, with or without a note, needs no answers.
+        Assert.Null(WebAskBroker.Check(questions, new WebAnswerRequest { Choice = WebAskBroker.DeclineChoice }));
+        Assert.Null(WebAskBroker.Check(questions, new WebAnswerRequest { Choice = WebAskBroker.DeclineChoice, Text = "later" }));
+        Assert.Equal("decline", WebAskBroker.DeclineChoice);
+    }
+
+    /// <summary>The PC's notice and the log name the page's decline by its label, never its note: the user's words (2026-11-24).</summary>
+    [Fact]
+    public void AQuestionAsksDescribe_IsSubmitOrDecline_NeverTheNote()
+    {
+        var questions = new List<Llm.Tools.AskQuestion> { new("Color?", "Color", Llm.Tools.AskKind.Single, ["red", "blue"]) };
+        var broker = new WebAskBroker();
+        var handle = broker.Open(App.ChatScreen.QuestionSpec(questions));
+        Assert.Equal(App.QuestionMenu.SubmitRow, handle.Describe(new WebAnswerRequest { Questions = [new()] }));
+        string declined = handle.Describe(new WebAnswerRequest { Choice = WebAskBroker.DeclineChoice, Text = "my secret plan" });
+        Assert.Equal(WebUiText.AskDecline, declined);
+        Assert.DoesNotContain("secret", declined, StringComparison.Ordinal);
     }
 
     [Fact]
     public void AskUsersAnswers_ReadAsTheToolReadsThePane()
     {
-        var questions = new List<Llm.Tools.AskQuestion> { new("Color?", "Color", false, ["red", "blue"]), new("Toppings?", null, true, ["cheese", "olives", "ham"]) };
+        var questions = new List<Llm.Tools.AskQuestion>
+        {
+            new("Color?", "Color", Llm.Tools.AskKind.Single, ["red", "blue"]),
+            new("Toppings?", null, Llm.Tools.AskKind.Multi, ["cheese", "olives", "ham"]),
+            new("Name?", null, Llm.Tools.AskKind.Text, []),
+            new("Size?", null, Llm.Tools.AskKind.Single, ["s", "m"]),
+        };
 
-        var answers = App.ChatScreen.QuestionAnswers(questions, new WebAnswerRequest { Questions = [new() { Picked = [1] }, new() { Picked = [2, 0], Other = " anchovies " }] });
+        var reply = App.ChatScreen.QuestionAnswers(questions, new WebAnswerRequest
+        {
+            Questions = [new() { Picked = [1] }, new() { Picked = [2, 0], Other = " anchovies " }, new() { Other = " notes " }, new() { Other = " M " }],
+        });
 
+        var answers = reply.Answers!;
+        Assert.True(reply.Shown);
         Assert.Equal(["blue"], answers[0].Choices);
-        Assert.Equal(["cheese", "ham", "anchovies"], answers[1].Choices);   // in option order, the typed answer last
+        Assert.Equal(["cheese", "ham"], answers[1].Choices);   // in option order
+        Assert.Equal("anchovies", answers[1].Typed);
+        Assert.Equal("notes", answers[2].Typed);
+        Assert.Equal(["m"], answers[3].Choices);                // a typed option is that option (2026-11-24)
+        Assert.Null(answers[3].Typed);
+        Assert.Equal("Color? — blue\nToppings? — cheese, ham, anchovies (typed)\nName? — notes (typed)\nSize? — m", Llm.Tools.AskUserText.ResultText(answers));
+
+        // Short of answers: skipped. The decline carries its note.
+        Assert.True(App.ChatScreen.QuestionAnswers(questions, new WebAnswerRequest { Questions = [] }).Answers!.All(a => a.Skipped));
+        var declined = App.ChatScreen.QuestionAnswers(questions, new WebAnswerRequest { Choice = WebAskBroker.DeclineChoice, Text = " later " });
+        Assert.Equal((null, "later", true), (declined.Answers, declined.DeclineNote, declined.Shown));
     }
 
     [Fact]

@@ -11776,7 +11776,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_UsagePromptOpensTheInfoPane_PromptToolsSkills_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab (2026-10-01)
-        _console.Profile.Height = 140;   // the Office converters (2026-10-29) two rows more; the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
+        _console.Profile.Height = 150;   // ask_user's text questions, option objects and skips (2026-11-24) more; the Office converters (2026-10-29) two rows more; the Git group (2026-09-20) makes the Tools tab eleven rows taller; skill_editor's file-actions sentence (2026-09-27) a row more; convert_to_pdf (2026-10-03) more again; date_difference's years-and-months sentence (2026-10-05) a row more; the picture tools' saved-picture paths (2026-10-09) more; the images folder's path in search_files, file_info and view_image (later on 2026-10-09) more again
         _geometry = new ScreenGeometry(() => null);
         PushLine("/usage prompt");   // /sys' Prompt tab until 2026-11-07
         _console.Input.PushKey(Keys.Right);
@@ -14947,12 +14947,16 @@ public partial class ChatScreenTests : IDisposable
     /// second a text; "pizza" then <c>/exit</c> at the idle line, and <paramref name="answer"/>
     /// pushed once at the pane's own wait (the tool's pane holds the keys: <see cref="KeySource.PendingLine"/>).
     /// </summary>
-    private void AskUserFixture(ConsoleKeyInfo[] answer, string reply)
+    private void AskUserFixture(ConsoleKeyInfo[] answer, string reply, int calls = 1)
     {
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
         _geometry = new ScreenGeometry(() => null);
-        _chat.Enqueue(FakeChatClient.Call("c1", AskUserTool.ToolName, new Dictionary<string, object?> { [AskUserTool.QuestionsArgument] = TwoQuestionsJson }));
+        for (int i = 1; i <= calls; i++)
+        {
+            _chat.Enqueue(FakeChatClient.Call("c" + i.ToString(System.Globalization.CultureInfo.InvariantCulture), AskUserTool.ToolName, new Dictionary<string, object?> { [AskUserTool.QuestionsArgument] = TwoQuestionsJson }));
+        }
+
         _chat.EnqueueText(reply);
         var input = Scripted();
         StepsWhenIdle(Line("pizza"), Line("/exit"));
@@ -15019,6 +15023,25 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(AskUserText.NotAnswered, Assert.Single(_chat.Requests[1][^1].Contents.OfType<FunctionResultContent>()).Result);
         // The idle line came back after the reply: the input row with its placeholder.
         Assert.Contains(InputLine.PromptGlyph + ChatScreen.InputPlaceholder, output);
+    }
+
+    /// <summary>
+    /// The Ask repeat guard on (2026-11-24, the ask_user plan's F): the same questions asked again in the turn after Esc are refused
+    /// unshown, and the refusal is a dim 🛠️ line in the transcript as any result is (the user's ask).
+    /// </summary>
+    [Fact]
+    public async Task AskUser_RepeatGuardOn_ARepeatAfterEsc_IsRefusedUnshown_AndTheTranscriptSaysSo()
+    {
+        _settings.Update(d => d.AskRepeatGuard = true);
+        AskUserFixture([Keys.Escape], "Going on without them.", calls: 2);
+
+        string output = await RunAsync();
+
+        Assert.Contains("🛠️ " + AskUserText.NotAnswered + "\n", output);
+        Assert.Contains("🛠️ " + AskUserText.AlreadyDeclined(null) + "\n", output);
+        Assert.Contains("Going on without them.", output);
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Equal(AskUserText.AlreadyDeclined(null), Assert.Single(_chat.Requests[2][^1].Contents.OfType<FunctionResultContent>()).Result);
     }
 
     [Fact]
@@ -15100,7 +15123,7 @@ public partial class ChatScreenTests : IDisposable
         var tool = _chat.Options[0]!.Tools!.Cast<AIFunction>().Last();
         Assert.Equal(AskUserTool.ToolName, tool.Name);
         Assert.Equal(3, tool.JsonSchema.GetProperty("properties").GetProperty("questions").GetProperty("maxItems").GetInt32());
-        Assert.Contains("1 to 3 multiple-choice questions", tool.Description);
+        Assert.Contains("Asks the user 1 to 3 questions", tool.Description);
         Assert.Equal(SkilledPrompt(false, Array.Empty<string>(), web: true, ask: new AskLimits(3, 15), markdown: true), _chat.Requests[0][0].Text);
         Assert.Contains("up to 3 questions in one call, 2 to 15 options each", _chat.Requests[0][0].Text!);
     }
@@ -26707,6 +26730,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("Interrupt switched off for this session: two interruptions in a row heard nothing.", ChatScreen.InterruptDisabledLogLine);
         Assert.Equal("ask_user: 2 questions answered", ChatScreen.AskUserAnsweredLogLine(2));
         Assert.Equal("ask_user: 1 question answered", ChatScreen.AskUserAnsweredLogLine(1));
+        Assert.Equal("ask_user: 2 questions answered, 1 skipped", ChatScreen.AskUserAnsweredLogLine(2, 1));   // 2026-11-24: skips counted, none said only when some
+        Assert.Equal("ask_user: declined with a note", ChatScreen.AskUserDeclinedNoteLogLine);
     }
 
     // ── A double-clicked picture opens in the image editor (later on 2026-09-24) ─

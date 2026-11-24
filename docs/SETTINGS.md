@@ -610,7 +610,8 @@ The tools most profiles use, and the pane's own options.
 
 | Setting | What it does | Default |
 |---|---|---|
-| Ask user | Offers `ask_user`: multiple-choice questions you answer in the app. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
+| Ask user | Offers `ask_user`: questions you answer in the app, by choice or in your own words. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
+| Ask repeat guard | On, the same questions asked again in one reply after you declined them aren't shown; the model is told you declined. | off |
 | Ask max questions | Questions per call (1–10). | 10 |
 | Ask max choices per question | Options per question (2–15). | 10 |
 

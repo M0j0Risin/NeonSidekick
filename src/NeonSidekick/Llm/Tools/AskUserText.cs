@@ -9,28 +9,79 @@ namespace NeonSidekick.Llm.Tools;
 /// </summary>
 public static class AskUserText
 {
-    /// <summary>The tool's result — and the one transcript line — when the user cancelled the questions (ESC), or nothing could ask them. Pinned.</summary>
+    /// <summary>The tool's result — and the one transcript line — when the user declined the questions (Esc), or nothing could ask them. Pinned.</summary>
     public const string NotAnswered = "(questions not answered)";
 
     /// <summary>The joiner between an answer's choices: <c>cheese, olives</c>.</summary>
     public const string ChoiceSeparator = ", ";
 
-    /// <summary>One question's choices as the result prints them: the options in their order, a typed answer last.</summary>
-    public static string AnswerText(IReadOnlyList<string> choices)
+    /// <summary>The tag after words the user typed (2026-11-24, the user's pick: trailing), so the model tells them from its own options. Pinned.</summary>
+    public const string TypedTag = " (typed)";
+
+    /// <summary>The answer of a question the user saw and left to the model (2026-11-24). Pinned.</summary>
+    public const string Skipped = "(skipped)";
+
+    /// <summary>
+    /// One question's answer as the result prints it: the options picked in their order, then the typed words with <see cref="TypedTag"/>;
+    /// <see cref="Skipped"/> for neither. The pane's Submit tab shows the same text, so what the user checks is what is sent.
+    /// </summary>
+    public static string AnswerText(AskAnswer answer)
     {
-        ArgumentNullException.ThrowIfNull(choices);
-        return string.Join(ChoiceSeparator, choices);
+        ArgumentNullException.ThrowIfNull(answer);
+        if (answer.Skipped)
+        {
+            return Skipped;
+        }
+
+        var parts = new List<string>(answer.Choices);
+        if (answer.Typed is { } typed)
+        {
+            parts.Add(typed + TypedTag);
+        }
+
+        return string.Join(ChoiceSeparator, parts);
     }
 
-    /// <summary>One line of the result: <c>Which colour? — blue</c>.</summary>
+    /// <summary>One line of the result: <c>Which color? — blue</c>.</summary>
     public static string AnswerLine(string question, string answer) => $"{question} — {answer}";
 
     /// <summary>The tool's result for answered questions: one <see cref="AnswerLine"/> per question in the order asked, joined by a line break.</summary>
     public static string ResultText(IReadOnlyList<AskAnswer> answers)
     {
         ArgumentNullException.ThrowIfNull(answers);
-        return string.Join('\n', answers.Select(a => AnswerLine(a.Question.Question, AnswerText(a.Choices))));
+        return string.Join('\n', answers.Select(a => AnswerLine(a.Question.Question, AnswerText(a))));
     }
+
+    /// <summary>A decline (2026-11-24, E): <see cref="NotAnswered"/>, or with the user's note <c>(questions not answered: the note)</c>, on one line. Pinned.</summary>
+    public static string Declined(string? note)
+    {
+        string? flat = note?.ReplaceLineEndings(" ").Trim();
+        return string.IsNullOrEmpty(flat) ? NotAnswered : $"(questions not answered: {flat})";
+    }
+
+    /// <summary>The tool's result for a reply: the answers' lines, or the decline (its note, if any).</summary>
+    public static string ReplyText(AskReply reply)
+    {
+        ArgumentNullException.ThrowIfNull(reply);
+        return reply.Answers is { } answers ? ResultText(answers) : Declined(reply.DeclineNote);
+    }
+
+    /// <summary>
+    /// The result for a call the repeat guard refused (2026-11-24, F, <c>Ask repeat guard</c> on): every question was declined earlier in
+    /// this turn, so nothing was shown; the latest decline's note follows when it had one. Pinned.
+    /// </summary>
+    public static string AlreadyDeclined(string? note)
+    {
+        const string Sentence = "The user declined these questions earlier in this turn; go on without them.";
+        string? flat = note?.ReplaceLineEndings(" ").Trim();
+        return string.IsNullOrEmpty(flat) ? Sentence : Sentence + " Their note: " + flat;
+    }
+
+    /// <summary>The log's category for the tool's own lines (the screen's other <c>ask_user</c> lines use the same).</summary>
+    public const string LogCategory = "App";
+
+    /// <summary>The log line for a refused repeat (2026-11-24, F). Pinned.</summary>
+    public const string RepeatRefusedLogLine = "ask_user: repeat refused";
 
     // ── The model's mistakes ────────────────────────────────────────────────
 
@@ -85,10 +136,17 @@ public static class AskUserText
 
     public static string NoQuestionText(int number) => $"Error: question {N(number)} has no question text.";
 
-    public static string BadType(int number, string raw) => $"Error: question {N(number)}: type must be single or multi, not '{raw.Trim()}'.";
+    public static string BadType(int number, string raw) => $"Error: question {N(number)}: type must be single, multi or text, not '{raw.Trim()}'.";
 
-    /// <summary>Options that are no list of texts; the range is <see cref="AskUserTool.MinOptions"/> to the cap (<c>Ask max choices per question</c>).</summary>
-    public static string BadOptions(int number, int maxChoices) => $"Error: question {N(number)}: options must be a list of {N(AskUserTool.MinOptions)} to {N(maxChoices)} short strings.";
+    /// <summary>
+    /// Options that are no list of options; the range is <see cref="AskUserTool.MinOptions"/> to the cap (<c>Ask max choices per question</c>), each a
+    /// string or an object with a label (2026-11-24: "short strings" misled a model that sent objects).
+    /// </summary>
+    public static string BadOptions(int number, int maxChoices) =>
+        $"Error: question {N(number)}: options must be a list of {N(AskUserTool.MinOptions)} to {N(maxChoices)} options, each a short string or {{\"label\": \"…\", \"description\": \"…\"}}.";
+
+    /// <summary>Options sent on a text question (2026-11-24): the model meant a choice. Pinned.</summary>
+    public static string TextTakesNoOptions(int number) => $"Error: question {N(number)} is type text, which takes no options; use single or multi to offer choices.";
 
     /// <summary>Too few or too many options for one question, the range as <see cref="BadOptions"/> names it.</summary>
     public static string OptionCount(int number, int count, int maxChoices) => $"Error: question {N(number)} has {N(count)} options; give {N(AskUserTool.MinOptions)} to {N(maxChoices)}.";

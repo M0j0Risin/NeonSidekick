@@ -120,7 +120,7 @@ Under *Ask user*. Not offered headless.
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `ask_user` | `questions` | Asks you multiple-choice questions: up to *Ask max questions*, each with 2 to *Ask max choices per question* options, `single` or `multi`; you can type your own answer. Esc declines them all. |
+| `ask_user` | `questions` | Asks you up to *Ask max questions* questions: single, multi or free text, options with optional descriptions and a recommended pick. Skip any on Submit; Esc, or a note, declines them all. |
 
 ### Help
 

@@ -312,7 +312,7 @@ internal static class HelpToolCatalog
         // MCP (2026-11-21, feature idea #33): the one built-in MCP tool; the servers' own tools are answered by McpAnswer
         T(Mcp.McpReadTool.ToolName, McpGroup, SettingsField.McpServers, "Lists and reads the resources a connected MCP server publishes, and follows resource links in its tools' results.", setup: "needs a connected server that offers resources; a read asks for a server whose `ask` is `always`"),
         // Questions
-        T(AskUserTool.ToolName, QuestionsGroup, SettingsField.AskUser, "Asks the user one to ten multiple-choice questions on screen and waits for the answers.", headless: false, pane: true),
+        T(AskUserTool.ToolName, QuestionsGroup, SettingsField.AskUser, "Asks the user questions on screen, a choice or free text, and waits for the answers.", headless: false, pane: true),
         // The passes' own
         T(PresentPlanTool.ToolName, PlanGroup, null, "Presents a plan for the user's approval and saves it in the working folder's `.neon` folder.", setup: "only while planning, under `/plan`"),
         T(PresentAuditTool.ToolName, AuditGroup, null, "Records a code audit pass's findings in the audit's report.", setup: "only during a `/code-audit` pass"),

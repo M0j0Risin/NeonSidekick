@@ -534,7 +534,7 @@ public sealed class WriteGuardTests : IDisposable
         var tools = new List<AIFunction> { new WriteFileTool(_files) };
         if (offersAskUser)
         {
-            tools.Add(new AskUserTool((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => new AppSettingsData()));
+            tools.Add(new AskUserTool((_, _) => Task.FromResult<AskReply?>(null), () => new AppSettingsData()));
         }
 
         var client = new FakeChatClient();

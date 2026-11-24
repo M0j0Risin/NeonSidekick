@@ -165,6 +165,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/tools` › Files › Video | `p` *Video files play in* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
+| The question pane (`ask_user`) | ←/→ questions · Enter chooses, or toggles on a multi · Space marks or clears · 1–9 jump · Other… types your own · Submit (skipped ones go as skipped) · Decline with a note… · Esc declines |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · Esc denies |
 | `/mcp` › Servers | `a` the server's ask (writes, always, never), written into its mcp.json; also on a skipped server whose ask is a typo. `s` signs in or out; Enter on a needs-sign-in row signs in, Esc calls a waiting sign-in off |
@@ -716,6 +717,7 @@ The button at the message box's left (or a bare `/prompts` or `/queue` from the 
 
 * **On both sides at once** (the first answer wins): a command's approval, `ask_user`, an allow (camera, screen, a database write, an MCP call), a yes/no, the plan's approval, a code audit's done pane and a reflection's skill.
 * The page shows a command, a statement or an MCP call's arguments whole, and a reflection's skill as its summary with **Keep** and **Discard**.
+* **`ask_user`** on the page: **Submit** sends what you answered, the rest as skipped (a second tap clears a pick); **Decline** declines them all, with a note if you like. What you picked or typed survives a reconnect.
 * **The camera's shutter** (*Camera shutter* `user`) offers **Take and send**: the PC's camera takes the photo, with no preview.
 * **At the PC only:** the plan's Close gaps and a code audit's reviewer page; meanwhile the page says "waiting for an answer at the PC".
 * **A bot check:** the allow question, then a card ([A bot check from the page](#a-bot-check-from-the-page)).

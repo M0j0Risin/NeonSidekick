@@ -273,7 +273,7 @@ public class ToolArgumentCheckTests
         Assert.Equal(CameraCaptureTool.PromptAliases, ((IAcceptsArguments)new CameraCaptureTool(null)).ExtraArguments);
         Assert.Equal([.. ScreenCaptureTool.TargetAliases, .. CameraCaptureTool.PromptAliases], ((IAcceptsArguments)new ScreenCaptureTool(null)).ExtraArguments);
         Assert.Equal(["old_text", "new_text", "replace_all", "edits"], WriteFileTool.EditArguments);
-        var ask = new AskUserTool((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => new NeonSidekick.Settings.AppSettingsData());
+        var ask = new AskUserTool((_, _) => Task.FromResult<AskReply?>(null), () => new NeonSidekick.Settings.AppSettingsData());
         Assert.Equal(["question", "text", "title", "type", "options", "choices", "multi", "multiple"], ((IAcceptsArguments)ask).ExtraArguments);
     }
 
@@ -295,7 +295,7 @@ public class ToolArgumentCheckTests
             var unc = new NeonSidekick.Unc.UncAccess(() => new NeonSidekick.Unc.UncCatalog([], []), time);
             var browser = new FakeHeadlessBrowser();
             var skillRoots = new NeonSidekick.Skills.SkillRoots(Path.Combine(root, "p"), Path.Combine(root, "g"), Path.Combine(root, "e"));
-            var ask = new AskUserTool((_, _) => Task.FromResult<IReadOnlyList<AskAnswer>?>(null), () => settings);
+            var ask = new AskUserTool((_, _) => Task.FromResult<AskReply?>(null), () => settings);
             (AIFunction Tool, Dictionary<string, object?> Base)[] table =
             [
                 (new CameraCaptureTool(null), Args()),

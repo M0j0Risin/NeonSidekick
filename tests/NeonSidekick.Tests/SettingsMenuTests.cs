@@ -1153,6 +1153,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.WebFooter,   // 2026-11-21, the 📚 line made a setting
                 SettingsField.McpKeepInSessions,   // 2026-11-21, MCP pictures not kept by default
                 SettingsField.ProjectSkills,   // 2026-11-23, a repo's own skills once trusted
+                SettingsField.AskRepeatGuard,   // 2026-11-24, the ask_user plan's repeat guard
             },
             Enum.GetValues<SettingsField>());
         // The compact rows: on the LLM tab after the context length but no reconnect; the type a picker, the two others typed.
@@ -1873,7 +1874,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("protected   [#9A8BB8]loaded skills are kept through a prune, during a reply too[/]", SettingsMenu.SkillCompactModeLabel("protected"));
         Assert.Equal("unprotected [#9A8BB8]loaded skills prune like any tool result[/]", SettingsMenu.SkillCompactModeLabel("unprotected"));
         Assert.Equal([SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount], ToolsMenuTests.TabFields(ToolsText.OptionsTabTitle));   // the Options tab, later on 2026-09-19 (index 7 since the SQL tab, 2026-09-23, 9 since the Claude tab, 2026-09-27, 11 since the Print tab, 2026-09-28); the fold's count under the switch 2026-09-22, the code fold's under it later that day
-        Assert.Equal([SettingsField.AskUser, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], ToolsMenuTests.TabFields(ToolsText.AskTabTitle));   // the Ask tab: second after Options until later on 2026-09-21, between Shell and Git (native) since
+        Assert.Equal([SettingsField.AskUser, SettingsField.AskRepeatGuard, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], ToolsMenuTests.TabFields(ToolsText.AskTabTitle));   // the Ask tab: second after Options until later on 2026-09-21, between Shell and Git (native) since
         Assert.True(SettingsMenu.IsToggle(SettingsField.AskUser));
         Assert.False(SettingsMenu.IsToggle(SettingsField.AskMaxQuestions) || SettingsMenu.IsToggle(SettingsField.AskMaxChoices));
         Assert.All(ToolsMenuTests.TabFields(ToolsText.AskTabTitle), f => Assert.False(SettingsMenu.IsLlmField(f) || SettingsMenu.IsTtsField(f) || SettingsMenu.IsVoiceField(f) || SettingsMenu.RefusedMidTurn(f)));
@@ -6142,10 +6143,11 @@ public partial class SettingsMenuTests : IDisposable
         var askSections = SettingsMenu.ToolsMenuSections[0];
         Assert.Null(SettingsMenu.SectionedField(ask, askSections, 0));
         Assert.Equal(SettingsField.AskUser, SettingsMenu.SectionedField(ask, askSections, 1));
-        Assert.Null(SettingsMenu.SectionedField(ask, askSections, 2));
-        Assert.Equal(SettingsField.AskMaxQuestions, SettingsMenu.SectionedField(ask, askSections, 3));
-        Assert.Equal(SettingsField.AskMaxChoices, SettingsMenu.SectionedField(ask, askSections, 4));
-        Assert.Null(SettingsMenu.SectionedField(ask, askSections, 5));
+        Assert.Equal(SettingsField.AskRepeatGuard, SettingsMenu.SectionedField(ask, askSections, 2));
+        Assert.Null(SettingsMenu.SectionedField(ask, askSections, 3));
+        Assert.Equal(SettingsField.AskMaxQuestions, SettingsMenu.SectionedField(ask, askSections, 4));
+        Assert.Equal(SettingsField.AskMaxChoices, SettingsMenu.SectionedField(ask, askSections, 5));
+        Assert.Null(SettingsMenu.SectionedField(ask, askSections, 6));
         Assert.Null(SettingsMenu.SectionedField(ask, askSections, -1));
         Assert.Equal(ask.Cast<SettingsField?>(), SettingsMenu.SectionedRows(ask, null));
     }

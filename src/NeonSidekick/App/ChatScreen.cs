@@ -8152,7 +8152,7 @@ internal sealed partial class ChatScreen
     /// hands the pane phase to the turn's key watcher; <paramref name="effective"/> the settings the
     /// caps (<c>Ask max questions</c>, <c>Ask max choices per question</c>) are read from at every use.
     /// </summary>
-    public static IReadOnlyList<AIFunction> AskTools(Func<IReadOnlyList<AskQuestion>, CancellationToken, Task<IReadOnlyList<AskAnswer>?>> ask, Func<AppSettingsData> effective) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> AskTools(Func<IReadOnlyList<AskQuestion>, CancellationToken, Task<AskReply?>> ask, Func<AppSettingsData> effective) => new AIFunction[]
     {
         new AskUserTool(ask, effective),
     };

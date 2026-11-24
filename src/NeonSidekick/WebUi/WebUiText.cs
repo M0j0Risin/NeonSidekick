@@ -556,8 +556,28 @@ public static class WebUiText
     /// <summary>An answer to an ask already answered or gone.</summary>
     public const string AskGone = "That question was answered or withdrawn.";
 
-    /// <summary>An answer that leaves a question unanswered. Pinned.</summary>
+    /// <summary>An answer whose questions are not the ask's (a count that differs). Pinned.</summary>
     public const string AskIncomplete = "Answer every question first.";
+
+    // ── ask_user's form (2026-11-24, the ask_user plan): the words shared with the PC's pane where it has them ──
+
+    /// <summary>The tag beside a recommended option, the pane's word.</summary>
+    public const string AskRecommended = App.QuestionMenu.RecommendedWord;
+
+    /// <summary>A text question's box, empty: the pane's row.</summary>
+    public const string AskTyped = App.QuestionMenu.TextRow;
+
+    /// <summary>The line by Submit: <c>2 of 3 answered</c>; {0} and {1} filled by the page.</summary>
+    public const string AskAnswered = "{0} of {1} answered";
+
+    /// <summary>The decline's button, and what the PC's notice and the log say the page chose.</summary>
+    public const string AskDecline = "Decline";
+
+    /// <summary>The decline's note box, empty.</summary>
+    public const string AskDeclineNote = "A note for the model (optional)";
+
+    /// <summary>The note box's button.</summary>
+    public const string AskSend = "Send";
 
     /// <summary>A choice the ask does not have.</summary>
     public const string NoSuchChoice = "That is not one of the choices.";
@@ -1127,7 +1147,8 @@ public static class WebUiText
         SessionsNone, SessionsNoMatch, SessionsFilter, SessionsFound, SessionsArmed, SessionsCurrent, SessionsHere, SessionsBusy, SessionsLoading, SessionsNotSaved,
         FilesNone, FilesTrimmed, FilesHint,
         AttachButton, AttachRemove, AttachWaiting, AttachTooBig, AttachRoom, AttachStopped, AttachLeftOut, AttachPdf, ManageReadFailed,
-        MemoryHere, MemoryElsewhere, SessionsNoneHere);
+        MemoryHere, MemoryElsewhere, SessionsNoneHere,
+        AskRecommended, AskTyped, AskAnswered, AskDecline, AskDeclineNote, AskSend);
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 

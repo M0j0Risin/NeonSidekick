@@ -242,27 +242,38 @@ internal sealed partial class ChatScreen
     /// <summary>The page's form of <c>ask_user</c>: every question at once, answered with the PC's Submit.</summary>
     internal static WebAskSpec QuestionSpec(IReadOnlyList<AskQuestion> questions) =>
         new("question", QuestionMenu.Title, [],
-            Questions: questions.Select(q => new WebQuestion(q.Question, q.Title, q.Multi, q.Options)).ToList(),
+            Questions: questions.Select(q => new WebQuestion(q.Question, q.Title, KindWord(q.Kind),
+                q.Options.Select(o => new WebQuestionOption(o.Label, o.Description, o.Recommended)).ToList())).ToList(),
             SubmitLabel: QuestionMenu.SubmitRow);
 
-    /// <summary>The page's answers as the tool reads them: the options picked in option order, a typed answer last.</summary>
-    internal static IReadOnlyList<AskAnswer> QuestionAnswers(IReadOnlyList<AskQuestion> questions, WebAnswerRequest answer)
+    /// <summary>A question's kind as the page reads it (2026-11-24): the schema's own words.</summary>
+    internal static string KindWord(AskKind kind) => kind switch
     {
+        AskKind.Multi => AskUserTool.MultiType,
+        AskKind.Text => AskUserTool.TextType,
+        _ => AskUserTool.SingleType,
+    };
+
+    /// <summary>
+    /// The page's answer as the tool reads it: its Decline (2026-11-24, with the note it carries), or one answer per question through
+    /// <see cref="AskAnswer.From"/> — the picks, and the typed words (a text question's answer), one that is an option counting as it.
+    /// </summary>
+    internal static AskReply QuestionAnswers(IReadOnlyList<AskQuestion> questions, WebAnswerRequest answer)
+    {
+        if (answer.Choice == WebAskBroker.DeclineChoice)
+        {
+            return AskReply.Declined(answer.Text);
+        }
+
         var given = answer.Questions ?? [];
         var answers = new List<AskAnswer>(questions.Count);
         for (int i = 0; i < questions.Count; i++)
         {
             var picked = i < given.Count ? given[i].Picked ?? [] : [];
-            var choices = picked.Where(p => p >= 0 && p < questions[i].Options.Count).Distinct().Order().Select(p => questions[i].Options[p]).ToList();
-            if (i < given.Count && !string.IsNullOrWhiteSpace(given[i].Other))
-            {
-                choices.Add(given[i].Other!.Trim());
-            }
-
-            answers.Add(new AskAnswer(questions[i], choices));
+            answers.Add(AskAnswer.From(questions[i], picked, i < given.Count ? given[i].Other : null));
         }
 
-        return answers;
+        return AskReply.Answered(answers);
     }
 
     /// <summary>The page's form of the plan's approval: the plan whole, and Approve, Approve fresh, Refine (with words) and Cancel. Close gaps stays the PC's.</summary>

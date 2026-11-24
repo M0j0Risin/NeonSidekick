@@ -700,6 +700,12 @@ button:disabled { opacity: 0.45; cursor: default; }
 .botcheck-type { display: flex; gap: 6px; }
 .botcheck-type input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }
 .ask label input[type="text"] { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+/* ask_user's form (2026-11-24, the ask_user plan): a text question's box, an option's description, the recommended tag, the count, the decline's note. */
+.ask .q-text, .ask .q-note input { width: 100%; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+.ask .q-desc { color: var(--dim); font-size: 13px; margin: -2px 0 4px 26px; }
+.ask .q-rec { color: var(--accent); font-size: 12px; border: 1px solid var(--accent); border-radius: 6px; padding: 0 6px; }
+.ask .q-count { color: var(--dim); font-size: 13px; align-self: center; }
+.ask .q-note { display: flex; gap: 8px; margin-top: 8px; }
 
 /* ── Shopping ───────────────────────────────────────────────────── */
 .shop-header { color: var(--dim); margin: 0 0 12px; }

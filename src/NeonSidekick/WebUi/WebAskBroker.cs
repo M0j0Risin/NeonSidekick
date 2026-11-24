@@ -93,7 +93,8 @@ public sealed class WebAskHandle
         ArgumentNullException.ThrowIfNull(answer);
         if (Spec.Questions is { Count: > 0 })
         {
-            return Spec.SubmitLabel ?? "answered";
+            // Never the decline's note (2026-11-24): the log names the page's address, and the note is the user's words.
+            return answer.Choice == WebAskBroker.DeclineChoice ? WebUiText.AskDecline : Spec.SubmitLabel ?? "answered";
         }
 
         string label = Spec.Choices.FirstOrDefault(c => c.Id == answer.Choice)?.Label
@@ -105,8 +106,8 @@ public sealed class WebAskHandle
 
 /// <summary>
 /// The asks open on the Web UI (2026-10-14): the screen opens one as its pane opens (<see cref="Open"/>), closes it as the pane ends
-/// (<see cref="Close"/>), and the page answers through <see cref="Answer"/>, which checks the answer against the ask (a choice it has; every
-/// question answered) before it claims. Several may be open at once, oldest first. Thread-safe; <see cref="Changed"/> runs on the
+/// (<see cref="Close"/>), and the page answers through <see cref="Answer"/>, which checks the answer against the ask (a choice it has; one
+/// answer per question, <see cref="Check"/>) before it claims. Several may be open at once, oldest first. Thread-safe; <see cref="Changed"/> runs on the
 /// changing task.
 /// </summary>
 public sealed class WebAskBroker
@@ -186,13 +187,25 @@ public sealed class WebAskBroker
         return WebReply.Ok;
     }
 
-    /// <summary>Why <paramref name="answer"/> does not fit <paramref name="spec"/>, or null.</summary>
+    /// <summary>The choice id of an <c>ask_user</c> form's Decline (2026-11-24, the ask_user plan's E): no answers, a note in <see cref="WebAnswerRequest.Text"/> if any.</summary>
+    public const string DeclineChoice = "decline";
+
+    /// <summary>
+    /// Why <paramref name="answer"/> does not fit <paramref name="spec"/>, or null. An <c>ask_user</c> form takes one answer per question (a
+    /// question with nothing picked and nothing typed is a skip, 2026-11-24), the picks its options, one at most on a single question and
+    /// none on a text one; or <see cref="DeclineChoice"/>.
+    /// </summary>
     public static WebReply? Check(WebAskSpec spec, WebAnswerRequest answer)
     {
         ArgumentNullException.ThrowIfNull(spec);
         ArgumentNullException.ThrowIfNull(answer);
         if (spec.Questions is { Count: > 0 } questions)
         {
+            if (answer.Choice == DeclineChoice)
+            {
+                return null;
+            }
+
             if (answer.Questions is not { } given || given.Count != questions.Count)
             {
                 return new WebReply(WebOutcome.Refused, WebUiText.AskIncomplete);
@@ -207,12 +220,7 @@ public sealed class WebAskBroker
                     return new WebReply(WebOutcome.Refused, WebUiText.NoSuchChoice);
                 }
 
-                if (picked.Count == 0 && !typed)
-                {
-                    return new WebReply(WebOutcome.Refused, WebUiText.AskIncomplete);
-                }
-
-                if (!questions[i].Multi && picked.Count + (typed ? 1 : 0) > 1)
+                if (questions[i].Kind != "multi" && picked.Count + (typed ? 1 : 0) > 1)
                 {
                     return new WebReply(WebOutcome.Refused, WebUiText.NoSuchChoice);
                 }
