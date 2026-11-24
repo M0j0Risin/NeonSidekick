@@ -1695,7 +1695,7 @@ internal sealed partial class ChatScreen
             // from the pool and a flipped setting shows at once. A /botchat shows its cast there instead (2026-09-30).
             RuleTitle = () => UpperRuleTitle(_botChatCast, _sessionTitle, ShowNameDisplay(_effective())),
             // The lower rule's jobs group (2026-11-23, the user's ask): 📦 the update, 🔁/🔎/⟳ the loop, 📥 the download, 🖼️ the pictures,
-            // ▶ n the running processes (since 2026-10-12), each only while it has something to say.
+            // ⚡n the running processes (since 2026-10-12; ▶ n until 2026-11-24), each only while it has something to say.
             LowerRuleItems = LowerRuleItemsNow,
             // The model and its mark while the Hint bar's Model is checked (2026-10-12).
             Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.ShownModelId) : "",

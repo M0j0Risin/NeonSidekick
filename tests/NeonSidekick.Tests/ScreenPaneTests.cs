@@ -153,7 +153,7 @@ public partial class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The lower rule's title (2026-10-12, the user's ask: the running processes' count, <c>▶ 3</c>, at the right of the rule
+    /// The lower rule's title (2026-10-12, the user's ask: the running processes' count, <c>⚡3</c>, at the right of the rule
     /// under the draft line): drawn there and nowhere else, repainted on the tick when it moves, bare again when it empties; it
     /// takes a click on its cells and the space either side, not under an overlay.
     /// </summary>
@@ -171,8 +171,8 @@ public partial class ScreenPaneTests : IDisposable
         title = NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
         int mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
-        Assert.Equal(Rule(34) + " ▶ 3 ─", ScreenPane.RuleWithTitle(title, 40));
-        Assert.Contains(Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(34) + " ▶ 3 ─\n", Output[mark..]);   // the upper rule bare
+        Assert.Equal(Rule(34) + " ⚡3 ─", ScreenPane.RuleWithTitle(title, 40));
+        Assert.Contains(Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(34) + " ⚡3 ─\n", Output[mark..]);   // the upper rule bare
         foreach (int x in new[] { 34, 35, 37, 38 })
         {
             Assert.True(HitsProcesses(pane, x, 101));
@@ -217,9 +217,9 @@ public partial class ScreenPaneTests : IDisposable
         marker = "📦 0.5.7 at quit";
         int mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains(Rule(14) + " 📦 0.5.7 at quit ── ▶ 3 ─\n", Output[mark..]);
+        Assert.Contains(Rule(14) + " 📦 0.5.7 at quit ── ⚡3 ─\n", Output[mark..]);
 
-        // 📦 0.5.7 at quit at columns 15–30, ▶ 3 at 35–37, the space either side of each included.
+        // 📦 0.5.7 at quit at columns 15–30, ⚡3 at 35–37, the space either side of each included.
         Assert.False(HitsUpdate(pane, 13, 101));
         foreach (int x in new[] { 14, 15, 30, 31 })
         {
@@ -241,7 +241,7 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal("", Output[mark..]);
         marker = "📦 0.5.7 42%";
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains("📦 0.5.7 42% ── ▶ 3 ─\n", Output[mark..]);
+        Assert.Contains("📦 0.5.7 42% ── ⚡3 ─\n", Output[mark..]);
 
         pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.False(HitsUpdate(pane, 20, 101));
@@ -381,7 +381,7 @@ public partial class ScreenPaneTests : IDisposable
 
         Color secondary = Theme.AccentSecondary.Foreground;
         Assert.Equal(Theme.Secondary, secondary);
-        Assert.Matches(@"38;2;" + secondary.R + ";" + secondary.G + ";" + secondary.B + "m▶ 3\e", Output);
+        Assert.Matches(@"38;2;" + secondary.R + ";" + secondary.G + ";" + secondary.B + "m⚡3\e", Output);
         Assert.DoesNotMatch(@"38;2;" + secondary.R + ";" + secondary.G + ";" + secondary.B + "m─", Output);
     }
 
@@ -414,7 +414,7 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Contains(Fg(green) + "─", marked);
         Assert.Contains(Fg(rule) + " my-session ", marked);   // the name keeps the theme's rule style
         Color secondary = Theme.AccentSecondary.Foreground;
-        Assert.Contains(Fg(secondary) + "▶ 3", marked);       // the lower rule's title keeps its own
+        Assert.Contains(Fg(secondary) + "⚡3", marked);       // the lower rule's title keeps its own
         Assert.Equal("green", pane.RuleMark);
 
         // Unchanged: nothing redrawn.

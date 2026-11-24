@@ -363,7 +363,7 @@ public static class HelpCommands
         ]),
         new("/process",
         [
-            new("/process", "List the background processes on a pane, the model's (`run_command` with `background`) and your `/cmd --bg` ones: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click opens one in the process window; **kill** (`k`) stops the highlighted one after a yes; the filter button (`f`) steps from all to the running ones, the ended ones and back. The toolbar's ⚡ opens it too, as does a double-click on the ▶ count on the rule under the input line."),
+            new("/process", "List the background processes on a pane, the model's (`run_command` with `background`) and your `/cmd --bg` ones: the id, running or how it ended, how long it has run, the shell and the command. Enter or a double-click opens one in the process window; **kill** (`k`) stops the highlighted one after a yes; the filter button (`f`) steps from all to the running ones, the ended ones and back. The toolbar's ⚡ opens it too, as does a double-click on the ⚡ count on the rule under the input line."),
             new("/process <id>", "Open the process window on one process (any unique start of its id; Tab completes it). It shows the output live, following the newest line while at the bottom, stderr in the warning color, its state in the title. Scroll, select and copy as in the log window; Tab brings the terminal forward, and `/process` with another id switches the window to that process. Ctrl+K twice within 3 seconds stops it: the chat says you stopped it, and the model hears so on its next turn."),
         ]),
         new("/profile",

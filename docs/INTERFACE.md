@@ -45,11 +45,11 @@ From top to bottom:
 * **The picture strip**, while there are ComfyUI pictures: 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and 🎞️ to bring a closed picture strip back.
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
-* **The lower rule** shows the running jobs at its right, whatever the Status section shows: `── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ▶ 1 ─`.
+* **The lower rule** shows the running jobs at its right, whatever the Status section shows: `── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ⚡1 ─`.
   * **📦** a new version and how its [update](COMMANDS.md#updating) stands (`📦 0.5.7`, `42%`, `checking`, `at quit`, `back to 0.5.6 at quit`); *Check for updates at start* off hides the plain `📦 0.5.7`.
   * **The loop:** 🔁 a [Ralph loop](COMMANDS.md#ralph-loop) (`🔁 step 2/5 · pass 3`), 🔎 a [code audit](COMMANDS.md#code-audit) (`🔎 2/5`, or `🔎 2` with no limit), ⟳ a [`/loop`](COMMANDS.md#loops) (`⟳ 3/10`, or `⟳ 3`). `· ending` follows once a double-click asked it to end.
-  * **📥** an embedded model's download, **🖼️** (🎨 for a rework) ComfyUI pictures still rendering, **▶ n** the background processes running.
-  * **A narrow window** drops 📦 first, then 🖼️, then 📥, then the loop; ▶ n stays. Each is shown whole or not at all.
+  * **📥** an embedded model's download, **🖼️** (🎨 for a rework) ComfyUI pictures still rendering, **⚡n** the background processes running.
+  * **A narrow window** drops 📦 first, then 🖼️, then 📥, then the loop; ⚡n stays. Each is shown whole or not at all.
 
 | Double-click on the lower rule | Does |
 |---|---|
@@ -59,7 +59,7 @@ From top to bottom:
 | ⟳ | ends the loop after the message or run in progress; Esc ends it at once |
 | 📥 | pauses the download |
 | 🖼️/🎨 | cancels the pictures; the reply goes on |
-| ▶ n | `/process` |
+| ⚡n | `/process` |
 * **A mark:** `/mark <color>` colors both rules for the conversation, kept with its session; `/mark default` takes it off.
 * **Five bars**, in *Toolbar order*: [hints](#the-hints-bar) (while there is a hint), [status](#the-status-bar), [toolbar](#the-toolbar), [performance](#the-performance-bar), [home](#the-home-bar).
 * **A short window** drops the home bar, then the performance bar, then the toolbar; the hints bar goes last.

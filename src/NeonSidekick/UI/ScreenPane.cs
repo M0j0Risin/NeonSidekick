@@ -1032,10 +1032,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The items at the right edge of the lower rule — the one under the input row — in every state, left to right (2026-11-23, the user's
-    /// ask: the jobs group, <c>── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ▶ 1 ─</c>; until then the running processes'
+    /// ask: the jobs group, <c>── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ⚡1 ─</c>; until then the running processes'
     /// count, 2026-10-12, and the update's marker, 2026-11-04, each a provider of its own). Read on every draw and on the tick, which repaints
     /// the pane when any text changes; an empty list or empty texts = the bare rule. <see cref="LowerRuleFit"/> lays them out; a lone
-    /// <c>▶ n</c> draws exactly <see cref="RuleWithTitle"/>.
+    /// <c>⚡n</c> draws exactly <see cref="RuleWithTitle"/>.
     /// </summary>
     public Func<IReadOnlyList<LowerRuleItem>> LowerRuleItems
     {
@@ -7771,7 +7771,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The lower rule's layout over <paramref name="width"/> cells (2026-11-23, the jobs group; <c>MarkerFit</c> until then): the items kept,
     /// in their order, and the rule glyphs at their left. Items are dropped whole by <see cref="LowerRuleDropRank"/> until
-    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>▶ n</c> left alone, which is
+    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>⚡n</c> left alone, which is
     /// <see cref="RuleWithTitle"/>'s fit as before. Empty texts are skipped; nothing kept = the bare rule. Pure, pinned.
     /// </summary>
     public static (IReadOnlyList<LowerRuleItem> Kept, int Left) LowerRuleFit(IReadOnlyList<LowerRuleItem> items, int width)

@@ -1744,7 +1744,7 @@ public partial class ChatScreenTests
         Assert.Equal(1, _updater.Checks);   // the start's answer was used
     }
 
-    /// <summary>Side by side (the plan's mockup: <c>📦 0.5.7 ── ▶ 1</c>), each answers its own double-click and neither takes the other's.</summary>
+    /// <summary>Side by side (the plan's mockup: <c>📦 0.5.7 ── ⚡1</c>), each answers its own double-click and neither takes the other's.</summary>
     [WindowsFact]
     public async Task TheMarkerAndTheProcessCount_SideBySide_EachOpensItsOwn()
     {
@@ -1759,7 +1759,7 @@ public partial class ChatScreenTests
         bool listFirst = false;
         UpdateScript(
             (() => Shows(UpdateText.IsOutLine("0.5.7")), Line("start it")),
-            (() => MarkerShows("📦 0.5.7 ── ▶ 1 ─"), i => { i.PushClick(76, 101); i.PushClick(76, 101); }),   // ▶ 1 at columns 75–77, the marker at 63–70
+            (() => MarkerShows("📦 0.5.7 ── ⚡1 ─"), i => { i.PushClick(76, 101); i.PushClick(76, 101); }),   // ⚡1 at columns 75–77, the marker at 63–70
             (() => Shows(ProcessMenu.Title), i => { listFirst = !Shows("the notes"); i.Push(Keys.Escape); }),
             (() => true, i => { i.PushClick(66, 101); i.PushClick(66, 101); }),
             (() => Shows("the notes"), Key(Keys.Char('l'))),
