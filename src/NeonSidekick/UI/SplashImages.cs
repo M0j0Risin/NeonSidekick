@@ -232,6 +232,12 @@ public static class SplashImages
         return $"Splash: could not move {path} to {TrashFolderName}: {error.GetType().Name}: {error.Message}";
     }
 
+    /// <summary>The name a copy takes when its own cleans to nothing but dots (2026-11-24). Pinned.</summary>
+    public const string FallbackStem = "splash";
+
+    /// <summary>How many taken names a copy steps past after its look before it reports the failure.</summary>
+    private const int CopyTries = 5;
+
     /// <summary>
     /// Copies <paramref name="source"/> into the splash <paramref name="folder"/> (2026-11-23, shared by <c>set_splash_image</c> and the picture
     /// menus' Add to the splash images): refused when it is no picture or already lives there; named <paramref name="name"/> or its own stem
@@ -253,16 +259,37 @@ public static class SplashImages
 
         string extension = Path.GetExtension(source).ToLowerInvariant();
         string stem = Comfy.ComfyStudio.SafeName(string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(source) : Path.GetFileNameWithoutExtension(name.Trim()));
+        if (stem.Trim('.').Length == 0)
+        {
+            // Nothing left but dots, or nothing at all (a ".png" source, a name of "." or ".."; 2026-11-24, the last-7 review's #60): "..png" is no
+            // picture's name, and a hidden file on a Mac.
+            stem = FallbackStem;
+        }
+
         try
         {
             Directory.CreateDirectory(folder);
+            int n = 1;
             string target = Path.Combine(folder, stem + extension);
-            for (int n = 2; File.Exists(target); n++)
+            for (int tries = 0; ; tries++)
             {
-                target = Path.Combine(folder, stem + "-" + n.ToString(System.Globalization.CultureInfo.InvariantCulture) + extension);
+                while (File.Exists(target))
+                {
+                    target = Path.Combine(folder, stem + "-" + (++n).ToString(System.Globalization.CultureInfo.InvariantCulture) + extension);
+                }
+
+                try
+                {
+                    File.Copy(source, target, overwrite: false);
+                    break;
+                }
+                catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && tries < CopyTries && Path.Exists(target))
+                {
+                    // The name taken since the look (another add at the same moment), or by a folder: the next one (2026-11-24, the last-7 review's #39).
+                    target = Path.Combine(folder, stem + "-" + (++n).ToString(System.Globalization.CultureInfo.InvariantCulture) + extension);
+                }
             }
 
-            File.Copy(source, target, overwrite: false);
             bool only = Directory.EnumerateFiles(folder).Count(ImageFile.IsImagePath) == 1;
             return new SplashAdd(SplashAddResult.Added, target, only, "");
         }

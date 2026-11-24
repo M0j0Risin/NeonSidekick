@@ -44,6 +44,18 @@ public class SplashImagesTests
             Assert.Equal(SplashAddResult.Already, SplashImages.Add(folder, first.Target).Result);
             Assert.Equal(SplashAddResult.NotAnImage, SplashImages.Add(folder, Path.Combine(dir, "notes.txt")).Result);
             Assert.Equal(3, Directory.GetFiles(folder).Length);
+
+            // A name taken after the look (the last-7 review's #39: two adds at once), stood in for by a folder of that name: the next one.
+            Directory.CreateDirectory(Path.Combine(folder, "Dog.png"));
+            string dog = Path.Combine(dir, "Dog.png");
+            File.WriteAllBytes(dog, Fakes.FakeHeadlessBrowser.TinyPng);
+            var dogAdd = SplashImages.Add(folder, dog);
+            Assert.Equal((SplashAddResult.Added, Path.Combine(folder, "Dog-2.png")), (dogAdd.Result, dogAdd.Target));
+
+            // A name that cleans to nothing but dots (#60): the fallback stem.
+            Assert.Equal(Path.Combine(folder, SplashImages.FallbackStem + ".png"), SplashImages.Add(folder, picture, "..").Target);
+            Assert.Equal(Path.Combine(folder, SplashImages.FallbackStem + "-2.png"), SplashImages.Add(folder, picture, ".png").Target);
+            Assert.Equal("splash", SplashImages.FallbackStem);
         }
         finally
         {

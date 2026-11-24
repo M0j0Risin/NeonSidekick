@@ -1481,7 +1481,12 @@ function questionForm(card, ask) {
   function sendDecline() {
     answer(card, { askId: ask.id, choice: 'decline', text: note.value.trim() });
   }
-  decline.addEventListener('click', () => { openNote(note.value); note.focus(); });
+  // Decline opens the note box; a tap while it is open declines, with the note if one was written (the PC's Enter in the note).
+  decline.addEventListener('click', () => {
+    if (noteRow.isConnected) { sendDecline(); return; }
+    openNote(note.value);
+    note.focus();
+  });
   send.addEventListener('click', sendDecline);
   note.addEventListener('input', () => { draft.note = note.value; });
 
@@ -1504,9 +1509,10 @@ function questionForm(card, ask) {
   }
   form.addEventListener('change', keep);
   form.addEventListener('input', keep);
-  // Enter in a text box: the browser would send the form, every question after it skipped. It moves on instead; in the note it sends the decline.
+  // Enter in a text box, a radio or a checkbox: the browser would send the form, every question after it skipped. It moves on
+  // instead; in the note it sends the decline.
   form.addEventListener('keydown', ev => {
-    if (ev.key !== 'Enter' || !(ev.target instanceof HTMLInputElement) || ev.target.type !== 'text') return;
+    if (ev.key !== 'Enter' || !(ev.target instanceof HTMLInputElement) || !['text', 'radio', 'checkbox'].includes(ev.target.type)) return;
     ev.preventDefault();
     if (ev.target === note) { sendDecline(); return; }
     const sets = [...form.querySelectorAll('fieldset')];

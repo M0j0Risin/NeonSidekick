@@ -801,7 +801,8 @@ internal sealed partial class ChatScreen
                 // A rule between All on / All off and the devices, and each device's glyph and name padded to the widest in the room so the
                 // states line up (2026-11-24, the user's ask and pick); the cursor stays an item, so a redraw keeps it on the same device.
                 var heads = members.Select(id => entities.GetValueOrDefault(id) is var entity ? HomeChips.GlyphFor(id, entity) + " " + (entity?.Name ?? catalog!.NameOf(id)) : "").ToList();
-                int headWidth = heads.Select(TextCells.Width).DefaultIfEmpty(0).Max();
+                // Capped (2026-11-24, the last-7 review's #58): one long device name cuts with … rather than pushing every state off the pane.
+                int headWidth = Math.Min(heads.Select(TextCells.Width).DefaultIfEmpty(0).Max(), HomeBarText.RoomHeadCap);
                 var devices = members.Select((id, i) => Markup.Escape(TextCells.Cell(heads[i], headWidth)) + Theme.DimMarkup("  " + HomeBarText.StateWord(entities.GetValueOrDefault(id)?.State ?? "…"))).ToList();
                 var ruled = RuledRows.Of([[Markup.Escape(HomeBarText.AllOnAction), Markup.Escape(HomeBarText.AllOffAction)], devices]);
 

@@ -110,6 +110,43 @@ public sealed class ThemeEditBandTests
         Assert.Equal([ThemeColorSlot.Primary, ThemeColorSlot.PanelBg], problems.Single(p => p.Pair == ThemeText.PanelRolePair("primary")).Roles);
     }
 
+    /// <summary>
+    /// The last-7 review's #19: a code color on a diff slab names the role it comes from — the default's own (keyword: primary, never ink though
+    /// ink may share the color), an alias's source (tag: keyword's), a theme's change by the roles of its color, a free hex by none.
+    /// </summary>
+    [Fact]
+    public void CodeOnSlabProblems_NameTheCodeColorsOwnRole()
+    {
+        var p = ThemeLibrary.Default;
+        Assert.Equal([ThemeColorSlot.Primary], ThemeChecks.CodeColorRoles(p with { Ink = p.Primary }, ThemeStyleSlot.CodeKeyword));
+        Assert.Equal([ThemeColorSlot.Primary], ThemeChecks.CodeColorRoles(p, ThemeStyleSlot.CodeTag));
+        Assert.Equal([ThemeColorSlot.Secondary], ThemeChecks.CodeColorRoles(p, ThemeStyleSlot.CodeAttribute));
+
+        var changed = p with { Styles = new Dictionary<ThemeStyleSlot, StyleOverride> { [ThemeStyleSlot.CodeType] = new(Foreground: p.Warm), [ThemeStyleSlot.CodeKeyword] = new(Set: Spectre.Console.Decoration.Bold) } };
+        Assert.Contains(ThemeColorSlot.Warm, ThemeChecks.CodeColorRoles(changed, ThemeStyleSlot.CodeType));
+        Assert.Contains(ThemeColorSlot.Warm, ThemeChecks.CodeColorRoles(changed, ThemeStyleSlot.CodeAttribute));   // the alias follows its source's change
+        Assert.Equal([ThemeColorSlot.Primary], ThemeChecks.CodeColorRoles(changed, ThemeStyleSlot.CodeKeyword));   // a decoration alone doesn't count
+        var hex = p with { Styles = new Dictionary<ThemeStyleSlot, StyleOverride> { [ThemeStyleSlot.CodeString] = new(Foreground: new Spectre.Console.Color(1, 2, 3)) } };
+        Assert.Empty(ThemeChecks.CodeColorRoles(hex, ThemeStyleSlot.CodeString));
+
+        // The slab problem itself carries it: a keyword color dull on the good slab names primary.
+        var dull = p with { Primary = Theme.Mix(p.Bg, p.Good, Theme.DiffSlabShare) };
+        var problem = ThemeChecks.Problems(dull).Single(x => x.Pair == ThemeText.SlabPair(ThemeKeys.Styles[(int)ThemeStyleSlot.CodeKeyword], "good"));
+        Assert.Contains(ThemeColorSlot.Primary, problem.Roles!);
+    }
+
+    /// <summary>The default map is the derived styles' color, for every code slot that is no alias (Theme's Derive).</summary>
+    [Fact]
+    public void CodeRoles_MatchTheDerivedStyles()
+    {
+        var p = ThemeLibrary.Default;
+        var styles = Theme.StylesBuilt(p);
+        foreach (var (_, slot) in Theme.CodeSlots.Where(c => ThemeKeys.AliasOf(c.Slot) is null))
+        {
+            Assert.Equal(styles(slot).Foreground, p.ColorOf(ThemeChecks.CodeRoles[slot]));
+        }
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1)]

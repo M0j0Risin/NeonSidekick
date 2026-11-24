@@ -40,10 +40,16 @@ public sealed partial class WebUiPageTests
         Assert.Equal("0 of 3 answered", await page.TextAsync(First + ".querySelector('.q-count').textContent"));
         Assert.False((await page.EvalAsync(First + ".querySelector('button[type=submit]').disabled")).GetBoolean());
 
-        // Typed, then Enter in the box: nothing sent, the focus on the next question's first input.
-        await page.EvalAsync("(() => { const b = " + First + ".querySelector('.q-text'); b.value = 'notes'; b.dispatchEvent(new Event('input', { bubbles: true })); "
-            + "b.focus(); b.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); })()");
+        // Typed, then Enter in the box: nothing sent (the browser's own submit prevented, 2026-11-24, the last-7 review's #44: the
+        // answers list alone could not fail, the post being async), the focus on the next question's first input.
+        Assert.False((await page.EvalAsync("(() => { const b = " + First + ".querySelector('.q-text'); b.value = 'notes'; b.dispatchEvent(new Event('input', { bubbles: true })); "
+            + "b.focus(); return b.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); })()")).GetBoolean());
         Assert.True((await page.EvalAsync("document.activeElement === " + First + ".querySelectorAll('fieldset')[1].querySelector('input')")).GetBoolean());
+
+        // Enter on a radio moves on too (#29), never submitting the form.
+        Assert.False((await page.EvalAsync("(() => { const r = " + First + ".querySelectorAll('fieldset')[1].querySelector('input'); r.focus(); "
+            + "return r.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); })()")).GetBoolean());
+        Assert.True((await page.EvalAsync("document.activeElement === " + First + ".querySelectorAll('fieldset')[2].querySelector('input')")).GetBoolean());
         Assert.Empty(_backend.Answers);
 
         // A second tap clears a radio; red picked, ham checked, a half-written note.
@@ -108,5 +114,13 @@ public sealed partial class WebUiPageTests
         await UntilAsync(() => _backend.Answers.Any(a => a.AskId == "q3"), "the noted decline's post");
         var noted = _backend.Answers.Single(a => a.AskId == "q3");
         Assert.Equal((WebAskBroker.DeclineChoice, "later"), (noted.Choice, noted.Text));
+
+        // Decline tapped twice (2026-11-24, the last-7 review's #43): the second tap declines, as Send would.
+        PublishWhenStreaming(new WebEvent("asks", () => JsonSerializer.Serialize(new WebAsks([QuestionsAsk("q4")]), WebUiJsonContext.Default.WebAsks)));
+        await page.WaitAsync(First + " !== null && " + First + ".querySelector('fieldset input[name^=\"q4-\"]') !== null", "the fourth card");
+        await page.EvalAsync("(() => { const c = " + First + "; const d = [...c.querySelectorAll('button')].find(b => b.textContent === '" + WebUiText.AskDecline + "'); d.click(); d.click(); })()");
+        await UntilAsync(() => _backend.Answers.Any(a => a.AskId == "q4"), "the second tap's post");
+        var twice = _backend.Answers.Single(a => a.AskId == "q4");
+        Assert.Equal((WebAskBroker.DeclineChoice, ""), (twice.Choice, twice.Text));
     }
 }

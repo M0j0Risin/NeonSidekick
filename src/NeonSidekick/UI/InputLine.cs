@@ -452,16 +452,19 @@ public sealed partial class InputLine
 
     /// <summary>
     /// What two clicks on the upper rule's session name must share to pair (2026-09-28): between the toolbar's keys (a column
-    /// each, down from −5) and the pictures' (<see cref="PicturePairKey"/>, from −1 000 000 down), so it is no other part's. Pinned.
+    /// each, down from −5) and the pictures' (<see cref="PicturePairKey"/>, from −1 000 000 down), so it is no other part's. The fixed
+    /// keys beside it (<see cref="ScreenPane.ToolbarModelKey"/> −500 002, <see cref="ScreenPane.HintPathKey"/> −500 003,
+    /// <see cref="ScreenPane.ToolbarMarkKey"/> −500 004, <see cref="ScreenPane.HintTimersKey"/> −500 005) are each their own; the off-pane hint
+    /// keys sit at −300 000 and −400 000, the lower rule's at −600 000 (2026-11-24, the last-7 review's #18). Pinned.
     /// </summary>
     public const int RuleTitlePairKey = -500_000;
 
     /// <summary>
-    /// What two clicks on a lower rule item must share to pair (2026-11-23, the jobs group): <c>-500_000 - kind</c>, beside
-    /// <see cref="RuleTitlePairKey"/> — the processes' count's −500 001 (2026-10-12) and the update's marker's −500 002 (2026-11-04) as they
-    /// were, then the loop, the download and the pictures. Pinned.
+    /// What two clicks on a lower rule item must share to pair (2026-11-23, the jobs group): <c>-600_000 - kind</c>, a band of its own
+    /// (2026-11-24, the last-7 review's #18: beside <see cref="RuleTitlePairKey"/> at <c>-500_000 - kind</c>, the update's, the loop's and the
+    /// download's keys were the toolbar's model, the hint row's path and the toolbar's mark, so a click on one and then the other paired). Pinned.
     /// </summary>
-    public static int LowerRulePairKey(LowerRuleKind kind) => -500_000 - (int)kind;
+    public static int LowerRulePairKey(LowerRuleKind kind) => -600_000 - (int)kind;
 
     /// <summary>
     /// What two clicks on the draft must share to pair into a word's selection (2026-09-30, <see cref="DraftWords"/>): the

@@ -382,7 +382,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The draft's View (2026-11-23): the change uncut (the info pane scrolls), or the whole draft for a new file, rendered as markdown on a first
-    /// tab since 2026-11-24 (the user's ask, as the Web UI's notes card shows it) with its text on Source.
+    /// tab since 2026-11-24 (the user's ask, as the Web UI's notes card shows it) with its text on Source; a warning over the rendering when the
+    /// draft holds link-definition lines it hides (later that day, the last-7 review's #7, the user's pick: both Views).
     /// </summary>
     private Task ViewProjectNotesAsync(ProjectNotesDraft draft, CancellationToken cancellationToken)
     {
@@ -390,7 +391,7 @@ internal sealed partial class ChatScreen
             : new Text(draft.Unchanged ? ProjectInitText.NoChanges(draft.Target) : draft.Content);
         string label = ProjectInitText.ViewLabel(draft.Target);
         IReadOnlyList<InfoTab> tabs = draft.Diff is null && !draft.Unchanged
-            ? [new InfoTab(SkillsText.RenderedTab, () => UI.Markdown.MarkdownView.Of(draft.Content)), new InfoTab(SkillsText.SourceTab, () => content)]
+            ? [new InfoTab(SkillsText.RenderedTab, () => Skills.SkillView.Warned(UI.Markdown.MarkdownView.Of(draft.Content), draft.Content)), new InfoTab(SkillsText.SourceTab, () => content)]
             : [new InfoTab(label, () => content)];
         return _info.ShowAsync(label, tabs, 0, cancellationToken);
     }
@@ -417,7 +418,11 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The page's form of the Write pane (2026-11-23): the caption's lines, the draft whole, the same choices; Revise takes words.</summary>
+    /// <summary>
+    /// The page's form of the Write pane (2026-11-23): the caption's lines, the draft whole, the same choices; Revise takes words. The page renders
+    /// the draft with the same Markdig pipeline, so a draft holding link-definition lines gets the warning as the caption's last line (2026-11-24,
+    /// the last-7 review's #7).
+    /// </summary>
     internal static WebAskSpec NotesSpec(ProjectNotesDraft draft, IReadOnlyList<string> caption, string? turnOn)
     {
         ArgumentNullException.ThrowIfNull(draft);
@@ -429,7 +434,9 @@ internal sealed partial class ChatScreen
 
         choices.Add(new WebChoice(ProjectInitText.ReviseId, ProjectInitText.ReviseRow));
         choices.Add(new WebChoice(ProjectInitText.CancelId, ProjectInitText.NotesCancelRow));
-        return new WebAskSpec("notes", ProjectInitText.NotesTitle, choices, Lines: caption, Markdown: draft.Content, TextChoice: ProjectInitText.ReviseId);
+        int hidden = UI.Markdown.MarkdigParser.LinkDefinitionCount(draft.Content);
+        IReadOnlyList<string> lines = hidden > 0 ? [.. caption, SkillsText.HiddenLinesWarning(hidden, source: false)] : caption;
+        return new WebAskSpec("notes", ProjectInitText.NotesTitle, choices, Lines: lines, Markdown: draft.Content, TextChoice: ProjectInitText.ReviseId);
     }
 
     /// <summary>The page's answer as the pane would give it; a Revise with blank words is a Revise with none.</summary>

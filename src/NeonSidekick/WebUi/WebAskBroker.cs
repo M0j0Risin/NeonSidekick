@@ -213,14 +213,21 @@ public sealed class WebAskBroker
 
             for (int i = 0; i < questions.Count; i++)
             {
-                var picked = given[i].Picked ?? [];
-                bool typed = !string.IsNullOrWhiteSpace(given[i].Other);
+                // A null entry (`[null, …]`) is an incomplete answer, never a 500 (2026-11-24, the last-7 review's #53).
+                if (given[i] is not { } one)
+                {
+                    return new WebReply(WebOutcome.Refused, WebUiText.AskIncomplete);
+                }
+
+                var picked = one.Picked ?? [];
+                bool typed = !string.IsNullOrWhiteSpace(one.Other);
                 if (picked.Any(p => p < 0 || p >= questions[i].Options.Count) || picked.Distinct().Count() != picked.Count)
                 {
                     return new WebReply(WebOutcome.Refused, WebUiText.NoSuchChoice);
                 }
 
-                if (questions[i].Kind != "multi" && picked.Count + (typed ? 1 : 0) > 1)
+                // The tool's own word (#10), as the page's spec writes it (ChatScreen.KindWord).
+                if (questions[i].Kind != Llm.Tools.AskUserTool.MultiType && picked.Count + (typed ? 1 : 0) > 1)
                 {
                     return new WebReply(WebOutcome.Refused, WebUiText.NoSuchChoice);
                 }

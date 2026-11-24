@@ -12,6 +12,12 @@ public static class AskUserText
     /// <summary>The tool's result — and the one transcript line — when the user declined the questions (Esc), or nothing could ask them. Pinned.</summary>
     public const string NotAnswered = "(questions not answered)";
 
+    /// <summary>
+    /// The most characters a decline's note or a typed answer keeps (2026-11-24, the last-7 review's #11): a paragraph or two, far
+    /// under the page's 64 KB body cap, so one answer can't fill the model's context. Cut whole-character (<see cref="Files.TextCut.Safe(string, int)"/>).
+    /// </summary>
+    public const int NoteChars = 2_000;
+
     /// <summary>The joiner between an answer's choices: <c>cheese, olives</c>.</summary>
     public const string ChoiceSeparator = ", ";
 
@@ -147,6 +153,13 @@ public static class AskUserText
 
     /// <summary>Options sent on a text question (2026-11-24): the model meant a choice. Pinned.</summary>
     public static string TextTakesNoOptions(int number) => $"Error: question {N(number)} is type text, which takes no options; use single or multi to offer choices.";
+
+    /// <summary>
+    /// A question with no options and no type but a list under another key (2026-11-24, the last-7 review's #20): the model misnamed its
+    /// options, so it is told, never asked a free-text question it didn't mean. Pinned.
+    /// </summary>
+    public static string StrayList(int number, string key) =>
+        $"Error: question {N(number)} sends a list as \"{key}\", which ask_user doesn't read; send the choices as \"options\", or leave the list out for a free-text question.";
 
     /// <summary>Too few or too many options for one question, the range as <see cref="BadOptions"/> names it.</summary>
     public static string OptionCount(int number, int count, int maxChoices) => $"Error: question {N(number)} has {N(count)} options; give {N(AskUserTool.MinOptions)} to {N(maxChoices)}.";

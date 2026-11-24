@@ -394,7 +394,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Clean passes:** it ends after *Plan gap clean passes* in a row find no gaps; wording or formatting fixes don't break a streak. Each pass after a clean one checks another area (order, verification, risks, assumptions, size), or, with *Confirm focus by change*, an area the last change touched, the most-changed first, and says which.
 * **Who reviews** (with advisors offered): the model alone (`m`), a fitting advisor (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
 * **Unattended:** with *Plan gap ask user* off (or no `ask_user`), a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, not a gap.
-* **Your answers:** a question you skip is the pass's to settle; it notes its pick in `## Risks` as "Assumed (left to me):". One you decline becomes an "Open question (your call):" bullet.
+* **Your answers:** a question you skip is the pass's to settle; it notes its pick in `## Risks` as "Assumed (left to me):". One you decline becomes an "Open question (your call):" bullet, unless your note settles it.
 * **The plan's shape:** no clean end while a step lacks `Done when:`, one step is oversized, steps sit outside `## Steps` or a parent has a by-hand check. A plan too long for a Ralph pass to send whole is noted, not a gap.
   * A clean pass that drops unfinished steps, ticks or sections, or cuts much of the plan, is refused; a pass with gaps is told what it dropped.
 * **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on Esc; at the count given or *Plan gap max passes*.
@@ -477,7 +477,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Which file:** an existing `NEON.md` is improved. With only `AGENTS.md` or `CLAUDE.md`, it asks: update that file, or create `NEON.md` (which is then read in its place). With none, it creates `NEON.md`.
 * **The survey:** the app reads the folder first: its files, build files and CI workflows, the README, other assistants' rule files, recent commits and project skills. Secret-looking files are skipped and values that look like secrets are masked.
 * **One turn:** the model gets only the file and git reads and `ask_user`, never your memories. It starts a new conversation when one is under way; the last one stays in `/sessions`.
-* **The pane:** Write, View (the change, or the whole draft rendered, its text on a Source tab), Revise (with your words) or Cancel ([keys](INTERFACE.md#pane-keys)); on the Web UI page too. It shows the cost per turn and flags lines that look like secrets.
+* **The pane:** Write, View (the change, or the whole draft rendered, its text on a Source tab; a warning names link-definition lines the rendering hides), Revise (with your words) or Cancel ([keys](INTERFACE.md#pane-keys)); on the Web UI page too. It shows the cost per turn and flags lines that look like secrets.
   * With *Project file* or *Agent skills* off, a **Write and turn on** row turns them on as it writes.
 * **Taking it back:** `/undo` or `/rewind` removes or restores the file; a setting turned on stays on.
 * Needs *LLM offer tools*, `read_file` and the bottom pane; refused in plan mode, during a pass or `/botchat`, and headless.

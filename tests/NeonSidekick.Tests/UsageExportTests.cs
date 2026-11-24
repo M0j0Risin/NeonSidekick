@@ -1,6 +1,7 @@
 using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Files;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Tests.Fakes;
 
 namespace NeonSidekick.Tests;
@@ -76,6 +77,35 @@ public sealed class UsageExportTests
         string left = UsageExport.Markdown(Facts(messages, thinkingFrom: messages.Length));
         Assert.DoesNotContain("old thought", left);
         Assert.Contains(UsageExport.ThinkingLeftOutLine, left);
+
+        // Left out because the server takes back only the turn in flight's (the last-7 review's #22): the line says so, not the setting.
+        string inFlight = UsageExport.Markdown(Facts(messages, thinkingFrom: messages.Length) with { ThinkingInFlightOnly = true });
+        Assert.Contains(UsageExport.ThinkingInFlightOnlyLine, inFlight);
+        Assert.DoesNotContain(UsageExport.ThinkingLeftOutLine, inFlight);
+        Assert.Equal("Thinking from earlier turns isn't sent (this server takes back only the turn in flight's), so it is left out.", UsageExport.ThinkingInFlightOnlyLine);
+    }
+
+    /// <summary>
+    /// The last-7 review's #62: before the first message, the line names the opening calls the next request carries — the clock, the working
+    /// folder, the memory list, each only when its tool is offered, in that order; with none offered, only the message.
+    /// </summary>
+    [Fact]
+    public void Markdown_NoMessagesYet_NamesTheOpeningCalls_OfTheToolsOffered()
+    {
+        Assert.EndsWith(UsageExport.NoMessagesLine + "\n", UsageExport.Markdown(Facts([]) with { Tools = [] }));
+
+        AIFunction[] tools = [new NamedTool(RecallMemoryTool.ToolName), new NamedTool("echo"), new NamedTool(GetCurrentTimeTool.ToolName), new NamedTool(GetWorkingDirectoryTool.ToolName)];
+        string md = UsageExport.Markdown(Facts([]) with { Tools = tools });
+        Assert.EndsWith("No messages yet: the next request carries the app's opening calls (`get_current_time`, `get_working_directory`, `recall_memory`) and then the message you send.\n", md);
+        Assert.Equal("No messages yet: the next request carries the app's opening calls (`recall_memory`) and then the message you send.",
+            UsageExport.NoMessagesWithCallsLine([RecallMemoryTool.ToolName]));
+    }
+
+    private sealed class NamedTool(string name) : AIFunction
+    {
+        public override string Name => name;
+
+        protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken) => new("ok");
     }
 
     [Fact]

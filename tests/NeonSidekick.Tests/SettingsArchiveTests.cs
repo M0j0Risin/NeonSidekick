@@ -517,7 +517,8 @@ public sealed class SettingsArchiveTests : IDisposable
         Assert.True(Has(To, "configs/comfy/x.md"));
         Assert.False(Has(To, "comfy/x.json"));
         Assert.Equal("mine", File.ReadAllText(Path.Combine(To, "configs", "comfy", "taken.json")));
-        Assert.Contains("configs/comfy/taken.json", Text(outcome));
+        Assert.Contains("comfy/taken.json", Text(outcome));                 // the skip under the zip's own name (the last-7 review's #26)
+        Assert.DoesNotContain("configs/comfy/taken.json", Text(outcome));
         Assert.True(Has(To, "profiles/p/configs/comfy/y.json"));
         Assert.False(Has(To, "profiles/p/comfy/y.json"));
     }

@@ -886,7 +886,8 @@ public static class PlanText
     /// The research bullet's second sentence in a gap pass that may and can ask (2026-10-21, the user's report that gap passes never asked: the
     /// half sentence "ask them (with ask_user when it is offered)" lost to the gap definition's "a choice left open" a pass must close, and the
     /// easiest close was to pick an answer). The user's call is theirs to make through <c>ask_user</c>, an earlier pass's open questions in
-    /// <c>## Risks</c> asked too; a question left unanswered (Esc, <c>AskUserTool</c>'s "do not ask again") becomes such an open question, a plain
+    /// <c>## Risks</c> asked too; a question declined (Esc or the decline row, <c>AskUserTool</c>'s "do not ask again"; since 2026-11-24, the last-7
+    /// review's #51, named for what the result says, and a decline's note acted on as the tool's description asks) becomes such an open question, a plain
     /// bullet listed in <c>minor</c> as <see cref="GapOpenQuestionSentence"/>'s is, so the next pass has no gap it cannot close. A question the user
     /// skipped (2026-11-24, the ask_user plan, the user's call) is the pass's to settle: its pick goes into <c>## Risks</c> as an
     /// <c>Assumed (left to me):</c> bullet, so the user still sees it, and it is not asked again. Only sent where
@@ -895,7 +896,7 @@ public static class PlanText
     public const string GapAskSentence =
         "A choice only the user can make (a preference, a trade-off, the scope, anything no file or page can tell you) is theirs: ask them with ask_user, a few questions in one call, rather than picking for them, and close the gap with their answer; settle yourself what research can. " +
         "Ask too about any \"Open question (your call):\" bullet in ## Risks you have not asked about yet. " +
-        "A question the user leaves unanswered goes into ## Risks as such a bullet, never a checkbox; it is not a gap, so leave it out of gaps, list it in minor as \"open question: …\", and do not ask it again. " +
+        "A question the user declines (the result says the questions were not answered) goes into ## Risks as such a bullet, never a checkbox, unless their note settles it, which you act on; it is not a gap, so leave it out of gaps, list it in minor as \"open question: …\", and do not ask it again. " +
         "A question they skip (answered \"(skipped)\") is yours to settle: close the gap with your own pick, write it into ## Risks as an \"Assumed (left to me): …\" bullet so they can still change it, and do not ask it again.";
 
     /// <summary>
@@ -903,7 +904,7 @@ public static class PlanText
     /// the user's call is closed by asking, and one left unanswered is no gap, so the review can still converge. Pinned.
     /// </summary>
     public const string GapAskException =
-        " (one only the user can make is closed by asking them, or by your own pick, noted in ## Risks, when they skip it; one they left unanswered, written into ## Risks as an open question, is not a gap)";
+        " (one only the user can make is closed by asking them, or by your own pick, noted in ## Risks, when they skip it; one they declined, written into ## Risks as an open question unless their note settles it, is not a gap)";
 
     /// <summary>
     /// The plan's shape as the directive asks for it (2026-10-18, the Ralph loop: each step carries its own check, and the only checkboxes are the

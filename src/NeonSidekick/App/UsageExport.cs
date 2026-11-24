@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using NeonSidekick.Audits;
 using NeonSidekick.Llm;
+using NeonSidekick.Llm.Tools;
 
 namespace NeonSidekick.App;
 
@@ -13,6 +14,8 @@ namespace NeonSidekick.App;
 /// it. <paramref name="Messages"/> are the history after the picture budget (<see cref="PictureBudget.Apply"/>), as the request carries them;
 /// the thinking of a message before <paramref name="ThinkingFrom"/> isn't sent and is left out. Null <paramref name="Messages"/> leaves the
 /// conversation out (a bare <c>/usage sysprompt</c>, 2026-11-23, the user's ask). The token figures are the Context tab's estimates.
+/// <paramref name="ThinkingInFlightOnly"/> (2026-11-24, the last-7 review's #22): earlier thinking is left out because this server takes back
+/// only the turn in flight's, not because <c>LLM preserve thinking</c> is off.
 /// </summary>
 public sealed record UsageExportFacts(
     DateTimeOffset At,
@@ -26,7 +29,8 @@ public sealed record UsageExportFacts(
     IReadOnlyList<ChatMessage>? Messages,
     int ThinkingFrom,
     long HistoryTokens,
-    string? Folder = null);
+    string? Folder = null,
+    bool ThinkingInFlightOnly = false);
 
 /// <summary>
 /// <c>/usage sysprompt</c>'s Markdown (2026-11-23, the user's ask): the system message, every tool offered (name, description, schema) and the
@@ -66,11 +70,47 @@ public static class UsageExport
     /// <summary>The contents line without the conversation (a bare <c>/usage sysprompt</c>). Pinned.</summary>
     public const string PromptContentsLine = "**Contents:** [" + SystemSection + "](#system-message) · [" + ToolsSection + "](#tools)";
 
-    /// <summary>The Conversation section's line before the first message (2026-11-23, the user's ask). Pinned.</summary>
+    /// <summary>The Conversation section's line before the first message (2026-11-23, the user's ask), with no tool to make an opening call. Pinned.</summary>
     public const string NoMessagesLine = "No messages yet: the next request carries only the message you send.";
+
+    /// <summary>
+    /// The Conversation section's line before the first message when the export's tools make opening calls (2026-11-24, the last-7 review's #62):
+    /// the clock, the working folder and the memory list, each only when its tool is offered, named in that order. Pinned.
+    /// </summary>
+    public static string NoMessagesWithCallsLine(IReadOnlyList<string> calls)
+    {
+        ArgumentNullException.ThrowIfNull(calls);
+        return calls.Count == 0
+            ? NoMessagesLine
+            : "No messages yet: the next request carries the app's opening calls (" + string.Join(", ", calls.Select(c => "`" + c + "`")) + ") and then the message you send.";
+    }
+
+    /// <summary>The tools whose opening call the first request carries, in the order the turn makes them (<c>ChatScreen</c>'s opening calls).</summary>
+    public static readonly IReadOnlyList<string> OpeningCallTools = [GetCurrentTimeTool.ToolName, GetWorkingDirectoryTool.ToolName, RecallMemoryTool.ToolName];
 
     /// <summary>The line under the Conversation heading when earlier thinking isn't sent. Pinned.</summary>
     public const string ThinkingLeftOutLine = "Thinking from earlier turns isn't sent (LLM preserve thinking is off), so it is left out.";
+
+    /// <summary>The same when the server takes back only the turn in flight's thinking (2026-11-24, the last-7 review's #22). Pinned.</summary>
+    public const string ThinkingInFlightOnlyLine = "Thinking from earlier turns isn't sent (this server takes back only the turn in flight's), so it is left out.";
+
+    // The labels the sections and the header are built from (2026-11-24, the last-7 review's #12: inline until then). Pinned by UsageExportTests' files.
+    public const string TokensEnd = " tokens.";
+    public const string ToolWord = "tool";
+    public const string ToolsWord = "tools";
+    public const string MessageWord = "message";
+    public const string MessagesWord = "messages";
+    public const string CallsLabel = "Calls ";
+    public const string ResultOfLabel = "Result of ";
+    public const string ExportedLabel = "- **Exported:** ";
+    public const string ModelLabel = "- **Model:** ";
+    public const string ProfileLabel = "- **Profile:** ";
+    public const string FolderLabel = "- **Working folder:** ";
+    public const string ContextLabel = "- **Context:** ~";
+    public const string SizeLabel = "- **Size:** ~";
+    public const string SystemPart = ": system message ~";
+    public const string ToolsPart = ", tools ~";
+    public const string ConversationPart = ", conversation ~";
 
     /// <summary>The model's fact while no model is known yet. Pinned.</summary>
     public const string NoModelYet = "not known yet";
@@ -88,11 +128,11 @@ public static class UsageExport
 
         // The three sections' headings are bare, so their anchors (#system-message, #tools, #conversation) hold whatever the counts are:
         // the counts go on the line under each (2026-11-23, the user's ask for a contents line).
-        md.Append("\n## ").Append(SystemSection).Append("\n~").Append(UsageText.CompactNumber(facts.SystemTokens)).Append(" tokens.\n");
+        md.Append("\n## ").Append(SystemSection).Append("\n~").Append(UsageText.CompactNumber(facts.SystemTokens)).Append(TokensEnd).Append('\n');
         Block(md, facts.SystemPrompt, "text");
 
-        md.Append("\n## ").Append(ToolsSection).Append('\n').Append(UsageText.Plural(facts.Tools.Count, "tool", "tools")).Append(", ~")
-            .Append(UsageText.CompactNumber(facts.ToolTokens)).Append(" tokens.\n");
+        md.Append("\n## ").Append(ToolsSection).Append('\n').Append(UsageText.Plural(facts.Tools.Count, ToolWord, ToolsWord)).Append(", ~")
+            .Append(UsageText.CompactNumber(facts.ToolTokens)).Append(TokensEnd).Append('\n');
         if (facts.Tools.Count > 0)
         {
             md.Append(SchemaLine).Append('\n');
@@ -110,17 +150,18 @@ public static class UsageExport
             return md.ToString();
         }
 
-        md.Append("\n## ").Append(ConversationSection).Append('\n').Append(UsageText.Plural(messages.Count, "message", "messages")).Append(", ~")
-            .Append(UsageText.CompactNumber(facts.HistoryTokens)).Append(" tokens.\n");
+        md.Append("\n## ").Append(ConversationSection).Append('\n').Append(UsageText.Plural(messages.Count, MessageWord, MessagesWord)).Append(", ~")
+            .Append(UsageText.CompactNumber(facts.HistoryTokens)).Append(TokensEnd).Append('\n');
         bool thinkingLeftOut = facts.ThinkingFrom > 0 && messages.Take(facts.ThinkingFrom).Any(m => m.Contents.OfType<TextReasoningContent>().Any());
         if (messages.Count == 0)
         {
-            md.Append(NoMessagesLine).Append('\n');
+            var offered = facts.Tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
+            md.Append(NoMessagesWithCallsLine(OpeningCallTools.Where(offered.Contains).ToList())).Append('\n');
         }
 
         if (thinkingLeftOut)
         {
-            md.Append(ThinkingLeftOutLine).Append('\n');
+            md.Append(facts.ThinkingInFlightOnly ? ThinkingInFlightOnlyLine : ThinkingLeftOutLine).Append('\n');
         }
 
         var callNames = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -142,11 +183,11 @@ public static class UsageExport
                         break;
                     case FunctionCallContent call:
                         callNames[call.CallId] = call.Name;
-                        md.Append("Calls `").Append(call.Name).Append("` (").Append(call.CallId).Append("):\n");
+                        md.Append(CallsLabel).Append('`').Append(call.Name).Append("` (").Append(call.CallId).Append("):\n");
                         Block(md, IndentedJson(Assistant.SerializeArguments(call.Arguments)), "json");
                         break;
                     case FunctionResultContent result:
-                        md.Append("Result of `").Append(callNames.GetValueOrDefault(result.CallId, "?")).Append("` (").Append(result.CallId).Append("):\n");
+                        md.Append(ResultOfLabel).Append('`').Append(callNames.GetValueOrDefault(result.CallId, "?")).Append("` (").Append(result.CallId).Append("):\n");
                         Block(md, ResultText(result.Result), "text");
                         break;
                     case DataContent data:
@@ -171,15 +212,15 @@ public static class UsageExport
     {
         bool conversation = facts.Messages is not null;
         long total = facts.SystemTokens + facts.ToolTokens + (conversation ? facts.HistoryTokens : 0);
-        md.Append("- **Exported:** ").Append(facts.At.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).Append('\n');
-        md.Append("- **Model:** ").Append(facts.Model is { Length: > 0 } model ? Code(model) : NoModelYet).Append('\n');
-        md.Append("- **Profile:** ").Append(Code(facts.Profile)).Append('\n');
+        md.Append(ExportedLabel).Append(facts.At.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).Append('\n');
+        md.Append(ModelLabel).Append(facts.Model is { Length: > 0 } model ? Code(model) : NoModelYet).Append('\n');
+        md.Append(ProfileLabel).Append(Code(facts.Profile)).Append('\n');
         if (facts.Folder is { Length: > 0 } folder)
         {
-            md.Append("- **Working folder:** ").Append(Code(folder)).Append('\n');
+            md.Append(FolderLabel).Append(Code(folder)).Append('\n');
         }
 
-        md.Append(conversation ? "- **Context:** ~" : "- **Size:** ~").Append(UsageText.CompactNumber(total));
+        md.Append(conversation ? ContextLabel : SizeLabel).Append(UsageText.CompactNumber(total));
         if (facts.Window is long window and > 0)
         {
             long percent = (long)Math.Round(total * 100.0 / window, MidpointRounding.AwayFromZero);
@@ -190,11 +231,11 @@ public static class UsageExport
             md.Append(" tokens");
         }
 
-        md.Append(": system message ~").Append(UsageText.CompactNumber(facts.SystemTokens))
-            .Append(", tools ~").Append(UsageText.CompactNumber(facts.ToolTokens));
+        md.Append(SystemPart).Append(UsageText.CompactNumber(facts.SystemTokens))
+            .Append(ToolsPart).Append(UsageText.CompactNumber(facts.ToolTokens));
         if (conversation)
         {
-            md.Append(", conversation ~").Append(UsageText.CompactNumber(facts.HistoryTokens));
+            md.Append(ConversationPart).Append(UsageText.CompactNumber(facts.HistoryTokens));
         }
 
         md.Append('\n');

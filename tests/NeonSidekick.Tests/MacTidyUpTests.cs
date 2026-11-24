@@ -252,6 +252,9 @@ public sealed class MacTidyUpTests : IDisposable
         {
             Assert.Contains(syntax, syntaxes);
         }
+
+        // The Mac picture menu names every item Windows' does (2026-11-24, the last-7 review's #48): the splash add was missing.
+        Assert.Contains("add to the splash images", HelpMac.Forms["/view <image>|<folder>"], StringComparison.Ordinal);
     }
 
     [Fact]

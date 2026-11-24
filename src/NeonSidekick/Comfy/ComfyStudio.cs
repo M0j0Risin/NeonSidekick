@@ -445,9 +445,17 @@ public sealed class ComfyStudio : IDisposable
     /// </summary>
     private (byte[]? Bytes, string? FileName, string? Saved, string? Error) ReadInput(string path)
     {
-        if (ComfyText.TryPastedLabel(path, out int number))
+        if (ComfyText.TryPastedLabel(path, out int number, out string? labelPath))
         {
-            return ReadPasted(number);
+            // A whole sent label names its file (2026-11-24, the last-7 review's #2): the paste store only when that paste is the same
+            // file (this session, a picture attached from outside the sandbox kept working); else, after a restart or with the number now
+            // another paste's, the label's own path, through the sandbox as any path is — the right picture or a plain refusal.
+            if (labelPath is null || (_pasted?.Invoke(number) is { Path: { Length: > 0 } own } && SameFile(own, labelPath)))
+            {
+                return ReadPasted(number);
+            }
+
+            path = labelPath;
         }
 
         var outcome = Llm.Tools.FileTool.For(_files, _images, path).Resolve(path, forWrite: false, out string full);
@@ -514,6 +522,20 @@ public sealed class ComfyStudio : IDisposable
             : picture.FileName is { Length: > 0 } own ? own
             : PastedStem(_time.GetLocalNow()) + ImageFile.ExtensionOf(picture.Bytes);
         return (picture.Bytes, name, picture.Path, null);
+    }
+
+    /// <summary>Whether two paths are the same file: full paths compared (a relative one taken against the working folder), case aside on Windows.</summary>
+    private bool SameFile(string a, string b)
+    {
+        try
+        {
+            string Full(string p) => Path.IsPathFullyQualified(p) ? Path.GetFullPath(p) : Path.GetFullPath(p, _files.Root);
+            return string.Equals(Full(a), Full(b), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The output folder as a path under the images folder (the sandbox until 2026-10-09): the setting trimmed, <c>.</c> for empty.</summary>

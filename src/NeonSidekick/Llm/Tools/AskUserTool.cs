@@ -59,6 +59,10 @@ public sealed record AskAnswer(AskQuestion Question, IReadOnlyList<string> Choic
         {
             text = null;
         }
+        else
+        {
+            text = Files.TextCut.Safe(text, AskUserText.NoteChars);
+        }
 
         if (text is not null)
         {
@@ -118,11 +122,11 @@ public sealed record AskReply(IReadOnlyList<AskAnswer>? Answers, string? Decline
     /// <summary>The user's Submit.</summary>
     public static AskReply Answered(IReadOnlyList<AskAnswer> answers) => new(answers ?? throw new ArgumentNullException(nameof(answers)), null, true);
 
-    /// <summary>The user's decline, with their note (flattened and trimmed; blank reads as none).</summary>
+    /// <summary>The user's decline, with their note (flattened and trimmed, cut to <see cref="AskUserText.NoteChars"/>; blank reads as none).</summary>
     public static AskReply Declined(string? note = null)
     {
         string? flat = note?.ReplaceLineEndings(" ").Trim();
-        return new(null, string.IsNullOrEmpty(flat) ? null : flat, true);
+        return new(null, string.IsNullOrEmpty(flat) ? null : Files.TextCut.Safe(flat, AskUserText.NoteChars), true);
     }
 }
 
@@ -201,12 +205,12 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
     private AskLimits _schemaLimits;
     private JsonElement _schema;
 
-    // The repeat guard's memory (2026-11-24, F): the turn's token, the questions declined under it (collapsed, case folded), the
-    // latest decline's note. A new token replaces the lot, so nothing outlives its turn; tool calls run one at a time, the lock a guard.
+    // The repeat guard's memory (2026-11-24, F): the turn's token, the questions declined under it (collapsed, case folded), each with
+    // the note its own decline carried (the last-7 review's #21: one shared note answered a repeat with another decline's words). A new
+    // token replaces the lot, so nothing outlives its turn; tool calls run one at a time, the lock a guard.
     private readonly Lock _declinedLock = new();
     private CancellationToken _declinedTurn;
-    private readonly HashSet<string> _declined = new(StringComparer.OrdinalIgnoreCase);
-    private string? _declinedNote;
+    private readonly Dictionary<string, string?> _declined = new(StringComparer.OrdinalIgnoreCase);
 
     /// <param name="ask">Shows the questions and waits: the reply (<see cref="AskReply"/>), or null when nothing could ask them. The token is the turn's.</param>
     /// <param name="effective">The settings the caps and the repeat guard are read from at every use.</param>
@@ -325,13 +329,36 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
         return AskUserText.ReplyText(reply);
     }
 
-    /// <summary>Whether every one of <paramref name="questions"/> was declined under <paramref name="turn"/>, with the latest decline's note.</summary>
+    /// <summary>
+    /// Whether every one of <paramref name="questions"/> was declined under <paramref name="turn"/>, with the notes those declines carried
+    /// (distinct, in the order asked, joined with "; "; null for none).
+    /// </summary>
     private bool AlreadyDeclined(IReadOnlyList<AskQuestion> questions, CancellationToken turn, out string? note)
     {
         lock (_declinedLock)
         {
-            note = _declinedNote;
-            return turn == _declinedTurn && _declined.Count > 0 && questions.All(q => _declined.Contains(AskAnswer.Collapse(q.Question)));
+            note = null;
+            if (turn != _declinedTurn || _declined.Count == 0)
+            {
+                return false;
+            }
+
+            var notes = new List<string>();
+            foreach (var question in questions)
+            {
+                if (!_declined.TryGetValue(AskAnswer.Collapse(question.Question), out string? own))
+                {
+                    return false;
+                }
+
+                if (own is not null && !notes.Contains(own, StringComparer.Ordinal))
+                {
+                    notes.Add(own);
+                }
+            }
+
+            note = notes.Count > 0 ? string.Join("; ", notes) : null;
+            return true;
         }
     }
 
@@ -348,10 +375,8 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
 
             foreach (var question in questions)
             {
-                _declined.Add(AskAnswer.Collapse(question.Question));
+                _declined[AskAnswer.Collapse(question.Question)] = note;
             }
-
-            _declinedNote = note;
         }
     }
 
@@ -385,7 +410,8 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
             // No list: the one question's fields at the top level, else nothing to ask.
             if (arguments.ContainsKey(QuestionArgument) || arguments.ContainsKey(TextArgument))
             {
-                string? topLevelError = ParseItem(1, limits, name => arguments.TryGetValue(name, out var value) && value is JsonElement element ? element : null, out var single);
+                // No stray list to look for at the top level: ToolArgumentCheck already refuses an unknown key there.
+                string? topLevelError = ParseItem(1, limits, name => arguments.TryGetValue(name, out var value) && value is JsonElement element ? element : null, null, out var single);
                 if (topLevelError is not null)
                 {
                     return topLevelError;
@@ -413,7 +439,7 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
         for (int i = 0; i < objects.Count; i++)
         {
             var item = objects[i];
-            string? error = ParseItem(i + 1, limits, name => item.TryGetProperty(name, out var value) ? value : null, out var question);
+            string? error = ParseItem(i + 1, limits, name => item.TryGetProperty(name, out var value) ? value : null, StrayList(item), out var question);
             if (error is not null)
             {
                 return error;
@@ -431,8 +457,39 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
     public const string MultiArgument = "multi";
     public const string MultipleArgument = "multiple";
 
-    /// <summary>One question out of its fields, read through <paramref name="property"/> (null for a missing one); the error sentence or null.</summary>
-    private static string? ParseItem(int number, AskLimits limits, Func<string, JsonElement?> property, out AskQuestion? question)
+    /// <summary>The fields a question item may carry: a list under any other name is a misnamed options list (<see cref="StrayList"/>).</summary>
+    private static readonly HashSet<string> ItemFields = new(StringComparer.Ordinal)
+    {
+        QuestionArgument, TextArgument, TitleArgument, OptionsArgument, ChoicesArgument, TypeArgument, MultiArgument, MultipleArgument,
+    };
+
+    /// <summary>
+    /// The name of the first list-valued key of <paramref name="item"/> that is none of <see cref="ItemFields"/> (<c>answers</c>, <c>items</c>):
+    /// with no options and no type it was meant as the options (2026-11-24, the last-7 review's #20), not a free-text question. Null for none.
+    /// </summary>
+    private static string? StrayList(JsonElement item)
+    {
+        if (item.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var property in item.EnumerateObject())
+        {
+            if (property.Value.ValueKind == JsonValueKind.Array && !ItemFields.Contains(property.Name))
+            {
+                return property.Name;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// One question out of its fields, read through <paramref name="property"/> (null for a missing one); the error sentence or null.
+    /// <paramref name="strayList"/> names a list sent under a key the item doesn't know (<see cref="StrayList"/>), null for none.
+    /// </summary>
+    private static string? ParseItem(int number, AskLimits limits, Func<string, JsonElement?> property, string? strayList, out AskQuestion? question)
     {
         question = null;
         string text = Flatten(Text(property(QuestionArgument)));
@@ -453,12 +510,32 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
             sent = null;
         }
 
+        // The list written by hand inside a string: what a server's parser hands over when its own parse failed. Unwrapped before the
+        // kind is decided (2026-11-24, the last-7 review's #25), so "[]" in a string is the empty list it says.
+        using var encoded = sent is { ValueKind: JsonValueKind.String } s && s.GetString() is { } list ? LooseJson.TryParse(list, closeOpen: true) : null;
+        if (encoded is not null)
+        {
+            sent = encoded.RootElement;
+        }
+
+        // No options: none sent, a blank string, or an empty list. With no type that is a free-text question; a choice's own errors
+        // still read what was sent.
+        bool noOptions = sent is null
+            || (sent is { ValueKind: JsonValueKind.String } blank && string.IsNullOrWhiteSpace(blank.GetString()))
+            || (sent is { ValueKind: JsonValueKind.Array } empty && empty.GetArrayLength() == 0);
+
         AskKind kind;
         string type = Text(property(TypeArgument)).Trim();
         if (type.Length == 0)
         {
             // No type: multi when the booleans say so, else single — or text when no options came either (2026-11-24).
-            kind = IsTrue(property(MultiArgument)) || IsTrue(property(MultipleArgument)) ? AskKind.Multi : sent is null ? AskKind.Text : AskKind.Single;
+            bool multi = IsTrue(property(MultiArgument)) || IsTrue(property(MultipleArgument));
+            if (!multi && noOptions && strayList is not null)
+            {
+                return AskUserText.StrayList(number, strayList);
+            }
+
+            kind = multi ? AskKind.Multi : noOptions ? AskKind.Text : AskKind.Single;
         }
         else if (string.Equals(type, SingleType, StringComparison.OrdinalIgnoreCase))
         {
@@ -479,20 +556,13 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
 
         if (kind == AskKind.Text)
         {
-            if (sent is not null && !(sent is { ValueKind: JsonValueKind.Array } empty && empty.GetArrayLength() == 0))
+            if (!noOptions)
             {
                 return AskUserText.TextTakesNoOptions(number);
             }
 
             question = new AskQuestion(text, title.Length == 0 ? null : title, AskKind.Text, []);
             return null;
-        }
-
-        using var encoded = sent is { ValueKind: JsonValueKind.String } s && s.GetString() is { } list ? LooseJson.TryParse(list, closeOpen: true) : null;
-        if (encoded is not null)
-        {
-            // The list written by hand inside a string: what a server's parser hands over when its own parse failed.
-            sent = encoded.RootElement;
         }
 
         if (sent is not { ValueKind: JsonValueKind.Array } array)

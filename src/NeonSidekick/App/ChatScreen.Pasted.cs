@@ -67,7 +67,8 @@ internal sealed partial class ChatScreen
             if (SavePasted(number) is not { } saved)
             {
                 // A picture from a file (2026-11-23): its label names the file, relative inside the working directory as a PDF's is. A camera
-                // photo is a file the app wrote, so it reads "saved as" with its full path, as a pasted picture's does (2026-11-24, the user's pick).
+                // photo is a file the app wrote, so it reads "saved as" with its full path, as a pasted picture's does (2026-11-24, the user's pick);
+                // a screen capture too (later that day, the last-7 review's #52, the user's yes).
                 if (!pastes.IsClipboard(number) && images[i].Path is { Length: > 0 } file && File.Exists(file))
                 {
                     string where = _files.Contains(file) && _files.Resolve(file, forWrite: false, out string inside) == FileOutcome.Ok ? _files.Relative(inside) : file;
@@ -75,7 +76,7 @@ internal sealed partial class ChatScreen
                     int found = text.IndexOf(bare, StringComparison.Ordinal);
                     if (found >= 0)
                     {
-                        string sent = IsCameraPicture(images[i]) ? PasteBlocks.SavedLabel(number, file) : PasteBlocks.FileLabel(number, where);
+                        string sent = IsCameraPicture(images[i]) || IsScreenPicture(images[i]) ? PasteBlocks.SavedLabel(number, file) : PasteBlocks.FileLabel(number, where);
                         text = string.Concat(text.AsSpan(0, found), sent, text.AsSpan(found + bare.Length));
                     }
                 }

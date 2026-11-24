@@ -1279,6 +1279,38 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// The last-7 review's #55: on a short pane the footer band gives way so the list keeps three rows and the more row; never under one slab
+    /// row, and never more than the page asks for.
+    /// </summary>
+    [Fact]
+    public void SlabRows_GiveWayToTheList_OnAShortPane()
+    {
+        var page = Page("1", "2", "3", "4", "5") with { Footer = (_, _) => new MenuFooter("x") };
+        Assert.Equal(MenuPane.FooterRows, MenuPane.SlabRows(page, 40, 3));
+        Assert.Equal(8, MenuPane.SlabRows(page with { FooterRows = 8 }, 40, 3));
+        Assert.Equal(2, MenuPane.SlabRows(page, 10, 3));   // 10 − 3 header − 1 rule − 4 kept
+        Assert.Equal(1, MenuPane.SlabRows(page, 6, 3));
+        Assert.Equal(4, MenuPane.SlabRows(Page("one", "two") with { Footer = (_, _) => new MenuFooter("x") }, 10, 3));   // a two-row list keeps two
+    }
+
+    [Fact]
+    public async Task AShortPane_KeepsTheListsRows_UnderAFooterPage()
+    {
+        _console.Profile.Height = 14;
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Enter);
+
+        await menu.PickAsync(Page("one", "two", "three") with { Footer = (_, _) => new MenuFooter("band") }, 0, CancellationToken.None);
+
+        Assert.Contains("▸ one", Output);
+        Assert.Contains("  two", Output);
+        Assert.Contains("band", Output);
+        menu.Close();
+    }
+
     [Fact]
     public async Task ANarrowWindow_DrawsASidedPage_AsOneWithout()
     {

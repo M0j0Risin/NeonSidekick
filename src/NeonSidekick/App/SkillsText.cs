@@ -780,13 +780,22 @@ public static class SkillsText
     /// <summary>The info pane's label over a skill's <c>SKILL.md</c> or its diff in the trust question. Pinned.</summary>
     public static string ViewLabel(string name) => Label + " › " + ShownName(name);
 
-    /// <summary>A skill the question can't show: no readable <c>SKILL.md</c> within the bound. Pinned.</summary>
     /// <summary>The View's first tab (2026-11-24, the user's ask): the file rendered as markdown. Pinned; <c>/project-init</c>'s View shares it.</summary>
     public const string RenderedTab = "Rendered";
 
     /// <summary>The View's second tab: the exact text, which a trust is given for. Pinned.</summary>
     public const string SourceTab = "Source";
 
+    /// <summary>
+    /// The warning over a rendered file that holds link reference definitions (2026-11-24, the last-7 review's #7): the rendering drops them, and
+    /// they can carry text the model reads. On a View it points at the Source tab; on the Web UI's notes card, which has none, it ends there. Pinned.
+    /// </summary>
+    public static string HiddenLinesWarning(int count, bool source = true) =>
+        "⚠ " + count.ToString(System.Globalization.CultureInfo.InvariantCulture)
+        + (count == 1 ? " link-definition line doesn't" : " link-definition lines don't")
+        + " show in the rendering and can hold hidden text" + (source ? "; read " + SourceTab + "." : ".");
+
+    /// <summary>A skill the question can't show: no readable <c>SKILL.md</c> within the bound. Pinned.</summary>
     public const string NothingToViewText = "(this skill's SKILL.md couldn't be read; it is listed under Skipped)";
 
     /// <summary>

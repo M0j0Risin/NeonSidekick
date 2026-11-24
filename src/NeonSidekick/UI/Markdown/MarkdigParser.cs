@@ -36,6 +36,17 @@ public sealed class MarkdigParser(bool softBreaksAsLines = false) : IMarkdownPar
         return new MarkdownDocument(Blocks(document, softBreaksAsLines));
     }
 
+    /// <summary>
+    /// How many link reference definitions (<c>[label]: url "title"</c>, the <c>[//]: # (…)</c> comment idiom among them) <paramref name="text"/>
+    /// holds: lines a rendering never shows, so a View warns of them (2026-11-24, the last-7 review's #7: a skill's or a draft's hidden text). Read
+    /// with the same pipeline as <see cref="Parse"/>. Pure.
+    /// </summary>
+    public static int LinkDefinitionCount(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return text.Length == 0 ? 0 : Markdig.Markdown.Parse(text, Pipeline).Descendants<LinkReferenceDefinition>().Count();
+    }
+
     private static MarkdownPipeline Build() =>
         new MarkdownPipelineBuilder().UsePipeTables().DisableHtml().Build();
 

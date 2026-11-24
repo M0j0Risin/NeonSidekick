@@ -165,9 +165,13 @@ internal sealed partial class ChatScreen
     /// </summary>
     private IReadOnlyList<ImageAttachment> MarkScreenImages(IReadOnlyList<ImageAttachment> images)
     {
-        bool IsScreen(ImageAttachment i) => !i.Screen && (_screenPaths.ContainsKey(i.Path) || (System.IO.Path.IsPathFullyQualified(i.Path) && InScreenFolder(i.Path)));
+        bool IsScreen(ImageAttachment i) => !i.Screen && IsScreenPicture(i);
         return images.Any(IsScreen) ? images.Select(i => IsScreen(i) ? i with { Screen = true } : i).ToList() : images;
     }
+
+    /// <summary>Whether <paramref name="image"/> is a screen capture: marked so, taken this run, or in the screen capture's folder. The twin of <c>IsCameraPicture</c>.</summary>
+    private bool IsScreenPicture(ImageAttachment image) =>
+        image.Screen || _screenPaths.ContainsKey(image.Path) || (System.IO.Path.IsPathFullyQualified(image.Path) && InScreenFolder(image.Path));
 
     /// <summary>
     /// <c>/screen [target | list]</c> (2026-10-04): the user's own hand, so <c>Screen capture tool</c> and the ask never judge it —

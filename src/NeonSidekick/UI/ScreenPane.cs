@@ -899,7 +899,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// readers' <see cref="MenuPane.OutsideRow"/> on the transcript and the rules, else one key per
     /// off-pane part — the toolbar's path, its blanks, each glyph by column; the hint row's zones,
     /// each strip glyph by column — so two clicks on different parts never pair (the transcript
-    /// then a toolbar glyph opens nothing). All below −2, never the pairing's own −1. Pinned.
+    /// then a toolbar glyph opens nothing). All below −2, never the pairing's own −1. The hint row's zones at <c>-300_000 - zone</c> and
+    /// its strip glyphs at <c>-400_000 - column</c> (2026-11-24, the last-7 review's #18: −100 and −200 until then, which a toolbar glyph's
+    /// <c>-5 - column</c> reached on a wide window). Pinned.
     /// </summary>
     public int OutsideKey(int x, int y) => OutsideKeyOf(OffPaneHitAt(x, y));
 
@@ -916,7 +918,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         },
         { Hint: { Zone: HintZone.Path } } => HintPathKey,
         { Hint: { Zone: HintZone.Timers } } => HintTimersKey,
-        { Hint: { } row } => row.Zone == HintZone.Strip ? -200 - row.Column : -100 - (int)row.Zone,
+        { Hint: { } row } => row.Zone == HintZone.Strip ? -400_000 - row.Column : -300_000 - (int)row.Zone,
         _ => MenuPane.OutsideRow,
     };
 
@@ -971,8 +973,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The working directory on the hint row in the off-pane and pairing keys (later on 2026-10-12): far from every column's key. Pinned.</summary>
     public const int HintPathKey = -500_003;
 
-    /// <summary>The timers on the hint row in the pairing keys (2026-10-13): far from every column's key. Pinned.</summary>
-    public const int HintTimersKey = -500_004;
+    /// <summary>
+    /// The timers on the hint row in the pairing keys (2026-10-13): far from every column's key. −500 005 since 2026-11-24 (the last-7
+    /// review's #18): −500 004 was <see cref="ToolbarMarkKey"/>'s too. Pinned.
+    /// </summary>
+    public const int HintTimersKey = -500_005;
 
     /// <summary>
     /// The standing hint row's parts in order (2026-10-12, the user's ask: the Hint bar setting, its sections in any order), each

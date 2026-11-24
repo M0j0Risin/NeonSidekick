@@ -800,17 +800,25 @@ public static class SettingsArchive
     {
         private readonly ZipArchive _zip;
 
-        internal Plan(ZipArchive zip, SettingsArchiveManifest manifest, List<(string Name, ZipArchiveEntry Entry)> entries, List<string> skipped)
+        internal Plan(ZipArchive zip, SettingsArchiveManifest manifest, List<(string Name, ZipArchiveEntry Entry)> entries, List<string> skipped,
+            Dictionary<string, string>? renamed = null)
         {
             _zip = zip;
             Manifest = manifest;
             Entries = entries;
             Skipped = skipped;
+            Renamed = renamed ?? [];
         }
 
         public SettingsArchiveManifest Manifest { get; }
 
         internal List<(string Name, ZipArchiveEntry Entry)> Entries { get; }
+
+        /// <summary>
+        /// The zip's own name of each entry read under another (an old zip's <c>comfy/x.json</c> as <c>configs/comfy/x.json</c>), by the name it
+        /// is read under: a skip is reported under the name the zip holds (2026-11-24, the last-7 review's #26).
+        /// </summary>
+        internal Dictionary<string, string> Renamed { get; }
 
         internal List<string> Skipped { get; }
 
@@ -856,6 +864,7 @@ public static class SettingsArchive
 
             SettingsArchiveManifest? manifest = null;
             var entries = new List<(string, ZipArchiveEntry)>();
+            var renamed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var skipped = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -908,6 +917,10 @@ public static class SettingsArchive
                     if (targets.Add(target))
                     {
                         entries.Add((target, entry));
+                        if (!string.Equals(target, name, StringComparison.Ordinal))
+                        {
+                            renamed[target] = name;
+                        }
                     }
                     else
                     {
@@ -935,7 +948,7 @@ public static class SettingsArchive
                 return null;
             }
 
-            return new Plan(zip, manifest!, entries, skipped);
+            return new Plan(zip, manifest!, entries, skipped, renamed);
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or NotSupportedException or ArgumentException or JsonException)
         {
@@ -986,8 +999,8 @@ public static class SettingsArchive
         public bool AddedAny => Added.Count > 0 || AddedHome.Count > 0;
     }
 
-    /// <summary>A home-level file read from the zip, written in the second phase.</summary>
-    private sealed record PendingFile(string Relative, byte[] Bytes, int Attributes);
+    /// <summary>A home-level file read from the zip, written in the second phase; <paramref name="Shown"/> is the zip's own name, which a skip reports.</summary>
+    private sealed record PendingFile(string Relative, byte[] Bytes, int Attributes, string Shown);
 
     /// <summary>A profile staged in the first phase: the keys its fixups reset, whether its <c>profile.json</c> didn't read, its connection files.</summary>
     private sealed record StagedProfile(IReadOnlyList<string> Reset, bool Unparsable, IReadOnlyList<string> ConnectionFiles);
@@ -1086,7 +1099,7 @@ public static class SettingsArchive
                 staged[zipName] = new StagedProfile(fixup?.Reset ?? [], fixup is null, StoredPasswordFiles(Path.Combine(dir, ConfigsName)));
             }
 
-            StageHome(root, homeEntries, skillStage, stagedSkills, pending, report, cancellationToken);
+            StageHome(root, homeEntries, plan.Renamed, skillStage, stagedSkills, pending, report, cancellationToken);
         }
         catch
         {
@@ -1167,8 +1180,8 @@ public static class SettingsArchive
     /// first file to claim a name wins), a ComfyUI workflow by its stem (the <c>.json</c> and <c>.md</c> pair), a command or configs file by its
     /// path. The local names are read once each, and only when the zip holds that kind (the review's #19 and #53).
     /// </summary>
-    private static void StageHome(string root, List<(string Name, ZipArchiveEntry Entry)> entries, string skillStage, List<string> stagedSkills,
-        List<PendingFile> pending, ImportReport report, CancellationToken cancellationToken)
+    private static void StageHome(string root, List<(string Name, ZipArchiveEntry Entry)> entries, IReadOnlyDictionary<string, string> renamed, string skillStage,
+        List<string> stagedSkills, List<PendingFile> pending, ImportReport report, CancellationToken cancellationToken)
     {
         var listings = new Listings();
         string skillsRoot = Path.Combine(root, SkillsName);
@@ -1214,6 +1227,7 @@ public static class SettingsArchive
             cancellationToken.ThrowIfCancellationRequested();
             string[] s = name.Split('/');
             string stem = Path.GetFileNameWithoutExtension(s[^1]);
+            string shown = renamed.GetValueOrDefault(name, name);
 
             // An advisor template is one item (2026-11-22): a folder already here keeps both its files, so a zip's never mixes in.
             // Only a folder holding one of its files counts (2026-11-23, review #23): an empty or broken one took the zip's template away.
@@ -1231,7 +1245,7 @@ public static class SettingsArchive
 
             if (listings.Exists(root, name))
             {
-                report.Skipped.Add(name);
+                report.Skipped.Add(shown);
                 continue;
             }
 
@@ -1253,11 +1267,11 @@ public static class SettingsArchive
             }
             else if (IsComfyItem(s) && comfyStems.Value.Contains(stem))
             {
-                report.Skipped.Add(name);
+                report.Skipped.Add(shown);
                 continue;
             }
 
-            pending.Add(new PendingFile(name, bytes, entry.ExternalAttributes));
+            pending.Add(new PendingFile(name, bytes, entry.ExternalAttributes, shown));
         }
     }
 
@@ -1521,7 +1535,7 @@ public static class SettingsArchive
         {
             if (!created && File.Exists(target))
             {
-                report.Skipped.Add(file.Relative);
+                report.Skipped.Add(file.Shown);
                 return;
             }
 

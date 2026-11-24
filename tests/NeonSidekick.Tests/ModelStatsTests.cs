@@ -166,6 +166,15 @@ public sealed class ModelStatsTests : IDisposable
         Assert.Contains(UsageText.ModelsSideTurnsNote(7, ["/cmd", "/advisor dev"]), string.Join(" ", texts));
         Assert.Equal("7 turns answered by a command (/cmd, /advisor dev) aren't counted.", UsageText.ModelsSideTurnsNote(7, ["/cmd", "/advisor dev"]));
         Assert.Equal("1 turn answered by a command (/claude) isn't counted.", UsageText.ModelsSideTurnsNote(1, ["/claude"]));
+
+        // The note's commands in the table's order (the last-7 review's #49): by turns, most first, though the fewer were used last.
+        var disagree = new List<ModelStat>
+        {
+            new("/claude", 2, 1, 0, 0, 0, 0, 0, 0, newer, 0),
+            new("/cmd", 5, 1, 0, 0, 0, 0, 0, 0, older, 0),
+            new("big", 9, 1, 0, 0, 0, 0, 0, 0, older, 0),
+        };
+        Assert.Contains(UsageText.ModelsSideTurnsNote(7, ["/cmd", "/claude"]), string.Join(" ", UsageText.ModelsRows(disagree, logging: true, 120).Select(r => r.Text)));
     }
 
     /// <summary>Only side turns (2026-11-23): never "No saved turns yet", which would contradict the note; no turns at all still is.</summary>

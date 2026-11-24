@@ -58,9 +58,10 @@ public sealed class WebSnippetTests
     [Fact]
     public void AMatch_IsAWholeWord_OutsideALabel_AndBlankEndsAreNoCut()
     {
+        // "cat" marked in the label's file name and in "category" (2026-11-24: the label kept whole; the test's replaces had dropped its ".png", and
+        // since the last-7 review's #1 a label ends at its picture's extension).
         string sent = @"[Image #1, saved as C:\pics\cat.png] a category of things";
-        Assert.DoesNotContain(WebSnippet.Parts(Marked(sent, "cat.png").Replace(WebSnippet.Open + "cat.png", WebSnippet.Open + "cat", StringComparison.Ordinal)
-            .Replace(".png" + WebSnippet.Close, WebSnippet.Close + ".png", StringComparison.Ordinal)), p => p.Match);
+        Assert.DoesNotContain(WebSnippet.Parts(Marked(sent, "cat")), p => p.Match);
 
         Assert.DoesNotContain(WebSnippet.Parts(Marked("[Image #1] the photo", "Image")), p => p.Match);
         Assert.Equal("an <image> of [Image #1]", Joined(WebSnippet.Parts(Marked("an image of [Image #1]", "image"))));

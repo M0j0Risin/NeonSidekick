@@ -66,6 +66,15 @@ public partial class SettingsMenuTests
         Assert.Null(AdvisorRoster.Find(entries, "nobody").Found);
         Assert.Equal(2, AdvisorRoster.Find(entries, "nobody").Candidates.Count);
         Assert.Null(AdvisorRoster.Find(entries, "e").Found);   // both roles hold it
+        // Two holding the role whole are a choice too (2026-11-24, the last-7 review's #16), never the first by name.
+        var shared = AdvisorRoster.Entries([new("alpha", "reviewer"), new("beta", "reviewer")]);
+        Assert.Null(AdvisorRoster.Find(shared, "Reviewer").Found);
+        Assert.Equal(["alpha", "beta"], AdvisorRoster.Find(shared, "reviewer").Candidates.Select(e => e.Profile));
+        // Cut by cells (#56): a wide role never runs past the width, nor splits a pair.
+        string wide = AdvisorRoster.Value([new("qa", "😀😀😀😀😀😀😀😀😀😀😀😀😀😀"), new("ux", "見る人見る人見る人")], 20);
+        Assert.True(NeonSidekick.UI.TextCells.Width(wide) <= 20, wide);
+        Assert.EndsWith("…", wide);
+        Assert.Equal(32, NeonSidekick.HomeAssistant.HomeBarText.RoomHeadCap);   // #58's cap, as ServicesMenu.NameCap
         Assert.Equal("ux (UX designer)", AdvisorRoster.Label(entries[1]));
         Assert.Equal("qa", AdvisorRoster.Label(new AdvisorEntry("qa")));
     }

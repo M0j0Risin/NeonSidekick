@@ -78,6 +78,8 @@ public sealed class AuditTextTests
         Assert.Contains("- Not read by any pass yet (2 files): ⟪src/folder0/file0.cs, src/folder1/file1.cs⟫", directive);
         Assert.Contains("- Open findings (1), details in .neon/audits/src-2026-10-18.md: " + AuditText.FindingTitlesNote + " A1 ⟪A problem with a fairly long title number 1⟫.", directive);
         Assert.Contains(AuditText.AskLine, directive);
+        Assert.Equal("- A question only the user can answer: ask it (with ask_user when it is offered), or put it in present_audit's questions. " +
+            "One they decline goes into present_audit's questions unless their note settles it; one they skip is yours to settle, noting your pick; ask neither again.", AuditText.AskLine);
         Assert.Contains("- Audit it yourself; do not consult advisors on this pass.", directive);
         Assert.DoesNotContain("You can look things up on the web", directive);
     }

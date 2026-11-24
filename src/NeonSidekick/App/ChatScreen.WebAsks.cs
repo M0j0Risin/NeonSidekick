@@ -269,8 +269,8 @@ internal sealed partial class ChatScreen
         var answers = new List<AskAnswer>(questions.Count);
         for (int i = 0; i < questions.Count; i++)
         {
-            var picked = i < given.Count ? given[i].Picked ?? [] : [];
-            answers.Add(AskAnswer.From(questions[i], picked, i < given.Count ? given[i].Other : null));
+            var one = i < given.Count ? given[i] : null;
+            answers.Add(AskAnswer.From(questions[i], one?.Picked ?? [], one?.Other));
         }
 
         return AskReply.Answered(answers);

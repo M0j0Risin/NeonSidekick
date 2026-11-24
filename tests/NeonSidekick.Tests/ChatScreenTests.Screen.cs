@@ -147,6 +147,30 @@ public partial class ChatScreenTests
         Assert.Equal([shot], _shotsShown);
     }
 
+    /// <summary>
+    /// A screen capture sent to the model is labeled "saved as" with its full path (2026-11-24, the last-7 review's #52, the user's yes), as a
+    /// camera photo is: a file the app wrote. The twin of <c>Camera_OnThePane_SpaceTakesIt_…</c>'s label check.
+    /// </summary>
+    [Fact]
+    public async Task ScreenCommand_TheShotSent_IsLabeledSavedAs_WithItsFullPath()
+    {
+        _screenSystem = new FakeScreenSystem();
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/screen");
+        PushLine("what is this?");
+        PushLine("/exit");
+        _chat.EnqueueText("A label.");
+
+        await RunAsync();
+
+        string shot = Assert.Single(ScreenFiles());
+        var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
+        Assert.StartsWith(PasteBlocks.SavedLabel(1, shot) + " what is this?", user.Text);
+        Assert.StartsWith("[Image #1] what is this?", PasteBlocks.WithoutSavedPaths(user.Text));
+    }
+
     /// <summary>F10 is <c>/screen</c> (2026-10-05, the user's pick): the app's monitor captured and put on the line, as typed.</summary>
     [Fact]
     public async Task F10_CapturesTheScreen_ToTheLine()

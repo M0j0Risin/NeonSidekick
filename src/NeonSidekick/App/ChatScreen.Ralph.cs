@@ -626,7 +626,9 @@ internal sealed partial class ChatScreen
                         stop = await RalphFinalCheckAsync(loop, cancellationToken).ConfigureAwait(false);
                         break;
                     default:
-                        (exit, stop) = await RalphPassAsync(loop, next, body, steps, PlanDocument.Stamp(text), () => _queue.Added != typed || PendedCount != pended || _webUi.LinesAdded != sent || end.Asked, cancellationToken).ConfigureAwait(false);
+                        // A line the user typed or sent, never 🔁's click (2026-11-24, the last-7 review's #23): a pass ended after its click is still
+                        // nudged to report, then the loop pauses as asked (end.Asked in loop.Next above).
+                        (exit, stop) = await RalphPassAsync(loop, next, body, steps, PlanDocument.Stamp(text), () => _queue.Added != typed || PendedCount != pended || _webUi.LinesAdded != sent, cancellationToken).ConfigureAwait(false);
                         if (exit)
                         {
                             stop ??= RalphStop.Stopped;
@@ -668,8 +670,18 @@ internal sealed partial class ChatScreen
         bool ours = ReferenceEquals(_ralph, loop);
         // Paused by 🔁's double-click alone, no line typed (2026-11-23): its own notice, and the next message starts afresh as after any stop.
         bool clicked = end.Asked && _queue.Added == typed && PendedCount == pended && _webUi.LinesAdded == sent;
-        EndRalph(stop ?? RalphStop.Stopped, clicked);
-        _ralphEnd = null;
+        try
+        {
+            EndRalph(stop ?? RalphStop.Stopped, clicked);
+        }
+        finally
+        {
+            // Cleared even when the end throws (2026-11-24, the last-7 review's #27), as /loop's is: a stale request would end the next run.
+            if (ReferenceEquals(_ralphEnd, end))
+            {
+                _ralphEnd = null;
+            }
+        }
         if (_ralphSpoken is { } spoken)
         {
             // The request the wake phrase cut a pass short for (2026-10-19, the fifth review): run once the loop has stopped, as an ordinary turn

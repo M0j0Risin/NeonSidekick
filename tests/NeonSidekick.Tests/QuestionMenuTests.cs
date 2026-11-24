@@ -272,6 +272,27 @@ public class QuestionMenuTests : IDisposable
         Type("draft");
         Push(Keys.Enter);
         Assert.Equal(["What should the file be called? — draft (typed)"], Flat(await text.AskAsync([FileName], CancellationToken.None)));
+
+        // Space opens a lone text question's edit too, and the saved answer is sent (2026-11-24, the last-7 review's #33): there is no
+        // Submit tab to send it later.
+        var (spaced, _) = Menu();
+        Push(Keys.Char(' '));
+        Type("spaced");
+        Push(Keys.Enter);
+        Assert.Equal(["What should the file be called? — spaced (typed)"], Flat(await spaced.AskAsync([FileName], CancellationToken.None)));
+    }
+
+    /// <summary>The last-7 review's #14: Space marks options only; on the Submit tab's rows and a lone question's decline row it does nothing.</summary>
+    [Fact]
+    public async Task Space_OnTheSubmitTabsRows_AndTheDeclineRow_DoesNothing()
+    {
+        var (menu, _) = Menu();
+        Push(Keys.Right, Keys.Right, Keys.Up, Keys.Char(' '), Keys.Down, Keys.Down, Keys.Char(' '), Keys.Up, Keys.Enter);   // Q2's row, the decline row: nothing; Submit
+        Assert.Equal(["Which color? — (skipped)", "Toppings? — (skipped)"], Flat(await menu.AskAsync([Colour, Toppings], CancellationToken.None)));
+
+        var (lone, _) = Menu();
+        Push(Keys.End, Keys.Char(' '), Keys.Home, Keys.Enter);   // the decline row: nothing; red
+        Assert.Equal(["Which color? — red"], Flat(await lone.AskAsync([Colour], CancellationToken.None)));
     }
 
     [Fact]
@@ -328,12 +349,12 @@ public class QuestionMenuTests : IDisposable
         Assert.False(pane.OverlayOpen);
     }
 
-    /// <summary>E: the decline row takes a note; an empty one goes back to the tab.</summary>
+    /// <summary>E: the decline row takes a note; Esc goes back to the tab, and an empty note declines plainly (2026-11-24, the last-7 review's #46), as the page's Send does.</summary>
     [Fact]
-    public async Task DeclineWithANote_FromTheSubmitTab_AndFromALoneQuestionsTab_AnEmptyNoteGoesBack()
+    public async Task DeclineWithANote_FromTheSubmitTab_AndFromALoneQuestionsTab_EscGoesBack_AnEmptyNoteDeclines()
     {
         var (menu, _) = Menu();
-        Push(Keys.Right, Keys.Right, Keys.Down, Keys.Enter, Keys.Enter);   // the Submit tab's decline row, an empty note: back
+        Push(Keys.Right, Keys.Right, Keys.Down, Keys.Enter, Keys.Escape);   // the Submit tab's decline row, Esc: back
         Push(Keys.Enter);
         Type("ask me later");
         Push(Keys.Enter);
@@ -345,6 +366,22 @@ public class QuestionMenuTests : IDisposable
         Type("nah");
         Push(Keys.Enter);
         AssertDeclined(await lone.AskAsync([Colour], CancellationToken.None), "nah");
+
+        var (plain, _) = Menu();
+        Push(Keys.Right, Keys.Right, Keys.Down, Keys.Enter, Keys.Enter);
+        AssertDeclined(await plain.AskAsync([Colour, Toppings], CancellationToken.None));
+    }
+
+    /// <summary>The last-7 review's #3: a key read that runs dry (no keyboard) is no decline, on a tab or in the decline's note.</summary>
+    [Fact]
+    public async Task ADryKeyRead_IsNoDecline_Null()
+    {
+        var (menu, _) = Menu();
+        Assert.Null(await menu.AskAsync([Colour], CancellationToken.None));
+
+        var (note, _) = Menu();
+        Push(Keys.End, Keys.Enter);   // the decline row's note, then nothing
+        Assert.Null(await note.AskAsync([Colour], CancellationToken.None));
     }
 
     [Fact]

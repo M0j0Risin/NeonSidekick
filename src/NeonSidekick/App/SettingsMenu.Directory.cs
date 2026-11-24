@@ -33,6 +33,10 @@ internal sealed partial class SettingsMenu
     public const string DirectoryWizardCancelledNotice = "No domain added.";
     public const string DirectoryWizardDomainRequired = "A domain is required.";
 
+    /// <summary>The domain wizard summary's test row and its caption (2026-11-24, the last-7 review's #24: built inline until then). Pinned.</summary>
+    public const string DirectoryWizardTestRow = "Test the domain";
+    public static readonly string DirectoryWizardSummaryCaption = ComputerWizardSummaryCaption.Replace("computer", "domain", StringComparison.Ordinal);
+
     public static readonly IReadOnlyList<string> DirectoryWizardTlsRows = ["389   signed and sealed (the default)", "636   LDAPS (the server's certificate must be trusted here)"];
 
     public static readonly IReadOnlyList<string> DirectoryWizardDetailRows =
@@ -544,10 +548,10 @@ internal sealed partial class SettingsMenu
         int cursor = 0;
         while (true)
         {
-            var actions = new List<string> { SqlWizardSaveOfferedRow, ComputerWizardSaveHiddenRow, "Test the domain", SqlWizardCancelRow };
+            var actions = new List<string> { SqlWizardSaveOfferedRow, ComputerWizardSaveHiddenRow, DirectoryWizardTestRow, SqlWizardCancelRow };
             var ruled = ConnectionWizardSummaryRows(actions, DirectoryWizardRows(draft));
             var rows = ruled.Rows;
-            var page = new MenuPage(title, rows, PickKeys) { Headings = ruled.Headings, Caption = ComputerWizardSummaryCaption.Replace("computer", "domain", StringComparison.Ordinal) };
+            var page = new MenuPage(title, rows, PickKeys) { Headings = ruled.Headings, Caption = DirectoryWizardSummaryCaption };
             if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
                 return (false, false, null);

@@ -288,6 +288,45 @@ public partial class ChatScreenTests
         Assert.Equal($"🔎 Code audit stopped after 1 pass, as asked. /code-audit resume {name} runs more passes.", AuditText.StopNotice(PlanGapStop.UserSpoke, name, 1, clicked: true));
     }
 
+    /// <summary>
+    /// 🔎's click during a pass that reports nothing (2026-11-24, the last-7 review's #23): the pass is still followed up, as a typed line would
+    /// not let it be, and then the audit stops as asked.
+    /// </summary>
+    [Fact]
+    public async Task CodeAudit_ADoubleClickDuringAReportlessPass_StillFollowsUp_ThenStops()
+    {
+        AuditFixture(Line("/code-audit src security"), Line("/exit"));
+        _console.Profile.Width = 80;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the lower rule at 101
+        _chat.BeforeUpdateOf = async (request, update, ct) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                _time.Advance(ScreenPane.Tick);
+                Scripted().PushClick(78, 101);
+                Scripted().PushClick(78, 101);
+                await UntilAsync(() =>
+                {
+                    _time.Advance(ScreenPane.Tick);
+                    return Output.Contains(LoopText.EndingTail + " ─", StringComparison.Ordinal);
+                }, ct);
+            }
+        };
+        _chat.Enqueue(ReadCall("r1"));        // 0
+        _chat.EnqueueText("Read it.");        // 1: no report
+        _chat.Enqueue(FindingCall("a1"));     // 2: the follow-up
+        _chat.EnqueueText("Pass 1 done.");    // 3
+        _chat.EnqueueText("never");
+
+        string output = await RunAsync();
+
+        string name = Path.GetFileNameWithoutExtension(AuditPath);
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.Equal(AuditText.FollowUpMessage(name, 1), LastUserText(_chat.Requests[2]));
+        Assert.Contains("Code audit stopped after 1 pass, as asked.", output);
+        Assert.Equal(AuditStatus.Stopped, AuditReportNow.Header.Status);
+    }
+
     [Fact]
     public async Task CodeAudit_FixViaPlan_EntersPlanMode_OnTheOpenFindings()
     {

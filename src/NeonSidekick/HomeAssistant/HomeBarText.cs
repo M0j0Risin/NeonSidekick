@@ -9,6 +9,12 @@ namespace NeonSidekick.HomeAssistant;
 /// </summary>
 public static class HomeBarText
 {
+    /// <summary>
+    /// The widest the room pane pads a device's glyph and name to (2026-11-24, the last-7 review's #58), as <c>ServicesMenu.NameCap</c>: a longer
+    /// name is cut with … so the states stay on the pane. Pinned.
+    /// </summary>
+    public const int RoomHeadCap = 32;
+
     // ─── the command ────────────────────────────────────────────────────────────
 
     public const string Command = "/homebar";

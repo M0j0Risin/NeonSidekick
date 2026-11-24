@@ -1324,16 +1324,23 @@ internal sealed partial class ChatScreen
         }
 
         var reply = outcome.Value ?? AskReply.NotShown;
+        // Shown or not (2026-11-24, the last-7 review's #8): a pane that never reached the user is not their Esc.
         DiagnosticLog.Info(AppCategory, reply.Answers is { } answers ? AskUserAnsweredLogLine(answers.Count(a => !a.Skipped), answers.Count(a => a.Skipped))
+            : !reply.Shown ? AskUserNotShownLogLine
             : reply.DeclineNote is not null ? AskUserDeclinedNoteLogLine : AskUserNotAnsweredLogLine);
         return reply;
     }
 
     /// <summary><c>ask_user: 2 questions answered</c>, and since 2026-11-24 <c>, 1 skipped</c> when any were. Pinned.</summary>
     public static string AskUserAnsweredLogLine(int answered, int skipped = 0) =>
-        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ask_user: {answered} question{(answered == 1 ? "" : "s")} answered{(skipped > 0 ? $", {skipped} skipped" : "")}");
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"ask_user: {answered} question{(answered == 1 ? "" : "s")} answered")
+        + (skipped > 0 ? ", " + skipped.ToString(System.Globalization.CultureInfo.InvariantCulture) + " skipped" : "");
 
-    public const string AskUserNotAnsweredLogLine = "ask_user: not answered (Esc).";
+    /// <summary>The user's decline without a note: Esc, or the decline row left empty. Pinned.</summary>
+    public const string AskUserNotAnsweredLogLine = "ask_user: declined.";
+
+    /// <summary>A pane that never reached the user or closed under them (2026-11-24, the last-7 review's #8): no key of theirs. Pinned.</summary>
+    public const string AskUserNotShownLogLine = "ask_user: not answered (the questions were not shown).";
 
     /// <summary>A decline with a note (2026-11-24): the note itself never logged, the user's words. Pinned.</summary>
     public const string AskUserDeclinedNoteLogLine = "ask_user: declined with a note";

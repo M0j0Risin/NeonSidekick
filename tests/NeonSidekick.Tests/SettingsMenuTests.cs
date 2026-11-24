@@ -3355,7 +3355,51 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal("clean", _settings.ProfileName);
         Assert.Equal(new AppSettingsData().TtsSpeed, _settings.Current.TtsSpeed);
-        Assert.Equal([ChatScreen.ProfileCreatedFreshNotice("clean")], menu.TakeProfileCreatedNotices());
+        Assert.Equal([ProfileText.ProfileCreatedFreshNotice("clean")], menu.TakeProfileCreatedNotices());
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// A profile the disk refuses (2026-11-24, the last-7 review's #36): a file where its folder goes makes the create throw; the picker shows
+    /// the error, no profile is made or switched to, and nothing is held. The file, not a profile, is left alone.
+    /// </summary>
+    [Fact]
+    public async Task PickProfile_TheAddRow_ACreateTheDiskRefuses_IsReported_NothingMade()
+    {
+        string blocker = Path.Combine(_dir, "profiles", "blocked");
+        Directory.CreateDirectory(Path.GetDirectoryName(blocker)!);
+        File.WriteAllText(blocker, "not a profile");
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('+'), Keys.Enter);
+        PushText("blocked");
+        Push(Keys.Enter);
+        Push(Keys.Enter);                                        // Copy: the create throws
+        Push(Keys.Escape);                                       // back on the list
+
+        Assert.False(await menu.PickProfileAsync(CancellationToken.None));
+
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Contains("Could not make profile blocked:", Output);
+        Assert.StartsWith("Could not make profile blocked: ", ProfileText.CreateFailedError("blocked", "x"));
+        Assert.Null(Profiles.Resolve(_dir, "blocked"));
+        Assert.True(File.Exists(blocker));
+        Assert.Empty(menu.TakeProfileCreatedNotices());
+        pane.Dispose();
+    }
+
+    /// <summary>The picker opens on the loaded profile found as the list compares names (2026-11-24, the last-7 review's #42), never the add row.</summary>
+    [Fact]
+    public async Task PickProfile_OpensOnTheLoadedProfile_NotTheAddRow()
+    {
+        Profiles.Create(_dir, "alpha", new AppSettingsData());
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Enter);                                        // Enter at once: the loaded profile, unchanged
+
+        Assert.False(await menu.PickProfileAsync(CancellationToken.None));
+
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Contains(SettingsMenu.AlreadyCurrentNotice(Profiles.DefaultName), Output);
+        Assert.DoesNotContain(ProfileText.AddProfileNameTitle, Output);
         pane.Dispose();
     }
 
@@ -3404,7 +3448,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.True((await menu.ShowAsync(CancellationToken.None)).HasFlag(SettingsChanges.Profile));
 
         Assert.Equal("two", _settings.ProfileName);
-        Assert.Equal([ChatScreen.ProfileCreatedNotice("one"), ChatScreen.ProfileCreatedFreshNotice("two")], menu.TakeProfileCreatedNotices());
+        Assert.Equal([ChatScreen.ProfileCreatedNotice("one"), ProfileText.ProfileCreatedFreshNotice("two")], menu.TakeProfileCreatedNotices());
         pane.Dispose();
     }
 
@@ -6324,6 +6368,30 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Single(lines.Select(l => l.IndexOf("Default: ", StringComparison.Ordinal)).Distinct());
         Assert.Single(lines.Select(l => l.IndexOf(" off ", StringComparison.Ordinal) is >= 0 and var at ? at : l.IndexOf(" 1.5 ", StringComparison.Ordinal) is >= 0 and var speed ? speed : l.IndexOf(" (custom)", StringComparison.Ordinal)).Distinct());   // the values too
         Assert.DoesNotContain(lines, l => l.Contains("/settings › ", StringComparison.Ordinal));
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// A value wider than the cap (2026-11-24, the last-7 review's #37): drawn whole, the other rows' columns padded to the cap, not to it.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ChangedWord_ALongValue_IsWhole_AndTheShortRowsStayInLine()
+    {
+        var (menu, pane) = PaneMenu();
+        _console.Profile.Width = 240;
+        var fresh = new AppSettingsData();
+        string url = "http://a-very-long-host-name.example.internal:30000/v1/with/a/long/path";
+        _settings.Update(d => { foreach (var p in Settings.SettingsJsonContext.Default.AppSettingsData.Properties) { if (p.Get is not null && p.Set is not null) { p.Set(d, p.Get(fresh)); } } d.CopyUserPrompt = false; d.ShellPreferNative = false; d.LlmUrl = url; });
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: false, words: "changed");
+
+        Assert.True(url.Length > SettingsMenu.FoundValueCap);
+        Assert.Contains(url + "  Default: ", Output);   // whole, its own tail after it
+        var shorts = Output.Split('\n').Where(l => l.Contains(" off ", StringComparison.Ordinal) && l.Contains("Default: ", StringComparison.Ordinal) && !l.Contains(url, StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(shorts);
+        int label = shorts[0].IndexOf(" off ", StringComparison.Ordinal);
+        Assert.All(shorts, l => Assert.Equal(label + 1 + SettingsMenu.FoundValueCap + 2, l.IndexOf("Default: ", StringComparison.Ordinal)));
         pane.Dispose();
     }
 

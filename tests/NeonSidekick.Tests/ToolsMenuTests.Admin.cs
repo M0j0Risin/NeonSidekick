@@ -96,6 +96,10 @@ public partial class ToolsMenuTests
         var lab = Assert.Single(NeonSidekick.ActiveDirectory.DirectoryConfigFile.Load(path).Domains);
         Assert.Equal(("lab", "lab.example", "localhost", "the lab"), (lab.Name, lab.Config.Domain, lab.Config.Server, lab.Config.Description));
         Assert.Null(_settings.Current.DirectoryDomainsOffered);
+        Assert.Contains(SettingsMenu.DirectoryWizardTestRow, Output);   // the summary's rows and caption (2026-11-24, #24)
+        Assert.Equal("Test the domain", SettingsMenu.DirectoryWizardTestRow);
+        Assert.DoesNotContain("computer", SettingsMenu.DirectoryWizardSummaryCaption, StringComparison.Ordinal);
+        Assert.Contains("domain", SettingsMenu.DirectoryWizardSummaryCaption, StringComparison.Ordinal);
     }
 
     /// <summary>ESC on the first page with nothing saved leaves the wizard (no endless loop back into it) and writes nothing.</summary>

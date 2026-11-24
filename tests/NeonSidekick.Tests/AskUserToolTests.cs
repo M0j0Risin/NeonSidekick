@@ -231,10 +231,14 @@ public class AskUserToolTests
               { "question": "Name the file?", "type": "Text" },
               { "question": "Anything else?" },
               { "question": "Why?", "type": "text", "options": [] },
-              { "question": "Toppings?", "options": null, "type": "text" }
+              { "question": "Toppings?", "options": null, "type": "text" },
+              { "question": "When?", "options": [] },
+              { "question": "Where?", "options": "[]" },
+              { "question": "How?", "type": "text", "choices": " " }
             ]
             """);
         var asked = Assert.Single(_asked);
+        Assert.Equal(7, asked.Count);   // the last-7 review's #25: an empty list, in a string too, is no options; with no type, a free-text question
         Assert.All(asked, q => Assert.Equal(AskKind.Text, q.Kind));
         Assert.All(asked, q => Assert.Empty(q.Options));
         Assert.True(asked[0].IsText);
@@ -246,6 +250,10 @@ public class AskUserToolTests
         // A single or multi question still needs its options.
         Assert.Equal(AskUserText.BadOptions(1, 10), await InvokeAsync("""[{ "question": "a?", "type": "single" }]"""));
         Assert.Equal(AskUserText.BadOptions(1, 10), await InvokeAsync("""[{ "question": "a?", "multi": true }]"""));
+
+        // A list under a key ask_user doesn't read, with no options or type (the last-7 review's #20): the model is told, not asked a text question.
+        Assert.Equal("Error: question 2 sends a list as \"answers\", which ask_user doesn't read; send the choices as \"options\", or leave the list out for a free-text question.",
+            await InvokeAsync("""[{ "question": "a?" }, { "question": "b?", "answers": ["x", "y"] }]"""));
         Assert.Empty(_asked);
     }
 
@@ -433,17 +441,26 @@ public class AskUserToolTests
         Assert.Equal("", await InvokeAsync("""[{ "question": "Which color?", "options": ["red", "blue"] }, { "question": "Size?" }]""", turn.Token));
         Assert.Equal(2, _asked.Count);
 
-        // A later decline with no note: the refusal has none.
+        // A later decline of another question with no note (2026-11-24, the last-7 review's #21): the color keeps its own note, the
+        // size has none, and the two asked together carry the one note there is.
         _reply = AskReply.Declined();
         await InvokeAsync("""[{ "question": "Size?" }]""", turn.Token);
-        Assert.Equal(AskUserText.AlreadyDeclined(null), await InvokeAsync(again, turn.Token));
+        Assert.Equal(AskUserText.AlreadyDeclined("not now"), await InvokeAsync(again, turn.Token));
+        Assert.Equal(AskUserText.AlreadyDeclined(null), await InvokeAsync("""[{ "question": "Size?" }]""", turn.Token));
+        Assert.Equal(AskUserText.AlreadyDeclined("not now"), await InvokeAsync("""[{ "question": "Size?" }, { "question": "Which color?", "options": ["red", "blue"] }]""", turn.Token));
         Assert.Equal(3, _asked.Count);
+
+        // Two notes for the questions asked together: both, in the order asked.
+        _reply = AskReply.Declined("too big");
+        await InvokeAsync("""[{ "question": "Shape?" }]""", turn.Token);
+        Assert.Equal(AskUserText.AlreadyDeclined("too big; not now"), await InvokeAsync("""[{ "question": "Shape?" }, { "question": "Which color?", "options": ["red", "blue"] }]""", turn.Token));
+        Assert.Equal(4, _asked.Count);
 
         // A new turn asks again.
         using var next = new CancellationTokenSource();
         _reply = AskReply.Answered([]);
         await InvokeAsync(again, next.Token);
-        Assert.Equal(4, _asked.Count);
+        Assert.Equal(5, _asked.Count);
     }
 
     [Fact]

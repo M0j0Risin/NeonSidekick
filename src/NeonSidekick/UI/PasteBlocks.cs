@@ -96,7 +96,9 @@ public sealed partial class PasteBlocks
     }
 
     /// <summary>The label an image token is drawn as, and what it expands to. Pinned.</summary>
-    public static string ImageLabel(int number) => $"[Image #{number}]";
+    public static string ImageLabel(int number) => $"[Image #{N(number)}]";
+
+    private static string N(int number) => number.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>The line that closes a cut preview: how many lines of the block it left out. Pinned.</summary>
     public static string MoreLabel(int hidden) => $"[… +{hidden} more {(hidden == 1 ? "line" : "lines")}]";
@@ -334,14 +336,14 @@ public sealed partial class PasteBlocks
     /// The label a saved clipboard picture carries in the sent text (2026-10-09, the user's pick): <c>[Image #1, saved as C:\…\pasted-…png]</c>,
     /// so the model can hand the file to its picture tools. The transcript's line keeps <see cref="ImageLabel"/>. Pinned.
     /// </summary>
-    public static string SavedLabel(int number, string path) => $"[Image #{number}, saved as {path}]";
+    public static string SavedLabel(int number, string path) => $"[Image #{N(number)}, saved as {path}]";
 
     /// <summary>
     /// The label a picture attached from a file carries in the sent text (2026-11-23, the user's ask, from a failed set_splash_image):
     /// <c>[Image #1, from C:\…\cat.png]</c>, worded as an attached PDF's, so the model can hand the file to its tools. The transcript keeps
     /// <see cref="ImageLabel"/>. Pinned.
     /// </summary>
-    public static string FileLabel(int number, string path) => $"[Image #{number}, from {path}]";
+    public static string FileLabel(int number, string path) => $"[Image #{N(number)}, from {path}]";
 
     /// <summary>
     /// <paramref name="text"/> with every <see cref="SavedLabel"/> (and <see cref="FileLabel"/>, 2026-11-23) put back as its <see cref="ImageLabel"/>, and since 2026-10-14 every sent PDF's
@@ -356,7 +358,10 @@ public sealed partial class PasteBlocks
             int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), Files.FileNames.LastPart(m.Groups[2].Value.Trim())));
     }
 
-    [GeneratedRegex(@"\[Image #(\d+), (?:saved as|from) [^\]\r\n]*\]", RegexOptions.CultureInvariant)]
+    // Up to the first image extension and "]", not the first ']' (2026-11-24, the last-7 review's #1, as the PDF label's since 2026-10-20): a
+    // folder or name may hold a ']' of its own (C:\shots\[old]\cat.png). Every extension of ImageIOFormats.All, on every system (a label
+    // written on a Mac reads on Windows; a Web UI attachment may be saved .jxl); ImageStoreTests holds the list against All.
+    [GeneratedRegex(@"\[Image #(\d+), (?:saved as|from) [^\r\n]*?\.(?:png|jpe?g|gif|bmp|tiff?|hei[cf]|webp|avif|jxl)\]", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
     private static partial Regex SavedLabelPattern();
 
     /// <summary>

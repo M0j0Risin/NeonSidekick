@@ -28,18 +28,19 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed class QuestionMenu
 {
-    // The strip's label and the tabs' hints. Each fits a 120-column window.
+    // The strip's label and the tabs' hints. Each fits a 120-column window. Esc declines the lot (2026-11-24, the last-7 review's #47:
+    // the hints said "cancel", but the model reads a decline).
     public const string Title = "Questions";
-    public const string SingleKeys = "Enter = choose · Space = mark/clear · 1–9 = jump · ←/→ tabs · Esc = cancel";
-    public const string MultiKeys = "Space / Enter = toggle · 1–9 = jump · ←/→ tabs · Esc = cancel";
-    public const string TextKeys = "Enter = type · ←/→ tabs · Esc = cancel";
-    public const string SubmitKeys = "Enter = submit or revisit · 1–9 = jump · ←/→ tabs · Esc = cancel";
+    public const string SingleKeys = "Enter = choose · Space = mark/clear · 1–9 = jump · ←/→ tabs · Esc = decline";
+    public const string MultiKeys = "Space / Enter = toggle · 1–9 = jump · ←/→ tabs · Esc = decline";
+    public const string TextKeys = "Enter = type · ←/→ tabs · Esc = decline";
+    public const string SubmitKeys = "Enter = submit or revisit · 1–9 = jump · ←/→ tabs · Esc = decline";
     public const string OtherKeys = "Enter = save · Esc = back";
-    public const string DeclineKeys = "Enter = decline with this note · Esc = back";
+    public const string DeclineKeys = "Enter = decline, with the note if you typed one · Esc = back";
 
     /// <summary>The hints of a lone question with no Submit tab (2026-11-24, B): choosing answers it.</summary>
-    public const string LoneSingleKeys = "Enter = answer · Space = mark/clear · 1–9 = jump · Esc = cancel";
-    public const string LoneTextKeys = "Enter = type your answer · Esc = cancel";
+    public const string LoneSingleKeys = "Enter = answer · Space = mark/clear · 1–9 = jump · Esc = decline";
+    public const string LoneTextKeys = "Enter = type your answer · Esc = decline";
 
     // The marks ahead of an option, ASCII on purpose (no East-Asian-ambiguous glyph on the row). Pinned.
     public const string SingleOn = "(x) ";
@@ -209,20 +210,24 @@ internal sealed class QuestionMenu
             cursors[n] = n;
         }
 
-        // The footer band (descriptions, D's whole label): only when a question needs it, so a plain ask keeps its height.
-        int rowCells = Math.Max(1, _pane.ListWidth(false) - TextCells.Width(MenuPane.Pointer));
-        bool footer = drafts.Any(d => d.Question.Options.Any(o => o.Description is not null || Cut(o, rowCells)));
+        // The footer band (descriptions, D's whole label): only when a question needs it, so a plain ask keeps its height. Whether
+        // it shows is decided here (the pane's height is fixed for the visit); the row's width is read when the band is drawn, so a
+        // resized window says the whole label for the rows it cuts now (2026-11-24, the last-7 review's #14).
+        int RowCells() => Math.Max(1, _pane.ListWidth(false) - TextCells.Width(MenuPane.Pointer));
+        int opening = RowCells();
+        Func<int>? rowCells = drafts.Any(d => d.Question.Options.Any(o => o.Description is not null || Cut(o, opening))) ? RowCells : null;
         int tab = 0;
         try
         {
             while (true)
             {
-                var page = Page(drafts, tab, cursors, lone, footer ? rowCells : 0);
+                var page = Page(drafts, tab, cursors, lone, rowCells);
                 var pick = await _pane.PickAsync(page, cursors[tab], cancellationToken).ConfigureAwait(false);
                 if (pick is not { } picked)
                 {
-                    // Esc (or Ctrl+C, a double-click off) is the user's decline; a cancelled token (the turn, the wake phrase) is not.
-                    return cancellationToken.IsCancellationRequested ? null : AskReply.Declined();
+                    // Esc (or Ctrl+C, a double-click off) is the user's decline; a cancelled token (the turn, the wake phrase) is not, nor
+                    // a key read that ran dry (no keyboard, 2026-11-24, the last-7 review's #3): the user chose nothing.
+                    return cancellationToken.IsCancellationRequested || _pane.ReadDry ? null : AskReply.Declined();
                 }
 
                 tab = picked.Tab;
@@ -235,7 +240,13 @@ internal sealed class QuestionMenu
                     int answerRows = q.IsText ? 1 : q.Options.Count + 1;
                     if (lone && row >= answerRows)
                     {
-                        if (await DeclineAsync(Page(drafts, tab, cursors, lone, footer ? rowCells : 0), row, cancellationToken).ConfigureAwait(false) is { } declined)
+                        if (picked.Toggle)
+                        {
+                            // Space marks options; on the decline row it does nothing (2026-11-24, the last-7 review's #14).
+                            continue;
+                        }
+
+                        if (await DeclineAsync(Page(drafts, tab, cursors, lone, rowCells), row, cancellationToken).ConfigureAwait(false) is { } declined)
                         {
                             return declined;
                         }
@@ -273,14 +284,16 @@ internal sealed class QuestionMenu
                     {
                         // The Other row or a text question's row: the slot under the list, pre-filled with what was typed before. The
                         // page is rebuilt for the tab picked on: a ←/→ inside the pane left `page` on another.
-                        var edit = Page(drafts, tab, cursors, lone, footer ? rowCells : 0) with { Hint = OtherKeys };
+                        var edit = Page(drafts, tab, cursors, lone, rowCells) with { Hint = OtherKeys };
                         var result = await _pane.EditAsync(edit, row, _input, draft.Other, allowEmpty: true, cancellationToken).ConfigureAwait(false);
                         if (result is InputResult.Submitted submitted)
                         {
                             draft.Type(submitted.Text);
                             bool typed = submitted.Text.Trim().Length > 0;
                             bool answered = !draft.Answer().Skipped;
-                            if (!picked.Toggle && (q.IsText || q.Multi || answered))
+                            // A lone text question's edit answers it however it was opened (2026-11-24, the last-7 review's #33): Space
+                            // there has no mark to leave, and with no Submit tab a saved answer that stays would never be sent.
+                            if ((!picked.Toggle || (lone && q.IsText)) && (q.IsText || q.Multi || answered))
                             {
                                 if (lone)
                                 {
@@ -298,6 +311,11 @@ internal sealed class QuestionMenu
                         }
                     }
                 }
+                else if (picked.Toggle)
+                {
+                    // Space on the Submit tab's rows does nothing (2026-11-24, the last-7 review's #14): no summary, Submit or decline by a mark key.
+                    continue;
+                }
                 else if (picked.Row < n)
                 {
                     // A summary row: back to that question, on the row it was left at; Submit lands on its own row again.
@@ -309,7 +327,7 @@ internal sealed class QuestionMenu
                     // Submit: unanswered questions go back as skipped (2026-11-24, the user's call).
                     return Answered(drafts);
                 }
-                else if (await DeclineAsync(Page(drafts, tab, cursors, lone, footer ? rowCells : 0), picked.Row, cancellationToken).ConfigureAwait(false) is { } declined)
+                else if (await DeclineAsync(Page(drafts, tab, cursors, lone, rowCells), picked.Row, cancellationToken).ConfigureAwait(false) is { } declined)
                 {
                     return declined;
                 }
@@ -321,11 +339,15 @@ internal sealed class QuestionMenu
         }
     }
 
-    /// <summary>The decline row (E): the slot for a note; a saved note declines with it, an empty one (or Esc) goes back to the tab (null).</summary>
+    /// <summary>
+    /// The decline row (E): the slot for a note; Enter declines, with the note if one was typed (an empty one declines plainly, as the
+    /// page's Send does: 2026-11-24, the last-7 review's #46), and only Esc goes back to the tab (null). A dry read is null too, and the
+    /// next pick then reports nothing shown (#3).
+    /// </summary>
     private async Task<AskReply?> DeclineAsync(MenuPage page, int row, CancellationToken cancellationToken)
     {
         var result = await _pane.EditAsync(page with { Hint = DeclineKeys }, row, _input, "", allowEmpty: true, cancellationToken).ConfigureAwait(false);
-        return result is InputResult.Submitted submitted && submitted.Text.Trim().Length > 0 ? AskReply.Declined(submitted.Text) : null;
+        return result is InputResult.Submitted submitted ? AskReply.Declined(submitted.Text) : null;
     }
 
     private static AskReply Answered(Draft[] drafts) => AskReply.Answered(drafts.Select(d => d.Answer()).ToArray());
@@ -336,9 +358,9 @@ internal sealed class QuestionMenu
 
     /// <summary>
     /// The page for the drafts as they stand: every tab's rows rebuilt, the strip on <paramref name="tab"/>. With <paramref name="rowCells"/>
-    /// above 0 the footer band says the cursor's option: its description, its whole label first when the row cuts it (D).
+    /// the footer band says the cursor's option: its description, its whole label first when the row cuts it at the width read then (D).
     /// </summary>
-    private static MenuPage Page(Draft[] drafts, int tab, int[] cursors, bool lone, int rowCells)
+    private static MenuPage Page(Draft[] drafts, int tab, int[] cursors, bool lone, Func<int>? rowCells)
     {
         var tabs = new List<MenuTab>(drafts.Length + 1);
         for (int i = 0; i < drafts.Length; i++)
@@ -389,7 +411,7 @@ internal sealed class QuestionMenu
         }
 
         var page = MenuPage.Tabbed(Title, tabs, tab, SingleKeys) with { SpaceToggles = true, TabCursors = cursors, CaptionGrows = true, Hotkeys = Digits };
-        return rowCells > 0 ? page with { Footer = (t, row) => FooterText(drafts, t, row, rowCells) } : page;
+        return rowCells is not null ? page with { Footer = (t, row) => FooterText(drafts, t, row, rowCells()) } : page;
     }
 
     /// <summary>What the band says for a row (D): an option's description, its whole label first when the row cuts it; null elsewhere.</summary>

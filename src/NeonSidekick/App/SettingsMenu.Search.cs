@@ -132,6 +132,9 @@ internal sealed partial class SettingsMenu
     private string FoundValue(HelpRow row, AppSettingsData saved, string? located) =>
         FieldValue(row.Field, saved, _settings.ProfileDirectory, row.Field == SettingsField.WebBrowserPath ? located : null);
 
+    /// <summary>The widest a search or changed page pads its value and default columns to (2026-11-24, the last-7 review's #37). Pinned.</summary>
+    internal const int FoundValueCap = 40;
+
     /// <summary><paramref name="text"/> padded with blanks to <paramref name="cells"/> cells; as it is when it is that wide already.</summary>
     private static string PadCells(string text, int cells) => text + new string(' ', Math.Max(0, cells - TextCells.Width(text)));
 
@@ -144,9 +147,11 @@ internal sealed partial class SettingsMenu
     {
         var values = rows.Select(r => FoundValue(r, saved, located)).ToList();
         int width = rows.Count == 0 ? 0 : rows.Max(r => TextCells.Width(r.Label)) + LabelGap;
-        int valueWidth = values.Select(TextCells.Width).DefaultIfEmpty(0).Max();
+        // The padding capped, never the value (2026-11-24, the last-7 review's #37): a long URL or path is drawn whole, only its own row's tail
+        // out of line, rather than pushing every row's place column off the pane.
+        int valueWidth = Math.Min(values.Select(TextCells.Width).DefaultIfEmpty(0).Max(), FoundValueCap);
         var leads = rows.Select(lead).ToList();
-        int leadWidth = leads.Select(l => l is null ? 0 : TextCells.Width(l)).DefaultIfEmpty(0).Max();
+        int leadWidth = Math.Min(leads.Select(l => l is null ? 0 : TextCells.Width(l)).DefaultIfEmpty(0).Max(), FoundValueCap);
         return rows.Select((r, i) => FoundRow(r, values[i], width, valueWidth, (leads[i] is { } l ? PadCells(l, leadWidth) + "  " : "") + place(r))).ToList();
     }
 

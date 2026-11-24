@@ -2,7 +2,7 @@ namespace NeonSidekick.UI;
 
 /// <summary>
 /// What an item on the lower rule stands for (2026-11-23, the user's ask: the jobs group). The values are pinned: each kind's double-click
-/// pair key is <c>-500_000 - kind</c> (<see cref="InputLine.LowerRulePairKey"/>), the processes' and the update's keeping the keys they had.
+/// pair key is <c>-600_000 - kind</c> (<see cref="InputLine.LowerRulePairKey"/>, a band of its own since 2026-11-24, the last-7 review's #18).
 /// </summary>
 public enum LowerRuleKind
 {

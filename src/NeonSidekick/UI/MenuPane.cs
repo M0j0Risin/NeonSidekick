@@ -591,6 +591,18 @@ public sealed class MenuPane : INoticeSink
     public const int CaptionKeepRows = 4;
 
     /// <summary>
+    /// The footer band's slab rows on a pane of <paramref name="content"/> rows under a <paramref name="header"/> (2026-11-24, the last-7 review's
+    /// #55): the page's own count, cut so the list keeps its rows up to <see cref="CaptionKeepRows"/> (three and the more row), never under one
+    /// slab row. The text is cut to the rows given (<see cref="FooterLines"/>), so a worst-first band drops its least. Pure.
+    /// </summary>
+    internal static int SlabRows(MenuPage page, int content, int header)
+    {
+        ArgumentNullException.ThrowIfNull(page);
+        int keep = Math.Min(Math.Max(1, page.Rows.Count), CaptionKeepRows);
+        return Math.Min(page.FooterSlabRows, Math.Max(1, content - header - FooterRuleRows - keep));
+    }
+
+    /// <summary>
     /// The most rows a <see cref="MenuPage.CaptionGrows"/> caption takes (2026-10-10): the menu's <paramref name="contentRows"/> less the
     /// strip's, the status's and the footer's rows and the list's, up to <see cref="CaptionKeepRows"/> of them; never fewer than
     /// <see cref="CaptionMaxRows"/>. Pure.
@@ -671,6 +683,12 @@ public sealed class MenuPane : INoticeSink
 
     /// <summary>The pane can host a menu: the screen has the bottom pane.</summary>
     public bool Enabled => _pane.Enabled;
+
+    /// <summary>
+    /// Whether the last <see cref="PickAsync"/> came back null because the key read ran dry (no keyboard), not from the user's Esc
+    /// (2026-11-24, the last-7 review's #3: <c>ask_user</c> told a dry read from a decline). Cleared at the start of every pick.
+    /// </summary>
+    public bool ReadDry { get; private set; }
 
     /// <summary>A visit is in progress: between the first <see cref="PickAsync"/> and <see cref="Close"/>.</summary>
     public bool IsOpen => _open;
@@ -941,6 +959,7 @@ public sealed class MenuPane : INoticeSink
         }
 
         Require();
+        ReadDry = false;
         if (_pane.Dismissed)
         {
             // A pane dismissed by a double-click off it: every host on the way up gets null without a draw, until the top one's Close clears it.
@@ -1376,6 +1395,7 @@ public sealed class MenuPane : INoticeSink
         catch (InvalidOperationException)
         {
             // No keyboard: the read ran dry.
+            ReadDry = true;
             return null;
         }
 
@@ -1838,6 +1858,9 @@ public sealed class MenuPane : INoticeSink
         var captionLines = Drawn(caption.Select(row => (IRenderable)new Markup(Markup.Escape(row.Text), row.Dim ? Theme.DimText : Theme.Body).Overflow(Overflow.Ellipsis)).ToList(), _sideWidth > 0);
         _captionRows = captionLines.Count;
         int header = Header;
+        // The band gives way to the list on a short window (2026-11-24, the last-7 review's #55: a 5-row band on a 6-row pane left no list).
+        int slab = page.Footer is null ? 0 : SlabRows(page, content, header);
+        footer = page.Footer is null ? 0 : FooterRuleRows + slab;
         int capacity = content - header - footer;
         bool more;
         if (page.Grid is { } grid)
@@ -1934,9 +1957,9 @@ public sealed class MenuPane : INoticeSink
             // tallest tab goes below it); a click there lands on no row. Since 2026-10-05 a rule over it and the text on a slab
             // to the list's edge, a row with nothing to say too, so the shape holds as the cursor moves.
             var text = page.Rows.Count > 0 ? FooterFor(page, _cursor) : null;
-            var rows = text is null ? [] : FooterLines(text, _listWidth - TextCells.Width(NoPointer), page.FooterSlabRows);
+            var rows = text is null ? [] : FooterLines(text, _listWidth - TextCells.Width(NoPointer), slab);
             lines.Add(new Markup(Theme.StyleMarkup(Theme.PaneRule, new string(ScreenPane.RuleGlyph, Math.Max(1, _listWidth)))).Overflow(Overflow.Crop));
-            for (int i = 0; i < page.FooterSlabRows; i++)
+            for (int i = 0; i < slab; i++)
             {
                 lines.Add(new Markup(FooterSlabMarkup(i < rows.Count ? rows[i] : "", _listWidth)).Overflow(Overflow.Ellipsis));
             }

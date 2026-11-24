@@ -275,6 +275,10 @@ public sealed class ProjectInitTests : IDisposable
         Assert.Equal(5, ProjectNotesApprovalMenu.RowsFor(turnOn: true).Count);
         Assert.Equal(4, ProjectNotesApprovalMenu.RowsFor(turnOn: false).Count);
         Assert.DoesNotContain(ChatScreen.NotesSpec(draft, caption, null).Choices, c => c.Id == ProjectInitText.WriteOnId);
+
+        // A draft holding link-definition lines (the last-7 review's #7): the page renders it too, so its caption ends in the warning.
+        var hiding = PresentProjectNotesTool.Draft(_box.Files, ProjectFile.PrimaryFileName, Draft + "\n[//]: # (hidden)\n");
+        Assert.Equal([.. caption, SkillsText.HiddenLinesWarning(1, source: false)], ChatScreen.NotesSpec(hiding, caption, null).Lines);
     }
 
     [Fact]

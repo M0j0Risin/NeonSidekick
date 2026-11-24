@@ -717,7 +717,7 @@ The button at the message box's left (or a bare `/prompts` or `/queue` from the 
 
 * **On both sides at once** (the first answer wins): a command's approval, `ask_user`, an allow (camera, screen, a database write, an MCP call), a yes/no, the plan's approval, a code audit's done pane and a reflection's skill.
 * The page shows a command, a statement or an MCP call's arguments whole, and a reflection's skill as its summary with **Keep** and **Discard**.
-* **`ask_user`** on the page: **Submit** sends what you answered, the rest as skipped (a second tap clears a pick); **Decline** declines them all, with a note if you like. What you picked or typed survives a reconnect.
+* **`ask_user`** on the page: **Submit** sends what you answered, the rest as skipped (a second tap clears a pick); **Decline** opens a note box; tap Decline again, or Send, to decline them all, with the note if you wrote one. What you picked or typed survives a reconnect.
 * **The camera's shutter** (*Camera shutter* `user`) offers **Take and send**: the PC's camera takes the photo, with no preview.
 * **At the PC only:** the plan's Close gaps and a code audit's reviewer page; meanwhile the page says "waiting for an answer at the PC".
 * **A bot check:** the allow question, then a card ([A bot check from the page](#a-bot-check-from-the-page)).

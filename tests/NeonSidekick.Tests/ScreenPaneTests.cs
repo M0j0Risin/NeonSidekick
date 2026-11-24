@@ -364,10 +364,48 @@ public partial class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Contains(" ⟳ 3/10 · ending ── ▶ 1 ─\n", Output[mark..]);
         Assert.Equal(
-            new[] { InputLine.RuleTitlePairKey - 1, InputLine.RuleTitlePairKey - 2, InputLine.RuleTitlePairKey - 3, InputLine.RuleTitlePairKey - 4, InputLine.RuleTitlePairKey - 5 },
+            new[] { -600_001, -600_002, -600_003, -600_004, -600_005 },
             new[] { LowerRuleKind.Processes, LowerRuleKind.Update, LowerRuleKind.Loop, LowerRuleKind.Download, LowerRuleKind.Pictures }.Select(InputLine.LowerRulePairKey));
-        Assert.Equal(-500_001, InputLine.LowerRulePairKey(LowerRuleKind.Processes));
-        Assert.Equal(-500_002, InputLine.LowerRulePairKey(LowerRuleKind.Update));
+    }
+
+    /// <summary>
+    /// Every double-click pair key of the hint pairing's space is its own (2026-11-24, the last-7 review's #18): the fixed keys, the toolbar's
+    /// and the strip's columns over a 500-cell window, the hint row's zones on and off the pane, every lower rule item and the first pictures.
+    /// </summary>
+    [Fact]
+    public void PairKeys_AreEachTheirOwn()
+    {
+        var keys = new List<(string Part, int Key)>
+        {
+            ("outside", InputLine.OutsidePairKey),
+            ("rule title", InputLine.RuleTitlePairKey),
+            ("toolbar model", ScreenPane.ToolbarModelKey),
+            ("toolbar mark", ScreenPane.ToolbarMarkKey),
+            ("hint path", ScreenPane.HintPathKey),
+            ("hint timers", ScreenPane.HintTimersKey),
+            ("toolbar path", InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Path, "", 0))),
+            ("toolbar row", InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Row, "", 0))),
+        };
+        for (int column = 0; column <= 500; column++)
+        {
+            keys.Add(("toolbar glyph " + column, -5 - column));
+            keys.Add(("strip glyph " + column, InputLine.HintPairKey(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "", column))));
+            keys.Add(("off-pane strip glyph " + column, ScreenPane.OutsideKeyOf(new ScreenPane.OffPaneHit(new ScreenPane.HintHit(ScreenPane.HintZone.Strip, "", column), null))));
+        }
+
+        foreach (var zone in Enum.GetValues<ScreenPane.HintZone>().Where(z => z is not (ScreenPane.HintZone.Strip or ScreenPane.HintZone.Path or ScreenPane.HintZone.Timers)))
+        {
+            keys.Add(("hint " + zone, InputLine.HintPairKey(new ScreenPane.HintHit(zone, "", 0))));
+            keys.Add(("off-pane hint " + zone, ScreenPane.OutsideKeyOf(new ScreenPane.OffPaneHit(new ScreenPane.HintHit(zone, "", 0), null))));
+        }
+
+        keys.AddRange(Enum.GetValues<LowerRuleKind>().Select(kind => ("lower rule " + kind, InputLine.LowerRulePairKey(kind))));
+        keys.AddRange(Enumerable.Range(0, 100).Select(id => ("picture " + id, InputLine.PicturePairKey(id))));
+        keys.Add(("draft gutter", InputLine.DraftGutterPairKey));
+
+        Assert.Empty(keys.GroupBy(k => k.Key).Where(g => g.Count() > 1).Select(g => string.Join(" = ", g.Select(k => k.Part))));
+        Assert.Equal(ScreenPane.HintPathKey, InputLine.HintPairKey(new ScreenPane.HintHit(ScreenPane.HintZone.Path, "", 0)));
+        Assert.Equal(ScreenPane.HintTimersKey, InputLine.HintPairKey(new ScreenPane.HintHit(ScreenPane.HintZone.Timers, "", 0)));
     }
 
     /// <summary>The lower rule's title in ⤡'s colour, the rule around it in the rule's own (later on 2026-10-12, the user's ask).</summary>
@@ -6392,10 +6430,10 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal(-8, pane.OutsideKey(3, 104));
         Assert.Equal(-4, pane.OutsideKey(10, 104));
         Assert.Equal(-3, pane.OutsideKey(37, 104));
-        Assert.Equal(-102, pane.OutsideKey(33, 103));
-        Assert.Equal(-106, pane.OutsideKey(38, 103));
-        Assert.Equal(-200, pane.OutsideKey(0, 103));
-        Assert.Equal(-100, pane.OutsideKey(10, 103));
+        Assert.Equal(-300_002, pane.OutsideKey(33, 103));   // the hint keys -300_000 and -400_000 down since 2026-11-24 (#18)
+        Assert.Equal(-300_006, pane.OutsideKey(38, 103));
+        Assert.Equal(-400_000, pane.OutsideKey(0, 103));
+        Assert.Equal(-300_000, pane.OutsideKey(10, 103));
         Assert.Equal(MenuPane.OutsideRow, pane.OutsideKey(5, 50));
         Assert.Equal(MenuPane.OutsideRow, ScreenPane.OutsideKeyOf(null));
 

@@ -549,28 +549,36 @@ public sealed class ThumbsTests
         Directory.CreateDirectory(dir);
         File.WriteAllBytes(picture, Fakes.FakeHeadlessBrowser.TinyPng);
         var lines = new List<(string Line, bool Error)>();
+        // The copy runs on a pool thread since 2026-11-24 (the last-7 review's #39): each report is waited for.
+        using var reported = new SemaphoreSlim(0);
+        void Run(string path)
+        {
+            Assert.True(PictureMenu.RunFileAction(path, PictureCommand.AddToSplash));
+            Assert.True(reported.Wait(TimeSpan.FromSeconds(10)), "the add's report");
+        }
+
         var (oldFolder, oldRobot, oldReported) = (PictureMenu.SplashFolder, PictureMenu.RobotSplash, PictureMenu.Reported);
         try
         {
-            PictureMenu.Reported = (line, error) => lines.Add((line, error));
+            PictureMenu.Reported = (line, error) => { lock (lines) { lines.Add((line, error)); } reported.Release(); };
             PictureMenu.SplashFolder = null;
-            Assert.True(PictureMenu.RunFileAction(picture, PictureCommand.AddToSplash));
+            Assert.True(PictureMenu.RunFileAction(picture, PictureCommand.AddToSplash));   // no folder: nothing runs, nothing to wait for
             Assert.False(Directory.Exists(folder));
             Assert.Empty(lines);
 
             PictureMenu.SplashFolder = () => folder;
             PictureMenu.RobotSplash = () => false;
-            Assert.True(PictureMenu.RunFileAction(picture, PictureCommand.AddToSplash));
+            Run(picture);
             Assert.True(File.Exists(Path.Combine(folder, "Sunset.png")));
             Assert.Equal((PictureMenuText.AddedToSplash("Sunset.png", only: true, robot: false), false), lines[^1]);
 
             PictureMenu.RobotSplash = () => true;
-            PictureMenu.RunFileAction(picture, PictureCommand.AddToSplash);
+            Run(picture);
             Assert.True(File.Exists(Path.Combine(folder, "Sunset-2.png")));
             Assert.Equal((PictureMenuText.AddedToSplash("Sunset-2.png", only: false, robot: true), false), lines[^1]);
             Assert.Contains("Welcome splash is image", lines[^1].Line);
 
-            PictureMenu.RunFileAction(Path.Combine(folder, "Sunset.png"), PictureCommand.AddToSplash);
+            Run(Path.Combine(folder, "Sunset.png"));
             Assert.Equal((PictureMenuText.SplashAlready("Sunset.png"), true), lines[^1]);
             Assert.Equal(2, Directory.GetFiles(folder).Length);
         }

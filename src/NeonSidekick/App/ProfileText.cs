@@ -9,6 +9,20 @@ namespace NeonSidekick.App;
 /// </summary>
 public static class ProfileText
 {
+    /// <summary>The notice after <c>/profile add &lt;name&gt; --fresh</c> (2026-11-23, the user's ask): the compiled defaults, nothing copied. Pinned.</summary>
+    public static string ProfileCreatedFreshNotice(string name) => $"({NoticeGlyphs.Profile}created profile \"{name}\" with the default settings)";
+
+    /// <summary><c>/profile add &lt;name&gt; --fresh</c> (2026-11-23, the user's ask): the flag, and its note on the argument list. Pinned.</summary>
+    public const string FreshFlag = "--fresh";
+    public const string FreshNote = "start from the default settings, copying nothing";
+
+    /// <summary>
+    /// A new profile the disk refused (2026-11-24, the last-7 review's #36): the picker's add row and <c>/profile add</c>, the half-made one taken
+    /// back. Worded as <c>AdvisorText.CreateFailedError</c>. Pinned.
+    /// </summary>
+    public static string CreateFailedError(string name, string detail) =>
+        $"Could not make profile {name}: {(detail ?? "").ReplaceLineEndings(" ").Trim()}";
+
     /// <summary>
     /// What a bar section's copy replaces, its verb included: <c>toolbar items, order and sides are replaced</c>, or the performance bar's, the
     /// Status bar's or the bar order's. Pinned through <see cref="BarPrompt"/>.

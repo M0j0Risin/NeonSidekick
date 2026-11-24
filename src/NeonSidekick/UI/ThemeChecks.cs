@@ -68,7 +68,10 @@ public static class ThemeChecks
             foreach (var (_, slot) in Theme.CodeSlots)
             {
                 var ink = styles(slot).Foreground;
-                ThemeColorSlot[] roles = ink == Color.Default ? [ThemeColorSlot.Bg, role, ThemeColorSlot.Ink] : [ThemeColorSlot.Bg, role];
+                // The code color's own role too (2026-11-24, the last-7 review's #19): the /theme edit row to change is the one it comes from.
+                ThemeColorSlot[] roles = ink == Color.Default
+                    ? [ThemeColorSlot.Bg, role, ThemeColorSlot.Ink]
+                    : [.. new[] { ThemeColorSlot.Bg, role }.Concat(CodeColorRoles(palette, slot)).Distinct()];
                 Need(ThemeText.SlabPair(ThemeKeys.Styles[(int)slot], slab), ink == Color.Default ? palette.Ink : ink, fill, CodeTarget, slab, roles);
             }
         }
@@ -84,6 +87,50 @@ public static class ThemeChecks
         }
 
         return problems;
+    }
+
+    /// <summary>
+    /// The role each code style's color comes from with no theme change (<c>Theme</c>'s derived styles; <c>ThemeChecksTests</c> holds the two in
+    /// step): a role that merely shares the color (ink drawn in the primary's color) is never blamed for it.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<ThemeStyleSlot, ThemeColorSlot> CodeRoles = new Dictionary<ThemeStyleSlot, ThemeColorSlot>
+    {
+        [ThemeStyleSlot.CodeKeyword] = ThemeColorSlot.Primary,
+        [ThemeStyleSlot.CodeType] = ThemeColorSlot.Secondary,
+        [ThemeStyleSlot.CodeString] = ThemeColorSlot.Highlight,
+        [ThemeStyleSlot.CodeNumber] = ThemeColorSlot.Warm,
+        [ThemeStyleSlot.CodeComment] = ThemeColorSlot.Dim,
+        [ThemeStyleSlot.CodePunctuation] = ThemeColorSlot.Dim,
+        [ThemeStyleSlot.CodeFunction] = ThemeColorSlot.Tertiary,
+        [ThemeStyleSlot.CodeVariable] = ThemeColorSlot.Tint,
+        [ThemeStyleSlot.CodeHeading] = ThemeColorSlot.Tertiary,
+        [ThemeStyleSlot.CodeInserted] = ThemeColorSlot.Good,
+        [ThemeStyleSlot.CodeDeleted] = ThemeColorSlot.Bad,
+    };
+
+    /// <summary>
+    /// The roles a code style's color comes from (2026-11-24, the last-7 review's #19), walking an alias to its source (<c>attribute</c> starts
+    /// from <c>type</c>'s final style, <c>tag</c> from <c>keyword</c>'s): a theme's own change of a slot's color, stored as a color and its role
+    /// word lost, names the roles of that color (a free hex none); else the <see cref="CodeRoles"/> default. A change that sets only a decoration
+    /// or a ground doesn't count. Pure.
+    /// </summary>
+    internal static IReadOnlyList<ThemeColorSlot> CodeColorRoles(ThemePalette palette, ThemeStyleSlot slot)
+    {
+        ArgumentNullException.ThrowIfNull(palette);
+        for (ThemeStyleSlot? at = slot; at is { } s; at = ThemeKeys.AliasOf(s))
+        {
+            if (palette.Styles is { } changes && changes.TryGetValue(s, out var change) && change.Foreground is { } color)
+            {
+                return color == Color.Default ? [] : Enum.GetValues<ThemeColorSlot>().Where(r => palette.ColorOf(r) == color).ToList();
+            }
+
+            if (ThemeKeys.AliasOf(s) is null)
+            {
+                return CodeRoles.TryGetValue(s, out var role) ? [role] : [];
+            }
+        }
+
+        return [];
     }
 
     private static (string, Color, ThemeColorSlot)[] Accents(ThemePalette p) =>

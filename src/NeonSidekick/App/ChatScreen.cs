@@ -3200,28 +3200,36 @@ internal sealed partial class ChatScreen
             new("Up / Down", "recall earlier messages · move through a wrapped draft · move in menus"),
             new("Left / Right", "switch tabs in menus · hold Shift to select text"),
             new("Home / End", "go to the start or end of the line · hold Shift to select"),
-            new("Ctrl+Left / Right", "move a word back or forward · hold Shift to select words"),   // 2026-10-04, the UI review
-            mac
-                ? new("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)")
-                : new("Ctrl+Backspace / Delete", "delete the word before or after the cursor"),
-            // The editing chords beside the editing keys (2026-10-05, the user's pick), out of the Ctrl letters.
-            new("Ctrl+A", "select all the text on the line"),
-            new("Ctrl+C", "copy the selection · stop the speech · cancel the reply · press twice to exit"),
-            new("Ctrl+X", "cut the selection"),
-            // A PDF copied in Finder pastes as its path, which attaches it (2026-10-14, the PDF plan's gap 77).
-            mac ? new("Ctrl+V / Alt+V", "paste text, pictures or PDFs (Cmd+V is the terminal's: text only)") : new("Alt+V", "paste text or pictures"),
-            // The transcript's scroll together (2026-10-05).
-            new("PgUp / PgDn", "scroll the transcript a page at a time"),
-            new("Ctrl+Home", "scroll to the top of the transcript"),
-            new("Ctrl+End", "scroll to the bottom of the transcript"),
-            new("Ctrl+Up / Down", "jump to the previous or next message"),   // 2026-11-01, message jumps
         };
+        // Each group's start a marker taken as its rows go in (2026-11-24, the last-7 review's #5 and #13), as talk, ctrl and ctrlAlt are: a
+        // search by label put a Mac's Option+Left / Right, added after the Transcript rows, in that group.
+        int editing = rows.Count;
+        rows.Add(new("Ctrl+Left / Right", "move a word back or forward · hold Shift to select words"));   // 2026-10-04, the UI review
         if (mac)
         {
+            // Terminal.app's Option+←/→ (2026-11-02, review P11-2: ESC b / ESC f, the word moves since 69b196c4), worded as Option+Up / Down's row.
             // Two rows, not one "or" label: /keycheck splits a label on " / ", and Option is no chord it probes (as Option+Delete).
-            rows.Add(new("Option+Up / Down", "jump to the previous or next message (Mission Control may hold Ctrl+Up / Down)"));
-            // Terminal.app's Option+←/→ (2026-11-02, review P11-2: ESC b / ESC f, the word moves since 69b196c4), worded as the row above.
             rows.Add(new("Option+Left / Right", "move a word back or forward (Mission Control may hold Ctrl+Left / Right)"));
+        }
+
+        rows.Add(mac
+            ? new("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)")
+            : new("Ctrl+Backspace / Delete", "delete the word before or after the cursor"));
+        // The editing chords beside the editing keys (2026-10-05, the user's pick), out of the Ctrl letters.
+        rows.Add(new("Ctrl+A", "select all the text on the line"));
+        rows.Add(new("Ctrl+C", "copy the selection · stop the speech · cancel the reply · press twice to exit"));
+        rows.Add(new("Ctrl+X", "cut the selection"));
+        // A PDF copied in Finder pastes as its path, which attaches it (2026-10-14, the PDF plan's gap 77).
+        rows.Add(mac ? new("Ctrl+V / Alt+V", "paste text, pictures or PDFs (Cmd+V is the terminal's: text only)") : new("Alt+V", "paste text or pictures"));
+        // The transcript's scroll together (2026-10-05).
+        int transcript = rows.Count;
+        rows.Add(new("PgUp / PgDn", "scroll the transcript a page at a time"));
+        rows.Add(new("Ctrl+Home", "scroll to the top of the transcript"));
+        rows.Add(new("Ctrl+End", "scroll to the bottom of the transcript"));
+        rows.Add(new("Ctrl+Up / Down", "jump to the previous or next message"));   // 2026-11-01, message jumps
+        if (mac)
+        {
+            rows.Add(new("Option+Up / Down", "jump to the previous or next message (Mission Control may hold Ctrl+Up / Down)"));
         }
 
         int talk = rows.Count;
@@ -3301,8 +3309,6 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+W", "open the Web UI pane", SlashCommands.WebUiWord));   // 2026-10-18, the user's pick
         rows.Add(new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"));
         rows.Add(new("Ctrl+Alt+Z", "start a new conversation with the splash", "/splash"));   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
-        int editing = rows.FindIndex(r => r.Key == "Ctrl+Left / Right");
-        int transcript = rows.FindIndex(r => r.Key == "PgUp / PgDn");
         return (rows.ToArray(), [0, editing, transcript, talk, ctrl, ctrlAlt]);
     }
 
@@ -5896,8 +5902,18 @@ internal sealed partial class ChatScreen
                         ], argText);
                     }
 
-                    return argText.StartsWith(withConversation, StringComparison.OrdinalIgnoreCase) && !argText[withConversation.Length..].Contains(' ', StringComparison.Ordinal)
-                        ? MentionCompleter.Matches([new CompletionItem(withConversation + Pdf.PdfText.ToWord, UsageText.SyspromptToNote)], argText)
+                    if (argText.StartsWith(withConversation, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return !argText[withConversation.Length..].Contains(' ', StringComparison.Ordinal)
+                            ? MentionCompleter.Matches([new CompletionItem(withConversation + Pdf.PdfText.ToWord, UsageText.SyspromptToNote)], argText)
+                            : [];
+                    }
+
+                    // conversation after to=… too (2026-11-24, the last-7 review's #31): the command takes the two in either order.
+                    string rest = argText[sysprompt.Length..];
+                    int space = rest.IndexOf(' ', StringComparison.Ordinal);
+                    return rest.StartsWith(Pdf.PdfText.ToWord, StringComparison.OrdinalIgnoreCase) && space > 0 && !rest[(space + 1)..].Contains(' ', StringComparison.Ordinal)
+                        ? MentionCompleter.Matches([new CompletionItem(sysprompt + rest[..(space + 1)] + UsageText.ConversationWord, UsageText.ConversationWordNote)], argText)
                         : [];
                 }
 
@@ -5926,7 +5942,7 @@ internal sealed partial class ChatScreen
                         && argText.Split(' ') is [_, { Length: > 0 } name, var partial] && !name.StartsWith('-') && !partial.Contains(' ', StringComparison.Ordinal))
                     {
                         // add <name> --fresh (2026-11-23): once the free name is typed with its space.
-                        return MentionCompleter.Matches([new CompletionItem("add " + name + " " + FreshFlag, FreshNote)], argText);
+                        return MentionCompleter.Matches([new CompletionItem("add " + name + " " + ProfileText.FreshFlag, ProfileText.FreshNote)], argText);
                     }
 
                     if (verb.Text is "add" or "edit" or "reload")
@@ -12152,23 +12168,23 @@ internal sealed partial class ChatScreen
     /// anything else ⇒ invalid. The names are not validated here (the handler says
     /// why one is refused). <see cref="ResetAllFlag"/> (any case, before or after the name) belongs to
     /// <c>reset</c> alone (2026-09-27): it sets <see cref="ProfileAction.All"/>; after any other verb,
-    /// or twice, the line is invalid. <see cref="FreshFlag"/> (2026-11-23, the same way) belongs to <c>add &lt;name&gt;</c> alone and sets
+    /// or twice, the line is invalid. <see cref="ProfileText.FreshFlag"/> (2026-11-23, the same way) belongs to <c>add &lt;name&gt;</c> alone and sets
     /// <see cref="ProfileAction.Fresh"/>; with <c>--all</c>, twice, or after any other verb, invalid.
     /// </summary>
     public static ProfileAction ParseProfileArgs(string args)
     {
         var tokens = (args ?? "").Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length >= 2 && !tokens.Any(token => token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase) || token.Equals(FreshFlag, StringComparison.OrdinalIgnoreCase))
+        if (tokens.Length >= 2 && !tokens.Any(token => token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase) || token.Equals(ProfileText.FreshFlag, StringComparison.OrdinalIgnoreCase))
             && (tokens[0].Equals(PushWord, StringComparison.OrdinalIgnoreCase) || tokens[0].Equals(PullWord, StringComparison.OrdinalIgnoreCase)))
         {
             return ParsePushPull(tokens[0].Equals(PullWord, StringComparison.OrdinalIgnoreCase) ? ProfileActionKind.Pull : ProfileActionKind.Push, tokens[1..]);
         }
 
-        int fresh = tokens.Count(token => token.Equals(FreshFlag, StringComparison.OrdinalIgnoreCase));
+        int fresh = tokens.Count(token => token.Equals(ProfileText.FreshFlag, StringComparison.OrdinalIgnoreCase));
         if (fresh > 0)
         {
             // add <name> --fresh (2026-11-23), the flag before or after the name, as reset's --all.
-            var rest = tokens.Where(token => !token.Equals(FreshFlag, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var rest = tokens.Where(token => !token.Equals(ProfileText.FreshFlag, StringComparison.OrdinalIgnoreCase)).ToArray();
             return fresh == 1 && rest.Length == 2 && rest[0].Equals("add", StringComparison.OrdinalIgnoreCase) && !rest[1].Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase)
                 ? new(ProfileActionKind.Add, rest[1], Fresh: true)
                 : new(ProfileActionKind.Invalid, "");
@@ -12378,12 +12394,6 @@ internal sealed partial class ChatScreen
 
     public static string ProfileCreatedNotice(string name) => $"({NoticeGlyphs.Profile}created profile \"{name}\" from the current settings)";
 
-    /// <summary>The notice after <c>/profile add &lt;name&gt; --fresh</c> (2026-11-23, the user's ask): the compiled defaults, nothing copied. Pinned.</summary>
-    public static string ProfileCreatedFreshNotice(string name) => $"({NoticeGlyphs.Profile}created profile \"{name}\" with the default settings)";
-
-    /// <summary><c>/profile add &lt;name&gt; --fresh</c> (2026-11-23, the user's ask): the flag, and its note on the argument list. Pinned.</summary>
-    public const string FreshFlag = "--fresh";
-    public const string FreshNote = "start from the default settings, copying nothing";
 
     /// <summary>
     /// The created notice naming what came along (the memories and, since 2026-10-13, the saved prompts, <see cref="Profiles.BasicSidekickFiles"/>; the prompt files too under
@@ -13024,13 +13034,17 @@ internal sealed partial class ChatScreen
                     case InputResult.LowerRuleItem ruleItem:
                         // A double-click on the lower rule's jobs group (2026-11-23, the user's ask): /process (since 2026-10-12) or /update
                         // (since 2026-11-04) through the dispatch, no transcript row, the draft back after, as the session's name; the download
-                        // and the pictures canceled here, their ends said by the drains that follow.
+                        // and the pictures canceled here, their ends said by the drains that follow. The PC's speech tail stops only for a command
+                        // run (2026-11-24, the last-7 review's #15): a loop, download or pictures click cancels in place, the reply still read out.
                         _timers.Acknowledge();
                         DisarmExit();
-                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
-                        if (LowerRuleClick(ruleItem.Kind) is { } ruleWord && await HandleAsync(ruleWord, [], cancellationToken).ConfigureAwait(false))
+                        if (LowerRuleClick(ruleItem.Kind) is { } ruleWord)
                         {
-                            return 0;
+                            await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
+                            if (await HandleAsync(ruleWord, [], cancellationToken).ConfigureAwait(false))
+                            {
+                                return 0;
+                            }
                         }
 
                         break;
@@ -14797,6 +14811,14 @@ internal sealed partial class ChatScreen
             if (EmbeddedLlm.EmbeddedEndpoint.IsEmbedded(choice.BaseUrl))
             {
                 await UseEmbeddedRowAsync(choice, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+
+            if (SettingsMenu.DockerRowOnPort([choice], _session.ShownBaseUrl) is not null)
+            {
+                // The row the cursor opened on for a saved loopback address on a running container's port (2026-11-24, the last-7 review's #54):
+                // Enter there keeps the address and the model, as an Esc would; /server docker and /server docker:<name> still move it on.
+                _transcript.Notice(SettingsMenu.UnchangedNotice);
                 return;
             }
 
@@ -16571,12 +16593,15 @@ internal sealed partial class ChatScreen
         ForgetReading();
         _transcript.ForgetPaths();   // another profile, another working folder (2026-11-02, review P2-4)
         ForgetSplash();
+        // The created notices (2026-11-24): /profile add's own, else what the picker's add row held (a real switch alone takes them, never a pull
+        // or a reset of the loaded profile). Taken once, here (later that day, the last-7 review's #61): RefitSplash draws the head again after
+        // the connects, and a take inside it found the list emptied, so the refit dropped them.
+        var created = prefaces ?? (switched ? _menu.TakeProfileCreatedNotices() : []);
         void Head()
         {
             _renderScreen(_pane);
-            // The created notices (2026-11-24): /profile add's own, else what the picker's add row held (a real switch alone takes them,
-            // never a pull or a reset of the loaded profile), one notice each, in order, above the switch line so the wipe keeps them.
-            foreach (string preface in prefaces ?? (switched ? _menu.TakeProfileCreatedNotices() : []))
+            // One notice each, in order, above the switch line so the wipe keeps them.
+            foreach (string preface in created)
             {
                 _transcript.Notice(preface);
             }

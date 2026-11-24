@@ -68,10 +68,17 @@ public static class ComfyText
     /// label too, the number followed by <c>, from …</c> or <c>, saved as …</c> (a model copies it whole) — nothing else, so a file really
     /// named <c>Image 1.png</c> is still a path. Pure; pinned.
     /// </summary>
-    public static bool TryPastedLabel(string image, out int number)
+    public static bool TryPastedLabel(string image, out int number) => TryPastedLabel(image, out number, out _);
+
+    /// <summary>
+    /// <see cref="TryPastedLabel(string, out int)"/>, and the path a whole sent label names (2026-11-24, the last-7 review's #2): the text
+    /// after <c>, from </c> or <c>, saved as </c>, a <c>]</c> inside it kept (only the outer brackets are the label's); null for a bare label.
+    /// </summary>
+    public static bool TryPastedLabel(string image, out int number, out string? path)
     {
         ArgumentNullException.ThrowIfNull(image);
         number = 0;
+        path = null;
         var s = image.AsSpan().Trim();
         if (s.Length >= 2 && s[0] == '[' && s[^1] == ']')
         {
@@ -96,13 +103,27 @@ public static class ComfyText
         }
 
         var rest = s[digits..];
-        if (digits == 0 || (rest.Length > 0 && !rest.StartsWith(", from ", StringComparison.OrdinalIgnoreCase) && !rest.StartsWith(", saved as ", StringComparison.OrdinalIgnoreCase)))
+        if (digits == 0 || (rest.Length > 0 && !rest.StartsWith(FromSeparator, StringComparison.OrdinalIgnoreCase) && !rest.StartsWith(SavedSeparator, StringComparison.OrdinalIgnoreCase)))
         {
             return false;
         }
 
-        return int.TryParse(s[..digits], NumberStyles.None, CultureInfo.InvariantCulture, out number) && number > 0;
+        if (!int.TryParse(s[..digits], NumberStyles.None, CultureInfo.InvariantCulture, out number) || number <= 0)
+        {
+            return false;
+        }
+
+        if (rest.Length > 0)
+        {
+            var named = rest[(rest.StartsWith(FromSeparator, StringComparison.OrdinalIgnoreCase) ? FromSeparator.Length : SavedSeparator.Length)..].Trim();
+            path = named.Length > 0 ? named.ToString() : null;
+        }
+
+        return true;
     }
+
+    private const string FromSeparator = ", from ";
+    private const string SavedSeparator = ", saved as ";
 
     /// <summary>An <c>[Image #N]</c> input with no such paste this session (or none kept at full size). Pinned.</summary>
     public static string NoPastedPicture(int number) =>

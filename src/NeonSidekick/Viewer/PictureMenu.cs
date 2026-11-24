@@ -249,7 +249,9 @@ public static class PictureMenu
 
     /// <summary>
     /// Add to the splash images (2026-11-23, the user's ask): the picture copied into the profile's splash folder by <see cref="NeonSidekick.UI.SplashImages.Add"/>,
-    /// as <c>set_splash_image</c> copies one, on the window's thread (a plain copy, as Copy the path is quick); told to the chat either way.
+    /// as <c>set_splash_image</c> copies one; told to the chat either way. What the window owns (the folder, whether the robot is the splash) is
+    /// read first on its thread, then the copy runs on a pool thread as <see cref="Edit"/>'s work does (2026-11-24, the last-7 review's #39: a
+    /// large file held the window), so two adds may overlap: <see cref="NeonSidekick.UI.SplashImages.Add"/> takes the next free name then.
     /// </summary>
     private static void AddToSplash(string path)
     {
@@ -260,20 +262,34 @@ public static class PictureMenu
             return;
         }
 
-        var added = NeonSidekick.UI.SplashImages.Add(folder, path);
+        bool robot;
+        try
+        {
+            robot = RobotSplash?.Invoke() == true;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            robot = false;
+        }
+
+        _ = Task.Run(() => AddToSplash(path, name, folder, robot));
+    }
+
+    private static void AddToSplash(string path, string name, string folder, bool robot)
+    {
+        NeonSidekick.UI.SplashAdd added;
+        try
+        {
+            added = NeonSidekick.UI.SplashImages.Add(folder, path);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            added = new NeonSidekick.UI.SplashAdd(NeonSidekick.UI.SplashAddResult.Failed, "", false, ex.Message);
+        }
+
         switch (added.Result)
         {
             case NeonSidekick.UI.SplashAddResult.Added:
-                bool robot;
-                try
-                {
-                    robot = RobotSplash?.Invoke() == true;
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    robot = false;
-                }
-
                 Report(PictureMenuText.AddedToSplash(Path.GetFileName(added.Target), added.Only, robot), false);
                 DiagnosticLog.Info("Viewer", $"Picture menu AddToSplash: {path} to {added.Target}");
                 break;

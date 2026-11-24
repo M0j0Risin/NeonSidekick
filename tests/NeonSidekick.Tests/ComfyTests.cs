@@ -696,6 +696,48 @@ public sealed class ComfyTests : IDisposable
         Assert.Equal("pasted-20260924-153012", ComfyStudio.PastedStem(new DateTimeOffset(2026, 9, 24, 15, 30, 12, TimeSpan.FromHours(-7))));
     }
 
+    /// <summary>
+    /// The last-7 review's #2: a whole sent label names its file. With no paste store (after a restart), or the number now another paste's,
+    /// the label's path is read, through the sandbox; the paste store answers only when its paste is that very file.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImage_AWholeLabel_ReadsItsOwnPath_UnlessThePasteIsThatFile()
+    {
+        Workflow("restyle", Img2Img);
+        ServeOnePicture();
+        string own = Path.Combine(_root, "shots [v2]", "cat.bmp");
+        Directory.CreateDirectory(Path.GetDirectoryName(own)!);
+        File.WriteAllBytes(own, SmokeChecks.SolidBmp(8, 8));
+
+        // No paste store: the label's path.
+        var restarted = Assert.IsType<ToolImageResult>(await new GenerateImageTool(_studio).InvokeAsync(Args(("prompt", "a"), ("image", PasteBlocksLabel(1, own)))));
+        Assert.Contains("cat.bmp", _stub.Requests.Last(r => r.Uri.AbsolutePath == "/upload/image").Body, StringComparison.Ordinal);
+
+        // The number now another paste's: still the label's own file, never the other paste.
+        byte[] other = SmokeChecks.SolidBmp(9, 9);
+        using var studio = PastingStudio(n => new PastedPicture(other, "dog.bmp", Path.Combine(_root, "dog.bmp")));
+        Assert.IsType<ToolImageResult>(await new GenerateImageTool(studio).InvokeAsync(Args(("prompt", "b"), ("image", PasteBlocksLabel(1, own)))));
+        Assert.Contains("cat.bmp", _stub.Requests.Last(r => r.Uri.AbsolutePath == "/upload/image").Body, StringComparison.Ordinal);
+
+        // The paste is that file: the paste store's bytes, as before.
+        using var same = PastingStudio(n => new PastedPicture(other, "cat.bmp", own));
+        var pasted = Assert.IsType<ToolImageResult>(await new GenerateImageTool(same).InvokeAsync(Args(("prompt", "c"), ("image", PasteBlocksLabel(1, own)))));
+        Assert.Contains(ComfyText.PastedInput(own, 1), pasted.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain(ComfyText.PastedInput(own, 1), restarted.Text, StringComparison.Ordinal);
+    }
+
+    private static string PasteBlocksLabel(int number, string path) => NeonSidekick.UI.PasteBlocks.FileLabel(number, path);
+
+    [Theory]
+    [InlineData(@"[Image #2, from C:\shots\[old]\a.png]", @"C:\shots\[old]\a.png")]
+    [InlineData("[Image #2, saved as x.png]", "x.png")]
+    [InlineData("[Image #2]", null)]
+    public void TryPastedLabel_GivesTheLabelsPath_BracketsInsideKept(string image, string? path)
+    {
+        Assert.True(ComfyText.TryPastedLabel(image, out int number, out string? named));
+        Assert.Equal((2, path), (number, named));
+    }
+
     [Fact]
     public async Task GenerateImage_APastedLabel_WithNoPasteStore_IsTheNoPasteError()
     {

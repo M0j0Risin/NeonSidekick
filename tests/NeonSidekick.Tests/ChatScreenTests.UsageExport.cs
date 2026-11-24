@@ -84,7 +84,8 @@ public partial class ChatScreenTests
             ChatScreen.ArgumentItems("/usage", "sysprompt ", Sources()));
         Assert.Equal([new CompletionItem("sysprompt conversation to=", UsageText.SyspromptToNote)], ChatScreen.ArgumentItems("/usage", "sysprompt conversation ", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/usage", "sysprompt to=x", Sources()));
-        Assert.Empty(ChatScreen.ArgumentItems("/usage", "sysprompt to=x ", Sources()));
+        Assert.Equal([new CompletionItem("sysprompt to=x conversation", UsageText.ConversationWordNote)], ChatScreen.ArgumentItems("/usage", "sysprompt to=x ", Sources()));   // the last-7 review's #31
+        Assert.Empty(ChatScreen.ArgumentItems("/usage", "sysprompt to=x conversation ", Sources()));
         Assert.Equal([new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote)], ChatScreen.ArgumentItems("/usage", "pro", Sources()));
     }
 }

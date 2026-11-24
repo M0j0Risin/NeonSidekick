@@ -7992,7 +7992,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · " + ChatScreen.ProfileCreatedFreshNotice("fresh1"), output);
+        Assert.Contains("  · " + ProfileText.ProfileCreatedFreshNotice("fresh1"), output);
         Assert.Equal("fresh1", _settings.ProfileName);
         var saved = Profiles.ReadProfileFile(Path.Combine(ProfileDir("fresh1"), Profiles.FileName));
         Assert.Equal((new AppSettingsData().LlmUrl, new AppSettingsData().LlmModel, new AppSettingsData().QueueMode), (saved.LlmUrl, saved.LlmModel, saved.QueueMode));
@@ -13038,7 +13038,7 @@ public partial class ChatScreenTests : IDisposable
         // from 2026-10-13 until 2026-10-18, when /find moved to Ctrl+F on both lists.
         Assert.Equal(windows.Length + 5 - 1, mac.Length);   // Option+Up / Down (2026-11-01, message jumps), Option+Left / Right (2026-11-02, review P11-2)
         Assert.DoesNotContain(mac, r => r.Key is "Ctrl+J" or "Ctrl+Shift+F");
-        Assert.Equal(new KeyRow("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)"), mac[8]);
+        Assert.Equal(new KeyRow("Option+Delete", "delete the word before the cursor (Ctrl+Delete opens the help: a Mac terminal sends it as Ctrl+H)"), mac[9]);   // after Option+Left / Right since 2026-11-24 (#5)
         string[] keys = mac.Select(r => r.Key).ToArray();
         Assert.Equal(["Ctrl+.", "Ctrl+]", "Ctrl+/", "Ctrl+B", "Ctrl+D", "Ctrl+E"], keys[Array.IndexOf(keys, "Ctrl+.")..(Array.IndexOf(keys, "Ctrl+E") + 1)]);
         Assert.Equal("Ctrl+Alt+A", keys[Array.IndexOf(keys, "Ctrl+Alt+B") - 1]);
@@ -13046,11 +13046,11 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(new KeyRow("Ctrl+D", "open the model picker", "/model"), mac.Single(r => r.Key == "Ctrl+D"));
         Assert.Equal(new KeyRow("Ctrl+Alt+A", "open the memory pane", "/memory"), mac.Single(r => r.Key == "Ctrl+Alt+A"));
         Assert.Equal("open the model picker (in the app's windows; Ctrl+D in the terminal)", mac.Single(r => r.Key == "Ctrl+M").Meaning);
-        Assert.Equal(new KeyRow("Ctrl+V / Alt+V", "paste text, pictures or PDFs (Cmd+V is the terminal's: text only)"), mac[12]);   // pictures off the pasteboard, 2026-10-07
+        Assert.Equal(new KeyRow("Ctrl+V / Alt+V", "paste text, pictures or PDFs (Cmd+V is the terminal's: text only)"), mac[13]);   // pictures off the pasteboard, 2026-10-07
         Assert.Equal(windows.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Ctrl+Backspace / Delete" or "Alt+V" or "Ctrl+J")),
             mac.Where(r => r.Key is not ("Ctrl+." or "Ctrl+M" or "Ctrl+Alt+M" or "Option+Delete" or "Ctrl+]" or "Ctrl+D" or "Ctrl+Alt+A" or "Ctrl+V / Alt+V" or "Option+Up / Down" or "Option+Left / Right")));
         Assert.Equal(new KeyRow("Option+Up / Down", "jump to the previous or next message (Mission Control may hold Ctrl+Up / Down)"), mac[Array.IndexOf(keys, "Ctrl+Up / Down") + 1]);
-        Assert.Equal("Option+Left / Right", mac[Array.IndexOf(keys, "Ctrl+Up / Down") + 2].Key);
+        Assert.Equal("Option+Left / Right", mac[Array.IndexOf(keys, "Ctrl+Left / Right") + 1].Key);   // in Editing since 2026-11-24 (the last-7 review's #5)
     }
 
     [Theory]
@@ -19776,6 +19776,40 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(0, Count(refit[..refit.IndexOf('▀')], line));                                  // never over it
     }
 
+    /// <summary>
+    /// The picker's add row with the splash on (2026-11-24, the last-7 review's #61): the created notice is drawn above the picture on the
+    /// switch's screen and again on the refit after the connects, which once took an emptied list and dropped it.
+    /// </summary>
+    [WindowsFact]
+    public async Task ProfileSwitch_FromThePickersAddRow_KeepsTheCreatedNotice_OnTheSplashRefit()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        PaneOf40Rows();
+        SplashOf(100, 4000);
+        PushLine("/profile");
+        _console.Input.PushKey(Keys.Char('+'));
+        _console.Input.PushKey(Keys.Enter);
+        foreach (char c in "lab")
+        {
+            _console.Input.PushKey(Keys.Char(c));
+        }
+
+        _console.Input.PushKey(Keys.Enter);
+        _console.Input.PushKey(Keys.Enter);   // Copy this profile's settings
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal("lab", _settings.ProfileName);
+        string created = ChatScreen.ProfileCreatedNotice("lab", Profiles.BasicSidekickFiles.Where(f => File.Exists(Path.Combine(ProfileDir("lab"), f))).ToList());
+        int[] screens = Enumerable.Range(0, Refreshes(output) + 1).Select(i => NthScreen(output, i)).ToArray();
+        string refit = output[screens[^2]..screens[^1]];
+        int at = refit.IndexOf(created, StringComparison.Ordinal);
+        Assert.True(at >= 0 && at < refit.IndexOf('▀'), refit);
+        Assert.True(refit.IndexOf(SettingsMenu.SwitchedNotice("lab"), StringComparison.Ordinal) > at, refit);
+        Assert.Equal(2, Count(output, created));   // the switch's screen and the refit: nothing lost, nothing doubled
+    }
+
     [WindowsFact]
     public async Task Startup_WelcomeSplash_AFolderWithNoPicture_LeavesTheEmbeddedSetInForce()
     {
@@ -26362,7 +26396,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(["delete chef", "delete work"], Texts(ChatScreen.ArgumentItems("/profile", "delete ", Sources(loaded: "work"))));   // delete never lists it (2026-09-22)
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "add ", sources));          // a new name is free text
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "add t1", sources));
-        Assert.Equal([new CompletionItem("add t1 --fresh", ChatScreen.FreshNote)], ChatScreen.ArgumentItems("/profile", "add t1 ", sources));   // --fresh once the name is typed with its space (2026-11-23)
+        Assert.Equal([new CompletionItem("add t1 --fresh", ProfileText.FreshNote)], ChatScreen.ArgumentItems("/profile", "add t1 ", sources));   // --fresh once the name is typed with its space (2026-11-23)
         Assert.Equal(["add t1 --fresh"], Texts(ChatScreen.ArgumentItems("/profile", "add t1 --f", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "edit ", sources));         // edit and reload take nothing
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "reload ", sources));
@@ -26732,6 +26766,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("ask_user: 1 question answered", ChatScreen.AskUserAnsweredLogLine(1));
         Assert.Equal("ask_user: 2 questions answered, 1 skipped", ChatScreen.AskUserAnsweredLogLine(2, 1));   // 2026-11-24: skips counted, none said only when some
         Assert.Equal("ask_user: declined with a note", ChatScreen.AskUserDeclinedNoteLogLine);
+        Assert.Equal("ask_user: declined.", ChatScreen.AskUserNotAnsweredLogLine);   // 2026-11-24, the last-7 review's #8: Esc is a decline,
+        Assert.Equal("ask_user: not answered (the questions were not shown).", ChatScreen.AskUserNotShownLogLine);   // and a pane never shown is not
     }
 
     // ── A double-clicked picture opens in the image editor (later on 2026-09-24) ─

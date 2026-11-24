@@ -48,8 +48,23 @@ internal static class SkillView
             parts.Add(new SectionRule(SectionRule.Bare));
         }
 
-        parts.Add(MarkdownView.Of(body));
+        parts.Add(Warned(MarkdownView.Of(body), body));
         return new Rows(parts);
+    }
+
+    /// <summary>
+    /// <paramref name="rendered"/> (the markdown <paramref name="text"/> drawn) under a warning line when the text holds link reference
+    /// definitions, which the rendering drops (2026-11-24, the last-7 review's #7: <c>[//]: # (…)</c> can hide words the model reads), naming
+    /// the Source tab; as it is without any. The trust View and <c>/project-init</c>'s draft View share it. Pure.
+    /// </summary>
+    public static IRenderable Warned(IRenderable rendered, string text)
+    {
+        ArgumentNullException.ThrowIfNull(rendered);
+        ArgumentNullException.ThrowIfNull(text);
+        int hidden = MarkdigParser.LinkDefinitionCount(text);
+        return hidden == 0
+            ? rendered
+            : new Rows(new Markup($"[{Theme.WarnText.ToMarkup()}]{Markup.Escape(App.SkillsText.HiddenLinesWarning(hidden))}[/]"), rendered);
     }
 
     /// <summary>

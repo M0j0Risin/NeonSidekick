@@ -5602,7 +5602,9 @@ internal sealed partial class SettingsMenu
                     JumpNames = Enumerable.Range(0, ruled.Rows.Count).Select(r => ruled.ItemOf(r) is > 0 and var i ? names[i - 1] : "").ToList(),
                     Hotkeys = ruled.Hotkeys(new Dictionary<char, int> { ['+'] = 0 }),
                 };
-                int start = cursor >= 0 ? cursor : ruled.RowOf(names.ToList().IndexOf(current) + 1);
+                // The loaded profile found as the list compares names (2026-11-24, the last-7 review's #42), never the add row.
+                int at = names.ToList().FindIndex(n => Profiles.NameEquals(n, current));
+                int start = cursor >= 0 ? cursor : ruled.RowOf(Math.Max(at, 0) + 1);
                 if (await PickAsync(page, start, cancellationToken).ConfigureAwait(false) is not { } row)
                 {
                     Done();
@@ -5625,7 +5627,29 @@ internal sealed partial class SettingsMenu
                 if (await AddProfileAsync(page, row, label, cancellationToken).ConfigureAwait(false) is { } added)
                 {
                     Done();
-                    return await SwitchProfileAsync(added).ConfigureAwait(false);
+                    // The created notice is held for the screen only once the switch is made (2026-11-24, the last-7 review's #4): a switch
+                    // that fails prints it here, so the new profile is still told of, and /profile's catch prints the failure under it.
+                    bool switched;
+                    try
+                    {
+                        switched = await SwitchProfileAsync(added.Name).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        Sink.Notice(added.Notice);
+                        throw;
+                    }
+
+                    if (switched)
+                    {
+                        _profileCreatedNotices.Add(added.Notice);
+                    }
+                    else
+                    {
+                        Sink.Notice(added.Notice);
+                    }
+
+                    return switched;
                 }
             }
         }
@@ -5647,9 +5671,9 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The picker's add row (2026-11-24, the user's ask): the name typed under the list (or on the input row without the pane, as
     /// <see cref="TypeStoreNameAsync"/> splits it), asked again with <c>/profile add</c>'s own error for an invalid or taken one, then the seed page.
-    /// The created profile's name, its notice held; null for Esc or a blank at either step, nothing made.
+    /// The created profile's name and its notice, for the caller to hold once it has switched; null for Esc or a blank at either step, nothing made.
     /// </summary>
-    private async Task<string?> AddProfileAsync(MenuPage page, int row, string label, CancellationToken cancellationToken)
+    private async Task<(string Name, string Notice)?> AddProfileAsync(MenuPage page, int row, string label, CancellationToken cancellationToken)
     {
         string initial = "";
         while (true)
@@ -5693,8 +5717,7 @@ internal sealed partial class SettingsMenu
                 return null;
             }
 
-            _profileCreatedNotices.Add(notice!);
-            return name;
+            return (name, notice!);
         }
     }
 
@@ -5730,15 +5753,33 @@ internal sealed partial class SettingsMenu
             return (ChatScreen.ProfileExistsError(existing), null);
         }
 
-        if (fresh)
+        try
         {
-            Profiles.Create(home, name, Profiles.FreshProfileSeed());
-            return (null, ChatScreen.ProfileCreatedFreshNotice(name));
-        }
+            if (fresh)
+            {
+                Profiles.Create(home, name, Profiles.FreshProfileSeed());
+                return (null, ProfileText.ProfileCreatedFreshNotice(name));
+            }
 
-        Profiles.Create(home, name, Profiles.NewProfileSeed(_settings.Current));
-        IReadOnlyList<string> copied = Profiles.CopySidekickFiles(_settings.ProfileDirectory, home, name, Profiles.BasicSidekickFiles);
-        return (null, ChatScreen.ProfileCreatedNotice(name, copied));
+            Profiles.Create(home, name, Profiles.NewProfileSeed(_settings.Current));
+            IReadOnlyList<string> copied = Profiles.CopySidekickFiles(_settings.ProfileDirectory, home, name, Profiles.BasicSidekickFiles);
+            return (null, ChatScreen.ProfileCreatedNotice(name, copied));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // All or nothing (2026-11-24, the last-7 review's #36): a half-made profile (its folder made, its profile.json or a copy not) is
+            // taken back. Safe: Resolve above found no profile of that name, and any folder there counts as one, so this run made it.
+            try
+            {
+                Profiles.Delete(home, name);
+            }
+            catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
+            {
+                Diagnostics.DiagnosticLog.Warn(ChatScreen.AppCategory, $"Could not take back the half-made profile {name}: {cleanup.Message}");
+            }
+
+            return (ProfileText.CreateFailedError(name, ex.Message), null);
+        }
     }
 
     /// <summary>
@@ -9826,7 +9867,9 @@ internal sealed partial class SettingsMenu
     {
         bool changed = false;
         bool forgot = false;   // a session allow forgotten: no setting changed, but not "unchanged" either
-        int cursor = 0;        // a page row, kept across a forget or a remove
+        // The cursor as the nth prefix shown, not a page row (2026-11-24, the last-7 review's #38): a forget or a remove that drops a group's
+        // heading shifts every row under it, so a row kept would land one past the prefix the user was on.
+        int cursor = 0;
         string filter = "";
         while (true)
         {
@@ -9890,7 +9933,10 @@ internal sealed partial class SettingsMenu
                     : null,
             };
             string policy = _settings.Current.ShellCommandPolicy;
-            int start = page.StopFrom(Math.Clamp(cursor, 0, rows.Count - 1), +1);
+            var itemRows = Enumerable.Range(0, items.Count).Where(r => items[r] is not null).ToList();
+            int RowOf(int item) => itemRows.Count == 0 ? 0 : itemRows[Math.Clamp(item, 0, itemRows.Count - 1)];
+            int ItemOf(int row) => Math.Max(0, itemRows.FindLastIndex(r => r <= row));
+            int start = page.StopFrom(Math.Clamp(RowOf(cursor), 0, rows.Count - 1), +1);
             MenuPick? pick = _pane.Enabled
                 ? await _pane.PickAsync(page with { Buttons = CommandPolicyButtons(policy), Removes = matched > 0 }, start, cancellationToken).ConfigureAwait(false)
                 : await PickAsync(page, start, cancellationToken).ConfigureAwait(false) is { } plain ? new MenuPick(0, plain) : null;
@@ -9905,7 +9951,7 @@ internal sealed partial class SettingsMenu
             // remove below and ask to remove the highlighted prefix.
             if (pick is { Button: >= 0 } pressed && pressed.Button < Shell.CommandPolicy.Names.Length)
             {
-                cursor = pressed.Row;
+                cursor = ItemOf(pressed.Row);
                 string chosen = Shell.CommandPolicy.Names[pressed.Button];
                 if (string.Equals(policy?.Trim(), chosen, StringComparison.Ordinal))
                 {
@@ -9949,7 +9995,7 @@ internal sealed partial class SettingsMenu
                 continue;   // the no-match row
             }
 
-            cursor = chosenRow.Row;
+            cursor = ItemOf(chosenRow.Row);
             string prefix = target.Prefix;
             if (target.Session)
             {

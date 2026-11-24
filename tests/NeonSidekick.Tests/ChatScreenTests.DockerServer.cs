@@ -178,6 +178,41 @@ public partial class ChatScreenTests
         Assert.Null(_session.DockerInUse);   // stopped at the exit
     }
 
+    /// <summary>
+    /// A saved loopback address on a running container's port (2026-11-24, the last-7 review's #54): /server opens on the container's row, and
+    /// Enter there keeps the address and the model; /server docker and Enter still move it onto the managed form.
+    /// </summary>
+    [Fact]
+    public async Task Server_EnterOnTheRowASavedLoopbackPortStandsFor_KeepsIt_WhileServerDockerSwitches()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var docker = UseDockerServers();
+        docker.List = new DockerServerList(
+            [
+                new DockerContainer("id-a", "sglang_a", "lmsysorg/sglang:latest", "sha", "running", "Up 1 hour", 0, [new DockerPort("0.0.0.0", 30000, 30000, "tcp")], new Dictionary<string, string>(), [], []),
+                new DockerContainer("id-b", "vllm_b", "vllm/vllm-openai:latest", "sha", "exited", "Exited (0)", 0, [], new Dictionary<string, string>(), [], []),
+            ], [], null);
+        ServerOn(30000, "sglang-model");
+        _settings.Update(d => { d.LlmUrl = "http://127.0.0.1:30000/v1"; d.LlmModel = "sglang-model"; });
+        PushLine("/server");
+        _console.Input.PushKey(Keys.Enter);    // the cursor opens on sglang_a's row
+        PushLine("/server docker");
+        _console.Input.PushKey(Keys.Enter);    // sglang_a
+        _console.Input.PushKey(Keys.Escape);   // keep the reasoning
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        int unchanged = output.IndexOf("  · " + SettingsMenu.UnchangedNotice, StringComparison.Ordinal);
+        Assert.True(unchanged >= 0, output);
+        Assert.DoesNotContain(SettingsMenu.ModelTitle, output[..unchanged]);
+        Assert.Equal("http://docker.localhost/sglang_a/v1", _settings.Current.LlmUrl);   // /server docker's pick
+    }
+
     [Fact]
     public async Task Server_Docker_Refuses_AnUnchosenName_AndTheSwitchedOffRows()
     {

@@ -47,6 +47,8 @@ internal sealed partial class ChatScreen
         IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>? messages = null;
         int thinkingFrom = 0;
         long historyTokens = 0;
+        // Which reason leaves earlier thinking out (2026-11-24, the last-7 review's #22): the setting off, or a server taking back only the turn in flight's.
+        bool inFlightOnly = effective.LlmPreserveThinking && Assistant.InFlightOnlyWire(url);
         if (conversation)
         {
             var budget = _session.Assistant?.PictureBudget ?? PictureBudget.Default;
@@ -68,7 +70,8 @@ internal sealed partial class ChatScreen
             messages,
             thinkingFrom,
             historyTokens,
-            _files.Root);
+            _files.Root,
+            inFlightOnly);
         byte[] bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(UsageExport.Markdown(facts));
 
         bool intoFolder = OutputNames.IntoFolder(to, IsFolder);

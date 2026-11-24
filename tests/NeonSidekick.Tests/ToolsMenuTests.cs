@@ -2765,6 +2765,25 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
+    /// <summary>
+    /// The cursor after a forget that drops the headings (2026-11-24, the last-7 review's #38): it stays on the prefix it was on, now the first
+    /// saved one, not one row on (the rows under the gone headings moved up).
+    /// </summary>
+    [Fact]
+    public async Task EditAllowedCommands_AForgetThatDropsTheHeadings_KeepsTheCursorOnItsPrefix()
+    {
+        _settings.Update(d => d.ShellCommandAllowed = ["a", "b"]);
+        var (_, pane, settings) = PaneMenu();
+        SessionAllows(settings, "s");
+        Push(Keys.Enter, Keys.Down, Keys.Enter);     // forget s?  yes
+        Push(Keys.Escape);                           // close
+
+        await settings.EditAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Contains("  · " + SettingsMenu.SessionForgottenNotice("s") + "\n▸ a\n  b\n", Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task ShowAllowedCommands_AFilter_CountsBothGroups_AndDropsAGroupWithNoMatch()
     {

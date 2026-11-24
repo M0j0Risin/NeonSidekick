@@ -713,6 +713,42 @@ public partial class ChatScreenTests
         Assert.Equal("🔁 Ralph loop paused after this pass, as asked (1 of 2 steps done). /plan ralph goes on.", RalphText.StopNotice(RalphStop.Paused, PlanPath, 1, 2, clicked: true));
     }
 
+    /// <summary>
+    /// 🔁's click during a pass that ends without finish_step (2026-11-24, the last-7 review's #23): the pass is still nudged to report, as a
+    /// typed line would not let it be, and then the loop pauses as asked.
+    /// </summary>
+    [Fact]
+    public async Task Ralph_ADoubleClickDuringAReportlessPass_StillNudges_ThenPauses()
+    {
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _console.Profile.Width = 80;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the lower rule at 101
+        _chat.BeforeUpdateOf = async (request, update, ct) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                _time.Advance(ScreenPane.Tick);
+                Scripted().PushClick(78, 101);
+                Scripted().PushClick(78, 101);
+                await UntilAsync(() =>
+                {
+                    _time.Advance(ScreenPane.Tick);
+                    return Output.Contains(RalphText.StripText(1, 2, 1) + LoopText.EndingTail + " ─", StringComparison.Ordinal);
+                }, ct);
+            }
+        };
+        _chat.EnqueueText("Worked on it.");   // the pass: no finish_step
+        RalphPass("1");                       // the nudge's answer
+
+        string output = await RunAsync();
+
+        Assert.Equal(3, _chat.Requests.Count);   // the pass, the nudge and its tool round: no pass 2
+        Assert.Equal(RalphText.NudgeMessage, LastUserText(_chat.Requests[1]));
+        Assert.Contains("Ralph loop paused after this pass, as asked (1 of 2 steps done).", output);
+        Assert.Contains("- [x] One", RalphPlanText);
+    }
+
     [Fact]
     public async Task Ralph_AMessageFromThePageDuringAPass_PausesTheLoopAfterIt_ThenRuns()
     {

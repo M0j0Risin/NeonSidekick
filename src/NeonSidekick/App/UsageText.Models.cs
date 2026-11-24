@@ -108,7 +108,9 @@ public static partial class UsageText
         var rows = new List<(string, bool, bool)>();
         void Wrapped(string text, int indent = 0) =>
             rows.AddRange(TextCells.WrapWords(text, Math.Max(1, width - indent)).Select(line => (new string(' ', indent) + line, true, false)));
-        var sides = stats.Where(s => SessionText.IsSideTurnModel(s.Model)).ToList();
+        // The side note's models in the table's order too (2026-11-24, the last-7 review's #49): turns, most first, then last use, then the name.
+        var sides = stats.Where(s => SessionText.IsSideTurnModel(s.Model))
+            .OrderByDescending(s => s.Turns).ThenByDescending(s => s.LastUsed).ThenBy(s => s.Model, StringComparer.Ordinal).ToList();
         var models = stats.Where(s => !SessionText.IsSideTurnModel(s.Model))
             .OrderByDescending(s => s.Turns).ThenByDescending(s => s.LastUsed).ThenBy(s => s.Model, StringComparer.Ordinal).ToList();
         void SideNote()

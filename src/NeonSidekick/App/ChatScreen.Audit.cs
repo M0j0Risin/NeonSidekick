@@ -652,6 +652,20 @@ internal sealed partial class ChatScreen
     /// <summary>The audit stops for 🔎's double-click alone, no line typed (2026-11-23): the stop's notice says "as asked".</summary>
     private bool AuditEndClicked() => _auditEnd is { Asked: true } && LinesNow() == _auditBaseline;
 
+    /// <summary>
+    /// A line typed, held or sent from the page since the audit began, never 🔎's click (2026-11-24, the last-7 review's #23): a pass that
+    /// reported nothing is still followed up after a click, then the audit stops as asked; a line waiting skips the follow-up.
+    /// </summary>
+    private bool AuditLinesCame() => LinesNow() != _auditBaseline;
+
+    /// <summary>🔎's request let go as the audit ends (2026-11-24, the last-7 review's #30): every end clears and disposes it, the early ones too.</summary>
+    private void ForgetAuditEnd()
+    {
+        var old = _auditEnd;
+        _auditEnd = null;
+        old?.Dispose();
+    }
+
     /// <summary>The lines as the gap review's pass 1 began, or as it resumed (2026-11-17, <see cref="LineCounts"/>).</summary>
     private LineCounts _gapBaseline;
 
@@ -735,7 +749,7 @@ internal sealed partial class ChatScreen
             return new AuditAfterTurn(null, null) { Retry = true };
         }
 
-        if (!spoke && reportless && loop.TakeFollowUp())
+        if (!AuditLinesCame() && reportless && loop.TakeFollowUp())
         {
             DiagnosticLog.Info(AppCategory, AuditText.FollowUpLogLine(loop.Pass, _lastTurnFailure == TurnFailure.ToolCap));
             return new AuditAfterTurn(AuditText.FollowUpMessage(_audit.Name, loop.Pass), null);
@@ -752,7 +766,7 @@ internal sealed partial class ChatScreen
         string? body = AuditFiles.Read(_audit.Files, path)?.StallBody();
         var stop = loop.Next(onItsOwn, spoke, body, PlanMeter());
         // A pass that would have been retried or followed up, but for the message: the message's stop, no tone (2026-11-17).
-        if (spoke && ((transient && loop.RetryLeft) || (reportless && loop.FollowUpLeft)))
+        if (spoke && ((transient && loop.RetryLeft) || (AuditLinesCame() && reportless && loop.FollowUpLeft)))
         {
             stop = PlanGapStop.UserSpoke;
         }
@@ -830,7 +844,9 @@ internal sealed partial class ChatScreen
             }
         }
 
+        bool clicked = reason == PlanGapStop.UserSpoke && AuditEndClicked();
         _audit.Stop();
+        ForgetAuditEnd();
         if (moved || lockLost || coverage is null)
         {
             return null;
@@ -838,7 +854,7 @@ internal sealed partial class ChatScreen
 
         _transcript.Notice(reason == PlanGapStop.Converged
             ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope, pane: _pane.Enabled || FromWebNow, coverage.Unread.Count, loop.StreakLight)
-            : AuditText.StopNotice(reason, name, loop.Pass, loop.PassLight.Count > 0, clicked: reason == PlanGapStop.UserSpoke && AuditEndClicked()), NoticeTone.Progress);
+            : AuditText.StopNotice(reason, name, loop.Pass, loop.PassLight.Count > 0, clicked: clicked), NoticeTone.Progress);
         return reason is PlanGapStop.Converged or PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed ? new AuditAfterTurn(null, path) : null;
     }
 
@@ -852,6 +868,7 @@ internal sealed partial class ChatScreen
         {
             _transcript.Notice(AuditText.LeftOnResetNotice(_audit.Name));
             _audit.Stop();
+            ForgetAuditEnd();
         }
     }
 

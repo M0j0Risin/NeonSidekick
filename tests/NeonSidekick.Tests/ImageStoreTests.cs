@@ -298,6 +298,24 @@ public sealed class ImageStoreTests : IDisposable
         Assert.Equal("see [Image #4] and [Image #2]", PasteBlocks.WithoutSavedPaths("see " + PasteBlocks.FileLabel(4, @"C:\pics\cat.png") + " and " + PasteBlocks.SavedLabel(2, path)));
     }
 
+    /// <summary>
+    /// The last-7 review's #1: a label's path may hold a ']' of its own, and is read up to its image extension, as an attached PDF's label
+    /// is; every extension a picture can be saved or attached with, on every system (a Web UI attachment's .jxl, a Mac's .heic read here).
+    /// </summary>
+    [Fact]
+    public void ASavedLabel_WithABracketInItsPath_ReadsBackWhole_ForEveryImageExtension()
+    {
+        Assert.Equal("see [Image #1] then", PasteBlocks.WithoutSavedPaths("see " + PasteBlocks.FileLabel(1, @"C:\shots\[old]\cat [v2].png") + " then"));
+        Assert.Equal("[Image #2] and [Image #3]", PasteBlocks.WithoutSavedPaths(PasteBlocks.SavedLabel(2, "/Users/me/web-1.jxl") + " and " + PasteBlocks.SavedLabel(3, "/Users/me/IMG_1.HEIC")));
+        foreach (string extension in Images.ImageIOFormats.All.SelectMany(f => f.Extensions))
+        {
+            Assert.Equal("[Image #7]", PasteBlocks.WithoutSavedPaths(PasteBlocks.SavedLabel(7, @"C:\a]b\pic" + extension)));
+        }
+
+        // Not a picture's path: left as it is.
+        Assert.Equal("[Image #8, from C:\\notes.txt]", PasteBlocks.WithoutSavedPaths("[Image #8, from C:\\notes.txt]"));
+    }
+
     [Fact]
     public void PasteBlocks_KnowAClipboardPicture_FromADroppedFile_AndRememberWhereItWasSaved()
     {

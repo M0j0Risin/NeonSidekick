@@ -76,6 +76,19 @@ public partial class ChatScreenTests
         Assert.Contains(SkillsText.SourceTab, output);
     }
 
+    /// <summary>The last-7 review's #7, the user's pick (both Views): a draft's link-definition lines are warned of over the rendering.</summary>
+    [Fact]
+    public async Task ProjectInit_ViewOfANewDraft_WarnsOfLinkDefinitionLines()
+    {
+        ProjectInitFixture([[Keys.Char('v'), Keys.Enter, Keys.Escape, Keys.Escape]], Line("/project-init"), Line("/exit"));
+        _chat.Enqueue(NotesCall("n1", NotesDraft + "\n[//]: # (hidden words)\n"));
+        _chat.EnqueueText("Left as it was.");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SkillsText.HiddenLinesWarning(1), output);
+    }
+
     [Fact]
     public async Task ProjectInit_EscOnThePane_WritesNothing()
     {

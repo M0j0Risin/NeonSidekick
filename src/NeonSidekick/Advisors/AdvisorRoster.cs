@@ -1,5 +1,6 @@
 using System.Globalization;
 using NeonSidekick.Settings;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Advisors;
 
@@ -106,9 +107,11 @@ public static class AdvisorRoster
             return (byName, [byName]);
         }
 
-        if (entries.FirstOrDefault(e => string.Equals(e.Role, wanted, StringComparison.OrdinalIgnoreCase)) is { } byRole)
+        // Several holding the role whole are a choice, as several holding it in part are (2026-11-24, the last-7 review's #16), never the first.
+        var byRole = entries.Where(e => string.Equals(e.Role, wanted, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (byRole.Count > 0)
         {
-            return (byRole, [byRole]);
+            return byRole.Count == 1 ? (byRole[0], byRole) : (null, byRole);
         }
 
         var holding = entries.Where(e => e.Role.Contains(wanted, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -142,6 +145,7 @@ public static class AdvisorRoster
         }
 
         string text = entries.Count.ToString(CultureInfo.InvariantCulture) + ": " + string.Join(", ", entries.Select(Label));
-        return text.Length <= width ? text : text[..Math.Max(0, width - 1)] + "…";
+        // Cut by cells (2026-11-24, the last-7 review's #56): an emoji or CJK role is two cells a character, and a cut by length could split a pair.
+        return TextCells.Cut(text, width);
     }
 }

@@ -448,6 +448,7 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Null(WebAskBroker.Check(YesNo(), new WebAnswerRequest { Choice = "no" }));
         // One answer per question; one pick at most for a single choice, none on a text question.
         Assert.Equal(WebUiText.AskIncomplete, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [1] }] })!.Value.Message);
+        Assert.Equal(WebUiText.AskIncomplete, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [null!, new(), new()] })!.Value.Message);   // the last-7 review's #53: refused, never a 500
         Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [0, 1] }, new() { Picked = [0] }, new()] })!.Value.Message);
         Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new() { Picked = [5] }, new() { Picked = [0] }, new()] })!.Value.Message);
         Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(questions, new WebAnswerRequest { Questions = [new(), new(), new() { Picked = [0] }] })!.Value.Message);

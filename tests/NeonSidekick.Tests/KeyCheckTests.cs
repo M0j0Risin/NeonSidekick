@@ -264,6 +264,9 @@ public class KeyCheckTests
         Assert.Equal("Enter", sections[0].Rows[0].Key);
         Assert.Equal("Ctrl+Left / Right", sections[1].Rows[0].Key);
         Assert.Equal("PgUp / PgDn", sections[2].Rows[0].Key);
+        // A Mac's Option rows in their own groups (2026-11-24, the last-7 review's #5): the word moves in Editing, the jumps last in Transcript.
+        Assert.Equal(mac, sections[1].Rows.Any(r => r.Key == "Option+Left / Right"));
+        Assert.Equal(mac ? "Option+Up / Down" : "Ctrl+Up / Down", sections[2].Rows[^1].Key);
         Assert.Equal(mac ? "Ctrl+Alt+A" : "Ctrl+Alt+B", sections[5].Rows[0].Key);
         Assert.All(sections[4].Rows, r => Assert.StartsWith("Ctrl+", r.Key, StringComparison.Ordinal));
         Assert.All(sections[4].Rows, r => Assert.False(r.Key.StartsWith("Ctrl+Alt+", StringComparison.Ordinal)));
