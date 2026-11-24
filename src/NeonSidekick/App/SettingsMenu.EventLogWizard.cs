@@ -504,16 +504,23 @@ internal sealed partial class SettingsMenu
             int test = actions.Count;
             actions.Add(EventLogWizardTestRow);
             actions.Add(SqlWizardCancelRow);
-            var rows = actions.Select(Markup.Escape).Concat(EventLogWizardRows(draft)).ToList();
-            var page = new MenuPage(EventLogWizardTitle, rows, PickKeys) { Caption = EventLogWizardSummaryCaption };
+            var ruled = ConnectionWizardSummaryRows(actions, EventLogWizardRows(draft));
+            var rows = ruled.Rows;
+            var page = new MenuPage(EventLogWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = EventLogWizardSummaryCaption };
             if (!_pane.Enabled)
             {
                 Flow.Notice(EventLogWizardSummaryCaption);
             }
 
-            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } picked)
+            if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
                 return (false, false, null);
+            }
+
+            int picked = ruled.ItemOf(pickedRow);
+            if (picked < 0)
+            {
+                continue;
             }
 
             cursor = picked;

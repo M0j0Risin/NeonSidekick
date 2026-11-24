@@ -580,16 +580,23 @@ internal sealed partial class SettingsMenu
             int test = actions.Count;
             actions.Add(SqlWizardTestRow);
             actions.Add(SqlWizardCancelRow);
-            var rows = actions.Select(Markup.Escape).Concat(PostgresWizardRows(draft)).ToList();
-            var page = new MenuPage(PostgresWizardTitle, rows, PickKeys) { Caption = SqlWizardSummaryCaption };
+            var ruled = ConnectionWizardSummaryRows(actions, PostgresWizardRows(draft));
+            var rows = ruled.Rows;
+            var page = new MenuPage(PostgresWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = SqlWizardSummaryCaption };
             if (!_pane.Enabled)
             {
                 Flow.Notice(SqlWizardSummaryCaption);
             }
 
-            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } picked)
+            if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
                 return (false, false, null);
+            }
+
+            int picked = ruled.ItemOf(pickedRow);
+            if (picked < 0)
+            {
+                continue;
             }
 
             cursor = picked;

@@ -187,13 +187,18 @@ public partial class ChatScreenTests
         WriteUserTheme("dull.json", ThemeJson.File("\"name\": \"dull\"", ("dimmer", Theme.ToHex(ShippedThemes.Synthwave.Bg))));
         _settings.Update(d => { d.TtsOutput = false; d.Theme = "synthwave"; });
         PushLine("/theme edit dull");
+        for (int i = 0; i < (int)ThemeColorSlot.Dimmer; i++)
+        {
+            PushKeys(Keys.Down);                 // the band under the list is the cursor's role's since 2026-11-24: dimmer's row
+        }
+
         PushKeys(Keys.Escape);                   // no change: closes without asking
         PushLine("/theme edit synthwave-custom");
         PushLine("/exit");
 
         string output = await RunAsync();
 
-        Assert.Contains("⚠ dimmer on bg 1.0:1, wants 2.5", output);
+        Assert.Contains("⚠  dimmer on bg 1.0:1 (wants 2.5)", output);
         Assert.DoesNotContain(ThemeText.EditDiscardQuestion, output);
         Assert.Contains("  ✗ " + SettingsMenu.ThemeNameError("synthwave-custom", ThemeCatalog.Scan(_settings.ThemesDirectory).Names)[..40], output);
     }

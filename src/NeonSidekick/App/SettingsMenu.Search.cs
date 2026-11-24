@@ -123,10 +123,41 @@ internal sealed partial class SettingsMenu
     /// One row of a search or changed page: the setting's full name padded to <paramref name="width"/>, its value, and dim after it
     /// <paramref name="tail"/> (where it lives, or its default).
     /// </summary>
-    private string FoundRow(HelpRow row, AppSettingsData saved, int width, string? located, string tail) =>
-        Markup.Escape(row.Label.PadRight(width))
-        + Theme.ColorMarkup(Theme.Ink, FieldValue(row.Field, saved, _settings.ProfileDirectory, row.Field == SettingsField.WebBrowserPath ? located : null))
-        + Theme.DimMarkup("  " + tail);
+    private static string FoundRow(HelpRow row, string value, int width, int valueWidth, string tail) =>
+        Markup.Escape(PadCells(row.Label, width))
+        + Theme.ColorMarkup(Theme.Ink, value)
+        + Theme.DimMarkup(new string(' ', Math.Max(0, valueWidth - TextCells.Width(value))) + "  " + tail);
+
+    /// <summary><paramref name="row"/>'s value as its tab shows it, plain.</summary>
+    private string FoundValue(HelpRow row, AppSettingsData saved, string? located) =>
+        FieldValue(row.Field, saved, _settings.ProfileDirectory, row.Field == SettingsField.WebBrowserPath ? located : null);
+
+    /// <summary><paramref name="text"/> padded with blanks to <paramref name="cells"/> cells; as it is when it is that wide already.</summary>
+    private static string PadCells(string text, int cells) => text + new string(' ', Math.Max(0, cells - TextCells.Width(text)));
+
+    /// <summary>
+    /// The rows of a search or changed page in aligned columns (2026-11-24, the user's note): the name, the value and each tail's first
+    /// part (<paramref name="lead"/>, the changed page's <c>Default: …</c>; none on the search) padded to the widest across the rows, by
+    /// cell width, so the place column after them lines up.
+    /// </summary>
+    private List<string> FoundRows(IReadOnlyList<HelpRow> rows, AppSettingsData saved, string? located, Func<HelpRow, string?> lead, Func<HelpRow, string> place)
+    {
+        var values = rows.Select(r => FoundValue(r, saved, located)).ToList();
+        int width = rows.Count == 0 ? 0 : rows.Max(r => TextCells.Width(r.Label)) + LabelGap;
+        int valueWidth = values.Select(TextCells.Width).DefaultIfEmpty(0).Max();
+        var leads = rows.Select(lead).ToList();
+        int leadWidth = leads.Select(l => l is null ? 0 : TextCells.Width(l)).DefaultIfEmpty(0).Max();
+        return rows.Select((r, i) => FoundRow(r, values[i], width, valueWidth, (leads[i] is { } l ? PadCells(l, leadWidth) + "  " : "") + place(r))).ToList();
+    }
+
+    /// <summary>The pane label a <see cref="HelpRow.Pane"/> stands for, the glyph and its space as the crumbs have them (2026-11-24).</summary>
+    internal static string PaneLabel(string pane) => pane switch
+    {
+        "/tools" => ToolsText.Label,
+        "/skills" => SkillsText.Label,
+        "/mcp" => Mcp.McpText.Label,
+        _ => Title,
+    };
 
     /// <summary>
     /// The settings search (2026-10-04, the UI review: <c>/settings &lt;words&gt;</c>, or a letter typed on a settings tab): every
@@ -148,10 +179,20 @@ internal sealed partial class SettingsMenu
                 var saved = _settings.Current;
                 var found = NeonHelp.FindSettings(query);
                 string? located = _locateBrowser("");
-                int width = found.Count == 0 ? 0 : found.Max(r => r.Label.Length) + LabelGap;
                 IReadOnlyList<string> rows = found.Count > 0
-                    ? found.Select(r => FoundRow(r, saved, width, located, r.Pane + HelpText.PathSeparator + r.Place)).ToList()
+                    ? FoundRows(found, saved, located, _ => null, r => r.Pane + HelpText.PathSeparator + r.Place)
                     : [query.Length == 0 ? Theme.DimMarkup(SearchEmptyLine) : MenuFilter.NoMatchRow(query)];
+                if (!_pane.Enabled)
+                {
+                    // No pane on an interactive console (2026-11-24, the plan's check): the rows as lines, as other lists print without it.
+                    foreach (string line in rows)
+                    {
+                        Flow.Notice(Markup.Remove(line));
+                    }
+
+                    return changes;
+                }
+
                 var page = new MenuPage(Crumb(SearchCrumbLabel(query)), rows, SearchKeys)
                 {
                     Filter = query,
@@ -238,28 +279,63 @@ internal sealed partial class SettingsMenu
                 var saved = _settings.Current;
                 var changed = HelpLocation.Rows.Where(r => IsChanged(r.Field, saved, _settings.ProfileDirectory)).ToList();
                 string? located = _locateBrowser("");
-                int width = changed.Count == 0 ? 0 : changed.Max(r => r.Label.Length) + LabelGap;
-                IReadOnlyList<string> rows = changed.Count > 0
-                    ? changed.Select(r => FoundRow(r, saved, width, located, DefaultLabel + HelpLocation.Default(r.Field) + "  " + r.Pane + HelpText.PathSeparator + r.Place)).ToList()
-                    : [Theme.DimMarkup(NothingChangedLine)];
+                // A labeled heading per pane, in HelpLocation.Rows' order (2026-11-24, the user's pick), so each tail drops the pane; the
+                // columns aligned across the whole list. The cursor stays an item (a changed row); headings map to -1.
+                var found = FoundRows(changed, saved, located, r => DefaultLabel + HelpLocation.Default(r.Field), r => r.Place);
+                var rows = new List<string>();
+                var headings = new HashSet<int>();
+                var items = new List<int>();   // the changed row each page row is, -1 for a heading
+                foreach (var pane in changed.Select((r, i) => (r.Pane, Index: i)).GroupBy(p => p.Pane))
+                {
+                    headings.Add(rows.Count);
+                    rows.Add(SectionRule.Markup(PaneLabel(pane.Key), pane.Count().ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                    items.Add(-1);
+                    foreach (var one in pane)
+                    {
+                        rows.Add(found[one.Index]);
+                        items.Add(one.Index);
+                    }
+                }
+
+                if (changed.Count == 0)
+                {
+                    rows.Add(Theme.DimMarkup(NothingChangedLine));
+                    items.Add(-1);
+                }
+
+                if (!_pane.Enabled)
+                {
+                    // No pane on an interactive console (2026-11-24, the plan's check): the rows under their pane headings as lines.
+                    for (int i = 0; i < rows.Count; i++)
+                    {
+                        Flow.Notice(headings.Contains(i) ? Markup.Remove(rows[i]) : "  " + Markup.Remove(rows[i]));
+                    }
+
+                    return changes;
+                }
+
+                int ItemOf(int row) => row >= 0 && row < items.Count ? items[row] : -1;
                 var page = new MenuPage(Crumb(ChangedLabel), rows, ChangedKeys)
                 {
                     Buttons = changed.Count > 0 ? [new MenuButton(ResetButton, ResetKey)] : null,
                     Placeholder = changed.Count == 0,
-                    Footer = (_, row) => row < changed.Count ? FieldFooter(changed[row].Field) : null,
+                    Headings = headings.Count > 0 ? headings : null,
+                    Footer = (_, row) => ItemOf(row) is >= 0 and var at ? FieldFooter(changed[at].Field) : null,
                 };
-                if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+                int start = changed.Count == 0 ? 0 : items.IndexOf(Math.Clamp(cursor, 0, changed.Count - 1));
+                if (await _pane.PickAsync(page, start, cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
                     return changes;
                 }
 
-                cursor = pick.Row;
-                if (pick.Row >= changed.Count)
+                int item = ItemOf(pick.Row);
+                if (item < 0 || item >= changed.Count)
                 {
                     continue;
                 }
 
-                var field = changed[pick.Row].Field;
+                cursor = item;
+                var field = changed[item].Field;
                 if (_reply.Running && RefusedMidTurn(field))
                 {
                     Sink.Notice(NotWhileReplyRunsNotice);

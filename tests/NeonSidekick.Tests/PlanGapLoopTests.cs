@@ -6,6 +6,7 @@ using NeonSidekick.Llm.Tools;
 using NeonSidekick.Plans;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
@@ -412,6 +413,16 @@ public class PlanGapLoopTests : IDisposable
         Assert.Equal(PlanReviewer.Any, (PlanReviewer)PlanApprovalMenu.ReviewerHotkeys['y']);
         Assert.Equal(PlanReviewer.Confirm, (PlanReviewer)PlanApprovalMenu.ReviewerHotkeys['c']);   // 2026-10-17; the main page's c (Cancel plan) is its own map
         Assert.Equal(4, PlanApprovalMenu.ReviewerPage(new PlanPresentation("G", "p.md", 1, "")).Rows.Count);
+
+        // The page's rules (2026-11-24, the user's ask): approve / keep refining and close gaps / cancel, each letter at its page row.
+        Assert.Equal(8, PlanApprovalMenu.PageRows.Count);
+        Assert.Equal(SectionRule.Bare, PlanApprovalMenu.PageRows[3]);
+        Assert.Equal(SectionRule.Bare, PlanApprovalMenu.PageRows[6]);
+        Assert.All(PlanApprovalMenu.Hotkeys, key => Assert.Equal(PlanApprovalMenu.Choices[key.Value], PlanApprovalMenu.Choices[PlanApprovalMenu.ChoiceOfRow(PlanApprovalMenu.PageHotkeys[key.Key])]));
+        Assert.Equal(4, PlanApprovalMenu.PageHotkeys['r']);
+        Assert.Equal(7, PlanApprovalMenu.PageHotkeys['c']);
+        Assert.Equal(PlanApprovalMenu.Rows[PlanApprovalMenu.StartRow], PlanApprovalMenu.PageRows[PlanApprovalMenu.StartPageRow]);
+        Assert.Equal(-1, PlanApprovalMenu.ChoiceOfRow(3));
     }
 
     // ── present_plan while a pass runs ──────────────────────────────────────

@@ -61,6 +61,21 @@ public partial class ChatScreenTests
         Assert.Contains(ProjectInitText.WrittenResult(ProjectFile.PrimaryFileName), ToolResultText(_chat.Requests[1]));
     }
 
+    /// <summary>A new file's View: the draft rendered on a first tab, its text on Source (2026-11-24, the user's ask).</summary>
+    [Fact]
+    public async Task ProjectInit_ViewOfANewDraft_HasRenderedAndSourceTabs()
+    {
+        ProjectInitFixture([[Keys.Char('v'), Keys.Enter, Keys.Escape, Keys.Escape]], Line("/project-init"), Line("/exit"));
+        _chat.Enqueue(NotesCall("n1"));
+        _chat.EnqueueText("Left as it was.");
+
+        string output = await RunAsync();
+
+        Assert.False(File.Exists(NotesPath));
+        Assert.Contains(SkillsText.RenderedTab, output);
+        Assert.Contains(SkillsText.SourceTab, output);
+    }
+
     [Fact]
     public async Task ProjectInit_EscOnThePane_WritesNothing()
     {

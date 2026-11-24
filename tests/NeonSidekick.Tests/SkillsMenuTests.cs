@@ -42,7 +42,10 @@ public class SkillsMenuTests : IDisposable
     private ProjectSkillTrust? _projectTrust;
     private string? _working;
     private readonly List<string> _viewed = new();
-    private readonly List<Spectre.Console.Rendering.IRenderable> _viewedContent = new();
+    private readonly List<Spectre.Console.Rendering.IRenderable> _viewedContent = new();   // each View's Source tab (its last)
+
+    // Each View's tabs (2026-11-24): Rendered then Source, or one plain tab.
+    private readonly List<IReadOnlyList<InfoTab>> _viewedTabs = new();
     /// <summary>What a View does besides recording it (2026-11-23, review #44: an edit made while the question is open).</summary>
     private Action<string>? _onView;
     /// <summary>The conversation the menu reads loaded skills from (2026-11-23, review #5); null, none.</summary>
@@ -156,7 +159,7 @@ public class SkillsMenuTests : IDisposable
         var settings = Settings(pane, keys, menuPane);
         var menu = new SkillsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, _usage,
             versions: _versions, restore: _versions is null ? null : Restore, forget: _forget,
-            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, content, _) => { _viewed.Add(label); _viewedContent.Add(content); _onView?.Invoke(label); return Task.CompletedTask; },
+            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, tabs, _) => { _viewed.Add(label); _viewedContent.Add(tabs[^1].Content()); _viewedTabs.Add(tabs); _onView?.Invoke(label); return Task.CompletedTask; },
             bin: _bin is null ? null : () => _bin, session: _session);
         pane.Show();
         return (menu, pane, settings);
@@ -606,6 +609,16 @@ public class SkillsMenuTests : IDisposable
         Assert.Contains(SkillsText.FilesChangedViewNote, Shown(0));
         Assert.Contains("The repo's steps.", Shown(0));
         Assert.DoesNotContain(SkillsText.FilesChangedViewNote, Shown(1));
+
+        // Rendered first, the exact text on Source (2026-11-24, the user's ask); a changed SKILL.md is its diff, one tab.
+        Assert.Equal([SkillsText.RenderedTab, SkillsText.SourceTab], _viewedTabs[0].Select(t => t.Title));
+        Assert.Single(_viewedTabs[1]);
+        var rendered = new TestConsole();
+        rendered.Profile.Width = 200;
+        rendered.Write(_viewedTabs[0][0].Content());
+        Assert.Contains(SkillsText.FilesChangedViewNote, rendered.Output);
+        Assert.Contains("Ships it.", rendered.Output);
+        Assert.DoesNotContain("---", rendered.Output.Split('\n')[0]);
     }
 
     /// <summary>The trust question's Cancel, and Esc, save nothing (2026-11-23).</summary>

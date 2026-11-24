@@ -36,6 +36,16 @@ internal sealed partial class SettingsMenu
 
     private const int RoleColumn = 10;
 
+    /// <summary>
+    /// The editor's band rows (2026-11-24, the tidier pane): the cursor's role note in full and its contrast lines. One number for the page's
+    /// <see cref="MenuPage.FooterRows"/> and <see cref="BandLines"/>, so the band never hands the pane more lines than fit (whose own
+    /// <c>+n more</c> would sit under <see cref="ThemeText.ChecksMore"/>). The left side padded blank rows beside the preview anyway.
+    /// </summary>
+    internal const int ThemeEditBandRows = 8;
+
+    /// <summary>The most rows the band's role note takes.</summary>
+    private const int BandNoteRows = 3;
+
     private static readonly IReadOnlyList<MenuButton> EditButtons =
         [new(ThemeText.SaveButton, 's'), new(ThemeText.ResetButton, 'r'), new(ThemeText.DiscardButton, 'd')];
 
@@ -236,14 +246,21 @@ internal sealed partial class SettingsMenu
         {
             // Once a pass (#151): the preview through the file's own styles and gradient (#38, #99), its band and the settings it reads.
             var current = Preview(palette, data, working);
-            string band = ChecksBand(current);
+            var problems = ThemeChecks.Problems(current);
             var effective = EffectiveNow();
-            var page = new MenuPage(ThemeText.EditTitle(palette.Name), EditRows(current, original), ThemeText.EditHint)
+            // The band (2026-11-24, the user's pick "Notes in the band"): the cursor's role note whole, then its contrast; a resize rebuilds the page.
+            int bandWidth = _pane.ListWidth(side: true) - TextCells.Width(MenuPane.NoPointer);
+            var page = new MenuPage(ThemeText.EditTitle(palette.Name), EditRows(current, original, problems), ThemeText.EditHint)
             {
                 Buttons = EditButtons,
                 Nudges = true,
                 Side = (_, width, rows) => ThemePreview.Lines(current, width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, effective.ThemedBackground, effective.DiffCollapseCount),
-                Footer = (_, _) => new MenuFooter(band),
+                Footer = (_, row) => row >= 0 && row < ThemeKeys.Colors.Count
+                    ? new MenuFooter(string.Join('\n', BandLines((ThemeColorSlot)row, problems, bandWidth, ThemeEditBandRows))) { KeepLines = true }
+                    : null,
+                FooterRows = ThemeEditBandRows,
+                // The whole mock screen beside the list (2026-11-24): on a tall window its blank rows show and the notices stop crowding.
+                SideRows = ThemePreview.ScreenRows(effective.DiffCollapseCount) + MenuPane.FooterRuleRows + ThemeEditBandRows,
             };
             if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
             {
@@ -405,26 +422,166 @@ internal sealed partial class SettingsMenu
         return root.ToJsonString(RelaxedIndented).Replace("\n", newline, StringComparison.Ordinal) + newline;
     }
 
-    /// <summary>One row per color role: the role, its swatch framed on the page's color (#149: a <c>bg</c> swatch shows), its hex, a mark when changed, and what it colors.</summary>
-    private static List<string> EditRows(ThemePalette current, IReadOnlyList<Color> original)
+    /// <summary>
+    /// One row per color role: the role, its swatch framed on the page's color (#149: a <c>bg</c> swatch shows), its hex, then two one-cell mark
+    /// columns, <c>•</c> when changed and (2026-11-24) <c>⚠</c> in <see cref="Theme.WarnText"/> when a pair it is in reads under its bar
+    /// (<paramref name="problems"/>, the pass's), a space for an absent mark so both columns line up. What the role colors lives in the band now
+    /// (<see cref="BandLines"/>), whole: on the row it was cut to a few cells.
+    /// </summary>
+    private static List<string> EditRows(ThemePalette current, IReadOnlyList<Color> original, IReadOnlyList<ContrastProblem> problems)
     {
         var rows = new List<string>(ThemeKeys.Colors.Count);
         string bg = Theme.ToHex(current.Bg);
         string dim = Theme.DimText.ToMarkup();
+        string warn = Theme.WarnText.ToMarkup();
+        string blank = new(' ', TextCells.Width("⚠"));
         for (int i = 0; i < ThemeKeys.Colors.Count; i++)
         {
-            var color = current.ColorOf((ThemeColorSlot)i);
+            var slot = (ThemeColorSlot)i;
+            var color = current.ColorOf(slot);
             string changed = color.Equals(original[i]) ? " " : "•";
-            rows.Add(Markup.Escape(ThemeKeys.Colors[i].PadRight(RoleColumn)) + $" [{dim}]▕[/][{Theme.ToHex(color)} on {bg}]██[/][{dim}]▏[/] " + Theme.ToHex(color) + " " + changed + "  "
-                + $"[{dim}]" + Markup.Escape(ThemeText.RoleNotes[i]) + "[/]");
+            bool poor = problems.Any(p => p.Roles?.Contains(slot) == true);
+            rows.Add(Markup.Escape(ThemeKeys.Colors[i].PadRight(RoleColumn)) + $" [{dim}]▕[/][{Theme.ToHex(color)} on {bg}]██[/][{dim}]▏[/] " + Theme.ToHex(color) + " " + changed + " "
+                + (poor ? $"[{warn}]⚠[/]" : blank));
         }
 
         return rows;
     }
 
-    /// <summary>The band under the list: the pairs under their bars, or that all are met.</summary>
-    private static string ChecksBand(ThemePalette palette) =>
-        ThemeChecks.Problems(palette) is { Count: > 0 } problems ? ThemeText.ChecksWarning(problems) : ThemeText.ChecksOk;
+    /// <summary>
+    /// The band under the list for <paramref name="role"/> (2026-11-24, the user's pick "Notes in the band"): <c>role: what it colors</c> wrapped to
+    /// <paramref name="width"/> (at most three rows), then its contrast into what's left of <paramref name="rows"/>:
+    /// <list type="bullet">
+    /// <item>every pair met: <c>✓  Contrast OK: every pair meets its bar.</c>;</item>
+    /// <item>the role in pairs under their bars: those, one a line, the furthest short of its bar first, a diff slab's code colors folded into one
+    /// line at the slab's worst (<see cref="ThemeText.ChecksCodeSlab"/>), then the pairs no role marks (a style on its own ground);</item>
+    /// <item>the role meeting its bars while others don't: <see cref="ThemeText.ChecksRoleOk"/>, then the roleless pairs.</item>
+    /// </list>
+    /// Lines that don't fit end on <see cref="ThemeText.ChecksMore"/> with how many were left out. A wrapped line hangs under its text, past the
+    /// glyph's two spaces. Plain text: the band is one style. Pure.
+    /// </summary>
+    internal static IReadOnlyList<string> BandLines(ThemeColorSlot role, IReadOnlyList<ContrastProblem> problems, int width, int rows)
+    {
+        ArgumentNullException.ThrowIfNull(problems);
+        var band = new List<string>();
+        if (width <= 0 || rows <= 0)
+        {
+            return band;
+        }
+
+        string name = ThemeKeys.Colors[(int)role];
+        band.AddRange(MenuPane.CaptionRows(name + ": " + ThemeText.RoleNotes[(int)role], width, Math.Min(BandNoteRows, rows)));
+        int room = rows - band.Count;
+        if (room <= 0)
+        {
+            return band;
+        }
+
+        List<string> lines;
+        if (problems.Count == 0)
+        {
+            lines = [ThemeText.Mark("✓") + ThemeText.ChecksOk];
+        }
+        else
+        {
+            var own = problems.Where(p => p.Roles?.Contains(role) == true).ToList();
+            var roleless = problems.Where(p => p.Roles is null).ToList();
+            lines = own.Count > 0 ? PairLines(own) : [ThemeText.ChecksRoleOk(name, problems.Count)];
+            lines.AddRange(PairLines(roleless));
+        }
+
+        var wrapped = lines.Select(line => Hang(line, width)).ToList();
+        if (wrapped.Sum(w => w.Count) <= room)
+        {
+            band.AddRange(wrapped.SelectMany(w => w));
+            return band;
+        }
+
+        int used = 0;
+        int shown = 0;
+        while (shown < wrapped.Count && used + wrapped[shown].Count <= room - 1)
+        {
+            band.AddRange(wrapped[shown]);
+            used += wrapped[shown].Count;
+            shown++;
+        }
+
+        band.AddRange(Hang(ThemeText.ChecksMore(wrapped.Count - shown), width).Take(1));
+        return band;
+    }
+
+    /// <summary><paramref name="problems"/>' band lines, worst first (<c>Ratio / Target</c>, lowest first), a slab's code colors one line at its worst.</summary>
+    private static List<string> PairLines(IReadOnlyList<ContrastProblem> problems)
+    {
+        static double Short(ContrastProblem p) => p.Ratio / p.Target;
+        var entries = problems.Where(p => p.Slab is null).Select(p => (Short(p), ThemeText.ChecksPair(p))).ToList();
+        foreach (var slab in problems.Where(p => p.Slab is not null).GroupBy(p => p.Slab!))
+        {
+            var worst = slab.MinBy(Short)!;
+            entries.Add((Short(worst), ThemeText.ChecksCodeSlab(slab.Count(), slab.Key, worst)));
+        }
+
+        return entries.OrderBy(e => e.Item1).Select(e => e.Item2).ToList();
+    }
+
+    /// <summary><paramref name="line"/> wrapped to <paramref name="width"/>, its glyph and two spaces kept and the rest hanging under the text.</summary>
+    private static List<string> Hang(string line, int width)
+    {
+        int lead = line.IndexOf("  ", StringComparison.Ordinal) is >= 0 and var at ? at + 2 : 0;
+        int indent = TextCells.Width(line[..lead]);
+        if (indent >= width)
+        {
+            return [.. MenuPane.CaptionRows(line, width, int.MaxValue)];
+        }
+
+        var rows = KeepSpacesWrap(line[lead..], width - indent);
+        return rows.Select((row, i) => (i == 0 ? line[..lead] : new string(' ', indent)) + row).ToList();
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> wrapped at spaces into rows of <paramref name="width"/> cells, keeping a double space inside a row (2026-11-24:
+    /// <c>· ⚠  n other pairs</c>, where the caption wrap would close it up); spaces at a break go, a word wider than a row is cut.
+    /// </summary>
+    private static List<string> KeepSpacesWrap(string text, int width)
+    {
+        var rows = new List<string>();
+        string row = "";
+        foreach (string word in text.Split(' '))
+        {
+            if (row.Length == 0)
+            {
+                if (word.Length == 0)
+                {
+                    continue;
+                }
+            }
+            else if (TextCells.Width(row) + 1 + TextCells.Width(word) <= width)
+            {
+                row += " " + word;
+                continue;
+            }
+            else
+            {
+                rows.Add(row.TrimEnd());
+                row = "";
+                if (word.Length == 0)
+                {
+                    continue;
+                }
+            }
+
+            var cut = MenuPane.CaptionRows(word, width, int.MaxValue);
+            rows.AddRange(cut.Take(cut.Count - 1));
+            row = cut[^1];
+        }
+
+        if (row.TrimEnd().Length > 0)
+        {
+            rows.Add(row.TrimEnd());
+        }
+
+        return rows;
+    }
 
     /// <summary><paramref name="palette"/> with <paramref name="colors"/> as its fifteen roles, in <see cref="ThemeColorSlot"/> order.</summary>
     internal static ThemePalette WithColors(ThemePalette palette, IReadOnlyList<Color> colors) => palette with
@@ -455,6 +612,7 @@ internal sealed partial class SettingsMenu
             var page = new MenuPage(ThemeText.PickerTitle(current.Name, ThemeKeys.Colors[(int)slot], Theme.ToHex(was)), PickerRows(hsl, candidate, current.Bg, PickerBarWidth()), ThemeText.PickerHint)
             {
                 Nudges = true,
+                SideRows = ThemePreview.ScreenRows(effective.DiffCollapseCount),   // the whole mock screen (2026-11-24); no footer here
                 Side = (_, width, rows) => ThemePreview.Lines(shown, width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, effective.ThemedBackground, effective.DiffCollapseCount),
             };
             if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)

@@ -57,6 +57,25 @@ public sealed class PlanApprovalMenu
         Markup.Escape(PlanText.CancelRow),
     ];
 
+    /// <summary>
+    /// The page's rows ruled (2026-11-24, the user's ask): the three approves, a rule, keep refining and close gaps, a rule, cancel.
+    /// <see cref="Rows"/>, <see cref="Choices"/>, <see cref="Hotkeys"/> and <see cref="StartRow"/> stay item lists; the page uses these.
+    /// Built at each use, so the rules take the theme in force.
+    /// </summary>
+    private static RuledRows Ruled => RuledRows.Of([Rows.Take(3).ToList(), Rows.Skip(3).Take(2).ToList(), Rows.Skip(5).ToList()]);
+
+    /// <summary>The page's rows: <see cref="Rows"/> with the rules between their groups.</summary>
+    public static IReadOnlyList<string> PageRows => Ruled.Rows;
+
+    /// <summary><see cref="Hotkeys"/> at their page rows.</summary>
+    public static IReadOnlyDictionary<char, int> PageHotkeys => Ruled.Hotkeys(Hotkeys);
+
+    /// <summary><see cref="StartRow"/>'s page row.</summary>
+    public static int StartPageRow => Ruled.RowOf(StartRow);
+
+    /// <summary>The item (index into <see cref="Choices"/>) a page row stands for; -1 for a rule.</summary>
+    public static int ChoiceOfRow(int row) => Ruled.ItemOf(row);
+
     /// <summary>The reviewer page for <paramref name="plan"/>: who looks for the gaps.</summary>
     public static MenuPage ReviewerPage(PlanPresentation plan)
     {
@@ -84,10 +103,11 @@ public sealed class PlanApprovalMenu
     public static MenuPage Page(PlanPresentation plan, string? checkLine = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
-        return new MenuPage(PlanText.ApprovalTitle, Rows, PlanText.ApprovalKeys)
+        return new MenuPage(PlanText.ApprovalTitle, PageRows, PlanText.ApprovalKeys)
         {
             Caption = PlanText.Caption(plan) + (checkLine is { Length: > 0 } line ? " · " + PlanText.RalphCaptionLead + line : ""),
-            Hotkeys = Hotkeys,
+            Hotkeys = PageHotkeys,
+            Headings = Ruled.Headings,
         };
     }
 
@@ -105,13 +125,13 @@ public sealed class PlanApprovalMenu
             var page = Page(plan, _checkLine(plan));
             while (true)
             {
-                var pick = await _pane.PickAsync(page, StartRow, cancellationToken).ConfigureAwait(false);
-                if (pick is not { } picked || picked.Row < 0 || picked.Row >= Choices.Count)
+                var pick = await _pane.PickAsync(page, StartPageRow, cancellationToken).ConfigureAwait(false);
+                if (pick is not { } picked || ChoiceOfRow(picked.Row) is var at && (at < 0 || at >= Choices.Count))
                 {
                     return new PlanVerdict(PlanChoice.Refine);
                 }
 
-                var choice = Choices[picked.Row];
+                var choice = Choices[at];
                 if (choice == PlanChoice.CloseGaps)
                 {
                     if (!_advisorsOffered())
@@ -139,7 +159,7 @@ public sealed class PlanApprovalMenu
                     return new PlanVerdict(choice);
                 }
 
-                var typed = await _pane.EditAsync(page with { Hint = PlanText.FeedbackKeys, Caption = PlanText.FeedbackPrompt }, StartRow, _input, "", allowEmpty: true, cancellationToken).ConfigureAwait(false);
+                var typed = await _pane.EditAsync(page with { Hint = PlanText.FeedbackKeys, Caption = PlanText.FeedbackPrompt }, StartPageRow, _input, "", allowEmpty: true, cancellationToken).ConfigureAwait(false);
                 if (typed is InputResult.Submitted submitted)
                 {
                     string feedback = submitted.Text.ReplaceLineEndings(" ").Trim();

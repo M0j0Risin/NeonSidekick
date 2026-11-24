@@ -215,9 +215,10 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var words = DockerServerWords.Sorted(_settings.Current.DockerServerMatchWords);
-            IReadOnlyList<string> rows = [Markup.Escape(AddDockerWordRow), .. words.Select(Markup.Escape)];
-            var page = new MenuPage(Crumb(title), rows, _pane.Enabled ? ForbiddenPaneKeys : ForbiddenKeys) { Footer = (_, row) => row > 0 && row <= words.Count ? new MenuFooter(words[row - 1], DockerWordNote) : null };
-            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
+            // A rule between the add row and the entries (2026-11-24, the user's ask); the cursor and the picks stay items.
+            var ruled = RuledRows.Of([[Markup.Escape(AddDockerWordRow)], words.Select(Markup.Escape).ToList()]);
+            var page = new MenuPage(Crumb(title), ruled.Rows, _pane.Enabled ? ForbiddenPaneKeys : ForbiddenKeys) { Headings = ruled.Headings, Footer = (_, row) => ruled.ItemOf(row) is var at && at > 0 && at <= words.Count ? new MenuFooter(words[at - 1], DockerWordNote) : null };
+            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
             {
                 if (!changed)
                 {
@@ -227,8 +228,14 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
-            cursor = pick.Row;
-            if (pick.Remove && pick.Row == 0)
+            int item = ruled.ItemOf(pick.Row);
+            if (item < 0)
+            {
+                continue;
+            }
+
+            cursor = item;
+            if (pick.Remove && item == 0)
             {
                 continue;   // Delete on the add row: nothing to remove
             }
@@ -239,9 +246,9 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
-            if (pick.Row > 0)
+            if (item > 0)
             {
-                string word = words[pick.Row - 1];
+                string word = words[item - 1];
                 var removing = new MenuPage(RemoveDockerWordQuestion(word), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
                 if (await PickAsync(removing, 0, cancellationToken).ConfigureAwait(false) != 1)
                 {

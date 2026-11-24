@@ -244,4 +244,62 @@ public class KeyCheckTests
         var smoke = SmokeChecks.ProbeCarbonHotkeys();
         Assert.True(smoke.Passed, smoke.Detail);
     }
+    /// <summary>
+    /// /help › Keys in six labeled groups (2026-11-24, the user's ask): every row of both lists, voice on and off, has a group, the groups come
+    /// in order with none coming back once another starts, and flattened they are the flat list /keycheck and neon_help read.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void KeySections_GroupEveryRow_InOrder_AndFlattenToKeyRows(bool mac, bool voice)
+    {
+        var sections = ChatScreen.KeySections(voice, ConsoleKey.F4, voice, "hey neon", mac);
+
+        Assert.Equal(ChatScreen.KeyRows(voice, ConsoleKey.F4, voice, "hey neon", mac), sections.SelectMany(s => s.Rows));
+        Assert.Equal(sections.Select(s => s.Group).Order(), sections.Select(s => s.Group));
+        Assert.Equal(sections.Count, sections.Select(s => s.Group).Distinct().Count());
+        Assert.Equal(6, sections.Count);
+        Assert.Equal("Enter", sections[0].Rows[0].Key);
+        Assert.Equal("Ctrl+Left / Right", sections[1].Rows[0].Key);
+        Assert.Equal("PgUp / PgDn", sections[2].Rows[0].Key);
+        Assert.Equal(mac ? "Ctrl+Alt+A" : "Ctrl+Alt+B", sections[5].Rows[0].Key);
+        Assert.All(sections[4].Rows, r => Assert.StartsWith("Ctrl+", r.Key, StringComparison.Ordinal));
+        Assert.All(sections[4].Rows, r => Assert.False(r.Key.StartsWith("Ctrl+Alt+", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void KeySections_VoiceOff_TalkAndCaptureHoldsF9AndF10()
+    {
+        var talk = ChatScreen.KeySections(false, ConsoleKey.F4, false, "", mac: false).Single(s => s.Group == KeyGroup.TalkAndCapture);
+
+        Assert.Equal(["F9", "F10"], talk.Rows.Select(r => r.Key));
+    }
+
+    /// <summary>The Keys tab draws the six headings in order, and the command column starts in the same cell across groups.</summary>
+    [Fact]
+    public void KeysTab_DrawsTheHeadings_AndOneCommandColumn()
+    {
+        var console = new Spectre.Console.Testing.TestConsole();
+        console.Profile.Width = 140;
+        console.Write(ChatScreen.KeysTab(ChatScreen.KeySections(false, ConsoleKey.F4, false, "", mac: false)));
+        string drawn = console.Output;
+
+        var at = KeyCheckText.GroupNames.Select(name => drawn.IndexOf("── " + name + " ", StringComparison.Ordinal)).ToList();
+        Assert.All(at, i => Assert.True(i >= 0));
+        Assert.Equal(at.Order(), at);
+        var lines = drawn.Split('\n');
+        int camera = lines.Single(l => l.StartsWith("F9 ", StringComparison.Ordinal)).IndexOf("/camera snap", StringComparison.Ordinal);
+        int terminal = lines.Single(l => l.StartsWith("Ctrl+. ", StringComparison.Ordinal)).IndexOf("/terminal", StringComparison.Ordinal);
+        Assert.Equal(camera, terminal);
+
+        var narrow = new Spectre.Console.Testing.TestConsole();
+        narrow.Profile.Width = 80;
+        narrow.Write(ChatScreen.KeysTab(ChatScreen.KeySections(false, ConsoleKey.F4, false, "", mac: false)));
+        var narrowLines = narrow.Output.Split('\n');
+        Assert.Equal(
+            narrowLines.Single(l => l.StartsWith("Ctrl+H ", StringComparison.Ordinal)).IndexOf("/help", StringComparison.Ordinal),
+            narrowLines.Single(l => l.StartsWith("Ctrl+Alt+Q ", StringComparison.Ordinal)).IndexOf("/queue clear", StringComparison.Ordinal));
+    }
 }

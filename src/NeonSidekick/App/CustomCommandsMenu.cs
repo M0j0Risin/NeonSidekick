@@ -301,13 +301,15 @@ internal sealed class CustomCommandsMenu
     private async Task<(string? Use, bool Changed)> CommandPageAsync(CustomCommand command, CancellationToken cancellationToken)
     {
         string[] words = [CustomCommandText.UseWord, CustomCommandText.MoveWord, CustomCommandText.CopyWord, CustomCommandText.RenameWord, CustomCommandText.EditWord, CustomCommandText.DeleteWord];
-        var page = new MenuPage(CustomCommandText.PageTitle(command.Word), words.Select(Markup.Escape).ToList(), SettingsMenu.PickKeys) { Caption = command.Description };
-        if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var row } || row < 0 || row >= words.Length)
+        // Rules between use, the file's changes and delete (2026-11-24, the user's ask); the pick maps back to the word.
+        var ruled = RuledRows.Of([[Markup.Escape(words[0])], words[1..5].Select(Markup.Escape).ToList(), [Markup.Escape(words[5])]]);
+        var page = new MenuPage(CustomCommandText.PageTitle(command.Word), ruled.Rows, SettingsMenu.PickKeys) { Caption = command.Description, Headings = ruled.Headings };
+        if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var row } || ruled.ItemOf(row) is var item && (item < 0 || item >= words.Length))
         {
             return (null, false);
         }
 
-        return words[row] switch
+        return words[item] switch
         {
             CustomCommandText.UseWord => (command.Word + " ", false),
             CustomCommandText.MoveWord => (null, await MoveAsync(command, command.Scope, otherScope: true, cancellationToken).ConfigureAwait(false)),

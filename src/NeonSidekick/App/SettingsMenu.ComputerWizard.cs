@@ -610,16 +610,23 @@ internal sealed partial class SettingsMenu
         {
             var actions = new List<string> { SqlWizardSaveOfferedRow, ComputerWizardSaveHiddenRow, ComputerWizardTestRow, SqlWizardCancelRow };
             int test = 2;
-            var rows = actions.Select(Markup.Escape).Concat(ComputerWizardRows(spec, draft)).ToList();
-            var page = new MenuPage(Crumb(FieldName(spec.AddField)), rows, PickKeys) { Caption = ComputerWizardSummaryCaption };
+            var ruled = ConnectionWizardSummaryRows(actions, ComputerWizardRows(spec, draft));
+            var rows = ruled.Rows;
+            var page = new MenuPage(Crumb(FieldName(spec.AddField)), rows, PickKeys) { Headings = ruled.Headings, Caption = ComputerWizardSummaryCaption };
             if (!_pane.Enabled)
             {
                 Flow.Notice(ComputerWizardSummaryCaption);
             }
 
-            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } picked)
+            if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
                 return (false, false, null);
+            }
+
+            int picked = ruled.ItemOf(pickedRow);
+            if (picked < 0)
+            {
+                continue;
             }
 
             cursor = picked;

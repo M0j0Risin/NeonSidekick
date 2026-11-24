@@ -55,8 +55,11 @@ internal sealed partial class SettingsMenu
             var shownFacts = facts.Where(f => filter.Length == 0 || f.Term.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
             var guesses = facts.Where(f => f.Source == ShoppingSources.Guess).ToList();
 
-            List<string> aisleRows = [Markup.Escape(ShoppingText.AddLocationRow), .. locations.Select((l, i) => Markup.Escape(ShoppingText.LayoutLocationRow(i + 1, l, facts.Count(f => f.LocationId == l.Id))))];
-            List<string> sectionRows = [Markup.Escape(ShoppingText.AddSectionRow), .. sections.Select(s => Markup.Escape(ShoppingText.LayoutSectionRow(s, locations.Count(l => l.SectionId == s.Id), facts.Count(f => f.SectionId == s.Id || (f.SectionId is null && locations.Any(l => l.Id == f.LocationId && l.SectionId == s.Id))))))];
+            // A rule between each add row and its entries on Aisles and Sections (2026-11-24, the user's ask); those tabs keep their cursor and
+            // picks as items through their ruled rows.
+            var aisleRows = RuledRows.Of([[Markup.Escape(ShoppingText.AddLocationRow)], locations.Select((l, i) => Markup.Escape(ShoppingText.LayoutLocationRow(i + 1, l, facts.Count(f => f.LocationId == l.Id)))).ToList()]);
+            var sectionRows = RuledRows.Of([[Markup.Escape(ShoppingText.AddSectionRow)], sections.Select(s => Markup.Escape(ShoppingText.LayoutSectionRow(s, locations.Count(l => l.SectionId == s.Id), facts.Count(f => f.SectionId == s.Id || (f.SectionId is null && locations.Any(l => l.Id == f.LocationId && l.SectionId == s.Id)))))).ToList()]);
+            RuledRows? RuledOf(int t) => t == AislesTabIndex ? aisleRows : t == SectionsTabIndex ? sectionRows : null;
             List<string> factRows = shownFacts.Count > 0
                 ? shownFacts.Select(f => Markup.Escape(ShoppingText.FactRow(f, PlaceOf(f)))).ToList()
                 : [filter.Length > 0 ? MenuFilter.NoMatchRow(filter) : Theme.DimMarkup(ShoppingText.NoFactsRow)];
@@ -65,8 +68,8 @@ internal sealed partial class SettingsMenu
                 : [Theme.DimMarkup(ShoppingText.NoGuessesRow)];
             var tabs = new MenuTab[]
             {
-                new(ShoppingText.AislesTab, aisleRows) { Hint = ShoppingText.AislesKeys, Moves = locations.Count > 0 },   // Moves takes Delete too
-                new(ShoppingText.SectionsTab, sectionRows) { Hint = ShoppingText.LayoutKeys, Removes = sections.Count > 0 },
+                new(ShoppingText.AislesTab, aisleRows.Rows) { Headings = aisleRows.Headings, Hint = ShoppingText.AislesKeys, Moves = locations.Count > 0 },   // Moves takes Delete too
+                new(ShoppingText.SectionsTab, sectionRows.Rows) { Headings = sectionRows.Headings, Hint = ShoppingText.LayoutKeys, Removes = sections.Count > 0 },
                 new(ShoppingText.FactsTab, factRows)
                 {
                     Hint = MenuFilter.Hint(ShoppingText.FactsKeys, filter),
@@ -77,14 +80,20 @@ internal sealed partial class SettingsMenu
                 },
                 new(ShoppingText.GuessesTitle(guesses.Count), guessRows) { Hint = ShoppingText.LayoutKeys, Removes = guesses.Count > 0, Placeholder = guesses.Count == 0 },
             };
-            var page = MenuPage.Tabbed(Crumb(ShoppingText.LayoutTitle(shop)), tabs, tab, ShoppingText.LayoutKeys) with { TabCursors = [locations.Count > 0 ? 1 : 0, sections.Count > 0 ? 1 : 0, 0, 0] };
-            if (await _pane.PickAsync(page, cursor < 0 ? (page.TabCursors![tab]) : cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
+            var page = MenuPage.Tabbed(Crumb(ShoppingText.LayoutTitle(shop)), tabs, tab, ShoppingText.LayoutKeys) with { TabCursors = [aisleRows.RowOf(locations.Count > 0 ? 1 : 0), sectionRows.RowOf(sections.Count > 0 ? 1 : 0), 0, 0] };
+            if (await _pane.PickAsync(page, cursor < 0 ? (page.TabCursors![tab]) : RuledOf(tab)?.RowOf(cursor) ?? cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
             {
                 return;
             }
 
             tab = pick.Tab;
-            cursor = pick.Row;
+            int row = RuledOf(tab)?.ItemOf(pick.Row) ?? pick.Row;
+            if (row < 0 && pick.Filter is null)
+            {
+                continue;
+            }
+
+            cursor = row;
 
             if (pick.Filter is { } typed)
             {
@@ -96,9 +105,9 @@ internal sealed partial class SettingsMenu
             if (pick.Move != 0)
             {
                 // Shift+↑/↓, Shift+Home/End on Aisles (2026-10-16, the user's ask): the aisle along the walk, the cursor going with it.
-                if (tab == AislesTabIndex && pick.Row > 0 && pick.Row - 1 < locations.Count)
+                if (tab == AislesTabIndex && row > 0 && row - 1 < locations.Count)
                 {
-                    var moving = locations[pick.Row - 1];
+                    var moving = locations[row - 1];
                     Say(list.MoveLocation(shop, moving, pick.Move));
                     int now = store.Locations(shop.Id).ToList().FindIndex(l => l.Id == moving.Id);
                     cursor = now >= 0 ? now + 1 : cursor;
@@ -112,9 +121,9 @@ internal sealed partial class SettingsMenu
                 // Delete (2026-10-16): the tab's own remove, its action page skipped; the add rows and the dim rows are nothing.
                 switch (tab)
                 {
-                    case AislesTabIndex when pick.Row > 0 && pick.Row - 1 < locations.Count:
+                    case AislesTabIndex when row > 0 && row - 1 < locations.Count:
                     {
-                        var location = locations[pick.Row - 1];
+                        var location = locations[row - 1];
                         if (await ConfirmAsync(ShoppingText.RemoveLocationPrompt(location, facts.Count(f => f.LocationId == location.Id)), cancellationToken, close: false).ConfigureAwait(false))
                         {
                             Say(list.RemoveLocation(shop, location));
@@ -127,9 +136,9 @@ internal sealed partial class SettingsMenu
                         break;
                     }
 
-                    case SectionsTabIndex when pick.Row > 0 && pick.Row - 1 < sections.Count:
+                    case SectionsTabIndex when row > 0 && row - 1 < sections.Count:
                     {
-                        var section = sections[pick.Row - 1];
+                        var section = sections[row - 1];
                         if (await ConfirmAsync(ShoppingText.RemoveSectionPrompt(section), cancellationToken, close: false).ConfigureAwait(false))
                         {
                             Say(list.RemoveSection(shop, section));
@@ -138,11 +147,11 @@ internal sealed partial class SettingsMenu
                         break;
                     }
 
-                    case FactsTabIndex when pick.Row < shownFacts.Count:
-                        Say(list.RemoveFact(shop, shownFacts[pick.Row]));
+                    case FactsTabIndex when row < shownFacts.Count:
+                        Say(list.RemoveFact(shop, shownFacts[row]));
                         break;
-                    case GuessesTabIndex when pick.Row < guesses.Count:
-                        Say(list.RemoveFact(shop, guesses[pick.Row]));
+                    case GuessesTabIndex when row < guesses.Count:
+                        Say(list.RemoveFact(shop, guesses[row]));
                         break;
                 }
 
@@ -151,7 +160,7 @@ internal sealed partial class SettingsMenu
 
             switch (tab)
             {
-                case AislesTabIndex when pick.Row == 0:
+                case AislesTabIndex when row == 0:
                     if (await TypeStoreNameAsync(page, 0, "", cancellationToken).ConfigureAwait(false) is { } label)
                     {
                         var (picked, section) = await PickSectionAsync(sections, null, cancellationToken).ConfigureAwait(false);
@@ -162,19 +171,19 @@ internal sealed partial class SettingsMenu
                     }
 
                     break;
-                case AislesTabIndex when pick.Row - 1 < locations.Count:
-                    await LocationActionsAsync(list, shop, locations[pick.Row - 1], sections, facts, page, pick.Row, cancellationToken).ConfigureAwait(false);
+                case AislesTabIndex when row > 0 && row - 1 < locations.Count:
+                    await LocationActionsAsync(list, shop, locations[row - 1], sections, facts, page, pick.Row, cancellationToken).ConfigureAwait(false);
                     break;
-                case SectionsTabIndex when pick.Row == 0:
+                case SectionsTabIndex when row == 0:
                     if (await TypeStoreNameAsync(page, 0, "", cancellationToken).ConfigureAwait(false) is { } name)
                     {
                         Say(list.AddSection(shop, name));
                     }
 
                     break;
-                case SectionsTabIndex when pick.Row - 1 < sections.Count:
+                case SectionsTabIndex when row > 0 && row - 1 < sections.Count:
                 {
-                    var section = sections[pick.Row - 1];
+                    var section = sections[row - 1];
                     switch (await PickActionAsync(section.Name, ShoppingText.SectionActions, cancellationToken).ConfigureAwait(false))
                     {
                         case 0 when await TypeStoreNameAsync(page, pick.Row, section.Name, cancellationToken).ConfigureAwait(false) is { } renamed && renamed != section.Name:
@@ -188,9 +197,9 @@ internal sealed partial class SettingsMenu
                     break;
                 }
 
-                case FactsTabIndex when pick.Row < shownFacts.Count:
+                case FactsTabIndex when row < shownFacts.Count:
                 {
-                    var fact = shownFacts[pick.Row];
+                    var fact = shownFacts[row];
                     switch (await PickActionAsync(fact.Term, ShoppingText.FactActions, cancellationToken).ConfigureAwait(false))
                     {
                         case 0:
@@ -207,9 +216,9 @@ internal sealed partial class SettingsMenu
                     break;
                 }
 
-                case GuessesTabIndex when pick.Row < guesses.Count:
+                case GuessesTabIndex when row < guesses.Count:
                 {
-                    var guess = guesses[pick.Row];
+                    var guess = guesses[row];
                     switch (await PickActionAsync(guess.Term, ShoppingText.GuessActions, cancellationToken).ConfigureAwait(false))
                     {
                         case 0:

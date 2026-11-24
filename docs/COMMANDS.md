@@ -108,7 +108,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 
 | Command | What it does |
 |---|---|
-| `/profile [<name>]` | Switches profiles for this run: a picker, or the one named. See [Profiles](#profiles). |
+| `/profile [<name>]` | Switches profiles for this run: a picker (its top row adds one), or the one named. See [Profiles](#profiles). |
 | `/profile add\|delete <name>`, `/profile add <name> --fresh`, `/profile rename <name> <new-name>` | Creates a profile from this one's settings, memories and saved prompts, or with `--fresh` from the default settings, copying nothing; deletes one, or renames one. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars (and *Embedded servers enabled* with an embedded URL, *Docker servers enabled* with a chosen container's) unless `--all`. |
 | `/profile push\|pull <name>` | Copies every setting but the working directory; a pull clears the conversation. |
@@ -476,7 +476,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Which file:** an existing `NEON.md` is improved. With only `AGENTS.md` or `CLAUDE.md`, it asks: update that file, or create `NEON.md` (which is then read in its place). With none, it creates `NEON.md`.
 * **The survey:** the app reads the folder first: its files, build files and CI workflows, the README, other assistants' rule files, recent commits and project skills. Secret-looking files are skipped and values that look like secrets are masked.
 * **One turn:** the model gets only the file and git reads and `ask_user`, never your memories. It starts a new conversation when one is under way; the last one stays in `/sessions`.
-* **The pane:** Write, View (the change, or the whole draft), Revise (with your words) or Cancel ([keys](INTERFACE.md#pane-keys)); on the Web UI page too. It shows the cost per turn and flags lines that look like secrets.
+* **The pane:** Write, View (the change, or the whole draft rendered, its text on a Source tab), Revise (with your words) or Cancel ([keys](INTERFACE.md#pane-keys)); on the Web UI page too. It shows the cost per turn and flags lines that look like secrets.
   * With *Project file* or *Agent skills* off, a **Write and turn on** row turns them on as it writes.
 * **Taking it back:** `/undo` or `/rewind` removes or restores the file; a setting turned on stays on.
 * Needs *LLM offer tools*, `read_file` and the bottom pane; refused in plan mode, during a pass or `/botchat`, and headless.
@@ -667,7 +667,7 @@ Your own are JSON files in the home's `themes` folder (and subfolders one level 
 
 Start with `/theme export <name> [<new-name>]`: it writes `themes/<new-name>.json` (`<name>-custom` by default) with every color filled in (a built-in's copy is its file with the new name, role words and comments kept), never over a file.
 
-`/theme edit [<name>]` changes the colors in the app: each role with its swatch, the theme previewed beside the list and pairs that read poorly listed under it. Its keys and the picker's are in [Pane keys](INTERFACE.md#pane-keys). A built-in offers its `<name>-custom` copy; a save changes only the colors you changed, and keeps the file's comments and layout.
+`/theme edit [<name>]` changes the colors: each role with its swatch, ⚠ on one that reads poorly, the theme previewed beside it, and under the list the role's use and failing pairs. Its keys and the picker's are in [Pane keys](INTERFACE.md#pane-keys). A built-in offers its `<name>-custom` copy; a save changes only the colors you changed, and keeps the file's comments and layout.
 
 `/theme delete <name>` removes one of your themes after a yes; a built-in it replaced comes back, and deleting the theme in force puts the default in force.
 

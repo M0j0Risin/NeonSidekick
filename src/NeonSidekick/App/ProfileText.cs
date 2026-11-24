@@ -89,6 +89,18 @@ public static class ProfileText
     public static string ChangedElsewhereNotice(string profile, int changed) =>
         $"({NoticeGlyphs.Profile}profile \"{profile}\" changed outside this window; {Counted(changed, "setting", "settings")} taken)";
 
+    /// <summary>The profile picker's top row (2026-11-24, the user's ask): a new profile, named, then copied or fresh. Pinned.</summary>
+    public const string AddProfileRow = "+ Add a profile…";
+
+    /// <summary>The name prompt's title on the add row. Pinned.</summary>
+    public const string AddProfileNameTitle = "Name the new profile";
+
+    /// <summary>The seed page's first row: the loaded profile's saved settings, as <c>/profile add</c> copies them. Pinned.</summary>
+    public static string CopySettingsRow(string loaded) => $"Copy {loaded}'s settings";
+
+    /// <summary>The seed page's second row: the compiled defaults, as <c>/profile add --fresh</c>. Pinned.</summary>
+    public const string StartFreshRow = "Start fresh (defaults)";
+
     private static string Counted(int count, string one, string many) =>
         count == 1 ? "1 " + one : $"{count.ToString(CultureInfo.InvariantCulture)} {many}";
 }

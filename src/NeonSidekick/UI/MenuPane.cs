@@ -262,6 +262,18 @@ public sealed record MenuPage(string Title, IReadOnlyList<string> Rows, string H
     public IReadOnlySet<int>? Headings { get; init; }
 
     /// <summary>
+    /// The rows the side column asks for under the title, the footer band included (2026-11-24, the <c>/theme edit</c> pane: the preview fills the
+    /// pane); 0 for <see cref="MenuPane.SideMinRows"/>. A short list is padded beside it, within the cap, so <c>Menus max height</c> still holds.
+    /// </summary>
+    public int SideRows { get; init; }
+
+    /// <summary>The footer band's slab rows (2026-11-24, the <c>/theme edit</c> pane's taller band); 0 for <see cref="MenuPane.FooterRows"/>.</summary>
+    public int FooterRows { get; init; }
+
+    /// <summary><see cref="FooterRows"/>, or the pane's default.</summary>
+    internal int FooterSlabRows => FooterRows > 0 ? FooterRows : MenuPane.FooterRows;
+
+    /// <summary>
     /// The text under the list for the cursor's row, as (tab, row) → text (2026-10-04, the UI review: <c>/settings</c> said nothing
     /// about a row, while <c>neon_help</c> had every one's description): drawn dim, word-wrapped to <see cref="MenuPane.FooterRows"/>
     /// rows, and those rows kept whatever the row returns (null for nothing), so the pane holds its height as the cursor moves.
@@ -513,10 +525,10 @@ public sealed class MenuPane : INoticeSink
     /// A <see cref="MenuFooter"/> laid out for <paramref name="width"/> cells: its text wrapped (<see cref="CaptionRows"/>) to the
     /// <see cref="FooterRows"/> its last line leaves, then that line cut to the width. Pure.
     /// </summary>
-    public static IReadOnlyList<string> FooterLines(MenuFooter footer, int width)
+    public static IReadOnlyList<string> FooterLines(MenuFooter footer, int width, int slabRows = FooterRows)
     {
         ArgumentNullException.ThrowIfNull(footer);
-        int room = footer.Last is null ? FooterRows : FooterRows - 1;
+        int room = footer.Last is null ? slabRows : slabRows - 1;
         var rows = new List<string>(footer.KeepLines ? KeptLines(footer.Text, width, room) : CaptionRows(footer.Text, width, room));
         if (footer.Last is { } last && width > 0)
         {
@@ -1817,7 +1829,7 @@ public sealed class MenuPane : INoticeSink
         _stripRows = topLines.Count;
         _statusRows = _status.Count == 0 ? 1 : statusLines.Count;   // the spacer only when there's no status; one that renders nothing takes no row
         _subRows = SubStripRows(page, Width).Count;
-        int footer = page.Footer is null ? 0 : FooterRuleRows + FooterRows;
+        int footer = page.Footer is null ? 0 : FooterRuleRows + page.FooterSlabRows;
         int content = _pane.MenuContentRows(Height, _inputRows);
         // A question's caption (2026-10-10, CaptionGrows) takes what the room leaves over a few list rows, not three.
         int captionMax = page.CaptionGrows ? CaptionRoom(content, _stripRows, _statusRows, footer, page.Rows.Count) : CaptionMaxRows;
@@ -1864,10 +1876,12 @@ public sealed class MenuPane : INoticeSink
         int pad = Math.Min(TabBodyRows(page, Width, captionMax) - _subRows, _captionRows + Math.Max(0, capacity)) - (_captionRows + _shown + (more ? 1 : 0));
         if (_sideWidth > 0)
         {
-            // The side column's rows under the title, at least SideMinRows within the cap: a short list is padded to them.
+            // The side column's rows under the title, at least SideMinRows within the cap: a short list is padded to them. A page's own SideRows
+            // (2026-11-24) counts the footer band, which sits outside body and room, so the band is taken off it.
             int body = header - _stripRows + _shown + (more ? 1 : 0) + Math.Max(0, pad);
             int room = header - _stripRows + Math.Max(0, capacity);
-            pad = Math.Max(0, pad) + Math.Clamp(SideMinRows - body, 0, Math.Max(0, room - body));
+            int want = Math.Max(SideMinRows, page.SideRows - footer);
+            pad = Math.Max(0, pad) + Math.Clamp(want - body, 0, Math.Max(0, room - body));
         }
 
         var lines = new List<IRenderable>(header + _shown + 1 + Math.Max(0, pad));
@@ -1920,9 +1934,9 @@ public sealed class MenuPane : INoticeSink
             // tallest tab goes below it); a click there lands on no row. Since 2026-10-05 a rule over it and the text on a slab
             // to the list's edge, a row with nothing to say too, so the shape holds as the cursor moves.
             var text = page.Rows.Count > 0 ? FooterFor(page, _cursor) : null;
-            var rows = text is null ? [] : FooterLines(text, _listWidth - TextCells.Width(NoPointer));
+            var rows = text is null ? [] : FooterLines(text, _listWidth - TextCells.Width(NoPointer), page.FooterSlabRows);
             lines.Add(new Markup(Theme.StyleMarkup(Theme.PaneRule, new string(ScreenPane.RuleGlyph, Math.Max(1, _listWidth)))).Overflow(Overflow.Crop));
-            for (int i = 0; i < FooterRows; i++)
+            for (int i = 0; i < page.FooterSlabRows; i++)
             {
                 lines.Add(new Markup(FooterSlabMarkup(i < rows.Count ? rows[i] : "", _listWidth)).Overflow(Overflow.Ellipsis));
             }

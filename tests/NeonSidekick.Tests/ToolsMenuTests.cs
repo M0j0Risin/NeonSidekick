@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.AI;
 using NeonSidekick.App;
 using NeonSidekick.Llm.Tools;
@@ -2863,10 +2864,13 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(["Format"], _settings.Current.ShellPoliceForbiddenStrings);
         Assert.Contains("\n" + Titled(ForbiddenListTitle.Replace(ToolsText.Label, CoreCrumb, StringComparison.Ordinal)) + "\n \n▸ " + SettingsMenu.AddForbiddenRow + "\n", Output);   // from the pane: under Standard's crumb (later on 2026-10-10)
         Assert.Contains(SettingsMenu.ForbiddenPaneKeys, Output);
-        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("rm -rf") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  rm -rf\n", Output);
-        Assert.Contains("  · " + SettingsMenu.ForbiddenAddedNotice("Format") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n  Format\n  rm -rf\n", Output);
+        // A bare rule between the add row and the strings (2026-11-24, the user's ask).
+        Assert.Matches(Regex.Escape("  · " + SettingsMenu.ForbiddenAddedNotice("rm -rf") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n") + "─+ *\n  rm -rf\n", Output);
+        Assert.Matches(Regex.Escape("  · " + SettingsMenu.ForbiddenAddedNotice("Format") + "\n▸ " + SettingsMenu.AddForbiddenRow + "\n") + "─+ *\n  Format\n  rm -rf\n", Output);
         Assert.Contains("  · Shell police forbidden strings: RM -RF is already in the list\n", Output);
         Assert.Contains("  · Shell police forbidden strings: rm -rf removed\n", Output);
+        // The last entry removed: the cursor on the new last one, never the rule or past the list (2026-11-24).
+        Assert.Matches(Regex.Escape("  · Shell police forbidden strings: rm -rf removed\n  " + SettingsMenu.AddForbiddenRow + "\n") + "─+ *\n▸ Format\n", Output);
         Assert.Contains("\n▸ Shell police forbidden strings  1 string\n" + Heading("── Commands") + "\n  Shell prefer native tools       on\n", Output);
         pane.Dispose();
     }

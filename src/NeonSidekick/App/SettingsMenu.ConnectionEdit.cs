@@ -58,6 +58,13 @@ internal sealed partial class SettingsMenu
         return list;
     }
 
+    /// <summary>
+    /// A wizard summary's rows (2026-11-24, the user's ask): the two saves, a rule, the test and the cancel, a rule, then the draft's rows
+    /// (already markup). The summaries keep their cursor and picks as items through it.
+    /// </summary>
+    internal static RuledRows ConnectionWizardSummaryRows(IReadOnlyList<string> actions, IEnumerable<string> draftRows) =>
+        RuledRows.Of([actions.Take(2).Select(Markup.Escape).ToList(), actions.Skip(2).Select(Markup.Escape).ToList(), draftRows.ToList()]);
+
     /// <summary>The summary's first cursor: "Save, hidden" for an edit of an entry not offered now, else "Save, and offer it".</summary>
     public static int ConnectionWizardStartCursor(string? original, IReadOnlyList<string>? offered) =>
         original is not null && !(offered ?? []).Contains(original, StringComparer.OrdinalIgnoreCase) ? 1 : 0;
@@ -220,15 +227,15 @@ internal sealed partial class SettingsMenu
     private async Task<int?> ConnectionWizardPickAsync(string title, string noun, IReadOnlyList<(string Name, bool Global)> entries, Func<bool, string> pathOf, CancellationToken cancellationToken)
     {
         int width = entries.Count == 0 ? 0 : entries.Max(e => e.Name.Length);   // only the new row: never a crash on an empty list (2026-10-15)
-        var rows = new List<string> { ConnectionWizardNewRow(noun) };
-        rows.AddRange(entries.Select(e => ConnectionWizardEntryRow(e.Name, width, e.Global, pathOf(e.Global))));
-        var page = new MenuPage(title, rows.Select(Markup.Escape).ToList(), PickKeys) { Caption = ConnectionWizardPickQuestion };
+        // A rule between the new row and the entries (2026-11-24, the user's ask): the pick maps back through the ruled rows.
+        var ruled = RuledRows.Of([[Markup.Escape(ConnectionWizardNewRow(noun))], entries.Select(e => Markup.Escape(ConnectionWizardEntryRow(e.Name, width, e.Global, pathOf(e.Global)))).ToList()]);
+        var page = new MenuPage(title, ruled.Rows, PickKeys) { Caption = ConnectionWizardPickQuestion, Headings = ruled.Headings };
         if (!_pane.Enabled)
         {
             Flow.Notice(ConnectionWizardPickQuestion);
         }
 
-        return await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } picked ? picked - 1 : null;
+        return await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } picked ? ruled.ItemOf(picked) - 1 : null;
     }
 
     /// <summary>An edit's stored password for its draft: the value, or "" with the reason as a warning (the Password page then asks).</summary>

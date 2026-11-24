@@ -798,17 +798,16 @@ internal sealed partial class ChatScreen
             while (true)
             {
                 var entities = _homeLive.Snapshot.Entities;
-                var rows = new List<string> { Markup.Escape(HomeBarText.AllOnAction), Markup.Escape(HomeBarText.AllOffAction) };
-                foreach (string id in members)
-                {
-                    var entity = entities.GetValueOrDefault(id);
-                    string glyph = HomeChips.GlyphFor(id, entity);
-                    rows.Add(Markup.Escape(glyph + " " + (entity?.Name ?? catalog!.NameOf(id))) + Theme.DimMarkup("  " + HomeBarText.StateWord(entity?.State ?? "…")));
-                }
+                // A rule between All on / All off and the devices, and each device's glyph and name padded to the widest in the room so the
+                // states line up (2026-11-24, the user's ask and pick); the cursor stays an item, so a redraw keeps it on the same device.
+                var heads = members.Select(id => entities.GetValueOrDefault(id) is var entity ? HomeChips.GlyphFor(id, entity) + " " + (entity?.Name ?? catalog!.NameOf(id)) : "").ToList();
+                int headWidth = heads.Select(TextCells.Width).DefaultIfEmpty(0).Max();
+                var devices = members.Select((id, i) => Markup.Escape(TextCells.Cell(heads[i], headWidth)) + Theme.DimMarkup("  " + HomeBarText.StateWord(entities.GetValueOrDefault(id)?.State ?? "…"))).ToList();
+                var ruled = RuledRows.Of([[Markup.Escape(HomeBarText.AllOnAction), Markup.Escape(HomeBarText.AllOffAction)], devices]);
 
                 string value = HomeChips.Build(chip.Reference, entities, catalog, HomeChipMark.None, stale: false).Value;
                 string drawn = HomeRoomKey(members, entities, value);
-                var page = new MenuPage(HomeBarText.DetailTitle(chip.Name, value), rows, HomeBarText.RoomKeys) { SpaceToggles = true };
+                var page = new MenuPage(HomeBarText.DetailTitle(chip.Name, value), ruled.Rows, HomeBarText.RoomKeys) { SpaceToggles = true, Headings = ruled.Headings };
                 MenuPick? picked;
                 bool redraw;
                 using (var watch = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
@@ -818,7 +817,7 @@ internal sealed partial class ChatScreen
                     {
                         // The key read answers a cancellation with null (KeySource's contract), so the pick ends as on ESC; the
                         // watcher's own cancellation, not the caller's, tells a change from the user leaving.
-                        picked = await _menuPane.PickAsync(page, cursor, watch.Token, row => cursor = row).ConfigureAwait(false);
+                        picked = await _menuPane.PickAsync(page, ruled.RowOf(cursor), watch.Token, row => cursor = Math.Max(0, ruled.ItemOf(row))).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                     {
@@ -843,14 +842,20 @@ internal sealed partial class ChatScreen
                     return;
                 }
 
-                cursor = pick.Row;
-                if (pick.Row < 2)
+                int item = ruled.ItemOf(pick.Row);
+                if (item < 0)
                 {
-                    StartHomeCall(chip.Reference, chip.Name, new HaServiceCall("light", pick.Row == 0 ? "turn_on" : "turn_off", [], areaId), catalog);
                     continue;
                 }
 
-                string member = members[pick.Row - 2];
+                cursor = item;
+                if (item < 2)
+                {
+                    StartHomeCall(chip.Reference, chip.Name, new HaServiceCall("light", item == 0 ? "turn_on" : "turn_off", [], areaId), catalog);
+                    continue;
+                }
+
+                string member = members[item - 2];
                 if (entities.GetValueOrDefault(member) is not { } device)
                 {
                     continue;

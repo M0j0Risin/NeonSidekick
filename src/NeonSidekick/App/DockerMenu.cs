@@ -386,11 +386,17 @@ internal sealed class DockerMenu
     private async Task<RowOutcome> PickRowAsync(DockerContainer container, CancellationToken cancellationToken)
     {
         var words = RowWords(container);
-        var page = new MenuPage(RowTitle(container), words.Select(w => RowPageRow(w, _openLogWindow is not null)).ToList(), RowKeys);
+        // Rules between the state's actions, the logs and URLs, and the copy (2026-11-24, the user's pick of three groups), split at the
+        // logs and copy-id words; RowWords stays as it is and the pick maps back through the ruled rows.
+        var shown = words.Select(w => RowPageRow(w, _openLogWindow is not null)).ToList();
+        int logs = Math.Max(0, words.ToList().IndexOf(LogsWord));
+        int copy = words.ToList().IndexOf(CopyIdWord) is >= 0 and var at ? at : words.Count;
+        var ruled = RuledRows.Of([shown[..logs], shown[logs..copy], shown[copy..]]);
+        var page = new MenuPage(RowTitle(container), ruled.Rows, RowKeys) { Headings = ruled.Headings };
         var picked = await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
-        if (picked is not { Row: var row })
+        if (picked is not { Row: var pickedRow } || ruled.ItemOf(pickedRow) is not (>= 0 and var row))
         {
-            return RowOutcome.Stay;
+            return RowOutcome.Stay;   // Esc, or a rule (never a stop): never clamped to row 0, a running container's stop
         }
 
         string word = words[Math.Clamp(row, 0, words.Count - 1)];

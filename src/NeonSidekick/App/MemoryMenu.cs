@@ -518,11 +518,12 @@ internal sealed class MemoryMenu
         // The folder choices after forget (2026-11-21, feature idea #6), so the rows above keep their places: this folder only, everywhere,
         // or both for another folder's.
         var folderActions = FolderActions(ScopeOf(entry, _folder?.Invoke()));
-        rows.AddRange(folderActions.Select(FolderActionRow));
         actions.AddRange(folderActions);
 
-        var page = new MenuPage(ActionTitle(entry.Text), rows, ActionKeys);
-        return await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } picked && picked >= 0 && picked < actions.Count ? actions[picked] : null;
+        // A rule between the entry's own actions and the folder choices (2026-11-24, the user's ask); the pick maps back to the action.
+        var ruled = RuledRows.Of([rows, folderActions.Select(FolderActionRow).ToList()]);
+        var page = new MenuPage(ActionTitle(entry.Text), ruled.Rows, ActionKeys) { Headings = ruled.Headings };
+        return await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } picked && ruled.ItemOf(picked) is var item && item >= 0 && item < actions.Count ? actions[item] : null;
     }
 
     /// <summary>
@@ -632,10 +633,14 @@ internal sealed class MemoryMenu
         var rows = page.Rows;
         var prompt = Theme.Selection(new SelectionPrompt<PromptResult<int>>()
             .Title(Theme.AccentMarkup(SettingsMenu.PromptTitle(page.Title, page.Hint)))
-            .AddChoices(Enumerable.Range(0, rows.Count).Select(PromptResult<int>.From))
+            // A rule (2026-11-24, the entry page's) is no choice here, as it is no stop on the pane: SettingsMenu.PickAsync's filter.
+            .AddChoices(Enumerable.Range(0, rows.Count).Where(page.IsStop).Select(PromptResult<int>.From))
             .AddCancelResult(() => PromptResult<int>.Canceled)
-            .DefaultValue(PromptResult<int>.From(Math.Clamp(cursor, 0, rows.Count - 1)))
             .UseConverter(r => r.IsCanceled ? "" : rows[r.Value]));
+        if (rows.Count > 0 && Math.Clamp(cursor, 0, rows.Count - 1) is var start && page.IsStop(start))
+        {
+            prompt.DefaultValue(PromptResult<int>.From(start));
+        }
 
         var picked = await ScreenPane.ModalAsync(_console, () => prompt.ShowAsync(_console, cancellationToken)).ConfigureAwait(false);
         return picked.IsCanceled ? null : picked.Value;

@@ -11694,7 +11694,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + new string(' ', SlashCommands.LabelWidth + SlashCommands.DescriptionWidth + 2 * SlashCommands.HelpColumnGap) + "/timer stop <name>|all", output);
         AssertPaneEnds(output, rule + "\n" + InfoPane.HintText);   // the pane's keys on the Hints bar (2026-10-14)
         // → showed the Keys tab, with the keys that apply (voice off: no push-to-talk row).
-        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n \nEnter", output);
+        // Under its first labeled heading since 2026-11-24 (the user's ask).
+        Assert.Contains(rule + "\n" + Titled(InfoPane.Title + " │ Basic · Advanced · Custom · Keys ") + "\n \n── " + Hotkeys.KeyCheckText.GroupNames[0] + " ─", output);
         // The label column follows the widest key ("Ctrl+Backspace / Delete", 23 cells, since 2026-10-04; on a Mac, 2026-10-07,
         // "Ctrl+Left / Right", Option+Delete standing for it; "Option+Left / Right", 19, since 2026-11-02) + the gap of 2.
         int width = ChatScreen.KeyRows(false, ConsoleKey.F4, false, "").Max(r => r.Key.Length) + 2;
@@ -11703,7 +11704,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("Ctrl+End".PadRight(width) + "scroll to the bottom of the transcript", output);
         Assert.Contains("Ctrl+C".PadRight(width) + "copy the selection · stop the speech · cancel the reply · press twice to exit", output);
         // The command in a column of its own (2026-10-05, the user's pick), after the widest meaning and the gap; none for Ctrl+L.
-        var keys = output[output.LastIndexOf("\n \nEnter", StringComparison.Ordinal)..];
+        var keys = output[output.LastIndexOf("\n── " + Hotkeys.KeyCheckText.GroupNames[0] + " ", StringComparison.Ordinal)..];
         int column = keys.Split('\n').Single(l => l.StartsWith("Ctrl+H ", StringComparison.Ordinal)).IndexOf("/help", StringComparison.Ordinal);
         Assert.Matches(@"\nCtrl\+H {" + (width - 6) + @"}open the help {2,}/help\s*\n", keys);
         Assert.Equal(column, keys.Split('\n').Single(l => l.StartsWith("Ctrl+Alt+Q ", StringComparison.Ordinal)).IndexOf("/queue clear", StringComparison.Ordinal));

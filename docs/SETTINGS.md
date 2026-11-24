@@ -31,7 +31,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 
 | Setting | What it does | Default |
 |---|---|---|
-| Profile | Switches profile for this run; each has its own settings, persona, memory, skills and sessions. | `neon` |
+| Profile | Switches profile for this run, or adds one from the picker's top row; each has its own settings, persona, memory, skills and sessions. | `neon` |
 | Working directory (cwd) | The folder the file and GitLib tools work in. Enter opens the [folder picker](INTERFACE.md#folder-picker); `/cwd <path>` sets one. | empty (the profile's `files\` folder) |
 | Memory mode | Each conversation opens with the memories unless `off`. `read-write`: the model also saves them. `read-only`: it never saves one. `off`: none. `/memory remember` saves in every mode. | `read-only` |
 | Model avatar | The profile's emoji, leading its replies, `/botchat` lines and the window title. Enter (or `/avatar`) opens the [avatar picker](INTERFACE.md#the-avatar-picker). | 🤖 |
@@ -494,7 +494,7 @@ Enter on a skill, then `disable`, switches it off without removing it; `enable` 
 A repo can carry its own skills. While *Project skills* is on, the app looks for them and offers them only once you trust them.
 
 * **Where:** each folder's `.agents/skills`, then `.claude/skills`, from the working folder up to the repo root, nearest first; outside a repo, the working folder alone. Never your user folder or the app's home.
-* **Trust per folder:** the `project` tab of `/skills` lists them dim under each folder. Enter on its `trust` row lists every skill with a **View** of its whole `SKILL.md`; trust saves exactly what you saw.
+* **Trust per folder:** the `project` tab of `/skills` lists them dim under each folder. Enter on its `trust` row lists every skill with a **View** of its whole `SKILL.md`, rendered, with the exact text on its Source tab; trust saves exactly what you saw.
 * **Asked again on any change:** an edit, an added or removed skill or a changed bundled file stops it being offered. The next turn says so, and the question shows what changed, with a diff for a changed `SKILL.md`.
 * **Your own move or delete** from `/skills` keeps the folder trusted when nothing else in it changed; otherwise it waits like any change.
 * **Ranked last:** your profile, global and external skills win a name clash; the trust tells you which are hidden. At most 50 project skills are offered.

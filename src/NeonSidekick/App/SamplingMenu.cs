@@ -59,8 +59,11 @@ internal sealed class SamplingMenu
     /// <summary>The row of the extra body on every tab, after the fields.</summary>
     public static int ExtraRow => SamplingField.All.Count;
 
-    /// <summary>The clear row, last.</summary>
-    public static int ClearRow => ExtraRow + 1;
+    /// <summary>The bare rule before the clear row (2026-11-24, the user's ask): a heading, never a stop.</summary>
+    public static int ClearRuleRow => ExtraRow + 1;
+
+    /// <summary>The clear row, last, under its rule.</summary>
+    public static int ClearRow => ExtraRow + 2;
 
     /// <summary>
     /// The tabs' keys in order: <paramref name="connectedModel"/> (as the map stores it, when it does), <c>*</c>, then every
@@ -100,6 +103,7 @@ internal sealed class SamplingMenu
         }
 
         rows.Add(Row(SamplingText.ExtraRowName, SamplingText.ExtraValue(entry, any, anyTab), own: entry?.Extra is { Count: > 0 }));
+        rows.Add(SectionRule.Bare);
         rows.Add(Theme.DimMarkup(SamplingText.ClearRowName));
         return rows;
     }
@@ -119,7 +123,7 @@ internal sealed class SamplingMenu
         {
             var reported = i == 0 && k != LlmSampling.AnyModel ? server : null;
             string? caption = claudeApi ? SamplingText.ClaudeApiCaption : openAIApi ? SamplingText.OpenAIApiCaption : reported is null ? null : SamplingText.SourceCaption(reported);
-            return new MenuTab(SamplingText.TabTitle(k), Rows(map, k, reported)) { Caption = caption };
+            return new MenuTab(SamplingText.TabTitle(k), Rows(map, k, reported)) { Caption = caption, Headings = new HashSet<int> { ClearRuleRow } };
         }).ToList();
         return MenuPage.Tabbed(SamplingText.Label, tabs, tab, SamplingText.Keys);
     }
@@ -341,6 +345,11 @@ internal sealed class SamplingMenu
                     }
 
                     continue;
+                }
+
+                if (cursor > ExtraRow)
+                {
+                    continue;   // the rule before Clear (never a stop): never a field past the last
                 }
 
                 string initial = cursor == ExtraRow

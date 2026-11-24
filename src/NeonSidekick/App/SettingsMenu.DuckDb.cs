@@ -455,16 +455,23 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             string[] actions = [SqlWizardSaveOfferedRow, DuckDbWizardSaveHiddenRow, DuckDbWizardTestRow, SqlWizardCancelRow];
-            var rows = actions.Select(Markup.Escape).Concat(DuckDbWizardRows(draft)).ToList();
-            var page = new MenuPage(DuckDbWizardTitle, rows, PickKeys) { Caption = DuckDbWizardSummaryCaption };
+            var ruled = ConnectionWizardSummaryRows(actions, DuckDbWizardRows(draft));
+            var rows = ruled.Rows;
+            var page = new MenuPage(DuckDbWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = DuckDbWizardSummaryCaption };
             if (!_pane.Enabled)
             {
                 Flow.Notice(DuckDbWizardSummaryCaption);
             }
 
-            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } picked)
+            if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
                 return (false, false, null);
+            }
+
+            int picked = ruled.ItemOf(pickedRow);
+            if (picked < 0)
+            {
+                continue;
             }
 
             cursor = picked;

@@ -1587,7 +1587,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The hint of a picker with a <c>(none)</c> row (<c>TTS voice 2</c>): Backspace moves the cursor to it.</summary>
     public const string NoneKeys = "Enter = choose · Backspace = none · Esc = back";
-    public const string SwitchKeys = "Enter = switch · a–z = jump · Esc = back";
+    public const string SwitchKeys = "Enter = switch · + = add · a–z = jump · Esc = back";
     public const string KeepKeys = "Enter = choose · Esc = keep";
 
     /// <summary>The model picker's hint on the pane (2026-10-03, the user's ask): <see cref="KeepKeys"/> with the type-to-filter. Pinned.</summary>
@@ -1843,7 +1843,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>/profile</c>'s picker label; ESC keeps the loaded profile. The settings row's level is <see cref="Breadcrumb"/> over <see cref="FieldName"/> (no glyph under the crumb) + <see cref="SwitchKeys"/>.</summary>
     public const string ProfileTitle = ChatScreen.ProfileToolGlyph + " Profile";   // the glyph the toolbar wears for the picker (later on 2026-09-29)
-    public const string ProfileKeys = "Enter = switch · a–z = jump · Esc = keep";
+    public const string ProfileKeys = "Enter = switch · + = add · a–z = jump · Esc = keep";
 
     /// <summary>The <c>/server</c> picker's label; ESC keeps the server in use.</summary>
     public const string ServerTitle = "🖥️ LLM server";
@@ -4616,6 +4616,7 @@ internal sealed partial class SettingsMenu
         _reply = reply;
         _openOnly = false;
         _profileSwitched = false;   // an advisor's Switch to profile never carries over from another visit (2026-11-22)
+        _profileCreatedNotices.Clear();   // nor the picker's created notices (2026-11-24)
         _stripSubs = new int[StripTabs.Count];   // every visit finds each group on its first tab
         try
         {
@@ -5553,10 +5554,20 @@ internal sealed partial class SettingsMenu
     /// <see cref="MenuPage.JumpNames"/>). Each row is led by its profile's avatar since 2026-10-10 (the user's ask,
     /// <see cref="ProfilePickerRow"/>), blanks for none.
     /// </summary>
-    public Task<bool> PickProfileAsync(CancellationToken cancellationToken) =>
-        PickProfileAsync(ProfileTitle, ProfileKeys, close: true, cancellationToken);
+    public Task<bool> PickProfileAsync(CancellationToken cancellationToken)
+    {
+        _profileCreatedNotices.Clear();   // the bare /profile's way in: a visit's created notices are its own
+        return PickProfileAsync(ProfileTitle, ProfileKeys, close: true, cancellationToken);
+    }
 
-    /// <summary>The profile picker under <paramref name="label"/>; <paramref name="close"/> false keeps the pane open for the settings list it came from.</summary>
+    /// <summary>
+    /// The profile picker under <paramref name="label"/>; <paramref name="close"/> false keeps the pane open for the settings list it came from.
+    /// Its top row adds a profile (2026-11-24, the user's ask, <see cref="ProfileText.AddProfileRow"/>, <c>+</c> goes there): a name typed in
+    /// place, then copy this profile's settings or start fresh, then the switch, its created notice held for the screen
+    /// (<see cref="TakeProfileCreatedNotices"/>). An add cancelled at the name or the seed page comes back to the list on the add row. A loop,
+    /// so the name prompt and the way back have the pane; with <paramref name="close"/> the pane closes once the visit ends, as
+    /// <see cref="PickOnceAsync"/> did.
+    /// </summary>
     private async Task<bool> PickProfileAsync(string label, string keys, bool close, CancellationToken cancellationToken)
     {
         string current = _settings.ProfileName;
@@ -5567,18 +5578,158 @@ internal sealed partial class SettingsMenu
             return false;
         }
 
-        // Each name led by its profile's avatar (2026-10-10, the user's ask); the type-ahead still reads the bare names.
-        var page = new MenuPage(label, ProfilePickerRows(names), keys) { JumpNames = names };
-        int cursor = names.ToList().IndexOf(current);
-        int? picked = close
-            ? await PickOnceAsync(page, cursor, cancellationToken).ConfigureAwait(false)
-            : await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
-        if (picked is not { } i)
+        try
         {
-            return Unchanged();
+            int cursor = -1;
+            while (true)
+            {
+                names = PickerNames(Profiles.List(_settings.StorageDirectory), current);
+                // Each name led by its profile's avatar (2026-10-10, the user's ask); the type-ahead still reads the bare names, "" at the add
+                // row and its rule so a letter only jumps among names.
+                var ruled = RuledRows.Of([[Markup.Escape(ProfileText.AddProfileRow)], ProfilePickerRows(names)]);
+                var page = new MenuPage(label, ruled.Rows, keys)
+                {
+                    Headings = ruled.Headings,
+                    JumpNames = Enumerable.Range(0, ruled.Rows.Count).Select(r => ruled.ItemOf(r) is > 0 and var i ? names[i - 1] : "").ToList(),
+                    Hotkeys = ruled.Hotkeys(new Dictionary<char, int> { ['+'] = 0 }),
+                };
+                int start = cursor >= 0 ? cursor : ruled.RowOf(names.ToList().IndexOf(current) + 1);
+                if (await PickAsync(page, start, cancellationToken).ConfigureAwait(false) is not { } row)
+                {
+                    Done();
+                    return Unchanged();
+                }
+
+                int item = ruled.ItemOf(row);
+                if (item < 0)
+                {
+                    continue;
+                }
+
+                if (item > 0)
+                {
+                    Done();
+                    return await SwitchProfileAsync(names[item - 1]).ConfigureAwait(false);
+                }
+
+                cursor = row;
+                if (await AddProfileAsync(page, row, label, cancellationToken).ConfigureAwait(false) is { } added)
+                {
+                    Done();
+                    return await SwitchProfileAsync(added).ConfigureAwait(false);
+                }
+            }
+        }
+        finally
+        {
+            Done();
         }
 
-        return await SwitchProfileAsync(names[i]).ConfigureAwait(false);
+        // The pane closed before what follows the pick, so its notices reach the transcript, as PickOnceAsync had it.
+        void Done()
+        {
+            if (close)
+            {
+                _pane.Close();
+            }
+        }
+    }
+
+    /// <summary>
+    /// The picker's add row (2026-11-24, the user's ask): the name typed under the list (or on the input row without the pane, as
+    /// <see cref="TypeStoreNameAsync"/> splits it), asked again with <c>/profile add</c>'s own error for an invalid or taken one, then the seed page.
+    /// The created profile's name, its notice held; null for Esc or a blank at either step, nothing made.
+    /// </summary>
+    private async Task<string?> AddProfileAsync(MenuPage page, int row, string label, CancellationToken cancellationToken)
+    {
+        string initial = "";
+        while (true)
+        {
+            InputResult result;
+            if (_pane.Enabled)
+            {
+                result = await _pane.EditAsync(page with { Hint = EditKeys, Caption = ProfileText.AddProfileNameTitle }, row, _input, initial, allowEmpty: false, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                Flow.Notice(PromptTitle(ProfileText.AddProfileNameTitle, EditKeys));
+                result = await _input.ReadAsync(initial, remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true).ConfigureAwait(false);
+            }
+
+            string name = result is InputResult.Submitted submitted ? submitted.Text.Trim() : "";
+            if (name.Length == 0)
+            {
+                return null;
+            }
+
+            string? error = !Profiles.IsValidName(name) ? ChatScreen.ProfileNameError
+                : Profiles.Resolve(_settings.StorageDirectory, name) is { } existing ? ChatScreen.ProfileExistsError(existing) : null;
+            if (error is not null)
+            {
+                Sink.Error(error);
+                initial = name;
+                continue;
+            }
+
+            var seed = new MenuPage(label + " › " + name, [Markup.Escape(ProfileText.CopySettingsRow(_settings.ProfileName)), Markup.Escape(ProfileText.StartFreshRow)], PickKeys);
+            if (await PickAsync(seed, 0, cancellationToken).ConfigureAwait(false) is not { } how)
+            {
+                return null;
+            }
+
+            var (failed, notice) = CreateProfile(name, fresh: how == 1);
+            if (failed is not null)
+            {
+                Sink.Error(failed);
+                return null;
+            }
+
+            _profileCreatedNotices.Add(notice!);
+            return name;
+        }
+    }
+
+    /// <summary>The created notices the picker's add row made this visit, for the screen to print after its switch (2026-11-24).</summary>
+    private readonly List<string> _profileCreatedNotices = [];
+
+    /// <summary>The created notices held since the visit opened, in order, and cleared (2026-11-24, the picker's add row).</summary>
+    internal IReadOnlyList<string> TakeProfileCreatedNotices()
+    {
+        var taken = _profileCreatedNotices.ToList();
+        _profileCreatedNotices.Clear();
+        return taken;
+    }
+
+    /// <summary>
+    /// A new profile, not switched to (2026-11-24: <c>/profile add</c>'s create code, shared with the picker's add row): an invalid or taken
+    /// name's error, else the profile made from this profile's saved settings (its basic files copied) or, <paramref name="fresh"/>, the
+    /// compiled defaults, and its created notice. The saved values, never the effective ones; and its own files folder, not this one's (a
+    /// sandbox is the sidekick's own). The memories come along when they exist on disk; the persona, operating rules and voice directive stay
+    /// behind (2026-10-10). The seed's rules live in <see cref="Profiles.NewProfileSeed"/>.
+    /// </summary>
+    internal (string? Error, string? Notice) CreateProfile(string name, bool fresh)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        string home = _settings.StorageDirectory;
+        if (!Profiles.IsValidName(name))
+        {
+            return (ChatScreen.ProfileNameError, null);
+        }
+
+        if (Profiles.Resolve(home, name) is { } existing)
+        {
+            return (ChatScreen.ProfileExistsError(existing), null);
+        }
+
+        if (fresh)
+        {
+            Profiles.Create(home, name, Profiles.FreshProfileSeed());
+            return (null, ChatScreen.ProfileCreatedFreshNotice(name));
+        }
+
+        Profiles.Create(home, name, Profiles.NewProfileSeed(_settings.Current));
+        IReadOnlyList<string> copied = Profiles.CopySidekickFiles(_settings.ProfileDirectory, home, name, Profiles.BasicSidekickFiles);
+        return (null, ChatScreen.ProfileCreatedNotice(name, copied));
     }
 
     /// <summary>
@@ -9838,10 +9989,11 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var forbidden = Shell.ForbiddenStrings.Sorted(_settings.Current.ShellPoliceForbiddenStrings);
-            IReadOnlyList<string> rows = [Markup.Escape(AddForbiddenRow), .. forbidden.Select(Markup.Escape)];
+            // A rule between the add row and the entries (2026-11-24, the user's ask); the cursor and the picks stay items.
+            var ruled = RuledRows.Of([[Markup.Escape(AddForbiddenRow)], forbidden.Select(Markup.Escape).ToList()]);
             // Each string whole under the list (2026-10-07, the user's ask: a long one was cut at the edge).
-            var page = new MenuPage(Crumb(title), rows, _pane.Enabled ? ForbiddenPaneKeys : ForbiddenKeys) { Footer = (_, row) => row > 0 && row <= forbidden.Count ? new MenuFooter(forbidden[row - 1], ForbiddenStringNote) : null };
-            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
+            var page = new MenuPage(Crumb(title), ruled.Rows, _pane.Enabled ? ForbiddenPaneKeys : ForbiddenKeys) { Headings = ruled.Headings, Footer = (_, row) => ruled.ItemOf(row) is var at && at > 0 && at <= forbidden.Count ? new MenuFooter(forbidden[at - 1], ForbiddenStringNote) : null };
+            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken, ForbiddenButtons).ConfigureAwait(false) is not { } pick)
             {
                 if (!changed)
                 {
@@ -9851,20 +10003,25 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
+            int index = ruled.ItemOf(pick.Row);
             if (pick.Button >= 0)
             {
-                cursor = pick.Row;
+                cursor = Math.Max(0, index);
                 changed |= await RestoreForbiddenDefaultsAsync(forbidden, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
-            if (pick.Remove && pick.Row == 0)
+            if (index < 0)
+            {
+                continue;
+            }
+
+            if (pick.Remove && index == 0)
             {
                 cursor = 0;
                 continue;   // Delete on the add row: nothing to remove
             }
 
-            int index = pick.Row;
             cursor = index;
             if (index > 0)
             {

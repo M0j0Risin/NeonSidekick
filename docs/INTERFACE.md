@@ -189,6 +189,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes · Delete removes · on **Aisles**, Shift+↑/↓ move an aisle along the walk, Shift+Home/End to either end |
 | **Settings and bars** | |
 | `/settings changed` | Enter edits · `r` back to default |
+| `/profile` | `+` goes to **+ Add a profile…** · a letter jumps to a profile |
 | `/theme` | a letter jumps to the next theme with it · → edit (as `/theme edit`), then back to the list · Delete deletes one of yours (asks) |
 | `/theme edit` | ←/→ lighter or darker (Shift ×5) · Enter opens the color picker · `s` save · `r` the row back · `d` discard · Esc closes, asking when there are changes |
 | `/theme edit`'s color picker | ↑/↓ a bar · ←/→ move it (Shift ×5) · Enter uses the color, or on *Hex value* types one · Esc back, unchanged |

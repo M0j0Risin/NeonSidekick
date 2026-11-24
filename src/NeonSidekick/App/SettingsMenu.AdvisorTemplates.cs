@@ -186,38 +186,34 @@ internal sealed partial class SettingsMenu
 
             var templates = scan.Templates;
             var current = scan.Matching(persona);
-            var rows = new List<string>();
             var bands = new List<string>();
             var jumps = new List<string>();
-            foreach (var (row, band) in lead)
+            bands.AddRange(lead.Select(l => l.Band));
+            jumps.AddRange(lead.Select(_ => ""));
+            bands.AddRange(templates.Select(AdvisorTemplates.Band));
+            jumps.AddRange(templates.Select(t => t.Id));
+            bands.AddRange(tail.Select(t => t.Band));
+            jumps.AddRange(tail.Select(_ => ""));
+            // Rules between the lead, the templates and the tail (2026-11-24, the user's ask); bands and jumps are items, "" at a rule.
+            var ruled = RuledRows.Of([
+                lead.Select(l => Markup.Escape(l.Row)).ToList(),
+                templates.Select(t => AdvisorTemplateRow(t, ReferenceEquals(t, current))).ToList(),
+                tail.Select(t => Markup.Escape(t.Row)).ToList()]);
+            var page = new MenuPage(Crumb(crumb), ruled.Rows, AdvisorTemplateKeys)
             {
-                rows.Add(Markup.Escape(row));
-                bands.Add(band);
-                jumps.Add("");
-            }
-
-            foreach (var template in templates)
-            {
-                rows.Add(AdvisorTemplateRow(template, ReferenceEquals(template, current)));
-                bands.Add(AdvisorTemplates.Band(template));
-                jumps.Add(template.Id);
-            }
-
-            foreach (var (row, band) in tail)
-            {
-                rows.Add(Markup.Escape(row));
-                bands.Add(band);
-                jumps.Add("");
-            }
-
-            var page = new MenuPage(Crumb(crumb), rows, AdvisorTemplateKeys)
-            {
-                JumpNames = jumps,
-                Footer = (_, row) => row >= 0 && row < bands.Count && bands[row].Length > 0 ? new MenuFooter(bands[row]) : null,
+                Headings = ruled.Headings,
+                JumpNames = Enumerable.Range(0, ruled.Rows.Count).Select(r => ruled.ItemOf(r) is >= 0 and var i ? jumps[i] : "").ToList(),
+                Footer = (_, row) => ruled.ItemOf(row) is >= 0 and var i && i < bands.Count && bands[i].Length > 0 ? new MenuFooter(bands[i]) : null,
             };
-            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { Row: var index } pick)
+            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { Row: var pickedRow } pick)
             {
                 return null;
+            }
+
+            int index = ruled.ItemOf(pickedRow);
+            if (index < 0)
+            {
+                continue;
             }
 
             cursor = index;

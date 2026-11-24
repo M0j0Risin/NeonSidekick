@@ -236,10 +236,45 @@ public static class ThemeText
     public static string ChecksWarning(IReadOnlyList<ContrastProblem> problems)
     {
         ArgumentNullException.ThrowIfNull(problems);
-        string shown = string.Join(" · ", problems.Take(ChecksShown).Select(p =>
-            string.Create(CultureInfo.InvariantCulture, $"{p.Pair} {Math.Floor(p.Ratio * 10) / 10:0.0}:1, wants {p.Target:0.##}")));
+        string shown = string.Join(" · ", problems.Take(ChecksShown).Select(p => Ratio(p) is var (ratio, target) ? $"{p.Pair} {ratio}:1, wants {target}" : ""));
         return "⚠ " + shown + (problems.Count > ChecksShown ? string.Create(CultureInfo.InvariantCulture, $" · and {problems.Count - ChecksShown} more") : "");
     }
+
+    /// <summary>
+    /// A problem's two numbers as text (2026-11-24, shared by every band line): the ratio floored to one decimal, so a pair just under its bar
+    /// never reads as meeting it (#106: 4.46 showed as 4.5), and the target as written (<c>4.5</c>, <c>3</c>). Pure.
+    /// </summary>
+    public static (string Ratio, string Target) Ratio(ContrastProblem problem)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+        return (string.Create(CultureInfo.InvariantCulture, $"{Math.Floor(problem.Ratio * 10) / 10:0.0}"), string.Create(CultureInfo.InvariantCulture, $"{problem.Target:0.##}"));
+    }
+
+    /// <summary>
+    /// A band glyph and the two spaces after it (2026-11-24, the user's note): Windows Terminal can draw ⚠ and ✓ two wide, and one space let the
+    /// text touch the glyph. Every band line leads with one. Pinned.
+    /// </summary>
+    public static string Mark(string glyph) => glyph + "  ";
+
+    /// <summary>The band's line for one pair under its bar: <c>⚠  dimmer on bg 2.1:1 (wants 2.5)</c>. Pinned.</summary>
+    public static string ChecksPair(ContrastProblem problem) =>
+        Ratio(problem) is var (ratio, target) ? Mark("⚠") + $"{problem.Pair} {ratio}:1 (wants {target})" : "";
+
+    /// <summary>
+    /// The code colors under their bar on one diff slab, folded to one line at the worst (2026-11-24): <c>⚠  4 code colors on the good diff, worst
+    /// 2.1:1 (wants 3)</c>. A gray <c>bg</c> or <c>good</c> would otherwise fill the band with near-identical lines. Pinned.
+    /// </summary>
+    public static string ChecksCodeSlab(int count, string slab, ContrastProblem worst) =>
+        Ratio(worst) is var (ratio, target)
+            ? Mark("⚠") + string.Create(CultureInfo.InvariantCulture, $"{count} code {(count == 1 ? "color" : "colors")} on the {slab} diff, worst {ratio}:1 (wants {target})")
+            : "";
+
+    /// <summary>The band's last row when its lines don't fit: <c>⚠  and 3 more</c>. Pinned.</summary>
+    public static string ChecksMore(int count) => Mark("⚠") + string.Create(CultureInfo.InvariantCulture, $"and {count} more");
+
+    /// <summary>The band when the cursor's role meets its bars and other pairs don't: <c>✓  dimmer meets its bars · ⚠  2 other pairs don't</c>. Pinned.</summary>
+    public static string ChecksRoleOk(string role, int others) =>
+        Mark("✓") + $"{role} meets its bars · " + Mark("⚠") + string.Create(CultureInfo.InvariantCulture, $"{others} other {(others == 1 ? "pair doesn't" : "pairs don't")}");
 
     /// <summary>A built-in named: the copy to make and edit instead.</summary>
     public static string EditBuiltInQuestion(string copy) => $"Built-in themes can't be changed. Save a copy as {copy} and edit it?";

@@ -113,7 +113,11 @@ internal sealed partial class ChatScreen
         {
             var rows = ConnectRows(EmbeddedAvailable, DockerEndpoint.Here);
             int width = rows.Max(r => r.Label.Length) + 2;
-            var page = new MenuPage(ConnectTitle, rows.Select(r => ConnectRow(r.Label, r.Note, width)).ToList(), ConnectKeys);
+            // Rules between the local ways, the hosted ones and Not now (2026-11-24, the user's ask), built here so ConnectRows stays as it is;
+            // the pick maps back to its row.
+            static int Group(ConnectChoice c) => c switch { ConnectChoice.NotNow => 2, ConnectChoice.Anthropic or ConnectChoice.OpenAI or ConnectChoice.ClaudeCli => 1, _ => 0 };
+            var ruled = RuledRows.Of([.. Enumerable.Range(0, 3).Select(g => (IReadOnlyList<string>)rows.Where(r => Group(r.Choice) == g).Select(r => ConnectRow(r.Label, r.Note, width)).ToList())]);
+            var page = new MenuPage(ConnectTitle, ruled.Rows, ConnectKeys) { Headings = ruled.Headings };
             MenuPick? pick;
             try
             {
@@ -124,12 +128,12 @@ internal sealed partial class ChatScreen
                 _menuPane.Close();
             }
 
-            if (pick is not { } picked || rows[picked.Row].Choice == ConnectChoice.NotNow)
+            if (pick is not { } picked || ruled.ItemOf(picked.Row) is not (>= 0 and var item) || rows[item].Choice == ConnectChoice.NotNow)
             {
                 return;
             }
 
-            switch (rows[picked.Row].Choice)
+            switch (rows[item].Choice)
             {
                 case ConnectChoice.Scan:
                     // Where to look first (2026-10-21, the user's pick): the scan mode is off by default, so a look under it found

@@ -1877,7 +1877,7 @@ internal sealed partial class ChatScreen
         _skillsMenu = new SkillsMenu(SkillsFacts, settings, _menu, _flow, _menuPane, _input, _openFile, name => SkillsMenu.UsageCaption(_skillRecords, _catalog.Find(name), _time.LocalTimeZone), _skillRecords, SkillVersions, RestoreSkill, ForgetSkillVersions,
             session: _session.History,   // the loaded sub-tab (2026-10-12): the one history the session keeps, watched while the pane is open
             // The repo's skills (2026-11-23): the trust question reads through the catalog, saves to the profile's store, and views in the info pane.
-            catalog: _catalog, trust: _projectTrust, view: (label, content, ct) => _info.ShowAsync(label, [new InfoTab(label, () => content)], 0, ct),
+            catalog: _catalog, trust: _projectTrust, view: (label, tabs, ct) => _info.ShowAsync(label, tabs, 0, ct),
             // A project skill's delete (2026-11-23, the user's ask): the screen's bin under File deletes to Recycle bin, read at each delete.
             bin: () => _effective().FileDeletesToRecycleBin ? _recycleBin : null);
         // The /tools pane (2026-09-19): the tool list over the live facts, the Ask / Files / Web rows through the settings menu.
@@ -3160,7 +3160,36 @@ internal sealed partial class ChatScreen
         KeyRows(voiceOn, pushToTalk, wakeReady, wakePhrase, OperatingSystem.IsMacOS());
 
     /// <summary><see cref="KeyRows(bool, ConsoleKey, bool, string)"/> for a Mac or not, whatever this machine is, so the tests pin both lists.</summary>
-    public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase, bool mac)
+    public static KeyRow[] KeyRows(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase, bool mac) =>
+        KeyRun(voiceOn, pushToTalk, wakeReady, wakePhrase, mac).Rows;
+
+    /// <summary>
+    /// The Keys tab's groups (2026-11-24, the user's ask and pick: labeled headings, six groups, nothing moved): <see cref="KeyRows(bool, ConsoleKey, bool, string)"/>'s
+    /// rows in their runs, each with its <see cref="KeyGroup"/>; flattened they are <see cref="KeyRows(bool, ConsoleKey, bool, string)"/> exactly, so
+    /// <c>/keycheck</c> and <c>neon_help</c> keep reading the flat list. A group with no rows is left out.
+    /// </summary>
+    public static IReadOnlyList<(Hotkeys.KeyGroup Group, IReadOnlyList<KeyRow> Rows)> KeySections(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase) =>
+        KeySections(voiceOn, pushToTalk, wakeReady, wakePhrase, OperatingSystem.IsMacOS());
+
+    /// <summary><see cref="KeySections(bool, ConsoleKey, bool, string)"/> for a Mac or not, so the tests pin both lists.</summary>
+    public static IReadOnlyList<(Hotkeys.KeyGroup Group, IReadOnlyList<KeyRow> Rows)> KeySections(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase, bool mac)
+    {
+        var (rows, starts) = KeyRun(voiceOn, pushToTalk, wakeReady, wakePhrase, mac);
+        var sections = new List<(Hotkeys.KeyGroup, IReadOnlyList<KeyRow>)>();
+        for (int g = 0; g < starts.Length; g++)
+        {
+            int end = g + 1 < starts.Length ? starts[g + 1] : rows.Length;
+            if (end > starts[g])
+            {
+                sections.Add(((Hotkeys.KeyGroup)g, rows[starts[g]..end]));
+            }
+        }
+
+        return sections;
+    }
+
+    /// <summary>The rows and where each <see cref="KeyGroup"/>'s run starts, in the enum's order.</summary>
+    private static (KeyRow[] Rows, int[] Starts) KeyRun(bool voiceOn, ConsoleKey pushToTalk, bool wakeReady, string wakePhrase, bool mac)
     {
         var rows = new List<KeyRow>
         {
@@ -3195,6 +3224,7 @@ internal sealed partial class ChatScreen
             rows.Add(new("Option+Left / Right", "move a word back or forward (Mission Control may hold Ctrl+Left / Right)"));
         }
 
+        int talk = rows.Count;
         if (voiceOn)
         {
             rows.Add(new(pushToTalk.ToString(), "talk (the push-to-talk key)"));
@@ -3210,6 +3240,7 @@ internal sealed partial class ChatScreen
         rows.Add(new("F10", "capture the screen and attach it", "/screen"));
         // A Mac's stand-ins (2026-10-07, the user's picks) for the chords its terminals cannot send; the originals still work in the
         // app's own windows, which hand their chords on.
+        int ctrl = rows.Count;
         rows.Add(new("Ctrl+.", mac ? "open a terminal (in the app's windows; Ctrl+] in the terminal)" : "open a terminal in the working directory", "/terminal"));
         if (mac)
         {
@@ -3247,6 +3278,7 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+W", "open the Web UI in a browser, signed in", "/webui browser"));   // 2026-10-18, the user's pick
         rows.Add(new("Ctrl+Y", "open the sessions pane", SlashCommands.SessionsWord));   // 2026-11-08, the user's pick (Ctrl+Alt+Y until then)
         rows.Add(new("Ctrl+Z", "open the theme picker", "/theme"));
+        int ctrlAlt = rows.Count;
         if (mac)
         {
             rows.Add(new("Ctrl+Alt+A", "open the memory pane", "/memory"));
@@ -3269,7 +3301,9 @@ internal sealed partial class ChatScreen
         rows.Add(new("Ctrl+Alt+W", "open the Web UI pane", SlashCommands.WebUiWord));   // 2026-10-18, the user's pick
         rows.Add(new("Ctrl+Alt+X", "unload the embedded model at once (press twice)"));
         rows.Add(new("Ctrl+Alt+Z", "start a new conversation with the splash", "/splash"));   // 2026-10-18, the user's pick (Ctrl+Alt+P until then)
-        return rows.ToArray();
+        int editing = rows.FindIndex(r => r.Key == "Ctrl+Left / Right");
+        int transcript = rows.FindIndex(r => r.Key == "PgUp / PgDn");
+        return (rows.ToArray(), [0, editing, transcript, talk, ctrl, ctrlAlt]);
     }
 
     /// <summary>
@@ -3355,25 +3389,44 @@ internal sealed partial class ChatScreen
         return cell;
     }
 
-    private IRenderable KeysTab() => KeysTab(KeyRows(_voice.Enabled, _voice.PushToTalk, _voice.WakeReady, _voice.WakePhrase));
+    private IRenderable KeysTab() => KeysTab(KeySections(_voice.Enabled, _voice.PushToTalk, _voice.WakeReady, _voice.WakePhrase));
 
     /// <summary>
-    /// The Keys tab over <paramref name="rows"/>: the key, what it does, and since 2026-10-05 (the user's pick) the command it runs
+    /// The Keys tab over <paramref name="sections"/>: the key, what it does, and since 2026-10-05 (the user's pick) the command it runs
     /// in a column of its own, in <see cref="Theme.HelpForm"/> as the Commands tabs' forms, blank for a key that runs none. The
-    /// meanings wrap inside their column on a narrow console; the key and the command never do.
+    /// meanings wrap inside their column on a narrow console; the key and the command never do. Since 2026-11-24 (the user's ask) each
+    /// group under a labeled heading (<see cref="KeyCheckText.GroupNames"/>, no count: a reference card), the rows not indented; every
+    /// group's grid has the same three column widths, taken over the whole tab, so the columns stay put from group to group and a narrow
+    /// console shrinks every grid's meaning column alike (<see cref="UsageText.StatisticsTab"/>'s shape).
     /// </summary>
-    internal static IRenderable KeysTab(IReadOnlyList<KeyRow> rows)
+    internal static IRenderable KeysTab(IReadOnlyList<(Hotkeys.KeyGroup Group, IReadOnlyList<KeyRow> Rows)> sections)
     {
-        var grid = new Grid()
-            .AddColumn(new GridColumn().NoWrap().PadRight(SlashCommands.HelpColumnGap))
-            .AddColumn(new GridColumn().PadRight(SlashCommands.HelpColumnGap))
-            .AddColumn(new GridColumn().NoWrap().PadRight(0));
-        foreach (var row in rows)
+        var all = sections.SelectMany(s => s.Rows).ToList();
+        int keyWidth = all.Select(r => TextCells.Width(r.Key)).DefaultIfEmpty(0).Max();
+        int meaningWidth = all.Select(r => TextCells.Width(r.Meaning)).DefaultIfEmpty(0).Max();
+        int commandWidth = all.Select(r => TextCells.Width(r.Command ?? "")).DefaultIfEmpty(0).Max();
+        var parts = new List<IRenderable>();
+        foreach (var (group, rows) in sections)
         {
-            grid.AddRow(new Text(row.Key, Theme.AccentSecondary), new Text(row.Meaning, Theme.Body), new Text(row.Command ?? "", Theme.HelpForm));
+            if (rows.Count == 0)
+            {
+                continue;
+            }
+
+            parts.Add(new SectionRule(SectionRule.Markup(Hotkeys.KeyCheckText.GroupNames[(int)group])));
+            var grid = new Grid()
+                .AddColumn(new GridColumn().NoWrap().Width(keyWidth).PadRight(SlashCommands.HelpColumnGap))
+                .AddColumn(new GridColumn().Width(meaningWidth).PadRight(SlashCommands.HelpColumnGap))
+                .AddColumn(new GridColumn().NoWrap().Width(Math.Max(1, commandWidth)).PadRight(0));
+            foreach (var row in rows)
+            {
+                grid.AddRow(new Text(row.Key, Theme.AccentSecondary), new Text(row.Meaning, Theme.Body), new Text(row.Command ?? "", Theme.HelpForm));
+            }
+
+            parts.Add(grid);
         }
 
-        return grid;
+        return new Rows(parts);
     }
 
     // Text cells, never Markup: a summary may hold brackets ("/timer <duration> [name]").
@@ -16167,45 +16220,23 @@ internal sealed partial class ChatScreen
                     return;
 
                 case ProfileActionKind.Add:
-                    if (!Profiles.IsValidName(action.Name))
+                {
+                    // One create path with the profile picker's add row (2026-11-24, SettingsMenu.CreateProfile): the name checks, the seed
+                    // (this profile's saved settings and basic files, or --fresh's compiled defaults, 2026-11-23) and the created notice.
+                    var (error, created) = _menu.CreateProfile(action.Name, action.Fresh);
+                    if (error is not null)
                     {
-                        _transcript.Error(ProfileNameError);
+                        _transcript.Error(error);
                         return;
                     }
 
-                    if (Profiles.Resolve(home, action.Name) is { } existing)
-                    {
-                        _transcript.Error(ProfileExistsError(existing));
-                        return;
-                    }
-
-                    // The saved values, never the effective ones; and its own files folder, not this one's
-                    // (a sandbox is the sidekick's own). The memories come along when they exist on disk (written
-                    // synchronously, so the disk is current); the persona, operating rules and voice directive
-                    // stay behind since 2026-10-10 (New profile mode retired, the user's call: /profile push|pull copies them).
-                    // The seed's rules (its own sandbox, the default avatar, its own shortcut, no Web UI token) live in Profiles.NewProfileSeed
-                    // since 2026-11-22, shared with a new advisor from a template. --fresh (2026-11-23, the user's ask): the compiled defaults, nothing copied.
-                    if (action.Fresh)
-                    {
-                        Profiles.Create(home, action.Name, Profiles.FreshProfileSeed());
-                        if (await _menu.SwitchProfileAsync(action.Name).ConfigureAwait(false))
-                        {
-                            await AfterProfileSwitchAsync(cancellationToken, ProfileCreatedFreshNotice(action.Name)).ConfigureAwait(false);
-                        }
-
-                        return;
-                    }
-
-                    var seed = Profiles.NewProfileSeed(_settings.Current);
-                    Profiles.Create(home, action.Name, seed);
-                    IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
-                        _settings.ProfileDirectory, home, action.Name, Profiles.BasicSidekickFiles);
                     if (await _menu.SwitchProfileAsync(action.Name).ConfigureAwait(false))
                     {
-                        await AfterProfileSwitchAsync(cancellationToken, ProfileCreatedNotice(action.Name, copied)).ConfigureAwait(false);
+                        await AfterProfileSwitchAsync(cancellationToken, [created!]).ConfigureAwait(false);
                     }
 
                     return;
+                }
 
                 case ProfileActionKind.Delete:
                     await DeleteProfileAsync(action.Name, cancellationToken).ConfigureAwait(false);
@@ -16500,7 +16531,7 @@ internal sealed partial class ChatScreen
     /// containers are kept running through it (<see cref="LlmSession.ProfileSwitched"/>); false for a pull into the loaded profile or a reset
     /// of it, which change its own settings as any settings change does.
     /// </summary>
-    private async Task AfterProfileSwitchAsync(CancellationToken cancellationToken, string? preface = null, string? notice = null, bool switched = true)
+    private async Task AfterProfileSwitchAsync(CancellationToken cancellationToken, IReadOnlyList<string>? prefaces = null, string? notice = null, bool switched = true)
     {
         _toolsOfferedDirty = true;   // 2026-10-16: the new profile's catalogs and switches
         // The Web UI's copy is the old profile's conversation's (2026-10-14): cleared; the server is reconciled below for the new profile.
@@ -16543,7 +16574,9 @@ internal sealed partial class ChatScreen
         void Head()
         {
             _renderScreen(_pane);
-            if (preface is not null)
+            // The created notices (2026-11-24): /profile add's own, else what the picker's add row held (a real switch alone takes them,
+            // never a pull or a reset of the loaded profile), one notice each, in order, above the switch line so the wipe keeps them.
+            foreach (string preface in prefaces ?? (switched ? _menu.TakeProfileCreatedNotices() : []))
             {
                 _transcript.Notice(preface);
             }

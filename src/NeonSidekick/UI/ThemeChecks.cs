@@ -2,8 +2,12 @@ using Spectre.Console;
 
 namespace NeonSidekick.UI;
 
-/// <summary>One pair of a palette's colors that reads less than it should: the pair in the theme file's words, its ratio and the target.</summary>
-public sealed record ContrastProblem(string Pair, double Ratio, double Target);
+/// <summary>
+/// One pair of a palette's colors that reads less than it should: the pair in the theme file's words, its ratio and the target. Since 2026-11-24
+/// (the <c>/theme edit</c> pane's band) the roles it judges, so a row can be marked and its band list its own pairs (none for a style on its own
+/// ground), and for a code color on a diff slab that slab ("good" or "bad"), so the band can fold them into one line per slab.
+/// </summary>
+public sealed record ContrastProblem(string Pair, double Ratio, double Target, IReadOnlyList<ThemeColorSlot>? Roles = null, string? Slab = null);
 
 /// <summary>
 /// The contrast bars every theme is held to (2026-11-16, plan sharded-hugging-puppy #53): the ones the contrast review of 2026-10-16 moved all
@@ -36,35 +40,36 @@ public static class ThemeChecks
     {
         ArgumentNullException.ThrowIfNull(palette);
         var problems = new List<ContrastProblem>();
-        void Need(string pair, Color a, Color b, double target)
+        void Need(string pair, Color a, Color b, double target, string? slab = null, params ThemeColorSlot[] roles)
         {
             double ratio = ColorContrast.Contrast(a, b);
             if (ratio < target)
             {
-                problems.Add(new ContrastProblem(pair, ratio, target));
+                problems.Add(new ContrastProblem(pair, ratio, target, roles.Length > 0 ? roles : null, slab));
             }
         }
 
-        Need(ThemeText.PanelPair, palette.PanelBg, palette.Bg, PanelTarget);
-        Need(ThemeText.DimmerPair, palette.Dimmer, palette.Bg, DimmerTarget);
-        Need(ThemeText.DeepPair, palette.Deep, palette.Bg, DeepTarget);
-        Need(ThemeText.InkPair, palette.Ink, palette.Bg, TextTarget);
-        Need(ThemeText.InkPanelPair, palette.Ink, palette.PanelBg, TextTarget);
-        Need(ThemeText.DimPanelPair, palette.Dim, palette.PanelBg, TextTarget);
-        foreach (var (name, color) in Accents(palette))
+        Need(ThemeText.PanelPair, palette.PanelBg, palette.Bg, PanelTarget, null, ThemeColorSlot.PanelBg, ThemeColorSlot.Bg);
+        Need(ThemeText.DimmerPair, palette.Dimmer, palette.Bg, DimmerTarget, null, ThemeColorSlot.Dimmer, ThemeColorSlot.Bg);
+        Need(ThemeText.DeepPair, palette.Deep, palette.Bg, DeepTarget, null, ThemeColorSlot.Deep, ThemeColorSlot.Bg);
+        Need(ThemeText.InkPair, palette.Ink, palette.Bg, TextTarget, null, ThemeColorSlot.Ink, ThemeColorSlot.Bg);
+        Need(ThemeText.InkPanelPair, palette.Ink, palette.PanelBg, TextTarget, null, ThemeColorSlot.Ink, ThemeColorSlot.PanelBg);
+        Need(ThemeText.DimPanelPair, palette.Dim, palette.PanelBg, TextTarget, null, ThemeColorSlot.Dim, ThemeColorSlot.PanelBg);
+        foreach (var (name, color, role) in Accents(palette))
         {
-            Need(ThemeText.PanelRolePair(name), color, palette.PanelBg, TextTarget);
+            Need(ThemeText.PanelRolePair(name), color, palette.PanelBg, TextTarget, null, role, ThemeColorSlot.PanelBg);
         }
 
-        Need(ThemeText.BgPrimaryPair, palette.Bg, palette.Primary, TextTarget);
+        Need(ThemeText.BgPrimaryPair, palette.Bg, palette.Primary, TextTarget, null, ThemeColorSlot.Bg, ThemeColorSlot.Primary);
         var styles = Theme.StylesBuilt(palette);
-        foreach (var (slab, under) in new[] { ("good", palette.Good), ("bad", palette.Bad) })
+        foreach (var (slab, under, role) in new[] { ("good", palette.Good, ThemeColorSlot.Good), ("bad", palette.Bad, ThemeColorSlot.Bad) })
         {
             var fill = Theme.Mix(palette.Bg, under, Theme.DiffSlabShare);
             foreach (var (_, slot) in Theme.CodeSlots)
             {
                 var ink = styles(slot).Foreground;
-                Need(ThemeText.SlabPair(ThemeKeys.Styles[(int)slot], slab), ink == Color.Default ? palette.Ink : ink, fill, CodeTarget);
+                ThemeColorSlot[] roles = ink == Color.Default ? [ThemeColorSlot.Bg, role, ThemeColorSlot.Ink] : [ThemeColorSlot.Bg, role];
+                Need(ThemeText.SlabPair(ThemeKeys.Styles[(int)slot], slab), ink == Color.Default ? palette.Ink : ink, fill, CodeTarget, slab, roles);
             }
         }
 
@@ -81,7 +86,8 @@ public static class ThemeChecks
         return problems;
     }
 
-    private static (string, Color)[] Accents(ThemePalette p) =>
-        [("primary", p.Primary), ("secondary", p.Secondary), ("tertiary", p.Tertiary), ("highlight", p.Highlight), ("warm", p.Warm), ("tint", p.Tint),
-         ("good", p.Good), ("bad", p.Bad), ("warn", p.Warn)];
+    private static (string, Color, ThemeColorSlot)[] Accents(ThemePalette p) =>
+        [("primary", p.Primary, ThemeColorSlot.Primary), ("secondary", p.Secondary, ThemeColorSlot.Secondary), ("tertiary", p.Tertiary, ThemeColorSlot.Tertiary),
+         ("highlight", p.Highlight, ThemeColorSlot.Highlight), ("warm", p.Warm, ThemeColorSlot.Warm), ("tint", p.Tint, ThemeColorSlot.Tint),
+         ("good", p.Good, ThemeColorSlot.Good), ("bad", p.Bad, ThemeColorSlot.Bad), ("warn", p.Warn, ThemeColorSlot.Warn)];
 }

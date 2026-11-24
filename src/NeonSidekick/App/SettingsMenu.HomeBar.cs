@@ -304,44 +304,55 @@ internal sealed partial class SettingsMenu
     {
         string? alias = HomeBarItems.AliasOf(_settings.Current.HomeBarAliases, reference);
         string? glyph = HomeBarItems.GlyphOf(_settings.Current.HomeBarGlyphs, reference);
-        var rows = new List<(string Row, (int, HomeItemDo) Action)>
+        // Rules between the moves, the pins, the name and emoji rows and Remove (2026-11-24, the user's ask); the tuples stay items, so a
+        // rule never maps to an action (Remove is (0, Move)).
+        var moves = new List<(string Row, (int, HomeItemDo) Action)>
         {
             (Markup.Escape(HomeBarText.MoveTop), (HomeBarItems.Top, HomeItemDo.Move)),
             (Markup.Escape(HomeBarText.MoveUp), (-1, HomeItemDo.Move)),
             (Markup.Escape(HomeBarText.MoveDown), (1, HomeItemDo.Move)),
             (Markup.Escape(HomeBarText.MoveBottom), (HomeBarItems.Bottom, HomeItemDo.Move)),
         };
+        var pins = new List<(string Row, (int, HomeItemDo) Action)>();
         foreach (var (pin, label) in new[] { (0, HomeBarText.PinLeftItem), (1, HomeBarText.PinCenterItem), (2, HomeBarText.PinRightItem) })
         {
             if (pin != group)
             {
-                rows.Add((Markup.Escape(label), (pin, HomeItemDo.Pin)));
+                pins.Add((Markup.Escape(label), (pin, HomeItemDo.Pin)));
             }
         }
+
+        var named = new List<(string Label, string? Value, (int, HomeItemDo) Action)>();
         if (!HomeBarItems.IsNameless(reference))
         {
             // The 🛒 chip shows no name to change (later on 2026-10-12, the user's call); its emoji still can be.
-            rows.Add((Markup.Escape(HomeBarText.RenameItem) + (alias is not null ? Theme.DimMarkup("  " + (alias.Length == 0 ? HomeBarText.EmojiAlone : alias)) : ""), (0, HomeItemDo.Rename)));
+            named.Add((HomeBarText.RenameItem, alias is null ? null : alias.Length == 0 ? HomeBarText.EmojiAlone : alias, (0, HomeItemDo.Rename)));
             if (alias is not null)
             {
                 // The way back from an alias, now that a blank is the emoji alone (later on 2026-10-12).
-                rows.Add((Markup.Escape(HomeBarText.DefaultNameItem) + Theme.DimMarkup("  " + HomeBarItems.NameOf(reference, catalog)), (0, HomeItemDo.DefaultName)));
+                named.Add((HomeBarText.DefaultNameItem, HomeBarItems.NameOf(reference, catalog), (0, HomeItemDo.DefaultName)));
             }
         }
 
         if (!HomeBarItems.IsDivider(reference))
         {
             // A divider has no emoji either (2026-10-13): its page is the moves and Remove.
-            rows.Add((Markup.Escape(HomeBarText.EmojiItem) + (glyph is not null ? Theme.DimMarkup("  " + glyph) : ""), (0, HomeItemDo.Emoji)));
+            named.Add((HomeBarText.EmojiItem, glyph, (0, HomeItemDo.Emoji)));
             if (glyph is not null)
             {
-                rows.Add((Markup.Escape(HomeBarText.DefaultEmojiItem) + Theme.DimMarkup("  " + HomeChips.DefaultGlyph(reference, catalog)), (0, HomeItemDo.DefaultEmoji)));
+                named.Add((HomeBarText.DefaultEmojiItem, HomeChips.DefaultGlyph(reference, catalog), (0, HomeItemDo.DefaultEmoji)));
             }
         }
 
-        rows.Add((Markup.Escape(HomeBarText.RemoveItem), (0, HomeItemDo.Move)));
-        var page = new MenuPage(Crumb(FieldName(SettingsField.ShowHomeBar)) + " › " + HomeBarItems.NameOf(reference, catalog), rows.Select(r => r.Row).ToList(), PickKeys);
-        return await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } pick && pick.Row >= 0 && pick.Row < rows.Count ? rows[pick.Row].Action : null;
+        // Each label padded to the widest shown, so the dim values start in one column (2026-11-24, the user's pick); a row with no value
+        // shows its label alone.
+        int labelWidth = named.Select(n => TextCells.Width(n.Label)).DefaultIfEmpty(0).Max();
+        var names = named.Select(n => (n.Value is null ? Markup.Escape(n.Label) : Markup.Escape(TextCells.Cell(n.Label, labelWidth)) + Theme.DimMarkup("  " + n.Value), n.Action)).ToList();
+        List<(string Row, (int, HomeItemDo) Action)> remove = [(Markup.Escape(HomeBarText.RemoveItem), (0, HomeItemDo.Move))];
+        List<(string Row, (int, HomeItemDo) Action)> rows = [.. moves, .. pins, .. names, .. remove];
+        var ruled = RuledRows.Of([moves.Select(r => r.Row).ToList(), pins.Select(r => r.Row).ToList(), names.Select(r => r.Item1).ToList(), remove.Select(r => r.Row).ToList()]);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ShowHomeBar)) + " › " + HomeBarItems.NameOf(reference, catalog), ruled.Rows, PickKeys) { Headings = ruled.Headings };
+        return await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is { } pick && ruled.ItemOf(pick.Row) is var item && item >= 0 && item < rows.Count ? rows[item].Action : null;
     }
 
     // Change emoji (later on 2026-10-12, the user's ask): the avatar's emoji grid for the item, opening on its emoji's group, 🚫
@@ -461,6 +472,18 @@ internal sealed partial class SettingsMenu
         var refs = new List<string?>();
         var headings = new HashSet<int>();
         int number = 1;
+        // Each item's number, glyph and name padded to the widest on the tab, across its groups, so the dim notes start in one column
+        // (2026-11-24, the user's pick).
+        int headWidth = 0;
+        foreach (var (_, group, _) in sides.All.Count > 0 ? SidedHeadings(sides) : [])
+        {
+            foreach (string item in group)
+            {
+                headWidth = Math.Max(headWidth, TextCells.Width(BarParts(catalog, item, number++, aliases, glyphs, monitorsHere).Head));
+            }
+        }
+
+        number = 1;
         foreach (var (title, group, empty) in sides.All.Count > 0 ? SidedHeadings(sides) : [])
         {
             headings.Add(rows.Count);
@@ -468,7 +491,8 @@ internal sealed partial class SettingsMenu
             refs.Add(null);
             foreach (string item in group)
             {
-                string row = BarRow(catalog, item, number++, aliases, glyphs, monitorsHere);
+                var (head, note) = BarParts(catalog, item, number++, aliases, glyphs, monitorsHere);
+                string row = Markup.Escape(TextCells.Cell(head, headWidth)) + Theme.DimMarkup("  " + note);
                 rows.Add(hidden ? Theme.DimMarkup(Markup.Remove(row)) : row);
                 refs.Add(item);
             }
@@ -479,20 +503,28 @@ internal sealed partial class SettingsMenu
             rows.Add(Theme.DimMarkup(HomeBarText.EmptyBar));
             refs.Add(null);
         }
+        else if (refs[^1] is not null)
+        {
+            // A bare rule before + Add divider when an item sits above it (2026-11-24, the user's ask); after an empty group's heading
+            // (Pinned right with nothing) none, the heading already sets it apart. A null ref reads as a heading.
+            headings.Add(rows.Count);
+            rows.Add(SectionRule.Bare);
+            refs.Add(null);
+        }
 
         rows.Add(Markup.Escape(HomeBarText.AddDividerRow));
         refs.Add(AddDividerRef);
         return new HomeTab(new MenuTab(HomeBarText.BarTab, rows) { Moves = true, Sides = true, Headings = headings.Count > 0 ? headings : null, Hint = HomeBarText.BarHint, Off = hidden }, refs);
     }
 
-    // One item's row on the bar's tab: its number, its glyph and its name as the chip has them, and where it is, dim.
-    private static string BarRow(HaCatalog catalog, string item, int number, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool monitorsHere = true)
+    // One item's row on the bar's tab, unescaped: its number, its glyph and its name as the chip has them, and where it is (drawn dim).
+    private static (string Head, string Note) BarParts(HaCatalog catalog, string item, int number, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool monitorsHere = true)
     {
         string at = number.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(2) + ". ";
         HomeBarItems.TryParse(item, out var kind, out string id);
         if (kind == HomeItemKind.Divider)
         {
-            return Markup.Escape($"{at}{ScreenPane.DividerGlyph} {HomeBarText.DividerName}") + Theme.DimMarkup("  " + HomeBarText.DividerWhere);
+            return ($"{at}{ScreenPane.DividerGlyph} {HomeBarText.DividerName}", HomeBarText.DividerWhere);
         }
 
         // The entity's own glyph, as its chip has (2026-10-12: a TV's 📺 is in its device class, which a bare id lacks), or the
@@ -505,7 +537,7 @@ internal sealed partial class SettingsMenu
         string name = HomeBarItems.NameOf(item, catalog);
         string? alias = HomeBarItems.AliasOf(aliases, item);
         string note = (alias is null ? where : (alias.Length == 0 ? HomeBarText.EmojiAlone + " · " : "") + name + " · " + where) + (custom is null ? "" : " · " + HomeBarText.DefaultGlyphNote(own));
-        return Markup.Escape($"{at}{custom ?? own} {alias ?? name}") + Theme.DimMarkup("  " + note);
+        return ($"{at}{custom ?? own} {alias ?? name}", note);
     }
 
     private static HomeTab RoomsTab(HaCatalog catalog, IReadOnlyList<string> items, string filter, IReadOnlyDictionary<string, string>? aliases)
@@ -524,7 +556,7 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        return Sectioned(HomeBarText.RoomsTab, sections, items, filter);
+        return Sectioned(HomeBarText.RoomsTab, sections, items, filter, catalog.Areas.Select(a => TextCells.Width(a.Name)).DefaultIfEmpty(0).Max());
     }
 
     private static HomeTab DomainTab(string title, HaCatalog catalog, IReadOnlyList<string> items, IReadOnlyList<HaEntity> entities, string filter, IReadOnlyDictionary<string, string>? aliases)
@@ -577,14 +609,16 @@ internal sealed partial class SettingsMenu
             sections.Add((HomeBarText.Extra, null, extra));
         }
 
-        return Sectioned(title, sections, items, filter);
+        return Sectioned(title, sections, items, filter, entities.Select(e => TextCells.Width(e.Name)).DefaultIfEmpty(0).Max());
     }
 
     // A row's dim note with the item's alias quoted ahead of it, when it has one.
     private static string AliasNote(string? alias, string note) => alias is null ? note : HomeBarText.AliasNote(alias, note);
 
-    // A tab of check rows in sections (a heading each, a gap between), filtering by filter; one dim line when nothing is left.
-    private static HomeTab Sectioned(string title, List<(string Heading, string? Note, List<(string Ref, string Name, string Note)> Rows)> sections, IReadOnlyList<string> items, string filter)
+    // A tab of check rows in sections (a heading each, a gap between), filtering by filter; one dim line when nothing is left. Each name is
+    // padded to nameWidth, the widest the caller's whole unfiltered list has (2026-11-24, the user's pick), so the details line up and
+    // don't shift while a filter is typed.
+    private static HomeTab Sectioned(string title, List<(string Heading, string? Note, List<(string Ref, string Name, string Note)> Rows)> sections, IReadOnlyList<string> items, string filter, int nameWidth = 0)
     {
         var rows = new List<string>();
         var refs = new List<string?>();
@@ -608,7 +642,7 @@ internal sealed partial class SettingsMenu
             foreach (var (reference, name, detail) in entries)
             {
                 bool on = HomeBarItems.Contains(items, reference);
-                rows.Add(Markup.Escape((on ? "[x] " : "[ ] ") + name) + Theme.DimMarkup("  " + detail));
+                rows.Add(Markup.Escape((on ? "[x] " : "[ ] ") + TextCells.Cell(name, Math.Max(nameWidth, TextCells.Width(name)))) + Theme.DimMarkup("  " + detail));
                 refs.Add(reference);
                 total++;
             }

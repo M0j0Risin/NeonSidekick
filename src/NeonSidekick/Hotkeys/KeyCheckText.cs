@@ -9,6 +9,12 @@ namespace NeonSidekick.Hotkeys;
 /// </summary>
 public static class KeyCheckText
 {
+    /// <summary>
+    /// The headings of <c>/help</c>'s Keys tab (2026-11-24, the user's ask and pick: six labeled groups, the rows in their old order), indexed by
+    /// <see cref="KeyGroup"/>. Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<string> GroupNames = ["Menus and the line", "Editing", "Transcript", "Talk and capture", "Ctrl shortcuts", "Ctrl+Alt shortcuts"];
+
     public const string Category = "Keys";
 
     /// <summary>The info pane's label and its one tab's title.</summary>
@@ -135,4 +141,15 @@ public static class KeyCheckText
     }
 
     private static string N(int value) => value.ToString(CultureInfo.InvariantCulture);
+}
+
+/// <summary>A group of <c>/help</c>'s Keys tab (2026-11-24), in the tab's order; indexes <see cref="KeyCheckText.GroupNames"/>.</summary>
+public enum KeyGroup
+{
+    MenusAndLine,
+    Editing,
+    Transcript,
+    TalkAndCapture,
+    Ctrl,
+    CtrlAlt,
 }

@@ -781,6 +781,12 @@ public static class SkillsText
     public static string ViewLabel(string name) => Label + " › " + ShownName(name);
 
     /// <summary>A skill the question can't show: no readable <c>SKILL.md</c> within the bound. Pinned.</summary>
+    /// <summary>The View's first tab (2026-11-24, the user's ask): the file rendered as markdown. Pinned; <c>/project-init</c>'s View shares it.</summary>
+    public const string RenderedTab = "Rendered";
+
+    /// <summary>The View's second tab: the exact text, which a trust is given for. Pinned.</summary>
+    public const string SourceTab = "Source";
+
     public const string NothingToViewText = "(this skill's SKILL.md couldn't be read; it is listed under Skipped)";
 
     /// <summary>

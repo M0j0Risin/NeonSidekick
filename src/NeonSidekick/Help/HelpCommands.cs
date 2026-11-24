@@ -368,7 +368,7 @@ public static class HelpCommands
         ]),
         new("/profile",
         [
-            new("/profile [<name>]", "Switch profiles for this run: alone, a picker (a typed letter jumps to the next profile starting with it); with a name, straight to that one. Each start opens `neon` unless `--profile`, `NEONSIDEKICK_PROFILE` or a desktop shortcut names another. Profiles whose name starts with `_` stay off the picker and the name list unless loaded; `/profile _name` still switches to one. Ctrl+P runs the bare `/profile`."),
+            new("/profile [<name>]", "Switch profiles for this run: alone, a picker (a typed letter jumps to the next profile starting with it; `+` or its top row adds one, copying this profile's settings or starting fresh); with a name, straight to that one. Each start opens `neon` unless `--profile`, `NEONSIDEKICK_PROFILE` or a desktop shortcut names another. Profiles whose name starts with `_` stay off the picker and the name list unless loaded; `/profile _name` still switches to one. Ctrl+P runs the bare `/profile`."),
             new("/profile add|delete <name>", "Create or delete a profile."),
             new("/profile add <name> --fresh", "Create a profile from the default settings, copying nothing: no server, keys, memories or saved prompts."),
             new("/profile rename <name> <new-name>", "Rename a profile."),

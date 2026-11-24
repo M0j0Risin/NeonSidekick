@@ -3304,6 +3304,129 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Contains("  · " + SettingsMenu.UnchangedNotice, Output);
     }
 
+    private void PushText(string text)
+    {
+        foreach (char c in text)
+        {
+            Push(Keys.Char(c));
+        }
+    }
+
+    /// <summary>
+    /// The profile picker's add row (2026-11-24, the user's ask): on top, a rule under it, the cursor still opening on the loaded profile; + goes
+    /// there, a letter still jumps among names; a name, then Copy, makes the profile from this one's settings and switches, its notice held.
+    /// </summary>
+    [Fact]
+    public async Task PickProfile_TheAddRow_CopiesThisProfile_AndSwitches_TheNoticeHeld()
+    {
+        Profiles.Create(_dir, "dba", new AppSettingsData());
+        _settings.Update(d => d.TtsSpeed = 1.5);
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('d'));                                    // a letter: dba, never the add row
+        Push(Keys.Char('+'), Keys.Enter);                        // + goes to the add row; Enter names one
+        PushText("lab");
+        Push(Keys.Enter);
+        Push(Keys.Enter);                                        // Copy neon's settings (the cursor's)
+
+        Assert.True(await menu.PickProfileAsync(CancellationToken.None));
+
+        Assert.Equal("lab", _settings.ProfileName);
+        Assert.Equal(1.5, _settings.Current.TtsSpeed);
+        Assert.Equal([ChatScreen.ProfileCreatedNotice("lab")], menu.TakeProfileCreatedNotices());
+        Assert.Empty(menu.TakeProfileCreatedNotices());
+        Assert.Contains("+ Add a profile…", Output);
+        Assert.Contains(ProfileText.CopySettingsRow(Profiles.DefaultName), Output);
+        Assert.Contains("Start fresh (defaults)", Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task PickProfile_TheAddRow_StartFresh_MakesItFromTheDefaults()
+    {
+        _settings.Update(d => d.TtsSpeed = 1.5);
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('+'), Keys.Enter);
+        PushText("clean");
+        Push(Keys.Enter);
+        Push(Keys.Down, Keys.Enter);                             // Start fresh
+
+        Assert.True(await menu.PickProfileAsync(CancellationToken.None));
+
+        Assert.Equal("clean", _settings.ProfileName);
+        Assert.Equal(new AppSettingsData().TtsSpeed, _settings.Current.TtsSpeed);
+        Assert.Equal([ChatScreen.ProfileCreatedFreshNotice("clean")], menu.TakeProfileCreatedNotices());
+        pane.Dispose();
+    }
+
+    /// <summary>A taken name and an invalid one each show their error and ask again; Esc at the name or the seed page makes nothing.</summary>
+    [Fact]
+    public async Task PickProfile_TheAddRow_RefusesATakenOrBadName_AndEscMakesNothing()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Char('+'), Keys.Enter);
+        PushText("work");
+        Push(Keys.Enter);                                        // taken: asked again, prefilled
+        Backspace(4);
+        PushText("bad name");
+        Push(Keys.Enter);                                        // invalid: asked again
+        Push(Keys.Escape);                                       // Esc at the name: back on the list, on the add row
+        Push(Keys.Enter);
+        PushText("ok");
+        Push(Keys.Enter);
+        Push(Keys.Escape);                                       // Esc at the seed page: nothing made
+        Push(Keys.Escape);                                       // Esc on the list
+
+        Assert.False(await menu.PickProfileAsync(CancellationToken.None));
+
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+        Assert.Contains(ChatScreen.ProfileExistsError("work"), Output);
+        Assert.Contains(ChatScreen.ProfileNameError[..40], Output);   // the band wraps the rest
+        Assert.Null(Profiles.Resolve(_dir, "ok"));
+        Assert.Empty(menu.TakeProfileCreatedNotices());
+        pane.Dispose();
+    }
+
+    /// <summary>Two adds in one /settings visit: the Profile row stays on the list after a switch, so both notices are held, in order.</summary>
+    [Fact]
+    public async Task TheProfileRow_TwoAddsInOneVisit_HoldBothNotices()
+    {
+        var (menu, pane) = PaneMenu();
+        Push(Keys.Enter, Keys.Char('+'), Keys.Enter);            // Profile, then its add row
+        PushText("one");
+        Push(Keys.Enter, Keys.Enter);                            // Copy
+        Push(Keys.Enter, Keys.Char('+'), Keys.Enter);            // again from the list
+        PushText("two");
+        Push(Keys.Enter, Keys.Down, Keys.Enter);                 // Start fresh
+        Push(Keys.Escape);
+
+        Assert.True((await menu.ShowAsync(CancellationToken.None)).HasFlag(SettingsChanges.Profile));
+
+        Assert.Equal("two", _settings.ProfileName);
+        Assert.Equal([ChatScreen.ProfileCreatedNotice("one"), ChatScreen.ProfileCreatedFreshNotice("two")], menu.TakeProfileCreatedNotices());
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Without the pane on an interactive console the shared prompt offers the add row (no rule among its choices), the name is read on the
+    /// input row, and Copy is picked from the prompt.
+    /// </summary>
+    [Fact]
+    public async Task PickProfile_WithoutThePane_TheAddRowWorksThroughThePrompts()
+    {
+        Profiles.Create(_dir, "work", new AppSettingsData());
+        Push(Keys.Up, Keys.Enter);                               // the prompt opens on neon; Up is the add row (the rule is no choice)
+        PushText("solo");
+        Push(Keys.Enter);
+        Push(Keys.Enter);                                        // Copy
+
+        Assert.True(await _menu.PickProfileAsync(CancellationToken.None));
+
+        Assert.Equal("solo", _settings.ProfileName);
+        Assert.Equal([ChatScreen.ProfileCreatedNotice("solo")], _menu.TakeProfileCreatedNotices());
+        Assert.DoesNotContain("──", Output);
+    }
+
     /// <summary>A typed letter jumps to the next profile starting with it, a second press to the one after (2026-10-06, the user's ask: as the theme picker).</summary>
     [Fact]
     public async Task PickProfile_ATypedLetter_JumpsToTheNextProfileStartingWithIt()
@@ -3319,6 +3442,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("work", _settings.ProfileName);
         Assert.Contains(SettingsMenu.ProfileKeys, Output);
         Assert.Contains("a–z = jump", SettingsMenu.SwitchKeys);
+        Assert.Contains("+ = add", SettingsMenu.SwitchKeys);   // the add row (2026-11-24)
+        Assert.Contains("+ = add", SettingsMenu.ProfileKeys);
         pane.Dispose();
     }
 
@@ -3984,8 +4109,10 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
-        // The picker held at the Chat tab's height (2026-10-14): blank rows under the two names, the title on the tab strip's row.
-        AssertPickerEnds(Rule(240) + "\n" + Titled(Breadcrumb("Profile")) + "\n \n▸ 🤖 neon\n  🤖 work\n", 240);
+        // The picker held at the Chat tab's height (2026-10-14): blank rows under the two names, the title on the tab strip's row; the add
+        // row on top and a rule under it since 2026-11-24 (the user's ask), the cursor still opening on the loaded profile.
+        Assert.Matches(new System.Text.RegularExpressions.Regex(System.Text.RegularExpressions.Regex.Escape(Rule(240) + "\n" + Titled(Breadcrumb("Profile")) + "\n \n  " + ProfileText.AddProfileRow + "\n")
+            + " *─+ *\\n" + System.Text.RegularExpressions.Regex.Escape("▸ 🤖 neon\n  🤖 work\n") + "\n*" + System.Text.RegularExpressions.Regex.Escape(Rule(240))), Output);
         Assert.Contains(Rule(240) + "\n" + SettingsMenu.SwitchKeys + "\n", Output);
         Assert.Contains("\n" + Head(SettingsTab.Chat) + "\n  · " + SettingsMenu.UnchangedNotice + "\n" + MenuLayout.Heading("Who and where", 240) + "\n▸ Profile                      neon (", Output);
         Assert.False(pane.OverlayOpen);
@@ -6038,7 +6165,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.False(_settings.Current.CopyUserPrompt);
         Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("copy user prompt"))), Output);
-        Assert.Matches(@"▸ Copy user prompt +on  /settings › Client › Chat", Output);
+        Assert.Matches(@"▸ Copy user prompt +on +/settings › Client › Chat", Output);   // the value column aligned (2026-11-24)
         Assert.Contains("  · Copy user prompt: off", Output);
         Assert.Contains(SettingsMenu.SearchEmptyLine, Output);   // the words cleared
         Assert.False(pane.OverlayOpen);
@@ -6058,7 +6185,7 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel(""))), Output);   // the first ESC: the words gone (the four letters arrived as one run)
         Assert.Contains(Titled(Breadcrumb(SettingsMenu.SearchCrumbLabel("wake"))), Output);
-        Assert.Matches(@"▸ STT wake +off  /settings › Voice › STT", Output);
+        Assert.Matches(@"▸ STT wake +off +/settings › Voice › STT", Output);   // the value column aligned (2026-11-24)
         Assert.True(Output.LastIndexOf(SettingsMenu.SettingsTabKeys, StringComparison.Ordinal) > Output.LastIndexOf(SettingsMenu.SearchKeys, StringComparison.Ordinal));   // the tab came back after the search
         pane.Dispose();
     }
@@ -6165,9 +6292,51 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.True(_settings.Current.CopyUserPrompt);
         Assert.Contains(Titled(Breadcrumb(SettingsMenu.ChangedLabel) + " │ " + SettingsMenu.ResetButton + " "), Output);
-        Assert.Matches(@"▸ Copy user prompt +off  Default: on  /settings › Client › Chat", Output);
+        // Under the pane's heading (2026-11-24, the user's pick), so the tail drops the pane.
+        Assert.Contains(SettingsMenu.PaneLabel("/settings") + SectionRule.CountSeparator + "1", Output);
+        Assert.Matches(@"▸ Copy user prompt +off  Default: on  Client › Chat", Output);
         Assert.Contains("  · Copy user prompt: on", Output);
         Assert.Contains(SettingsMenu.NothingChangedLine, Output);
         pane.Dispose();
+    }
+
+    /// <summary>
+    /// /settings changed groups its rows under each pane's heading, in the panes' order, and lines up the value, Default and place columns
+    /// across the whole list (2026-11-24, the user's pick).
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ChangedWord_HeadsEachPane_AndLinesUpTheColumns()
+    {
+        var (menu, pane) = PaneMenu();
+        var fresh = new AppSettingsData();
+        _settings.Update(d => { foreach (var p in Settings.SettingsJsonContext.Default.AppSettingsData.Properties) { if (p.Get is not null && p.Set is not null) { p.Set(d, p.Get(fresh)); } } d.CopyUserPrompt = false; d.TtsSpeed = 1.5; d.ShellPreferNative = false; });
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None, midTurn: false, words: "changed");
+
+        int settingsAt = Output.IndexOf(SettingsMenu.PaneLabel("/settings") + SectionRule.CountSeparator + "3", StringComparison.Ordinal);   // the speed makes the preset (custom) too
+        int toolsAt = Output.IndexOf(SettingsMenu.PaneLabel("/tools") + SectionRule.CountSeparator + "1", StringComparison.Ordinal);
+        Assert.True(settingsAt >= 0 && toolsAt > settingsAt, Output);
+        var lines = Output[settingsAt..].Split('\n').Where(l => l.Contains("Default: ", StringComparison.Ordinal)).Take(4).ToList();
+        Assert.Equal(4, lines.Count);
+        Assert.Single(lines.Select(l => l.IndexOf("Default: ", StringComparison.Ordinal)).Distinct());
+        Assert.Single(lines.Select(l => l.IndexOf(" off ", StringComparison.Ordinal) is >= 0 and var at ? at : l.IndexOf(" 1.5 ", StringComparison.Ordinal) is >= 0 and var speed ? speed : l.IndexOf(" (custom)", StringComparison.Ordinal)).Distinct());   // the values too
+        Assert.DoesNotContain(lines, l => l.Contains("/settings › ", StringComparison.Ordinal));
+        pane.Dispose();
+    }
+
+    /// <summary>Without the pane on an interactive console, /settings changed and a search print their rows as lines (2026-11-24, the plan's check).</summary>
+    [Fact]
+    public async Task WithoutThePane_ChangedAndSearch_PrintTheirRows()
+    {
+        var fresh = new AppSettingsData();
+        _settings.Update(d => { foreach (var p in Settings.SettingsJsonContext.Default.AppSettingsData.Properties) { if (p.Get is not null && p.Set is not null) { p.Set(d, p.Get(fresh)); } } d.CopyUserPrompt = false; });
+
+        await _menu.ShowAsync(CancellationToken.None, midTurn: false, words: "changed");
+        await _menu.ShowAsync(CancellationToken.None, midTurn: false, words: "copy user prompt");
+
+        Assert.Contains(SettingsMenu.PaneLabel("/settings") + SectionRule.CountSeparator + "1", Output);
+        Assert.Matches(@"  Copy user prompt +off  Default: on  Client › Chat", Output);
+        Assert.Matches(@"· Copy user prompt +off +/settings › Client › Chat", Output);
     }
 }

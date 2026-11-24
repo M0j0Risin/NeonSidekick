@@ -66,6 +66,13 @@ public static class ThemePreview
         return lines;
     }
 
+    /// <summary>
+    /// The whole mock screen's rows (2026-11-24, the <c>/theme edit</c> pane's preview fills the pane), read from <see cref="Screen"/> so it follows
+    /// any row added: 32 with the fold off. <paramref name="diffCollapseCount"/> is <c>Diff collapse count</c>, which adds the sample diff's fold row
+    /// when the diff is longer than it. Each line is one row whatever the width, the palette, the banner or the version.
+    /// </summary>
+    public static int ScreenRows(int diffCollapseCount) => Screen(ThemeLibrary.Default, 40, "neon", "0", diffCollapseCount).Count;
+
     /// <summary>One row of the mock screen and its rank (0 is kept longest).</summary>
     private sealed record Line(int Rank, IReadOnlyList<Piece> Pieces);
 

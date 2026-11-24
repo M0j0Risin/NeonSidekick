@@ -644,16 +644,23 @@ internal sealed partial class SettingsMenu
             int test = actions.Count;
             actions.Add(ComfyWizardTestRow);
             actions.Add(ComfyWizardCancelRow);
-            var rows = actions.Select(Markup.Escape).Concat(ComfyWizardRows(draft)).ToList();
-            var page = new MenuPage(ComfyWizardTitle, rows, PickKeys) { Caption = ComfyWizardSummaryCaption };
+            var ruled = ConnectionWizardSummaryRows(actions, ComfyWizardRows(draft));
+            var rows = ruled.Rows;
+            var page = new MenuPage(ComfyWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = ComfyWizardSummaryCaption };
             if (!_pane.Enabled)
             {
                 Flow.Notice(ComfyWizardSummaryCaption);
             }
 
-            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } picked)
+            if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
                 return (false, false, null);
+            }
+
+            int picked = ruled.ItemOf(pickedRow);
+            if (picked < 0)
+            {
+                continue;
             }
 
             cursor = picked;

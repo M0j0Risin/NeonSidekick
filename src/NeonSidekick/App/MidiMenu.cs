@@ -46,7 +46,7 @@ internal sealed class MidiMenu
     private MidiBindings File => new(_settings.ProfileDirectory);
 
     // One Bindings row: its markup, its footer, the binding's index (null for the skipped and the learn rows), whether it is the learn row.
-    private sealed record Row(string Markup, string? Footer, int? Index = null, bool LearnRow = false);
+    internal sealed record Row(string Markup, string? Footer, int? Index = null, bool LearnRow = false);
 
     /// <summary>The pane until Esc; with <paramref name="learn"/> it starts on a learn (<c>/midi learn</c>), binding <paramref name="command"/> when given.</summary>
     public async Task ShowAsync(bool learn, string? command, CancellationToken cancellationToken)
@@ -70,7 +70,7 @@ internal sealed class MidiMenu
             var rows = BindingRows(set);
             var tabs = new List<MenuTab>
             {
-                new(MidiText.BindingsTab, rows.Select(r => r.Markup).ToList()) { Caption = BindingsCaption(set), Hint = MidiText.BindingsKeys },
+                new(MidiText.BindingsTab, rows.Select(r => r.Markup).ToList()) { Caption = BindingsCaption(set), Hint = MidiText.BindingsKeys, Headings = RuleRows(rows) },
                 new(MidiText.DevicesTab, DeviceRows()) { Caption = MidiText.HeldCaption, Hint = MidiText.DevicesKeys, Placeholder = true },
             };
             var page = MenuPage.Tabbed(MidiText.Title, tabs, Math.Clamp(tabIndex, 0, tabs.Count - 1), MidiText.BindingsKeys) with
@@ -175,22 +175,37 @@ internal sealed class MidiMenu
     private string? BindingsCaption(MidiBindingSet set) =>
         MidiText.FileProblem(set.State) ?? (!_effective().MidiInput && set.Bindings.Count > 0 ? MidiText.OffCaption : null);
 
-    private static List<Row> BindingRows(MidiBindingSet set)
+    // The bindings tab's rows (2026-11-24, the user's ask): the bindings, a rule, the skipped lines, a rule, then Learn; a rule only between two
+    // groups that both have rows, as RuledRows draws them. Each trigger padded to the widest, so the commands line up (the user's pick). A
+    // rule's Row has no Index and isn't LearnRow, so a pick on it falls through to the loop's continue, and its band is empty.
+    internal static List<Row> BindingRows(MidiBindingSet set)
     {
+        int width = set.Bindings.Select(b => TextCells.Width(MidiText.Describe(b.Trigger))).DefaultIfEmpty(0).Max();
+        var groups = new List<List<Row>>
+        {
+            set.Bindings.Select((b, i) => new Row(Markup.Escape(TextCells.Cell(MidiText.Describe(b.Trigger), width)) + Theme.DimMarkup("  → ") + Markup.Escape(b.Command), MidiText.BindingFooter, i)).ToList(),
+            set.Skipped.Select(skipped => new Row(Theme.DimMarkup(MidiText.SkippedLine(skipped)), null)).ToList(),
+            new List<Row> { new(Markup.Escape(MidiText.LearnRow), MidiText.LearnRowFooter, LearnRow: true) },
+        };
         var rows = new List<Row>();
-        for (int i = 0; i < set.Bindings.Count; i++)
+        foreach (var group in groups.Where(g => g.Count > 0))
         {
-            var b = set.Bindings[i];
-            rows.Add(new Row(Markup.Escape(MidiText.Describe(b.Trigger)) + Theme.DimMarkup("  → ") + Markup.Escape(b.Command), MidiText.BindingFooter, i));
+            if (rows.Count > 0)
+            {
+                rows.Add(new Row(SectionRule.Bare, null));
+            }
+
+            rows.AddRange(group);
         }
 
-        foreach (string skipped in set.Skipped)
-        {
-            rows.Add(new Row(Theme.DimMarkup(MidiText.SkippedLine(skipped)), null));
-        }
-
-        rows.Add(new Row(Markup.Escape(MidiText.LearnRow), MidiText.LearnRowFooter, LearnRow: true));
         return rows;
+    }
+
+    // The rule rows among BindingRows', for the tab's headings; null with none.
+    internal static HashSet<int>? RuleRows(List<Row> rows)
+    {
+        var rules = Enumerable.Range(0, rows.Count).Where(i => rows[i] is { Index: null, LearnRow: false, Footer: null } r && r.Markup == SectionRule.Bare).ToHashSet();
+        return rules.Count > 0 ? rules : null;
     }
 
     private List<string> DeviceRows()

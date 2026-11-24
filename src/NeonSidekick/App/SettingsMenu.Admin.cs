@@ -192,9 +192,10 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var hosts = get(_settings.Current);
-            IReadOnlyList<string> rows = [Markup.Escape(AddHostRow), .. hosts.Select(Markup.Escape)];
-            var page = new MenuPage(Crumb(title), rows, HostListKeys);
-            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { Row: var index } pick)
+            // A rule between the add row and the entries (2026-11-24, the user's ask); the cursor and the picks stay items.
+            var ruled = RuledRows.Of([[Markup.Escape(AddHostRow)], hosts.Select(Markup.Escape).ToList()]);
+            var page = new MenuPage(Crumb(title), ruled.Rows, HostListKeys) { Headings = ruled.Headings };
+            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { Row: var pickedRow } pick)
             {
                 if (!changed)
                 {
@@ -202,6 +203,12 @@ internal sealed partial class SettingsMenu
                 }
 
                 return changed;
+            }
+
+            int index = ruled.ItemOf(pickedRow);
+            if (index < 0)
+            {
+                continue;
             }
 
             cursor = index;

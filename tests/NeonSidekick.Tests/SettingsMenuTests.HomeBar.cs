@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using NeonSidekick.App;
 using NeonSidekick.Emojis;
 using NeonSidekick.HomeAssistant;
@@ -142,6 +143,51 @@ public partial class SettingsMenuTests
 
         Assert.Empty(_settings.Current.HomeBarItems!);
         Assert.Equal(["entity:switch.kettle", "area:hall"], _settings.Current.HomeBarLastItems);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// Rules on the bar's pages (2026-11-24, the user's ask): a divider's page is the moves, a rule, the pins, a rule, Remove (no name or emoji
+    /// group, so never two rules in a row); a bar with nothing pinned right ends on that heading, no bare rule before + Add divider.
+    /// </summary>
+    [Fact]
+    public async Task ThePicker_ADividersPage_HasTwoRules_AndAnEmptyRightGroupTakesNoRule()
+    {
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = ["divider:1", "entity:light.den_lamp"];
+        });
+        var (menu, pane) = PaneMenu();
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        Push(Keys.Enter, Keys.Escape, Keys.Escape);   // the divider's page, back, closed
+
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Matches(Regex.Escape(HomeBarText.MoveBottom + "\n") + " *─+ *\n  " + Regex.Escape(HomeBarText.PinLeftItem + "\n  " + HomeBarText.PinRightItem + "\n") + " *─+ *\n  " + Regex.Escape(HomeBarText.RemoveItem + "\n"), Output);
+        Assert.Matches(Regex.Escape(SettingsMenu.PinnedRightHeading) + "[^\n]*\n  " + Regex.Escape(HomeBarText.AddDividerRow), Output);
+        pane.Dispose();
+    }
+
+    /// <summary>With an item pinned right, a bare rule sets + Add divider apart from it (2026-11-24).</summary>
+    [Fact]
+    public async Task ThePicker_AnItemPinnedRight_TakesARuleBeforeAddDivider()
+    {
+        _settings.Update(d =>
+        {
+            d.HomeAssistantUrl = "http://ha.test:8123";
+            d.HomeAssistantToken = "secret";
+            d.HomeBarItems = ["entity:light.den_lamp"];
+            d.HomeBarRight = ["entity:light.den_lamp"];
+        });
+        var (menu, pane) = PaneMenu();
+        menu.HomeCatalog = _ => Task.FromResult<(HaCatalog?, string?)>((HomeCatalog(), null));
+        Push(Keys.Escape);
+
+        Assert.False(await menu.EditHomeBarAsync(own: true, CancellationToken.None));
+
+        Assert.Matches("Den Lamp[^\n]*\n *─+ *\n  " + Regex.Escape(HomeBarText.AddDividerRow), Output);
         pane.Dispose();
     }
 
@@ -441,7 +487,8 @@ public partial class SettingsMenuTests
         Assert.Contains(" 1. 💡 Lamp  Den Lamp · Den", Output);
         Assert.Contains("\"Lamp\" · light.den_lamp", Output);
         Assert.Contains(" 1. 💡   " + HomeBarText.EmojiAlone + " · Den Lamp · Den", Output);   // later on 2026-10-12: a blank is the emoji alone
-        Assert.Contains(HomeBarText.DefaultNameItem + "  Den Lamp", Output);
+        // The labels padded to the widest shown (2026-11-24, the user's pick): "Rename on the bar…" here.
+        Assert.Contains(HomeBarText.DefaultNameItem.PadRight(HomeBarText.RenameItem.Length) + "  Den Lamp", Output);
         Assert.Null(_settings.Current.HomeBarAliases);
         pane.Dispose();
     }

@@ -295,15 +295,16 @@ internal sealed partial class SettingsMenu
             int width = entries.Count == 0 ? 0 : Math.Min(24, entries.Max(e => TextCells.Width(e.Profile)) + 2);
             int roleWidth = AdvisorRoleColumn(entries);
             var (lines, columns) = AdvisorLines(entries);
-            IReadOnlyList<string> rows = [Markup.Escape(AddAdvisorRow), Markup.Escape(NewAdvisorRow), .. lines.Select(l =>
+            // A rule between the two add rows and the advisors (2026-11-24, the user's ask); the cursor and the picks stay items.
+            var ruled = RuledRows.Of([[Markup.Escape(AddAdvisorRow), Markup.Escape(NewAdvisorRow)], lines.Select(l =>
                 // Each advisor's avatar ahead of its name (later on 2026-10-10, the user's ask), as the profile pickers show theirs; a
                 // missing profile none (its file would read as the defaults, the robot). The kind padded so the models line up (2026-11-22).
                 AdvisorRow(l.Advisor, l.Exists, width, l.Facts, roleWidth, AdvisorMark(l.Advisor),
-                    l.Exists ? ProfileAvatar(l.Advisor.Profile) : "", columns.Kind))];
+                    l.Exists ? ProfileAvatar(l.Advisor.Profile) : "", columns.Kind)).ToList()]);
             // Each row's band (2026-11-22): what the two add rows do, an advisor's description (or how to give it one).
             // Under /advisor list's lone visit one Esc closes the pane, and the hint says so (2026-11-23).
-            var page = new MenuPage(Crumb(title), rows, _openOnly ? AdvisorListCloseKeys : AdvisorListKeys) { Footer = (_, row) => AdvisorRowBand(entries, row) };
-            if (await PickListAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { Row: var index } pick)
+            var page = new MenuPage(Crumb(title), ruled.Rows, _openOnly ? AdvisorListCloseKeys : AdvisorListKeys) { Headings = ruled.Headings, Footer = (_, row) => AdvisorRowBand(entries, ruled.ItemOf(row)) };
+            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { Row: var pickedRow } pick)
             {
                 if (!changed)
                 {
@@ -311,6 +312,12 @@ internal sealed partial class SettingsMenu
                 }
 
                 return changed;
+            }
+
+            int index = ruled.ItemOf(pickedRow);
+            if (index < 0)
+            {
+                continue;
             }
 
             cursor = index;

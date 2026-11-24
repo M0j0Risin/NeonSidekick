@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using NeonSidekick.App;
 using NeonSidekick.Docker;
 using NeonSidekick.Settings;
@@ -206,7 +207,7 @@ public partial class SettingsMenuTests
         var defaults = DockerServerWords.Defaults;
         Assert.Equal(defaults, _settings.Current.DockerServerMatchWords);
         Assert.Contains("\n▸ " + SettingsMenu.AddDockerWordRow + "\n", Output);
-        Assert.Contains("  · " + SettingsMenu.DockerWordAddedNotice("tgi") + "\n▸ " + SettingsMenu.AddDockerWordRow + "\n  tgi\n  vllm\n", Output);
+        Assert.Matches(Regex.Escape("  · " + SettingsMenu.DockerWordAddedNotice("tgi") + "\n▸ " + SettingsMenu.AddDockerWordRow + "\n") + "─+ *\n  tgi\n  vllm\n", Output);   // a rule under the add row (2026-11-24)
         Assert.Contains("  · Docker server match words: VLLM is already in the list\n", Output);
         Assert.Contains("  · Docker server match words: tgi removed\n", Output);
         Assert.Contains(SettingsMenu.RestoreDockerWordsQuestion(1, defaults.Count), Output);

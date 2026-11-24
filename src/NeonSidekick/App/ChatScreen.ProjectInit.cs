@@ -380,13 +380,19 @@ internal sealed partial class ChatScreen
         _transcript.Notice(draft.Unchanged && turnedOn is null ? ProjectInitText.UnchangedNotice(draft.Target) : ProjectInitText.WroteNotice(draft.Target, draft.Content.Length, turnedOn));
     }
 
-    /// <summary>The draft's View (2026-11-23): the change uncut (the info pane scrolls), or the whole draft for a new file.</summary>
+    /// <summary>
+    /// The draft's View (2026-11-23): the change uncut (the info pane scrolls), or the whole draft for a new file, rendered as markdown on a first
+    /// tab since 2026-11-24 (the user's ask, as the Web UI's notes card shows it) with its text on Source.
+    /// </summary>
     private Task ViewProjectNotesAsync(ProjectNotesDraft draft, CancellationToken cancellationToken)
     {
         IRenderable content = draft.Diff is { } diff ? new DiffView(null, diff, int.MaxValue)
             : new Text(draft.Unchanged ? ProjectInitText.NoChanges(draft.Target) : draft.Content);
         string label = ProjectInitText.ViewLabel(draft.Target);
-        return _info.ShowAsync(label, [new InfoTab(label, () => content)], 0, cancellationToken);
+        IReadOnlyList<InfoTab> tabs = draft.Diff is null && !draft.Unchanged
+            ? [new InfoTab(SkillsText.RenderedTab, () => UI.Markdown.MarkdownView.Of(draft.Content)), new InfoTab(SkillsText.SourceTab, () => content)]
+            : [new InfoTab(label, () => content)];
+        return _info.ShowAsync(label, tabs, 0, cancellationToken);
     }
 
     /// <summary>What keeps NeonSidekick from reading the notes: <c>Agent skills</c>, <c>Project file</c>, both, or null.</summary>

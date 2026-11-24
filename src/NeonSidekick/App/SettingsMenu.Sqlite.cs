@@ -459,16 +459,23 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             string[] actions = [SqlWizardSaveOfferedRow, SqliteWizardSaveHiddenRow, SqliteWizardTestRow, SqlWizardCancelRow];
-            var rows = actions.Select(Markup.Escape).Concat(SqliteWizardRows(draft)).ToList();
-            var page = new MenuPage(SqliteWizardTitle, rows, PickKeys) { Caption = SqliteWizardSummaryCaption };
+            var ruled = ConnectionWizardSummaryRows(actions, SqliteWizardRows(draft));
+            var rows = ruled.Rows;
+            var page = new MenuPage(SqliteWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = SqliteWizardSummaryCaption };
             if (!_pane.Enabled)
             {
                 Flow.Notice(SqliteWizardSummaryCaption);
             }
 
-            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } picked)
+            if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
                 return (false, false, null);
+            }
+
+            int picked = ruled.ItemOf(pickedRow);
+            if (picked < 0)
+            {
+                continue;
             }
 
             cursor = picked;

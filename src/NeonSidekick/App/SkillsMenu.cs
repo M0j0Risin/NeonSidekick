@@ -101,7 +101,7 @@ internal sealed class SkillsMenu
     private readonly Func<Skill, SkillRevision?, int>? _forget;
     private readonly SkillCatalog? _catalog;
     private readonly ProjectSkillTrust? _trust;
-    private readonly Func<string, IRenderable, CancellationToken, Task>? _view;
+    private readonly Func<string, IReadOnlyList<InfoTab>, CancellationToken, Task>? _view;
     private readonly Func<IRecycleBin?>? _bin;
 
     /// <summary>
@@ -134,7 +134,7 @@ internal sealed class SkillsMenu
     /// Recycle bin</c> is on. Null, or a null answer, deletes for good, and the row and the question say so.</param>
     public SkillsMenu(Func<SkillsFacts> facts, AppSettings settings, SettingsMenu menu, INoticeSink transcript, MenuPane pane, InputLine input, Action<string> openFile, Func<string, string?>? usage = null, SkillRecords? records = null,
         Func<Skill, IReadOnlyList<SkillRevision>>? versions = null, Func<Skill, SkillRevision, SkillRevert>? restore = null, Func<Skill, SkillRevision?, int>? forget = null, Llm.ConversationHistory? session = null,
-        SkillCatalog? catalog = null, ProjectSkillTrust? trust = null, Func<string, IRenderable, CancellationToken, Task>? view = null, Func<IRecycleBin?>? bin = null)
+        SkillCatalog? catalog = null, ProjectSkillTrust? trust = null, Func<string, IReadOnlyList<InfoTab>, CancellationToken, Task>? view = null, Func<IRecycleBin?>? bin = null)
     {
         _bin = bin;
         _catalog = catalog;
@@ -1511,7 +1511,7 @@ internal sealed class SkillsMenu
     }
 
     /// <summary>One skill as the trust question shows it: its key, name, description, mark (new, changed…), file count, acting mark, the text read and the kept copy for a diff.</summary>
-    private sealed record TrustEntry(string Key, string Name, string Description, string Mark, string Files, bool Acting, string? Text, string? Old, string FilePath);
+    private sealed record TrustEntry(string Key, string Name, string Description, string Mark, string Files, bool Acting, string? Text, string? Old, string FilePath, bool Claude = false, string Folder = "");
 
     /// <summary>
     /// The trust question (2026-11-23): the folder's skills as read now, each with a View of its whole <c>SKILL.md</c> (a diff against the kept copy when it
@@ -1562,16 +1562,25 @@ internal sealed class SkillsMenu
 
                 if (row >= first && row < first + entries.Count)
                 {
-                    // View: exactly what was read, never run or rendered as markdown (a stranger's link text can't hide where it goes).
+                    // View: exactly what was read, never run. Rendered since 2026-11-24 (the user's ask) on a first tab, the exact text on Source:
+                    // a link draws as text (url), so its address always shows; HTML is off, so a comment shows as text; and the trust is given for
+                    // the Source tab's bytes. A diff, the unreadable note and a file whose front matter can't be read stay one plain tab.
                     var entry = entries[row - first];
                     IRenderable content = entry.Text is null ? new Text(SkillsText.NothingToViewText)
                         : entry.Old is not null && FileDiff.Of(entry.FilePath, entry.Old, entry.Text) is { } diff ? new DiffView(null, diff, int.MaxValue)
                         // Only its bundled files changed (2026-11-23, hand check 1): say so over the text, which is the one trusted.
                         : entry.Mark == SkillsText.FilesChangedMark ? new Rows(new Markup(Theme.DimMarkup(SkillsText.FilesChangedViewNote)), new Text(""), new Text(entry.Text))
                         : new Text(entry.Text);
+                    var rendered = entry.Text is not null && content is not DiffView && SkillView.Of(entry.Text, entry.Claude, entry.Folder) is { } view
+                        ? entry.Mark == SkillsText.FilesChangedMark ? new Rows(new Markup(Theme.DimMarkup(SkillsText.FilesChangedViewNote)), new Text(""), view) : view
+                        : null;
                     if (_view is not null)
                     {
-                        await _view(SkillsText.ViewLabel(entry.Name), content, cancellationToken).ConfigureAwait(false);
+                        string viewLabel = SkillsText.ViewLabel(entry.Name);
+                        IReadOnlyList<InfoTab> tabs = rendered is null
+                            ? [new InfoTab(viewLabel, () => content)]
+                            : [new InfoTab(SkillsText.RenderedTab, () => rendered), new InfoTab(SkillsText.SourceTab, () => content)];
+                        await _view(viewLabel, tabs, cancellationToken).ConfigureAwait(false);
                     }
 
                     cursor = row;
@@ -1629,9 +1638,9 @@ internal sealed class SkillsMenu
             string directory = skill?.Directory ?? Path.Combine(level, key.Replace('/', Path.DirectorySeparatorChar));
             string? text = state.Copies.GetValueOrDefault(key);
             SkillFrontmatter? read = null;
+            bool claude = key.StartsWith(new ProjectSkillLevel(level, "", Claude: true).Kind + "/", StringComparison.Ordinal);
             if (text is not null)
             {
-                bool claude = key.StartsWith(new ProjectSkillLevel(level, "", Claude: true).Kind + "/", StringComparison.Ordinal);
                 bool parsed = claude
                     ? SkillFrontmatter.TryParseClaude(text, Path.GetFileName(directory), out read, out _, out _)
                     : SkillFrontmatter.TryParse(text, out read, out _, out _);
@@ -1672,7 +1681,7 @@ internal sealed class SkillsMenu
                 }
             }
 
-            entries.Add(new TrustEntry(key, name, description, mark, SkillsText.FilesNote(files, more), acting, text, old, Path.Combine(directory, SkillCatalog.FileName)));
+            entries.Add(new TrustEntry(key, name, description, mark, SkillsText.FilesNote(files, more), acting, text, old, Path.Combine(directory, SkillCatalog.FileName), claude, Path.GetFileName(directory)));
         }
 
         var removed = held is null ? [] : held.Skills.Keys.Where(k => !state.Order.Contains(k, StringComparer.Ordinal)).Select(k => k[(k.LastIndexOf('/') + 1)..]).ToList();
@@ -1720,20 +1729,21 @@ internal sealed class SkillsMenu
     {
         var roots = facts.Roots;
         var copies = roots.WritableScopes;
-        var rows = new List<string> { SkillsText.ProjectEditRow };
-        rows.AddRange(copies.Select(SkillsText.ProjectCopyRow));
-        int disableRow = rows.Count;
-        rows.Add(SkillsText.ProjectDisableRow(skill.Disabled));
+        var copyRows = copies.Select(SkillsText.ProjectCopyRow).ToList();
+        var tail = new List<string> { SkillsText.ProjectDisableRow(skill.Disabled) };
+        int disableRow = 1 + copyRows.Count;
         // The delete (2026-11-23, the user's ask): last, its own index; handled before the copy rows' fall-through below.
-        int deleteRow = skill.TrustFolder is not null && skill.ProjectKey is not null ? rows.Count : -1;
+        int deleteRow = skill.TrustFolder is not null && skill.ProjectKey is not null ? disableRow + 1 : -1;
         if (deleteRow >= 0)
         {
-            rows.Add(SkillsText.ProjectDeleteRow(_bin?.Invoke() is not null));
+            tail.Add(SkillsText.ProjectDeleteRow(_bin?.Invoke() is not null));
         }
 
+        // Rules between the edit, the copies and the rest (2026-11-24, the user's ask); the picks map back to items, as the indexes above count.
+        var ruled = RuledRows.Of([[SkillsText.ProjectEditRow], copyRows, tail]);
         string label = SkillsText.FolderLabel(facts, skill.TrustFolder ?? skill.Directory);
-        var page = new MenuPage(ScopeTitle(skill.Name), rows, ScopeKeys) { Caption = SkillsText.ProjectPageCaption(label) };
-        if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var row })
+        var page = new MenuPage(ScopeTitle(skill.Name), ruled.Rows, ScopeKeys) { Caption = SkillsText.ProjectPageCaption(label), Headings = ruled.Headings };
+        if (await _pane.PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { Row: var pickedRow } || ruled.ItemOf(pickedRow) is not (>= 0 and var row))
         {
             return false;
         }

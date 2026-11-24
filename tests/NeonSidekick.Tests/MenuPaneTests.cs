@@ -1218,6 +1218,67 @@ public class MenuPaneTests : IDisposable
         menu.Close();
     }
 
+    /// <summary>
+    /// A page's own SideRows (2026-11-24, the /theme edit pane's preview fills the pane): the side is asked for that many rows under the title,
+    /// the footer band included, within the cap; a smaller window clamps it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SideRows_AsksTheSideForThem_BandIncluded_WithinTheCap(bool footer)
+    {
+        _console.Profile.Width = 100;
+        _console.Profile.Height = 50;
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Enter);
+        var page = Sided("one", "two", "three") with { SideRows = 20, Footer = footer ? (_, _) => new MenuFooter("band") : null, FooterRows = footer ? 8 : 0 };
+
+        await menu.PickAsync(page, 0, CancellationToken.None);
+
+        Assert.Contains("side 0:19 w61", Output);
+        Assert.DoesNotContain("side 0:20 ", Output);   // not 20 plus the band's 9
+        menu.Close();
+    }
+
+    [Fact]
+    public async Task SideRows_AreClampedByASmallWindow()
+    {
+        _console.Profile.Width = 100;
+        _console.Profile.Height = 20;
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Enter);
+
+        await menu.PickAsync(Sided("one", "two", "three") with { SideRows = 40 }, 0, CancellationToken.None);
+
+        Assert.DoesNotContain("side 0:39 ", Output);
+        menu.Close();
+    }
+
+    /// <summary>A page's FooterRows (2026-11-24, the /theme edit pane's taller band): that many slab rows; 0 is the pane's five.</summary>
+    [Theory]
+    [InlineData(8, 8)]
+    [InlineData(0, MenuPane.FooterRows)]
+    public async Task FooterRows_SetTheBandsSlabRows(int asked, int drawn)
+    {
+        _console.Profile.Height = 40;
+        using var pane = Pane();
+        pane.Show();
+        var menu = new MenuPane(pane, _keys);
+        Push(Keys.Enter);
+        string text = string.Join('\n', Enumerable.Range(1, 8).Select(i => "band" + i));
+
+        await menu.PickAsync(Page("one", "two") with { Footer = (_, _) => new MenuFooter(text) { KeepLines = true }, FooterRows = asked }, 0, CancellationToken.None);
+
+        int shown = Enumerable.Range(1, 8).Count(i => Output.Contains("band" + i + " ", StringComparison.Ordinal));
+        Assert.Equal(drawn == 8 ? 8 : drawn - 1, shown);   // five rows: four lines and the pane's "+4 more"
+        Assert.Equal(drawn < 8, Output.Contains(MenuPane.MoreLines(8 - (drawn - 1)), StringComparison.Ordinal));
+        menu.Close();
+    }
+
     [Fact]
     public async Task ANarrowWindow_DrawsASidedPage_AsOneWithout()
     {

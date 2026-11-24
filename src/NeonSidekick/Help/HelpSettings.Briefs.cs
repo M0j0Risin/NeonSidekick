@@ -17,7 +17,7 @@ public static partial class HelpSettings
     internal static string BriefAsWritten(SettingsField field) => field switch
     {
         // /settings › Client › Chat
-        SettingsField.Profile => "Switches to another profile for this run. Each profile has its own settings, persona, memory, skills and sessions.",
+        SettingsField.Profile => "Switches to another profile for this run, or adds one from the top row. Each profile has its own settings, persona, memory, skills and sessions.",
         SettingsField.WorkingDirectory => "The folder the file and git tools work in. Empty uses the profile's own files folder. Enter opens a folder picker.",
         SettingsField.MemoryMode => "The model's long-term memory. read-write: it saves and recalls. read-only: it recalls only. off: none. Your /memory remember saves in every mode.",
         SettingsField.ModelAvatar => "The profile's emoji, shown at the start of each reply, on its /botchat lines and in the window title. Enter opens the emoji picker.",

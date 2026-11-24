@@ -545,11 +545,18 @@ internal sealed partial class SettingsMenu
         while (true)
         {
             var actions = new List<string> { SqlWizardSaveOfferedRow, ComputerWizardSaveHiddenRow, "Test the domain", SqlWizardCancelRow };
-            var rows = actions.Select(Markup.Escape).Concat(DirectoryWizardRows(draft)).ToList();
-            var page = new MenuPage(title, rows, PickKeys) { Caption = ComputerWizardSummaryCaption.Replace("computer", "domain", StringComparison.Ordinal) };
-            if (await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } picked)
+            var ruled = ConnectionWizardSummaryRows(actions, DirectoryWizardRows(draft));
+            var rows = ruled.Rows;
+            var page = new MenuPage(title, rows, PickKeys) { Headings = ruled.Headings, Caption = ComputerWizardSummaryCaption.Replace("computer", "domain", StringComparison.Ordinal) };
+            if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
                 return (false, false, null);
+            }
+
+            int picked = ruled.ItemOf(pickedRow);
+            if (picked < 0)
+            {
+                continue;
             }
 
             cursor = picked;

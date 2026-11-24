@@ -54,18 +54,26 @@ internal sealed partial class SettingsMenu
             var store = list.Store;
             var stores = store.Stores();
             var active = store.ActiveStore();
-            IReadOnlyList<string> rows = [Markup.Escape(ShoppingText.AddStoreRow), .. stores.Select(s => Markup.Escape(ShoppingText.StoreRow(s, s.Id == active?.Id)))];
-            int cursor = on is { } id && stores.ToList().FindIndex(s => s.Id == id) is >= 0 and var at ? at + 1 : 0;
-            var page = new MenuPage(Crumb(ShoppingText.StoresTitle), rows, ShoppingText.StoresKeys)
+            // A rule between the add row and the stores (2026-11-24, the user's ask); the cursor and the picks stay items.
+            var ruled = RuledRows.Of([[Markup.Escape(ShoppingText.AddStoreRow)], stores.Select(s => Markup.Escape(ShoppingText.StoreRow(s, s.Id == active?.Id))).ToList()]);
+            int cursor = on is { } id && stores.ToList().FindIndex(s => s.Id == id) is >= 0 and var at ? ruled.RowOf(at + 1) : 0;
+            var page = new MenuPage(Crumb(ShoppingText.StoresTitle), ruled.Rows, ShoppingText.StoresKeys)
             {
-                Footer = (_, row) => row > 0 && row <= stores.Count ? StoreFooter(store, stores[row - 1]) : null,
+                Headings = ruled.Headings,
+                Footer = (_, row) => ruled.ItemOf(row) is var at && at > 0 && at <= stores.Count ? StoreFooter(store, stores[at - 1]) : null,
             };
             if (await PickListAsync(page, cursor, cancellationToken, StoreButtons).ConfigureAwait(false) is not { } pick)
             {
                 return changed;
             }
 
-            var shop = pick.Row > 0 && pick.Row <= stores.Count ? stores[pick.Row - 1] : null;
+            int item = ruled.ItemOf(pick.Row);
+            if (item < 0)
+            {
+                continue;
+            }
+
+            var shop = item > 0 && item <= stores.Count ? stores[item - 1] : null;
             on = shop?.Id ?? on;
             if (pick.Remove && shop is null)
             {

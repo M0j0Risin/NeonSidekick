@@ -1,4 +1,6 @@
+using NeonSidekick.App;
 using NeonSidekick.Midi;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
@@ -26,6 +28,46 @@ public sealed class MidiBindingsTests : IDisposable
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         File.WriteAllText(FilePath, json);
+    }
+
+    /// <summary>
+    /// The bindings tab's rows (2026-11-24, the user's ask): the bindings, a rule, the skipped lines, a rule, then Learn, each rule a heading
+    /// (no stop); the triggers padded to one width so the commands line up.
+    /// </summary>
+    [Fact]
+    public void TheBindingsTab_RulesBetweenItsGroups_AndLinesUpTheCommands()
+    {
+        WriteFile("""
+            { "version": 1, "bindings": [
+              { "device": "FS-4", "kind": "cc", "channel": 1, "number": 80, "command": "/tts" },
+              { "device": "Pad", "occurrence": 1, "kind": "note", "channel": 10, "number": 36, "command": "/camera snap" },
+              { "device": "FS-4", "kind": "pitch", "channel": 1, "number": 81, "command": "/tts" } ] }
+            """);
+
+        var rows = MidiMenu.BindingRows(new MidiBindings(_dir).Load());
+
+        Assert.Equal(6, rows.Count);
+        Assert.Equal([0, 1], rows.Take(2).Select(r => r.Index));
+        Assert.Equal(SectionRule.Bare, rows[2].Markup);
+        Assert.Contains(MidiText.SkippedKind("pitch"), rows[3].Markup);
+        Assert.Equal(SectionRule.Bare, rows[4].Markup);
+        Assert.True(rows[5].LearnRow);
+        Assert.Equal([2, 4], MidiMenu.RuleRows(rows)!.Order());
+        Assert.Equal(Spectre.Console.Markup.Remove(rows[0].Markup).IndexOf("→", StringComparison.Ordinal), Spectre.Console.Markup.Remove(rows[1].Markup).IndexOf("→", StringComparison.Ordinal));
+    }
+
+    /// <summary>A file with only a skipped entry opens on it, no rule above it; one rule before Learn.</summary>
+    [Fact]
+    public void TheBindingsTab_OnlySkipped_HasNoRuleOnTop()
+    {
+        WriteFile("""{ "version": 1, "bindings": [ { "device": "FS-4", "kind": "pitch", "channel": 1, "number": 81, "command": "/tts" } ] }""");
+
+        var rows = MidiMenu.BindingRows(new MidiBindings(_dir).Load());
+
+        Assert.Equal(3, rows.Count);
+        Assert.NotEqual(SectionRule.Bare, rows[0].Markup);
+        Assert.Equal([1], MidiMenu.RuleRows(rows)!);
+        Assert.Null(MidiMenu.RuleRows(MidiMenu.BindingRows(MidiBindingSet.Empty)));   // Learn alone: no rule
     }
 
     [Fact]

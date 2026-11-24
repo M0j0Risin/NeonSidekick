@@ -339,20 +339,24 @@ internal sealed class ShoppingMenu
             var shop = _list.StoreFor(null, out _);
             var bought = _list.Bought();
             var shown = Enumerable.Range(0, bought.Count).Where(i => filter.Length == 0 || bought[i].Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
-            List<string> rows = [Markup.Escape(ShoppingText.AddItemRow), .. shown.Select(i => Markup.Escape(ShoppingText.BoughtRow(bought[i], _zone)))];
+            List<string> lines = [.. shown.Select(i => Markup.Escape(ShoppingText.BoughtRow(bought[i], _zone)))];
             if (shown.Count == 0 && filter.Length > 0)
             {
-                rows.Add(MenuFilter.NoMatchRow(filter));
+                lines.Add(MenuFilter.NoMatchRow(filter));
             }
 
-            var page = new MenuPage(ShoppingText.AddTitle, rows, MenuFilter.HintBeforeEsc(ShoppingText.AddKeys, filter, letteredButtons: true))
+            // A rule between the add row and the bought lines (2026-11-24, the user's ask), kept while a filter leaves the no-match row so
+            // it doesn't flicker as you type; the cursor and the picks stay items.
+            var ruled = RuledRows.Of([[Markup.Escape(ShoppingText.AddItemRow)], lines]);
+            var page = new MenuPage(ShoppingText.AddTitle, ruled.Rows, MenuFilter.HintBeforeEsc(ShoppingText.AddKeys, filter, letteredButtons: true))
             {
+                Headings = ruled.Headings,
                 Buttons = AddButtons,
                 Filter = filter,
                 Caption = bought.Count == 0 ? ShoppingText.NothingBoughtYet : ShoppingText.BoughtCaption(bought.Count),
                 Removes = shown.Count > 0,   // Delete forgets a bought line (2026-10-16); the new-item row is skipped below
             };
-            if (await _pane.PickAsync(page, Math.Min(cursor, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } pick)
+            if (await _pane.PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pick)
             {
                 return;
             }
@@ -364,8 +368,14 @@ internal sealed class ShoppingMenu
                 continue;
             }
 
-            cursor = pick.Row;
-            var line = pick.Row > 0 && pick.Row - 1 < shown.Count ? bought[shown[pick.Row - 1]] : null;
+            int item = ruled.ItemOf(pick.Row);
+            if (item < 0)
+            {
+                continue;
+            }
+
+            cursor = item;
+            var line = item > 0 && item - 1 < shown.Count ? bought[shown[item - 1]] : null;
             if (pick.Button == 0 || pick.Remove)
             {
                 if (line is not null)
@@ -382,7 +392,7 @@ internal sealed class ShoppingMenu
                 continue;
             }
 
-            if (pick.Row == 0 && await TypeAsync(page, 0, filter, cancellationToken).ConfigureAwait(false) is { } text)
+            if (item == 0 && await TypeAsync(page, 0, filter, cancellationToken).ConfigureAwait(false) is { } text)
             {
                 var added = new List<ShopAdded>();
                 foreach (string entry in ShoppingCommand.Items(text))
