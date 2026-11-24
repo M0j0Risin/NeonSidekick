@@ -42,6 +42,7 @@ public class SkillsMenuTests : IDisposable
     private ProjectSkillTrust? _projectTrust;
     private string? _working;
     private readonly List<string> _viewed = new();
+    private readonly List<Spectre.Console.Rendering.IRenderable> _viewedContent = new();
     /// <summary>What a View does besides recording it (2026-11-23, review #44: an edit made while the question is open).</summary>
     private Action<string>? _onView;
     /// <summary>The conversation the menu reads loaded skills from (2026-11-23, review #5); null, none.</summary>
@@ -155,7 +156,7 @@ public class SkillsMenuTests : IDisposable
         var settings = Settings(pane, keys, menuPane);
         var menu = new SkillsMenu(Facts, _settings, settings, new TranscriptRenderer(pane), menuPane, new InputLine(pane, keys), OpenFile, _usage,
             versions: _versions, restore: _versions is null ? null : Restore, forget: _forget,
-            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, _, _) => { _viewed.Add(label); _onView?.Invoke(label); return Task.CompletedTask; },
+            catalog: _projectSource is null ? null : _catalog, trust: _projectTrust, view: (label, content, _) => { _viewed.Add(label); _viewedContent.Add(content); _onView?.Invoke(label); return Task.CompletedTask; },
             bin: _bin is null ? null : () => _bin, session: _session);
         pane.Show();
         return (menu, pane, settings);
@@ -294,6 +295,29 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal("before a revert at 2026-10-04 14:05", SkillRecordText.VersionText(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.Revert), TimeZoneInfo.Utc));
         Assert.Equal("before the model's change at 2026-10-04 14:05", SkillRecordText.VersionText(new SkillRevision(1, 1, at, "SKILL.md", "x", SkillActors.Model), TimeZoneInfo.Utc));
         Assert.Equal("(↩️ nothing to revert: no earlier version of haiku is kept yet)", SkillRecordText.NoVersionsNotice("haiku"));
+    }
+
+    /// <summary>
+    /// A skill's page (2026-11-23, the user's ask): a bare rule between its place rows and its acts. The rule is no stop: Down from the last
+    /// place row lands on move, never on a global move.
+    /// </summary>
+    [Fact]
+    public async Task ASkillsPage_ARuleUnderThePlaceRows_NoStop()
+    {
+        Put(SkillScope.Profile, "haiku", "Writes haiku.");
+        var (menu, _) = PaneMenu();
+        Push(Keys.Enter);                       // the scope page, on profile
+        Push(Keys.Down, Keys.Down, Keys.Enter); // global, then past the rule to move
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var lines = Output.Split('\n');
+        int global = Array.FindLastIndex(lines, l => l.StartsWith("  global   ", StringComparison.Ordinal));
+        Assert.True(global >= 0, Output);
+        Assert.Equal(Rule(100), lines[global + 1]);
+        Assert.Contains(Markup.Remove(SkillsMenu.MoveRow), lines[global + 2]);
+        Assert.DoesNotContain(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global), Output);
     }
 
     /// <summary>The revert row (2026-10-04): always on the page with the seams, before delete; nothing kept is a notice on the status line, no list.</summary>
@@ -467,7 +491,7 @@ public class SkillsMenuTests : IDisposable
         Push(Keys.Right, Keys.Right, Keys.Right);   // profile, global, project (no external skills, so no external tab)
         Push(Keys.Enter);                           // the folder's trust row: the question, on the skill's View row
         Push(Keys.Enter);                           // View deploy
-        Push(Keys.Up, Keys.Enter);                  // Trust
+        Push(Keys.Up, Keys.Up, Keys.Enter);         // Trust (over Cancel; the rule is no stop)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -481,6 +505,109 @@ public class SkillsMenuTests : IDisposable
         Assert.Equal("Ships [it].", _catalog.Find("deploy")!.Description);
     }
 
+    /// <summary>
+    /// The trust question's actions come first (2026-11-23, hand check 1): trust, cancel, a bare rule, the views, then the removed skills.
+    /// The cursor starts on the first view, so Enter views; cancel trusts nothing.
+    /// </summary>
+    [Fact]
+    public async Task TheTrustQuestion_TrustAndCancelFirst_ThenARule_ThenTheViews()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        PutProject(repo, "lint", "Lints.");
+        string old = PutProject(repo, "zold", "Old.");
+        TrustRepo(repo);
+        Directory.Delete(old, recursive: true);
+        File.AppendAllText(Path.Combine(repo, ".agents", "skills", "deploy", SkillCatalog.FileName), "\nMore.\n");
+        _console.Profile.Width = 200;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row: the question
+        Push(Keys.Enter);                                       // the first view, under the cursor
+        Push(Keys.Up, Keys.Enter);                              // cancel, above it (the rule is no stop)
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([SkillsText.ViewLabel("deploy")], _viewed);
+        Assert.True(_projectTrust!.Trusted(repo)!.Skills.ContainsKey(".agents/skills/zold"));   // cancel saved nothing: the old trust stands
+        var lines = Output.Split('\n');
+        int trust = Array.FindIndex(lines, l => l.Contains(Markup.Remove(SkillsText.TrustQuestionRow(SkillsText.ThisFolderLabel)), StringComparison.Ordinal));
+        int cancel = Array.FindIndex(lines, l => l.Contains(Markup.Remove(SkillsText.CancelRow), StringComparison.Ordinal));
+        int first = Array.FindIndex(lines, l => l.Contains("view", StringComparison.Ordinal) && l.Contains("deploy", StringComparison.Ordinal));
+        Assert.True(trust >= 0 && cancel == trust + 1, Output);
+        Assert.Equal(cancel + 2, first);
+        Assert.Contains(new string(ScreenPane.RuleGlyph, 40), lines[cancel + 1]);
+    }
+
+    /// <summary>
+    /// On a narrow pane (2026-11-23, hand check 1) a long description is what gets cut: the acting mark and the files count still show.
+    /// </summary>
+    [Fact]
+    public async Task TheTrustQuestion_Narrow_ShowsTheActingMarkAndTheFilesCount_TheDescriptionCut()
+    {
+        string repo = UseRepo();
+        string tools = PutProject(repo, "tools", "A long description that runs on and on well past what an eighty column pane can hold in one row.");
+        File.WriteAllText(Path.Combine(tools, SkillCatalog.FileName), "---\nname: tools\ndescription: A long description that runs on and on well past what an eighty column pane can hold in one row.\nallowed-tools: Bash\n---\n\nSteps.\n");
+        string notes = PutProject(repo, "notes", "Another long description that runs on and on well past what an eighty column pane can hold.");
+        Directory.CreateDirectory(Path.Combine(notes, "templates"));
+        File.WriteAllText(Path.Combine(notes, "templates", "notes.md"), "x");
+        _console.Profile.Width = 80;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row: the question
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.ActingMark[..20], Output);
+        Assert.Contains(SkillsText.FilesNote(1, false), Output);
+    }
+
+    /// <summary>A row with neither note starts its tail with the description (2026-11-23).</summary>
+    [Fact]
+    public void TrustViewRow_NotesFirst_ThenTheDescription()
+    {
+        string plain = Markup.Remove(SkillsText.TrustViewRow("a", 4, "", "Desc.", "", acting: false));
+        Assert.EndsWith("Desc.", plain.TrimEnd());
+        string both = Markup.Remove(SkillsText.TrustViewRow("a", 4, "", "Desc.", SkillsText.FilesNote(1, false), acting: true));
+        Assert.EndsWith(SkillsText.FilesNote(1, false) + " · " + SkillsText.ActingMark + " · Desc.", both.TrimEnd());
+    }
+
+    /// <summary>
+    /// A skill whose bundled files alone changed (2026-11-23, hand check 1): its view says SKILL.md is the one trusted, over the text, with no diff.
+    /// A changed skill's view doesn't carry the note.
+    /// </summary>
+    [Fact]
+    public async Task TheTrustQuestion_AFilesChangedSkill_ItsViewSaysSo()
+    {
+        string repo = UseRepo();
+        string deploy = PutProject(repo, "deploy", "Ships it.");
+        File.WriteAllText(Path.Combine(deploy, "helper.md"), "one");
+        string lint = PutProject(repo, "lint", "Lints.");
+        TrustRepo(repo);
+        File.WriteAllText(Path.Combine(deploy, "helper.md"), "two");
+        File.AppendAllText(Path.Combine(lint, SkillCatalog.FileName), "\nMore.\n");
+        _console.Profile.Width = 200;
+        var (menu, _) = PaneMenu();
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row: the question
+        Push(Keys.Enter, Keys.Down, Keys.Enter);                // view deploy, then lint
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal([SkillsText.ViewLabel("deploy"), SkillsText.ViewLabel("lint")], _viewed);
+        string Shown(int i)
+        {
+            var console = new TestConsole();
+            console.Profile.Width = 200;
+            console.Write(_viewedContent[i]);
+            return console.Output;
+        }
+
+        Assert.Contains(SkillsText.FilesChangedViewNote, Shown(0));
+        Assert.Contains("The repo's steps.", Shown(0));
+        Assert.DoesNotContain(SkillsText.FilesChangedViewNote, Shown(1));
+    }
+
     /// <summary>The trust question's Cancel, and Esc, save nothing (2026-11-23).</summary>
     [Fact]
     public async Task TheTrustQuestion_CancelAndEsc_SaveNothing()
@@ -488,7 +615,7 @@ public class SkillsMenuTests : IDisposable
         string repo = UseRepo();
         PutProject(repo, "deploy", "Ships it.");
         var (menu, _) = PaneMenu();
-        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Enter);   // Cancel
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Up, Keys.Enter);     // Cancel, above the first view
         Push(Keys.Enter, Keys.Escape);                                                  // asked again, Esc
         Push(Keys.Escape);
 
@@ -524,7 +651,8 @@ public class SkillsMenuTests : IDisposable
     /// <summary>The project sub-tab's first skill's page, its delete row (edit, copy to profile, copy to global, disable, delete), then Yes or No.</summary>
     private void PushDeleteFirstProjectSkill(bool yes = true)
     {
-        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
+        // Untrust first under the heading (2026-11-23), so Down to the first skill, then its page's delete.
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Enter, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);
         Push(yes ? [Keys.Down, Keys.Enter] : [Keys.Enter]);
     }
 
@@ -1127,7 +1255,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        HeldRows.AssertContains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n  move     send it to another profile's skills\n  copy     copy it into another profile's skills\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
+        HeldRows.AssertContains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Fitted("  global   " + _roots.Global) + "\n" + Rule(100) + "\n  move     send it to another profile's skills\n  copy     copy it into another profile's skills\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Rule(100) + "\n" + SkillsMenu.ScopeKeys + "\n", Output);   // delete always offered since 2026-09-23
         HeldRows.AssertContains("\n" + Titled(SkillsMenu.MovePrompt("haiku", SkillScope.Profile, SkillScope.Global)) + "\n \n▸ No\n  Yes\n", Rule(100) + "\n" + SettingsMenu.ConfirmKeys + "\n", Output);
         Assert.Contains("\n" + Titled(Strip) + "\n" + Scopes + "\n  · " + SkillsMenu.MovedNotice("haiku", SkillScope.Global) + "\n" + SkillsHead(1) + "\n▸ haiku  global   Writes haiku.\n", Output);
         Assert.False(Exists(SkillScope.Profile, "haiku"));
@@ -1365,7 +1493,7 @@ public class SkillsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("  profile  " + _roots.Profile) + "\n" + Fitted("▸ global   " + _roots.Global) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("  profile  " + _roots.Profile) + "\n" + Fitted("▸ global   " + _roots.Global) + "\n" + Rule(100) + "\n  rename   give it a new name (letters, digits and hyphens)\n  edit     open its SKILL.md in your editor\n  lock     keep the model, reflection and updates from changing it\n  disable  stop offering it; a reflection still sees it, and changes nothing\n  delete   remove the folder and everything in it\n", Output);
         Assert.Contains("\n" + Titled(SkillsMenu.DeletePrompt("haiku", SkillScope.Global)) + "\n \n▸ No\n  Yes\n", Output);
         Assert.Contains("\n  · " + SkillsMenu.KeptNotice + "\n" + SkillsHead(1) + "\n▸ haiku  global   Writes haiku.\n", Output);
         Assert.Contains("\n" + Titled(Strip) + "\n  · " + SkillsMenu.DeletedNotice("haiku", SkillScope.Global) + "\n" + Fitted("▸ " + SkillsText.NoneLine) + "\n", Output);
@@ -1723,7 +1851,7 @@ public class SkillsMenuTests : IDisposable
         Assert.DoesNotContain("Reads PDFs.", Output);
         Assert.Contains("\n" + Markup.Remove(InfoPane.SubStripRows(SkillsText.Label, ["all", "profile"], 0, 100)[0]) + "\n", Output);
         Assert.DoesNotContain(Scopes, Output);
-        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n  move     send it to another profile's skills\n", Output);
+        Assert.Contains("\n" + Titled(SkillsMenu.ScopeTitle("haiku")) + "\n \n" + Fitted("▸ profile  " + _roots.Profile) + "\n" + Rule(100) + "\n  move     send it to another profile's skills\n", Output);
         Assert.True(SkillLock.IsLocked(Path.Combine(_roots.Profile, "haiku")));
         Assert.Equal([SkillScope.Profile], SkillsMenu.ScopeRowsFor(Roots));
         Assert.Equal([SkillScope.Profile, SkillScope.Global], SkillsMenu.ScopeRows);
@@ -1770,7 +1898,7 @@ public class SkillsMenuTests : IDisposable
         _console.Profile.Width = 200;
         var (menu, _) = PaneMenu();
         Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row
-        Push(Keys.Up, Keys.Enter);                              // Trust
+        Push(Keys.Up, Keys.Up, Keys.Enter);                     // Trust
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -1791,7 +1919,7 @@ public class SkillsMenuTests : IDisposable
         var (menu, _) = PaneMenu();
         Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row: View deploy on the cursor
         Push(Keys.Down, Keys.Enter);                            // lint's removed row: nothing
-        Push(Keys.Up, Keys.Up, Keys.Enter);                     // Trust
+        Push(Keys.Up, Keys.Up, Keys.Up, Keys.Enter);            // Trust
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -1811,7 +1939,7 @@ public class SkillsMenuTests : IDisposable
         var (menu, _) = PaneMenu();
         Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // the trust row
         Push(Keys.Enter);                                       // View deploy: the edit lands
-        Push(Keys.Up, Keys.Enter);                              // Trust: changed meanwhile, asked again
+        Push(Keys.Up, Keys.Up, Keys.Enter);                     // Trust: changed meanwhile, asked again
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -1834,7 +1962,7 @@ public class SkillsMenuTests : IDisposable
         Load(_session, "x");
         _console.Profile.Width = 200;
         var (menu, _) = PaneMenu();
-        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Down, Keys.Enter);   // deploy, x (hidden), untrust
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);                         // untrust, first under the heading
         Push(Keys.Down, Keys.Enter);                                                   // Yes
         Push(Keys.Escape);
 
@@ -1855,7 +1983,7 @@ public class SkillsMenuTests : IDisposable
         File.WriteAllText(Path.Combine(folder, SkillCatalog.FileName), "---\nname: foo\ndescription: The repo's foo.\n---\n\nSteps.\n");
         TrustRepo(repo);
         var (menu, _) = PaneMenu();
-        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter);   // foo's page
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Enter);   // foo's page, under untrust
         Push(Keys.Down, Keys.Enter, Keys.Down, Keys.Enter);     // copy to profile, Yes
         Push(Keys.Escape);
 
@@ -1875,7 +2003,7 @@ public class SkillsMenuTests : IDisposable
         _openFile = path => File.AppendAllText(path, "\nMore steps.\n");
         _console.Profile.Width = 200;
         var (menu, _) = PaneMenu();
-        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Enter, Keys.Enter);   // deploy's page, edit: the file changes, the list is as it was
+        Push(Keys.Right, Keys.Right, Keys.Right, Keys.Down, Keys.Enter, Keys.Enter);   // deploy's page, edit: the file changes, the list is as it was
         Push(Keys.Enter, Keys.Down, Keys.Enter);                            // deploy's page, copy to profile
         Push(Keys.Escape);
 

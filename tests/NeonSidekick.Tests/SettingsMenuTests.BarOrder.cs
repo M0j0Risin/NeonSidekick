@@ -34,7 +34,7 @@ public partial class SettingsMenuTests
         await menu.ShowAsync(CancellationToken.None);
 
         var order = _settings.Current.ToolbarOrder!;
-        Assert.Equal(ToolbarItems.Profile, order[0]);
+        Assert.Equal(ToolbarItems.Tools, order[0]);   // the default order's second since 2026-11-23 (Profile until then)
         Assert.Equal([ToolbarItems.Settings, ToolbarItems.Path, ToolbarItems.Model], order[^3..]);   // the model's name after the path (2026-10-12)
         Assert.DoesNotContain(ToolbarItems.Settings, _settings.Current.ToolbarItems!);
         Assert.Contains(ToolbarItems.Tools, _settings.Current.ToolbarItems!);
@@ -473,7 +473,7 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["settings", "divider:4", "profile"], _settings.Current.ToolbarOrder!.Take(3));   // 1 to 3 are the default's (1 and 2 until later still on 2026-10-13)
+        Assert.Equal(["settings", "divider:15", "tools"], _settings.Current.ToolbarOrder!.Take(3));   // 1 to 14 are the default's since 2026-11-23 (1 to 3 until then; 1 and 2 until later still on 2026-10-13)
         Assert.Contains(SettingsMenu.DividerButton, Output);
         Assert.Contains("    │   Divider", Output);
         pane.Dispose();
@@ -499,8 +499,9 @@ public partial class SettingsMenuTests
     {
         var shown = new AppSettingsData { ToolbarRight = ["tools", "path"], WebTools = false };
         var parts = ChatScreen.ToolbarPartsFor(ToolbarItems.Resolve(["settings", "tools", "web", "path", "model"]), shown, @"D:\x", "llama", "");
-        // The default order's dividers lie between ⚙️ and 🌐 (three since later still that day) with nothing drawn between them: one │ (2026-10-13).
-        Assert.Equal([ChatScreen.SettingsToolGlyph, ScreenPane.DividerGlyph, ChatScreen.WebToolGlyph, "llama"], parts.Left.Select(i => i.Text));
+        // The default order's dividers lie between ⚙️ and 🌐, and between 🌐 and the name, with nothing drawn between them: one │ each (2026-10-13; the name
+        // after none until the order became the neon profile's, 2026-11-23).
+        Assert.Equal([ChatScreen.SettingsToolGlyph, ScreenPane.DividerGlyph, ChatScreen.WebToolGlyph, ScreenPane.DividerGlyph, "llama"], parts.Left.Select(i => i.Text));
         Assert.Equal(ScreenPane.ToolbarItemKind.Divider, parts.Left[1].Kind);
         Assert.True(parts.Left[2].Off);
         Assert.Equal([ChatScreen.ToolsToolGlyph, @"D:\x"], parts.Right.Select(i => i.Text));

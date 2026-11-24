@@ -45,7 +45,7 @@ public sealed class ImageToolsGroupTests : IDisposable
         Assert.Equal("Image", ToolbarItems.Title(ToolbarItems.Image));
         Assert.Equal(ToolbarItems.Image, ChatScreen.ToolbarItemOf(ChatScreen.ImageToolGlyph));
         Assert.Equal(ToolsText.SwitchLine(ToolbarItems.Image), ChatScreen.ToolbarWord(ChatScreen.ImageToolGlyph));
-        Assert.Equal(ToolbarItems.Defaults.ToList().IndexOf(ToolbarItems.Files) + 1, ToolbarItems.Defaults.ToList().IndexOf(ToolbarItems.Image));   // a default since later on 2026-10-10 (the user's ask), after the folder
+        Assert.DoesNotContain(ToolbarItems.Image, ToolbarItems.Defaults);   // a default from later on 2026-10-10 until 2026-11-23 (the user's ask: the neon profile's checklist)
         Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Image, new AppSettingsData()));
         Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Image, new AppSettingsData { ImageTools = true }));
         // The frame is also the status bar's ComfyUI generation (2026-10-27): only the toolbar's routes read it as the Image switch,

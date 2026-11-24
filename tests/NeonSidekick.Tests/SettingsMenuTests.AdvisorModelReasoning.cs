@@ -230,7 +230,7 @@ public partial class SettingsMenuTests
         Push(Keys.Down, Keys.Enter);            // dba: gemma-b, which the running model stands in for
         Push(Keys.Down);                        // qa
         SameAdvisorAction(SettingsMenu.ChangeAdvisorServerChoice);
-        Push(Keys.Down, Keys.Enter);            // the embedded row (gemma-b), under the borrow row
+        Push(Keys.Enter);                       // the embedded row (gemma-b): a saved address no row stands for opens on the first server row
         Push(Keys.Enter);                       // reasoning
         Push(Keys.Escape, Keys.Escape);
 

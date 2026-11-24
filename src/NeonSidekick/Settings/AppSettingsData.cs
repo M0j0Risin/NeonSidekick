@@ -436,8 +436,10 @@ public sealed class AppSettingsData
     /// <c>/usage</c> (📊, since 2026-09-29), then 💾 <c>/memory</c> while <see cref="Memory"/> is on, the lock
     /// <c>/tools shell allowed</c> (<c>/cmdlist</c> until 2026-10-09) that follows <see cref="ShellCommandPolicy"/>, and 👮 while <see cref="ShellPolice"/>
     /// is on, 🥷 while it is off (2026-10-02) — the lock since later that day, the disk and the officer since 2026-09-22), the working directory in force
-    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — Settings, the Web UI, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask,
-    /// Shell allowed commands, Shell police, the Shell, Files, Image and Web switches and the path since 2026-11-07 (the user's ask: Commands,
+    /// (<c>/cwd browse</c>) at its right. Null is <see cref="App.ToolbarItems.Defaults"/> — the neon profile's checklist since 2026-11-23 (the user's ask):
+    /// Settings, Profile, Themes, the Web UI, Tools, Skills, Commands, Sessions, Usage, Memory, Saved prompts, Queue, Shell allowed commands, Shell police,
+    /// the Shell, Files, Web and Advisors switches and the path; Settings, the Web UI, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask,
+    /// Shell allowed commands, Shell police, the Shell, Files, Image and Web switches and the path from 2026-11-07 (the user's ask: Commands,
     /// Usage and Ask added; 🎭 <c>/sys</c> retired the same day); Settings, Tools, Skills, Memory, Shell
     /// allowed commands, Shell police, the Shell, Files, Image (2026-10-10) and Web switches and the path from 2026-10-05 (the user's pick; the last
     /// seven alone from 2026-10-03; Shell allowed commands,
@@ -492,7 +494,7 @@ public sealed class AppSettingsData
     /// <summary>
     /// The toolbar's order (2026-10-12, the user's ask: the home bar picker's move keys on the <c>Show toolbar</c> checklist):
     /// every id of <see cref="App.ToolbarItems.Names"/>, checked or not, in the order the strip draws them (the path always last until
-    /// 2026-10-13; each side's order since, <see cref="ToolbarRight"/>) (<see cref="App.ToolbarItems.Order"/>). Null (the default) is <see cref="App.ToolbarItems.Names"/>' own order, which the
+    /// 2026-10-13; each side's order since, <see cref="ToolbarRight"/>) (<see cref="App.ToolbarItems.Order"/>). Null (the default) is <see cref="App.ToolbarItems.DefaultOrder"/> (the neon profile's order with its dividers since 2026-11-23), which the
     /// checklist's <c>⊡ default</c> puts back with the checks; an id it leaves out goes in after the one before it there. Apart
     /// from <see cref="ToolbarItems"/>, so <c>/toolbar</c> and the checks never touch it. No settings row of its own, no variable.
     /// </summary>
@@ -2801,7 +2803,7 @@ public sealed class AppSettingsData
 
     // ─── Docker servers (2026-10-02) ────────────────────────────────────────────
     // Chosen Docker containers as /server choices (the user's ask, after their tray app DockerLlmPicker: their vLLM and SGLang
-    // containers, one running at a time so the GPU holds one model, unless Docker server one at a time is off, 2026-11-10).
+    // containers, one running at a time so the GPU holds one model, unless Docker containers one at a time is off, 2026-11-10).
     // /settings' Docker tab; the engine pipe is /tools' row above.
 
     /// <summary>

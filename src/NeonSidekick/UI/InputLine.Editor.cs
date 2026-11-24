@@ -1227,25 +1227,15 @@ public sealed partial class InputLine
                     return new EditOutcome.End(new InputResult.RuleTitle(_text.ToString()));
                 }
             }
-            else if (pane.TryHitLowerRuleMarker(click.X, click.Y))
+            else if (pane.LowerRuleItemAt(click.X, click.Y) is { } ruleItem)
             {
-                // The update's marker on the lower rule (2026-11-04, self-update): a double-click opens /update, the draft back after.
+                // The lower rule's jobs group (2026-11-23, the user's ask; the processes' count since 2026-10-12, the update's marker since
+                // 2026-11-04): a double-click hands the item to the screen, the draft back after, as the session's name above.
                 _anchor = -1;
-                if (hintClicks.Second(LowerRuleMarkerPairKey))
+                if (hintClicks.Second(LowerRulePairKey(ruleItem)))
                 {
                     EndRow();
-                    return new EditOutcome.End(new InputResult.LowerRuleMarker(_text.ToString()));
-                }
-            }
-            else if (pane.TryHitLowerRuleTitle(click.X, click.Y))
-            {
-                // The running processes' count on the lower rule (2026-10-12, the user's ask): a double-click opens /process,
-                // the draft back after, as the session's name above.
-                _anchor = -1;
-                if (hintClicks.Second(LowerRuleTitlePairKey))
-                {
-                    EndRow();
-                    return new EditOutcome.End(new InputResult.LowerRuleTitle(_text.ToString()));
+                    return new EditOutcome.End(new InputResult.LowerRuleItem(ruleItem, _text.ToString()));
                 }
             }
             else if (pane.PictureAt(click.X, click.Y) is int picture)

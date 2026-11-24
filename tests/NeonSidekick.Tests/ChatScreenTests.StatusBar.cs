@@ -197,11 +197,11 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The tool bar's default order (2026-10-13, the user's ask): a dim │ ahead of 💾 (later still that day), one after ⏳ (after 💾 until it came) and one after 🐚, each between two drawn glyphs
-    /// (the fixture saves a bare order for the column pins; this test takes the default again).
+    /// The tool bar's default order (2026-10-13, the user's ask): the neon profile's since 2026-11-23 (the user's ask), five dividers drawn, each between
+    /// two drawn glyphs (three until then) (the fixture saves a bare order for the column pins; this test takes the default again).
     /// </summary>
     [WindowsFact]
-    public async Task Toolbar_TheDefaultOrder_DrawsItsThreeDividers()
+    public async Task Toolbar_TheDefaultOrder_DrawsItsDividers()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = null; d.ToolbarOrder = null; });
         _console.Profile.Height = 40;
@@ -211,8 +211,8 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(ChatScreen.SkillsToolGlyph + " " + ChatScreen.CommandsToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.UsageToolGlyph + " " + ChatScreen.MemoryToolGlyph + " " + ChatScreen.PromptsToolGlyph + " " + ChatScreen.QueueToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.AskToolGlyph, output);   // 🎓 │ 💾 ⏳ │ (later still on 2026-10-13), 🎓 │ 💾 📣 ⏳ │ since 2026-10-14, 🎓 🪄 │ 📊 💾 📣 ⏳ │ 🙋 since 2026-11-07
-        Assert.Contains(ChatScreen.ShellToolGlyph + " " + ScreenPane.DividerGlyph + " " + ChatScreen.FilesToolGlyph, output);
+        string[] drawn = ["settings", "tools", "sessions", "|", "profile", "themes", "usage", "|", "memory", "skills", "advisors", "|", "commands", "prompts", "queue", "|", "files", "web", "webui", "|", "cmdlist", "police", "shell"];
+        Assert.Contains("\n" + string.Join(" ", drawn.Select(id => id == "|" ? ScreenPane.DividerGlyph : ToolbarItems.Glyph(id))) + " ", output);   // ⚙️ 🛠️ 💬 │ 🪪 🧮 📊 │ 💾 🎓 🦉 │ 🪄 📣 ⏳ │ 📁 🌐 📱 │ 🔒 👮 🐚
     }
 
     /// <summary>

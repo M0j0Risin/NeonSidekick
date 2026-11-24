@@ -73,7 +73,7 @@ public static class SplashCommand
     public const string NeedsScreen = "/splash view, thumbs and purge need the screen: they are the interactive app's.";
 
     /// <summary>After <c>/splash view|thumbs</c> on a folder with no pictures yet: the built-in ones are the app's, not in it. Pinned.</summary>
-    public const string BuiltInNotice = "(the built-in splash pictures show until this folder has some; drop pictures here, or ask the model to set_splash_image)";
+    public const string BuiltInNotice = "(the built-in splash pictures show until this folder has some; drop pictures here, use a picture's right-click Add to the splash images, or ask the model to set_splash_image)";
 
     public static PictureFolderVerb Parse(string args) => PictureFolderCommand.Parse(args);
 

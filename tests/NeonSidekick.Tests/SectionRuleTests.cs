@@ -35,6 +35,14 @@ public class SectionRuleTests
         return console.Output.TrimEnd('\n');
     }
 
+    /// <summary>A bare rule (2026-11-23) is one unbroken run of rule glyphs to the width: no label, no space.</summary>
+    [Fact]
+    public void Bare_IsOneUnbrokenRule_ToTheWidth()
+    {
+        Assert.Equal(Rule(40), Render(SectionRule.Bare, 40));
+        Assert.Equal(Rule(5), Render(SectionRule.Bare, 5));
+    }
+
     [Fact]
     public void Markup_IsTheLeadTheLabelTheCountAndTheNote_InTheirStyles_Escaped()
     {

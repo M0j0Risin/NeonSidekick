@@ -143,13 +143,34 @@ public partial class ChatScreenTests
     /// reply the edit waits on the watcher as a pane does, while the bare word and the others stay quick.
     /// </summary>
     /// <summary>
-    /// The screen hands the Tool bar page its own answer for <c>bar:</c> (2026-11-08, the review: <c>ToolbarDrawn</c>, the row's parts): only
-    /// 🔒 and 👮 checked under <c>Shell command policy</c> <c>off</c> draw no row, so <c>/toolbar edit</c> reads hidden.
+    /// The screen hands the Tool bar page its own answer for <c>bar:</c> (2026-11-08, the review: <c>ToolbarDrawn</c>, the row's parts): 🔒 and
+    /// 👮 alone under <c>Shell command policy</c> <c>off</c> draw on the slab since 2026-11-23 (the user's ask), so <c>/toolbar edit</c> reads shown.
     /// </summary>
     [Fact]
-    public async Task Toolbar_TheBarButton_ReadsHidden_WhenNothingCheckedIsDrawn()
+    public async Task Toolbar_TheBarButton_ReadsShown_ForTheLockAndTheOfficer_UnderThePolicyOff()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["cmdlist", "police"]; d.ShellCommandPolicy = "off"; });
+        _console.Profile.Width = 120;
+        _console.Profile.Height = 60;
+        _geometry = new ScreenGeometry(() => null);
+        PushLine("/toolbar edit");
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(SettingsMenu.ShowBarButton(true), output);
+        Assert.DoesNotContain(SettingsMenu.ShowBarButton(false), output);
+    }
+
+    /// <summary>
+    /// The screen's answer for <c>bar:</c> when nothing checked is drawn: only an item this system doesn't offer (a Mac's 📅) draws no row,
+    /// so <c>/toolbar edit</c> reads hidden (🔒 and 👮 alone under the policy off until 2026-11-23).
+    /// </summary>
+    [MacFact]
+    public async Task Toolbar_TheBarButton_ReadsHidden_WhenNothingCheckedIsDrawn()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [ToolbarItems.Tasks]; });
         _console.Profile.Width = 120;
         _console.Profile.Height = 60;
         _geometry = new ScreenGeometry(() => null);

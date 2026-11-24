@@ -73,13 +73,6 @@ internal sealed partial class ChatScreen
     /// <summary>Whether a pass may wait on the user: only while the checkpoint is on (an unattended loop never stops on a question).</summary>
     private bool RalphAsksBarred() => _ralph is { InPass: true, Snapshot.Checkpoint: 0 };
 
-    /// <summary>The strip with the loop's glyph and place ahead of the rest while a loop runs. Pinned.</summary>
-    public static string RalphStrip(string? text, string strip)
-    {
-        ArgumentNullException.ThrowIfNull(strip);
-        return text is null ? strip : strip.Length == 0 ? text : text + GlyphSeparator + strip;
-    }
-
     /// <summary>The <c>l</c> button on the plans picker: only outside plan mode (the plan being planned goes through its pane).</summary>
     private bool RalphButtonOffered() => !_plan.Active;
 
@@ -585,6 +578,9 @@ internal sealed partial class ChatScreen
         long typed = _queue.Added;
         long pended = PendedCount;
         long sent = _webUi.LinesAdded;
+        // 🔁's double-click on the lower rule (2026-11-23, the user's ask): the loop pauses after the pass in progress, as a typed line pauses it.
+        using var end = new PassEnd();
+        _ralphEnd = end;
         try
         {
             while (stop is null)
@@ -620,7 +616,7 @@ internal sealed partial class ChatScreen
                 // A message pauses the loop: one typed on the PC since the run began (2026-10-20, a review: the queue's count paused it on lines
                 // waiting before its first pass, and under Queue mode manual a typed line never did), and the page's, which the idle line takes
                 // whatever the queue mode (2026-10-19, the third review: a message sent from the Web UI during a pass never paused it).
-                var next = loop.Next(steps, _queue.Added != typed || PendedCount != pended || _webUi.LinesAdded != sent);
+                var next = loop.Next(steps, _queue.Added != typed || PendedCount != pended || _webUi.LinesAdded != sent || end.Asked);
                 switch (next.Kind)
                 {
                     case RalphNextKind.Stop:
@@ -630,7 +626,7 @@ internal sealed partial class ChatScreen
                         stop = await RalphFinalCheckAsync(loop, cancellationToken).ConfigureAwait(false);
                         break;
                     default:
-                        (exit, stop) = await RalphPassAsync(loop, next, body, steps, PlanDocument.Stamp(text), () => _queue.Added != typed || PendedCount != pended || _webUi.LinesAdded != sent, cancellationToken).ConfigureAwait(false);
+                        (exit, stop) = await RalphPassAsync(loop, next, body, steps, PlanDocument.Stamp(text), () => _queue.Added != typed || PendedCount != pended || _webUi.LinesAdded != sent || end.Asked, cancellationToken).ConfigureAwait(false);
                         if (exit)
                         {
                             stop ??= RalphStop.Stopped;
@@ -670,7 +666,10 @@ internal sealed partial class ChatScreen
         }
 
         bool ours = ReferenceEquals(_ralph, loop);
-        EndRalph(stop ?? RalphStop.Stopped);
+        // Paused by 🔁's double-click alone, no line typed (2026-11-23): its own notice, and the next message starts afresh as after any stop.
+        bool clicked = end.Asked && _queue.Added == typed && PendedCount == pended && _webUi.LinesAdded == sent;
+        EndRalph(stop ?? RalphStop.Stopped, clicked);
+        _ralphEnd = null;
         if (_ralphSpoken is { } spoken)
         {
             // The request the wake phrase cut a pass short for (2026-10-19, the fifth review): run once the loop has stopped, as an ordinary turn
@@ -1061,8 +1060,11 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>The loop over: the summary, the stop's notice, the file and the state, the lock let go, then the stop tone for a stop the user did not cause.</summary>
-    private void EndRalph(RalphStop stop)
+    /// <summary>
+    /// The loop over: the summary, the stop's notice, the file and the state, the lock let go, then the stop tone for a stop the user did not cause.
+    /// <paramref name="clicked"/> (2026-11-23): paused by 🔁's double-click on the lower rule, no line typed.
+    /// </summary>
+    private void EndRalph(RalphStop stop, bool clicked = false)
     {
         if (_ralph is not { } loop)
         {
@@ -1078,7 +1080,7 @@ internal sealed partial class ChatScreen
         _ralphTurn = null;
         _ralphStrip = null;
         _webUi.StatusNudge();
-        var ended = RalphStart.End(files, loop, stop, _executingPlan?.Requirement ?? "", _time);
+        var ended = RalphStart.End(files, loop, stop, _executingPlan?.Requirement ?? "", _time, clicked: clicked && stop == RalphStop.Paused);
         foreach (var (text, warning) in ended.Lines)
         {
             if (warning)
@@ -1109,8 +1111,9 @@ internal sealed partial class ChatScreen
         SavePlanState();
         DiagnosticLog.Info(AppCategory, $"ralph: stopped {path}: {RalphText.StopWord(stop)} after {loop.PassesThisRun} passes");
         // The next message starts a new conversation (2026-11-22, the user's call), but a typed line that paused the loop, or the wake phrase's
-        // request, runs in the pass's (it may ask about the work), and a loop that ran no pass this run leaves the user's own chat alone.
-        if (stop != RalphStop.Paused && _ralphSpoken is null && loop.PassesThisRun > 0)
+        // request, runs in the pass's (it may ask about the work), and a loop that ran no pass this run leaves the user's own chat alone. A pause
+        // 🔁's double-click asked for (2026-11-23) has no line to run, so it starts afresh as any other stop.
+        if ((stop != RalphStop.Paused || clicked) && _ralphSpoken is null && loop.PassesThisRun > 0)
         {
             DropUndoNote();
             ResetConversationLight(NewConversationNotice);

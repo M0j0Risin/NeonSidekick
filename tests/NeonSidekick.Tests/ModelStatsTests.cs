@@ -76,21 +76,24 @@ public sealed class ModelStatsTests : IDisposable
             int heading = rows.ToList().FindIndex(r => r.Text.StartsWith(UsageText.ModelsModelHeading, StringComparison.Ordinal));
             Assert.Equal(UsageText.ModelsCaption, string.Join(" ", rows.Take(heading - 1).Select(r => r.Text)));   // the caption, wrapped
             Assert.Equal("", rows[heading - 1].Text);
-            var (longRow, longDim) = rows[heading + 1];   // the caption, a gap, the heading, then a row a model
+            Assert.True(rows[heading + 1].Rule);           // a rule under the heading (2026-11-23)
+            var (longRow, longDim, _) = rows[heading + 2];   // the caption, a gap, the heading, the rule, then a row a model
             Assert.False(longDim);
             Assert.Contains("50.0", longRow);   // 2000 tokens over 40 s
             Assert.Contains("10%", longRow);    // 5 of 50 calls
             Assert.EndsWith("50.0", longRow);
-            var (gemma, gemmaDim) = rows[heading + 2];
+            var (gemma, gemmaDim, _) = rows[heading + 3];
             Assert.StartsWith("gemma ", gemma);
             Assert.True(gemmaDim);
             Assert.EndsWith("—", gemma);        // no speed
-            string notes = string.Join(" ", rows.Skip(heading + 3).Select(r => r.Text));
+            Assert.True(rows[heading + 4].Rule);           // and one before the notes
+            string notes = string.Join(" ", rows.Skip(heading + 5).Select(r => r.Text));
             Assert.Contains(UsageText.ModelsUntaggedNote, notes);
             Assert.Contains(UsageText.ModelsFewNote, notes);
             int modelWidth = Math.Max(UsageText.ModelsModelMin, width - UsageText.FiguresWidth(stats));
             Assert.Equal(width < 120 ? UsageText.CutMiddle(longId, modelWidth) : longId, longRow[..modelWidth].TrimEnd());
-            Assert.Equal(width < 120, rows.Any(r => r.Text == longId && r.Dim) || (width < longId.Length && notes.Replace(" ", "").Contains(longId, StringComparison.Ordinal)));   // a cut id written whole under the table
+            Assert.Equal(width < 120, rows.Any(r => r.Text == "  " + longId && r.Dim) || (width < longId.Length + 2 && notes.Replace(" ", "").Contains(longId, StringComparison.Ordinal)));   // a cut id written whole, indented under its label
+            Assert.Equal(width < 120, rows.Any(r => r.Text == UsageText.ModelsFullNamesLabel));
             Assert.Equal(width < 120, longRow.Contains('…'));
         }
     }
@@ -120,19 +123,73 @@ public sealed class ModelStatsTests : IDisposable
 
         var wide = UsageText.ModelsRows(stats, logging: true, 160);
         int heading = wide.ToList().FindIndex(r => r.Text.StartsWith(UsageText.ModelsModelHeading, StringComparison.Ordinal));
-        Assert.Contains("100,000", wide[heading + 1].Text);
-        Assert.Equal(TextCells.Width(wide[heading].Text), TextCells.Width(wide[heading + 1].Text));   // the heading as wide as the row: columns in line
-        Assert.Equal(TextCells.Width(wide[heading].Text), TextCells.Width(wide[heading + 2].Text));
+        Assert.Contains("100,000", wide[heading + 2].Text);
+        Assert.Equal(TextCells.Width(wide[heading].Text), TextCells.Width(wide[heading + 2].Text));   // the heading as wide as the row: columns in line
+        Assert.Equal(TextCells.Width(wide[heading].Text), TextCells.Width(wide[heading + 3].Text));
+        Assert.Equal(TextCells.Width(wide[heading].Text), TextCells.Width(wide[heading + 1].Text));   // the rule as wide as the table
         Assert.True(UsageText.FigureWidths(stats)[0] >= "100,000".Length);
 
         var narrow = UsageText.ModelsRows(stats, logging: false, 60);
         Assert.All(narrow, r => Assert.True(TextCells.Width(r.Text) <= 60, r.Text));
         int narrowHeading = narrow.ToList().FindIndex(r => r.Text.StartsWith(UsageText.ModelsModelHeading, StringComparison.Ordinal));
-        Assert.StartsWith("qwen3", narrow[narrowHeading + 1].Text);
+        Assert.StartsWith("qwen3", narrow[narrowHeading + 2].Text);
         Assert.DoesNotContain("tok/s", narrow[narrowHeading].Text);   // dropped from the right
         Assert.Contains("Turns", narrow[narrowHeading].Text);
         Assert.Contains(UsageText.ModelsLoggingOff, string.Join(" ", narrow.Select(r => r.Text)));
         Assert.Contains("tool calls", UsageText.ModelsCaption);   // what Errors count (#85)
         Assert.DoesNotContain("before this version", UsageText.ModelsUntaggedNote);
+    }
+    /// <summary>
+    /// The turns a command answered (2026-11-23, the user's ask) leave the table for one note naming them in the table's order; the models go by
+    /// turns, most first, then by last use.
+    /// </summary>
+    [Fact]
+    public void TheTab_SideTurnsLeaveTheTable_ForOneNote_AndTheModelsGoByTurns()
+    {
+        var older = DateTimeOffset.UnixEpoch;
+        var newer = older.AddDays(1);
+        var stats = new List<ModelStat>
+        {
+            new("/cmd", 4, 2, 0, 0, 0, 0, 0, 0, newer, 0),
+            new("small", 30, 2, 0, 0, 0, 0, 0, 0, newer, 0),
+            new("big", 300, 9, 0, 0, 0, 0, 0, 0, older, 0),
+            new("/advisor dev", 3, 1, 0, 0, 0, 0, 0, 0, older, 0),
+            new("tie-new", 30, 1, 0, 0, 0, 0, 0, 0, newer.AddDays(1), 0),
+        };
+
+        var rows = UsageText.ModelsRows(stats, logging: true, 120);
+        var texts = rows.Select(r => r.Text).ToList();
+
+        Assert.DoesNotContain(texts, t => t.StartsWith("/cmd", StringComparison.Ordinal) || t.StartsWith("/advisor", StringComparison.Ordinal));
+        int heading = texts.FindIndex(t => t.StartsWith(UsageText.ModelsModelHeading, StringComparison.Ordinal));
+        Assert.Equal(["big", "tie-new", "small"], texts.Skip(heading + 2).Take(3).Select(t => t.Split(' ')[0]));
+        Assert.Contains(UsageText.ModelsSideTurnsNote(7, ["/cmd", "/advisor dev"]), string.Join(" ", texts));
+        Assert.Equal("7 turns answered by a command (/cmd, /advisor dev) aren't counted.", UsageText.ModelsSideTurnsNote(7, ["/cmd", "/advisor dev"]));
+        Assert.Equal("1 turn answered by a command (/claude) isn't counted.", UsageText.ModelsSideTurnsNote(1, ["/claude"]));
+    }
+
+    /// <summary>Only side turns (2026-11-23): never "No saved turns yet", which would contradict the note; no turns at all still is.</summary>
+    [Fact]
+    public void TheTab_OnlySideTurns_SaysNoModelTurns_AndTheNote()
+    {
+        var stats = new List<ModelStat> { new("/claude", 2, 1, 0, 0, 0, 0, 0, 0, DateTimeOffset.UnixEpoch, 0) };
+
+        Assert.Equal([UsageText.ModelsNoModelTurns, UsageText.ModelsSideTurnsNote(2, ["/claude"])], UsageText.ModelsRows(stats, logging: true, 120).Select(r => r.Text));
+        Assert.Equal([UsageText.ModelsEmpty], UsageText.ModelsRows([], logging: true, 120).Select(r => r.Text));
+    }
+
+    /// <summary>The side-turn test (2026-11-23): only what SideTurnModel writes, never a model served under its path.</summary>
+    [Fact]
+    public void IsSideTurnModel_OnlyTheCommandsForms()
+    {
+        foreach (string side in new[] { "/cmd", "/claude", "/advisor", "/advisor dev", SessionText.SideTurnModel(SessionText.AdvisorSideTurn, "neo") })
+        {
+            Assert.True(SessionText.IsSideTurnModel(side), side);
+        }
+
+        foreach (string model in new[] { "/models/Qwen3-27B", "/advisors", "qwen3", "", "/cmd2", "/advisor dev x" })
+        {
+            Assert.False(SessionText.IsSideTurnModel(model), model);
+        }
     }
 }

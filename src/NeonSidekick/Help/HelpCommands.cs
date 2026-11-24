@@ -228,7 +228,7 @@ public static class HelpCommands
         ]),
         new("/imagine",
         [
-            new("/imagine [<workflow>] <prompt> [-- <negative>|--no-negative]", "Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. The first word is the workflow when it names one; a workflow that takes no prompt runs without one. It renders behind the input line and is drawn when done; double-click 🖼️ on the status bar to cancel."),
+            new("/imagine [<workflow>] <prompt> [-- <negative>|--no-negative]", "Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. The first word is the workflow when it names one; a workflow that takes no prompt runs without one. It renders behind the input line and is drawn when done; double-click 🖼️ on the lower rule to cancel."),
             new("/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]", "Set the seed, size, steps and picture count (at most *ComfyUI max images per call*). The size's `x` may be `X` or `*`. Flags go anywhere on the line, in any case; a value with spaces goes in double quotes."),
             new("/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]", "Set the guidance and denoise strength, and up to three input pictures (a path, or a pasted picture's label such as `\"[Image #1]\"`); `--image2` needs `--image`, and `--image3` needs `--image2`."),
         ]),
@@ -249,7 +249,7 @@ public static class HelpCommands
         ]),
         new("/loop",
         [
-            new("/loop <count>|infinite [<delay>] <message>", "Send the message that many times, or until Esc or Ctrl+C, waiting for each reply. A delay is one word such as `30s`, `5m` or `1h30m` (never a bare number), up to 24 hours."),
+            new("/loop <count>|infinite [<delay>] <message>", "Send the message that many times, or until Esc or Ctrl+C, waiting for each reply; a double-click on ⟳ on the lower rule ends it after the message in progress. A delay is one word such as `30s`, `5m` or `1h30m` (never a bare number), up to 24 hours."),
             new("/loop <count>|infinite [<delay>] /imagine|/read <arguments>", "Run `/imagine` or `/read` itself on each pass, with no model in between; no other command can be looped."),
         ]),
         new("/mark",
@@ -370,6 +370,7 @@ public static class HelpCommands
         [
             new("/profile [<name>]", "Switch profiles for this run: alone, a picker (a typed letter jumps to the next profile starting with it); with a name, straight to that one. Each start opens `neon` unless `--profile`, `NEONSIDEKICK_PROFILE` or a desktop shortcut names another. Profiles whose name starts with `_` stay off the picker and the name list unless loaded; `/profile _name` still switches to one. Ctrl+P runs the bare `/profile`."),
             new("/profile add|delete <name>", "Create or delete a profile."),
+            new("/profile add <name> --fresh", "Create a profile from the default settings, copying nothing: no server, keys, memories or saved prompts."),
             new("/profile rename <name> <new-name>", "Rename a profile."),
             new("/profile reset [<name>] [--all]", "Reset a profile to the defaults (the loaded one when no name is given), keeping its URLs, paths, keys, avatars and the server in use; `--all` resets those too."),
             new("/profile push|pull <name>", "Copy every setting but the working directory to another profile (`push`) or from it into this one (`pull`). A pull clears the conversation; a section pulled (the forms below) applies at once, like a settings change, and the conversation stays."),
@@ -412,7 +413,7 @@ public static class HelpCommands
         ]),
         new("/queue",
         [
-            new("/queue [clear]", "List and prune the messages queued during a reply; Enter or Delete removes one (it asks); **⊠ clear all** (`c`) drops them all, and `/queue clear` does so without the pane. **mode: …** (`m`) and **cancel: …** (`k`) on the title row step *Queue mode* and *Queue cancel mode*, on the empty queue too. While the queue is held (*Queue cancel mode* `hold`, after a canceled reply), and always under *Queue mode* `manual`, **➤ send** (`s`) sends the next message now (under a reply, under `manual` only, when it ends), and `/queue send` does so without the pane. The toolbar's ⏳ and Ctrl+Q open it; Ctrl+Alt+Q runs `/queue clear`."),
+            new("/queue [clear]", "List and prune the messages queued during a reply; Enter or Delete removes one (it asks); **⊠ clear all** (`x`) drops them all, and `/queue clear` does so without the pane. **mode: …** (`m`) and **cancel: …** (`c`) on the title row step *Queue mode* and *Queue cancel mode*, on the empty queue too. While the queue is held (*Queue cancel mode* `hold`, after a canceled reply), and always under *Queue mode* `manual`, **➤ send** (`s`) sends the next message now (under a reply, under `manual` only, when it ends), and `/queue send` does so without the pane. The toolbar's ⏳ and Ctrl+Q open it; Ctrl+Alt+Q runs `/queue clear`."),
             new("/queue send", "Send the next queued message now, as **➤ send** does. At the idle line it works while the queue is held or under *Queue mode* `manual`; under a reply only under `manual`, and the message goes when the reply ends. Otherwise the queue sends by itself and nothing is taken off it."),
             new("/queue mode automatic|manual|off", "Set *Queue mode*: `automatic` queues what you send during a reply and sends it when the reply ends, `manual` queues every message for **➤ send**, `off` keeps no list. Works while a reply runs."),
             new("/queue cancel hold|drain|empty", "Set *Queue cancel mode*, what a canceled reply does to the queue: `hold` keeps it until your next message has run, `drain` sends the next one at once, `empty` drops them all. Works while a reply runs."),
@@ -582,9 +583,10 @@ public static class HelpCommands
         ]),
         new("/usage",
         [
-            new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Its other tabs show what fills the context, the system prompt, the tools, the skills and each model's figures. Ctrl+U runs it too."),
+            new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Its other tabs show what fills the context, the system prompt, the tools, the skills and each model's figures, and `/usage sysprompt` writes the next request to a file. Ctrl+U runs it too."),
             new("/usage context", "Open it on the Context tab: what fills the context window (the system prompt, each tool group, the history, pictures and thinking) and, with the window known, what turning a switchable group off would save."),
-            new("/usage models", "Open it on the Models tab: each model's turns, sessions, tool calls a turn, error and cancel rates, output a turn and speed, from the saved sessions. Few-turn rows show dim."),
+            new("/usage models", "Open it on the Models tab: each model's turns, sessions, tool calls a turn, error and cancel rates, output a turn and speed, from the saved sessions, most turns first. Few-turn rows show dim; turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out and counted in a note."),
+            new("/usage sysprompt [to=<path>]", "Write what the next request sends (the system message, every tool offered and the history, pictures as placeholders) to `neon-sysprompt-<timestamp>.md` in the working folder, or at `to=` (a file or a folder in it), never over a file. It holds the whole conversation."),
             new("/usage prompt|tools|skills", "Open it on the Prompt tab (the system message the next turn sends, apart from the skills block: persona, rules, project notes, memory, plan mode and the voice directive), the Tools tab (each tool it offers, grouped) or the Skills tab (the skills block's directive, then each skill it offers with its scope, description and `SKILL.md` file, or why the skills are off)."),
         ]),
         new("/vault",
@@ -605,7 +607,7 @@ public static class HelpCommands
         ]),
         new("/view",
         [
-            new("/view <image>|<folder>", "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. The arrows or the mouse wheel step through the pictures, and a right-click opens the picture menu (rotate, flip, color, resize, convert, shrink, copy the path, show in the file browser, attach, print, delete; edits go where *Image edit mode* says). Works while a reply runs. A PDF (`/view report.pdf`) opens in the Browser window's own PDF viewer instead, a copy of it that goes when the window closes; where the window can't take it, in its own program."),
+            new("/view <image>|<folder>", "Open an image from the working directory in the picture viewer, or a folder there on its newest picture. The arrows or the mouse wheel step through the pictures, and a right-click opens the picture menu (rotate, flip, color, resize, convert, shrink, copy the path, show in the file browser, attach, print, add to the splash images, delete; edits go where *Image edit mode* says). Works while a reply runs. A PDF (`/view report.pdf`) opens in the Browser window's own PDF viewer instead, a copy of it that goes when the window closes; where the window can't take it, in its own program."),
             new("/view <image> --chat", "Draw the image in the transcript instead; `--chat` may be the first or last word."),
             new("/view <image>|<folder> --thumbs", "Open the folder (an image's folder, with the image selected) as thumbnails in a window of their own, in step with the picture viewer and the picture strip. A click shows the picture in the viewer, a double-click or Enter opens it there, and the viewer's own moves select it here; new pictures go on the end, so nothing moves. + and − or Ctrl+wheel resize the tiles, F5 lists and fits again, and a right-click opens the picture menu. `--thumbs` may be the first or last word. Works while a reply runs."),
             new("/view <video>", "Play a video file (MP4, M4V, MOV, WebM or MKV) as `/video <path>` does."),

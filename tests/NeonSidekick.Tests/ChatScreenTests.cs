@@ -7722,6 +7722,26 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Theory]
+    [InlineData("add x --fresh", ProfileActionKind.Add, "x", true)]
+    [InlineData("add --fresh x", ProfileActionKind.Add, "x", true)]
+    [InlineData("ADD x --FRESH", ProfileActionKind.Add, "x", true)]
+    [InlineData("add x", ProfileActionKind.Add, "x", false)]
+    [InlineData("--fresh", ProfileActionKind.Invalid, "", false)]
+    [InlineData("add --fresh", ProfileActionKind.Invalid, "", false)]
+    [InlineData("delete x --fresh", ProfileActionKind.Invalid, "", false)]
+    [InlineData("reset --fresh", ProfileActionKind.Invalid, "", false)]
+    [InlineData("push --fresh x", ProfileActionKind.Invalid, "", false)]
+    [InlineData("pull keys --fresh x", ProfileActionKind.Invalid, "", false)]
+    [InlineData("add x --fresh --fresh", ProfileActionKind.Invalid, "", false)]
+    [InlineData("add x --fresh --all", ProfileActionKind.Invalid, "", false)]
+    [InlineData("add --all --fresh", ProfileActionKind.Invalid, "", false)]
+    public void ParseProfileArgs_Fresh_IsPinned(string args, ProfileActionKind kind, string name, bool fresh)
+    {
+        // --fresh belongs to add <name> alone (2026-11-23, the user's ask), before or after the name.
+        Assert.Equal(new ProfileAction(kind, name, Fresh: fresh), ChatScreen.ParseProfileArgs(args));
+    }
+
+    [Theory]
     [InlineData("", GitActionKind.User, false)]
     [InlineData("force", GitActionKind.User, true)]
     [InlineData("\tFORCE ", GitActionKind.User, true)]
@@ -7955,6 +7975,58 @@ public partial class ChatScreenTests : IDisposable
         // Copies, not moves: the default profile keeps its own.
         Assert.Equal(new[] { "They like tea." }, new MemoryStore(ProfileDir(Profiles.DefaultName)).Snapshot());
         Assert.Equal("You are Rex.", File.ReadAllText(Path.Combine(ProfileDir(Profiles.DefaultName), PersonaFile.FileName)));
+    }
+
+    /// <summary>
+    /// <c>/profile add &lt;name&gt; --fresh</c> (2026-11-23, the user's ask): the compiled defaults, nothing copied — no changed setting, URL,
+    /// memories or saved prompts — and switched to.
+    /// </summary>
+    [Fact]
+    public async Task Profile_AddFresh_StartsFromTheDefaults_CopyingNothing()
+    {
+        FurnishedDefaultProfile();
+        _settings.Update(d => { d.LlmUrl = "http://box:8000/v1"; d.LlmModel = "qwen"; d.QueueMode = "off"; });
+        new NeonSidekick.Prompts.SavedPrompts(ProfileDir(Profiles.DefaultName)).Add("Summarize this.", out _);
+        PushLine("/profile add fresh1 --fresh");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("  · " + ChatScreen.ProfileCreatedFreshNotice("fresh1"), output);
+        Assert.Equal("fresh1", _settings.ProfileName);
+        var saved = Profiles.ReadProfileFile(Path.Combine(ProfileDir("fresh1"), Profiles.FileName));
+        Assert.Equal((new AppSettingsData().LlmUrl, new AppSettingsData().LlmModel, new AppSettingsData().QueueMode), (saved.LlmUrl, saved.LlmModel, saved.QueueMode));
+        foreach (string file in Profiles.BasicSidekickFiles)
+        {
+            Assert.False(File.Exists(Profiles.SidekickFilePath(ProfileDir("fresh1"), file)), file);
+        }
+    }
+
+    /// <summary><c>/profile add existing --fresh</c> is refused as a plain add is (2026-11-23), and nothing is written.</summary>
+    [Fact]
+    public async Task Profile_AddFresh_AnExistingName_IsRefused()
+    {
+        WorkProfile();
+        string before = File.ReadAllText(Path.Combine(ProfileDir("work"), Profiles.FileName));
+        PushLine("/profile add work --fresh");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(ChatScreen.ProfileExistsError("work"), output);
+        Assert.Equal(before, File.ReadAllText(Path.Combine(ProfileDir("work"), Profiles.FileName)));
+        Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
+    }
+
+    /// <summary>A fresh seed keeps a new profile's rules (2026-11-23): an empty working folder, the default avatar, no shortcut offered, no Web UI token.</summary>
+    [Fact]
+    public void FreshProfileSeed_IsTheDefaults_AndKeepsTheNewProfileRules()
+    {
+        var fresh = Profiles.FreshProfileSeed();
+        var rules = Profiles.NewProfileSeed(new AppSettingsData());
+        Assert.Equal((rules.WorkingDirectory, rules.ModelAvatar, rules.ShortcutOffered, rules.WebUiToken), (fresh.WorkingDirectory, fresh.ModelAvatar, fresh.ShortcutOffered, fresh.WebUiToken));
+        Assert.Equal(System.Text.Json.JsonSerializer.Serialize(new AppSettingsData(), NeonSidekick.Settings.SettingsJsonContext.Default.AppSettingsData),
+            System.Text.Json.JsonSerializer.Serialize(fresh, NeonSidekick.Settings.SettingsJsonContext.Default.AppSettingsData));
     }
 
     [Fact]
@@ -8321,6 +8393,110 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(1, CountOf(output, ChatScreen.LoopWaitNotice(TimeSpan.FromSeconds(30))));
         Assert.Contains("● One.\n\n  · " + ChatScreen.LoopWaitNotice(TimeSpan.FromSeconds(30)) + "\n  · " + ChatScreen.LoopTurnNotice(2, 2) + "\n› say a number\n", output);
         Assert.Contains("● Two.\n\n  · " + ChatScreen.LoopDoneNotice(2) + "\n", output);
+    }
+
+    /// <summary>⟳'s texts and the ended notices (2026-11-23, the user's ask), worded as the stopped ones.</summary>
+    [Fact]
+    public void LoopText_IsPinned()
+    {
+        Assert.Equal("⟳ 3/10", LoopText.RuleTitle(3, 10));
+        Assert.Equal("⟳ 3", LoopText.RuleTitle(3, null));
+        Assert.Equal(" · ending", LoopText.EndingTail);
+        Assert.Equal("(loop ended after 3 messages, as asked)", LoopText.EndedNotice(3));
+        Assert.Equal("(loop ended after 1 message, as asked)", LoopText.EndedNotice(1));
+        Assert.Equal("(loop ended after 2 runs, as asked)", LoopText.CommandEndedNotice(2));
+    }
+
+    /// <summary>
+    /// ⟳ on the lower rule (2026-11-23, the user's ask): <c>⟳ 1/3</c> during pass 1, <c>⟳ 2/3</c> during pass 2; a double-click on it during
+    /// pass 2 lets the reply finish, shows <c>· ending</c> until then, sends no pass 3 and says the ended notice; no ⟳ after.
+    /// </summary>
+    [Fact]
+    public async Task Loop_TheLowerRule_ShowsThePass_AndADoubleClickEndsItAfterThePassInProgress()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Width = 80;
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the input row at 100, the lower rule at 101
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("Two. ", "more");
+        _chat.EnqueueText("never");
+        bool first = false;
+        bool ending = false;
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (_chat.Requests.Count == 1 && i == 0)
+            {
+                _time.Advance(ScreenPane.Tick);
+                first = Output.Contains(ScreenPane.RuleWithTitle(LoopText.RuleTitle(1, 3), 80), StringComparison.Ordinal);
+            }
+
+            if (_chat.Requests.Count == 2 && i == 1)
+            {
+                _time.Advance(ScreenPane.Tick);
+                Assert.Contains(ScreenPane.RuleWithTitle(LoopText.RuleTitle(2, 3), 80), Output);
+                Scripted().PushClick(78, 101);   // the space after ⟳ 2/3, at the rule's right edge
+                Scripted().PushClick(78, 101);
+                await UntilAsync(() =>
+                {
+                    _time.Advance(ScreenPane.Tick);
+                    return Output.Contains(LoopText.RuleTitle(2, 3) + LoopText.EndingTail + " ─", StringComparison.Ordinal);
+                }, ct);
+                ending = true;
+            }
+        };
+        PushLine(Scripted(), "/loop 3 hi");
+        PushLine(Scripted(), "/exit");
+
+        string output = await RunAsync();
+
+        Assert.True(first);
+        Assert.True(ending);
+        Assert.Equal(2, _chat.Requests.Count);
+        Assert.Contains("Two. more", output);
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
+        Assert.Contains("  · " + LoopText.EndedNotice(2) + "\n", output);
+        Assert.DoesNotContain(ChatScreen.LoopTurnNotice(3, 3), output);
+    }
+
+    /// <summary>A double-click on ⟳ in the wait between passes (2026-11-23) ends the loop there at once, the delay never run out, with the ended notice.</summary>
+    [Fact]
+    public async Task Loop_ADoubleClickOnTheLowerRule_DuringTheWait_EndsItThere()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Width = 80;
+        _console.Profile.Height = 40;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        _chat.EnqueueText("One.");
+        _chat.EnqueueText("never");
+        PushLine(Scripted(), "/loop infinite 1m hi");
+        PushLine(Scripted(), "/exit");
+        using var done = new CancellationTokenSource();
+        var click = Task.Run(async () =>
+        {
+            while (!done.IsCancellationRequested && !Output.Contains(ChatScreen.LoopWaitNotice(TimeSpan.FromMinutes(1)), StringComparison.Ordinal))
+            {
+                await Task.Delay(10, CancellationToken.None);
+            }
+
+            while (!done.IsCancellationRequested && !Output.Contains(ScreenPane.RuleWithTitle(LoopText.RuleTitle(1, null), 80), StringComparison.Ordinal))
+            {
+                _time.Advance(ScreenPane.Tick);
+                await Task.Delay(10, CancellationToken.None);
+            }
+
+            Scripted().PushClick(78, 101);
+            Scripted().PushClick(78, 101);
+        });
+
+        string output = await RunAsync();
+        await done.CancelAsync();
+        await click;
+
+        Assert.Single(_chat.Requests);
+        Assert.Contains("  · " + LoopText.EndedNotice(1) + "\n", output);
+        Assert.DoesNotContain(ChatScreen.LoopStoppedNotice(1), output);
+        Assert.DoesNotContain(ChatScreen.LoopTurnNotice(2, null), output);
     }
 
     /// <summary>ESC in the wait between passes stops the loop there: nothing more is sent, and the stopped notice counts the passes sent.</summary>
@@ -10656,7 +10832,7 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// The strip under the settings in force names its off glyphs (2026-10-03): a tool switch that is off, the shell under the
-    /// policy off; never a pane's glyph, the lock, the officer or a window.
+    /// policy off, and the lock and the officer under it too (2026-11-23, the user's ask); never a pane's glyph or a window.
     /// </summary>
     [Fact]
     public void ToolbarStripFor_TheSettings_NameTheOffGlyphs()
@@ -10664,16 +10840,16 @@ public partial class ChatScreenTests : IDisposable
         var items = ToolbarItems.Resolve(["settings", "cmdlist", "police", "shell", "web", "sql", "log"]);
         var shown = new AppSettingsData { WebTools = true, SqlTools = false, ShellCommandPolicy = "off" };
         var (strip, off) = ChatScreen.ToolbarStripFor(items, shown);
-        Assert.Equal("⚙️ 🐚 🌐 🛢️ 📄", strip);   // no lock, no officer under off
-        Assert.Equal([1, 3], off);
+        Assert.Equal("⚙️ 🌐 🔒 👮 🐚 📄 🛢️", strip);   // the closed lock and the officer under off, on the slab (2026-11-23, the user's ask); the default order neon's since that day
+        Assert.Equal([2, 3, 4, 6], off);
         shown.ShellCommandPolicy = "ask";
         (strip, off) = ChatScreen.ToolbarStripFor(items, shown);
-        Assert.Equal("⚙️ 🔒 👮 🐚 🌐 🛢️ 📄", strip);
-        Assert.Equal([5], off);
-        Assert.Equal(strip, ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPolice));   // the same text either way
+        Assert.Equal("⚙️ 🌐 🔒 👮 🐚 📄 🛢️", strip);
+        Assert.Equal([6], off);
+        Assert.Equal("⚙️ 🔒 👮 🐚 🌐 🛢️ 📄", ChatScreen.ToolbarStripFor(items, CommandPolicyMode.Ask, shown.ShellPolice));   // the pure strip in Names' order (the same text as the settings' until the default order became neon's, 2026-11-23)
         Assert.True(ChatScreen.ToolbarItemOff("advisors", new AppSettingsData { Advisors = false }));
         Assert.False(ChatScreen.ToolbarItemOff("advisors", new AppSettingsData { Advisors = true }));
-        Assert.All(new[] { "settings", "themes", "cmdlist", "police", "log", "comfyview", "comfythumbs", "youtube", "shoppinglist", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "off", ShellCommandPolicy = "off" })));
+        Assert.All(new[] { "settings", "themes", "log", "comfyview", "comfythumbs", "youtube", "shoppinglist", "path" }, id => Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { MemoryMode = "off", ShellCommandPolicy = "off" })));
         // The disk on the slab while Memory is off (later on 2026-10-03, the user's ask: always drawn, telling which).
         Assert.True(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "off" }));
         Assert.False(ChatScreen.ToolbarItemOff("memory", new AppSettingsData { MemoryMode = "read-only" }));   // 2026-10-04: read-only is still memory
@@ -10692,8 +10868,8 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(ChatScreen.ToolbarItemOff(ToolbarItems.Tools, new AppSettingsData(), noToolsOffered: true));
         Assert.False(ChatScreen.ToolbarItemOff(ToolbarItems.Tools, new AppSettingsData()));
         (strip, off) = ChatScreen.ToolbarStripFor(ToolbarItems.Resolve(["tools", "skills", "usage"]), new AppSettingsData { AgentSkills = false }, noToolsOffered: true);
-        Assert.Equal("🛠️ 🎓 📊", strip);
-        Assert.Equal([0, 1], off);
+        Assert.Equal("🛠️ 📊 🎓", strip);   // the default order neon's since 2026-11-23
+        Assert.Equal([0, 2], off);
     }
 
     /// <summary>
@@ -10784,7 +10960,7 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// The toolbar's lock follows Shell command policy at each draw (later still on 2026-09-21):
-    /// none under off — the fixed glyphs alone, a pair at its column the blanks' /settings — the
+    /// the closed lock on the slab under off (2026-11-23, the user's ask; none until then), a pair on a blank /settings — the
     /// open lock under yolo, whose pair is the list as the closed lock's; the change on the Tools
     /// pane shows once that pane closes. Memory and the police off here (2026-09-22), so the lock's
     /// column is the pane glyphs' end (21 since the chart joined them, 2026-09-29; 27 since the ID card and the rising chart, later that day;
@@ -10792,7 +10968,7 @@ public partial class ChatScreenTests : IDisposable
     /// drawn on its slab with Memory off).
     /// </summary>
     [WindowsFact]
-    public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo()
+    public async Task TheToolbarLock_FollowsTheShellCommandPolicy_ClosedUnderOff_OpenUnderYolo()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; d.ShellCommandPolicy = "off"; d.MemoryMode = "off"; d.ShellPolice = false; });
         _console.Profile.Height = 40;
@@ -10810,18 +10986,17 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
-        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false), cwd, 239), output);   // the closed lock under off since 2026-11-23
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false), cwd, 239), output);
-        Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Automation · Voice ") + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && allowed > settings, output);
         Assert.Empty(_chat.Requests);
     }
 
-    /// <summary>The Unix twin of <see cref="TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo"/> (2026-10-06, the macOS build): the blank clicked left of the working directory, whose Unix temp path is long enough to reach column 120.</summary>
+    /// <summary>The Unix twin of <see cref="TheToolbarLock_FollowsTheShellCommandPolicy_ClosedUnderOff_OpenUnderYolo"/> (2026-10-06, the macOS build): the blank clicked left of the working directory, whose Unix temp path is long enough to reach column 120.</summary>
     [UnixFact]
-    public async Task TheToolbarLock_FollowsTheShellCommandPolicy_NoneUnderOff_OpenUnderYolo_Unix()
+    public async Task TheToolbarLock_FollowsTheShellCommandPolicy_ClosedUnderOff_OpenUnderYolo_Unix()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [.. ToolbarItems.Names.Where(id => id != ToolbarItems.Model)]; d.ShellCommandPolicy = "off"; d.MemoryMode = "off"; d.ShellPolice = false; });
         _console.Profile.Height = 40;
@@ -10839,9 +11014,8 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         string cwd = WorkingDirectory.Resolve("", _settings.ProfileDirectory);
-        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStrip, cwd, 239), output);
+        Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false), cwd, 239), output);   // the closed lock under off since 2026-11-23
         Assert.Contains("\n" + ScreenPane.ToolbarRow(ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false), cwd, 239), output);
-        Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
         int settings = output.IndexOf("\n" + Titled(SettingsMenu.Title + " │ Client · Servers · Advisors · Automation · Voice ") + "\n", StringComparison.Ordinal);
         int allowed = output.IndexOf("\n" + Titled(AllowedCommandsTitle) + "\n", StringComparison.Ordinal);
         Assert.True(settings > 0 && allowed > settings, output);
@@ -12475,11 +12649,32 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), ChatScreen.ToolbarStripFor(ToolbarItems.Resolve([.. ToolbarItems.Names]), CommandPolicyMode.Ask, true));
         Assert.Equal("📊 💾", ChatScreen.ToolbarStripFor(Items("usage", "memory"), CommandPolicyMode.Ask, true));   // the disk whatever Memory is (later on 2026-10-03), its slab telling which
         Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
-        Assert.Equal("", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));
+        Assert.Equal("🔒 👮", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));   // drawn under off since 2026-11-23 (the user's ask), on the slab
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
         Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 💬 🎹 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
         Assert.Equal("🐚 🌐", ChatScreen.ToolbarStripFor(Items("web", "shell"), CommandPolicyMode.Off, true));   // the switches always drawn, the shell under off too
         Assert.Equal("🪪 📄", ChatScreen.ToolbarStripFor(Items("log", "profile"), CommandPolicyMode.Ask, true));   // strip order (later on 2026-09-29; the rising chart's pair until 2026-10-14)
+    }
+
+    /// <summary>
+    /// The lock and the officer on the off slab under the policy <c>off</c> (2026-11-23, the user's ask: they vanished while the shell
+    /// stayed on the slab), never under <c>ask</c> or <c>yolo</c>; the police switch shows only as its glyph.
+    /// </summary>
+    [Fact]
+    public void TheLockAndTheOfficer_OnTheSlab_UnderThePolicyOff()
+    {
+        foreach (string id in new[] { ToolbarItems.CmdList, ToolbarItems.Police })
+        {
+            Assert.True(ChatScreen.ToolbarItemOff(id, new AppSettingsData { ShellCommandPolicy = "off" }));
+            Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { ShellCommandPolicy = "ask" }));
+            Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { ShellCommandPolicy = "yolo" }));
+            Assert.False(ChatScreen.ToolbarItemOff(id, new AppSettingsData { ShellCommandPolicy = "ask", ShellPolice = false }));
+        }
+
+        var parts = ChatScreen.ToolbarPartsFor(ToolbarItems.Resolve(["cmdlist", "police", "shell"]), new AppSettingsData { ShellCommandPolicy = "off", ShellPolice = false }, "", "", "");
+        var glyphs = parts.Left.Where(i => i.Kind == ScreenPane.ToolbarItemKind.Glyph).ToList();
+        Assert.Equal([ChatScreen.CmdAskToolGlyph, ChatScreen.NinjaToolGlyph, ChatScreen.ShellToolGlyph], glyphs.Select(i => i.Text));
+        Assert.All(glyphs, i => Assert.True(i.Off));
     }
 
     /// <summary>
@@ -12513,13 +12708,31 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// Show toolbar with only the lock and the officer checked and the policy off (2026-09-29; the disk alone with Memory off
-    /// until later on 2026-10-03, when the disk began to be drawn either way): nothing to draw, so no row at all — not a blank one.
+    /// Show toolbar with only the lock and the officer checked under the policy off (2026-11-23, the user's ask): they draw on the slab,
+    /// so the row is there, and its blanks open /settings (no row at all until then).
     /// </summary>
     [Fact]
-    public async Task ToolbarItems_WhatIsCheckedDrawsNothing_NoRow()
+    public async Task ToolbarItems_TheLockAndTheOfficerAlone_UnderThePolicyOff_DrawARow()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = ["cmdlist", "police"]; d.ShellCommandPolicy = "off"; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains("\n" + ChatScreen.CmdAskToolGlyph + " " + ChatScreen.PoliceToolGlyph, output);
+    }
+
+    /// <summary>
+    /// Show toolbar with only an item this system doesn't offer checked (a Mac's 📅, from a Windows profile): nothing to draw, so no row
+    /// at all — not a blank one (2026-09-29 with the lock and the officer alone under the policy off, which draw on the slab since 2026-11-23).
+    /// </summary>
+    [MacFact]
+    public async Task ToolbarItems_WhatIsCheckedDrawsNothing_NoRow()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ToolbarItems = [ToolbarItems.Tasks]; });
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
         _geometry = new ScreenGeometry(() => null, () => 100);
@@ -12536,8 +12749,6 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.DoesNotContain(SettingsMenu.Title + " │ General", output);   // no row, so no blanks' /settings
-        Assert.DoesNotContain(ChatScreen.CmdAskToolGlyph, output);
-        Assert.DoesNotContain(ChatScreen.PoliceToolGlyph, output);
         Assert.Equal("hi", Assert.Single(_chat.Requests).Last(m => m.Role == ChatRole.User).Text);
     }
 
@@ -12551,10 +12762,10 @@ public partial class ChatScreenTests : IDisposable
         const string Panes = "⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 💬 🎹 📊";   // 🧮 Themes 2026-10-04; 📱 the Web UI 2026-10-14; 🪄 the custom commands 2026-11-01; 🎭 after 🪄 until it went, 2026-11-07; 🎹 MIDI 2026-11-12
         const string Rest = "🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒";   // 📈 last until it was retired (2026-10-14); 🛢️ SQL (🪟 until then) and 🪟 the Comfy thumb viewer, 2026-10-04; 🛒 the shopping list after 📺, 2026-10-11
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09; 📣 after the disk since 2026-10-14
-        Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));
+        Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));   // the closed lock and the ninja under off (2026-11-23, the user's ask)
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔓 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false));
-        Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, true));   // no officer while the shell is off (later on 2026-09-22, the user's ask)
+        Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 👮 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, true));   // the officer under off again since 2026-11-23 (none from later on 2026-09-22), on the slab
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 👮 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true));   // the defaults
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔓 👮 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, true));
         Assert.Equal("📊", ChatScreen.UsageToolGlyph);
@@ -13099,21 +13310,23 @@ public partial class ChatScreenTests : IDisposable
     public void SpeechGlyphs_IsPinned(bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string expected) =>
         Assert.Equal(expected, ChatScreen.SpeechGlyphs(ttsOn, sttOn, wakeReady, interruptReady));
 
-    /// <summary>The strip (2026-09-18): the brain while a reflection runs, the tag while the model writes a session title (the user's place: right after the brain), the botchat pictures still rendering (2026-09-27), then the speech glyphs; each only while on.</summary>
+    /// <summary>
+    /// The strip (2026-09-18): the brain while a reflection runs, the tag while the model writes a session title (the user's place: right after the
+    /// brain), the jobs, then the speech glyphs; each only while on. The pending pictures moved to the lower rule (2026-11-23).
+    /// </summary>
     [Theory]
-    [InlineData(false, false, "", false, false, false, false, "")]
-    [InlineData(true, false, "", false, false, false, false, "🧠")]
-    [InlineData(false, true, "", false, false, false, false, "🏷️")]
-    [InlineData(true, true, "", false, false, false, false, "🧠 🏷️")]
-    [InlineData(true, false, "", true, false, false, false, "🧠 🔊")]
-    [InlineData(false, true, "", true, false, false, false, "🏷️ 🔊")]
-    [InlineData(true, true, "", true, true, false, false, "🧠 🏷️ 🔊 🎤")]
-    [InlineData(true, false, "", false, true, true, true, "🧠 🎤 👂 ✋")]
-    [InlineData(false, false, "", true, true, false, false, "🔊 🎤")]
-    [InlineData(false, false, "🖼️", false, false, false, false, "🖼️")]
-    [InlineData(true, true, "🎨 2", true, false, false, false, "🧠 🏷️ 🎨 2 🔊")]   // after the jobs, before the speech
-    public void StripGlyphs_IsPinned(bool learning, bool titling, string pictures, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string expected) =>
-        Assert.Equal(expected, ChatScreen.StripGlyphs(learning, titling, pictures, ttsOn, sttOn, wakeReady, interruptReady));
+    [InlineData(false, false, false, false, false, false, "", "")]
+    [InlineData(true, false, false, false, false, false, "", "🧠")]
+    [InlineData(false, true, false, false, false, false, "", "🏷️")]
+    [InlineData(true, true, false, false, false, false, "", "🧠 🏷️")]
+    [InlineData(true, false, true, false, false, false, "", "🧠 🔊")]
+    [InlineData(false, true, true, false, false, false, "", "🏷️ 🔊")]
+    [InlineData(true, true, true, true, false, false, "", "🧠 🏷️ 🔊 🎤")]
+    [InlineData(true, false, false, true, true, true, "", "🧠 🎤 👂 ✋")]
+    [InlineData(false, false, true, true, false, false, "", "🔊 🎤")]
+    [InlineData(true, true, true, false, false, false, "🔌 1/3", "🧠 🏷️ 🔌 1/3 🔊")]   // the jobs before the speech
+    public void StripGlyphs_IsPinned(bool learning, bool titling, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string jobs, string expected) =>
+        Assert.Equal(expected, ChatScreen.StripGlyphs(learning, titling, ttsOn, sttOn, wakeReady, interruptReady, jobs));
 
     /// <summary>The rule above the input row (2026-09-18): every title under all-names, a model-written or typed one alone under model-written, nothing under none or without a session.</summary>
     [Fact]
@@ -26114,6 +26327,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "reset neon ", Sources(loaded: "work")));
         Assert.Equal(["delete chef", "delete work"], Texts(ChatScreen.ArgumentItems("/profile", "delete ", Sources(loaded: "work"))));   // delete never lists it (2026-09-22)
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "add ", sources));          // a new name is free text
+        Assert.Empty(ChatScreen.ArgumentItems("/profile", "add t1", sources));
+        Assert.Equal([new CompletionItem("add t1 --fresh", ChatScreen.FreshNote)], ChatScreen.ArgumentItems("/profile", "add t1 ", sources));   // --fresh once the name is typed with its space (2026-11-23)
+        Assert.Equal(["add t1 --fresh"], Texts(ChatScreen.ArgumentItems("/profile", "add t1 --f", sources)));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "edit ", sources));         // edit and reload take nothing
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "reload ", sources));
         Assert.Empty(ChatScreen.ArgumentItems("/profile", "rename work ", sources));  // so is the new name

@@ -56,9 +56,9 @@ internal static class HelpInterface
     public const string DarkEventLogs = "while Event log tools is off, or where this computer has no event logs";
     public const string DarkDirectory = "while Directory tools is off, or where this computer has no directory to read";
 
-    // The two state icons the row draws besides the checklist's (2026-10-25). Pinned.
-    public const string LockLine = "Its icon: 🔒 while Shell command policy is ask, 🔓 while it is yolo (commands run unasked); not drawn while it is off.";
-    public const string PoliceLine = "Its icon: 👮 while Shell police is on, 🥷 while it is off; not drawn while Shell command policy is off.";
+    // The two state icons the row draws besides the checklist's (2026-10-25); dark under the policy off since 2026-11-23 (the user's ask). Pinned.
+    public const string LockLine = "Its icon: 🔒 while Shell command policy is ask, 🔓 while it is yolo (commands run unasked); 🔒 dark while it is off.";
+    public const string PoliceLine = "Its icon: 👮 while Shell police is on, 🥷 while it is off; dark while Shell command policy is off.";
 
     /// <summary>The settings row that shows or hides each bar (the rows carry the bars' names).</summary>
     private static SettingsField RowOf(string id) => id switch

@@ -337,7 +337,14 @@ public sealed partial class PasteBlocks
     public static string SavedLabel(int number, string path) => $"[Image #{number}, saved as {path}]";
 
     /// <summary>
-    /// <paramref name="text"/> with every <see cref="SavedLabel"/> put back as its <see cref="ImageLabel"/>, and since 2026-10-14 every sent PDF's
+    /// The label a picture attached from a file carries in the sent text (2026-11-23, the user's ask, from a failed set_splash_image):
+    /// <c>[Image #1, from C:\…\cat.png]</c>, worded as an attached PDF's, so the model can hand the file to its tools. The transcript keeps
+    /// <see cref="ImageLabel"/>. Pinned.
+    /// </summary>
+    public static string FileLabel(int number, string path) => $"[Image #{number}, from {path}]";
+
+    /// <summary>
+    /// <paramref name="text"/> with every <see cref="SavedLabel"/> (and <see cref="FileLabel"/>, 2026-11-23) put back as its <see cref="ImageLabel"/>, and since 2026-10-14 every sent PDF's
     /// <see cref="Pdf.PdfText.DocumentSentLabel"/> as its draft label (the PDF plan's gap 49): a sent message read back as it was typed
     /// (<c>/rewind</c>'s draft, a withdrawn line). Pure.
     /// </summary>
@@ -349,7 +356,7 @@ public sealed partial class PasteBlocks
             int.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), Files.FileNames.LastPart(m.Groups[2].Value.Trim())));
     }
 
-    [GeneratedRegex(@"\[Image #(\d+), saved as [^\]\r\n]*\]", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"\[Image #(\d+), (?:saved as|from) [^\]\r\n]*\]", RegexOptions.CultureInvariant)]
     private static partial Regex SavedLabelPattern();
 
     /// <summary>

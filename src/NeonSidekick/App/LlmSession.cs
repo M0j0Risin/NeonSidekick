@@ -91,7 +91,7 @@ internal sealed partial class LlmSession : IDisposable
     {
         /// <summary>
         /// Started under a profile switched away from (<see cref="ProfileSwitched"/>): no switch-off stops it (<see cref="SwitchedOffRuns"/>),
-        /// whatever the new profile offers, and with Docker server one at a time off no container switch does either. A connect whose list
+        /// whatever the new profile offers, and with Docker containers one at a time off no container switch does either. A connect whose list
         /// offers it again makes it this profile's own (<see cref="Remember"/>). The exit's stop still reaches it, and LLM one local model's
         /// clears too (the VRAM rule).
         /// </summary>
@@ -404,7 +404,7 @@ internal sealed partial class LlmSession : IDisposable
         {
             // A run off the new list (2026-10-02, the user's ask): the switch stops only the ones its own list names, so a container
             // unticked, or another profile's, stops here first. One both lists name is the switch's to stop. Since 2026-11-11 (the review)
-            // any run off the list counts, not only the one in use; with Docker server one at a time off the list's containers are spared,
+            // any run off the list counts, not only the one in use; with Docker containers one at a time off the list's containers are spared,
             // so they keep running side by side, and since 2026-11-14 (the user's call on the review's #30) so are the old profile's, kept
             // through the switch (DockerRun.Kept): only an untick within a profile stops one. With it on, starting a container stops the
             // others, the setting's own rule, kept or not. No settle here: the switch waits it, told the GPU was freed, only before a real start.
@@ -552,7 +552,7 @@ internal sealed partial class LlmSession : IDisposable
     }
 
     /// <summary>
-    /// A chosen container's endpoint (2026-10-02): every other chosen container stopped (with <c>Docker server one at a time</c> on), this
+    /// A chosen container's endpoint (2026-10-02): every other chosen container stopped (with <c>Docker containers one at a time</c> on), this
     /// one started and waited for (<see cref="IDockerServers.SwitchToAsync"/>, told <paramref name="freed"/>: this connect freed the GPU).
     /// Its run is kept before the switch and its live endpoint only after one that succeeded (2026-11-11, the review); the runs the switch
     /// stopped are dropped. The base is the sentinel, its <see cref="LlmEndpoint.LiveUrl"/> the
@@ -601,7 +601,7 @@ internal sealed partial class LlmSession : IDisposable
     /// URL is a server that leaves this machine's GPU alone (<see cref="DockerEndpoint.LeavesTheGpuAlone"/>) and is offered — a Claude Code,
     /// Anthropic or OpenAI URL switched off connects as a blank URL does, and a blank URL scans this machine's ports, where the
     /// container's own would be found. It shields only the GPU's clear (2026-11-11, the review, <see cref="StopsBefore"/>): a container
-    /// switched off or unticked still stops, and a pick of another container still stops it under <c>Docker server one at a time</c>.
+    /// switched off or unticked still stops, and a pick of another container still stops it under <c>Docker containers one at a time</c>.
     /// </summary>
     private bool KeepsDocker(AppSettingsData effective)
     {
@@ -922,7 +922,7 @@ internal sealed partial class LlmSession : IDisposable
     public string? DockerInUse => _dockerInUse;
 
     /// <summary>
-    /// This run's containers believed running, oldest first (2026-11-11, the review: with Docker server one at a time off, several): what the
+    /// This run's containers believed running, oldest first (2026-11-11, the review: with Docker containers one at a time off, several): what the
     /// exit stops and its spinner and close line name. Empty when none.
     /// </summary>
     public IReadOnlyList<string> DockerRunning => Runs.Select(run => run.Name).ToList();
@@ -942,7 +942,7 @@ internal sealed partial class LlmSession : IDisposable
     public string? DockerServedModel { get; private set; }
 
     /// <summary>
-    /// The app's exit (2026-10-02): with <c>Docker server stop on exit</c> on and this run having started a chosen container, the running
+    /// The app's exit (2026-10-02): with <c>Docker containers stop on exit</c> on and this run having started a chosen container, the running
     /// ones stop. The names stopped; empty when the setting is off (the containers keep running, the default) or this run started none.
     /// </summary>
     public async Task<IReadOnlyList<string>> StopDockerAtExitAsync(AppSettingsData effective, CancellationToken cancellationToken)
@@ -955,7 +955,7 @@ internal sealed partial class LlmSession : IDisposable
         }
 
         // This run's containers, by the union of the lists each started under: the profile now loaded may not name them (2026-10-02), and a
-        // leftover on those lists stops too. Every stop asked at once (2026-11-10): with Docker server one at a time off several may run, and
+        // leftover on those lists stops too. Every stop asked at once (2026-11-10): with Docker containers one at a time off several may run, and
         // the exit's budget covers one stop. The stops go by the caller's settings (2026-11-11, the review), so the timeout fits its budget.
         var names = runs.SelectMany(run => DockerEndpoint.ChosenNames(run.Settings)).Distinct(StringComparer.Ordinal).ToList();
         var left = await _docker.ClearAsync(new DockerClear(names, effective, Settle: false) { Together = true }, null, null, cancellationToken).ConfigureAwait(false);
@@ -980,7 +980,11 @@ internal sealed partial class LlmSession : IDisposable
     public static IReadOnlyList<LlmServer> DockerRows(DockerServerList list)
     {
         ArgumentNullException.ThrowIfNull(list);
-        return list.Chosen.Select(c => new LlmServer(DockerEndpoint.BaseUrl(c.Name), DockerEndpoint.ServerName, new ProbeResult(true, [], DockerServerText.RowDetail(c))))
+        // An active container's row carries its host ports (2026-11-23), so a saved loopback address on one finds its row.
+        return list.Chosen.Select(c => new LlmServer(DockerEndpoint.BaseUrl(c.Name), DockerEndpoint.ServerName, new ProbeResult(true, [], DockerServerText.RowDetail(c)))
+            {
+                HostPorts = DockerServerHost.Active(c) ? DockerServerHost.HostPortsOf(c) : [],
+            })
             .Concat(list.Missing.Select(n => new LlmServer(DockerEndpoint.BaseUrl(n), DockerEndpoint.ServerName, new ProbeResult(false, [], DockerServerText.MissingDetail))))
             .ToList();
     }
@@ -1402,7 +1406,7 @@ internal sealed partial class LlmSession : IDisposable
         {
             // A bot's own container (2026-10-02): only one this session runs is shared — bots and advisors never start or switch one.
             // Since 2026-11-11 (the review) any of this run's containers whose switch succeeded: the session's own server, one it kept running
-            // behind a server that leaves the GPU alone (2026-10-10), or one kept beside it with Docker server one at a time off.
+            // behind a server that leaves the GPU alone (2026-10-10), or one kept beside it with Docker containers one at a time off.
             string wanted = DockerEndpoint.ContainerOf(profile.LlmUrl)!;
             var live = Runs.Where(run => run.Live is { LiveUrl: not null }).ToList();   // as LinkableRuns, which a bot's load spares
             if (live.Count == 0)

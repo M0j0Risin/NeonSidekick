@@ -251,7 +251,7 @@ internal sealed partial class ChatScreen
     /// Switches to the chosen container <paramref name="name"/> (2026-10-02; a <c>/server</c> row, <c>/server docker:&lt;name&gt;</c>,
     /// <c>/server docker</c>'s pick): refused while Docker servers is off or the container is not chosen; else saved as the LLM URL
     /// (the model cleared when the URL changed — the container's own is taken), the reasoning picker offered, and one connect,
-    /// which stops the others (with Docker server one at a time on, 2026-11-10), starts it and waits for its model under the load's spinner. With a flag or variable overriding the
+    /// which stops the others (with Docker containers one at a time on, 2026-11-10), starts it and waits for its model under the load's spinner. With a flag or variable overriding the
     /// URL, the save and its warning are all that happens.
     /// </summary>
     private async Task UseDockerAsync(string name, CancellationToken cancellationToken, bool reasoning = true)
@@ -326,7 +326,7 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// <c>Docker server stop on exit</c> at the screen's end (2026-10-02): off by default (the containers keep running); on, once this run
+    /// <c>Docker containers stop on exit</c> at the screen's end (2026-10-02): off by default (the containers keep running); on, once this run
     /// has started a chosen container, the running ones stop under a spinner that names them (2026-11-11, the review: every one this run
     /// keeps, not only the one in use) — its own deadline, never the app's token — and the log says so. Nothing here may cut the rest of the
     /// teardown short.
@@ -352,7 +352,7 @@ internal sealed partial class ChatScreen
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            DiagnosticLog.Warn(DockerText.Category, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
+            DiagnosticLog.Warn(DockerText.Category, "Docker containers stop on exit: " + Llm.Assistant.Explain(ex));
         }
     }
 

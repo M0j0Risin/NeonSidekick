@@ -195,9 +195,10 @@ public enum ProfileSection
 
 /// <summary>
 /// The parsed <c>/profile</c> argument; <paramref name="NewName"/> is set by <see cref="ProfileActionKind.Rename"/> alone, <paramref name="All"/> by
-/// <c>reset --all</c> alone (2026-09-27), <paramref name="Section"/> and <paramref name="Overwrite"/> by <c>push</c> and <c>pull</c> alone (2026-10-09).
+/// <c>reset --all</c> alone (2026-09-27), <paramref name="Section"/> and <paramref name="Overwrite"/> by <c>push</c> and <c>pull</c> alone (2026-10-09),
+/// <paramref name="Fresh"/> by <c>add &lt;name&gt; --fresh</c> alone (2026-11-23).
 /// </summary>
-public readonly record struct ProfileAction(ProfileActionKind Kind, string Name, string NewName = "", bool All = false, ProfileSection Section = ProfileSection.All, bool Overwrite = false);
+public readonly record struct ProfileAction(ProfileActionKind Kind, string Name, string NewName = "", bool All = false, ProfileSection Section = ProfileSection.All, bool Overwrite = false, bool Fresh = false);
 
 /// <summary>What a <c>/gituser</c> argument asks for (2026-09-21; <c>/git</c>'s until 2026-09-26). Top-level like <see cref="ProfileActionKind"/>, so the test project can pin the grammar.</summary>
 public enum GitActionKind
@@ -499,7 +500,7 @@ internal sealed partial class ChatScreen
     public const string FindNeedsPaneNotice = "/find needs the interactive screen.";
     /// <summary><c>/profile</c>'s usage line. The section words were listed in it until 2026-10-25, when five more made it too long for one line;
     /// the completion and <c>/help</c> name them (<see cref="ProfileSectionWords"/>).</summary>
-    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name>, delete <name>, rename <name> <new-name>, reset [name], push|pull [section] <name> [overwrite], edit or reload.";
+    public const string ProfileUsageError = "/profile takes nothing (pick), a name, add <name> [--fresh], delete <name>, rename <name> <new-name>, reset [name], push|pull [section] <name> [overwrite], edit or reload.";
 
     // The /loop words and lines (2026-09-21, the user's ask). Pinned.
     public const string LoopInfiniteWord = "infinite";
@@ -1684,19 +1685,18 @@ internal sealed partial class ChatScreen
             // then the speech switches as of the last connect, the wake word and the interrupt
             // once ready. The tick re-reads it, so the brain and the tag come and go with their
             // jobs (LlmSession.IsLearning / IsTitling), nothing pushed.
-            // The jobs behind the line (2026-09-29) after the pictures; a switch whose setup runs shows its job's glyph, not
-            // its own (a click on 🎤 or 🔊 turns it off).
-            Strip = () => !HintOn(StatusBarItems.Status) ? "" : CameraStrip(_camera.Live, RalphStrip(_ralphStrip, AuditStrip(_audit.StripPass, PlanStrip(_plan.Active, BotChatStrip(BotChatResumable, BotExtrasIdle, StripGlyphs(_session.IsLearning, _session.IsTitling, _pendingPictures.Glyph, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip())))))),
+            // The jobs behind the line (2026-09-29); a switch whose setup runs shows its job's glyph, not its own (a click on 🎤 or 🔊
+            // turns it off). The loops (🔁, 🔎), the pictures and the embedded download moved to the lower rule (2026-11-23, the user's ask).
+            Strip = () => !HintOn(StatusBarItems.Status) ? "" : CameraStrip(_camera.Live, PlanStrip(_plan.Active, BotChatStrip(BotChatResumable, BotExtrasIdle, StripGlyphs(_session.IsLearning, _session.IsTitling, _speech.Enabled && !_jobs.Running(BackgroundJobKind.Speech), _voice.Enabled && !_jobs.Running(BackgroundJobKind.Voice), _voice.WakeReady, _voice.InterruptReady, _jobs.Strip(static kind => kind != BackgroundJobKind.EmbeddedDownload))))),
             // The model at the row's right edge, from the live connection: empty until one lands;
             // the reasoning glyph after it in its own colour, none with the model.
             // The session's name at the right edge of the rule above the input row (2026-09-18, the user's
             // ask), as Session show name allows; read per draw and on the tick, so the model's title lands
             // from the pool and a flipped setting shows at once. A /botchat shows its cast there instead (2026-09-30).
             RuleTitle = () => UpperRuleTitle(_botChatCast, _sessionTitle, ShowNameDisplay(_effective())),
-            // The running processes' count on the lower rule (2026-10-12, the user's ask): ▶ 3, nothing while none run.
-            LowerRuleTitle = () => ProcessWindowText.RuleTitle(_processes.Running),
-            // The update's marker left of it (2026-11-04, self-update): 📦 0.5.7 at quit, nothing while no update is known or under way.
-            LowerRuleMarker = UpdateMarkerNow,
+            // The lower rule's jobs group (2026-11-23, the user's ask): 📦 the update, 🔁/🔎/⟳ the loop, 📥 the download, 🖼️ the pictures,
+            // ▶ n the running processes (since 2026-10-12), each only while it has something to say.
+            LowerRuleItems = LowerRuleItemsNow,
             // The model and its mark while the Hint bar's Model is checked (2026-10-12).
             Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.ShownModelId) : "",
             TrailerMark = () => HintOn(StatusBarItems.Model) ? ModelMark(_session.ShownModelId, _effective().LlmReasoning, _session.ShownUnloaded) : "",
@@ -1863,7 +1863,7 @@ internal sealed partial class ChatScreen
             ToolbarItemHere = id => this.ToolbarItemHere(id),
             // The /theme list's Del (2026-11-20): the screen's bin under File deletes to Recycle bin, read at each call as tests set it after the build.
             ThemeBin = () => _effective().FileDeletesToRecycleBin ? _recycleBin : null,
-            // The Tool bar page's bar: reads what the row would draw (2026-11-08, the review): 🔒 and 👮 alone draw nothing under the policy off.
+            // The Tool bar page's bar: reads what the row would draw (2026-11-08, the review): a lone model name before any model is known draws nothing.
             ToolbarDrawn = d => ToolbarParts(d) is not null,
         };
         // The mode buttons (2026-10-13, the user's ask): after the settings menu, whose rows save them; the saved words, read without the turn's warning; set through the rows' own save.
@@ -2195,8 +2195,8 @@ internal sealed partial class ChatScreen
     public static bool TogglesWindow(string? line) => line is LogToolLine or ComfyViewToolLine or ComfyThumbsToolLine;
 
     /// <summary>
-    /// The glyphs every item checked always draws, in strip order: all but the lock and the officer, which come and go with
-    /// their switches (the tool switches since 2026-10-03 are drawn on or off, never gone; the disk too since later that day,
+    /// The glyphs every item checked always draws the same, in strip order: all but the lock and the officer, whose glyphs change with
+    /// their switches (drawn under every policy since 2026-11-23, on the slab under off; the tool switches since 2026-10-03 are drawn on or off, never gone; the disk too since later that day,
     /// the user's ask: "it always shows whether memory is on or off"). Pinned.
     /// </summary>
     public static readonly string ToolbarStrip = string.Join(GlyphSeparator, ToolbarItems.Names
@@ -2205,12 +2205,10 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The strip drawn for the switches, in the strip's order (the user's, 2026-10-03): the closed lock under <c>ask</c> or the
-    /// open one under <c>yolo</c> (neither under <c>off</c>), the officer while <paramref name="police"/> is on and the policy is
-    /// not <c>off</c> (later on 2026-09-22, the user's ask: with no shell tool offered there is nothing to police) — and the ninja
-    /// while it is off (2026-10-02, the user's ask: the item stays, as the lock does, its glyph telling which; still none under
-    /// <c>off</c>); every other glyph always, the disk among them (its Memory switch shows as the slab,
-    /// <see cref="ToolbarItemOff"/>). <see cref="ToolbarStrip"/> alone with the policy <c>off</c>. Every item checked (not the
-    /// saved default, which narrowed on 2026-09-29). Pinned.
+    /// open one under <c>yolo</c>, the officer while <paramref name="police"/> is on and the ninja while it is off (2026-10-02, the user's ask:
+    /// the item stays, as the lock does, its glyph telling which); under <c>off</c> the closed lock and the officer or ninja too since 2026-11-23
+    /// (the user's ask; on the slab, <see cref="ToolbarItemOff"/>; none from 2026-09-22 until then); every other glyph always, the disk among them
+    /// (its Memory switch shows as the slab). Every item checked (not the saved default, which narrowed on 2026-09-29). Pinned.
     /// </summary>
     public static string ToolbarStripFor(Shell.CommandPolicyMode policy, bool police) =>
         ToolbarStripFor(ToolbarItems.Names.ToHashSet(StringComparer.Ordinal), policy, police);
@@ -2302,6 +2300,13 @@ internal sealed partial class ChatScreen
         if (id == ToolbarItems.Directory)
         {
             return !(directoryHere ?? OperatingSystem.IsWindows()) || !shown.DirectoryTools;   // a Mac has one since 2026-10-18 (the screen says so)
+        }
+
+        if (id is ToolbarItems.CmdList or ToolbarItems.Police)
+        {
+            // 2026-11-23, the user's ask: the lock and the officer on the slab under the policy off, as the shell; the police switch itself shows
+            // only as the glyph (👮 or 🥷), never as the slab.
+            return ToolbarPolicy(shown) == Shell.CommandPolicyMode.Off;
         }
 
         if (id == ToolbarItems.Queue)
@@ -2413,25 +2418,19 @@ internal sealed partial class ChatScreen
         return (string.Join(GlyphSeparator, glyphs), dim);
     }
 
-    /// <summary>The glyph item <paramref name="id"/> draws: the lock and the officer (or the ninja) as their switches allow, null where they draw nothing (and for the path and the name).</summary>
+    /// <summary>
+    /// The glyph item <paramref name="id"/> draws: the lock and the officer (or the ninja) as their switches say; null for the path and the name.
+    /// Under the policy <c>off</c> (2026-11-23, the user's ask: they vanished while the shell stayed on the slab) the closed lock (nothing runs
+    /// unasked) and the officer or the ninja still draw, on the off slab (<see cref="ToolbarItemOff"/>), as any item whose tools are off.
+    /// </summary>
     private static string? ToolbarGlyph(string id, Shell.CommandPolicyMode policy, bool police) => id switch
     {
         ToolbarItems.Path or ToolbarItems.Model => null,
-        ToolbarItems.CmdList => policy switch
-        {
-            Shell.CommandPolicyMode.Ask => CmdAskToolGlyph,
-            Shell.CommandPolicyMode.Yolo => CmdYoloToolGlyph,
-            _ => null,
-        },
-        ToolbarItems.Police => policy == Shell.CommandPolicyMode.Off ? null : police ? PoliceToolGlyph : NinjaToolGlyph,
+        ToolbarItems.CmdList => policy == Shell.CommandPolicyMode.Yolo ? CmdYoloToolGlyph : CmdAskToolGlyph,
+        ToolbarItems.Police => police ? PoliceToolGlyph : NinjaToolGlyph,
         _ => ToolbarItems.Glyph(id),
     };
 
-    /// <summary>
-    /// The toolbar row for the settings in force: the items Show toolbar checks (2026-09-29, the user's ask: a checklist),
-    /// the glyphs among them their switches allow and the path when it is checked; null — no row — when nothing is checked,
-    /// or when what is checked draws nothing (the lock and the officer alone with the policy <c>off</c>).
-    /// </summary>
     private readonly Perf.PerfSampler _perf;
 
     /// <summary>
@@ -2884,17 +2883,14 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The hint row's strip (2026-09-18): 🧠 while a reflection runs, 🏷️ while the model writes
-    /// the session's title (later that day, the user's place: right after the brain), then
-    /// <paramref name="pictures"/> — <c>/botchat</c>'s pictures still rendering with <c>Botchat image async</c> on
-    /// (<see cref="PendingPictures.Glyph"/>, 2026-09-27, the user's ask: nothing said a generation ran while the next bot
-    /// answered), empty with none — then <paramref name="jobs"/>, the jobs behind the input line (<see cref="BackgroundJobs.Strip"/>,
-    /// 2026-09-29), then <see cref="SpeechGlyphs"/> — each part only while its job or switch is on, joined by
-    /// <see cref="GlyphSeparator"/>, empty with nothing. The speech status lines keep
-    /// <see cref="SpeechGlyphs"/> (no brain, no tag there). Pinned.
+    /// the session's title (later that day, the user's place: right after the brain), then <paramref name="jobs"/>, the jobs
+    /// behind the input line (<see cref="BackgroundJobs.Strip"/>, 2026-09-29), then <see cref="SpeechGlyphs"/> — each part only
+    /// while its job or switch is on, joined by <see cref="GlyphSeparator"/>, empty with nothing. The pending pictures
+    /// (<see cref="PendingPictures.Glyph"/>, here from 2026-09-27) and the embedded download moved to the lower rule on 2026-11-23
+    /// (the user's ask, <see cref="LowerRuleItemsNow"/>). The speech status lines keep <see cref="SpeechGlyphs"/> (no brain, no tag there). Pinned.
     /// </summary>
-    public static string StripGlyphs(bool learning, bool titling, string pictures, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string jobs = "")
+    public static string StripGlyphs(bool learning, bool titling, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string jobs = "")
     {
-        ArgumentNullException.ThrowIfNull(pictures);
         ArgumentNullException.ThrowIfNull(jobs);
         var parts = new List<string>(4);
         if (learning)
@@ -2905,11 +2901,6 @@ internal sealed partial class ChatScreen
         if (titling)
         {
             parts.Add(TitleStripGlyph);
-        }
-
-        if (pictures.Length != 0)
-        {
-            parts.Add(pictures);
         }
 
         if (jobs.Length != 0)
@@ -3695,17 +3686,12 @@ internal sealed partial class ChatScreen
                 return _queuedClicks.Second(InputLine.RuleTitlePairKey) ? SessionTitleLine : null;
             }
 
-            if (_pane.TryHitLowerRuleMarker(click.X, click.Y))
+            if (_pane.LowerRuleItemAt(click.X, click.Y) is { } ruleItem)
             {
-                // The update's marker (2026-11-04, self-update): two clicks answer /update, under the reply as at idle.
-                return _queuedClicks.Second(InputLine.LowerRuleMarkerPairKey) ? Updates.UpdateText.Word : null;
-            }
-
-            if (_pane.TryHitLowerRuleTitle(click.X, click.Y))
-            {
-                // The running processes' count on the lower rule (2026-10-12, the user's ask): two clicks answer /process,
-                // the list under the reply as at idle.
-                return _queuedClicks.Second(InputLine.LowerRuleTitlePairKey) ? ProcessWindowText.Word : null;
+                // The lower rule's jobs group (2026-11-23, the user's ask; the processes' count since 2026-10-12, the update's marker since
+                // 2026-11-04): two clicks answer /process or /update, under the reply as at idle, or end the loop after its pass, cancel the
+                // download or the pictures (the reply goes on).
+                return _queuedClicks.Second(InputLine.LowerRulePairKey(ruleItem)) ? LowerRuleClick(ruleItem) : null;
             }
 
             if (_pane.PictureAt(click.X, click.Y) is int picture)
@@ -3769,10 +3755,10 @@ internal sealed partial class ChatScreen
                 return null;
             }
 
-            if (hit.Zone == ScreenPane.HintZone.Label || (hit.Zone == ScreenPane.HintZone.Strip && ComfyText.IsGeneratingLabel(hit.Glyph)))
+            if (hit.Zone == ScreenPane.HintZone.Label)
             {
-                // The ComfyUI generation's 🖼️ / 🎨 and its time on the busy row, or a /botchat picture's on the strip
-                // (2026-09-28, the user's ask): the pair cancels the pictures alone — the reply goes on, Esc still ends it.
+                // The ComfyUI generation's 🖼️ / 🎨 and its time on the busy row (2026-09-28, the user's ask; a /botchat picture's moved from
+                // the strip to the lower rule on 2026-11-23): the pair cancels the pictures alone — the reply goes on, Esc still ends it.
                 // The embedded model's spinner and label under its load (2026-10-01, the user's ask; the pane's LabelZone
                 // since the review's finding, the tally beside them staying /usage's): the pair cancels the load as Ctrl+C does.
                 if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
@@ -5513,7 +5499,7 @@ internal sealed partial class ChatScreen
     /// <summary>The <c>/profile</c> verbs on its list, each with its note (<c>edit</c> and <c>reload</c> since 2026-09-21). Pinned.</summary>
     public static readonly IReadOnlyList<CompletionItem> ProfileVerbs =
     [
-        new("add", "add a profile: /profile add <name>"),
+        new("add", "add a profile: /profile add <name> [--fresh]"),
         new("delete", "delete a profile: /profile delete <name>"),
         new("edit", "open this profile's profile.json in your editor: /profile edit"),
         new(PullWord, "copy another profile's settings, or one section, into this one: /profile pull [section] <name>"),
@@ -5840,6 +5826,13 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Usage:
                 // context (2026-11-01): the pane opened on its Context tab; prompt, tools and skills (2026-11-07, /sys' tabs folded in) in tab order.
+                // sysprompt (2026-11-23) after them, then its to= once the word and a space are typed.
+                if (argText.StartsWith(UsageText.SyspromptWord + " ", StringComparison.OrdinalIgnoreCase)
+                    && !argText[(UsageText.SyspromptWord.Length + 1)..].Contains(' ', StringComparison.Ordinal))
+                {
+                    return MentionCompleter.Matches([new CompletionItem(UsageText.SyspromptWord + " " + Pdf.PdfText.ToWord, UsageText.SyspromptToNote)], argText);
+                }
+
                 return MentionCompleter.Matches(
                 [
                     new CompletionItem(UsageText.ContextWord, UsageText.ContextWordNote),
@@ -5847,6 +5840,7 @@ internal sealed partial class ChatScreen
                     new CompletionItem(UsageText.ToolsWord, UsageText.ToolsWordNote),
                     new CompletionItem(UsageText.SkillsWord, UsageText.SkillsWordNote),
                     new CompletionItem(UsageText.ModelsWord, UsageText.ModelsWordNote),   // 2026-11-21, feature idea #7
+                    new CompletionItem(UsageText.SyspromptWord, UsageText.SyspromptWordNote),   // 2026-11-23
                 ], argText);
 
             case SlashCommand.Header:
@@ -5860,6 +5854,13 @@ internal sealed partial class ChatScreen
             {
                 foreach (var verb in ProfileVerbs)
                 {
+                    if (verb.Text == "add" && argText.StartsWith("add ", StringComparison.OrdinalIgnoreCase)
+                        && argText.Split(' ') is [_, { Length: > 0 } name, var partial] && !name.StartsWith('-') && !partial.Contains(' ', StringComparison.Ordinal))
+                    {
+                        // add <name> --fresh (2026-11-23): once the free name is typed with its space.
+                        return MentionCompleter.Matches([new CompletionItem("add " + name + " " + FreshFlag, FreshNote)], argText);
+                    }
+
                     if (verb.Text is "add" or "edit" or "reload")
                     {
                         // No name follows: a new one is free text, edit and reload take none.
@@ -12082,15 +12083,26 @@ internal sealed partial class ChatScreen
     /// anything else ⇒ invalid. The names are not validated here (the handler says
     /// why one is refused). <see cref="ResetAllFlag"/> (any case, before or after the name) belongs to
     /// <c>reset</c> alone (2026-09-27): it sets <see cref="ProfileAction.All"/>; after any other verb,
-    /// or twice, the line is invalid.
+    /// or twice, the line is invalid. <see cref="FreshFlag"/> (2026-11-23, the same way) belongs to <c>add &lt;name&gt;</c> alone and sets
+    /// <see cref="ProfileAction.Fresh"/>; with <c>--all</c>, twice, or after any other verb, invalid.
     /// </summary>
     public static ProfileAction ParseProfileArgs(string args)
     {
         var tokens = (args ?? "").Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-        if (tokens.Length >= 2 && !tokens.Any(token => token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase))
+        if (tokens.Length >= 2 && !tokens.Any(token => token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase) || token.Equals(FreshFlag, StringComparison.OrdinalIgnoreCase))
             && (tokens[0].Equals(PushWord, StringComparison.OrdinalIgnoreCase) || tokens[0].Equals(PullWord, StringComparison.OrdinalIgnoreCase)))
         {
             return ParsePushPull(tokens[0].Equals(PullWord, StringComparison.OrdinalIgnoreCase) ? ProfileActionKind.Pull : ProfileActionKind.Push, tokens[1..]);
+        }
+
+        int fresh = tokens.Count(token => token.Equals(FreshFlag, StringComparison.OrdinalIgnoreCase));
+        if (fresh > 0)
+        {
+            // add <name> --fresh (2026-11-23), the flag before or after the name, as reset's --all.
+            var rest = tokens.Where(token => !token.Equals(FreshFlag, StringComparison.OrdinalIgnoreCase)).ToArray();
+            return fresh == 1 && rest.Length == 2 && rest[0].Equals("add", StringComparison.OrdinalIgnoreCase) && !rest[1].Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase)
+                ? new(ProfileActionKind.Add, rest[1], Fresh: true)
+                : new(ProfileActionKind.Invalid, "");
         }
 
         int flags = tokens.Count(token => token.Equals(ResetAllFlag, StringComparison.OrdinalIgnoreCase));
@@ -12296,6 +12308,13 @@ internal sealed partial class ChatScreen
     public static string ProfileExistsError(string name) => $"A profile named \"{name}\" already exists; /profile {name} switches to it.";
 
     public static string ProfileCreatedNotice(string name) => $"({NoticeGlyphs.Profile}created profile \"{name}\" from the current settings)";
+
+    /// <summary>The notice after <c>/profile add &lt;name&gt; --fresh</c> (2026-11-23, the user's ask): the compiled defaults, nothing copied. Pinned.</summary>
+    public static string ProfileCreatedFreshNotice(string name) => $"({NoticeGlyphs.Profile}created profile \"{name}\" with the default settings)";
+
+    /// <summary><c>/profile add &lt;name&gt; --fresh</c> (2026-11-23, the user's ask): the flag, and its note on the argument list. Pinned.</summary>
+    public const string FreshFlag = "--fresh";
+    public const string FreshNote = "start from the default settings, copying nothing";
 
     /// <summary>
     /// The created notice naming what came along (the memories and, since 2026-10-13, the saved prompts, <see cref="Profiles.BasicSidekickFiles"/>; the prompt files too under
@@ -12818,11 +12837,6 @@ internal sealed partial class ChatScreen
                             _session.CancelLearning();
                             _transcript.Notice(LearnCancelledNotice);
                         }
-                        else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && ComfyText.IsGeneratingLabel(hint.Hit.Glyph))
-                        {
-                            // A /botchat picture or an /imagine behind the line (2026-10-04) still rendering (2026-09-28): its cancel, as on the busy row; nothing when it just ended.
-                            DrainPictures();
-                        }
                         else if (hint.Hit.Zone == ScreenPane.HintZone.Strip && BackgroundJobs.KindOfGlyph(hint.Hit.Glyph) is { } job)
                         {
                             // A job behind the line (2026-09-29): its cancel; its end is said by the drain that follows at once.
@@ -12938,24 +12952,14 @@ internal sealed partial class ChatScreen
                         }
 
                         break;
-                    case InputResult.LowerRuleMarker:
-                        // A double-click on the update's marker (2026-11-04, self-update): /update through the dispatch, no transcript row, the draft back after.
+                    case InputResult.LowerRuleItem ruleItem:
+                        // A double-click on the lower rule's jobs group (2026-11-23, the user's ask): /process (since 2026-10-12) or /update
+                        // (since 2026-11-04) through the dispatch, no transcript row, the draft back after, as the session's name; the download
+                        // and the pictures canceled here, their ends said by the drains that follow.
                         _timers.Acknowledge();
                         DisarmExit();
                         await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
-                        if (await HandleAsync(Updates.UpdateText.Word, [], cancellationToken).ConfigureAwait(false))
-                        {
-                            return 0;
-                        }
-
-                        break;
-                    case InputResult.LowerRuleTitle:
-                        // A double-click on the running processes' count on the lower rule (2026-10-12, the user's ask): /process
-                        // through the dispatch, its list — no transcript row, the draft back after, as the session's name.
-                        _timers.Acknowledge();
-                        DisarmExit();
-                        await StopTailFromAsync(null).ConfigureAwait(false);   // a PC tail only (2026-11-13)
-                        if (await HandleAsync(ProcessWindowText.Word, [], cancellationToken).ConfigureAwait(false))
+                        if (LowerRuleClick(ruleItem.Kind) is { } ruleWord && await HandleAsync(ruleWord, [], cancellationToken).ConfigureAwait(false))
                         {
                             return 0;
                         }
@@ -13043,7 +13047,7 @@ internal sealed partial class ChatScreen
             _session.CancelLearning();
             // The jobs behind the line cancelled and awaited first (2026-09-29): nothing still touches MCP, voice or speech as they go.
             await _jobs.CancelAllAsync().ConfigureAwait(false);
-            // Docker server stop on exit (2026-10-02): off by default; on, the running chosen containers stop while the screen is still up,
+            // Docker containers stop on exit (2026-10-02): off by default; on, the running chosen containers stop while the screen is still up,
             // once this run has started one (2026-11-11, the review: every one it keeps).
             await StopDockerAtExitAsync().ConfigureAwait(false);
             _timers.Dispose();
@@ -15773,6 +15777,11 @@ internal sealed partial class ChatScreen
                 _transcript.Notice(WindowNotice(_pane.Profile.Width, _pane.Profile.Height));
                 return false;
 
+            case SlashCommand.Usage when UsageText.IsSysprompt(args):
+                // The next request to a Markdown file (2026-11-23, the user's ask), at the idle line only.
+                ExportSysprompt(args);
+                return false;
+
             case SlashCommand.Usage when UsageTab(args) is { } usageTab:
                 await ShowUsageAsync(usageTab, cancellationToken).ConfigureAwait(false);
                 return false;
@@ -16159,7 +16168,18 @@ internal sealed partial class ChatScreen
                     // synchronously, so the disk is current); the persona, operating rules and voice directive
                     // stay behind since 2026-10-10 (New profile mode retired, the user's call: /profile push|pull copies them).
                     // The seed's rules (its own sandbox, the default avatar, its own shortcut, no Web UI token) live in Profiles.NewProfileSeed
-                    // since 2026-11-22, shared with a new advisor from a template.
+                    // since 2026-11-22, shared with a new advisor from a template. --fresh (2026-11-23, the user's ask): the compiled defaults, nothing copied.
+                    if (action.Fresh)
+                    {
+                        Profiles.Create(home, action.Name, Profiles.FreshProfileSeed());
+                        if (await _menu.SwitchProfileAsync(action.Name).ConfigureAwait(false))
+                        {
+                            await AfterProfileSwitchAsync(cancellationToken, ProfileCreatedFreshNotice(action.Name)).ConfigureAwait(false);
+                        }
+
+                        return;
+                    }
+
                     var seed = Profiles.NewProfileSeed(_settings.Current);
                     Profiles.Create(home, action.Name, seed);
                     IReadOnlyList<string> copied = Profiles.CopySidekickFiles(
@@ -16792,37 +16812,61 @@ internal sealed partial class ChatScreen
         _sentFromWebPage = null;   // its passes are PC turns for speech, whoever started it (2026-11-13, the webui-voice plan)
         // One network budget for the whole loop (2026-10-23, the admin review's L6, decision DA8).
         using var budgetRun = BudgetRun();
-        for (int n = 1; count is null || n <= count; n++)
+        // ⟳ on the lower rule and its end after this pass (2026-11-23, the user's ask), gone however the loop ends.
+        using var end = new PassEnd();
+        _loopEnd = end;
+        try
         {
-            if (n > 1 && delay is { } wait)
+            for (int n = 1; count is null || n <= count; n++)
             {
-                // The gap after the last reply, never after the final pass (2026-09-24): on the
-                // clock, under the turn's keys, so ESC or Ctrl+C ends the loop here as mid-reply.
-                _transcript.Notice(LoopWaitNotice(wait));
-                if (await WaitUnderWatchAsync(ct => Task.Delay(wait, _time, ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false)
-                    || cancellationToken.IsCancellationRequested)
+                if (n > 1 && delay is { } wait)
                 {
-                    _transcript.Notice(LoopStoppedNotice(n - 1));
+                    // The gap after the last reply, never after the final pass (2026-09-24): on the
+                    // clock, under the turn's keys, so ESC or Ctrl+C ends the loop here as mid-reply; ⟳'s double-click ends it here too.
+                    _transcript.Notice(LoopWaitNotice(wait));
+                    if (await WaitUnderWatchAsync(ct => DelayOrEndedAsync(wait, end.Token, ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false)
+                        || cancellationToken.IsCancellationRequested)
+                    {
+                        _transcript.Notice(LoopStoppedNotice(n - 1));
+                        return false;
+                    }
+
+                    if (end.Asked)
+                    {
+                        _transcript.Notice(LoopText.EndedNotice(n - 1));
+                        return false;
+                    }
+                }
+
+                _loopRule = LoopText.RuleTitle(n, count);
+                _transcript.Notice(LoopTurnNotice(n, count));
+                _transcript.User(message);
+                if (await RunMessageAsync(sent, n == 1 ? images : [], cancellationToken, mark).ConfigureAwait(false))
+                {
+                    return true;
+                }
+
+                if (_lastTurnCancelled || _lastTurnFailed || _restoreDraft is not null || cancellationToken.IsCancellationRequested)
+                {
+                    _transcript.Notice(LoopStoppedNotice(n));
+                    return false;
+                }
+
+                if (end.Asked && (count is null || n < count))
+                {
+                    _transcript.Notice(LoopText.EndedNotice(n));
                     return false;
                 }
             }
 
-            _transcript.Notice(LoopTurnNotice(n, count));
-            _transcript.User(message);
-            if (await RunMessageAsync(sent, n == 1 ? images : [], cancellationToken, mark).ConfigureAwait(false))
-            {
-                return true;
-            }
-
-            if (_lastTurnCancelled || _lastTurnFailed || _restoreDraft is not null || cancellationToken.IsCancellationRequested)
-            {
-                _transcript.Notice(LoopStoppedNotice(n));
-                return false;
-            }
+            _transcript.Notice(LoopDoneNotice(count!.Value));
+            return false;
         }
-
-        _transcript.Notice(LoopDoneNotice(count!.Value));
-        return false;
+        finally
+        {
+            _loopRule = null;
+            _loopEnd = null;
+        }
     }
 
     /// <summary>How one pass of a looped command went (2026-09-25): <see cref="Ok"/> goes on, the others stop the loop.</summary>
@@ -16846,35 +16890,59 @@ internal sealed partial class ChatScreen
     private async Task RunLoopedCommandAsync(SlashCommand command, string args, int? count, TimeSpan? delay, CancellationToken cancellationToken)
     {
         var loopBase = (_imagineNotes.Count, _imagineImages.Count);
-        for (int n = 1; count is null || n <= count; n++)
+        // ⟳ on the lower rule and its end after this run (2026-11-23, the user's ask), as a message loop's.
+        using var end = new PassEnd();
+        _loopEnd = end;
+        try
         {
-            if (n > 1)
+            for (int n = 1; count is null || n <= count; n++)
             {
-                var wait = delay ?? LoopCommandMinGap;
-                if (delay is not null)
+                if (n > 1)
                 {
-                    _transcript.Notice(LoopWaitNotice(wait));
+                    var wait = delay ?? LoopCommandMinGap;
+                    if (delay is not null)
+                    {
+                        _transcript.Notice(LoopWaitNotice(wait));
+                    }
+
+                    if (await LoopWaitAsync(wait, end.Token, cancellationToken).ConfigureAwait(false) || cancellationToken.IsCancellationRequested)
+                    {
+                        _transcript.Notice(LoopCommandStoppedNotice(n - 1));
+                        return;
+                    }
+
+                    if (end.Asked)
+                    {
+                        _transcript.Notice(LoopText.CommandEndedNotice(n - 1));
+                        return;
+                    }
                 }
 
-                if (await LoopWaitAsync(wait, cancellationToken).ConfigureAwait(false) || cancellationToken.IsCancellationRequested)
+                _loopRule = LoopText.RuleTitle(n, count);
+                _transcript.Notice(LoopTurnNotice(n, count));
+                var pass = command == SlashCommand.Imagine
+                    ? await ImaginePassAsync(args, loopBase, cancellationToken).ConfigureAwait(false)
+                    : await SpeakPassAsync(args, cancellationToken).ConfigureAwait(false);
+                if (pass != LoopPass.Ok || cancellationToken.IsCancellationRequested)
                 {
-                    _transcript.Notice(LoopCommandStoppedNotice(n - 1));
+                    _transcript.Notice(LoopCommandStoppedNotice(n));
+                    return;
+                }
+
+                if (end.Asked && (count is null || n < count))
+                {
+                    _transcript.Notice(LoopText.CommandEndedNotice(n));
                     return;
                 }
             }
 
-            _transcript.Notice(LoopTurnNotice(n, count));
-            var pass = command == SlashCommand.Imagine
-                ? await ImaginePassAsync(args, loopBase, cancellationToken).ConfigureAwait(false)
-                : await SpeakPassAsync(args, cancellationToken).ConfigureAwait(false);
-            if (pass != LoopPass.Ok || cancellationToken.IsCancellationRequested)
-            {
-                _transcript.Notice(LoopCommandStoppedNotice(n));
-                return;
-            }
+            _transcript.Notice(LoopCommandDoneNotice(count!.Value));
         }
-
-        _transcript.Notice(LoopCommandDoneNotice(count!.Value));
+        finally
+        {
+            _loopRule = null;
+            _loopEnd = null;
+        }
     }
 
     /// <summary>One looped <c>/read</c> (2026-09-25): the reading started, then its audio waited out under ESC, which stops it and the loop.</summary>

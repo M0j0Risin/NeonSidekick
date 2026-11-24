@@ -777,8 +777,10 @@ public static class AuditText
     /// Why the audit stopped (2026-10-18) and the way on, <c>/code-audit resume &lt;name&gt;</c>, as plan gaps' stop notices name <c>/plan gaps</c>;
     /// a pass that ended without a report says so. <paramref name="lastLight"/> (2026-11-17): the last pass recorded low changes only. Pinned.
     /// </summary>
-    public static string StopNotice(PlanGapStop reason, string name, int passes, bool lastLight = false) => reason switch
+    public static string StopNotice(PlanGapStop reason, string name, int passes, bool lastLight = false, bool clicked = false) => reason switch
     {
+        // 🔎's double-click on the lower rule (2026-11-23, the user's ask): stopped after the pass in progress, not for a message.
+        PlanGapStop.UserSpoke when clicked => $"{Glyph} Code audit stopped after {Passes(passes)}, as asked. /code-audit resume {name} runs more passes.",
         PlanGapStop.Limit => $"{Glyph} Code audit stopped at its limit after {Passes(passes)}; the last pass still found something. /code-audit resume {name} runs more passes.",
         PlanGapStop.Unconfirmed => $"{Glyph} Code audit stopped at its limit after {Passes(passes)}: the last pass found {NothingNew(lastLight)}, but no pass was left to check it again. /code-audit resume {name} runs more passes.",
         PlanGapStop.Stalled => $"{Glyph} Code audit stopped after {Passes(passes)}: the same findings came back. /code-audit resume {name} runs more passes.",

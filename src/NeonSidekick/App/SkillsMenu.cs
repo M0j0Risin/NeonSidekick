@@ -800,6 +800,10 @@ internal sealed class SkillsMenu
             rows.Add(SkillsText.ProjectMoveRow(facts.ProjectTarget!));
         }
 
+        // A bare rule between the places and the acts (2026-11-23, the user's ask): a heading, never a stop, so key scripts keep their counts.
+        int ruleRow = rows.Count;
+        rows.Add(SectionRule.Bare);
+
         // The move to another profile (2026-10-13, the user's ask): a profile skill's alone, after the two roots; every row its own index since.
         int moveRow = skill.Scope == SkillScope.Profile ? rows.Count : -1;
         if (moveRow >= 0)
@@ -834,7 +838,7 @@ internal sealed class SkillsMenu
         int deleteRow = rows.Count;
         rows.Add(DeleteRow);
 
-        var page = new MenuPage(ScopeTitle(skill.Name), rows, ScopeKeys) { Caption = _usage(skill.Name) };
+        var page = new MenuPage(ScopeTitle(skill.Name), rows, ScopeKeys) { Caption = _usage(skill.Name), Headings = new HashSet<int> { ruleRow } };
         var picked = await _pane.PickAsync(page, Math.Max(0, IndexOf(scopeRows, skill.Scope)), cancellationToken).ConfigureAwait(false);
         if (picked is not { Row: var row })
         {
@@ -1530,14 +1534,25 @@ internal sealed class SkillsMenu
         {
             var (state, held, entries, removed) = await Task.Run(() => ReadForTrust(catalog, trust, folder.Level, bound, known), cancellationToken).ConfigureAwait(false);
             int width = Math.Max(4, entries.Select(e => SkillsText.ShownName(e.Name).Length).Concat(removed.Select(r => SkillsText.ShownName(r).Length)).DefaultIfEmpty(0).Max());
-            var rows = new List<string> { SkillsText.TrustQuestionRow(label) };
+            // The actions first (2026-11-23, hand check 1, the user's call): trust and cancel, then a bare rule, then the views and the
+            // removed skills, so cancel never lands far down a long list. The rule is a heading, never a stop.
+            var rows = new List<string> { SkillsText.TrustQuestionRow(label), SkillsText.CancelRow };
+            int first = rows.Count;
+            IReadOnlySet<int>? headings = null;
+            if (entries.Count + removed.Count > 0)
+            {
+                headings = new HashSet<int> { rows.Count };
+                rows.Add(UI.SectionRule.Bare);
+                first = rows.Count;
+            }
+
             rows.AddRange(entries.Select(e => SkillsText.TrustViewRow(e.Name, width, e.Mark, e.Description, e.Files, e.Acting)));
             rows.AddRange(removed.Select(r => SkillsText.TrustRemovedRow(r, width)));
-            rows.Add(SkillsText.CancelRow);
             string caption = held is null ? SkillsText.TrustCaption(label)
                 : SkillsText.TrustChangedCaption(label, entries.Count(e => e.Mark == SkillsText.NewMark), entries.Count(e => e.Mark is SkillsText.ChangedMark or SkillsText.FilesChangedMark), removed.Count);
-            var page = new MenuPage(SkillsText.TrustTitle, rows, SkillsText.TrustKeys) { Caption = caption, CaptionGrows = true };
-            int cursor = entries.Count > 0 ? 1 : rows.Count - 1;
+            var page = new MenuPage(SkillsText.TrustTitle, rows, SkillsText.TrustKeys) { Caption = caption, CaptionGrows = true, Headings = headings };
+            // On the first view, so a reflex Enter views and never trusts; on cancel with nothing to view.
+            int cursor = entries.Count > 0 ? first : 1;
             while (true)
             {
                 if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { Row: var row })
@@ -1545,12 +1560,14 @@ internal sealed class SkillsMenu
                     return (false, null);
                 }
 
-                if (row >= 1 && row <= entries.Count)
+                if (row >= first && row < first + entries.Count)
                 {
                     // View: exactly what was read, never run or rendered as markdown (a stranger's link text can't hide where it goes).
-                    var entry = entries[row - 1];
+                    var entry = entries[row - first];
                     IRenderable content = entry.Text is null ? new Text(SkillsText.NothingToViewText)
                         : entry.Old is not null && FileDiff.Of(entry.FilePath, entry.Old, entry.Text) is { } diff ? new DiffView(null, diff, int.MaxValue)
+                        // Only its bundled files changed (2026-11-23, hand check 1): say so over the text, which is the one trusted.
+                        : entry.Mark == SkillsText.FilesChangedMark ? new Rows(new Markup(Theme.DimMarkup(SkillsText.FilesChangedViewNote)), new Text(""), new Text(entry.Text))
                         : new Text(entry.Text);
                     if (_view is not null)
                     {
@@ -1561,7 +1578,7 @@ internal sealed class SkillsMenu
                     continue;
                 }
 
-                if (row > entries.Count && row <= entries.Count + removed.Count)
+                if (row >= first + entries.Count && row < first + entries.Count + removed.Count)
                 {
                     // A removed skill's row has nothing to view (2026-11-23, review #75): the question stays open.
                     cursor = row;

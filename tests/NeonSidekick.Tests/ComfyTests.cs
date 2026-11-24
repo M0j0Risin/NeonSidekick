@@ -716,6 +716,10 @@ public sealed class ComfyTests : IDisposable
     [InlineData("[Image #]", 0)]
     [InlineData("photo.png", 0)]
     [InlineData("[Pasted text #1 +3 lines]", 0)]
+    [InlineData(@"[Image #2, from C:\x.png]", 2)]   // the whole sent label, copied by the model (2026-11-23)
+    [InlineData("[Image #2, saved as x.png]", 2)]
+    [InlineData("[Image #2 from x]", 0)]
+    [InlineData("[Image #2, x.png]", 0)]
     public void TryPastedLabel_IsTheLabelAlone(string image, int expected)
     {
         Assert.Equal(expected > 0, ComfyText.TryPastedLabel(image, out int number));

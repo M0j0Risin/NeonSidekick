@@ -231,4 +231,56 @@ public static class SplashImages
         ArgumentNullException.ThrowIfNull(error);
         return $"Splash: could not move {path} to {TrashFolderName}: {error.GetType().Name}: {error.Message}";
     }
+
+    /// <summary>
+    /// Copies <paramref name="source"/> into the splash <paramref name="folder"/> (2026-11-23, shared by <c>set_splash_image</c> and the picture
+    /// menus' Add to the splash images): refused when it is no picture or already lives there; named <paramref name="name"/> or its own stem
+    /// (<see cref="Comfy.ComfyStudio.SafeName"/>), <c>-2</c>, <c>-3</c>… on a clash, never over a file; the folder made. Blocking, a plain copy.
+    /// </summary>
+    public static SplashAdd Add(string folder, string source, string? name = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        if (!ImageFile.IsImagePath(source))
+        {
+            return new SplashAdd(SplashAddResult.NotAnImage, "", false, "");
+        }
+
+        if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(source)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase))
+        {
+            return new SplashAdd(SplashAddResult.Already, "", false, "");
+        }
+
+        string extension = Path.GetExtension(source).ToLowerInvariant();
+        string stem = Comfy.ComfyStudio.SafeName(string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(source) : Path.GetFileNameWithoutExtension(name.Trim()));
+        try
+        {
+            Directory.CreateDirectory(folder);
+            string target = Path.Combine(folder, stem + extension);
+            for (int n = 2; File.Exists(target); n++)
+            {
+                target = Path.Combine(folder, stem + "-" + n.ToString(System.Globalization.CultureInfo.InvariantCulture) + extension);
+            }
+
+            File.Copy(source, target, overwrite: false);
+            bool only = Directory.EnumerateFiles(folder).Count(ImageFile.IsImagePath) == 1;
+            return new SplashAdd(SplashAddResult.Added, target, only, "");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new SplashAdd(SplashAddResult.Failed, "", false, ex.Message);
+        }
+    }
 }
+
+/// <summary>What <see cref="SplashImages.Add"/> did (2026-11-23).</summary>
+public enum SplashAddResult
+{
+    Added,
+    Already,
+    NotAnImage,
+    Failed,
+}
+
+/// <summary><see cref="SplashImages.Add"/>'s outcome: the copy's path and whether it is the folder's only picture when added, the reason when it failed.</summary>
+public readonly record struct SplashAdd(SplashAddResult Result, string Target, bool Only, string Detail);

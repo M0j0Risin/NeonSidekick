@@ -68,12 +68,28 @@ public static class SessionText
     /// <summary>The pane's footer line naming the session's folder.</summary>
     public static string FolderFooter(string folder) => "folder: " + folder;
 
+    /// <summary>The command words a side turn's model starts with (2026-11-23), shared by the callers and <see cref="IsSideTurnModel"/>.</summary>
+    public const string CmdSideTurn = "/cmd";
+
+    public const string ClaudeSideTurn = "/claude";
+
+    public const string AdvisorSideTurn = "/advisor";
+
     /// <summary>
     /// The model a side turn records (2026-11-21, feature idea #7): the command that answered it (<c>/claude</c>, <c>/cmd</c>), and for
-    /// <c>/advisor</c> the advisor's profile too (<c>/advisor neo</c>); never blank, so <c>/usage</c> › Models counts it as its own row
-    /// rather than as the chat's model, which never answered it.
+    /// <c>/advisor</c> the advisor's profile too (<c>/advisor neo</c>); never blank, so the chat's model, which never answered it, gets no credit.
+    /// Since 2026-11-23 (the user's ask) <c>/usage</c> › Models leaves these out of its table and counts them in one note (<see cref="IsSideTurnModel"/>).
     /// </summary>
     public static string SideTurnModel(string command, string? who = null) => string.IsNullOrWhiteSpace(who) ? command : command + " " + who.Trim();
+
+    /// <summary>
+    /// Whether <paramref name="model"/> is what <see cref="SideTurnModel"/> writes (2026-11-23): <c>/cmd</c>, <c>/claude</c>, or <c>/advisor</c> alone
+    /// or with a space and a profile. Never "any model starting with /": vLLM and SGLang serve a model under its path (<c>/models/Qwen3-27B</c>). Pure.
+    /// </summary>
+    public static bool IsSideTurnModel(string? model) =>
+        model is CmdSideTurn or ClaudeSideTurn or AdvisorSideTurn
+        || (model is not null && model.StartsWith(AdvisorSideTurn + " ", StringComparison.Ordinal) && model.Length > AdvisorSideTurn.Length + 1
+            && !model[(AdvisorSideTurn.Length + 1)..].Contains(' ', StringComparison.Ordinal));
 
     // ---- titles ----
 

@@ -6,7 +6,7 @@ namespace NeonSidekick.Comfy;
 public sealed record ComfyWorkflowProblem(string FilePath, string Problem);
 
 /// <summary>
-/// The ComfyUI workflows the image tools can run (2026-09-24): every <c>*.json</c> in the <c>comfy</c> folders — the
+/// The ComfyUI workflows the image tools can run (2026-09-24): every <c>*.json</c> in the <c>comfy</c> folders (in a profile's and the home's <c>configs</c> since 2026-11-23) — the
 /// loaded profile's first, then the home's — a profile file shadowing a global one of the same name, the
 /// <see cref="Skills.SkillCatalog"/> shape. Rescanned at every call (<see cref="Scan"/>) so a file dropped in, edited
 /// or removed shows at the next turn without a restart; a file is parsed again only when it or its sidecar changed.
@@ -16,7 +16,7 @@ public sealed class ComfyWorkflowCatalog
 {
     private const string Category = "Comfy";
 
-    /// <summary>The folder's name under a profile and under the home.</summary>
+    /// <summary>The folder's name in a profile's and the home's <c>configs</c> (2026-11-23, the user's call; at their top until then).</summary>
     public const string DirectoryName = "comfy";
 
     private readonly Func<IReadOnlyList<string>> _roots;

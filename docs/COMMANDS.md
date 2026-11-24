@@ -82,8 +82,9 @@ Elsewhere:
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 | `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
-| `/usage models` | The Models tab: each model's turns, sessions, tool calls a turn, tool-call error and cancel rates, output a turn and tok/s, from the saved sessions. |
+| `/usage models` | The Models tab: each model's turns, sessions, tool calls a turn, tool-call error and cancel rates, output a turn and tok/s, from the saved sessions, most turns first. Turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out and counted in a note. |
 | `/usage prompt\|tools\|skills` | The Prompt tab (the system message, less the skills block), the Tools tab (each tool offered) or the Skills tab (the skills block: its directive, then each skill with its scope and file). |
+| `/usage sysprompt [to=<path>]` | Writes what the next request sends (the system message, every tool offered and the history, pictures as placeholders) to `neon-sysprompt-<timestamp>.md` in the working folder, or at `to=` (a file or a folder in it), never over a file. It holds the whole conversation. |
 
 ### Models and servers
 
@@ -108,7 +109,7 @@ The push and pull forms copy to (`push`) or from (`pull`) another profile, after
 | Command | What it does |
 |---|---|
 | `/profile [<name>]` | Switches profiles for this run: a picker, or the one named. See [Profiles](#profiles). |
-| `/profile add\|delete <name>`, `/profile rename <name> <new-name>` | Creates a profile (from this one's settings, memories and saved prompts), deletes one, or renames one. |
+| `/profile add\|delete <name>`, `/profile add <name> --fresh`, `/profile rename <name> <new-name>` | Creates a profile from this one's settings, memories and saved prompts, or with `--fresh` from the default settings, copying nothing; deletes one, or renames one. |
 | `/profile reset [<name>] [--all]` | Resets a profile to the defaults, keeping its URLs, paths, keys and avatars (and *Embedded servers enabled* with an embedded URL, *Docker servers enabled* with a chosen container's) unless `--all`. |
 | `/profile push\|pull <name>` | Copies every setting but the working directory; a pull clears the conversation. |
 | `/profile push\|pull keys <name>` | Copies the six API keys; one the source lacks is cleared in the target, one set only by a variable isn't copied. |
@@ -408,7 +409,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
-* **A pass** gets the plan, its step and `Done when:` line, what earlier passes learned and every tool, and reports `done`, `partial`, `blocked` or `split`. Each pass is its own session; 🔁 on the Status bar shows the step and pass.
+* **A pass** gets the plan, its step and `Done when:` line, what earlier passes learned and every tool, and reports `done`, `partial`, `blocked` or `split`. Each pass is its own session; 🔁 on the [lower rule](INTERFACE.md#the-screen) shows the step and pass, and a double-click there pauses the loop after the pass in progress.
 * **The app decides if a step stands:** the `verify:` command, then the evidence (files changed or committed) and a review (*Ralph loop reviewer*).
   * The reviewer's diff is redacted; a secrets file (`.env`, a key) is named, never shown. A failed check unticks the step, its output going to the next pass.
   * **Only the app ticks boxes.** A pass's edits to the steps or the `verify:` and `final:` lines are undone, an added step removed; a stopped pass decides nothing. The plan as the pass left it stays in `as-left.md` beside the log; type a message to pause the loop before editing the plan.
@@ -458,7 +459,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Clean passes:** it ends after *Code audit clean passes* in a row find nothing new (or, with [*Code audit low keeps streak*](SETTINGS.md#automation) on, only low changes); a pass after a clean one reads unread files first. *Code audit pass tool calls* guides, never cuts off. The pane says how much of the scope was read.
   * Only an audit that read the whole scope says "converged"; short of it, the end says how much it read and the way on.
 * **Retractions:** a retracted finding reported again is refused unless it says, in `reopen`, why the retraction was wrong; then it comes back under its own id.
-* **When it stops:** the clean passes, the pass limit, the same findings again, a pass with no `present_audit`, a message (PC or Web UI), Esc, `/new`, `/clear`, a profile switch or a working directory change (the report stays in its folder). Each stop says why; `/code-audit resume <name>` runs more.
+* **When it stops:** the clean passes, the pass limit, the same findings again, a pass with no `present_audit`, a message (PC or Web UI), a double-click on 🔎 on the [lower rule](INTERFACE.md#the-screen) (after the pass in progress), Esc, `/new`, `/clear`, a profile switch or a working directory change (the report stays in its folder). Each stop says why; `/code-audit resume <name>` runs more.
   * A server failure is tried once more; a pass that ends without `present_audit` is asked for it once.
   * A stop you didn't cause, a failed pass or a working directory change rings *Code audit stop tone*.
 * **The pane** shows the open findings and its choices, on the Web UI page too ([keys](INTERFACE.md#pane-keys)):
@@ -528,7 +529,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 ### Loops
 
 * A delay waits after each reply (`/loop infinite 1m check the build`): one word (`30s`, `5m`, `1h30m`, never a bare number), up to 24 hours.
-* Esc or Ctrl+C stops the loop; a canceled or failed turn ends it.
+* Esc or Ctrl+C stops the loop; a double-click on ⟳ on the [lower rule](INTERFACE.md#the-screen) ends it after the message or run in progress; a canceled or failed turn ends it.
 * `/imagine …` and `/read …` run with no model in between (`/loop infinite 5s /imagine score_9, 1girl`); a [custom command](#custom-commands) sends its prompt each time (`/loop 3 /review src`). Nothing else can be looped.
 * From the Web UI's page (with *Web UI commands* on), its Stop ends a loop; `/read` can't be looped there.
 
@@ -582,7 +583,7 @@ Style: $style
 
 ### Imagine options
 
-* It runs behind the input line, so you can keep chatting; double-click 🖼️ on the status bar to cancel.
+* It runs behind the input line, so you can keep chatting; double-click 🖼️ on the lower rule to cancel.
 * The picture is drawn in the transcript, saved in *ComfyUI output folder* and sent to the model with your next message.
 * A first word that matches a workflow names it; otherwise an offered workflow is used.
 * `-- <negative>` sets the negative prompt; `--no-negative` sends none, not even the workflow's own.

@@ -435,7 +435,7 @@ app.StartNotices = importNotices;   // --import-settings' report, shown after th
 
 System.Diagnostics.Stopwatch? closeStarted = null;   // when the window's close began, for what's left of its deadline (2026-11-04, review P1-3)
 
-// The console window closed by its X button (2026-10-02, the user's report: Docker server stop on exit never ran then).
+// The console window closed by its X button (2026-10-02, the user's report: Docker containers stop on exit never ran then).
 // SIGHUP is CTRL_CLOSE_EVENT on Windows (a hangup elsewhere): no finally of the run's runs after it, so the handler does the
 // exit's work itself, on the console's control thread. On Windows (2026-10-24, the leftover process) it then ends the process
 // itself through ProcessEnd: returning let the default handler call ExitProcess, whose DLL detaches can hang for good, and the
@@ -559,6 +559,8 @@ NeonSidekick.Viewer.PictureMenu.Settings = () => NeonSidekick.Images.PictureEdit
 NeonSidekick.Viewer.PictureMenu.Attach = app.AttachPicture;
 NeonSidekick.Viewer.PictureMenu.Print = app.PrintPicture;
 NeonSidekick.Viewer.PictureMenu.Reported = app.PictureReported;
+NeonSidekick.Viewer.PictureMenu.SplashFolder = () => app.PictureSplashFolder;   // Add to the splash images (2026-11-23), both systems
+NeonSidekick.Viewer.PictureMenu.RobotSplash = () => app.PictureRobotSplash;
 // The Browser window's address box searches words with the Web search method in force, and its home button and a bare /browser
 // go to Web browser home page (2026-10-13, the navigation bar), both read from the effective settings when used.
 if (OperatingSystem.IsWindows())

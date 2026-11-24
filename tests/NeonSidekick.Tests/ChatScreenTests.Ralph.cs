@@ -674,6 +674,45 @@ public partial class ChatScreenTests
         Assert.Contains("- [x] One", RalphPlanText);
     }
 
+    /// <summary>
+    /// 🔁 on the lower rule (2026-11-23, the user's ask): a double-click there shows <c>· ending</c>, lets the pass finish with no nudge,
+    /// pauses the loop with its own notice, and the next message starts a new conversation as after any stop.
+    /// </summary>
+    [Fact]
+    public async Task Ralph_ADoubleClickOnTheLowerRule_PausesTheLoopAfterThePass()
+    {
+        RalphPlan();
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        _console.Profile.Width = 80;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the lower rule at 101
+        bool item = false;
+        _chat.BeforeUpdateOf = async (request, update, ct) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                _time.Advance(ScreenPane.Tick);
+                item = Output.Contains(ScreenPane.RuleWithTitle(RalphText.StripText(1, 2, 1), 80), StringComparison.Ordinal);
+                Scripted().PushClick(78, 101);
+                Scripted().PushClick(78, 101);
+                await UntilAsync(() =>
+                {
+                    _time.Advance(ScreenPane.Tick);
+                    return Output.Contains(RalphText.StripText(1, 2, 1) + LoopText.EndingTail + " ─", StringComparison.Ordinal);
+                }, ct);
+            }
+        };
+        RalphPass("1");
+
+        string output = await RunAsync();
+
+        Assert.True(item);
+        Assert.Equal(2, _chat.Requests.Count);   // the pass alone: no nudge, no pass 2
+        Assert.Contains("Ralph loop paused after this pass, as asked (1 of 2 steps done).", output);   // the notice, wrapped at 80 columns after it
+        Assert.Contains(ChatScreen.NewConversationNotice, output);
+        Assert.Contains("- [x] One", RalphPlanText);
+        Assert.Equal("🔁 Ralph loop paused after this pass, as asked (1 of 2 steps done). /plan ralph goes on.", RalphText.StopNotice(RalphStop.Paused, PlanPath, 1, 2, clicked: true));
+    }
+
     [Fact]
     public async Task Ralph_AMessageFromThePageDuringAPass_PausesTheLoopAfterIt_ThenRuns()
     {

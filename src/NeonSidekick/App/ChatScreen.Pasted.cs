@@ -27,7 +27,9 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <paramref name="text"/> and <paramref name="images"/> with each clipboard picture among them saved (<see cref="SavePasted"/>): the
-    /// attachment's path the file's, the text's first <c>[Image #N]</c> naming it. Pictures that are not the line's pastes pass untouched.
+    /// attachment's path the file's, the text's first <c>[Image #N]</c> naming it. A picture attached from a file (the viewer's Attach to the
+    /// chat, a dropped file) names its file too since 2026-11-23 (the user's ask, from a failed set_splash_image: the model hunted for it),
+    /// <see cref="PasteBlocks.FileLabel"/>. Pictures that are not the line's pastes pass untouched.
     /// </summary>
     private (string Text, IReadOnlyList<ImageAttachment> Images) SavePastedPictures(string text, IReadOnlyList<ImageAttachment> images)
     {
@@ -56,8 +58,25 @@ internal sealed partial class ChatScreen
                 continue;
             }
 
-            if (pastes.NumberOf(images[i]) is not int number || SavePasted(number) is not { } saved)
+            if (pastes.NumberOf(images[i]) is not int number)
             {
+                continue;
+            }
+
+            if (SavePasted(number) is not { } saved)
+            {
+                // A picture from a file (2026-11-23): its label names the file, relative inside the working directory as a PDF's is.
+                if (!pastes.IsClipboard(number) && images[i].Path is { Length: > 0 } file && File.Exists(file))
+                {
+                    string where = _files.Contains(file) && _files.Resolve(file, forWrite: false, out string inside) == FileOutcome.Ok ? _files.Relative(inside) : file;
+                    string bare = PasteBlocks.ImageLabel(number);
+                    int found = text.IndexOf(bare, StringComparison.Ordinal);
+                    if (found >= 0)
+                    {
+                        text = string.Concat(text.AsSpan(0, found), PasteBlocks.FileLabel(number, where), text.AsSpan(found + bare.Length));
+                    }
+                }
+
                 continue;
             }
 

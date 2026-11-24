@@ -301,6 +301,81 @@ public partial class SettingsMenuTests
         pane.Dispose();
     }
 
+    /// <summary>
+    /// An advisor saved with a running container's loopback address (2026-11-23, hand check 4): the scan drops that row for the container's own,
+    /// so the cursor lands on the Docker row by its port, and picking it keeps the saved model (the container lists none).
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ChangeTheServer_ASavedContainerPort_LandsOnItsDockerRow()
+    {
+        Profiles.Create(_dir, "qa", new AppSettingsData { LlmUrl = "http://localhost:30000/v1", LlmModel = "qwen", LlmReasoning = "low" });
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("qa", "tester")]);
+        var (menu, pane) = PaneMenu();
+        var docker = new LlmServer(new Uri("docker:sglang"), "sglang", new ProbeResult(true, [], "", null, null)) { HostPorts = [30000] };
+        menu.AdvisorServerProbe = (_, _, _) => Task.FromResult<IReadOnlyList<LlmServer>>([ListedServer(Box1, "m-a"), docker]);
+        OpenAdvisorList();
+        FirstAdvisorAction(SettingsMenu.ChangeAdvisorServerChoice);
+        Push(Keys.Enter);                       // the cursor's row: the container
+        Push(Keys.Enter);                       // reasoning: low, as it was
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var qa = AdvisorFile("qa");
+        Assert.Equal(("docker:sglang", "qwen"), (qa.LlmUrl, qa.LlmModel));
+        pane.Dispose();
+    }
+
+    /// <summary>A saved loopback address no row stands for (2026-11-23) opens on the first server row, never the borrow row.</summary>
+    [Fact]
+    public async Task OnThePane_ChangeTheServer_ASavedAddressNoRowStandsFor_OpensOnTheFirstServer()
+    {
+        Profiles.Create(_dir, "qa", new AppSettingsData { LlmUrl = "http://localhost:9999/v1", LlmModel = "gone", LlmReasoning = "low" });
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("qa", "tester")]);
+        var (menu, pane) = PaneMenu();
+        menu.AdvisorServerProbe = (_, _, _) => Task.FromResult<IReadOnlyList<LlmServer>>([ListedServer(Box1, "m-a")]);
+        OpenAdvisorList();
+        FirstAdvisorAction(SettingsMenu.ChangeAdvisorServerChoice);
+        Push(Keys.Enter);                       // the cursor's row: box1, not the borrow row
+        Push(Keys.Enter);                       // its model: m-a
+        Push(Keys.Enter);                       // reasoning
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        var qa = AdvisorFile("qa");
+        Assert.Equal((Box1, "m-a"), (qa.LlmUrl, qa.LlmModel));
+        pane.Dispose();
+    }
+
+    /// <summary>The /server twin (2026-11-23): a session on a container's loopback address opens the picker on the container's row.</summary>
+    [Fact]
+    public async Task ServerPicker_ASessionOnAContainersPort_OpensOnItsDockerRow()
+    {
+        var (menu, pane) = PaneMenu();
+        var docker = new LlmServer(new Uri("docker:sglang"), "sglang", new ProbeResult(true, [], "", null, null)) { HostPorts = [30000] };
+        Push(Keys.Enter);
+
+        var picked = await menu.PickServerAsync([ListedServer(Box1, "m-a"), docker], new Uri("http://localhost:30000/v1"), SettingsMenu.ServerTitle, CancellationToken.None);
+
+        Assert.Same(docker, picked);
+        pane.Dispose();
+    }
+
+    /// <summary>The port match (2026-11-23) is loopback only, and only a row that carries the port.</summary>
+    [Fact]
+    public void DockerRowOnPort_MatchesALoopbackPort_ItsRowCarries()
+    {
+        var plain = new LlmServer(new Uri("http://box:30000/v1"), "SGLang", new ProbeResult(true, [], "", null, null));
+        var docker = new LlmServer(new Uri("docker:sglang"), "sglang", new ProbeResult(true, [], "", null, null)) { HostPorts = [30000] };
+
+        Assert.Equal(1, SettingsMenu.DockerRowOnPort([plain, docker], new Uri("http://localhost:30000/v1")));
+        Assert.Equal(1, SettingsMenu.DockerRowOnPort([plain, docker], new Uri("http://127.0.0.1:30000/v1")));
+        Assert.Null(SettingsMenu.DockerRowOnPort([plain, docker], new Uri("http://box:30000/v1")));
+        Assert.Null(SettingsMenu.DockerRowOnPort([plain, docker], new Uri("http://localhost:8000/v1")));
+        Assert.Null(SettingsMenu.DockerRowOnPort([plain, docker], null));
+    }
+
     /// <summary>A new URL's model page lists that server's ids alone: the advisor's model on another server is never offered as listed.</summary>
     [Fact]
     public async Task OnThePane_ChangeTheServer_ANewUrl_ListsNoStaleModel()
@@ -486,5 +561,28 @@ public partial class SettingsMenuTests
         Assert.DoesNotContain(SettingsMenu.AdvisorBorrowServerRow, Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
+    }
+    /// <summary>An advisor's page (2026-11-23, the user's ask): rules after the persona and after the reasoning, each page row mapped back to its choice.</summary>
+    [Fact]
+    public void AdvisorEntryPage_RulesAtThreeAndSeven_RowsMapBackToTheirChoices()
+    {
+        var rows = SettingsMenu.AdvisorEntryPageRows();
+
+        Assert.Equal(SettingsMenu.AdvisorEntryRows.Count + 2, rows.Count);
+        Assert.Equal(new HashSet<int> { 3, 7 }, SettingsMenu.AdvisorEntryRuleRows());
+        Assert.Equal(UI.SectionRule.Bare, rows[3]);
+        Assert.Equal(UI.SectionRule.Bare, rows[7]);
+        Assert.Equal(SettingsMenu.ChangeAdvisorServerChoice, SettingsMenu.AdvisorChoiceOfRow(4));
+        Assert.Equal(SettingsMenu.ChangeAdvisorReasoningChoice, SettingsMenu.AdvisorChoiceOfRow(6));
+        Assert.Equal(SettingsMenu.SwitchToAdvisorChoice, SettingsMenu.AdvisorChoiceOfRow(8));
+        Assert.Equal(SettingsMenu.RemoveAdvisorChoice, SettingsMenu.AdvisorChoiceOfRow(9));
+        Assert.Equal(2, SettingsMenu.AdvisorChoiceOfRow(2));
+        Assert.Equal(-1, SettingsMenu.AdvisorChoiceOfRow(3));
+        Assert.Equal(-1, SettingsMenu.AdvisorChoiceOfRow(-1));
+        for (int choice = 0; choice < SettingsMenu.AdvisorEntryRows.Count; choice++)
+        {
+            int row = Enumerable.Range(0, rows.Count).Single(r => SettingsMenu.AdvisorChoiceOfRow(r) == choice);
+            Assert.Equal(Spectre.Console.Markup.Escape(SettingsMenu.AdvisorEntryRows[choice]), rows[row]);
+        }
     }
 }

@@ -933,14 +933,14 @@ public partial class SettingsMenuTests : IDisposable
         data.LlmUrl = "";
         // The label column is the longest name plus two spaces, computed ("STT interrupt echo guard" once touched "100 %" when it was a hand-kept number).
         int longest = Enum.GetValues<SettingsField>().Max(f => SettingsMenu.FieldName(f).Length);
-        Assert.Equal(33, longest);   // "Reflection edit downloaded skills" (2026-10-13, with "Botchat ComfyUI limited workflows" until it became "Botchat limited workflows" on 2026-10-27; when the external-skills row lost its Use); before then "External skills (.agents\\skills)" (again since later on 2026-10-10, when "Claude Code slash command permissions", 37, became "Claude Code command permissions", the user's call; that one from 2026-10-10, when the advisor tool's rows went; "Claude Code advisor tool calls per turn", 39, from 2026-10-09; "Claude CLI …", 38, from 2026-10-04; the skills one from 2026-09-16; "Ask max choices per question", 28, before)
-        Assert.Equal(35, SettingsMenu.LabelWidth);
+        Assert.Equal(36, longest);   // "Docker container post-stop delay (s)" since 2026-11-23 (the user's ask: Container…); "Reflection edit downloaded skills", 33 (2026-10-13, with "Botchat ComfyUI limited workflows" until it became "Botchat limited workflows" on 2026-10-27; when the external-skills row lost its Use); before then "External skills (.agents\\skills)" (again since later on 2026-10-10, when "Claude Code slash command permissions", 37, became "Claude Code command permissions", the user's call; that one from 2026-10-10, when the advisor tool's rows went; "Claude Code advisor tool calls per turn", 39, from 2026-10-09; "Claude CLI …", 38, from 2026-10-04; the skills one from 2026-09-16; "Ask max choices per question", 28, before)
+        Assert.Equal(38, SettingsMenu.LabelWidth);
         Assert.Equal(longest + 2, SettingsMenu.LabelWidth);
         Assert.Equal("LLM request timeout (s)", SettingsMenu.FieldName(SettingsField.LlmRequestTimeoutSeconds));
         Assert.Equal("LLM turn timeout (s)", SettingsMenu.FieldName(SettingsField.LlmTurnTimeoutSeconds));
-        Assert.Equal("LLM URL                            [#EFE6FF](probe local ports)[/]", SettingsMenu.FieldLabel(SettingsField.LlmUrl, data, _settings.ProfileDirectory, null));
-        Assert.Equal("LLM API key                        [#EFE6FF]sk•••••••[/][#9A8BB8]  (overridden by X)[/]", SettingsMenu.FieldLabel(SettingsField.LlmApiKey, data, _settings.ProfileDirectory, "X"));
-        Assert.Equal("LLM request timeout (s)            [#EFE6FF]3600[/]", SettingsMenu.FieldLabel(SettingsField.LlmRequestTimeoutSeconds, data, _settings.ProfileDirectory, null));
+        Assert.Equal("LLM URL                               [#EFE6FF](probe local ports)[/]", SettingsMenu.FieldLabel(SettingsField.LlmUrl, data, _settings.ProfileDirectory, null));
+        Assert.Equal("LLM API key                           [#EFE6FF]sk•••••••[/][#9A8BB8]  (overridden by X)[/]", SettingsMenu.FieldLabel(SettingsField.LlmApiKey, data, _settings.ProfileDirectory, "X"));
+        Assert.Equal("LLM request timeout (s)               [#EFE6FF]3600[/]", SettingsMenu.FieldLabel(SettingsField.LlmRequestTimeoutSeconds, data, _settings.ProfileDirectory, null));
         Assert.Equal("(none)", SettingsMenu.Mask(""));
         Assert.Equal("••••", SettingsMenu.Mask("abcd"));
         Assert.Equal("3600", SettingsMenu.FieldValue(SettingsField.LlmRequestTimeoutSeconds, data, _settings.ProfileDirectory));
@@ -1429,7 +1429,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(HintsBarMode.Off, SettingsMenu.FieldValue(SettingsField.HintsBar, new AppSettingsData { HintsBar = " OFF " }, _settings.ProfileDirectory));
         Assert.Equal(HintsBarMode.Auto, SettingsMenu.FieldValue(SettingsField.HintsBar, new AppSettingsData { HintsBar = "nonsense" }, _settings.ProfileDirectory));
         Assert.False(SettingsMenu.RefusedMidTurn(SettingsField.HintsBar) || SettingsMenu.IsLlmField(SettingsField.HintsBar));
-        Assert.Equal("17 of 49", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (14 until 🪄, 📊 and 🙋 became defaults, of 49 until 🎭 went, 2026-11-07; of 48 until 🪄, 2026-11-01; 📱 since 2026-10-17; 📣 since 2026-10-14; ⏳ since 2026-10-13, of 40 with it; 🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
+        Assert.Equal("19 of 49", SettingsMenu.FieldValue(SettingsField.ToolbarItems, data, _settings.ProfileDirectory));   // the defaults (17 until 2026-11-23, the neon profile's since; 14 until 🪄, 📊 and 🙋 became defaults, of 49 until 🎭 went, 2026-11-07; of 48 until 🪄, 2026-11-01; 📱 since 2026-10-17; 📣 since 2026-10-14; ⏳ since 2026-10-13, of 40 with it; 🌄 since 2026-10-10): 5 of 13 from later on 2026-09-29, 3 from 2026-10-02; of 30 and 7 from 2026-10-03; 10 since 2026-10-05; of 39 with Model name, 2026-10-12
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [] }, _settings.ProfileDirectory));
         Assert.Equal("3 of 49", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = ["usage", "PATH", " tools ", "nonsense"] }, _settings.ProfileDirectory));   // of 49 until 🎭 went (2026-11-07)
         Assert.Equal("all", SettingsMenu.FieldValue(SettingsField.ToolbarItems, new AppSettingsData { ToolbarItems = [.. ToolbarItems.Names] }, _settings.ProfileDirectory));
@@ -1917,7 +1917,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("(" + Path.Combine(_settings.ProfileDirectory, WorkingDirectory.DefaultFolderName) + ")", SettingsMenu.FieldValue(SettingsField.WorkingDirectory, data, _settings.ProfileDirectory));
         Assert.Equal("", SettingsMenu.EditableValue(SettingsField.WorkingDirectory, data));
         Assert.Equal(@"D:\x\[v]", SettingsMenu.FieldValue(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory));
-        Assert.Equal("Working directory (cwd)            [#EFE6FF]D:\\x\\[[v]][/]", SettingsMenu.FieldLabel(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory, null));
+        Assert.Equal("Working directory (cwd)               [#EFE6FF]D:\\x\\[[v]][/]", SettingsMenu.FieldLabel(SettingsField.WorkingDirectory, new AppSettingsData { WorkingDirectory = @"D:\x\[v]" }, _settings.ProfileDirectory, null));
         Assert.Equal(@"(D:\home\profiles\p\files)", SettingsMenu.DefaultWorkingDirectoryLabel(@"D:\home\profiles\p"));
         Assert.Equal("Could not create Q:\\nope (boom); keeping (profile folder).", SettingsMenu.WorkingDirectoryCreateError(@"Q:\nope", "boom", "(profile folder)"));
         Assert.False(SettingsMenu.IsToggle(SettingsField.MemoryMode));   // a picker since 2026-10-04
@@ -3236,8 +3236,8 @@ public partial class SettingsMenuTests : IDisposable
     [Fact]
     public void ProfileStrings_ArePinned()
     {
-        Assert.Equal(@"Profile                            [#EFE6FF]work[/][#9A8BB8] (D:\home\profiles\work)[/]", SettingsMenu.ProfileLabel("work", @"D:\home\profiles\work"));
-        Assert.Equal(@"Profile                            [#EFE6FF]p[/][#9A8BB8] (D:\h[[x]]\profiles\p)[/]", SettingsMenu.ProfileLabel("p", @"D:\h[x]\profiles\p"));   // the path escaped
+        Assert.Equal(@"Profile                               [#EFE6FF]work[/][#9A8BB8] (D:\home\profiles\work)[/]", SettingsMenu.ProfileLabel("work", @"D:\home\profiles\work"));
+        Assert.Equal(@"Profile                               [#EFE6FF]p[/][#9A8BB8] (D:\h[[x]]\profiles\p)[/]", SettingsMenu.ProfileLabel("p", @"D:\h[x]\profiles\p"));   // the path escaped
         Assert.Equal("profiles: neon (current), work", SettingsMenu.ProfileListLine(new[] { "neon", "work" }, "neon"));
         Assert.Equal("profiles: neon, work (current)", SettingsMenu.ProfileListLine(new[] { "neon", "work" }, "Work"));
         Assert.Equal("(🪪 already on profile \"neon\")", SettingsMenu.AlreadyCurrentNotice("neon"));
@@ -3258,7 +3258,7 @@ public partial class SettingsMenuTests : IDisposable
 
         await _menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains("Profile                            " + Profiles.DefaultName, Output);
+        Assert.Contains("Profile                               " + Profiles.DefaultName, Output);
         Assert.StartsWith(Profiles.DefaultName, _settings.ProfileName);
     }
 
@@ -3277,7 +3277,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("work", _settings.ProfileName);
         Assert.Equal("work-model", _settings.Current.LlmModel);
         Assert.DoesNotContain(SettingsMenu.SwitchedNotice("work"), Output);   // the screen announces it, after its redraw
-        Assert.Contains("Profile                            work", Output);   // the menu again, on the new profile
+        Assert.Contains("Profile                               work", Output);   // the menu again, on the new profile
     }
 
     [Fact]
@@ -3621,7 +3621,7 @@ public partial class SettingsMenuTests : IDisposable
         // page may do under Guardrails and which tabs it shows under Tabs ("The page" held both until then); the connection details off since then; the bot check control on under them since 2026-10-17; the reach local since 2026-11-08.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               local\n  Web UI HTTPS address       auto\n  Web UI sign in mode        one-time-link\n" + MenuLayout.Heading("Guardrails", 120) + "\n  Web UI commands            off\n  Web UI connection details  off\n  Web UI bot check control   off\n" + MenuLayout.Heading("Tabs", 120) + "\n  Web UI profile theme       on\n  Web UI chat controls       on\n  Web UI voice controls      off\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI video controls      off\n", 120);
         // The Toolbars tab (2026-11-21, the user's ask and headings): Chat's Tool bars run as it was, Bars then Order, padded to Performance bar (15) and the gap.
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Bars", 120) + "\n▸ Hints bar        auto\n  Status bar       default\n  Tool bar         17 of 49\n  Performance bar  CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar         off\n" + MenuLayout.Heading("Order", 120) + "\n  Toolbar order    default\n", 120);
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Bars", 120) + "\n▸ Hints bar        auto\n  Status bar       default\n  Tool bar         19 of 49\n  Performance bar  CPU, RAM, GPU, " + Perf.PerfText.VramLabel + " · led\n  Home bar         off\n" + MenuLayout.Heading("Order", 120) + "\n  Toolbar order    default\n", 120);
         // The Common tab (2026-10-10, the user's call; the LLM tab before): whole names, no row starting "Common ", in the LLM tab's five runs (2026-10-01, the user's call).
         AssertTabEnds("\n \n" + MenuLayout.Heading("Connection", 120) + "\n▸ LLM URL                   (probe local ports)\n  LLM model                 (first listed)\n  LLM one local model       on\n" + MenuLayout.Heading("How it answers", 120) + "\n  LLM reasoning             none\n  LLM show thinking         on\n" + MenuLayout.Heading("Tools and limits", 120) + "\n  LLM offer tools           on\n  LLM max tool iterations   10000 round trips\n  LLM request timeout (s)   3600\n  LLM turn timeout (s)      21600\n" + MenuLayout.Heading("Context", 120) + "\n  LLM context length        (from the server)\n  LLM mid-turn usage        last-known\n  LLM max turns             auto\n  LLM auto compact (%)      90 %\n  LLM compact mode          summary\n  LLM compact keep recent   2 turns\n  LLM compact show summary  off\n  LLM tool compact mode     compact\n" + MenuLayout.Heading("Pictures and verbs", 120) + "\n  LLM max images            20 pictures\n  LLM max images (MB)       24 MB\n  LLM fun verbs             off\n", 120);
         // The Http tab (2026-10-10): the six rows only an OpenAI-compatible HTTP server reads, whole names too, in three runs.
@@ -5011,16 +5011,17 @@ public partial class SettingsMenuTests : IDisposable
 
         Assert.Equal(SettingsChanges.None, await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal(["webui", "tools", "skills", "commands", "usage", "memory", "prompts", "queue", "ask", "cmdlist", "police", "shell", "files", "image", "web"], _settings.Current.ToolbarItems);   // 📱 a default since 2026-10-17; 🪄 📊 🙋 since 2026-11-07
+        Assert.Equal(["profile", "themes", "webui", "tools", "skills", "commands", "sessions", "usage", "memory", "prompts", "queue", "cmdlist", "police", "shell", "files", "web", "advisors"], _settings.Current.ToolbarItems);   // the neon profile's defaults since 2026-11-23; 📱 a default since 2026-10-17; 🪄 📊 🙋 from 2026-11-07
         Assert.Contains("[x] ⚙️  Settings", Output);
         Assert.Contains("[ ] ⚙️  Settings", Output);
         Assert.Contains("[x] 📂  Working directory path", Output);
         Assert.Contains("[ ] 📂  Working directory path", Output);
         Assert.Contains("[ ] 🔌  MCP", Output);
-        Assert.Contains("[ ] 🪪  Profile", Output);
+        Assert.Contains("[x] 🪪  Profile", Output);   // a default since 2026-11-23
+        Assert.Contains("[ ] 🙋  Ask", Output);   // a default from 2026-11-07 until 2026-11-23
         Assert.DoesNotContain("📈  Performance", Output);   // retired (2026-10-14)
-        Assert.Contains("  · Tool bar: 16 of 49", Output);   // 13 of 49 until 🪄, 📊 and 🙋 became defaults and 🎭 went (2026-11-07); of 48 until 🪄 (2026-11-01); "Toolbar" until later on 2026-10-12; 12 until 📱 became a default, 2026-10-17
-        Assert.Contains("  · Tool bar: 15 of 49", Output);   // 12 of 49 until 2026-11-07; 11 until 📱 became a default, 2026-10-17
+        Assert.Contains("  · Tool bar: 18 of 49", Output);   // 16 of 49 until 2026-11-23; 13 of 49 until 🪄, 📊 and 🙋 became defaults and 🎭 went (2026-11-07); of 48 until 🪄 (2026-11-01); "Toolbar" until later on 2026-10-12; 12 until 📱 became a default, 2026-10-17
+        Assert.Contains("  · Tool bar: 17 of 49", Output);   // 15 of 49 until 2026-11-23; 12 of 49 until 2026-11-07; 11 until 📱 became a default, 2026-10-17
         pane.Dispose();
     }
 
@@ -5389,12 +5390,34 @@ public partial class SettingsMenuTests : IDisposable
     }
 
     /// <summary>
-    /// The Tool bar page's <c>bar:</c> reads what the row draws (2026-11-08, the review), not what is checked: 🔒 and 👮 alone under
-    /// <c>Shell command policy</c> <c>off</c> draw nothing, so it reads hidden; <c>h</c> still does what <c>/toolbar</c> does (the user's
-    /// pick), the two kept in the last list.
+    /// The Tool bar page's <c>bar:</c> reads what the row draws (2026-11-08, the review), not what is checked: an item checked but not
+    /// offered on this system (a Mac's 🧩 or 📅) draws nothing, so it reads hidden. 🔒 and 👮 alone under <c>Shell command policy</c>
+    /// <c>off</c> were the case until 2026-11-23, when they began to draw on the slab (the user's ask).
     /// </summary>
     [Fact]
-    public async Task OnThePane_ShowToolbar_TheBarButton_ReadsHidden_WhenOnlyTheLockAndTheOfficerAreChecked_UnderThePolicyOff()
+    public async Task OnThePane_ShowToolbar_TheBarButton_ReadsHidden_WhenNothingCheckedIsOfferedHere()
+    {
+        _settings.Update(d => d.ToolbarItems = ["tasks"]);
+        var (menu, pane) = PaneMenu();
+        menu.ToolbarItemHere = id => id != "tasks";
+        GoTo(SettingsTab.Toolbars);
+        Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.ToolbarItems));
+        Push(Keys.Enter);
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
+        Assert.DoesNotContain(SettingsMenu.ShowBarButton(true), Output);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// 🔒 and 👮 alone under <c>Shell command policy</c> <c>off</c> draw on the slab (2026-11-23, the user's ask), so <c>bar:</c> reads shown;
+    /// <c>h</c> still does what <c>/toolbar</c> does (the user's pick), the two kept in the last list.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ShowToolbar_TheBarButton_ReadsShown_ForTheLockAndTheOfficer_UnderThePolicyOff()
     {
         _settings.Update(d => { d.ToolbarItems = ["cmdlist", "police"]; d.ShellCommandPolicy = "off"; });
         var (menu, pane) = PaneMenu();
@@ -5406,8 +5429,7 @@ public partial class SettingsMenuTests : IDisposable
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Contains(SettingsMenu.ShowBarButton(false), Output);
-        Assert.DoesNotContain(SettingsMenu.ShowBarButton(true), Output);
+        Assert.Contains(SettingsMenu.ShowBarButton(true), Output);
         Assert.Empty(_settings.Current.ToolbarItems!);
         Assert.Equal(["cmdlist", "police"], _settings.Current.ToolbarLastItems);
         pane.Dispose();
@@ -5662,21 +5684,21 @@ public partial class SettingsMenuTests : IDisposable
         var (menu, pane) = OpenBarPage(SettingsField.ToolbarItems);
         var delete = new ConsoleKeyInfo('\0', ConsoleKey.Delete, shift: false, alt: false, control: false);
         Push(delete);                                   // settings (the first row) off
-        Push(Keys.Down, Keys.Char(' '));                // profile on
+        Push(Keys.Down, Keys.Char(' '));                // tools on (the default order's second since 2026-11-23)
         Push(Keys.Char(SettingsMenu.DividerKey));       // a divider after it
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Empty(_settings.Current.ToolbarItems!);
-        Assert.Equal(["profile", "usage"], _settings.Current.ToolbarLastItems);
+        Assert.Equal(["tools", "usage"], _settings.Current.ToolbarLastItems);
         Assert.NotNull(_settings.Current.ToolbarOrder);   // the divider made the order its own
         pane.Dispose();
 
         (menu, pane) = OpenBarPage(SettingsField.ToolbarItems);
         Push(Keys.Char(SettingsMenu.ShowBarKey), Keys.Escape, Keys.Escape);
         await menu.ShowAsync(CancellationToken.None);
-        Assert.Equal(["profile", "usage"], _settings.Current.ToolbarItems);
+        Assert.Equal(["tools", "usage"], _settings.Current.ToolbarItems);
         Assert.NotNull(_settings.Current.ToolbarOrder);
         pane.Dispose();
     }
@@ -5735,7 +5757,7 @@ public partial class SettingsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Null(_settings.Current.ToolbarItems);
-        Assert.Contains("  · Tool bar: 17 of 49", Output);   // 14 of 49 until 🪄, 📊 and 🙋 became defaults and 🎭 went (2026-11-07); of 48 until 🪄 (2026-11-01)
+        Assert.Contains("  · Tool bar: 19 of 49", Output);   // 17 of 49 until 2026-11-23; 14 of 49 until 🪄, 📊 and 🙋 became defaults and 🎭 went (2026-11-07); of 48 until 🪄 (2026-11-01)
         pane.Dispose();
     }
 

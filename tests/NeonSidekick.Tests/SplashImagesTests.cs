@@ -20,6 +20,37 @@ public class SplashImagesTests
         Assert.Contains("splash/splash_01.png", names);   // the zero-padded names since 2026-09-18
     }
 
+    /// <summary>
+    /// The shared copy (2026-11-23: set_splash_image's and the picture menus'): its own name or the one given, <c>-2</c> on a clash, never
+    /// over a file; refused for no picture or one already in the folder; the folder made.
+    /// </summary>
+    [Fact]
+    public void Add_CopiesIntoTheFolder_NeverOverAFile()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        string folder = Path.Combine(dir, "splash");
+        string picture = Path.Combine(dir, "Cat.png");
+        try
+        {
+            Directory.CreateDirectory(dir);
+            File.WriteAllBytes(picture, Fakes.FakeHeadlessBrowser.TinyPng);
+            File.WriteAllText(Path.Combine(dir, "notes.txt"), "x");
+
+            var first = SplashImages.Add(folder, picture);
+            Assert.Equal((SplashAddResult.Added, Path.Combine(folder, "Cat.png"), true), (first.Result, first.Target, first.Only));
+            var second = SplashImages.Add(folder, picture);
+            Assert.Equal((SplashAddResult.Added, Path.Combine(folder, "Cat-2.png"), false), (second.Result, second.Target, second.Only));
+            Assert.Equal(Path.Combine(folder, "hero.png"), SplashImages.Add(folder, picture, "hero").Target);
+            Assert.Equal(SplashAddResult.Already, SplashImages.Add(folder, first.Target).Result);
+            Assert.Equal(SplashAddResult.NotAnImage, SplashImages.Add(folder, Path.Combine(dir, "notes.txt")).Result);
+            Assert.Equal(3, Directory.GetFiles(folder).Length);
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public void FromDirectory_IsTheFoldersPictures_InNameOrder_LoadedFromDisk_OrNull()
     {

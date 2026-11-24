@@ -338,7 +338,74 @@ public static partial class UsageText
     public const string SkillsWordNote = "the skills the next turn offers";
 
     /// <summary>The refusal of any other argument (the three words from <c>/sys</c> since 2026-11-07). Pinned.</summary>
-    public const string UsageError = "/usage takes context, prompt, tools, skills or models, or nothing for the pane.";
+    public const string UsageError = "/usage takes context, prompt, tools, skills, models or sysprompt, or nothing for the pane.";
+
+    // ── /usage sysprompt (2026-11-23, the user's ask: the word theirs, over "export") ─────────────
+
+    /// <summary>The word that writes the next request to a Markdown file. Pinned.</summary>
+    public const string SyspromptWord = "sysprompt";
+
+    /// <summary>The argument list's note beside <see cref="SyspromptWord"/>.</summary>
+    public const string SyspromptWordNote = "the next request's context to a Markdown file";
+
+    /// <summary>The argument list's note beside <c>sysprompt to=</c>, worded as <c>/pdf</c>'s.</summary>
+    public const string SyspromptToNote = "to=notes/context.md, or a folder";
+
+    /// <summary>Anything but the bare word or one <c>to=</c> after it.</summary>
+    public const string SyspromptUsage = "/usage sysprompt takes nothing, or to=<file or folder>.";
+
+    /// <summary>Under the Claude Code server, worded as <see cref="ClaudeCodeContext"/>.</summary>
+    public const string ExportClaudeCode = "The Claude Code server builds its own context, so there is no request here to write out.";
+
+    /// <summary>The file's extension.</summary>
+    public const string ExportExtension = ".md";
+
+    /// <summary>Whether <c>/usage</c>'s first word is <see cref="SyspromptWord"/> (any case, the whole word): the mid-turn class and the dispatch.</summary>
+    public static bool IsSysprompt(string args) =>
+        Printing.PrintCommand.Words(args ?? "").FirstOrDefault() is { } first && string.Equals(first, SyspromptWord, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <c>/usage sysprompt [to=&lt;path&gt;]</c>'s words (2026-11-23), split as <c>/pdf</c> splits them (a quoted path whole): not the word at all,
+    /// or the word with an optional non-empty <c>to=</c>; a second <c>to=</c>, an empty one or any other word is <see cref="SyspromptUsage"/>. Pure.
+    /// </summary>
+    public static (bool Is, string? To, string? Error) ParseSysprompt(string args)
+    {
+        var words = Printing.PrintCommand.Words(args ?? "").ToList();
+        if (words.Count == 0 || !string.Equals(words[0], SyspromptWord, StringComparison.OrdinalIgnoreCase))
+        {
+            return (false, null, null);
+        }
+
+        string? to = null;
+        foreach (string word in words.Skip(1))
+        {
+            if (to is not null || !word.StartsWith(Pdf.PdfText.ToWord, StringComparison.OrdinalIgnoreCase) || word.Length == Pdf.PdfText.ToWord.Length)
+            {
+                return (true, null, SyspromptUsage);
+            }
+
+            to = word[Pdf.PdfText.ToWord.Length..];
+        }
+
+        return (true, to, null);
+    }
+
+    /// <summary>
+    /// The file's name (2026-11-23, the user's): <c>neon-sysprompt-20261123-194207-318.md</c>, to the millisecond, then <c>-2</c>, <c>-3</c>… before
+    /// the extension for <paramref name="n"/> past 1. Pinned.
+    /// </summary>
+    public static string ExportFileName(DateTimeOffset at, int n) =>
+        "neon-sysprompt-" + at.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture) + (n > 1 ? "-" + n.ToString(CultureInfo.InvariantCulture) : "") + ExportExtension;
+
+    /// <summary>The notice after the write.</summary>
+    public static string Exported(string shownPath, int tools, int messages) =>
+        $"(wrote the next request's context to {shownPath}: the system message, {Plural(tools, "tool", "tools")} and {Plural(messages, "message", "messages")}. It holds the whole conversation, so mind it before a commit.)";
+
+    /// <summary>A <c>to=</c> naming a file already there: never written over.</summary>
+    public static string ExportExists(string shownPath) => $"{shownPath} is already there; /usage sysprompt never writes over a file.";
+
+    /// <summary>A write that failed (locked, no access).</summary>
+    public static string ExportFailed(string shownPath, string reason) => $"Could not write {shownPath}: {reason}";
 
     /// <summary>The tab's one line on the Claude Code server, which keeps the conversation itself. Pinned.</summary>
     public const string ClaudeCodeContext = "The Claude Code server manages its own context, so there is nothing here to break down.";

@@ -123,17 +123,17 @@ public static class DockerServerText
 
     /// <summary>A container that did not answer in time; with <paramref name="sideBySide"/> (2026-11-11) <see cref="SideBySideHint"/> as its own sentence at the end.</summary>
     public static string NotReady(string name, int seconds, bool sideBySide) =>
-        $"{name} did not answer /v1/models within {seconds.ToString(CultureInfo.InvariantCulture)} s; it is left running (raise Docker server ready timeout if its model needs longer)."
+        $"{name} did not answer /v1/models within {seconds.ToString(CultureInfo.InvariantCulture)} s; it is left running (raise Docker container ready timeout if its model needs longer)."
         + (sideBySide ? " " + char.ToUpperInvariant(SideBySideHint[0]) + SideBySideHint[1..] + "." : "");
 
     /// <summary>
-    /// What a failed load says with <c>LLM one local model</c> or <c>Docker server one at a time</c> off (2026-11-11, the review): the models
+    /// What a failed load says with <c>LLM one local model</c> or <c>Docker containers one at a time</c> off (2026-11-11, the review): the models
     /// this app keeps running beside it may be what left too little memory, and the ways to free it.
     /// </summary>
-    public const string SideBySideHint = "other models this app keeps running may hold the GPU's memory: LLM one local model, Docker server one at a time, Ctrl+Alt+X";
+    public const string SideBySideHint = "other models this app keeps running may hold the GPU's memory: LLM one local model, Docker containers one at a time, Ctrl+Alt+X";
 
     /// <summary>
-    /// A side-by-side start refused before the engine's raw bind error (2026-11-11, the review: with <c>Docker server one at a time</c> off,
+    /// A side-by-side start refused before the engine's raw bind error (2026-11-11, the review: with <c>Docker containers one at a time</c> off,
     /// two containers on one host port): <paramref name="other"/> already publishes <paramref name="port"/>.
     /// </summary>
     public static string PortTaken(string name, int port, string other) =>

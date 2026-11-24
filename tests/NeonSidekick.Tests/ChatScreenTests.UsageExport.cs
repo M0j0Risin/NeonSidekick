@@ -1,0 +1,77 @@
+using NeonSidekick.App;
+using NeonSidekick.Files;
+using NeonSidekick.UI;
+
+namespace NeonSidekick.Tests;
+
+/// <summary>
+/// <c>/usage sysprompt [to=&lt;path&gt;]</c> (2026-11-23, the user's ask): the next request written to a Markdown file in the working folder or at
+/// <c>to=</c>, never over a file and never outside the sandbox; it waits for a reply under way; the completion offers the word and its <c>to=</c>.
+/// </summary>
+public partial class ChatScreenTests
+{
+    [Fact]
+    public async Task UsageSysprompt_WritesTheNextRequest_InTheWorkingFolder_OrAtTo_NeverOverAFile()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string folder = Path.Combine(_dir, "work");
+        Directory.CreateDirectory(Path.Combine(folder, "notes"));
+        _settings.Update(d => d.WorkingDirectory = folder);
+        string outside = Path.Combine(_dir, "outside.md");
+        _chat.EnqueueText("Hello there.");
+        PushLine("hi");
+        PushLine("/usage sysprompt");
+        PushLine("/usage sysprompt");
+        PushLine("/usage sysprompt to=notes/");
+        PushLine("/usage sysprompt to=notes");
+        PushLine("/usage sysprompt to=ctx");
+        PushLine("/usage sysprompt to=ctx.md");
+        PushLine("/usage sysprompt to=out.pdf");
+        PushLine("/usage sysprompt to=.neon/x.md");
+        PushLine("/usage sysprompt \"to=" + outside + "\"");
+        PushLine("/usage sysprompt foo");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var now = _time.GetLocalNow();
+        string first = Path.Combine(folder, UsageText.ExportFileName(now, 1));
+        Assert.True(File.Exists(first), output);
+        Assert.True(File.Exists(Path.Combine(folder, UsageText.ExportFileName(now, 2))));   // the same instant: -2, never over the first
+        Assert.True(File.Exists(Path.Combine(folder, "notes", UsageText.ExportFileName(now, 1))));
+        Assert.True(File.Exists(Path.Combine(folder, "notes", UsageText.ExportFileName(now, 2))));   // an existing folder named bare
+        Assert.True(File.Exists(Path.Combine(folder, "ctx.md")));
+        string text = File.ReadAllText(first);
+        Assert.StartsWith(UsageExport.Heading + "\n", text);
+        Assert.Matches("### \\d+ · user\n```text\nhi\n```", text);   // after the app's own opening calls
+        Assert.Matches("### \\d+ · assistant\n```text\nHello there.\n```", text);
+        Assert.Contains("## System message (~", text);
+        Assert.DoesNotContain("\r", text);
+        Assert.Contains("wrote the next request's context to " + UsageText.ExportFileName(now, 1), output);
+        Assert.Contains(UsageText.ExportExists("ctx.md"), output);
+        Assert.Contains(OutputNames.Refusal("out.pdf", UsageText.ExportExtension, _ => false)!, output);
+        Assert.False(File.Exists(Path.Combine(folder, ".neon", "x.md")));
+        Assert.False(File.Exists(outside));
+        Assert.Contains(UsageText.SyspromptUsage, output);
+        Assert.Equal(5, Directory.GetFiles(folder, "*.md", SearchOption.AllDirectories).Length);   // two here, two in notes, ctx.md once
+    }
+
+    [Fact]
+    public void UsageSysprompt_WaitsForAReply_ItsTabsStayPanes()
+    {
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Usage, "sysprompt"));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Usage, "SYSPROMPT to=x"));
+        Assert.Equal(ChatScreen.MidTurnPolicy(SlashCommand.Usage, hasArgs: true), ChatScreen.MidTurnPolicy(SlashCommand.Usage, "prompt"));
+        Assert.Equal(ChatScreen.MidTurnPolicy(SlashCommand.Usage, hasArgs: false), ChatScreen.MidTurnPolicy(SlashCommand.Usage, ""));
+        Assert.Equal("/usage takes context, prompt, tools, skills, models or sysprompt, or nothing for the pane.", UsageText.UsageError);
+    }
+
+    [Fact]
+    public void UsageSysprompt_TheCompletion_OffersTheWord_ThenItsTo()
+    {
+        Assert.Contains(new CompletionItem(UsageText.SyspromptWord, UsageText.SyspromptWordNote), ChatScreen.ArgumentItems("/usage", "sys", Sources()));
+        Assert.Equal([new CompletionItem("sysprompt to=", UsageText.SyspromptToNote)], ChatScreen.ArgumentItems("/usage", "sysprompt ", Sources()));
+        Assert.Empty(ChatScreen.ArgumentItems("/usage", "sysprompt to=x", Sources()));
+        Assert.Equal([new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote)], ChatScreen.ArgumentItems("/usage", "pro", Sources()));
+    }
+}

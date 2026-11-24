@@ -18,7 +18,10 @@ public partial class SettingsMenuTests
         Assert.Equal("Docker", SettingsMenu.TabTitles[tab]);
         Assert.Equal("Embedded", SettingsMenu.TabTitles[tab - 1]);
         Assert.Equal([SettingsField.DockerServers, SettingsField.DockerServerContainers, SettingsField.DockerServerMatchWords, SettingsField.DockerServerStopTimeoutSeconds, SettingsField.DockerServerPostStopDelaySeconds, SettingsField.DockerServerReadyTimeoutSeconds, SettingsField.DockerServerOneAtATime, SettingsField.DockerServerStopOnExit], SettingsMenu.TabFields[tab]);
-        Assert.Equal(["Docker servers enabled", "Docker server containers", "Docker server match words", "Docker server stop timeout (s)", "Docker server post-stop delay (s)", "Docker server ready timeout (s)", "Docker server one at a time", "Docker server stop on exit"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));
+        Assert.Equal(["Docker servers enabled", "Docker server containers", "Docker server match words", "Docker container stop timeout (s)", "Docker container post-stop delay (s)", "Docker container ready timeout (s)", "Docker containers one at a time", "Docker containers stop on exit"], SettingsMenu.TabFields[tab].Select(SettingsMenu.FieldName));   // "Docker server …" until 2026-11-23 (the user's ask)
+        // On the tab the five read Container… (the full names keep "Docker " for notices and help).
+        Assert.Equal(["Container stop timeout (s)", "Container post-stop delay (s)", "Container ready timeout (s)", "Containers one at a time", "Containers stop on exit"],
+            SettingsMenu.TabFields[tab].Skip(3).Select(f => SettingsMenu.RowName(f, SettingsMenu.TabTitles[tab])));
         Assert.True(SettingsMenu.IsLlmField(SettingsField.DockerServers));
         Assert.All(SettingsMenu.TabFields[tab].Skip(1), f => Assert.False(SettingsMenu.IsLlmField(f), f.ToString()));   // read at the next switch
         Assert.True(SettingsMenu.IsToggle(SettingsField.DockerServers) && SettingsMenu.IsToggle(SettingsField.DockerServerOneAtATime) && SettingsMenu.IsToggle(SettingsField.DockerServerStopOnExit));
@@ -69,8 +72,8 @@ public partial class SettingsMenuTests
         Assert.Equal(900, _settings.Current.DockerServerReadyTimeoutSeconds);
         Assert.False(_settings.Current.DockerServerOneAtATime);
         Assert.True(_settings.Current.DockerServerStopOnExit);
-        Assert.Contains("Docker server stop timeout (s) " + SettingsMenu.DockerServerStopTimeoutRangeError + "; keeping 30.", Output);
-        Assert.Contains("Docker server ready timeout (s) " + SettingsMenu.DockerServerReadyTimeoutRangeError + "; keeping 900.", Output);
+        Assert.Contains("Docker container stop timeout (s) " + SettingsMenu.DockerServerStopTimeoutRangeError + "; keeping 30.", Output);
+        Assert.Contains("Docker container ready timeout (s) " + SettingsMenu.DockerServerReadyTimeoutRangeError + "; keeping 900.", Output);
         pane.Dispose();
     }
 

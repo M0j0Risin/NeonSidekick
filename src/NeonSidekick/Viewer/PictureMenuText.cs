@@ -34,6 +34,9 @@ public static class PictureMenuText
     public const string ShowInFinder = "Show in Finder";
     public const string Attach = "Attach to the chat";
     public const string Print = "Print";
+
+    /// <summary>The row that copies the picture into the profile's splash images (2026-11-23, the user's ask).</summary>
+    public const string AddToSplash = "Add to the splash images";
     public const string Delete = "Delete";
 
     /// <summary>A Fit preset's row: <c>Fit in 1920 px</c>.</summary>
@@ -64,4 +67,20 @@ public static class PictureMenuText
 
     /// <summary>The chat's line when the clipboard was busy.</summary>
     public const string CopyFailed = "Could not copy the path: the clipboard is busy";
+
+    /// <summary>
+    /// The chat's line after Add to the splash images (2026-11-23): the copy's name; the only picture there replaces the built-in ones; and
+    /// while <c>Welcome splash</c> is <c>robot</c>, when they show.
+    /// </summary>
+    public static string AddedToSplash(string name, bool only, bool robot) =>
+        $"(🖼️ added {name} to the splash images"
+        + (only ? "; it's the only one, so it replaces the built-in pictures" : "")
+        + (robot ? "; they show while Welcome splash is image" : "")
+        + ")";
+
+    /// <summary>A picture already in the splash folder (2026-11-23).</summary>
+    public static string SplashAlready(string name) => $"{name} is already one of the splash images";
+
+    /// <summary>A copy into the splash folder that failed on disk (2026-11-23).</summary>
+    public static string SplashFailed(string name, string detail) => $"Could not add {name} to the splash images: {Diagnostics.LogText.Excerpt(detail)}";
 }

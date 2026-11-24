@@ -1376,6 +1376,28 @@ public class AppSettingsTests : IDisposable
         Assert.Null(SplashImages.FromDirectory(settings.ProfileSplashDirectory));   // made, but empty: the embedded set is still in force
     }
 
+    /// <summary>
+    /// The ComfyUI workflows in each configs folder (2026-11-23, the user's call, no migration): the profile's made at a load, the old
+    /// top-level comfy folders neither made nor read.
+    /// </summary>
+    [Fact]
+    public void ComfyFolders_SitInEachConfigsFolder()
+    {
+        using var settings = new AppSettings(_dir);
+        string profile = Profiles.Directory(_dir, Profiles.DefaultName);
+
+        Assert.Equal(Path.Combine(profile, "configs", "comfy"), settings.ProfileComfyDirectory);
+        Assert.Equal(Path.Combine(_dir, "configs", "comfy"), settings.GlobalComfyDirectory);
+        Assert.True(Directory.Exists(settings.ProfileComfyDirectory));
+        Assert.False(Directory.Exists(Path.Combine(profile, "comfy")));
+        Assert.Equal(settings.ProfileComfyDirectory, AppSettings.ProfileComfyDirectoryOf(profile));
+        Assert.Equal(settings.GlobalComfyDirectory, AppSettings.GlobalComfyDirectoryOf(_dir));
+
+        Directory.CreateDirectory(Path.Combine(_dir, "comfy"));
+        File.WriteAllText(Path.Combine(_dir, "comfy", "old.json"), "{\"1\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}}}");
+        Assert.Empty(new NeonSidekick.Comfy.ComfyWorkflowCatalog(() => [settings.ProfileComfyDirectory, settings.GlobalComfyDirectory]).Workflows);
+    }
+
     [Fact]
     public async Task SwitchProfile_CreatesTheNewProfilesSplashFolder_NeverAnothers()
     {

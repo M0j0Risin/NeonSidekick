@@ -374,8 +374,8 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// A double-click on the strip's 🖼️ while a picture renders (2026-09-28, the user's ask): the picture is cancelled — its
-    /// prompt deleted from ComfyUI's queue — the chat goes on, and the notice says so; nothing opens /settings.
+    /// A double-click on the 🖼️ while a picture renders (2026-09-28, the user's ask; on the lower rule since 2026-11-23): the picture is
+    /// cancelled — its prompt deleted from ComfyUI's queue — the chat goes on, and the notice says so; nothing opens /settings.
     /// </summary>
     [Fact]
     public async Task BotChat_Async_ADoubleClickOnTheRenderingGlyph_CancelsThePicture_AndTheChatGoesOn()
@@ -396,12 +396,13 @@ public partial class ChatScreenTests
         {
             if (_chat.Requests.Count == 3 && i == 0)
             {
-                // Ada answers while the picture renders: the strip's glyph double-clicked on the busy row.
+                // Ada answers while the picture renders: the lower rule's 🖼️ double-clicked under the reply (2026-11-23; the strip's until then),
+                // the space after it at the rule's right edge, as the only item there.
                 await polled.Task.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
                 _time.Advance(ScreenPane.Tick);
-                int glyph = BusyRows.ColumnOf(Output, "🖼");   // the strip's only glyph, after the spinner's label (2026-10-13: the busy row follows the sides)
-                Scripted().PushClick(glyph, 102);
-                Scripted().PushClick(glyph + 1, 102);
+                Assert.Contains(" 🖼️ ─\n", Output);
+                Scripted().PushClick(238, 101);
+                Scripted().PushClick(238, 101);
                 for (int tries = 0; tries < 500 && !drained; tries++)
                 {
                     await Task.Delay(10, CancellationToken.None);

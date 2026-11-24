@@ -789,7 +789,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary><see cref="InstalledComfyWorkflows"/> with the files skipped, for the checklists' prune: a workflow that failed to load is still there (2026-10-04).</summary>
     private static (IReadOnlyList<ComfyWorkflow> Workflows, IReadOnlyList<ComfyWorkflowProblem> Problems) ScanComfyWorkflows(string profileDirectory) =>
-        new ComfyWorkflowCatalog(() => [Path.Combine(profileDirectory, ComfyWorkflowCatalog.DirectoryName), Path.Combine(Profiles.HomeOf(profileDirectory), ComfyWorkflowCatalog.DirectoryName)]).Scan();
+        new ComfyWorkflowCatalog(() => [AppSettings.ProfileComfyDirectoryOf(profileDirectory), AppSettings.GlobalComfyDirectoryOf(Profiles.HomeOf(profileDirectory))]).Scan();
 
     /// <summary>The <c>ComfyUI workflows offered</c> value: <c>K of N</c>, or <c>none of N</c> — before any is ticked too (2026-10-01: null offers none). Pinned.</summary>
     public static string ComfyOfferedValue(IReadOnlyList<string>? offered, IReadOnlyList<ComfyWorkflow> installed)

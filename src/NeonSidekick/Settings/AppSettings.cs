@@ -156,11 +156,20 @@ public sealed class AppSettings : IDisposable
     /// </summary>
     public string ProfileImagesDirectory => Path.Combine(ProfileDirectory, ImagesFolderName);
 
-    /// <summary>The loaded profile's ComfyUI workflows folder: <c>comfy</c> under <see cref="ProfileDirectory"/> (2026-09-24), read ahead of <see cref="GlobalComfyDirectory"/> (<see cref="Comfy.ComfyWorkflowCatalog"/>).</summary>
-    public string ProfileComfyDirectory => Path.Combine(ProfileDirectory, Comfy.ComfyWorkflowCatalog.DirectoryName);
+    /// <summary>
+    /// The loaded profile's ComfyUI workflows folder: <c>configs\comfy</c> under <see cref="ProfileDirectory"/> (2026-11-23, the user's call, no migration:
+    /// <c>comfy</c> at the profile's top from 2026-09-24, no longer read), read ahead of <see cref="GlobalComfyDirectory"/> (<see cref="Comfy.ComfyWorkflowCatalog"/>).
+    /// </summary>
+    public string ProfileComfyDirectory => ProfileComfyDirectoryOf(ProfileDirectory);
 
-    /// <summary>The global ComfyUI workflows folder: <c>comfy</c> under the home, every profile's (2026-09-24).</summary>
-    public string GlobalComfyDirectory => Path.Combine(StorageDirectory, Comfy.ComfyWorkflowCatalog.DirectoryName);
+    /// <summary>The global ComfyUI workflows folder: <c>configs\comfy</c> under the home, every profile's (2026-11-23, the user's call, no migration; <c>comfy</c> at the home's top from 2026-09-24).</summary>
+    public string GlobalComfyDirectory => GlobalComfyDirectoryOf(StorageDirectory);
+
+    /// <summary><see cref="ProfileComfyDirectory"/> for any profile folder (2026-11-23): the wizard's catalog reads it too, so the two can't drift.</summary>
+    public static string ProfileComfyDirectoryOf(string profileDirectory) => Path.Combine(Profiles.ConfigsDirectory(profileDirectory), Comfy.ComfyWorkflowCatalog.DirectoryName);
+
+    /// <summary><see cref="GlobalComfyDirectory"/> for any home (2026-11-23).</summary>
+    public static string GlobalComfyDirectoryOf(string home) => Path.Combine(Profiles.ConfigsDirectory(home), Comfy.ComfyWorkflowCatalog.DirectoryName);
 
     /// <summary>The loaded profile's custom commands folder: <c>commands</c> under <see cref="ProfileDirectory"/> (2026-10-30, the custom commands plan), read ahead of <see cref="GlobalCustomCommandsDirectory"/> (<see cref="CustomCommands.CustomCommandCatalog"/>).</summary>
     public string ProfileCustomCommandsDirectory => Path.Combine(ProfileDirectory, CustomCommands.CustomCommandRoots.DirectoryName);

@@ -1031,10 +1031,31 @@ public class ProjectSkillsTests : IDisposable
 
         var rows = SkillsText.ProjectRows(facts);
 
-        Assert.Equal([ProjectRowKind.Heading, ProjectRowKind.Trust, ProjectRowKind.Pending], rows.Select(r => r.Kind));
+        // The heading, its trust row, the bare rule (a heading too), then the skills (2026-11-23).
+        Assert.Equal([ProjectRowKind.Heading, ProjectRowKind.Trust, ProjectRowKind.Heading, ProjectRowKind.Pending], rows.Select(r => r.Kind));
+        Assert.Equal(UI.SectionRule.Bare, rows[2].Markup);
         Assert.All(rows, r => _ = new Markup(r.Markup));   // Spectre would throw on a stray [
         Assert.Contains(SkillScope.Project, SkillsText.ScopeTabs(facts));
         Assert.Equal(1, SkillsText.ScopeCount(facts, SkillScope.Project));
+    }
+
+    /// <summary>A trusted folder's rows (2026-11-23, hand check 1): the heading, untrust under it, a bare rule, then its skills.</summary>
+    [Fact]
+    public void ProjectRows_ATrustedFolder_UntrustFirst_ThenARule_ThenItsSkills()
+    {
+        string odd = Path.Combine(_dir, "trusted");
+        Directory.CreateDirectory(Path.Combine(odd, ".git"));
+        PutProject(odd, "deploy", Skill("deploy", "Ships it."));
+        _working = odd;
+        Scan();
+        TrustFolder(odd);
+        Scan();
+        var facts = new SkillsFacts(true, _catalog.All, _catalog.Shadowed, _catalog.Problems, _roots, Pending: _catalog.ProjectPending, Folders: _catalog.ProjectFolders, WorkingFolder: odd, RepoRoot: odd);
+
+        var rows = SkillsText.ProjectRows(facts);
+
+        Assert.Equal([ProjectRowKind.Heading, ProjectRowKind.Untrust, ProjectRowKind.Heading, ProjectRowKind.Skill], rows.Select(r => r.Kind));
+        Assert.Equal(UI.SectionRule.Bare, rows[2].Markup);
     }
 
     [Fact]

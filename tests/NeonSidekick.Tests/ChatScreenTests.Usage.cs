@@ -178,9 +178,10 @@ public partial class ChatScreenTests
             new CompletionItem(UsageText.ToolsWord, UsageText.ToolsWordNote),
             new CompletionItem(UsageText.SkillsWord, UsageText.SkillsWordNote),
             new CompletionItem(UsageText.ModelsWord, UsageText.ModelsWordNote),   // 2026-11-21
+            new CompletionItem(UsageText.SyspromptWord, UsageText.SyspromptWordNote),   // 2026-11-23
         ], ChatScreen.ArgumentItems("/usage", "", sources));
         Assert.Single(ChatScreen.ArgumentItems("/usage", "co", sources));
-        Assert.Equal(UsageText.SkillsWord, Assert.Single(ChatScreen.ArgumentItems("/usage", "s", sources)).Text);
+        Assert.Equal([UsageText.SkillsWord, UsageText.SyspromptWord], ChatScreen.ArgumentItems("/usage", "s", sources).Select(i => i.Text));
         Assert.Empty(ChatScreen.ArgumentItems("/usage", "x", sources));
     }
 }

@@ -55,7 +55,7 @@ internal sealed class FakeDockerServers : IDockerServers
         if (effective.DockerServerOneAtATime)
         {
             stoppedNow.AddRange(DockerEndpoint.ChosenNames(effective).Where(other => other != name && IsRunning(other)));
-            // The others stop first only with Docker server one at a time on (2026-11-10), as the host's switch.
+            // The others stop first only with Docker containers one at a time on (2026-11-10), as the host's switch.
             _switched.RemoveWhere(other => DockerEndpoint.ChosenNames(effective).Contains(other, StringComparer.Ordinal));
             foreach (string other in DockerEndpoint.ChosenNames(effective))
             {

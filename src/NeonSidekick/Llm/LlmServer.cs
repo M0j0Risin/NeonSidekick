@@ -11,6 +11,13 @@ namespace NeonSidekick.Llm;
 /// <param name="Result">The probe's answer; <see cref="ProbeResult.Exists"/> is true for a discovered server.</param>
 public sealed record LlmServer(Uri BaseUrl, string Name, ProbeResult Result)
 {
+    /// <summary>
+    /// The loopback ports a running Docker container's row answers on (2026-11-23, hand check 4: an advisor saved with the container's
+    /// <c>http://localhost:30000</c> opened Change the server on the first row, since the scan drops that loopback row for the container's
+    /// own). Empty for every other row. The same ports <c>LlmSession.WithoutDockerPorts</c> drops, so the two can't disagree.
+    /// </summary>
+    public IReadOnlyList<int> HostPorts { get; init; } = [];
+
     /// <summary>What lives on each candidate port by convention.</summary>
     public static readonly IReadOnlyDictionary<int, string> PortNames = new Dictionary<int, string>
     {

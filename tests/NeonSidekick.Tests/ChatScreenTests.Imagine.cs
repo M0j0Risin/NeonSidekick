@@ -154,7 +154,7 @@ public partial class ChatScreenTests
             File.Exists(Path.Combine(_settings.ProfileImagesDirectory, "comfy", $"pony-{seed}.png"));
     }
 
-    /// <summary>The strip's 🖼️ double-clicked at the idle line: the generation behind the line is cancelled with one notice, and no picture comes.</summary>
+    /// <summary>The lower rule's 🖼️ (the strip's until 2026-11-23) double-clicked at the idle line: the generation behind the line is cancelled with one notice, and no picture comes.</summary>
     [Fact]
     public async Task Imagine_BehindTheLine_ADoubleClickOnTheStrip_CancelsIt_WithOneNotice()
     {
@@ -176,8 +176,8 @@ public partial class ChatScreenTests
                 case 1 when Output.Contains(ComfyText.ImagineInBackground, StringComparison.Ordinal):
                     step++;
                     _time.Advance(ScreenPane.Tick);
-                    input.PushClick(0, 102);                  // 🖼️ at 0–1: speech is off
-                    input.PushClick(1, 102);
+                    input.PushClick(238, 101);                // 🖼️ alone on the lower rule: the space after it at the right edge
+                    input.PushClick(238, 101);
                     break;
                 case 2 when Output.Contains("· " + ComfyText.Drained(1), StringComparison.Ordinal):
                     step++;

@@ -60,12 +60,22 @@ internal sealed class SectionRule : IRenderable
         return head;
     }
 
+    /// <summary>
+    /// A rule with no label (2026-11-23, the user's ask: a plain rule between a page's actions and its rows, the trust question's, the
+    /// project tab's, a skill's page, an advisor's page and <c>/usage</c> › Models): the <see cref="Lead"/> alone, so the renderable
+    /// draws one unbroken rule to the edge, with no space after the lead. Built at each call, in the theme in force.
+    /// </summary>
+    public static string Bare => $"[{Theme.PaneRule.ToMarkup()}]{Lead}[/]";
+
     public Measurement Measure(RenderOptions options, int maxWidth) => new(Math.Min(1, maxWidth), maxWidth);
 
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
     {
         var segments = ((IRenderable)_head).Render(options, maxWidth).ToList();
-        int fill = maxWidth - FittedMarkup.RowCells(segments) - 1;
+        // A bare rule (Bare: rule glyphs alone) runs on with no space after its lead.
+        bool bare = segments.All(s => s.IsLineBreak || s.Text.All(c => c == ScreenPane.RuleGlyph));
+        int gap = bare ? 0 : 1;
+        int fill = maxWidth - FittedMarkup.RowCells(segments) - gap;
         if (_stops is { } stops)
         {
             // Gradient rules (2026-11-01): the lead's two glyphs and the fill shade along the theme's quiet gradient across the width the
@@ -75,8 +85,12 @@ internal sealed class SectionRule : IRenderable
 
         if (fill > 0)
         {
-            int column = FittedMarkup.RowCells(segments) + 1;
-            segments.Add(new Segment(" "));
+            int column = FittedMarkup.RowCells(segments) + gap;
+            if (!bare)
+            {
+                segments.Add(new Segment(" "));
+            }
+
             if (_stops is { } fillStops)
             {
                 foreach (var (text, color) in Theme.RuleRuns(fill, fillStops, column, maxWidth, ScreenPane.RuleGlyph))

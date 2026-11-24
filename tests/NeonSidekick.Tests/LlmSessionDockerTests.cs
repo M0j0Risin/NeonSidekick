@@ -166,7 +166,7 @@ public sealed class LlmSessionDockerTests
         using var session = Session();
         await session.ConnectAsync(Docker("sglang_a"), NoPhase, CancellationToken.None);
 
-        // Profile B chooses vllm_c alone: its own switch would never stop sglang_a. Docker server one at a time on: the switch keeps
+        // Profile B chooses vllm_c alone: its own switch would never stop sglang_a. Docker containers one at a time on: the switch keeps
         // nothing (2026-11-14, the review's #30), starting a container stops the others.
         session.ProfileSwitched();
         var other = new AppSettingsData { DockerServers = true, DockerServerContainers = ["vllm_c"], LlmUrl = "docker:vllm_c", LlmScanMode = "disabled" };
@@ -865,7 +865,7 @@ public sealed class LlmSessionDockerTests
         Assert.True(_docker.IsRunning("sglang_a"));
         Assert.Equal("sglang_a", session.DockerInUse);
 
-        // Container to container is Docker server one at a time's, whatever this one says.
+        // Container to container is Docker containers one at a time's, whatever this one says.
         await session.ConnectAsync(OneLocalOff(Docker("vllm_b")), NoPhase, CancellationToken.None);
         Assert.Equal(["switch sglang_a", "switch vllm_b"], _docker.Calls);
         Assert.False(_docker.IsRunning("sglang_a"));
@@ -1008,7 +1008,7 @@ public sealed class LlmSessionDockerTests
         Assert.Empty(session.DockerRunning);
     }
 
-    /// <summary>P1's sglang_a running, both LLM one local model and Docker server one at a time off.</summary>
+    /// <summary>P1's sglang_a running, both LLM one local model and Docker containers one at a time off.</summary>
     private async Task<LlmSession> BothOffRunningAsync(bool claudeCode = true)
     {
         var session = Session(claudeCode: claudeCode);
@@ -1090,7 +1090,7 @@ public sealed class LlmSessionDockerTests
         return settings;
     }
 
-    /// <summary>sglang_a and then vllm_b switched to with Docker server one at a time off: both run, vllm_b in use.</summary>
+    /// <summary>sglang_a and then vllm_b switched to with Docker containers one at a time off: both run, vllm_b in use.</summary>
     private async Task<LlmSession> TwoRunningAsync(FakeEmbeddedLlm? embedded = null, bool claudeCode = false)
     {
         _docker.List = new DockerServerList([Running("sglang_a", 30000), Running("vllm_b", 8000)], [], null);

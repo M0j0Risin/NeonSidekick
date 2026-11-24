@@ -495,10 +495,10 @@ public sealed class ThumbsTests
     {
         var rows = PictureMenu.Build(thumbs: true, @"D:\pics\cat.png", "beside-original");
 
-        // A Mac's file rows (2026-10-07): Show in Finder; Print on both since 2026-10-08 (CUPS).
+        // A Mac's file rows (2026-10-07): Show in Finder; Print on both since 2026-10-08 (CUPS); Add to the splash images after it since 2026-11-23.
         string[] files = OperatingSystem.IsMacOS()
-            ? [PictureMenuText.CopyPath, PictureMenuText.ShowInFinder, PictureMenuText.Attach, PictureMenuText.Print]
-            : [PictureMenuText.CopyPath, PictureMenuText.ShowInExplorer, PictureMenuText.Attach, PictureMenuText.Print];
+            ? [PictureMenuText.CopyPath, PictureMenuText.ShowInFinder, PictureMenuText.Attach, PictureMenuText.Print, PictureMenuText.AddToSplash]
+            : [PictureMenuText.CopyPath, PictureMenuText.ShowInExplorer, PictureMenuText.Attach, PictureMenuText.Print, PictureMenuText.AddToSplash];
         Assert.Equal(
             [PictureMenuText.OpenInViewer, "", PictureMenuText.Rotate, PictureMenuText.Colour, PictureMenuText.Resize, PictureMenuText.Convert, PictureMenuText.Shrink,
              PictureMenuText.StripMetadata, "", .. files, "", PictureMenuText.Delete, "",
@@ -520,6 +520,65 @@ public sealed class ThumbsTests
         Assert.Equal(PictureMenuText.Rotate, PictureMenu.Build(thumbs: false, @"D:\pics\cat.jpg", "overwrite-original")[0].Label);   // no Open in the viewer itself
         Assert.All(rows.Where(r => r.Selectable && !r.HasChildren).Concat(rows.Where(r => r.HasChildren).SelectMany(r => r.Children!).Where(r => r.Selectable)),
             r => Assert.NotEqual(0, r.Command));
+    }
+
+    /// <summary>Add to the splash images (2026-11-23, the user's ask): greyed with no splash folder or for a picture already in it, else offered.</summary>
+    [Fact]
+    public void PictureMenu_AddToSplash_GreyedInTheFolder_OrWithNone()
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "splash-x");
+        ContextMenuItem Row(string path, string? splash) => PictureMenu.Build(thumbs: false, path, "beside-original", splash).Single(r => r.Label == PictureMenuText.AddToSplash);
+
+        Assert.Equal((int)PictureCommand.AddToSplash, Row(@"D:\pics\cat.png", folder).Command);
+        Assert.True(Row(Path.Combine(Path.GetTempPath(), "cat.png"), folder).Enabled);
+        Assert.False(Row(Path.Combine(folder, "cat.png"), folder).Enabled);
+        Assert.False(Row(@"D:\pics\cat.png", null).Enabled);
+        Assert.False(PictureActions.IsEdit(PictureCommand.AddToSplash));
+    }
+
+    /// <summary>
+    /// The row copies the picture into the splash folder and says so (2026-11-23): a second copy of the name lands as <c>-2</c>, a picture in the
+    /// folder is refused, and with no folder wired nothing is written.
+    /// </summary>
+    [Fact]
+    public void PictureMenu_AddToSplash_CopiesIntoTheFolder_AndReports()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        string folder = Path.Combine(dir, "splash");
+        string picture = Path.Combine(dir, "Sunset.png");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(picture, Fakes.FakeHeadlessBrowser.TinyPng);
+        var lines = new List<(string Line, bool Error)>();
+        var (oldFolder, oldRobot, oldReported) = (PictureMenu.SplashFolder, PictureMenu.RobotSplash, PictureMenu.Reported);
+        try
+        {
+            PictureMenu.Reported = (line, error) => lines.Add((line, error));
+            PictureMenu.SplashFolder = null;
+            Assert.True(PictureMenu.RunFileAction(picture, PictureCommand.AddToSplash));
+            Assert.False(Directory.Exists(folder));
+            Assert.Empty(lines);
+
+            PictureMenu.SplashFolder = () => folder;
+            PictureMenu.RobotSplash = () => false;
+            Assert.True(PictureMenu.RunFileAction(picture, PictureCommand.AddToSplash));
+            Assert.True(File.Exists(Path.Combine(folder, "Sunset.png")));
+            Assert.Equal((PictureMenuText.AddedToSplash("Sunset.png", only: true, robot: false), false), lines[^1]);
+
+            PictureMenu.RobotSplash = () => true;
+            PictureMenu.RunFileAction(picture, PictureCommand.AddToSplash);
+            Assert.True(File.Exists(Path.Combine(folder, "Sunset-2.png")));
+            Assert.Equal((PictureMenuText.AddedToSplash("Sunset-2.png", only: false, robot: true), false), lines[^1]);
+            Assert.Contains("Welcome splash is image", lines[^1].Line);
+
+            PictureMenu.RunFileAction(Path.Combine(folder, "Sunset.png"), PictureCommand.AddToSplash);
+            Assert.Equal((PictureMenuText.SplashAlready("Sunset.png"), true), lines[^1]);
+            Assert.Equal(2, Directory.GetFiles(folder).Length);
+        }
+        finally
+        {
+            (PictureMenu.SplashFolder, PictureMenu.RobotSplash, PictureMenu.Reported) = (oldFolder, oldRobot, oldReported);
+            Directory.Delete(dir, recursive: true);
+        }
     }
 
     [Fact]

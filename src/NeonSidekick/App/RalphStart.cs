@@ -254,8 +254,9 @@ internal static class RalphStart
     /// The loop over in its own folder: the summary, the files a failing step left changed, the plan marked done (else incomplete while steps are
     /// left), the stop's notice, the log's head saying how it stopped, the lock let go. The caller says the lines, forgets or pauses the stored plan.
     /// <paramref name="canAsk"/> is false headless, where the stop's notice tells the user to tick a checked step's box (<see cref="RalphText.StopNotice"/>).
+    /// <paramref name="clicked"/> (2026-11-23): a pause 🔁's double-click asked for, worded so.
     /// </summary>
-    public static RalphEnded End(WorkingDirectory files, RalphLoop loop, RalphStop stop, string requirement, TimeProvider time, bool canAsk = true)
+    public static RalphEnded End(WorkingDirectory files, RalphLoop loop, RalphStop stop, string requirement, TimeProvider time, bool canAsk = true, bool clicked = false)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(loop);
@@ -308,7 +309,7 @@ internal static class RalphStart
                 PlanFiles.MarkFile(files, path, PlanStatus.Incomplete, time.GetLocalNow(), requirement, counts);
             }
 
-            lines.Add((RalphText.StopNotice(stop, path, counts.Item1, counts.Item2, canAsk), false));
+            lines.Add((RalphText.StopNotice(stop, path, counts.Item1, counts.Item2, canAsk, clicked), false));
             // A stall or a failing step after a failed review says why, after its notice (2026-10-21, RalphLoop.LastReviewFail).
             if (stop is RalphStop.Stalled or RalphStop.StepFailing && loop.LastReviewFail is { Length: > 0 } reason)
             {

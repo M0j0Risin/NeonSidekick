@@ -269,6 +269,13 @@ public static class Profiles
     }
 
     /// <summary>
+    /// A fresh profile's settings (2026-11-23, the user's ask: <c>/profile add &lt;name&gt; --fresh</c>): the compiled defaults, as
+    /// <c>/profile reset --all</c> leaves one; no URL, model or keys. They already keep <see cref="NewProfileSeed"/>'s rules (an empty working
+    /// folder, the default avatar, no shortcut offered, no Web UI token), held by a test.
+    /// </summary>
+    public static AppSettingsData FreshProfileSeed() => new();
+
+    /// <summary>
     /// Creates the directory and writes <paramref name="seed"/> as its <c>profile.json</c> (a temp
     /// file then a move, like every settings write). The settings alone: the sidekick's files come
     /// along only through <see cref="CopySidekickFiles"/>, which the caller runs over <see cref="BasicSidekickFiles"/>. Throws <see cref="IOException"/> /

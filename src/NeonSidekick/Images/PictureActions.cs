@@ -41,6 +41,9 @@ public enum PictureCommand
     ShowInExplorer,
     Attach,
     Print,
+
+    /// <summary>The picture copied into the profile's splash images (2026-11-23, the user's ask): a file action, past the edits' range.</summary>
+    AddToSplash,
     Delete,
 }
 

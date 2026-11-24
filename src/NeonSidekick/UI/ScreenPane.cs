@@ -238,18 +238,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private int _ruleTitleColumn = -1;
     private int _ruleTitleCells;
 
-    // The lower rule's title (2026-10-12, the running processes' count): its provider, the one last drawn for the tick, and the
-    // column it landed at (-1 = none drawn) and its cells, for TryHitLowerRuleTitle.
-    private Func<string> _lowerRuleTitle = static () => "";
-    private string _drawnLowerRuleTitle = "";
-    private int _lowerTitleColumn = -1;
-    private int _lowerTitleCells;
-
-    // The update's marker (2026-11-04, self-update), beside the lower rule's title and not merged into it: its provider, the one last drawn for the tick, and where it landed, for TryHitLowerRuleMarker.
-    private Func<string> _lowerRuleMarker = static () => "";
-    private string _drawnLowerRuleMarker = "";
-    private int _lowerMarkerColumn = -1;
-    private int _lowerMarkerCells;
+    // The lower rule's items (2026-11-23, the user's ask: the jobs group; the processes' count since 2026-10-12, the update's marker since
+    // 2026-11-04): their provider, the ones last drawn for the tick (as one key), and where each landed, for LowerRuleItemAt.
+    private Func<IReadOnlyList<LowerRuleItem>> _lowerRuleItems = static () => [];
+    private string _drawnLowerRuleKey = "";
+    private (LowerRuleKind Kind, int Column, int Cells)[] _lowerItemSpans = [];
 
     // The hint row.
     private Func<string> _hint = static () => "";
@@ -1038,25 +1031,16 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The title at the right edge of the lower rule — the one under the input row — in every state (2026-10-12, the user's ask:
-    /// the running processes' count, <c>▶ 3</c>, as the session's name sits on the rule above), read like <see cref="RuleTitle"/>
-    /// on every draw and on the tick, which repaints the pane when it changes; empty = the bare rule, as it was until then.
-    /// <see cref="RuleWithTitle"/> is the row, so a window too narrow for it keeps the bare rule.
+    /// The items at the right edge of the lower rule — the one under the input row — in every state, left to right (2026-11-23, the user's
+    /// ask: the jobs group, <c>── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ▶ 1 ─</c>; until then the running processes'
+    /// count, 2026-10-12, and the update's marker, 2026-11-04, each a provider of its own). Read on every draw and on the tick, which repaints
+    /// the pane when any text changes; an empty list or empty texts = the bare rule. <see cref="LowerRuleFit"/> lays them out; a lone
+    /// <c>▶ n</c> draws exactly <see cref="RuleWithTitle"/>.
     /// </summary>
-    public Func<string> LowerRuleTitle
+    public Func<IReadOnlyList<LowerRuleItem>> LowerRuleItems
     {
-        get => _lowerRuleTitle;
-        set => _lowerRuleTitle = value ?? throw new ArgumentNullException(nameof(value));
-    }
-
-    /// <summary>
-    /// The update's marker, left of <see cref="LowerRuleTitle"/> on the lower rule (2026-11-04, self-update: <c>📦 0.5.7 at quit ── ▶ 2</c>), read on every draw and on the tick, so the download's percentage redraws too; empty = none.
-    /// In a narrow window it's dropped first, whole, so <c>▶ n</c> stays readable and clickable.
-    /// </summary>
-    public Func<string> LowerRuleMarker
-    {
-        get => _lowerRuleMarker;
-        set => _lowerRuleMarker = value ?? throw new ArgumentNullException(nameof(value));
+        get => _lowerRuleItems;
+        set => _lowerRuleItems = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -1577,44 +1561,33 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the lower rule's title (2026-10-12,
-    /// the running processes' count: a double-click there opens <c>/process</c>), the space either side of it included. False
-    /// with no title drawn, an overlay drawn, the pane lifted or disabled, or no geometry — <see cref="TryHitRuleTitle"/>'s rules.
+    /// The lower rule's item a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on (2026-11-23, the jobs group; until
+    /// then one test for the processes' count and one for the update's marker), the space either side of it included, never the rule glyphs
+    /// between two items. Null with none drawn there, an overlay drawn, the pane lifted or disabled, or no geometry — <see cref="TryHitRuleTitle"/>'s rules.
     /// </summary>
-    public bool TryHitLowerRuleTitle(int x, int y)
+    public LowerRuleKind? LowerRuleItemAt(int x, int y)
     {
         if (!Enabled)
         {
-            return false;
+            return null;
         }
 
         lock (_gate)
         {
-            if (!_drawn || _drawnOverlay || _lowerTitleColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            if (!_drawn || _drawnOverlay || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top || y != top + FirstBarRowBelowCursor - 1)
             {
-                return false;
+                return null;
             }
 
-            return y == top + FirstBarRowBelowCursor - 1 && x >= _lowerTitleColumn - 1 && x <= _lowerTitleColumn + _lowerTitleCells;
-        }
-    }
-
-    /// <summary>Whether a click landed on the update's marker on the lower rule (2026-11-04: a double-click there opens <c>/update</c>), the space either side of it included; <see cref="TryHitLowerRuleTitle"/>'s rules.</summary>
-    public bool TryHitLowerRuleMarker(int x, int y)
-    {
-        if (!Enabled)
-        {
-            return false;
-        }
-
-        lock (_gate)
-        {
-            if (!_drawn || _drawnOverlay || _lowerMarkerColumn < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            foreach (var (kind, column, cells) in _lowerItemSpans)
             {
-                return false;
+                if (x >= column - 1 && x <= column + cells)
+                {
+                    return kind;
+                }
             }
 
-            return y == top + FirstBarRowBelowCursor - 1 && x >= _lowerMarkerColumn - 1 && x <= _lowerMarkerColumn + _lowerMarkerCells;
+            return null;
         }
     }
 
@@ -7732,81 +7705,108 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The lower rule with <see cref="LowerRuleTitle"/> at its right edge (2026-10-12; the bare rule until then, and while none is
-    /// answered): the title remembered for the tick and where it landed for <see cref="TryHitLowerRuleTitle"/>. The title is in
-    /// the upper rule's ⤡ style, <see cref="Theme.AccentSecondary"/> (later on 2026-10-12, the user's ask), the rule around it
-    /// in <see cref="Theme.PaneRule"/>.
+    /// The lower rule with <see cref="LowerRuleItems"/> at its right edge (2026-11-23, the jobs group; the processes' count since 2026-10-12,
+    /// the bare rule until then and while none is answered): the items remembered for the tick and where each landed for
+    /// <see cref="LowerRuleItemAt"/>. The items are in the upper rule's ⤡ style, <see cref="Theme.AccentSecondary"/> (2026-10-12, the user's
+    /// ask), the rule around them in <see cref="Theme.PaneRule"/>, two rule glyphs (<see cref="LowerRuleGap"/>) between each two.
     /// </summary>
     private void WriteLowerRule(int width)
     {
-        _drawnLowerRuleTitle = _lowerRuleTitle();
+        var items = _lowerRuleItems() ?? [];
+        _drawnLowerRuleKey = LowerRuleKey(items);
         // The mark the upper rule took this frame (WriteUpperRule): a change since redraws both at the tick.
         var rule = _drawnRuleMark ?? Theme.PaneRule;
-        _drawnLowerRuleMarker = _lowerRuleMarker();
-        (_lowerMarkerColumn, _lowerMarkerCells) = (-1, 0);
-        if (MarkerFit(_drawnLowerRuleMarker, _drawnLowerRuleTitle, width) is int markerLeft)
+        var (kept, left) = LowerRuleFit(items, width);
+        if (kept.Count == 0)
         {
-            // The marker, then the title behind two rule glyphs: each has its own click area and neither is ever cut.
-            int markerCells = TextCells.Width(_drawnLowerRuleMarker);
-            (_lowerMarkerColumn, _lowerMarkerCells) = (markerLeft + 1, markerCells);
-            WriteRuleText(new string(RuleGlyph, markerLeft) + " ", 0, width, rule);
-            _inner.Write(new RawText(_drawnLowerRuleMarker, Theme.AccentSecondary));
-            int at = markerLeft + 1 + markerCells;
-            (_lowerTitleColumn, _lowerTitleCells) = (-1, 0);
-            if (_drawnLowerRuleTitle.Length > 0)
-            {
-                string between = " " + new string(RuleGlyph, LowerRuleGap) + " ";
-                WriteRuleText(between, at, width, rule);
-                at += between.Length;
-                int titleCells = TextCells.Width(_drawnLowerRuleTitle);
-                (_lowerTitleColumn, _lowerTitleCells) = (at, titleCells);
-                _inner.Write(new RawText(_drawnLowerRuleTitle, Theme.AccentSecondary));
-                at += titleCells;
-            }
-
-            WriteRuleText(" " + RuleGlyph, at, width, rule);
+            _lowerItemSpans = [];
+            WriteRuleText(new string(RuleGlyph, Math.Max(0, width)), 0, width, rule);
             _inner.WriteLine();
             return;
         }
 
-        (_lowerTitleColumn, _lowerTitleCells) = TitleSpan(_drawnLowerRuleTitle, width, 0);
-        if (FitRuleTitle(_drawnLowerRuleTitle, width) is var (fitted, left))
+        var spans = new (LowerRuleKind, int, int)[kept.Count];
+        WriteRuleText(new string(RuleGlyph, left) + " ", 0, width, rule);
+        int at = left + 1;
+        for (int i = 0; i < kept.Count; i++)
         {
-            WriteRuleText(new string(RuleGlyph, left) + " ", 0, width, rule);
-            _inner.Write(new RawText(fitted, Theme.AccentSecondary));
-            WriteRuleText(" " + RuleGlyph, left + 1 + TextCells.Width(fitted), width, rule);
-        }
-        else
-        {
-            WriteRuleText(new string(RuleGlyph, Math.Max(0, width)), 0, width, rule);
+            if (i > 0)
+            {
+                string between = " " + new string(RuleGlyph, LowerRuleGap) + " ";
+                WriteRuleText(between, at, width, rule);
+                at += between.Length;
+            }
+
+            int cells = TextCells.Width(kept[i].Text);
+            spans[i] = (kept[i].Kind, at, cells);
+            _inner.Write(new RawText(kept[i].Text, Theme.AccentSecondary));
+            at += cells;
         }
 
+        _lowerItemSpans = spans;
+        WriteRuleText(" " + RuleGlyph, at, width, rule);
         _inner.WriteLine();
     }
 
-    /// <summary>The rule glyphs between the update's marker and the lower rule's title.</summary>
+    /// <summary>The rule glyphs between two items on the lower rule.</summary>
     public const int LowerRuleGap = 2;
 
+    /// <summary>The items' texts as one string, so the tick sees any change (the download's spinner, a loop's <c>· ending</c>).</summary>
+    private static string LowerRuleKey(IReadOnlyList<LowerRuleItem> items) =>
+        string.Join("\u001f", items.Where(i => i.Text.Length > 0).Select(i => ((int)i.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + i.Text));
+
     /// <summary>
-    /// Where the lower rule's marker goes: the rule glyphs at its left, or null with none or too little room, since the marker is dropped first, whole. <see cref="RuleTitleMinRule"/> glyphs stay at the left, as for a title.
+    /// Which kinds a narrow lower rule drops first (2026-11-23, the user's ask): the update's marker, then the pictures, then the download,
+    /// then the loop; the processes' count never. Lower drops sooner; null is never dropped.
     /// </summary>
-    public static int? MarkerFit(string marker, string title, int width)
+    public static int? LowerRuleDropRank(LowerRuleKind kind) => kind switch
     {
-        ArgumentNullException.ThrowIfNull(marker);
-        ArgumentNullException.ThrowIfNull(title);
-        if (marker.Length == 0)
+        LowerRuleKind.Update => 0,
+        LowerRuleKind.Pictures => 1,
+        LowerRuleKind.Download => 2,
+        LowerRuleKind.Loop => 3,
+        _ => null,
+    };
+
+    /// <summary>
+    /// The lower rule's layout over <paramref name="width"/> cells (2026-11-23, the jobs group; <c>MarkerFit</c> until then): the items kept,
+    /// in their order, and the rule glyphs at their left. Items are dropped whole by <see cref="LowerRuleDropRank"/> until
+    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>▶ n</c> left alone, which is
+    /// <see cref="RuleWithTitle"/>'s fit as before. Empty texts are skipped; nothing kept = the bare rule. Pure, pinned.
+    /// </summary>
+    public static (IReadOnlyList<LowerRuleItem> Kept, int Left) LowerRuleFit(IReadOnlyList<LowerRuleItem> items, int width)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        var kept = items.Where(i => !string.IsNullOrEmpty(i.Text)).ToList();
+        while (kept.Count > 0)
         {
-            return null;
+            int used = kept.Sum(i => TextCells.Width(i.Text)) + ((kept.Count - 1) * (LowerRuleGap + 2)) + 3;   // a space either side, the last glyph
+            int left = width - used;
+            if (left >= RuleTitleMinRule)
+            {
+                return (kept, left);
+            }
+
+            int drop = -1;
+            for (int i = 0; i < kept.Count; i++)
+            {
+                if (LowerRuleDropRank(kept[i].Kind) is int rank && (drop < 0 || rank < LowerRuleDropRank(kept[drop].Kind)))
+                {
+                    drop = i;
+                }
+            }
+
+            if (drop < 0)
+            {
+                break;
+            }
+
+            kept.RemoveAt(drop);
         }
 
-        int used = 1 + TextCells.Width(marker) + 2;   // a space either side and the last glyph
-        if (title.Length > 0)
-        {
-            used += LowerRuleGap + 2 + TextCells.Width(title);
-        }
-
-        int left = width - used;
-        return left >= RuleTitleMinRule ? left : null;
+        return kept.Count == 1 && FitRuleTitle(kept[0].Text, width) is var (fitted, cut)
+            ? ([kept[0] with { Text = fitted }], cut)
+            : ([], Math.Max(0, width));
     }
 
     /// <summary>
@@ -8091,10 +8091,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             : new string(RuleGlyph, Math.Max(0, width));
     }
 
-    /// <summary>The title <see cref="RuleTitle"/> answers now is not the one on the drawn upper rule, or <see cref="LowerRuleTitle"/>'s not the lower one's (2026-10-12).</summary>
+    /// <summary>The title <see cref="RuleTitle"/> answers now is not the one on the drawn upper rule, or <see cref="LowerRuleItems"/>' not the lower one's (2026-10-12; the items since 2026-11-23).</summary>
     private bool RuleTitleChanged() =>
-        !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal) || !string.Equals(_lowerRuleTitle(), _drawnLowerRuleTitle, StringComparison.Ordinal)
-        || !string.Equals(_lowerRuleMarker(), _drawnLowerRuleMarker, StringComparison.Ordinal)   // the update's marker (2026-11-04)
+        !string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal)
+        || !string.Equals(LowerRuleKey(_lowerRuleItems() ?? []), _drawnLowerRuleKey, StringComparison.Ordinal)
         || !Equals(RuleMarks.StyleFor(_ruleMark, Theme.PageGround, Theme.PageInk), _drawnRuleMark)   // a /mark (2026-10-18), or its page's shade (2026-11-17)
         || !ReferenceEquals(Theme.RuleStops, _drawnRuleStops);   // Gradient rules flipped or the palette changed (2026-11-01)
 

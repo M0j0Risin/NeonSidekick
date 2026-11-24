@@ -246,6 +246,48 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(PresentAuditTool.ToolName, OfferedNames(_chat.Options[3]));
     }
 
+    /// <summary>
+    /// 🔎 on the lower rule (2026-11-23, the user's ask): a double-click there shows <c>· ending</c>, lets the pass finish and stops the audit
+    /// with its own notice, the report kept for <c>/code-audit resume</c>.
+    /// </summary>
+    [Fact]
+    public async Task CodeAudit_ADoubleClickOnTheLowerRule_StopsItAfterThePass()
+    {
+        AuditFixture(Line("/code-audit src security"), Line("/exit"));
+        _console.Profile.Width = 80;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the lower rule at 101
+        bool item = false;
+        _chat.BeforeUpdateOf = async (request, update, ct) =>
+        {
+            if (request == 0 && update == 0)
+            {
+                _time.Advance(ScreenPane.Tick);
+                item = Output.Contains(" " + AuditText.Glyph + " 1/", StringComparison.Ordinal);
+                Scripted().PushClick(78, 101);
+                Scripted().PushClick(78, 101);
+                await UntilAsync(() =>
+                {
+                    _time.Advance(ScreenPane.Tick);
+                    return Output.Contains(LoopText.EndingTail + " ─", StringComparison.Ordinal);
+                }, ct);
+            }
+        };
+        _chat.Enqueue(ReadCall("r1"));
+        _chat.Enqueue(FindingCall("a1"));
+        _chat.EnqueueText("Pass 1 done.");
+        _chat.EnqueueText("never");
+
+        string output = await RunAsync();
+
+        string name = Path.GetFileNameWithoutExtension(AuditPath);
+        Assert.True(item);
+        Assert.Equal(3, _chat.Requests.Count);
+        Assert.Contains("Code audit stopped after 1 pass, as asked.", output);   // the notice, wrapped at 80 columns after it
+        Assert.DoesNotContain("for your message", output);
+        Assert.Equal(AuditStatus.Stopped, AuditReportNow.Header.Status);
+        Assert.Equal($"🔎 Code audit stopped after 1 pass, as asked. /code-audit resume {name} runs more passes.", AuditText.StopNotice(PlanGapStop.UserSpoke, name, 1, clicked: true));
+    }
+
     [Fact]
     public async Task CodeAudit_FixViaPlan_EntersPlanMode_OnTheOpenFindings()
     {
@@ -326,10 +368,6 @@ public partial class ChatScreenTests
     [Fact]
     public async Task CodeAudit_TheStrip_AndTheResumeOfAGoneScope()
     {
-        Assert.Equal("🔎 2/5" + ChatScreen.GlyphSeparator + "x", ChatScreen.AuditStrip("2/5", "x"));
-        Assert.Equal("🔎 2", ChatScreen.AuditStrip("2", ""));
-        Assert.Equal("x", ChatScreen.AuditStrip(null, "x"));
-
         _settings.Update(d => d.CodeAuditPasses = 1);
         AuditFixture(Line("/code-audit src/"), Key(Keys.Escape), Line("/code-audit resume"), Line("/exit"));
         _chat.Enqueue(ReadCall("r1"));

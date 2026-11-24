@@ -859,7 +859,7 @@ function drawStatus() {
   const label = status && status.label;
   const spinning = !!label || !!(state && state.busy);
   const learning = !!(status && status.learning);
-  // A Ralph loop's place (2026-10-18): the PC's strip, 🔁 step 4/9 · pass 6, while a loop runs.
+  // The loop under way (2026-10-18, a Ralph loop's 🔁 step 4/9 · pass 6; since 2026-11-23 the PC's lower rule item: 🔁, 🔎 or ⟳, with · ending).
   const loop = (status && status.loop) || '';
   loopEl.textContent = loop;
   loopEl.classList.toggle('hidden', !loop);

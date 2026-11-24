@@ -64,8 +64,9 @@ public static class ComfyText
 
     /// <summary>
     /// Whether <paramref name="image"/> names a pasted picture by the label the model read (later still on 2026-09-24):
-    /// <c>[Image #1]</c>, or the same without the brackets or the <c>#</c>, any case, spaces around allowed — nothing
-    /// else, so a file really named <c>Image 1.png</c> is still a path. Pure; pinned.
+    /// <c>[Image #1]</c>, or the same without the brackets or the <c>#</c>, any case, spaces around allowed; since 2026-11-23 the whole sent
+    /// label too, the number followed by <c>, from …</c> or <c>, saved as …</c> (a model copies it whole) — nothing else, so a file really
+    /// named <c>Image 1.png</c> is still a path. Pure; pinned.
     /// </summary>
     public static bool TryPastedLabel(string image, out int number)
     {
@@ -88,8 +89,19 @@ public static class ComfyText
             s = s[1..].TrimStart();
         }
 
-        return s.Length > 0 && char.IsAsciiDigit(s[0])
-            && int.TryParse(s, NumberStyles.None, CultureInfo.InvariantCulture, out number) && number > 0;
+        int digits = 0;
+        while (digits < s.Length && char.IsAsciiDigit(s[digits]))
+        {
+            digits++;
+        }
+
+        var rest = s[digits..];
+        if (digits == 0 || (rest.Length > 0 && !rest.StartsWith(", from ", StringComparison.OrdinalIgnoreCase) && !rest.StartsWith(", saved as ", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        return int.TryParse(s[..digits], NumberStyles.None, CultureInfo.InvariantCulture, out number) && number > 0;
     }
 
     /// <summary>An <c>[Image #N]</c> input with no such paste this session (or none kept at full size). Pinned.</summary>
@@ -333,7 +345,7 @@ public static class ComfyText
     /// user's report: the line was held until it ended), so the missing spinner reads as running, and how to stop it. Led by
     /// <c>✨ imagining</c> since later that day (the user's wording; it read <c>generating behind the input line</c>). Pinned.
     /// </summary>
-    public const string ImagineInBackground = "(✨ imagining: the picture shows here when it is done; double-click the 🖼️ / 🎨 on the status bar to cancel)";
+    public const string ImagineInBackground = "(✨ imagining: the picture shows here when it is done; double-click the 🖼️ / 🎨 on the lower rule to cancel)";
 
     /// <summary><c>/imagine</c> with both a negative after <c>--</c> and <c>--no-negative</c> (later on 2026-09-24). Pinned.</summary>
     public const string NegativeAndNoNegative = "give a negative after -- or --no-negative, not both";

@@ -637,8 +637,9 @@ public static class SkillsText
 
     /// <summary>
     /// The project sub-tab (2026-11-23): a group per folder holding skills, nearest first, under <see cref="ProjectFolderTitle"/> with its trust; in each, a trust
-    /// row while it isn't trusted, its offered skills, the ones a higher root hides, the ones not offered (dim, with the reason), its broken ones, and an untrust
-    /// row while it is. The <paramref name="filter"/> keeps the skills and problems that hold it, a folder's rows with them; <see cref="MenuFilter.NoMatchRow"/>
+    /// row while it isn't trusted or an untrust row while it is (both under the heading since later that day, the user's call), a bare rule
+    /// (<see cref="SectionRule.Bare"/>) when skills follow, then its offered skills, the ones a higher root hides, the ones not offered (dim, with the
+    /// reason) and its broken ones. The <paramref name="filter"/> keeps the skills and problems that hold it, a folder's rows with them; <see cref="MenuFilter.NoMatchRow"/>
     /// alone when none is left.
     /// </summary>
     public static IReadOnlyList<ProjectRow> ProjectRows(SkillsFacts facts, string filter = "")
@@ -694,12 +695,19 @@ public static class SkillsText
             {
                 rows.Add(new ProjectRow(Styled(Theme.AccentSecondary, TrustWord.PadRight(width)) + Markup.Escape("  ") + Theme.DimMarkup(TrustRowNote(folder.Trust == ProjectFolderTrust.Changed)), ProjectRowKind.Trust, null, folder));
             }
-
-            rows.AddRange(group);
-            if (folder.Trust == ProjectFolderTrust.Trusted)
+            else
             {
+                // Under the heading, as trust is (2026-11-23, hand check 1, the user's call): the folder's action always comes first.
                 rows.Add(new ProjectRow(Styled(Theme.AccentSecondary, UntrustWord.PadRight(width)) + Markup.Escape("  ") + Theme.DimMarkup(UntrustRowNote), ProjectRowKind.Untrust, null, folder));
             }
+
+            if (group.Count > 0)
+            {
+                // A bare rule between the action and the skills (2026-11-23, the user's ask): a heading row, never a stop.
+                rows.Add(new ProjectRow(SectionRule.Bare, ProjectRowKind.Heading, null, folder));
+            }
+
+            rows.AddRange(group);
         }
 
         if (rows.Count == 0)
@@ -756,7 +764,9 @@ public static class SkillsText
     public static string TrustViewRow(string name, int nameWidth, string mark, string description, string files, bool acting)
     {
         ArgumentNullException.ThrowIfNull(name);
-        string tail = string.Join(" · ", new[] { description, files, acting ? ActingMark : "" }.Where(p => p.Length > 0));
+        // The notes ahead of the description (2026-11-23, hand check 1): the pane cuts a row at its width, and a long description pushed
+        // the files count and the acting mark off the edge; now the description is what gets cut.
+        string tail = string.Join(" · ", new[] { files, acting ? ActingMark : "", description }.Where(p => p.Length > 0));
         return Markup.Escape(ViewWord.PadRight(9) + ShownName(name).PadRight(nameWidth) + "  " + mark.PadRight(FilesChangedMark.Length) + "  ") + Theme.DimMarkup(tail);
     }
 
@@ -772,6 +782,12 @@ public static class SkillsText
 
     /// <summary>A skill the question can't show: no readable <c>SKILL.md</c> within the bound. Pinned.</summary>
     public const string NothingToViewText = "(this skill's SKILL.md couldn't be read; it is listed under Skipped)";
+
+    /// <summary>
+    /// Over a <see cref="FilesChangedMark"/> skill's text in the trust question's view (2026-11-23, hand check 1: the view showed the
+    /// plain text with no hint of what changed): its SKILL.md is the one trusted, only its bundled files differ.
+    /// </summary>
+    public const string FilesChangedViewNote = "SKILL.md is the same as when you trusted it; only its bundled files changed";
 
     /// <summary>Trusted (2026-11-23). Pinned.</summary>
     public static string TrustedNotice(string label, int count) =>

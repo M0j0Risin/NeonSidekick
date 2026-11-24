@@ -27,6 +27,19 @@ public static partial class UsageText
     /// <summary>The tab with nothing saved. Pinned.</summary>
     public const string ModelsEmpty = "No saved turns yet. These figures come from saved sessions.";
 
+    /// <summary>The tab when every saved turn is a command's (2026-11-23): "No saved turns yet" would contradict the side-turn note's count.</summary>
+    public const string ModelsNoModelTurns = "No turns a model answered are saved yet.";
+
+    /// <summary>The label over the cut ids written whole (2026-11-23, the user's ask: a bare id at the end read as stray).</summary>
+    public const string ModelsFullNamesLabel = "Full names:";
+
+    /// <summary>
+    /// The note under the table for the turns a command answered (2026-11-23, the user's ask): <c>/cmd</c>, <c>/advisor</c> and <c>/claude</c> are
+    /// left out of the table and counted here, each command as saved, in the table's order.
+    /// </summary>
+    public static string ModelsSideTurnsNote(int turns, IReadOnlyList<string> commands) =>
+        Plural(turns, "turn", "turns") + " answered by a command (" + string.Join(", ", commands) + (turns == 1 ? ") isn't counted." : ") aren't counted.");
+
     /// <summary>Added to <see cref="ModelsEmpty"/> while Session logging is off.</summary>
     public const string ModelsLoggingOff = "Session logging is off, so new turns aren't saved.";
 
@@ -69,9 +82,10 @@ public static partial class UsageText
         ArgumentNullException.ThrowIfNull(stats);
         var lines = ModelsRows(stats, logging, width);
         var parts = new List<IRenderable>();
-        foreach (var (text, dim) in lines)
+        foreach (var (text, dim, rule) in lines)
         {
-            parts.Add(new Indented(new Text(text, dim ? Theme.DimText : Theme.Body), SystemPromptSummary.BodyIndent));
+            // A rule row (2026-11-23) is the pane's bare rule; a redirected console's is the run of ─ the row carries.
+            parts.Add(new Indented(rule ? new SectionRule(SectionRule.Bare) : new Text(text, dim ? Theme.DimText : Theme.Body), SystemPromptSummary.BodyIndent));
         }
 
         return new Rows(parts);
@@ -82,18 +96,33 @@ public static partial class UsageText
         ModelsRows(stats, logging, width).Select(r => r.Text);
 
     /// <summary>
-    /// The tab's lines and which show dim: the caption, the heading, a row a model (dim under <see cref="ModelsFewTurns"/>), then the notes and
-    /// each cut id in full. Every line fits <paramref name="width"/> cells (2026-11-22, the review's #65): the caption, notes and ids word-wrapped,
-    /// the table's right-most columns dropped when the model column couldn't keep <see cref="ModelsModelMin"/>. Pure.
+    /// The tab's lines, which show dim and which are rules: the caption, the heading, a rule, a row a model (dim under <see cref="ModelsFewTurns"/>),
+    /// a rule, then the notes and each cut id in full under <see cref="ModelsFullNamesLabel"/>. Every line fits <paramref name="width"/> cells
+    /// (2026-11-22, the review's #65): the caption, notes and ids word-wrapped, the table's right-most columns dropped when the model column couldn't
+    /// keep <see cref="ModelsModelMin"/>. Since 2026-11-23 (the user's asks) the turns a command answered (<see cref="SessionText.IsSideTurnModel"/>)
+    /// leave the table for one note, and the models go by turns, most first, then by last use. Pure.
     /// </summary>
-    public static IReadOnlyList<(string Text, bool Dim)> ModelsRows(IReadOnlyList<ModelStat> stats, bool logging, int width)
+    public static IReadOnlyList<(string Text, bool Dim, bool Rule)> ModelsRows(IReadOnlyList<ModelStat> stats, bool logging, int width)
     {
         ArgumentNullException.ThrowIfNull(stats);
-        var rows = new List<(string, bool)>();
-        void Wrapped(string text) => rows.AddRange(TextCells.WrapWords(text, width).Select(line => (line, true)));
-        if (stats.Count == 0)
+        var rows = new List<(string, bool, bool)>();
+        void Wrapped(string text, int indent = 0) =>
+            rows.AddRange(TextCells.WrapWords(text, Math.Max(1, width - indent)).Select(line => (new string(' ', indent) + line, true, false)));
+        var sides = stats.Where(s => SessionText.IsSideTurnModel(s.Model)).ToList();
+        var models = stats.Where(s => !SessionText.IsSideTurnModel(s.Model))
+            .OrderByDescending(s => s.Turns).ThenByDescending(s => s.LastUsed).ThenBy(s => s.Model, StringComparer.Ordinal).ToList();
+        void SideNote()
         {
-            Wrapped(ModelsEmpty);
+            if (sides.Count > 0)
+            {
+                Wrapped(ModelsSideTurnsNote(sides.Sum(s => s.Turns), sides.Select(s => s.Model).ToList()));
+            }
+        }
+
+        if (models.Count == 0)
+        {
+            Wrapped(stats.Count == 0 ? ModelsEmpty : ModelsNoModelTurns);
+            SideNote();
             if (!logging)
             {
                 Wrapped(ModelsLoggingOff);
@@ -101,6 +130,8 @@ public static partial class UsageText
 
             return rows;
         }
+
+        stats = models;
 
         int[] widths = FigureWidths(stats);
         int columns = widths.Length;
@@ -112,8 +143,12 @@ public static partial class UsageText
         widths = widths[..columns];
         int modelWidth = Math.Max(ModelsModelMin, width - widths.Sum(w => w + ModelsGap));
         Wrapped(ModelsCaption);
-        rows.Add(("", false));
-        rows.Add((Row(ModelsModelHeading, ModelsHeadings, widths, modelWidth), true));
+        rows.Add(("", false, false));
+        string heading = Row(ModelsModelHeading, ModelsHeadings, widths, modelWidth);
+        rows.Add((heading, true, false));
+        // A rule under the heading and another before the notes (2026-11-23, the user's ask), as wide as the table.
+        var rule = (new string(ScreenPane.RuleGlyph, TextCells.Width(heading)), true, true);
+        rows.Add(rule);
         var cut = new List<string>();
         foreach (var stat in stats)
         {
@@ -124,14 +159,16 @@ public static partial class UsageText
                 cut.Add(name);
             }
 
-            rows.Add((Row(shown, Figures(stat), widths, modelWidth), stat.Turns < ModelsFewTurns));
+            rows.Add((Row(shown, Figures(stat), widths, modelWidth), stat.Turns < ModelsFewTurns, false));
         }
 
-        rows.Add(("", false));
+        rows.Add(rule);
         if (stats.Any(s => s.Turns < ModelsFewTurns))
         {
             Wrapped(ModelsFewNote);
         }
+
+        SideNote();
 
         if (stats.Any(s => s.Untagged > 0))
         {
@@ -143,9 +180,13 @@ public static partial class UsageText
             Wrapped(ModelsLoggingOff);
         }
 
-        foreach (string name in cut)
+        if (cut.Count > 0)
         {
-            Wrapped(name);
+            Wrapped(ModelsFullNamesLabel);
+            foreach (string name in cut)
+            {
+                Wrapped(name, indent: 2);
+            }
         }
 
         return rows;

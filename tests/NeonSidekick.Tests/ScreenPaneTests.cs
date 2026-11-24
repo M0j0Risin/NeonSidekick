@@ -163,10 +163,10 @@ public partial class ScreenPaneTests : IDisposable
         _cursorTop = 100;   // the upper rule at 99, the lower one at 101
         string title = "";
         using var pane = Pane();
-        pane.LowerRuleTitle = () => title;
+        pane.LowerRuleItems = Items(() => "", () => title);
         pane.Show();
         Assert.EndsWith(Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + "\n", Output);
-        Assert.False(pane.TryHitLowerRuleTitle(36, 101));   // none drawn
+        Assert.False(HitsProcesses(pane, 36, 101));   // none drawn
 
         title = NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
         int mark = Output.Length;
@@ -175,14 +175,14 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Contains(Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(34) + " ▶ 3 ─\n", Output[mark..]);   // the upper rule bare
         foreach (int x in new[] { 34, 35, 37, 38 })
         {
-            Assert.True(pane.TryHitLowerRuleTitle(x, 101));
+            Assert.True(HitsProcesses(pane, x, 101));
         }
 
-        Assert.False(pane.TryHitLowerRuleTitle(33, 101));
-        Assert.False(pane.TryHitLowerRuleTitle(39, 101));
-        Assert.False(pane.TryHitLowerRuleTitle(36, 99));    // the upper rule's row
+        Assert.False(HitsProcesses(pane, 33, 101));
+        Assert.False(HitsProcesses(pane, 39, 101));
+        Assert.False(HitsProcesses(pane, 36, 99));    // the upper rule's row
         Assert.False(pane.TryHitRuleTitle(36, 99));
-        Assert.False(pane.TryHitLowerRuleTitle(36, 100));
+        Assert.False(HitsProcesses(pane, 36, 100));
 
         // The same count again: nothing redrawn.
         mark = Output.Length;
@@ -190,15 +190,15 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal("", Output[mark..]);
 
         pane.ShowOverlay(new Markup("a"), "Esc closes");
-        Assert.False(pane.TryHitLowerRuleTitle(36, 101));
+        Assert.False(HitsProcesses(pane, 36, 101));
         pane.CloseOverlay();
-        Assert.True(pane.TryHitLowerRuleTitle(36, 101));
+        Assert.True(HitsProcesses(pane, 36, 101));
 
         // The last one ended: the bare rule again, no click.
         title = NeonSidekick.Viewer.ProcessWindowText.RuleTitle(0);
         _time.Advance(ScreenPane.Tick);
         Assert.EndsWith(Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + "\n", Output);
-        Assert.False(pane.TryHitLowerRuleTitle(36, 101));
+        Assert.False(HitsProcesses(pane, 36, 101));
     }
 
     /// <summary>The update's marker left of the process count (2026-11-04, self-update), each with its own click area, following on the tick.</summary>
@@ -209,11 +209,10 @@ public partial class ScreenPaneTests : IDisposable
         string marker = "";
         string title = NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
         using var pane = Pane();
-        pane.LowerRuleMarker = () => marker;
-        pane.LowerRuleTitle = () => title;
+        pane.LowerRuleItems = Items(() => marker, () => title);
         pane.Show();
-        Assert.False(pane.TryHitLowerRuleMarker(20, 101));
-        Assert.True(pane.TryHitLowerRuleTitle(36, 101));
+        Assert.False(HitsUpdate(pane, 20, 101));
+        Assert.True(HitsProcesses(pane, 36, 101));
 
         marker = "📦 0.5.7 at quit";
         int mark = Output.Length;
@@ -221,19 +220,19 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Contains(Rule(14) + " 📦 0.5.7 at quit ── ▶ 3 ─\n", Output[mark..]);
 
         // 📦 0.5.7 at quit at columns 15–30, ▶ 3 at 35–37, the space either side of each included.
-        Assert.False(pane.TryHitLowerRuleMarker(13, 101));
+        Assert.False(HitsUpdate(pane, 13, 101));
         foreach (int x in new[] { 14, 15, 30, 31 })
         {
-            Assert.True(pane.TryHitLowerRuleMarker(x, 101));
-            Assert.False(pane.TryHitLowerRuleTitle(x, 101));
+            Assert.True(HitsUpdate(pane, x, 101));
+            Assert.False(HitsProcesses(pane, x, 101));
         }
 
-        Assert.False(pane.TryHitLowerRuleMarker(32, 101));
-        Assert.False(pane.TryHitLowerRuleTitle(33, 101));
+        Assert.False(HitsUpdate(pane, 32, 101));
+        Assert.False(HitsProcesses(pane, 33, 101));
         foreach (int x in new[] { 34, 35, 37, 38 })
         {
-            Assert.True(pane.TryHitLowerRuleTitle(x, 101));
-            Assert.False(pane.TryHitLowerRuleMarker(x, 101));
+            Assert.True(HitsProcesses(pane, x, 101));
+            Assert.False(HitsUpdate(pane, x, 101));
         }
 
         // A percentage's change redraws; the same text again doesn't.
@@ -245,13 +244,13 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Contains("📦 0.5.7 42% ── ▶ 3 ─\n", Output[mark..]);
 
         pane.ShowOverlay(new Markup("a"), "Esc closes");
-        Assert.False(pane.TryHitLowerRuleMarker(20, 101));
+        Assert.False(HitsUpdate(pane, 20, 101));
         pane.CloseOverlay();
 
         marker = "";
         _time.Advance(ScreenPane.Tick);
-        Assert.False(pane.TryHitLowerRuleMarker(20, 101));
-        Assert.True(pane.TryHitLowerRuleTitle(36, 101));
+        Assert.False(HitsUpdate(pane, 20, 101));
+        Assert.True(HitsProcesses(pane, 36, 101));
     }
 
     [Fact]
@@ -259,12 +258,12 @@ public partial class ScreenPaneTests : IDisposable
     {
         _cursorTop = 100;
         using var pane = Pane();
-        pane.LowerRuleMarker = () => "📦 0.5.7";
+        pane.LowerRuleItems = Items(() => "📦 0.5.7", () => "");
         pane.Show();
         Assert.Contains(Rule(29) + " 📦 0.5.7 ─\n", Output);
-        Assert.True(pane.TryHitLowerRuleMarker(30, 101));
-        Assert.True(pane.TryHitLowerRuleMarker(38, 101));
-        Assert.False(pane.TryHitLowerRuleTitle(30, 101));
+        Assert.True(HitsUpdate(pane, 30, 101));
+        Assert.True(HitsUpdate(pane, 38, 101));
+        Assert.False(HitsProcesses(pane, 30, 101));
     }
 
     /// <summary>A narrow window drops the marker first, whole, so <c>▶ n</c> stays readable and clickable.</summary>
@@ -273,23 +272,102 @@ public partial class ScreenPaneTests : IDisposable
     {
         const string marker = "📦 0.5.7 at quit";
         const string title = "▶ 3";
-        Assert.Equal(14, ScreenPane.MarkerFit(marker, title, 40));
-        Assert.Equal(8, ScreenPane.MarkerFit(marker, title, 34));
-        Assert.Null(ScreenPane.MarkerFit(marker, title, 33));
-        Assert.Equal(8, ScreenPane.MarkerFit(marker, "", 27));
-        Assert.Null(ScreenPane.MarkerFit(marker, "", 26));
-        Assert.Null(ScreenPane.MarkerFit("", title, 200));
+        Assert.Equal((2, 14), Fit(marker, title, 40));
+        Assert.Equal((2, 8), Fit(marker, title, 34));
+        Assert.Equal(1, Fit(marker, title, 33).Kept);   // the title alone
+        Assert.Equal((1, 8), Fit(marker, "", 27));
+        Assert.Equal(0, Fit(marker, "", 26).Kept);
+        Assert.Equal(1, Fit("", title, 200).Kept);
 
         _cursorTop = 100;
         _console.Profile.Width = 30;
         using var pane = Pane();
-        pane.LowerRuleMarker = () => marker;
-        pane.LowerRuleTitle = () => title;
+        pane.LowerRuleItems = Items(() => marker, () => title);
         pane.Show();
         Assert.DoesNotContain(NeonSidekick.Updates.UpdateText.MarkerGlyph, Output);
         Assert.Contains(Rule(24) + " ▶ 3 ─\n", Output);
-        Assert.True(pane.TryHitLowerRuleTitle(26, 101));
-        Assert.False(pane.TryHitLowerRuleMarker(10, 101));
+        Assert.True(HitsProcesses(pane, 26, 101));
+        Assert.False(HitsUpdate(pane, 10, 101));
+    }
+
+    // The update's marker and the processes' count as the lower rule's items (2026-11-23, the jobs group; a provider each until then).
+    private static bool HitsProcesses(ScreenPane pane, int x, int y) => pane.LowerRuleItemAt(x, y) == LowerRuleKind.Processes;
+
+    private static bool HitsUpdate(ScreenPane pane, int x, int y) => pane.LowerRuleItemAt(x, y) == LowerRuleKind.Update;
+
+    private static Func<IReadOnlyList<LowerRuleItem>> Items(Func<string> marker, Func<string> title) =>
+        () => [new(LowerRuleKind.Update, marker()), new(LowerRuleKind.Processes, title())];
+
+    private static (int Kept, int Left) Fit(string marker, string title, int width)
+    {
+        var (kept, left) = ScreenPane.LowerRuleFit([new(LowerRuleKind.Update, marker), new(LowerRuleKind.Processes, title)], width);
+        return (kept.Count, left);
+    }
+
+    /// <summary>
+    /// The jobs group (2026-11-23, the user's ask): every item kept with room, then a narrow window drops the update's marker, the pictures, the
+    /// download and the loop in that order, each whole; <c>▶ n</c> is never dropped, only cut alone as <see cref="ScreenPane.RuleWithTitle"/> cuts it.
+    /// </summary>
+    [Fact]
+    public void LowerRuleFit_DropsTheUpdateThenThePicturesThenTheDownloadThenTheLoop_NeverTheProcesses()
+    {
+        LowerRuleItem update = new(LowerRuleKind.Update, "📦 0.5.9 at quit");
+        LowerRuleItem loop = new(LowerRuleKind.Loop, "🔁 step 2/5 · pass 3");
+        LowerRuleItem download = new(LowerRuleKind.Download, "📥 ⠋ 42%");
+        LowerRuleItem pictures = new(LowerRuleKind.Pictures, "🖼️ 2");
+        LowerRuleItem processes = new(LowerRuleKind.Processes, "▶ 1");
+        LowerRuleItem[] all = [update, loop, download, pictures, processes];
+        static int Room(params LowerRuleItem[] kept) =>
+            kept.Sum(i => TextCells.Width(i.Text)) + ((kept.Length - 1) * (ScreenPane.LowerRuleGap + 2)) + 3 + ScreenPane.RuleTitleMinRule;
+
+        Assert.Equal(all, ScreenPane.LowerRuleFit(all, Room(all)).Kept);
+        Assert.Equal(ScreenPane.RuleTitleMinRule, ScreenPane.LowerRuleFit(all, Room(all)).Left);
+        Assert.Equal(new[] { loop, download, pictures, processes }, ScreenPane.LowerRuleFit(all, Room(all) - 1).Kept);
+        Assert.Equal(new[] { loop, download, processes }, ScreenPane.LowerRuleFit(all, Room(loop, download, pictures, processes) - 1).Kept);
+        Assert.Equal(new[] { loop, processes }, ScreenPane.LowerRuleFit(all, Room(loop, download, processes) - 1).Kept);
+        Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit(all, Room(loop, processes) - 1).Kept);
+        Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit(all, Room(processes)).Kept);
+        Assert.Equal(ScreenPane.RuleWithTitle("▶ 1", 12), new string('─', ScreenPane.LowerRuleFit(all, 12).Left) + " " + ScreenPane.LowerRuleFit(all, 12).Kept.Single().Text + " ─");
+        Assert.Empty(ScreenPane.LowerRuleFit(all, 11).Kept);
+        Assert.Empty(ScreenPane.LowerRuleFit([new(LowerRuleKind.Loop, ""), new(LowerRuleKind.Processes, "")], 80).Kept);
+        // With no processes running, the loop is the last to go, whole.
+        Assert.Empty(ScreenPane.LowerRuleFit([update, loop], Room(loop) - 1).Kept);
+    }
+
+    /// <summary>Each item takes a click on its cells and the space either side (2026-11-23), never on the rule glyphs between two; the pair keys stay apart.</summary>
+    [Fact]
+    public void LowerRuleItems_EachHasItsOwnClickArea_NoneOnTheGlyphsBetween()
+    {
+        _cursorTop = 100;
+        string loop = "⟳ 3/10";
+        using var pane = Pane();
+        pane.LowerRuleItems = () => [new(LowerRuleKind.Loop, loop), new(LowerRuleKind.Processes, "▶ 1")];
+        pane.Show();
+        Assert.Equal(1, TextCells.Width(LoopText.Glyph));
+        Assert.Contains(Rule(24) + " ⟳ 3/10 ── ▶ 1 ─\n", Output);
+        foreach (int x in new[] { 24, 25, 30, 31 })
+        {
+            Assert.Equal(LowerRuleKind.Loop, pane.LowerRuleItemAt(x, 101));
+        }
+
+        Assert.Null(pane.LowerRuleItemAt(32, 101));
+        Assert.Null(pane.LowerRuleItemAt(33, 101));
+        Assert.Null(pane.LowerRuleItemAt(23, 101));
+        foreach (int x in new[] { 34, 35, 37, 38 })
+        {
+            Assert.Equal(LowerRuleKind.Processes, pane.LowerRuleItemAt(x, 101));
+        }
+
+        // The ending tail redraws on the tick.
+        int mark = Output.Length;
+        loop = "⟳ 3/10" + LoopText.EndingTail;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(" ⟳ 3/10 · ending ── ▶ 1 ─\n", Output[mark..]);
+        Assert.Equal(
+            new[] { InputLine.RuleTitlePairKey - 1, InputLine.RuleTitlePairKey - 2, InputLine.RuleTitlePairKey - 3, InputLine.RuleTitlePairKey - 4, InputLine.RuleTitlePairKey - 5 },
+            new[] { LowerRuleKind.Processes, LowerRuleKind.Update, LowerRuleKind.Loop, LowerRuleKind.Download, LowerRuleKind.Pictures }.Select(InputLine.LowerRulePairKey));
+        Assert.Equal(-500_001, InputLine.LowerRulePairKey(LowerRuleKind.Processes));
+        Assert.Equal(-500_002, InputLine.LowerRulePairKey(LowerRuleKind.Update));
     }
 
     /// <summary>The lower rule's title in ⤡'s colour, the rule around it in the rule's own (later on 2026-10-12, the user's ask).</summary>
@@ -298,7 +376,7 @@ public partial class ScreenPaneTests : IDisposable
     {
         _console.EmitAnsiSequences();
         using var pane = Pane();
-        pane.LowerRuleTitle = () => NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
+        pane.LowerRuleItems = Items(() => "", () => NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3));
         pane.Show();
 
         Color secondary = Theme.AccentSecondary.Foreground;
@@ -319,7 +397,7 @@ public partial class ScreenPaneTests : IDisposable
         _console.EmitAnsiSequences();
         using var pane = Pane();
         pane.RuleTitle = () => "my-session";
-        pane.LowerRuleTitle = () => NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
+        pane.LowerRuleItems = Items(() => "", () => NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3));
         pane.Show();
         Color rule = Theme.PaneRule.Foreground;
         Color first = Theme.QuietGradient![0];

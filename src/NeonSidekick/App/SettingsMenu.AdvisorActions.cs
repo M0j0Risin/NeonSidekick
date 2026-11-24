@@ -222,12 +222,15 @@ internal sealed partial class SettingsMenu
             }
             else
             {
-                // The advisor's model is offered only on its own server: /server clears the model on a new URL before its picker.
-                string current = string.Equals(savedUrl, url, StringComparison.Ordinal) ? saved.LlmModel?.Trim() ?? "" : "";
+                // The advisor's model is offered only on its own server: /server clears the model on a new URL before its picker. A Docker row
+                // found by the saved loopback address's port (2026-11-23, hand check 4) is its own server too.
+                bool own = string.Equals(savedUrl, url, StringComparison.Ordinal) || (inUse is { IsLoopback: true } && choice.HostPorts.Contains(inUse.Port));
+                string current = own ? saved.LlmModel?.Trim() ?? "" : "";
                 var (ids, cursor) = ModelChoices(choice.Result, current);
                 if (ids.Count == 0)
                 {
-                    model = "";   // a Docker container or a server that listed none: its own default
+                    // A Docker container or a server that listed none: its own default; the container the saved address reached keeps the saved model.
+                    model = own && current.Length > 0 ? null : "";
                 }
                 else if (await ChooseModelFromListAsync(ids, cursor, cancellationToken, crumb + AdvisorText.ModelCrumb, close: false).ConfigureAwait(false) is { } id)
                 {

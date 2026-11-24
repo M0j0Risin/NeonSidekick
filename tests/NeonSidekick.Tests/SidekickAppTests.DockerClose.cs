@@ -6,7 +6,7 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// The console window's close (2026-10-02, the user's report: its X button never stopped the container): Program's SIGHUP
-/// registration calls <see cref="SidekickApp.ConsoleClosing"/>, which asks for <c>Docker server stop on exit</c>'s stop while the
+/// registration calls <see cref="SidekickApp.ConsoleClosing"/>, which asks for <c>Docker containers stop on exit</c>'s stop while the
 /// run is still live — proven here over a headless run whose stdin closes the window at its first read.
 /// </summary>
 public partial class SidekickAppTests

@@ -184,6 +184,6 @@ public sealed class BackgroundJobsTests
         Assert.Null(BackgroundJobs.KindOfGlyph(ChatScreen.SttGlyph));   // nor the switch's hand-held microphone
         Assert.Equal("voice input is still setting up (🎙️ 42%)", BackgroundJobText.VoiceSettingUp("42%"));
         Assert.Equal("voice input is still setting up (🎙️)", BackgroundJobText.VoiceSettingUp(null));
-        Assert.Equal("🧠 📥 42% 🔊", ChatScreen.StripGlyphs(true, false, "", true, false, false, false, "📥 42%"));
+        Assert.Equal("🧠 🔌 1/3 🔊", ChatScreen.StripGlyphs(true, false, true, false, false, false, "🔌 1/3"));
     }
 }

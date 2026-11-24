@@ -7,7 +7,7 @@ namespace NeonSidekick.App;
 /// <summary>
 /// The <c>/queue</c> screen (2026-09-18): one row per message waiting in the <see cref="MessageQueue"/>
 /// (its number, then its label — a paste as <c>[Pasted text +N lines]</c>), Enter or a double-click removes the highlighted one and shows the
-/// list again (Delete too since 2026-10-16, the user's ask, <see cref="MenuPage.Removes"/>: the same question, the same stale-row check), the <see cref="ClearAllButton"/> on the title row (a click, or <see cref="ClearAllKey"/>;
+/// list again (Delete too since 2026-10-16, the user's ask, <see cref="MenuPage.Removes"/>: the same question, the same stale-row check), the <see cref="ClearAllButton"/> on the title row (a click, or <see cref="QueueClearAllKey"/>;
 /// 2026-09-21, the user's ask, the folder pane's collapse-all shape) drops every one and closes
 /// with the transcript's dropped notice — what <c>/queue clear</c> prints —, ESC / Ctrl+C / the <c>×</c> back out. A list in the bottom pane (<see cref="MenuPane"/>,
 /// the removal notice on its status line above the re-shown rows), the <see cref="MemoryMenu"/>
@@ -33,20 +33,26 @@ internal sealed class QueueMenu
 {
     // The label and the key hints: the pane shows the label as its title and the keys in its hint row. Pinned.
     public const string Title = ChatScreen.QueueToolGlyph + " Queue";
-    public const string Keys = "Enter = remove · m = mode · k = cancel mode · c = clear all · Esc = close";   // close since 2026-10-07: the pane's top level; m and k 2026-10-13
+    public const string Keys = "Enter = remove · m = mode · c = cancel mode · x = clear all · Esc = close";   // close since 2026-10-07: the pane's top level; m 2026-10-13; c and x 2026-11-23, the user's ask
 
     /// <summary>The key hints with the <see cref="SendButton"/> on the title row (2026-10-05). Pinned.</summary>
-    public const string KeysWithSend = "Enter = remove · s = send · m = mode · k = cancel mode · c = clear all · Esc = close";
+    public const string KeysWithSend = "Enter = remove · s = send · m = mode · c = cancel mode · x = clear all · Esc = close";   // c and x 2026-11-23, the user's ask
 
     /// <summary>The key hints over the empty queue (2026-10-13): the mode buttons alone. Pinned.</summary>
-    public const string EmptyKeys = "m = mode · k = cancel mode · Esc = close";
+    public const string EmptyKeys = "m = mode · c = cancel mode · Esc = close";   // c 2026-11-23, the user's ask
     public const string EmptyNotice = "(" + NoticeGlyphs.Queue + "nothing queued)";   // the hourglass since 2026-09-22
 
     /// <summary>The one button on the title row (2026-09-21), drawn as a dim tab: every queued message dropped.</summary>
     public const string ClearAllButton = "⊠ clear all";
 
-    /// <summary>The key that is the button.</summary>
+    /// <summary>The key that is the button, in the other panes that share it (<c>/prompts</c>, <c>/browser list</c>, <c>/youtube list</c>, a skill's revert page).</summary>
     public const char ClearAllKey = 'c';
+
+    /// <summary>
+    /// The queue's own key for the button (2026-11-23, the user's ask): <c>x</c>, after the ⊠, since <c>c</c> is the cancel mode's here. The
+    /// other panes keep <see cref="ClearAllKey"/>: they have no cancel mode.
+    /// </summary>
+    public const char QueueClearAllKey = 'x';
 
     /// <summary>The button that sends the front message now (2026-10-05), first on the title row while the queue is held at the idle line, and always under <c>Queue mode</c> <c>manual</c> (2026-10-09).</summary>
     public const string SendButton = "➤ send";
@@ -57,8 +63,8 @@ internal sealed class QueueMenu
     /// <summary>The key of the Queue mode button (2026-10-13).</summary>
     public const char ModeKey = 'm';
 
-    /// <summary>The key of the Queue cancel mode button (2026-10-13).</summary>
-    public const char CancelKey = 'k';
+    /// <summary>The key of the Queue cancel mode button (2026-10-13; <c>c</c> for cancel since 2026-11-23, the user's ask, <c>k</c> until then).</summary>
+    public const char CancelKey = 'c';
 
     /// <summary>The Queue mode button (2026-10-13, the user's ask): the word in force, <c>mode: automatic</c>; a press steps to the next. Pinned.</summary>
     public static string ModeButton(Queueing mode) => "mode: " + QueueMode.Name(mode);
@@ -90,7 +96,7 @@ internal sealed class QueueMenu
     [
         .. send ? new[] { new MenuButton(SendButton, SendKey) } : [],
         .. modes is { } m ? new[] { new MenuButton(ModeButton(m.Mode), ModeKey), new MenuButton(CancelButton(m.Cancel), CancelKey) } : [],
-        .. empty ? [] : new[] { new MenuButton(ClearAllButton, ClearAllKey) },
+        .. empty ? [] : new[] { new MenuButton(ClearAllButton, QueueClearAllKey) },
     ];
 
     private readonly MessageQueue _queue;

@@ -293,6 +293,9 @@ public sealed class ImageStoreTests : IDisposable
         Assert.Equal("[Image #2, saved as " + path + "]", PasteBlocks.SavedLabel(2, path));
         Assert.Equal("see [Image #2] and [Image #3]", PasteBlocks.WithoutSavedPaths("see " + PasteBlocks.SavedLabel(2, path) + " and " + PasteBlocks.SavedLabel(3, "x.png")));
         Assert.Equal("[Image #2] stays", PasteBlocks.WithoutSavedPaths("[Image #2] stays"));
+        // A picture from a file (2026-11-23): named in the sent text, put back the same way.
+        Assert.Equal(@"[Image #4, from C:\pics\cat.png]", PasteBlocks.FileLabel(4, @"C:\pics\cat.png"));
+        Assert.Equal("see [Image #4] and [Image #2]", PasteBlocks.WithoutSavedPaths("see " + PasteBlocks.FileLabel(4, @"C:\pics\cat.png") + " and " + PasteBlocks.SavedLabel(2, path)));
     }
 
     [Fact]

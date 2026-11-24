@@ -1,9 +1,8 @@
-using System.Globalization;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
-using NeonSidekick.Comfy;
 using NeonSidekick.Files;
 using NeonSidekick.Images;
+using NeonSidekick.UI;
 
 namespace NeonSidekick.Llm.Tools;
 
@@ -93,36 +92,16 @@ public sealed class SetSplashImageTool : AIFunction
         }
 
         files.Resolve(path, forWrite: false, out string source);
-        string extension = Path.GetExtension(source).ToLowerInvariant();
-        if (!ImageFile.IsImagePath(source))
-        {
-            return ImageText.SplashNotAnImage(read.Relative);
-        }
-
         string folder = _splashDirectory();
-        if (string.Equals(Path.GetDirectoryName(source), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase))
+        // The copy itself is SplashImages.Add's since 2026-11-23, shared with the picture menus' Add to the splash images.
+        var added = SplashImages.Add(folder, source, name);
+        return added.Result switch
         {
-            return ImageText.SplashAlready(read.Relative);
-        }
-
-        string stem = ComfyStudio.SafeName(string.IsNullOrWhiteSpace(name) ? Path.GetFileNameWithoutExtension(source) : Path.GetFileNameWithoutExtension(name.Trim()));
-        try
-        {
-            Directory.CreateDirectory(folder);
-            string target = Path.Combine(folder, stem + extension);
-            for (int n = 2; File.Exists(target); n++)
-            {
-                target = Path.Combine(folder, stem + "-" + n.ToString(CultureInfo.InvariantCulture) + extension);
-            }
-
-            File.Copy(source, target, overwrite: false);
-            bool only = Directory.EnumerateFiles(folder).Count(ImageFile.IsImagePath) == 1;
-            return ImageText.SplashSet(read.Relative, target, only) + (_robotSplash?.Invoke() == true ? ImageText.SplashRobotNote : "");
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return ImageText.SplashFailed(folder, ex.Message);
-        }
+            SplashAddResult.NotAnImage => ImageText.SplashNotAnImage(read.Relative),
+            SplashAddResult.Already => ImageText.SplashAlready(read.Relative),
+            SplashAddResult.Failed => ImageText.SplashFailed(folder, added.Detail),
+            _ => ImageText.SplashSet(read.Relative, added.Target, added.Only) + (_robotSplash?.Invoke() == true ? ImageText.SplashRobotNote : ""),
+        };
     }
 
     protected override ValueTask<object?> InvokeCoreAsync(AIFunctionArguments arguments, CancellationToken cancellationToken)

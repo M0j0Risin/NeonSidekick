@@ -112,6 +112,37 @@ public partial class SettingsMenuTests
     /// Delete on an advisor goes straight to the Remove question (2026-10-16, the user's ask), skipping the change-role/remove page; on the
     /// add row it is nothing (no profile picker).
     /// </summary>
+    /// <summary>The advisors by name (2026-11-23, the user's ask), case ignored; a duplicate in another case still keeps the first saved.</summary>
+    [Fact]
+    public void TheRoster_ListsByName_CaseIgnored()
+    {
+        List<AdvisorEntry> saved = [new("ops", "operations"), new("dev", "developer"), new("Architect", "design"), new("OPS", "dup")];
+
+        Assert.Equal(["Architect", "dev", "ops"], AdvisorRoster.Entries(saved).Select(e => e.Profile));
+        Assert.Equal("operations", AdvisorRoster.Entries(saved).Single(e => e.Profile == "ops").Role);
+    }
+
+    /// <summary>The Advisor list draws its rows by name (2026-11-23), even when the file holds a new advisor last.</summary>
+    [Fact]
+    public async Task OnThePane_TheAdvisorList_DrawsByName()
+    {
+        Profiles.Create(_dir, "ops", new AppSettingsData());
+        Profiles.Create(_dir, "dev", new AppSettingsData());
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("ops", "operations"), new AdvisorEntry("dev", "developer")]);
+        var (menu, pane) = PaneMenu();
+        GoTo(SettingsTab.Advisors);
+        Down(1);
+        Push(Keys.Enter);                       // the list
+        Push(Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        int dev = Output.LastIndexOf("developer", StringComparison.Ordinal);
+        int ops = Output.LastIndexOf("operations", StringComparison.Ordinal);
+        Assert.True(dev >= 0 && ops > dev, Output);
+        pane.Dispose();
+    }
+
     [Fact]
     public async Task OnThePane_TheAdvisorList_DeleteAsksToRemove_AndIsNothingOnTheAddRow()
     {

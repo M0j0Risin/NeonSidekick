@@ -36,10 +36,10 @@ public static class BackgroundJobText
 
     /// <summary>The notice as an embedded download starts behind the line.</summary>
     public static string DownloadStarted(EmbeddedModel model) =>
-        $"{DownloadGlyph} downloading {model.Display} in the background; double-click {DownloadGlyph} on the status bar to pause";
+        $"{DownloadGlyph} downloading {model.Display} in the background; double-click {DownloadGlyph} on the lower rule to pause";
 
     /// <summary>The same model picked again while it downloads.</summary>
-    public static string AlreadyDownloading(EmbeddedModel model) => $"{model.Display} is already downloading ({DownloadGlyph} on the status bar)";
+    public static string AlreadyDownloading(EmbeddedModel model) => $"{model.Display} is already downloading ({DownloadGlyph} on the lower rule)";
 
     /// <summary>A download that finished after another server was picked: installed, not switched to.</summary>
     public static string InstalledNotSwitched(EmbeddedModel model) => $"{model.Display} installed; pick it in /server to use it";

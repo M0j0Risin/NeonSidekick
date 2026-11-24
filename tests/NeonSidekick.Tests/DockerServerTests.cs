@@ -295,7 +295,7 @@ public sealed class DockerServerTests : IDisposable
         _settings.DockerServerReadyTimeoutSeconds = 30;
         var result = await Switch("vllm_b");
         Assert.False(result.Ok);
-        Assert.Equal("vllm_b did not answer /v1/models within 30 s; it is left running (raise Docker server ready timeout if its model needs longer).", result.Error);
+        Assert.Equal("vllm_b did not answer /v1/models within 30 s; it is left running (raise Docker container ready timeout if its model needs longer).", result.Error);
         Assert.Equal("running", _engine.State("vllm_b"));
         Assert.True(_probed.Count >= 30);
     }

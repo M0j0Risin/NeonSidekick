@@ -73,13 +73,11 @@ public abstract record InputResult
     public sealed record RuleTitle(string Draft) : InputResult;
 
     /// <summary>
-    /// A double-click on the running processes' count at the lower rule's right edge (2026-10-12, the user's ask,
-    /// <see cref="ScreenPane.LowerRuleTitle"/>): the screen opens <c>/process</c>; <see cref="Draft"/> as <see cref="HintRow"/>'s.
+    /// A double-click on an item of the lower rule's jobs group (2026-11-23, the user's ask, <see cref="ScreenPane.LowerRuleItems"/>; the
+    /// processes' count since 2026-10-12 and the update's marker since 2026-11-04 had a result each): the screen opens <c>/process</c> or
+    /// <c>/update</c>, or cancels the download or the pictures; <see cref="Draft"/> as <see cref="HintRow"/>'s.
     /// </summary>
-    public sealed record LowerRuleTitle(string Draft) : InputResult;
-
-    /// <summary>A double-click on the update's marker on the lower rule (2026-11-04, self-update): the screen opens <c>/update</c>; <see cref="Draft"/> as <see cref="HintRow"/>'s.</summary>
-    public sealed record LowerRuleMarker(string Draft) : InputResult;
+    public sealed record LowerRuleItem(LowerRuleKind Kind, string Draft) : InputResult;
 
     /// <summary>
     /// A path's link chord-clicked in the transcript (2026-11-01, clickable links and paths): the screen runs <c>/browse</c> on
@@ -458,11 +456,12 @@ public sealed partial class InputLine
     /// </summary>
     public const int RuleTitlePairKey = -500_000;
 
-    /// <summary>What two clicks on the lower rule's process count must share to pair (2026-10-12): beside <see cref="RuleTitlePairKey"/>, no other part's. Pinned.</summary>
-    public const int LowerRuleTitlePairKey = -500_001;
-
-    /// <summary>What two clicks on the update's marker must share to pair (2026-11-04): beside <see cref="LowerRuleTitlePairKey"/>, no other part's. Pinned.</summary>
-    public const int LowerRuleMarkerPairKey = -500_002;
+    /// <summary>
+    /// What two clicks on a lower rule item must share to pair (2026-11-23, the jobs group): <c>-500_000 - kind</c>, beside
+    /// <see cref="RuleTitlePairKey"/> — the processes' count's −500 001 (2026-10-12) and the update's marker's −500 002 (2026-11-04) as they
+    /// were, then the loop, the download and the pictures. Pinned.
+    /// </summary>
+    public static int LowerRulePairKey(LowerRuleKind kind) => -500_000 - (int)kind;
 
     /// <summary>
     /// What two clicks on the draft must share to pair into a word's selection (2026-09-30, <see cref="DraftWords"/>): the

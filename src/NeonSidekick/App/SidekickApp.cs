@@ -1641,7 +1641,7 @@ public sealed partial class SidekickApp
                         if (sessionId is { } claudeRow)
                         {
                             ChatScreen.StampTurn(session.History, sessions.AppendTurn(claudeRow, text, claudeReply, 0, [], [], 0, claudeTurn.Usage.Input, claudeTurn.Usage.Output, claudeTurn.Cancelled,
-                                model: Sessions.SessionText.SideTurnModel("/claude"), usage: claudeTurn.Usage, cwd: files.Root));
+                                model: Sessions.SessionText.SideTurnModel(Sessions.SessionText.ClaudeSideTurn), usage: claudeTurn.Usage, cwd: files.Root));
                         }
                     }
 
@@ -1661,7 +1661,7 @@ public sealed partial class SidekickApp
                         sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "", files.Root);
                         if (sessionId is { } advisorRow)
                         {
-                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(advisorRow, text, advisorReply, 0, [], [], 0, 0, 0, false, model: Sessions.SessionText.SideTurnModel("/advisor", Advisors.AdvisorRoster.Find(Advisors.AdvisorRoster.Entries(EffectiveSettings.AdvisorList), Advisors.AdvisorText.Split(advisorArgs).Item1).Item1?.Profile), cwd: files.Root));
+                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(advisorRow, text, advisorReply, 0, [], [], 0, 0, 0, false, model: Sessions.SessionText.SideTurnModel(Sessions.SessionText.AdvisorSideTurn, Advisors.AdvisorRoster.Find(Advisors.AdvisorRoster.Entries(EffectiveSettings.AdvisorList), Advisors.AdvisorText.Split(advisorArgs).Item1).Item1?.Profile), cwd: files.Root));
                             SaveHeadlessHistory(advisorRow, session.History.Messages);
                         }
                     }
@@ -2493,7 +2493,7 @@ public sealed partial class SidekickApp
             }
             // A code audit's lock too (2026-10-29): the report lists as stopped, and resume picks it up.
             audit.Stop();
-            // Docker server stop on exit (2026-10-02): off by default, the container keeps running.
+            // Docker containers stop on exit (2026-10-02): off by default, the container keeps running.
             foreach (string stopped in await StopDockerAtExitAsync(session, DockerExitBudget).ConfigureAwait(false))
             {
                 await HeadlessNoticeLineAsync("[notice] " + DockerServerExitNotice(stopped)).ConfigureAwait(false);
@@ -3726,12 +3726,12 @@ public sealed partial class SidekickApp
             (url, ct) => _probe.ProbeAsync(url, LlmEndpoint.KeyOf(EffectiveSettings), ct),
             _time);
 
-    /// <summary>How long the exit waits for <c>Docker server stop on exit</c>: the stop's own timeout and its grace, then it gives up.</summary>
+    /// <summary>How long the exit waits for <c>Docker containers stop on exit</c>: the stop's own timeout and its grace, then it gives up.</summary>
     private TimeSpan DockerExitBudget =>
         TimeSpan.FromSeconds(Math.Clamp(EffectiveSettings.DockerServerStopTimeoutSeconds, 0, AppSettingsData.MaxDockerServerStopTimeoutSeconds)) + Docker.DockerServerHost.StopGrace;
 
     /// <summary>
-    /// <c>Docker server stop on exit</c> at the run's end (2026-10-02), under its own deadline rather than the app's token (which
+    /// <c>Docker containers stop on exit</c> at the run's end (2026-10-02), under its own deadline rather than the app's token (which
     /// may be the one that ended the run): the names stopped; empty when off, this run started none, or anything went wrong (logged).
     /// </summary>
     private async Task<IReadOnlyList<string>> StopDockerAtExitAsync(LlmSession session, TimeSpan deadline)
@@ -3743,16 +3743,16 @@ public sealed partial class SidekickApp
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            DiagnosticLog.Warn(ChatScreen.AppCategory, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
+            DiagnosticLog.Warn(ChatScreen.AppCategory, "Docker containers stop on exit: " + Llm.Assistant.Explain(ex));
             return [];
         }
     }
 
-    /// <summary>The exit's notice for a container it stopped (<c>Docker server stop on exit</c>). Pinned.</summary>
-    public static string DockerServerExitNotice(string name) => Docker.DockerText.Glyph + " stopped " + name + " (Docker server stop on exit)";
+    /// <summary>The exit's notice for a container it stopped (<c>Docker containers stop on exit</c>). Pinned.</summary>
+    public static string DockerServerExitNotice(string name) => Docker.DockerText.Glyph + " stopped " + name + " (Docker containers stop on exit)";
 
     /// <summary>
-    /// How long the window's close waits for <c>Docker server stop on exit</c> (2026-10-02): inside the 5 s Windows gives a
+    /// How long the window's close waits for <c>Docker containers stop on exit</c> (2026-10-02): inside the 5 s Windows gives a
     /// console process after <c>CTRL_CLOSE_EVENT</c>, and long enough for the list and the stop request. The engine finishes a
     /// stop whose request was dropped (moby's <c>containerStop</c> runs under <c>context.WithoutCancel</c>), kill after the
     /// timeout included, so a container still stopping when this runs out stops all the same.
@@ -3761,7 +3761,7 @@ public sealed partial class SidekickApp
 
     /// <summary>
     /// The log line as the window's close asks the engine to stop this run's containers (2026-11-11, the review: every one it keeps, with
-    /// Docker server one at a time off several). Pinned.
+    /// Docker containers one at a time off several). Pinned.
     /// </summary>
     public static string DockerServerClosingLine(IReadOnlyList<string> names)
     {
@@ -3793,7 +3793,7 @@ public sealed partial class SidekickApp
     /// <summary>
     /// The console window closing (2026-10-02, the user's report: its X button never stopped the container): Program's
     /// <c>SIGHUP</c> registration, which is <c>CTRL_CLOSE_EVENT</c> on Windows, calls this on the console's control thread,
-    /// and the process lives until it returns — no <c>finally</c> of the run's will. With <c>Docker server stop on exit</c> on
+    /// and the process lives until it returns — no <c>finally</c> of the run's will. With <c>Docker containers stop on exit</c> on
     /// and any container this run started, the stops are asked under <see cref="CloseBudget"/>. Blocks; never throws. Nothing when no run is live.
     /// On a Mac (2026-10-07, the embedded LLM there) it also takes <c>SIGTERM</c> and <c>SIGQUIT</c>, and kills the embedded
     /// servers first (<see cref="KillEmbeddedAtExit"/>): no job object ends them with the app there.
@@ -3820,7 +3820,7 @@ public sealed partial class SidekickApp
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            DiagnosticLog.Warn(ChatScreen.AppCategory, "Docker server stop on exit: " + Llm.Assistant.Explain(ex));
+            DiagnosticLog.Warn(ChatScreen.AppCategory, "Docker containers stop on exit: " + Llm.Assistant.Explain(ex));
         }
     }
 
@@ -4079,6 +4079,12 @@ public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
 
     /// <summary>The picture menu's Print (2026-10-04, <see cref="Viewer.PictureMenu.Print"/>): queued for the running screen's idle line. Any thread.</summary>
     public void PrintPicture(string path) => _screen?.PrintPicture(path);
+
+    /// <summary>The loaded profile's splash folder (2026-11-23, <see cref="Viewer.PictureMenu.SplashFolder"/>): read at each press, so a profile switch is followed.</summary>
+    public string PictureSplashFolder => _settings.ProfileSplashDirectory;
+
+    /// <summary>Whether <c>Welcome splash</c> is <c>robot</c> in force (2026-11-23, <see cref="Viewer.PictureMenu.RobotSplash"/>).</summary>
+    public bool PictureRobotSplash => UI.SplashMode.TryParse(EffectiveSettings.WelcomeSplashMode, out var style) && style == UI.SplashStyle.Robot;
 
     /// <summary>What a picture menu row did (2026-10-04, <see cref="Viewer.PictureMenu.Reported"/>), as a line in the running screen's chat. Any thread.</summary>
     public void PictureReported(string line, bool error) => _screen?.PictureReported(line, error);

@@ -174,13 +174,15 @@ public sealed partial class BackgroundJobs
     /// user's ask: a multi-GB file's percentage stands still for long stretches, and the runtime's zip and the SHA check show
     /// none, so the row looked stuck). It goes after the glyph, not before, so the 📥 stays the strip's first cells and its
     /// double-click target does not move; the frame turns with the clock, so the pane's tick sees a changed row and redraws it.
+    /// <paramref name="which"/> (2026-11-23) keeps only the kinds it answers true for: the status bar takes all but the download, the
+    /// lower rule the download alone. Null keeps every kind.
     /// </summary>
-    public string Strip()
+    public string Strip(Func<BackgroundJobKind, bool>? which = null)
     {
         var parts = new List<string>(Kinds.Length);
         foreach (var kind in Kinds)
         {
-            if (Volatile.Read(ref _slots[(int)kind]) is { } job)
+            if ((which is null || which(kind)) && Volatile.Read(ref _slots[(int)kind]) is { } job)
             {
                 string glyph = BackgroundJobText.Glyph(kind);
                 if (kind == BackgroundJobKind.EmbeddedDownload)

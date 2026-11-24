@@ -101,7 +101,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 * **`automatic`:** after each reply the model writes an image prompt and the app draws it; bots get no tool. With *Botchat limited skills* ticked, the prompt writer may load a skill first ("use the pony-prompts skill for pictures").
 * **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call written as text still runs.
 * **Reworks:** with a picture and an image → image workflow, the prompt writer picks a new picture or a rework.
-* **Async on:** 🖼️ (🎨 for a rework) shows on the status bar while a picture renders. **Async off:** Esc on a reply waiting for its picture cuts that bot short; Esc under the picture's spinner skips it.
+* **Async on:** 🖼️ (🎨 for a rework) shows on the lower rule while a picture renders. **Async off:** Esc on a reply waiting for its picture cuts that bot short; Esc under the picture's spinner skips it.
 
 #### Web UI
 
@@ -132,7 +132,7 @@ The bars under the input line, under **Bars**, and their order, under **Order**.
 |---|---|---|
 | Hints bar | `auto` (its own bar over the status bar while there is a hint, held until the next send), `always`, or `off` (hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
 | Status bar | The status bar's sections, order and sides. Enter opens the [checklist](INTERFACE.md#bar-checklists); see [The status bar](INTERFACE.md#the-status-bar). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | Settings, Tools, Skills, Commands, Usage, Memory, Saved prompts, Queue, Ask, Shell allowed commands, Shell police, Shell, Files, Image, Web, Web UI, path (17 of 49), with three dividers |
+| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | Settings, Profile, Themes, Web UI, Tools, Skills, Commands, Sessions, Usage, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Web, Advisors, path (19 of 49), with five dividers |
 | Performance bar | Its meters and places: Enter (or `/perfbar edit`) opens the checklist. **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look ([The performance bar](INTERFACE.md#the-performance-bar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | CPU, RAM, GPU, VRAM, `led` |
 | Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on their own row. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar); [**bar:**](INTERFACE.md#bar-checklists) hides or shows it. | off |
 | Toolbar order | The order of the five bars under the input line. Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
@@ -206,7 +206,7 @@ Until you set something, sampling is left to the server and the model.
 
 A model the app downloads and runs itself on llama.cpp's `llama-server`, on Windows x64 and Apple Silicon Macs.
 
-* **Install:** *Install* on **Embedded models** downloads it in the background (📥 on the status bar; a double-click pauses), then switches to it.
+* **Install:** *Install* on **Embedded models** downloads it in the background (📥 on the lower rule; a double-click pauses), then switches to it.
 * **Switch:** needs *Embedded servers enabled*; Connect a model's *Download an embedded model* turns it on once your model is ready.
 * **Use:** `/server` and the startup picker list an **Embedded** row per installed model; `/model` picks between them.
 * **Loading:** the status bar shows `🦙 loading <model>`; Esc, Ctrl+C or a double-click on the spinner cancels.
@@ -273,11 +273,11 @@ Your own LLM containers (vLLM, SGLang, anything serving an OpenAI-compatible API
 | Docker servers enabled | Offers the chosen containers in `/server`. Off: this run's containers stop at the reconnect. A plain `/profile reset` keeps it, the list and the pipe while the URL is a chosen container's. | off |
 | Docker server containers | A checklist of the engine's LLM servers: containers matching *Docker server match words* or labeled `neonsidekick.llm=true`. | empty |
 | Docker server match words | Words in an image or command that mark an LLM server. `r` restores the defaults; empty lists every container. | `aphrodite`, `koboldcpp`, `llama-server`, `llama.cpp`, `lmdeploy`, `localai`, `nvcr.io/nim`, `ollama`, `sglang`, `text-generation`, `trtllm`, `vllm` |
-| Docker server stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
-| Docker server post-stop delay (s) | The wait after a stop (a container or the embedded model) before the next model loads, so GPU memory frees (0–60). | 2 |
-| Docker server ready timeout (s) | How long a started container may take to answer on its OpenAI-compatible API (30–3600). | 900 |
-| Docker server one at a time | Starting a chosen container stops the other chosen ones first. Off: they keep running side by side, through a profile switch too (even to one with Docker servers off); each needs its own host port and GPU share. | on |
-| Docker server stop on exit | Once the app has started one, stops the running chosen containers when it exits, the window's close button included. | off |
+| Docker container stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
+| Docker container post-stop delay (s) | The wait after a stop (a container or the embedded model) before the next model loads, so GPU memory frees (0–60). | 2 |
+| Docker container ready timeout (s) | How long a started container may take to answer on its OpenAI-compatible API (30–3600). | 900 |
+| Docker containers one at a time | Starting a chosen container stops the other chosen ones first. Off: they keep running side by side, through a profile switch too (even to one with Docker servers off); each needs its own host port and GPU share. | on |
+| Docker containers stop on exit | Once the app has started one, stops the running chosen containers when it exits, the window's close button included. | off |
 
 #### Anthropic
 

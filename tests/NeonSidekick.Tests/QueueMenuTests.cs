@@ -73,14 +73,15 @@ public class QueueMenuTests : IDisposable
     [Fact]
     public void Strings_ArePinned()
     {
-        Assert.Equal('c', QueueMenu.ClearAllKey);
-        Assert.Equal(new MenuButton("⊠ clear all", 'c'), Assert.Single(QueueMenu.Buttons(send: false, null)));
+        Assert.Equal('c', QueueMenu.ClearAllKey);        // the other panes' (2026-11-23)
+        Assert.Equal('x', QueueMenu.QueueClearAllKey);   // the queue's: c is its cancel mode
+        Assert.Equal(new MenuButton("⊠ clear all", 'x'), Assert.Single(QueueMenu.Buttons(send: false, null)));
         Assert.Equal('s', QueueMenu.SendKey);
-        Assert.Equal([new MenuButton("➤ send", 's'), new MenuButton("⊠ clear all", 'c')], QueueMenu.Buttons(send: true, null));
+        Assert.Equal([new MenuButton("➤ send", 's'), new MenuButton("⊠ clear all", 'x')], QueueMenu.Buttons(send: true, null));
         // The mode buttons (2026-10-13, the user's ask): between send and clear all, the words in force; alone over the empty queue.
-        Assert.Equal([new MenuButton("➤ send", 's'), new MenuButton("mode: manual", 'm'), new MenuButton("cancel: hold", 'k'), new MenuButton("⊠ clear all", 'c')], QueueMenu.Buttons(send: true, (Queueing.Manual, QueueCancel.Hold)));
-        Assert.Equal([new MenuButton("mode: automatic", 'm'), new MenuButton("cancel: empty", 'k')], QueueMenu.Buttons(send: false, (Queueing.Automatic, QueueCancel.Empty), empty: true));
-        Assert.Equal("Enter = remove · s = send · m = mode · k = cancel mode · c = clear all · Esc = close", QueueMenu.KeysWithSend);
+        Assert.Equal([new MenuButton("➤ send", 's'), new MenuButton("mode: manual", 'm'), new MenuButton("cancel: hold", 'c'), new MenuButton("⊠ clear all", 'x')], QueueMenu.Buttons(send: true, (Queueing.Manual, QueueCancel.Hold)));
+        Assert.Equal([new MenuButton("mode: automatic", 'm'), new MenuButton("cancel: empty", 'c')], QueueMenu.Buttons(send: false, (Queueing.Automatic, QueueCancel.Empty), empty: true));
+        Assert.Equal("Enter = remove · s = send · m = mode · c = cancel mode · x = clear all · Esc = close", QueueMenu.KeysWithSend);
         Assert.Equal("(⏳ nothing queued)", QueueMenu.EmptyNotice);
         Assert.Equal("(⏳ removed: and then?)", QueueMenu.RemovedNotice("and then?"));
         Assert.Equal("[#9A8BB8]1[/]  a [[b]]", QueueMenu.RowMarkup(0, "a [b]"));
@@ -120,7 +121,7 @@ public class QueueMenuTests : IDisposable
         Seed("one", "two");
         var modes = new List<string>();
         var (menu, pane) = ModesPaneMenu(modes);
-        Push(Keys.Char('m'), Keys.Char('m'), Keys.Char('m'), Keys.Char('k'), Keys.Escape);
+        Push(Keys.Char('m'), Keys.Char('m'), Keys.Char('m'), Keys.Char('c'), Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
@@ -139,11 +140,11 @@ public class QueueMenuTests : IDisposable
         // The empty queue's pane carries the buttons too (2026-10-13): no clear all, Enter on the dim row nothing, ESC closes.
         var modes = new List<string>();
         var (menu, pane) = ModesPaneMenu(modes);
-        Push(Keys.Enter, Keys.Char('k'), Keys.Char('c'), Keys.Escape);
+        Push(Keys.Enter, Keys.Char('c'), Keys.Char('x'), Keys.Escape);
 
         Assert.Null(await menu.ShowAsync(CancellationToken.None));
 
-        Assert.Equal(["hold"], modes);   // c is no button here
+        Assert.Equal(["hold"], modes);   // x is no button here
         Assert.Contains("▸ " + QueueMenu.EmptyNotice + "\n", _console.Output);
         Assert.Contains("\n" + QueueMenu.EmptyKeys + "\n", _console.Output);
         Assert.Contains("mode: automatic", _console.Output);
@@ -305,7 +306,7 @@ public class QueueMenuTests : IDisposable
         Assert.Equal(new[] { "one", "two" }, Labels());
         Assert.DoesNotContain("dropped", _console.Output);
 
-        input.Push(Keys.Char('c'));
+        input.Push(Keys.Char('x'));
 
         await menu.ShowAsync(CancellationToken.None);
 

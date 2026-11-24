@@ -48,6 +48,47 @@ internal sealed partial class SettingsMenu
     /// <summary>The row of <see cref="AdvisorEntryRows"/> a Delete on an advisor goes to.</summary>
     public const int RemoveAdvisorChoice = 7;
 
+    /// <summary>
+    /// The choices a bare rule follows on an advisor's page (2026-11-23, the user's ask): who it is (role, description, persona), how it
+    /// answers (server, model, reasoning), then the rest (switch, remove). Pinned.
+    /// </summary>
+    public static readonly IReadOnlyList<int> AdvisorEntryRuleAfter = [2, ChangeAdvisorReasoningChoice];
+
+    /// <summary>The page's rows: <see cref="AdvisorEntryRows"/> escaped, a <see cref="SectionRule.Bare"/> after each of <see cref="AdvisorEntryRuleAfter"/>. Pure.</summary>
+    public static IReadOnlyList<string> AdvisorEntryPageRows()
+    {
+        var rows = new List<string>();
+        for (int i = 0; i < AdvisorEntryRows.Count; i++)
+        {
+            rows.Add(Markup.Escape(AdvisorEntryRows[i]));
+            if (AdvisorEntryRuleAfter.Contains(i))
+            {
+                rows.Add(SectionRule.Bare);
+            }
+        }
+
+        return rows;
+    }
+
+    /// <summary>The page rows that are rules (<see cref="AdvisorEntryPageRows"/>'s headings). Pure.</summary>
+    public static IReadOnlySet<int> AdvisorEntryRuleRows() =>
+        AdvisorEntryRuleAfter.Select((choice, n) => choice + 1 + n).ToHashSet();
+
+    /// <summary>
+    /// The choice a picked page row stands for: a row past a rule counts back over it. A negative pick (Esc) is itself; a rule row (never
+    /// picked, being no stop) is -1. Pure.
+    /// </summary>
+    public static int AdvisorChoiceOfRow(int row)
+    {
+        if (row < 0)
+        {
+            return row;
+        }
+
+        var rules = AdvisorEntryRuleRows();
+        return rules.Contains(row) ? -1 : row - rules.Count(r => r < row);
+    }
+
     /// <summary>The profile picker's title when adding. Pinned.</summary>
     public const string AdvisorProfileTitle = "Which profile advises?";
 
@@ -286,8 +327,9 @@ internal sealed partial class SettingsMenu
             }
 
             var entry = entries[index - AdvisorListLead];
-            var choice = new MenuPage(Crumb(title + " › " + entry.Profile), AdvisorEntryRows.Select(Markup.Escape).ToList(), PickKeys);
-            switch (pick.Remove ? RemoveAdvisorChoice : await PickAsync(choice, 0, cancellationToken).ConfigureAwait(false))   // Delete is the removal, asked as ever
+            // Two bare rules split the choices into who, how and the rest (2026-11-23, the user's ask); the switch runs on the choice the row stands for.
+            var choice = new MenuPage(Crumb(title + " › " + entry.Profile), AdvisorEntryPageRows(), PickKeys) { Headings = AdvisorEntryRuleRows() };
+            switch (pick.Remove ? RemoveAdvisorChoice : (await PickAsync(choice, 0, cancellationToken).ConfigureAwait(false) is int row ? AdvisorChoiceOfRow(row) : (int?)null))   // Delete is the removal, asked as ever
             {
                 case 0:
                     if (await ReadAdvisorRoleAsync(page, entry.Profile, entry.Role, cancellationToken).ConfigureAwait(false) is { } role && role != entry.Role)

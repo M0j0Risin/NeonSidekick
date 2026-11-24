@@ -845,7 +845,7 @@ internal sealed partial class ChatScreen
         // The reflection's 🧠 (2026-10-17, the user's ask): the PC's strip shows it while one runs, so the page does too.
         bool learning = _session.IsLearning;
         // A Ralph loop's place (2026-10-18): one volatile string the screen's task publishes, read here off a request's thread.
-        string? loop = _ralphStrip;
+        string? loop = LoopItemText();   // the lower rule's loop item (2026-11-23): 🔁, 🔎 or ⟳, with its ending tail
         var status = new WebStatus(
             busy?.Label,
             busy is { } running ? (long)running.Elapsed.TotalMilliseconds : null,

@@ -2793,11 +2793,11 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerServers => "Docker servers enabled",
         SettingsField.DockerServerContainers => "Docker server containers",
         SettingsField.DockerServerMatchWords => "Docker server match words",
-        SettingsField.DockerServerStopTimeoutSeconds => "Docker server stop timeout (s)",
-        SettingsField.DockerServerPostStopDelaySeconds => "Docker server post-stop delay (s)",
-        SettingsField.DockerServerReadyTimeoutSeconds => "Docker server ready timeout (s)",
-        SettingsField.DockerServerOneAtATime => "Docker server one at a time",
-        SettingsField.DockerServerStopOnExit => "Docker server stop on exit",
+        SettingsField.DockerServerStopTimeoutSeconds => "Docker container stop timeout (s)",
+        SettingsField.DockerServerPostStopDelaySeconds => "Docker container post-stop delay (s)",
+        SettingsField.DockerServerReadyTimeoutSeconds => "Docker container ready timeout (s)",
+        SettingsField.DockerServerOneAtATime => "Docker containers one at a time",
+        SettingsField.DockerServerStopOnExit => "Docker containers stop on exit",
         SettingsField.ObsidianAllowDelete => "Obsidian allow delete (.trash)",   // "Obsidian allow delete" until 2026-09-23 (the user's call: the row says where a delete goes)
         SettingsField.WebBrowserMode => "Web browser mode",
         SettingsField.WebBrowserPath => "Web browser path",
@@ -5040,10 +5040,11 @@ internal sealed partial class SettingsMenu
         var rows = page.Rows;
         var prompt = Theme.Selection(new SelectionPrompt<PromptResult<int>>()
             .Title(Theme.AccentMarkup(PromptTitle(page.Title, page.Hint)))
-            .AddChoices(Enumerable.Range(0, rows.Count).Select(PromptResult<int>.From))
+            // A heading or a rule (2026-11-23: the bare rules on an advisor's and a skill's page) is no choice here either, as it is no stop on the pane.
+            .AddChoices(Enumerable.Range(0, rows.Count).Where(page.IsStop).Select(PromptResult<int>.From))
             .AddCancelResult(() => PromptResult<int>.Canceled)
             .UseConverter(r => r.IsCanceled ? "" : rows[r.Value]));
-        if (cursor >= 0 && cursor < rows.Count)
+        if (cursor >= 0 && cursor < rows.Count && page.IsStop(cursor))
         {
             prompt.DefaultValue(PromptResult<int>.From(cursor));
         }
@@ -5358,11 +5359,18 @@ internal sealed partial class SettingsMenu
             }
         }
 
+        if (cursor < 0 && DockerRowOnPort(servers, current) is int docker)
+        {
+            // A saved loopback address on a running container's port (2026-11-23, hand check 4): the scan dropped that row for the container's own.
+            cursor = docker;
+        }
+
         if (lead is not null)
         {
-            // The caller's row first (2026-11-22): the sentinel at index 0, so both branches and the cursor see it as a row.
+            // The caller's row first (2026-11-22): the sentinel at index 0, so both branches and the cursor see it as a row. A saved address no
+            // row stands for lands on the first server row (2026-11-23, hand check 4), never the lead: a reflex Enter there clears the advisor's server.
             servers = [LeadServerRow, .. servers];
-            cursor = cursor >= 0 ? cursor + 1 : current is null ? 0 : -1;
+            cursor = cursor >= 0 ? cursor + 1 : current is null || servers.Count == 1 ? 0 : 1;
         }
 
         string keys = title == StartupServerTitle ? StartupServerKeys : KeepKeys;
@@ -5386,6 +5394,29 @@ internal sealed partial class SettingsMenu
         }
 
         return chosen;
+    }
+
+    /// <summary>
+    /// The row whose running container answers on <paramref name="current"/>'s loopback port (2026-11-23, hand check 4), or null: the scan
+    /// drops a loopback row a container stands for (<c>LlmSession.WithoutDockerPorts</c>), so a saved <c>http://localhost:30000</c> matches no URL. Pure.
+    /// </summary>
+    public static int? DockerRowOnPort(IReadOnlyList<LlmServer> servers, Uri? current)
+    {
+        ArgumentNullException.ThrowIfNull(servers);
+        if (current is not { IsLoopback: true })
+        {
+            return null;
+        }
+
+        for (int i = 0; i < servers.Count; i++)
+        {
+            if (servers[i].HostPorts.Contains(current.Port))
+            {
+                return i;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

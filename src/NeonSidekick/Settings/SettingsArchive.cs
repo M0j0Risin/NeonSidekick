@@ -122,9 +122,9 @@ public static class SettingsArchive
 
     /// <summary>
     /// Whether <paramref name="relative"/> (a path under the home, <c>/</c>-separated) is a settings file the zip carries: the home's
-    /// <c>configs/*.json</c>, themes and voice presets (top level and one non-dot subfolder), and skills, commands and ComfyUI workflows as their
-    /// catalogs read them; each valid, non-temporary profile's <c>profile.json</c>, prompt files, <c>configs/*.json</c> but the browser's
-    /// history, and its own skills, commands and workflows. Extensions and fixed names match ignoring case, as the catalogs read them. Pure.
+    /// <c>configs/*.json</c> and ComfyUI workflows (<c>configs/comfy/</c> since 2026-11-23), themes and voice presets (top level and one non-dot
+    /// subfolder), and skills and commands as their catalogs read them; each valid, non-temporary profile's <c>profile.json</c>, prompt files,
+    /// <c>configs/*.json</c> but the browser's history, its workflows, and its own skills and commands. Extensions and fixed names match ignoring case, as the catalogs read them. Pure.
     /// </summary>
     public static bool IsExported(string relative)
     {
@@ -142,7 +142,8 @@ public static class SettingsArchive
 
         if (Is(s[0], ConfigsName))
         {
-            return s.Length == 2 && HasExtension(s[1], ".json");
+            // The workflows in configs/comfy (2026-11-23, the user's call) ahead of the flat rule, which would refuse a third part.
+            return IsComfyItem(s) || (s.Length == 2 && HasExtension(s[1], ".json"));
         }
 
         if (Is(s[0], ThemesName) || Is(s[0], VoicesName))
@@ -170,15 +171,15 @@ public static class SettingsArchive
         if (Is(s[0], ConfigsName))
         {
             // The MCP sign-ins (2026-11-21) stay behind too: sealed for this user and computer, so sign in again on the other one.
-            // The project skills' trust (2026-11-23): a decision about folders on this PC, never carried to another.
-            return s.Length == 2 && HasExtension(s[1], ".json") && !Is(s[1], Viewer.BrowserHistory.FileName) && !Is(s[1], Mcp.McpTokenStore.FileName)
-                && !Is(s[1], Skills.ProjectSkillTrust.FileName);
+            // The project skills' trust (2026-11-23): a decision about folders on this PC, never carried to another. The workflows (configs/comfy) first.
+            return IsComfyItem(s) || (s.Length == 2 && HasExtension(s[1], ".json") && !Is(s[1], Viewer.BrowserHistory.FileName) && !Is(s[1], Mcp.McpTokenStore.FileName)
+                && !Is(s[1], Skills.ProjectSkillTrust.FileName));
         }
 
         return IsCatalogItem(s);
     }
 
-    /// <summary>A skill's file (its folder one level down, never under <c>.git</c> or <c>node_modules</c>), a command, or a workflow file.</summary>
+    /// <summary>A skill's file (its folder one level down, never under <c>.git</c> or <c>node_modules</c>) or a command; a workflow is <see cref="IsComfyItem"/>'s since 2026-11-23.</summary>
     private static bool IsCatalogItem(string[] s)
     {
         if (Is(s[0], SkillsName))
@@ -192,12 +193,35 @@ public static class SettingsArchive
                 && HasExtension(s[^1], CustomCommands.CustomCommandName.Extension);
         }
 
-        if (Is(s[0], ComfyName))
+        return false;
+    }
+
+    /// <summary>
+    /// <c>configs/comfy/&lt;file&gt;</c>, a workflow's <c>.json</c> or <c>.md</c> one level down (2026-11-23, the user's call: the workflows moved into
+    /// <c>configs</c>, no migration; a top-level <c>comfy/</c> is no longer exported). <paramref name="s"/> starts at <c>configs</c>.
+    /// </summary>
+    private static bool IsComfyItem(string[] s) =>
+        s.Length == 3 && Is(s[0], ConfigsName) && Is(s[1], ComfyName) && !s[2].StartsWith('.') && (HasExtension(s[2], ".json") || HasExtension(s[2], ".md"));
+
+    /// <summary>
+    /// A zip made before 2026-11-23 carries its workflows as <c>comfy/x.json</c> (or <c>profiles/p/comfy/x.json</c>): renamed into
+    /// <c>configs/comfy/</c>, so an old export still restores workflows that get read; any other name as it is. Pure.
+    /// </summary>
+    public static string LegacyComfyName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        string[] s = name.Split('/');
+        if (s.Length == 2 && Is(s[0], ComfyName))
         {
-            return s.Length == 2 && !s[1].StartsWith('.') && (HasExtension(s[1], ".json") || HasExtension(s[1], ".md"));
+            return ConfigsName + "/" + ComfyName + "/" + s[1];
         }
 
-        return false;
+        if (s.Length == 4 && Is(s[0], Profiles.DirectoryName) && Is(s[2], ComfyName))
+        {
+            return s[0] + "/" + s[1] + "/" + ConfigsName + "/" + ComfyName + "/" + s[3];
+        }
+
+        return name;
     }
 
     /// <summary>OS junk and temp files, never carried; a Mac's AppleDouble <c>._x</c> beside a copied file among them (the review's #91).</summary>
@@ -270,7 +294,7 @@ public static class SettingsArchive
                     }
                 }
             }
-            else if (Is(name, ConfigsName) || Is(name, ThemesName) || Is(name, VoicesName) || Is(name, AdvisorsName) || Is(name, SkillsName) || Is(name, CommandsName) || Is(name, ComfyName))
+            else if (Is(name, ConfigsName) || Is(name, ThemesName) || Is(name, VoicesName) || Is(name, AdvisorsName) || Is(name, SkillsName) || Is(name, CommandsName))
             {
                 CollectFolder(dir, name + "/", c, seen);
             }
@@ -307,7 +331,7 @@ public static class SettingsArchive
 
         foreach (var dir in profile.EnumerateDirectories().OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
         {
-            if (Is(dir.Name, ConfigsName) || Is(dir.Name, SkillsName) || Is(dir.Name, CommandsName) || Is(dir.Name, ComfyName))
+            if (Is(dir.Name, ConfigsName) || Is(dir.Name, SkillsName) || Is(dir.Name, CommandsName))
             {
                 CollectFolder(dir, prefix + dir.Name + "/", c, seen);
             }
@@ -318,8 +342,8 @@ public static class SettingsArchive
         }
     }
 
-    /// <summary>One of the allowlist's folders (<c>configs</c>, <c>themes</c>, <c>voices</c>, <c>skills</c>, <c>commands</c>, <c>comfy</c>), at the home's or a profile's top.</summary>
-    private static void CollectFolder(DirectoryInfo dir, string prefix, ExportCollection c, HashSet<string> seen)
+    /// <summary>One of the allowlist's folders (<c>configs</c>, <c>themes</c>, <c>voices</c>, <c>skills</c>, <c>commands</c>), at the home's or a profile's top, or <c>configs/comfy</c> (2026-11-23).</summary>
+    private static void CollectFolder(DirectoryInfo dir, string prefix, ExportCollection c, HashSet<string> seen, bool configsComfy = false)
     {
         // A linked top folder (a junctioned skills/ or configs/) is left out as a nested link is (the review's #20).
         if (IsLink(dir))
@@ -363,8 +387,8 @@ public static class SettingsArchive
             return;
         }
 
-        bool configs = Is(kind, ConfigsName);
-        bool comfy = Is(kind, ComfyName);
+        bool configs = Is(kind, ConfigsName) && !configsComfy;
+        bool comfy = configsComfy;
         var files = dir.EnumerateFiles().OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToList();
         var jsonStems = comfy
             ? files.Where(f => HasExtension(f.Name, ".json")).Select(f => Path.GetFileNameWithoutExtension(f.Name)).ToHashSet(StringComparer.OrdinalIgnoreCase)
@@ -413,6 +437,13 @@ public static class SettingsArchive
             // The trusted SKILL.md copies (2026-11-23) are the trust's, never exported or listed as left out.
             foreach (var sub in dir.EnumerateDirectories().Where(d => !Is(d.Name, Skills.ProjectSkillTrust.CopiesFolderName)).OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
             {
+                // The ComfyUI workflows (2026-11-23, the user's call): configs/comfy, collected as the top-level comfy folder was.
+                if (Is(sub.Name, ComfyName) && !configsComfy)
+                {
+                    CollectFolder(sub, prefix + sub.Name + "/", c, seen, configsComfy: true);
+                    continue;
+                }
+
                 c.LeftOut.Add(prefix + sub.Name + "/");
             }
         }
@@ -827,6 +858,7 @@ public static class SettingsArchive
             var entries = new List<(string, ZipArchiveEntry)>();
             var skipped = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             long declared = 0;
             foreach (var entry in zip.Entries)
             {
@@ -870,9 +902,17 @@ public static class SettingsArchive
                 {
                     manifest = ReadManifest(entry);
                 }
-                else if (IsExported(name))
+                else if (LegacyComfyName(name) is var target && IsExported(target))
                 {
-                    entries.Add((name, entry));
+                    // An old zip's comfy/x.json lands in configs/comfy (2026-11-23); with both spellings in one zip the first is kept, never two writes.
+                    if (targets.Add(target))
+                    {
+                        entries.Add((target, entry));
+                    }
+                    else
+                    {
+                        skipped.Add(name);
+                    }
                 }
                 else
                 {
@@ -1135,7 +1175,7 @@ public static class SettingsArchive
         var themeNames = new Lazy<HashSet<string>>(() => LocalThemeNames(Path.Combine(root, ThemesName)));
         var voiceNames = new Lazy<HashSet<string>>(() => Speech.VoicePresets.Files(Path.Combine(root, VoicesName))
             .Select(f => Path.GetFileNameWithoutExtension(f.Name)).ToHashSet(StringComparer.OrdinalIgnoreCase));
-        var comfyStems = new Lazy<HashSet<string>>(() => LocalComfyStems(Path.Combine(root, ComfyName)));
+        var comfyStems = new Lazy<HashSet<string>>(() => LocalComfyStems(AppSettings.GlobalComfyDirectoryOf(root)));
         var skillNames = new Lazy<HashSet<string>>(() => LocalSkillNames(skillsRoot));
         var skills = entries.Where(e => Is(e.Name.Split('/')[0], SkillsName))
             .GroupBy(e => e.Name.Split('/')[1], StringComparer.OrdinalIgnoreCase)
@@ -1211,7 +1251,7 @@ public static class SettingsArchive
                 report.Skipped.Add(name);
                 continue;
             }
-            else if (Is(s[0], ComfyName) && comfyStems.Value.Contains(stem))
+            else if (IsComfyItem(s) && comfyStems.Value.Contains(stem))
             {
                 report.Skipped.Add(name);
                 continue;
@@ -1467,7 +1507,7 @@ public static class SettingsArchive
 
             ApplyMode(target, file.Attributes);
             report.AddedHome.Add(file.Relative);
-            if (Is(file.Relative.Split('/')[0], ConfigsName))
+            if (Is(file.Relative.Split('/')[0], ConfigsName) && !IsComfyItem(file.Relative.Split('/')))   // a workflow is no connection file (2026-11-23)
             {
                 Computers.ConfigCache.Invalidate(target);
                 report.WroteMcp |= Is(file.Relative.Split('/')[^1], Mcp.McpConfigFile.FileName);

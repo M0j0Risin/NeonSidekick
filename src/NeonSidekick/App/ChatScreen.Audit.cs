@@ -23,19 +23,6 @@ internal sealed partial class ChatScreen
     /// <summary>The /usage Tools tab's name for the group that holds <c>present_audit</c>.</summary>
     public const string AuditGroupName = "Audit";
 
-    /// <summary>The strip with the audit's glyph and pass ahead of the rest while a pass runs (<c>🔎 2/5</c>). Pinned.</summary>
-    public static string AuditStrip(string? pass, string strip)
-    {
-        ArgumentNullException.ThrowIfNull(strip);
-        if (pass is null)
-        {
-            return strip;
-        }
-
-        string lead = AuditText.Glyph + " " + pass;
-        return strip.Length == 0 ? lead : lead + GlyphSeparator + strip;
-    }
-
     /// <summary>What a turn of the audit leaves to do once it ends: the next pass's message, or the report to put on the done pane.</summary>
     private sealed record AuditAfterTurn(string? Message, string? DonePath)
     {
@@ -526,7 +513,9 @@ internal sealed partial class ChatScreen
                 // The pass's turn failed on the server's side (2026-11-17, the gap-audit-reliability plan): the same message once more after a
                 // wait, under the turn's keys, so Esc or the page's Stop ends the review here as mid-reply; a line typed meanwhile goes first.
                 _retryPass = false;
-                bool stopped = await WaitUnderWatchAsync(ct => Task.Delay(PassRetryWait, _time, ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false)
+                // 🔎's double-click on the lower rule (2026-11-23) ends the wait at once, read as the message's stop, never as Esc.
+                var ended = _audit.Running is { Pending: false } && _auditEnd is { } auditEnd ? auditEnd.Token : CancellationToken.None;
+                bool stopped = await WaitUnderWatchAsync(ct => DelayOrEndedAsync(PassRetryWait, ended, ct), KeySource.IsTurnCancel, cancellationToken, pointer: true).ConfigureAwait(false)
                     || cancellationToken.IsCancellationRequested;
                 if (stopped || PassUserSpoke())
                 {
@@ -645,10 +634,23 @@ internal sealed partial class ChatScreen
     /// The lines so far as an audit begins or resumes (2026-10-20, a review, the Ralph loop's rule: the queue's count stopped it after pass 1 on a
     /// line waiting before it began, while under Queue mode manual a typed line, and a page's message, never stopped it).
     /// </summary>
-    private void MarkAuditBaseline() => _auditBaseline = LinesNow();
+    private void MarkAuditBaseline()
+    {
+        _auditBaseline = LinesNow();
+        // 🔎's double-click asked afresh each run (2026-11-23).
+        var old = _auditEnd;
+        _auditEnd = new PassEnd();
+        old?.Dispose();
+    }
 
-    /// <summary>A message typed on the PC, held, or sent from the page since the audit began: it stops the audit after its pass.</summary>
-    private bool AuditUserSpoke() => LinesNow() != _auditBaseline;
+    /// <summary>
+    /// A message typed on the PC, held, or sent from the page since the audit began: it stops the audit after its pass. 🔎's double-click on the
+    /// lower rule (2026-11-23, the user's ask) stops it the same way, its report kept for <c>/code-audit resume</c>.
+    /// </summary>
+    private bool AuditUserSpoke() => LinesNow() != _auditBaseline || _auditEnd is { Asked: true };
+
+    /// <summary>The audit stops for 🔎's double-click alone, no line typed (2026-11-23): the stop's notice says "as asked".</summary>
+    private bool AuditEndClicked() => _auditEnd is { Asked: true } && LinesNow() == _auditBaseline;
 
     /// <summary>The lines as the gap review's pass 1 began, or as it resumed (2026-11-17, <see cref="LineCounts"/>).</summary>
     private LineCounts _gapBaseline;
@@ -836,7 +838,7 @@ internal sealed partial class ChatScreen
 
         _transcript.Notice(reason == PlanGapStop.Converged
             ? AuditText.ConvergedNotice(name, loop.Pass, loop.CleanPasses, coverage.Read, coverage.Scope, pane: _pane.Enabled || FromWebNow, coverage.Unread.Count, loop.StreakLight)
-            : AuditText.StopNotice(reason, name, loop.Pass, loop.PassLight.Count > 0), NoticeTone.Progress);
+            : AuditText.StopNotice(reason, name, loop.Pass, loop.PassLight.Count > 0, clicked: reason == PlanGapStop.UserSpoke && AuditEndClicked()), NoticeTone.Progress);
         return reason is PlanGapStop.Converged or PlanGapStop.Limit or PlanGapStop.Stalled or PlanGapStop.Unconfirmed ? new AuditAfterTurn(null, path) : null;
     }
 

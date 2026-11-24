@@ -34,7 +34,7 @@ public sealed record DockerClear(IReadOnlyList<string> Names, AppSettingsData Se
     public int? SparePort { get; init; }
 
     /// <summary>
-    /// Every stop asked at once, then all awaited (2026-11-10, the app's exit): with <c>Docker server one at a time</c> off several may run,
+    /// Every stop asked at once, then all awaited (2026-11-10, the app's exit): with <c>Docker containers one at a time</c> off several may run,
     /// and the exit's budget covers one stop. The engine finishes a stop it has received even if the caller gives up. Else one after another,
     /// each reported as it stops. Since 2026-11-11 (the review of the one-local-model change) a together clear reports at the end, tells no
     /// phase and takes no gate: a window closed while a container loads still asks every stop (the engine takes a second stop of one
@@ -58,9 +58,9 @@ public interface IDockerServers : IDisposable
     Task<DockerServerList> ListAsync(AppSettingsData effective, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Stops every other chosen container (with <c>Docker server one at a time</c> on, 2026-11-10; off, they keep running, and a target that
+    /// Stops every other chosen container (with <c>Docker containers one at a time</c> on, 2026-11-10; off, they keep running, and a target that
     /// would bind a host port one of them publishes is refused), starts <paramref name="name"/> and waits for its API; <paramref name="phase"/>
-    /// is told each step. <c>Docker server post-stop delay</c> is waited when it stopped any, or (2026-11-11, the review) when
+    /// is told each step. <c>Docker container post-stop delay</c> is waited when it stopped any, or (2026-11-11, the review) when
     /// <paramref name="freed"/> says the caller just freed the GPU (the embedded model stopped, a profile switch's clear) and the target
     /// loads a model: neither running nor paused, since an unpause loads nothing.
     /// </summary>
@@ -70,7 +70,7 @@ public interface IDockerServers : IDisposable
     /// Stops every active container <paramref name="request"/> names but those it spares (another server picked, an embedded model about to
     /// load, a profile switch, the app's exit), from one list of the engine's, under the switch's gate; each name told to
     /// <paramref name="stoppedOne"/> as it stops, so a cancel keeps what happened. A <see cref="DockerClear.Together"/> clear (the exit's)
-    /// takes no gate and reports at the end. With <see cref="DockerClear.Settle"/> and any stopped, <c>Docker server post-stop delay</c> is
+    /// takes no gate and reports at the end. With <see cref="DockerClear.Settle"/> and any stopped, <c>Docker container post-stop delay</c> is
     /// waited after, as a switch waits it.
     /// </summary>
     Task<DockerStopAll> ClearAsync(DockerClear request, Action<string>? phase, Action<string>? stoppedOne, CancellationToken cancellationToken);
@@ -78,18 +78,18 @@ public interface IDockerServers : IDisposable
 
 /// <summary>
 /// The switch between the chosen Docker containers (2026-10-02, the user's ask, after their tray app
-/// DockerLlmPicker, whose algorithm this carries): one snapshot of the containers; with <c>Docker server one at a time</c> on (the
+/// DockerLlmPicker, whose algorithm this carries): one snapshot of the containers; with <c>Docker containers one at a time</c> on (the
 /// default; off since 2026-11-10, the user's ask, they run side by side, and since 2026-11-11 a target binding a host port another
 /// active chosen container publishes is refused before the engine's bind error) every other chosen one that holds memory
 /// (running, paused or restarting) stopped in the chosen order — a paused one unpaused first —, each waited for until it has
-/// exited; then, when any was stopped or the caller freed the GPU, <c>Docker server post-stop delay</c> for the GPU's memory to settle; then the target
+/// exited; then, when any was stopped or the caller freed the GPU, <c>Docker container post-stop delay</c> for the GPU's memory to settle; then the target
 /// started (a 304 is "already running"). A stop that fails leaves the target unstarted: two models may not fit the GPU, and with the
 /// setting on the user's call is one at a time. A clear (<see cref="ClearAsync"/>) stops chosen containers without starting one; the
 /// exit's asks every stop together (<see cref="DockerClear.Together"/>). Then what DockerLlmPicker never did: the container's published TCP ports are read (inspect,
 /// the running ones first, the asked-for ones else; every-address binds mean loopback) and each port's <c>/v1/models</c> is asked
 /// once a second, through the endpoint probe, until one answers — a model takes minutes to load — while every
 /// <see cref="InspectEvery"/> the container is looked at: exited is a failure with its last log lines, restarting a phase of its
-/// own; past <c>Docker server ready timeout</c> it is a failure too, the container left running. Only chosen containers are ever
+/// own; past <c>Docker container ready timeout</c> it is a failure too, the container left running. Only chosen containers are ever
 /// touched. Every act is audited (<see cref="DockerServerText.By"/>) by <see cref="DockerSession.ActOneAsync"/>. One switch or clear at a
 /// time (the exit's together clear excepted); nothing throws but the caller's own cancellation. Starts no process: the engine's API alone.
 /// </summary>
@@ -204,7 +204,7 @@ public sealed class DockerServerHost : IDockerServers
                 return DockerSwitch.Failed(DockerServerText.NotFound(name), []);
             }
 
-            // With Docker server one at a time off (2026-11-10, the user's ask) the others keep running: none stopped, so no settle either.
+            // With Docker containers one at a time off (2026-11-10, the user's ask) the others keep running: none stopped, so no settle either.
             var stopped = new List<string>();
             foreach (var other in effective.DockerServerOneAtATime ? OthersToStop(all, names, except: [name]) : [])
             {
@@ -435,7 +435,7 @@ public sealed class DockerServerHost : IDockerServers
         return ports.Contains(port) || (inspected is not null && string.Equals(inspected.NetworkMode, "host", StringComparison.Ordinal));
     }
 
-    /// <summary>When the GPU was just freed (a container stopped, or the caller's own stop), <c>Docker server post-stop delay</c> for its memory to settle before the next model loads.</summary>
+    /// <summary>When the GPU was just freed (a container stopped, or the caller's own stop), <c>Docker container post-stop delay</c> for its memory to settle before the next model loads.</summary>
     private async Task SettleAsync(bool freed, AppSettingsData effective, Action<string>? phase, CancellationToken cancellationToken)
     {
         if (freed && effective.DockerServerPostStopDelaySeconds > 0)

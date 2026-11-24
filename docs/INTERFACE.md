@@ -45,8 +45,21 @@ From top to bottom:
 * **The picture strip**, while there are ComfyUI pictures: 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and 🎞️ to bring a closed picture strip back.
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
-* **The lower rule:** **▶ n** counts the background processes running; a double-click opens `/process`.
-* **The update marker:** left of **▶ n**, **📦** shows a new version and how its [update](COMMANDS.md#updating) stands (`📦 0.5.7`, `42%`, `checking`, `at quit`, `back to 0.5.6 at quit`); a double-click opens `/update`. *Check for updates at start* off hides the plain `📦 0.5.7`, and a narrow window drops the marker first.
+* **The lower rule** shows the running jobs at its right, whatever the Status section shows: `── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ▶ 1 ─`.
+  * **📦** a new version and how its [update](COMMANDS.md#updating) stands (`📦 0.5.7`, `42%`, `checking`, `at quit`, `back to 0.5.6 at quit`); *Check for updates at start* off hides the plain `📦 0.5.7`.
+  * **The loop:** 🔁 a [Ralph loop](COMMANDS.md#ralph-loop) (`🔁 step 2/5 · pass 3`), 🔎 a [code audit](COMMANDS.md#code-audit) (`🔎 2/5`, or `🔎 2` with no limit), ⟳ a [`/loop`](COMMANDS.md#loops) (`⟳ 3/10`, or `⟳ 3`). `· ending` follows once a double-click asked it to end.
+  * **📥** an embedded model's download, **🖼️** (🎨 for a rework) ComfyUI pictures still rendering, **▶ n** the background processes running.
+  * **A narrow window** drops 📦 first, then 🖼️, then 📥, then the loop; ▶ n stays. Each is shown whole or not at all.
+
+| Double-click on the lower rule | Does |
+|---|---|
+| 📦 | `/update` |
+| 🔁 | pauses the loop after the pass in progress (`/plan ralph` goes on); Esc stops it at once |
+| 🔎 | stops the audit after the pass in progress, the report kept for `/code-audit resume` |
+| ⟳ | ends the loop after the message or run in progress; Esc ends it at once |
+| 📥 | pauses the download |
+| 🖼️/🎨 | cancels the pictures; the reply goes on |
+| ▶ n | `/process` |
 * **A mark:** `/mark <color>` colors both rules for the conversation, kept with its session; `/mark default` takes it off.
 * **Five bars**, in *Toolbar order*: [hints](#the-hints-bar) (while there is a hint), [status](#the-status-bar), [toolbar](#the-toolbar), [performance](#the-performance-bar), [home](#the-home-bar).
 * **A short window** drops the home bar, then the performance bar, then the toolbar; the hints bar goes last.
@@ -110,7 +123,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 |---|---|
 | **Conversation** | |
 | `/memory` | Enter: edit, disable/enable, folder / everywhere, forget (asks) · Delete forgets (asks) · `r` remember · `m` *Memory mode* |
-| `/queue` | Enter or Delete removes (asks) · `c` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `k` *Queue cancel mode* |
+| `/queue` | Enter or Delete removes (asks) · `x` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `c` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
 | `/rewind`'s files question | `f` conversation and files · `c` conversation only · Enter chooses · Esc cancels |
 | Files changed since (`/undo`, `/rewind … files`) | `r` restore over them (yours to the Recycle bin first) · `s` skip them · Esc cancels |
@@ -343,8 +356,8 @@ The row under the hints bar (*Status bar*); [Bar checklists](#bar-checklists) mo
 * **A call's size**, `(41.0k chars)`, shows past 1,000 characters where the server sends the call as it's written; elsewhere nothing shows until it's done.
 * **A runaway `present_audit` call** (the model repeating itself) is stopped, and the reply ends on an error.
 * **Narrow window:** the model's name and the path shrink, then go; then the right group gives way, then the left. The spinner goes last.
-* **Background setups** (an embedded model's download, MCP servers connecting, the voice models' first load) show 📥, 🔌, 🎙️ or 🔈; the input line stays yours.
-* **Leading the Status section:** 🔁 for a Ralph loop (`🔁 step 2/5 · pass 3`; Esc stops it, typing pauses it), 🔎 for a code audit (`🔎 2/5`, or `🔎 2` with no pass limit), 📝 in plan mode.
+* **Background setups** (MCP servers connecting, the voice models' first load) show 🔌, 🎙️ or 🔈; the input line stays yours.
+* **Leading the Status section:** 📝 in plan mode. Loops, downloads and rendering pictures show on [the lower rule](#the-screen).
 * **An audit that ends on its own** prints its open findings as a table (most severe first, at most 40) and opens its done pane on **Keep report** ([Pane keys](#pane-keys), [Code audit](COMMANDS.md#code-audit)).
 
 | Double-click | Does |
@@ -353,9 +366,9 @@ The row under the hints bar (*Status bar*); [Bar checklists](#bar-checklists) mo
 | the reasoning icon | `/reasoning` |
 | the working directory | `/cwd browse` |
 | the tokens or spinner | `/usage` |
-| 🖼️/🎨 (ComfyUI rendering) | cancels the pictures; the reply goes on |
+| 🖼️/🎨 (beside the spinner, ComfyUI rendering) | cancels the pictures; the reply goes on |
 | 🧠 (background learning) | cancels it, like Ctrl+L |
-| 📥 / 🔌 / 🎙️ / 🔈 | cancels that setup |
+| 🔌 / 🎙️ / 🔈 | cancels that setup |
 | the queued count | `/queue` |
 | the timers | asks, then cancels them all |
 | 📷 (camera on) | `/camera off` |
@@ -377,8 +390,8 @@ Icons under the status bar (*Tool bar*), each shown while checked there. A click
 | 📣 | always | `/prompts` |
 | ⏳ | dark while *Queue mode* is `off` | `/queue` |
 | 🙋 | dark while *Ask user* is off | `/tools ask` |
-| 🔒 / 🔓 | *Shell command policy* `ask` / `yolo` (none under `off`) | `/tools shell allowed` |
-| 👮 / 🥷 | *Shell police* on / off (none while the policy is `off`) | `/tools shell police` |
+| 🔒 / 🔓 | *Shell command policy* `ask` / `yolo` (🔒 dark under `off`) | `/tools shell allowed` |
+| 👮 / 🥷 | *Shell police* on / off (dark while the policy is `off`) | `/tools shell police` |
 | 🐚 | dark under `off` | `/tools shell` |
 | 📁 🖼️ 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ | dark while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |
 | 🪵 | dark while off, or where there are no event logs to read | `/tools eventlog` |
@@ -445,7 +458,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 * Shift+↑/↓ (or Alt+↑/↓) moves it a place, crossing into the next group at the edge; Shift+Home/End to its group's top or bottom.
 * **Performance bar:** **look:** on the title row (`l`) steps text, gauge, led.
 * **Status bar:** the Spinner can only be moved, not unchecked. The row reads `default`, `all`, `none`, or the left group's sections, `|`, then the right group's.
-* **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor; it moves like an item, and Delete takes it out. The default has three: `⚙️ 🛠️ 🎓 🪄 │ 📊 💾 📣 ⏳ │ 🙋 🔒 👮 🐚 │ 📁 🖼️ 🌐 📱`.
+* **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor; it moves like an item, and Delete takes it out. The default draws five: `⚙️ 🛠️ 💬 │ 🪪 🧮 📊 │ 💾 🎓 🦉 │ 🪄 📣 ⏳ │ 📁 🌐 📱 │ 🔒 👮 🐚`.
 
 *Toolbar order* orders the five bars: Shift+↑/↓ (or Alt+↑/↓) moves the bar under the cursor, Shift+Home/End to the top or bottom, `d` the default. A bar that is off keeps its place.
 
@@ -461,7 +474,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 
 * *Welcome splash* `image`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
 * *Welcome splash* `robot`: a robot above the draft line follows the mouse (where the terminal reports it) and your typing; your first line takes it away. Short of room it shows just its head, or nothing.
-* **Your own pictures** in the profile's `images\splash\` replace the built-in ones; `/splash view` or `/splash thumbs` opens the folder, `/splash purge` empties it.
+* **Your own pictures** in the profile's `images\splash\` replace the built-in ones; the [picture menu](#the-picture-menu) adds one, `/splash view` or `/splash thumbs` opens the folder, `/splash purge` empties it.
 * `/splash` shows the splash whatever *Welcome splash* says (the picture when it's `off`).
 * **On the Web UI** the picture leads the transcript until the first message from either side; the robot isn't shown.
 
@@ -498,7 +511,7 @@ What every window shares:
 A right-click in the viewer or the thumbnail browser.
 
 * **Edits:** rotate and flip, color (grayscale, sepia, negative, polaroid), resize, convert (PNG, JPEG, GIF, BMP), shrink the file under a size, strip metadata losslessly. *Image edit mode* decides whether an edit writes `photo-edited.png` or replaces the picture.
-* **The file:** copy its path, show it in Explorer (Finder on a Mac), attach it, print it, or delete it without asking (to the Recycle bin or Trash under *File deletes to Recycle bin*, else for good).
+* **The file:** copy its path, show it in Explorer (Finder on a Mac), attach it, print it, add it to the splash images, or delete it without asking (to the Recycle bin or Trash under *File deletes to Recycle bin*, else for good).
 
 ### The thumbnail browser
 
@@ -785,7 +798,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 | Page | bare `/prompts`, `/sessions`, `/queue` | Opens the [queue and prompts sheet](#queue-prompts-history-and-memory) on its Prompts or Queue tab, or the 🗂️ sheet on its Sessions tab (the sheets' buttons do too, even with *Web UI commands* off) |
 | Other | Every form that opens a pane or a window at the PC, and `/update`'s others, since installing happens at the PC (`/settings`, `/advisor list`, `/theme`, `/view`, `/prompts list --clear`, `/camera`, `/screen`, `/ha stills`, `/undo purge`…) | Refused, naming the form that works here when there is one |
 
-* **A Ralph loop:** its confirm, checkpoint and by-hand check ask on both sides; the status row shows 🔁, and Stop ends the loop.
+* **A Ralph loop:** its confirm, checkpoint and by-hand check ask on both sides; the status row shows 🔁 (🔎 for an audit, ⟳ for a `/loop`), and Stop ends the loop.
 * **`/loop`** runs as at the PC (a looped `/read` is refused).
 * **Pointers:** bare `/shopping` points at the Shopping tab; bare `/youtube` and `/youtube list` at the Video tab's saved videos (or its setting while the tab is off). Bare `/about` points at ☰ › About.
 * **`/queue send|mode|cancel`** point at the [Queue tab](#queue-prompts-history-and-memory).

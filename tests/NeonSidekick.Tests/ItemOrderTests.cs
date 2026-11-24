@@ -184,11 +184,14 @@ public class ItemOrderTests
         Assert.Equal(["a", "divider:1", "b"], added.Left);
         Assert.Equal(1, at);
 
-        Assert.Equal([ToolbarItems.Sessions, ToolbarItems.Midi, "divider:1", ToolbarItems.Usage, ToolbarItems.Memory], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Sessions).Take(5));   // 🎹 after 💬 since 2026-11-12 (the user's ask); ahead of 📊 since 2026-11-07 (the user's ask: 📊 on, right of the first divider); ahead of 💾 from later still on 2026-10-13
-        string[] memoryOn = [.. ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Memory).Take(5)];
-        Assert.Equal([ToolbarItems.Memory, ToolbarItems.Prompts, ToolbarItems.Queue, "divider:2", ToolbarItems.Ask], memoryOn);   // ⏳ ahead of the divider since 2026-10-13, 📣 after 💾 since 2026-10-14
-        Assert.Equal([ToolbarItems.Shell, "divider:3", ToolbarItems.Files], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Shell).Take(3));
-        Assert.Equal(ToolbarItems.Names.Length + 3, ToolbarItems.DefaultOrder.Length);
+        // The neon profile's order since 2026-11-23 (the user's ask): fifteen groups, the dividers numbered from the left; three dividers
+        // from 2026-10-13 until then, the first ahead of 📊 since 2026-11-07.
+        Assert.Equal([ToolbarItems.Settings, ToolbarItems.Tools, ToolbarItems.Sessions, "divider:1", ToolbarItems.Profile, ToolbarItems.Themes, ToolbarItems.Usage, "divider:2"], ToolbarItems.DefaultOrder.Take(8));
+        Assert.Equal([ToolbarItems.Advisors, "divider:3", ToolbarItems.Commands], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Advisors).Take(3));   // neon's two dividers here are one
+        Assert.Equal([ToolbarItems.Shell, "divider:6", ToolbarItems.Process], ToolbarItems.DefaultOrder.SkipWhile(id => id != ToolbarItems.Shell).Take(3));
+        Assert.Equal([ToolbarItems.Postgres, "divider:14", ToolbarItems.BrowserLinks, ToolbarItems.ShoppingList, ToolbarItems.Path, ToolbarItems.Model], ToolbarItems.DefaultOrder[^6..]);
+        Assert.Equal(ToolbarItems.Names.Length + 14, ToolbarItems.DefaultOrder.Length);
+        Assert.Equal(ToolbarItems.Names.Order(StringComparer.Ordinal), ToolbarItems.DefaultOrder.Where(id => !ItemOrder.IsDivider(id)).Order(StringComparer.Ordinal));   // every item once
         Assert.Null(ToolbarItems.SaveOrder(ToolbarItems.DefaultOrder));
         Assert.Equal(ToolbarItems.Names, ToolbarItems.Order([.. ToolbarItems.Names]));   // a saved order without them stays without
     }

@@ -131,9 +131,12 @@ public sealed class SettingsArchiveTests : IDisposable
     [InlineData("commands/a/b/c/d/e/x.md", false)]
     [InlineData("commands/.hidden/x.md", false)]
     [InlineData("commands/x.txt", false)]
-    [InlineData("comfy/wf.json", true)]
-    [InlineData("comfy/wf.md", true)]
-    [InlineData("comfy/sub/wf.json", false)]
+    [InlineData("configs/comfy/wf.json", true)]   // the workflows in configs since 2026-11-23 (the user's call, no migration)
+    [InlineData("configs/comfy/wf.md", true)]
+    [InlineData("configs/comfy/sub/wf.json", false)]
+    [InlineData("configs/comfy/.hidden.json", false)]
+    [InlineData("configs/comfy/notes.txt", false)]
+    [InlineData("comfy/wf.json", false)]   // the old place, no longer read (an old zip's entry is renamed first: LegacyComfyName)
     [InlineData("machine-id", false)]
     [InlineData("crash.log", false)]
     [InlineData("models/x.bin", false)]
@@ -151,7 +154,8 @@ public sealed class SettingsArchiveTests : IDisposable
     [InlineData("profiles/neon/files/a.txt", false)]
     [InlineData("profiles/neon/skills/s/SKILL.md", true)]
     [InlineData("profiles/neon/commands/x.md", true)]
-    [InlineData("profiles/neon/comfy/wf.json", true)]
+    [InlineData("profiles/neon/configs/comfy/wf.json", true)]
+    [InlineData("profiles/neon/comfy/wf.json", false)]
     [InlineData("profiles/_temp/profile.json", false)]
     [InlineData("profiles/bad name/profile.json", false)]
     [InlineData("profiles/neon/configs/Thumbs.db", false)]
@@ -180,7 +184,8 @@ public sealed class SettingsArchiveTests : IDisposable
         {
             "configs/sql.json", "configs/app.db", "themes/a.json", "themes/cat/b.json", "themes/.hidden/c.json", "voices/v.json", "voices/cat/w.json",
             "skills/s1/SKILL.md", "skills/s1/scripts/run.sh", "skills/s1/.git/HEAD", "skills/s1/.neon-lock", "skills/noskill/readme.md",
-            "commands/review.md", "commands/Deploy.MD", "commands/a/b/c/d/e/deep.md", "comfy/wf.json", "comfy/wf.md", "comfy/lone.md",
+            "commands/review.md", "commands/Deploy.MD", "commands/a/b/c/d/e/deep.md", "configs/comfy/wf.json", "configs/comfy/wf.md", "configs/comfy/lone.md",
+            "comfy/old.json", "profiles/neon/configs/comfy/mine.json", "profiles/neon/comfy/stale.json",
             "machine-id", "crash.log", "models/x.bin", "db/skills/skills.db", "persona_x.md", "claude-cli/state.json",
             "profiles/neon/profile.json", "profiles/neon/persona.md", "profiles/neon/configs/memory.json", "profiles/neon/configs/browser-history.json",
             "profiles/neon/db/sessions/sessions.db", "profiles/neon/images/x.png", "profiles/neon/files/a.txt", "profiles/neon/files - Copy/x.txt",
@@ -198,8 +203,8 @@ public sealed class SettingsArchiveTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "comfy/wf.json", "comfy/wf.md", "commands/Deploy.MD", "commands/review.md", "configs/sql.json", SettingsArchive.ManifestName,
-                "profiles/larry/persona.md", "profiles/neon/configs/memory.json", "profiles/neon/persona.md", "profiles/neon/profile.json",
+                "configs/comfy/wf.json", "configs/comfy/wf.md", "commands/Deploy.MD", "commands/review.md", "configs/sql.json", SettingsArchive.ManifestName,
+                "profiles/larry/persona.md", "profiles/neon/configs/comfy/mine.json", "profiles/neon/configs/memory.json", "profiles/neon/persona.md", "profiles/neon/profile.json",
                 "skills/s1/.neon-lock", "skills/s1/SKILL.md", "skills/s1/scripts/run.sh", "themes/a.json", "themes/cat/b.json", "voices/cat/w.json", "voices/v.json",
             }.Order(StringComparer.Ordinal),
             Entries(zip));
@@ -209,6 +214,9 @@ public sealed class SettingsArchiveTests : IDisposable
         Assert.Contains("configs/app.db", text);
         Assert.Contains("profiles/neon/memory.json", text);
         Assert.Contains("profiles/neon/files - Copy/", text);
+        Assert.Contains("profiles/neon/comfy/", text);   // the old workflows folder left out by name (2026-11-23)
+        Assert.Contains("comfy/", text.Replace("configs/comfy/", "", StringComparison.Ordinal).Replace("profiles/neon/comfy/", "", StringComparison.Ordinal));
+        Assert.DoesNotContain("configs/comfy/lone.md", text);
         Assert.DoesNotContain("profiles/neon/files/", text);
         Assert.DoesNotContain("profiles/neon/db/", text);
         Assert.DoesNotContain("claude-cli", text);
@@ -468,15 +476,15 @@ public sealed class SettingsArchiveTests : IDisposable
     {
         Put(From, "skills/s1/SKILL.md", "theirs");
         Put(From, "skills/s1/extra.md", "theirs");
-        Put(From, "comfy/wf.json", "theirs");
-        Put(From, "comfy/wf.md", "theirs");
+        Put(From, "configs/comfy/wf.json", "theirs");
+        Put(From, "configs/comfy/wf.md", "theirs");
         Put(From, "themes/x.json", "{ }");
         Put(From, "themes/y.json", """{ "name": "Mine" }""");
         Put(From, "themes/z.json", "{ }");
         Put(From, "voices/v.json", "{ }");
         Put(From, "profiles/neon/persona.md");
         Put(To, "skills/S1/SKILL.md", "mine");
-        Put(To, "comfy/wf.json", "mine");
+        Put(To, "configs/comfy/wf.json", "mine");
         Put(To, "themes/cat/x.json", "{ }");
         Put(To, "themes/other.json", """{ "name": "mine" }""");
         Put(To, "voices/cat/v.json", "{ }");
@@ -484,17 +492,57 @@ public sealed class SettingsArchiveTests : IDisposable
         var outcome = Import(ExportedZip());
 
         Assert.False(Has(To, "skills/S1/extra.md"));
-        Assert.False(Has(To, "comfy/wf.md"));
+        Assert.False(Has(To, "configs/comfy/wf.md"));
         Assert.False(Has(To, "themes/x.json"));
         Assert.False(Has(To, "themes/y.json"));
         Assert.True(Has(To, "themes/z.json"));
         Assert.False(Has(To, "voices/v.json"));
         string text = Text(outcome);
-        foreach (string skipped in new[] { "skills/s1/", "comfy/wf.json", "comfy/wf.md", "themes/x.json", "themes/y.json", "voices/v.json" })
+        foreach (string skipped in new[] { "skills/s1/", "configs/comfy/wf.json", "configs/comfy/wf.md", "themes/x.json", "themes/y.json", "voices/v.json" })
         {
             Assert.Contains(skipped, text);
         }
     }
+
+    /// <summary>An old zip's workflows (2026-11-23): <c>comfy/x.json</c> and a profile's <c>comfy/y.json</c> land in <c>configs/comfy</c>; a stem already there is skipped.</summary>
+    [Fact]
+    public void Import_AnOldZipsWorkflows_LandInConfigsComfy()
+    {
+        Put(To, "configs/comfy/taken.json", "mine");
+        string zip = Zip([("comfy/x.json", "{}"), ("comfy/x.md", "notes"), ("comfy/taken.json", "theirs"), ("profiles/p/persona.md", "p"), ("profiles/p/comfy/y.json", "{}")]);
+
+        var outcome = Import(zip);
+
+        Assert.True(Has(To, "configs/comfy/x.json"));
+        Assert.True(Has(To, "configs/comfy/x.md"));
+        Assert.False(Has(To, "comfy/x.json"));
+        Assert.Equal("mine", File.ReadAllText(Path.Combine(To, "configs", "comfy", "taken.json")));
+        Assert.Contains("configs/comfy/taken.json", Text(outcome));
+        Assert.True(Has(To, "profiles/p/configs/comfy/y.json"));
+        Assert.False(Has(To, "profiles/p/comfy/y.json"));
+    }
+
+    /// <summary>A zip holding both spellings of one workflow (2026-11-23) writes it once, the first kept, the other listed as skipped.</summary>
+    [Fact]
+    public void Import_BothSpellingsOfAWorkflow_WriteOne()
+    {
+        string zip = Zip([("comfy/x.json", "old"), ("configs/comfy/x.json", "new")]);
+
+        var outcome = Import(zip);
+
+        Assert.Null(outcome.Error);
+        Assert.Equal("old", File.ReadAllText(Path.Combine(To, "configs", "comfy", "x.json")));
+        Assert.Contains("configs/comfy/x.json", Text(outcome));   // the second spelling, skipped
+    }
+
+    [Theory]
+    [InlineData("comfy/x.json", "configs/comfy/x.json")]
+    [InlineData("comfy/x.md", "configs/comfy/x.md")]
+    [InlineData("profiles/p/comfy/y.json", "profiles/p/configs/comfy/y.json")]
+    [InlineData("configs/comfy/x.json", "configs/comfy/x.json")]
+    [InlineData("comfy/sub/x.json", "comfy/sub/x.json")]
+    [InlineData("themes/a.json", "themes/a.json")]
+    public void LegacyComfyName_MovesAnOldWorkflowIntoConfigs(string name, string expected) => Assert.Equal(expected, SettingsArchive.LegacyComfyName(name));
 
     [Fact]
     public void Import_AProfileWithoutProfileJson_LandsAsTheDefaults()

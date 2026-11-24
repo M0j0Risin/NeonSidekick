@@ -379,7 +379,7 @@ Under *Docker tools*, over *Docker engine pipe* (a socket on a Mac, [below](#doc
 
 #### Docker servers
 
-Containers that serve an OpenAI-compatible API (vLLM, SGLang…) can be `/server` choices, one running at a time unless *Docker server one at a time* is off. **Windows only.**
+Containers that serve an OpenAI-compatible API (vLLM, SGLang…) can be `/server` choices, one running at a time unless *Docker containers one at a time* is off. **Windows only.**
 
 Turn on *Docker servers enabled* and tick them in *Docker server containers* (`/settings` › Servers › Docker); the Docker tools needn't be on.
 
@@ -389,7 +389,7 @@ Turn on *Docker servers enabled* and tick them in *Docker server containers* (`/
 * **Clearing the GPU:** with [LLM one local model](SETTINGS.md#common) on, the running chosen containers stop before the embedded model loads or a server on this computer connects (`localhost`, `0.0.0.0`, a blank *LLM URL*). Ones the app didn't start stop too; the transcript names each.
   * A container publishing that server's port, or on the `host` network, is that server and keeps running. One behind a proxy on another port: pick it as `docker:<name>`, or leave it unticked.
   * Bots' and advisors' embedded models clear the GPU the same way, sparing the container in use. They share a running container but never start one.
-* Other servers leave the containers running. *Docker server stop on exit* stops them at exit.
+* Other servers leave the containers running. *Docker containers stop on exit* stops them at exit.
 
 #### Docker on a Mac
 
@@ -417,7 +417,7 @@ Under *ComfyUI tools*. `generate_image` runs **your own ComfyUI workflows** on y
 **By hand:**
 
 1. Export in the API format (*Workflow → Export (API)*); a regular save is refused.
-2. Put placeholders in, and drop the file into `<profile>\comfy\` (this profile) or `<home>\comfy\` (every profile). Its file name is the workflow's name.
+2. Put placeholders in, and drop the file into `<profile>\configs\comfy\` (this profile) or `<home>\configs\comfy\` (every profile). Its file name is the workflow's name.
 
 | Placeholder | Becomes |
 |---|---|

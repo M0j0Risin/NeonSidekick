@@ -231,9 +231,10 @@ internal sealed partial class ChatScreen
     /// and chord until the loop stopped): the delay on the screen's clock under the reply's own watch (<see cref="StartReplyWatch"/>)
     /// — a pane opens, a message is queued for after the loop, a quick command runs at the wait's end, a cancelling one
     /// (<c>/clear</c>, <c>/new</c>) stops the loop and then runs. ESC, Ctrl+C and Ctrl+Alt+X stop it. True when it was cancelled
-    /// that way, not by <paramref name="cancellationToken"/>.
+    /// that way, not by <paramref name="cancellationToken"/>. ⟳'s double-click (<paramref name="ended"/>, 2026-11-23) ends the wait too, and
+    /// answers false: the loop says its own ended notice.
     /// </summary>
-    private async Task<bool> LoopWaitAsync(TimeSpan wait, CancellationToken cancellationToken)
+    private async Task<bool> LoopWaitAsync(TimeSpan wait, CancellationToken ended, CancellationToken cancellationToken)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
@@ -241,7 +242,7 @@ internal sealed partial class ChatScreen
         var watcher = StartReplyWatch(cts, stop.Token, cancellationToken);
         try
         {
-            await Task.Delay(wait, _time, cts.Token).ConfigureAwait(false);
+            await DelayOrEndedAsync(wait, ended, cts.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {

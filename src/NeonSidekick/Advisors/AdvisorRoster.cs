@@ -10,7 +10,10 @@ namespace NeonSidekick.Advisors;
 /// </summary>
 public static class AdvisorRoster
 {
-    /// <summary>The saved list as it counts: trimmed, blank profiles dropped, the first of a profile kept.</summary>
+    /// <summary>
+    /// The saved list as it counts: trimmed, blank profiles dropped, the first of a profile kept; sorted by profile name, case ignored
+    /// (2026-11-23, the user's ask: a removed-and-re-added advisor landed last), so every list shows one order.
+    /// </summary>
     public static IReadOnlyList<AdvisorEntry> Entries(IReadOnlyList<AdvisorEntry>? saved)
     {
         var entries = new List<AdvisorEntry>();
@@ -25,7 +28,7 @@ public static class AdvisorRoster
             entries.Add(new AdvisorEntry(profile, (entry!.Role ?? "").Trim(), CleanDescription(entry.Description)));
         }
 
-        return entries;
+        return entries.OrderBy(e => e.Profile, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>
@@ -49,7 +52,7 @@ public static class AdvisorRoster
     public static bool Contains(IReadOnlyList<AdvisorEntry>? saved, string profile) => Entries(saved).Any(e => SameProfile(e.Profile, profile));
 
     /// <summary>
-    /// <paramref name="saved"/> with <paramref name="entry"/> last; a profile already there (a <c>(missing)</c> one whose name a new advisor
+    /// <paramref name="saved"/> with <paramref name="entry"/> last (shown by name all the same, <see cref="Entries"/>); a profile already there (a <c>(missing)</c> one whose name a new advisor
     /// takes again) keeps its place and takes the new role and description.
     /// </summary>
     public static List<AdvisorEntry> Add(IReadOnlyList<AdvisorEntry>? saved, AdvisorEntry entry)

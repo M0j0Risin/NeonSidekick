@@ -632,8 +632,9 @@ public static class RalphText
     /// Why the loop stopped, said once. Pinned. <paramref name="canAsk"/> (2026-10-22, a review) words <see cref="RalphStop.NeedsUser"/>'s way on: where
     /// the resume can ask the by-hand question (the screen), the user checks and resumes, the box left for the answer — ticked by hand, the answer was
     /// never written into the log and the parent never ticked; headless, where nobody can be asked, the box is the user's to tick.
+    /// <paramref name="clicked"/> (2026-11-23, the user's ask): a pause 🔁's double-click on the lower rule asked for, not a message.
     /// </summary>
-    public static string StopNotice(RalphStop stop, string path, int done, int total, bool canAsk = true)
+    public static string StopNotice(RalphStop stop, string path, int done, int total, bool canAsk = true, bool clicked = false)
     {
         string name = System.IO.Path.GetFileNameWithoutExtension(path);
         string resume = $" /plan ralph{(stop == RalphStop.Paused ? "" : " " + name)} goes on.";
@@ -646,7 +647,7 @@ public static class RalphText
             RalphStop.Limit => $"{Glyph} Ralph loop stopped at its pass limit ({N(done)} of {N(total)} steps done)." + resume,
             RalphStop.Budget => $"{Glyph} Ralph loop stopped: its token budget is spent ({N(done)} of {N(total)} steps done)." + resume,
             RalphStop.Stopped => $"{Glyph} Ralph loop stopped ({N(done)} of {N(total)} steps done)." + resume,
-            RalphStop.Paused => $"{Glyph} Ralph loop paused for your message ({N(done)} of {N(total)} steps done)." + resume,
+            RalphStop.Paused => $"{Glyph} Ralph loop paused {(clicked ? "after this pass, as asked" : "for your message")} ({N(done)} of {N(total)} steps done)." + resume,
             RalphStop.FinalFailed => $"{Glyph} Ralph loop stopped: the final check still fails after its fix pass." + resume,
             RalphStop.PlanGone => $"{Glyph} Ralph loop stopped: {path} is gone or cannot be read whole.",
             RalphStop.WorkdirMoved => $"{Glyph} Ralph loop stopped: the working directory changed." + resume,

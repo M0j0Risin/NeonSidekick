@@ -151,8 +151,8 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// <see cref="ToolbarDrawn"/>, or without it the same reading from the settings alone (2026-11-08, the review): an item checked and shown
-    /// here (<see cref="ToolbarItemHere"/>) is the path, the model name or a glyph the strip draws, so 🔒 and 👮 alone under <c>Shell command
-    /// policy</c> <c>off</c>, or 🧩 and 📅 alone on a Mac, read hidden.
+    /// here (<see cref="ToolbarItemHere"/>) is the path, the model name or a glyph the strip draws, so 🧩 and 📅 alone on a Mac read hidden
+    /// (🔒 and 👮 draw under <c>Shell command policy</c> <c>off</c> since 2026-11-23, on the slab).
     /// </summary>
     private bool ToolbarDrawsFor(AppSettingsData d)
     {

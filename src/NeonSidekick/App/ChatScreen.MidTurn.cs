@@ -242,10 +242,12 @@ internal sealed partial class ChatScreen
     /// purge</c>) wait for the idle line, as <c>/comfy purge</c> does: a question, and a capture or a paste may be writing there.
     /// <c>/splash view|thumbs</c> and <c>/pasted view|thumbs</c> are quick (a window of their own), as is a word either does not know (its
     /// error at once, nothing cancelled); the bare <c>/splash</c> still stops the reply first. <c>/ha stills</c> (2026-10-27) is classed as
-    /// <c>/pasted</c> is; every other <c>/ha</c> stays a pane on the watcher.
+    /// <c>/pasted</c> is; every other <c>/ha</c> stays a pane on the watcher. <c>/usage sysprompt</c> (2026-11-23) waits for the reply, its
+    /// <c>to=</c> too: under a reply the history is the turn's own list, appended to without a lock; the bare <c>/usage</c> and its tabs stay panes.
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
+        SlashCommand.Usage when UsageText.IsSysprompt(args) => MidTurnClass.Deferred,
         // 2026-11-04, review P7-1: it hashes for seconds under a pane Esc can close, and a Quick command runs through Post, which isn't built to read a pane's keys.
         SlashCommand.Update when string.Equals(args.Trim(), Updates.UpdateText.RollbackWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Pane,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Purge => MidTurnClass.Deferred,

@@ -227,7 +227,7 @@ internal sealed partial class ChatScreen
             string line = SlashLine(prompt);
             _log.Add(line, reply.ToString());
             _lastReply = reply.ToString();
-            LogSideTurn(line, reply.ToString(), result?.Usage ?? default, cancelled, effective, SessionText.SideTurnModel("/claude"));
+            LogSideTurn(line, reply.ToString(), result?.Usage ?? default, cancelled, effective, SessionText.SideTurnModel(SessionText.ClaudeSideTurn));
         }
 
         return default;

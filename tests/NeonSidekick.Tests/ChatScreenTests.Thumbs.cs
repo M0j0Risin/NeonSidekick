@@ -233,7 +233,35 @@ public partial class ChatScreenTests
         Assert.Contains("  ✗ square.bmp: Error: nope", output);
         Assert.Equal(FakePrintSpooler.Laser, Assert.Single(_printSpooler.Jobs).Printer);
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
-        Assert.StartsWith("[Image #1] what is this?", user.Text);
+        Assert.StartsWith(PasteBlocks.FileLabel(1, "square.bmp") + " what is this?", user.Text);   // its file named, relative inside the working directory (2026-11-23)
         Assert.Single(user.Contents.OfType<DataContent>());
+        Assert.Contains("[Image #1] what is this?", output);   // the transcript keeps the bare label
+        Assert.DoesNotContain(PasteBlocks.FileLabel(1, "square.bmp"), output);
+    }
+
+    /// <summary>
+    /// A picture attached from a file outside the working directory names its full path to the model (2026-11-23, the user's ask: a model handed
+    /// "[Image #1]" to set_splash_image and hunted for the file), and set_splash_image takes that path as written.
+    /// </summary>
+    [WindowsFact]
+    public async Task AnAttachedPicture_OutsideTheWorkingDirectory_NamesItsFullPath_ThatSetSplashImageTakes()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.ImageTools = true; });
+        string outside = Path.Combine(_dir, "elsewhere");
+        Directory.CreateDirectory(outside);
+        string picture = Path.Combine(outside, "lucia.png");
+        File.WriteAllBytes(picture, Fakes.FakeHeadlessBrowser.TinyPng);
+        _chat.Enqueue(FakeChatClient.Call("c1", "set_splash_image", new Dictionary<string, object?> { ["path"] = picture }));
+        _chat.EnqueueText("Done.");
+        StepsWhenIdle(
+            _ => _running!.AttachPicture(picture),
+            Line("add this to my splash images"),
+            Line("/exit"));
+
+        await RunAsync();
+
+        var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
+        Assert.StartsWith(PasteBlocks.FileLabel(1, picture) + " add this to my splash images", user.Text);
+        Assert.True(File.Exists(Path.Combine(_settings.ProfileSplashDirectory, "lucia.png")));
     }
 }

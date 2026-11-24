@@ -175,8 +175,8 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The download behind the line paused by a double-click on its 📥 (2026-09-29; Ctrl+C under a spinner until then): the
-    /// paused notice, nothing saved, nothing started.
+    /// The download behind the line paused by a double-click on its 📥 (2026-09-29; Ctrl+C under a spinner until then; on the lower rule
+    /// since 2026-11-23): the paused notice, nothing saved, nothing started.
     /// </summary>
     [Fact]
     public async Task Settings_AnEmbeddedDownloadPaused_SavesNothing_AndSaysSo()
@@ -204,8 +204,8 @@ public partial class ChatScreenTests
                     step++;
                     Volatile.Write(ref idle, true);
                     _time.Advance(ScreenPane.Tick);
-                    input.PushClick(0, 102);                          // 📥 at 0–1, the strip's first part
-                    input.PushClick(1, 102);
+                    input.PushClick(_console.Profile.Width - 2, 101);   // 📥 alone on the lower rule: the space after it at the right edge
+                    input.PushClick(_console.Profile.Width - 2, 101);
                     break;
                 case 2:
                     if (Output.Contains(EmbeddedLlmText.PausedNotice, StringComparison.Ordinal))

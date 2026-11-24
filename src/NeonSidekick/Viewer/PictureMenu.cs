@@ -29,12 +29,22 @@ public static class PictureMenu
     public static Action<string, bool>? Reported { get; set; }
 
     /// <summary>
+    /// The loaded profile's splash folder, read at each press (2026-11-23, the user's ask: Add to the splash images), so a profile switch is
+    /// followed; null greys the row.
+    /// </summary>
+    public static Func<string?>? SplashFolder { get; set; }
+
+    /// <summary>Whether <c>Welcome splash</c> is <c>robot</c> now (2026-11-23): the added line says when the pictures show.</summary>
+    public static Func<bool>? RobotSplash { get; set; }
+
+    /// <summary>
     /// The rows for the picture at <paramref name="path"/>: Open in the viewer first in the thumbnail browser; Rotate and flip, Colour,
     /// Resize, Convert to (the picture's own format greyed) and Shrink the file as submenus; Strip metadata (lossless; greyed but for
     /// a JPEG, PNG, WebP or GIF, 2026-10-05); the file's actions; Delete apart; and the
-    /// edit mode as a last row that cannot be chosen. Pure.
+    /// edit mode as a last row that cannot be chosen. Add to the splash images (2026-11-23) is greyed with no <paramref name="splashFolder"/>
+    /// or for a picture already in it. Pure.
     /// </summary>
-    public static IReadOnlyList<ContextMenuItem> Build(bool thumbs, string path, string mode)
+    public static IReadOnlyList<ContextMenuItem> Build(bool thumbs, string path, string mode, string? splashFolder = null)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(mode);
@@ -87,6 +97,7 @@ public static class PictureMenu
         rows.Add(Row(OperatingSystem.IsMacOS() ? PictureMenuText.ShowInFinder : PictureMenuText.ShowInExplorer, PictureCommand.ShowInExplorer));
         rows.Add(Row(PictureMenuText.Attach, PictureCommand.Attach));
         rows.Add(Row(PictureMenuText.Print, PictureCommand.Print));   // a Mac's too since 2026-10-08 (CUPS; left out from 2026-10-07 until then)
+        rows.Add(new ContextMenuItem(PictureMenuText.AddToSplash, (int)PictureCommand.AddToSplash, Enabled: splashFolder is not null && !InFolder(path, splashFolder)));
 
         rows.Add(ContextMenuItem.Separator);
         rows.Add(Row(PictureMenuText.Delete, PictureCommand.Delete));
@@ -97,7 +108,25 @@ public static class PictureMenu
 
     /// <summary>The rows for the picture at <paramref name="path"/> with the edit mode in force now.</summary>
     internal static IReadOnlyList<ContextMenuItem> BuildNow(bool thumbs, string path) =>
-        Build(thumbs, path, ImageWords.EditModeNames[(int)SettingsNow().Mode]);
+        Build(thumbs, path, ImageWords.EditModeNames[(int)SettingsNow().Mode], SplashFolderNow());
+
+    /// <summary>The hook's splash folder, null when none is wired or it throws.</summary>
+    private static string? SplashFolderNow()
+    {
+        try
+        {
+            return SplashFolder?.Invoke();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            DiagnosticLog.Warn("Viewer", $"The splash folder could not be read: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Whether <paramref name="path"/> sits directly in <paramref name="folder"/>.</summary>
+    private static bool InFolder(string path, string folder) =>
+        string.Equals(Path.GetDirectoryName(Path.GetFullPath(path)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// An edit row run on the picture at <paramref name="path"/> on a pool thread; <paramref name="done"/> gets the outcome there (the
@@ -160,6 +189,9 @@ public static class PictureMenu
             case PictureCommand.Print:
                 Hand(Print, path, "print");
                 return true;
+            case PictureCommand.AddToSplash:
+                AddToSplash(path);
+                return true;
             default:
                 return false;
         }
@@ -212,6 +244,48 @@ public static class PictureMenu
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             DiagnosticLog.Warn("Viewer", $"Could not tell the chat: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Add to the splash images (2026-11-23, the user's ask): the picture copied into the profile's splash folder by <see cref="NeonSidekick.UI.SplashImages.Add"/>,
+    /// as <c>set_splash_image</c> copies one, on the window's thread (a plain copy, as Copy the path is quick); told to the chat either way.
+    /// </summary>
+    private static void AddToSplash(string path)
+    {
+        string name = Path.GetFileName(path);
+        if (SplashFolderNow() is not { } folder)
+        {
+            DiagnosticLog.Warn("Viewer", $"Nothing to add {name} to the splash images with: no splash folder.");
+            return;
+        }
+
+        var added = NeonSidekick.UI.SplashImages.Add(folder, path);
+        switch (added.Result)
+        {
+            case NeonSidekick.UI.SplashAddResult.Added:
+                bool robot;
+                try
+                {
+                    robot = RobotSplash?.Invoke() == true;
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    robot = false;
+                }
+
+                Report(PictureMenuText.AddedToSplash(Path.GetFileName(added.Target), added.Only, robot), false);
+                DiagnosticLog.Info("Viewer", $"Picture menu AddToSplash: {path} to {added.Target}");
+                break;
+            case NeonSidekick.UI.SplashAddResult.Already:
+                Report(PictureMenuText.SplashAlready(name), true);
+                break;
+            case NeonSidekick.UI.SplashAddResult.NotAnImage:
+                Report(PictureMenuText.Failed(name, Images.ImageText.SplashNotAnImage(name)), true);
+                break;
+            default:
+                Report(PictureMenuText.SplashFailed(name, added.Detail), true);
+                break;
         }
     }
 

@@ -5,7 +5,7 @@ namespace NeonSidekick.Docker;
 /// <summary>
 /// A chosen Docker container as a <c>/server</c> choice (2026-10-02, the user's ask, after their tray app DockerLlmPicker: the
 /// vLLM and SGLang containers they keep, ticked on <c>/settings</c>' Docker tab, offered as servers, one of them running at a time
-/// so the GPU is never asked to hold two — unless <c>Docker server one at a time</c> is off, 2026-11-10, when they run side by side,
+/// so the GPU is never asked to hold two — unless <c>Docker containers one at a time</c> is off, 2026-11-10, when they run side by side,
 /// each on its own host port and share of the GPU's memory). As with the embedded model (<see cref="EmbeddedLlm.EmbeddedEndpoint"/>), the
 /// provider is told by the URL alone: <see cref="AppSettingsData.LlmUrl"/> saved as <c>http://docker.localhost/&lt;container&gt;/v1</c>
 /// names the container, so <c>LLM URL</c> stays the one place the choice lives — a profile switch, <c>/server</c>,
