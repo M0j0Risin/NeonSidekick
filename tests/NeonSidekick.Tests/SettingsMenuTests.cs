@@ -1561,7 +1561,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("must be 10 to 3600 seconds", SettingsMenu.ShellForegroundCapSecondsRangeError);
         Assert.Equal("must be 2000 to 500000 chars", SettingsMenu.ShellOutputMaxCharsRangeError);
         Assert.Equal("ask  [#9A8BB8]you approve each command not on the allow list[/]", SettingsMenu.CommandPolicyLabel("ask"));
-        Assert.Equal("yolo [#9A8BB8]every command runs, nothing is asked[/]", SettingsMenu.CommandPolicyLabel("yolo"));
+        Assert.Equal("yolo [#9A8BB8]commands run unasked; the shell police still checks[/]", SettingsMenu.CommandPolicyLabel("yolo"));
         Assert.Equal("off  [#9A8BB8]no shell or script tool is offered[/]", SettingsMenu.CommandPolicyLabel("off"));
         Assert.Equal("bash       [#9A8BB8]Git Bash, when bash.exe is found — not found[/]", SettingsMenu.ShellLabel("bash", installed: false));
         Assert.Equal("cmd        [#9A8BB8]cmd.exe: batch syntax[/]", SettingsMenu.ShellLabel("cmd", installed: true));
@@ -6086,6 +6086,54 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsMenu.FieldFooter(SettingsField.TtsSpeed).Last + SettingsMenu.ChangedNote, menu.FieldFooter(SettingsField.TtsSpeed, new AppSettingsData { TtsSpeed = 1.5 }).Last);
         Assert.Equal(SettingsMenu.FieldFooter(SettingsField.TtsSpeed), menu.FieldFooter(SettingsField.TtsSpeed, new AppSettingsData()));
         pane.Dispose();
+    }
+
+    /// <summary>The screen's allow list over this fixture's store, as ChatScreen builds it, set on <paramref name="menu"/>.</summary>
+    private NeonSidekick.Shell.CommandAllowList SessionAllows(SettingsMenu menu)
+    {
+        var list = new NeonSidekick.Shell.CommandAllowList(() => _settings.Current.ShellCommandAllowed, merged => _settings.Update(d => d.ShellCommandAllowed = [.. merged]));
+        menu.SessionAllows = list;
+        return list;
+    }
+
+    /// <summary>
+    /// 2026-11-23: a prefix Allow always saved this run, then reset in /settings › Changed (or overwritten by a pull, a bare update), asks
+    /// again and never shows under This session; a prefix allowed only for the session survives.
+    /// </summary>
+    [Fact]
+    public void ADropFromTheSavedList_ForgetsTheSessionsCopy_ResetOrBareUpdate()
+    {
+        var (menu, pane) = PaneMenu();
+        var list = SessionAllows(menu);
+        list.AllowSession(["zip"]);
+        list.AllowPermanently(["python"]);
+
+        Assert.True(menu.ResetToDefault(SettingsField.ShellCommandAllowed));
+        Assert.Empty(_settings.Current.ShellCommandAllowed);
+        Assert.False(list.IsAllowed("python"));
+        Assert.Equal(["zip"], list.SessionOnly());
+
+        list.AllowPermanently(["python"]);
+        _settings.Update(d => d.ShellCommandAllowed = []);   // as a section pull's overwrite does
+        Assert.False(list.IsAllowed("python"));
+        Assert.True(list.IsAllowed("zip"));
+        pane.Dispose();
+    }
+
+    /// <summary>Without the pane the headings are no choices (2026-11-23), so a session row says what it is.</summary>
+    [Fact]
+    public async Task EditAllowedCommands_WithoutThePane_ASessionRow_CarriesItsTag()
+    {
+        _settings.Update(d => d.ShellCommandAllowed = ["git log"]);
+        SessionAllows(_menu).AllowSession(["dotnet test"]);
+        Push(Keys.Escape);
+
+        Assert.False(await _menu.EditAllowedCommandsAsync(CancellationToken.None));
+
+        Assert.Contains("dotnet test" + SettingsMenu.SessionRowTag, Output);
+        Assert.Contains("git log", Output);
+        Assert.DoesNotContain("git log" + SettingsMenu.SessionRowTag, Output);
+        Assert.DoesNotContain(SettingsMenu.SessionAllowsHeading, Output);
     }
 
     /// <summary>A tab's badge (2026-10-07): how many of its rows differ from the default, in superscript digits; none while none does.</summary>

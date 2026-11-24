@@ -57,7 +57,7 @@ internal static class HelpInterface
     public const string DarkDirectory = "while Directory tools is off, or where this computer has no directory to read";
 
     // The two state icons the row draws besides the checklist's (2026-10-25); dark under the policy off since 2026-11-23 (the user's ask). Pinned.
-    public const string LockLine = "Its icon: 🔒 while Shell command policy is ask, 🔓 while it is yolo (commands run unasked); 🔒 dark while it is off.";
+    public const string LockLine = "Its icon: 🔒 while Shell command policy is ask, 🚀 while it is yolo (commands run unasked); 🔒 dark while it is off.";
     public const string PoliceLine = "Its icon: 👮 while Shell police is on, 🥷 while it is off; dark while Shell command policy is off.";
 
     /// <summary>The settings row that shows or hides each bar (the rows carry the bars' names).</summary>
@@ -120,7 +120,7 @@ internal static class HelpInterface
         return sb.ToString();
     }
 
-    /// <summary>One toolbar item in full; <paramref name="glyph"/> the icon asked about (🔓 and 🥷 say their state).</summary>
+    /// <summary>One toolbar item in full; <paramref name="glyph"/> the icon asked about (🚀 and 🥷 say their state).</summary>
     public static string Item(string id, bool windows, string? glyph = null)
     {
         string shown = glyph ?? (id == ToolbarItems.Path ? "" : ToolbarItems.Glyph(id));
@@ -185,7 +185,7 @@ internal static class HelpInterface
 
     /// <summary>
     /// Every icon the toolbar draws on a system, U+FE0F dropped, to the items that draw it: the checklist's icons, and the row's two state
-    /// icons 🔓 and 🥷 (<see cref="ChatScreen.CmdYoloToolGlyph"/>, <see cref="ChatScreen.NinjaToolGlyph"/>). The path draws its text, so
+    /// icons 🚀 and 🥷 (<see cref="ChatScreen.CmdYoloToolGlyph"/>, <see cref="ChatScreen.NinjaToolGlyph"/>). The path draws its text, so
     /// nothing maps to it.
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> GlyphMap(bool windows) => windows ? s_windowsGlyphs.Value : s_elsewhereGlyphs.Value;
@@ -251,7 +251,7 @@ internal static class HelpInterface
         return found;
     }
 
-    // The icon to head an item asked by: the state icon itself (🔓, 🥷), else the checklist's.
+    // The icon to head an item asked by: the state icon itself (🚀, 🥷), else the checklist's.
     private static string? IconFor(string cluster) =>
         Bare(ChatScreen.CmdYoloToolGlyph) == cluster || Bare(ChatScreen.NinjaToolGlyph) == cluster ? cluster : null;
 

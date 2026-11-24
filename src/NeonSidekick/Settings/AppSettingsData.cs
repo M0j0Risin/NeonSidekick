@@ -2993,7 +2993,7 @@ public sealed class AppSettingsData
     /// words): one of <see cref="Shell.CommandPolicy.Names"/> — <c>off</c> (no shell tool is offered: this is
     /// the Shell group's switch, and the default rules lose their shell sentence), <c>ask</c> (a command
     /// whose prefixes are not all in <see cref="ShellCommandAllowed"/> or allowed for the session is put to
-    /// the user on the pane first; with no pane to ask on it is refused), <c>yolo</c> (everything runs).
+    /// the user on the pane first; with no pane to ask on it is refused), <c>yolo</c> (commands run unasked; the shell police still checks, 2026-11-23).
     /// Anything else reads as <see cref="Shell.CommandPolicy.Default"/>, <c>off</c> since 2026-09-29 (the user's call;
     /// <c>ask</c> before). Read at each call, no reconnect.
     /// <see cref="EnvironmentOverrides.CommandPolicyVariable"/> outranks it, so a scripted headless run can say yolo.

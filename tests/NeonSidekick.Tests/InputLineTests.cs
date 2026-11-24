@@ -1322,7 +1322,7 @@ public class InputLineTests : IDisposable
         Assert.Equal(-17, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🎭", 12)));
         Assert.Equal(-20, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "💬", 15)));   // the sixth glyph, later on 2026-09-21
         Assert.Equal(-23, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔒", 18)));   // the seventh, the lock, later still that day — the same key open; the key is the column's, not the glyph's
-        Assert.Equal(-23, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔓", 18)));
+        Assert.Equal(-23, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🚀", 18)));
         Assert.Equal(-23, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "💾", 18)));   // the disk in the lock's place while Memory is on (2026-09-22)
         Assert.Equal(-26, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "🔒", 21)));   // the lock moved behind it
         Assert.Equal(-29, InputLine.ToolbarPairKey(new ScreenPane.ToolbarHit(ScreenPane.ToolbarZone.Glyph, "👮", 24)));   // the officer last

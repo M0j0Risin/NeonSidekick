@@ -19,7 +19,7 @@ internal readonly record struct SettingButton(SettingsField Target, string Word,
 /// </summary>
 internal sealed partial class SettingsMenu
 {
-    /// <summary>The glyph before every setting button's word, the policy picker's <c>≡ police</c> one. Pinned.</summary>
+    /// <summary>The glyph before every setting button's word. Pinned.</summary>
     public const string SettingButtonGlyph = "≡";
 
     /// <summary>

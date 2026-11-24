@@ -84,7 +84,7 @@ Elsewhere:
 | `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
 | `/usage models` | The Models tab: each model's turns, sessions, tool calls a turn, tool-call error and cancel rates, output a turn and tok/s, from the saved sessions, most turns first. Turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out and counted in a note. |
 | `/usage prompt\|tools\|skills` | The Prompt tab (the system message, less the skills block), the Tools tab (each tool offered) or the Skills tab (the skills block: its directive, then each skill with its scope and file). |
-| `/usage sysprompt [to=<path>]` | Writes what the next request sends (the system message, every tool offered and the history, pictures as placeholders) to `neon-sysprompt-<timestamp>.md` in the working folder, or at `to=` (a file or a folder in it), never over a file. It holds the whole conversation. |
+| `/usage sysprompt [conversation] [to=<path>]` | Writes the system message and every tool offered to `neon-sysprompt-<timestamp>.md` in the working folder, or at `to=` (a file or a folder in it), never over a file. With `conversation`, this conversation's messages too (pictures as placeholders): mind it before a commit. |
 
 ### Models and servers
 

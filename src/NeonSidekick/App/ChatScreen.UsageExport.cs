@@ -10,15 +10,15 @@ namespace NeonSidekick.App;
 internal sealed partial class ChatScreen
 {
     /// <summary>
-    /// <c>/usage sysprompt [to=&lt;path&gt;]</c> (2026-11-23, the user's ask): the next request — the system message, every tool offered and the
-    /// history after the picture budget, with the thinking the wire sends back — written word for word to <see cref="UsageText.ExportFileName"/>
+    /// <c>/usage sysprompt [conversation] [to=&lt;path&gt;]</c> (2026-11-23, the user's ask): the next request — the system message and every
+    /// tool offered, and with <c>conversation</c> the history after the picture budget, with the thinking the wire sends back — written word for word to <see cref="UsageText.ExportFileName"/>
     /// in the working folder, or at <c>to=</c> (a file or a folder, as <c>/pdf</c>'s), never over a file. Every path goes through the sandbox's
     /// <see cref="WorkingDirectory.Resolve(string, bool, out string)"/> for a write, so its guards hold. At the idle line only
     /// (<see cref="MidTurnClass.Deferred"/>): under a reply the history is the turn's own list.
     /// </summary>
     private void ExportSysprompt(string args)
     {
-        var (_, to, error) = UsageText.ParseSysprompt(args);
+        var (_, conversation, to, error) = UsageText.ParseSysprompt(args);
         if (error is not null)
         {
             _transcript.Error(error);
@@ -43,9 +43,18 @@ internal sealed partial class ChatScreen
         var disabled = TurnDisabled(effective);
         string prompt = SystemPromptSummary.SystemPrompt(SystemPromptFacts(effective, disabled));
         var tools = ToolGroups(effective, disabled).SelectMany(g => g.Tools).ToList();
-        var budget = _session.Assistant?.PictureBudget ?? PictureBudget.Default;
-        var messages = budget.Apply(_session.History.Messages).Messages;
-        int thinkingFrom = effective.LlmPreserveThinking && !Assistant.InFlightOnlyWire(url) ? 0 : messages.Count;
+        // The conversation only when asked for (2026-11-23, the user's ask: a bare /usage sysprompt is the system message and the tools).
+        IReadOnlyList<Microsoft.Extensions.AI.ChatMessage>? messages = null;
+        int thinkingFrom = 0;
+        long historyTokens = 0;
+        if (conversation)
+        {
+            var budget = _session.Assistant?.PictureBudget ?? PictureBudget.Default;
+            messages = budget.Apply(_session.History.Messages).Messages;
+            thinkingFrom = effective.LlmPreserveThinking && !Assistant.InFlightOnlyWire(url) ? 0 : messages.Count;
+            historyTokens = ConversationCompactor.Estimate(messages, thinkingFrom).Total;
+        }
+
         var now = _time.GetLocalNow();
         var facts = new UsageExportFacts(
             now,
@@ -58,7 +67,8 @@ internal sealed partial class ChatScreen
             tools.Sum(ToolTokens),
             messages,
             thinkingFrom,
-            ConversationCompactor.Estimate(messages, thinkingFrom).Total);
+            historyTokens,
+            _files.Root);
         byte[] bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(UsageExport.Markdown(facts));
 
         bool intoFolder = OutputNames.IntoFolder(to, IsFolder);
@@ -89,7 +99,7 @@ internal sealed partial class ChatScreen
                     stream.Write(bytes);
                 }
 
-                _transcript.Notice(UsageText.Exported(shown, tools.Count, messages.Count));
+                _transcript.Notice(UsageText.Exported(shown, tools.Count, messages?.Count));
                 return;
             }
             catch (IOException) when (File.Exists(full))

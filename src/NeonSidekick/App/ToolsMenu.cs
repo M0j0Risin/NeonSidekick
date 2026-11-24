@@ -325,13 +325,37 @@ internal sealed class ToolsMenu
     /// <summary>
     /// The <c>Shell allowed commands</c> row alone, as plain lines for a console without the pane
     /// (later on 2026-09-21, <c>/cmdlist</c>; <c>/tools shell allowed</c> since 2026-10-09): the row's name as a heading, each prefix indented under it,
-    /// <see cref="SettingsMenu.NoAllowedCommandsRow"/> while there is none. Pinned.
+    /// <see cref="SettingsMenu.NoAllowedCommandsRow"/> while there is none. Since 2026-11-23 (the user's ask) the session's own allows
+    /// (<paramref name="session"/>) come first under the pane's two headings as labels, each prefix four spaces in, the saved ones after
+    /// (or <see cref="SettingsMenu.SavedAllowsEmptyNote"/>); with none the lines are as before. Pinned.
     /// </summary>
-    public static IEnumerable<string> AllowedCommandLines(AppSettingsData saved)
+    public static IEnumerable<string> AllowedCommandLines(AppSettingsData saved, IReadOnlyList<string>? session = null)
     {
         ArgumentNullException.ThrowIfNull(saved);
         yield return SettingsMenu.FieldName(SettingsField.ShellCommandAllowed);
         var allowed = Shell.CommandAllowList.Merge(saved.ShellCommandAllowed, []);
+        if (session is { Count: > 0 })
+        {
+            yield return "  " + SettingsMenu.SessionAllowsHeading + ":";
+            foreach (var prefix in session)
+            {
+                yield return "    " + prefix;
+            }
+
+            yield return "  " + SettingsMenu.SavedAllowsHeading + ":";
+            if (allowed.Count == 0)
+            {
+                yield return "    " + SettingsMenu.SavedAllowsEmptyNote;
+            }
+
+            foreach (var prefix in allowed)
+            {
+                yield return "    " + prefix;
+            }
+
+            yield break;
+        }
+
         if (allowed.Count == 0)
         {
             yield return "  " + SettingsMenu.NoAllowedCommandsRow;
@@ -358,7 +382,7 @@ internal sealed class ToolsMenu
     {
         if (!_pane.Enabled)
         {
-            foreach (var line in AllowedCommandLines(_settings.Current))
+            foreach (var line in AllowedCommandLines(_settings.Current, _menu.SessionAllows?.SessionOnly()))
             {
                 _transcript.Notice(line);
             }
@@ -469,16 +493,9 @@ internal sealed class ToolsMenu
     {
         if (!_pane.Enabled)
         {
+            // The policy's line alone since 2026-11-23 (the user's ask: the picker lost its allowed and police buttons, so their lines went
+            // too); /tools shell allowed and /tools shell police still print theirs.
             _transcript.Notice(ToolsText.SwitchStateLine(field, _settings.Current));
-            if (field == SettingsField.ShellCommandPolicy)
-            {
-                // The picker's two buttons as lines too (2026-10-09): the allowed commands, the police and its strings.
-                foreach (var line in AllowedCommandLines(_settings.Current).Append(PoliceLine(_settings.Current)).Concat(ForbiddenStringLines(_settings.Current)))
-                {
-                    _transcript.Notice(line);
-                }
-            }
-
             return SettingsChanges.None;
         }
 

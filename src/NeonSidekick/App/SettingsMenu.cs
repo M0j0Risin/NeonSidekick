@@ -2137,6 +2137,9 @@ internal sealed partial class SettingsMenu
         Flow = _transcript;
         _speech = speech ?? throw new ArgumentNullException(nameof(speech));
         _pane = pane ?? throw new ArgumentNullException(nameof(pane));
+        // A prefix dropped from the saved list (the pane's remove, /settings › Changed's reset, a section pull's overwrite) loses the
+        // session's copy Allow always made, so it asks again (2026-11-23, Shell.CommandAllowList.ForgetDropped). One rule for every path.
+        _settings.Changed += saved => SessionAllows?.ForgetDropped(saved.ShellCommandAllowed ?? []);
     }
 
     /// <summary>Where a notice goes: the pane's status line while a menu is open there, else the transcript.</summary>
@@ -2178,6 +2181,13 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The effective settings (saved plus this launch's overrides), set by the screen; the saved ones when unset. What the embedded rows resolve the backend under.</summary>
     public Func<AppSettingsData>? Effective { get; set; }
+
+    /// <summary>
+    /// The screen's shell allow list (2026-11-23, the user's ask), set by the screen: the allowed-commands list shows its session-only
+    /// prefixes under <see cref="SessionAllowsHeading"/> and forgets one there, and a drop from the saved list forgets the session's copy.
+    /// Null (headless, tests without one) shows the saved list alone.
+    /// </summary>
+    public Shell.CommandAllowList? SessionAllows { get; set; }
 
     private AppSettingsData EffectiveNow() => Effective?.Invoke() ?? _settings.Current;
 
@@ -3918,8 +3928,35 @@ internal sealed partial class SettingsMenu
     /// <summary>The question before a forbidden string goes (2026-10-07). Pinned.</summary>
     public static string RemoveForbiddenQuestion(string entry) => $"Remove \"{entry}\" from the forbidden strings? Commands holding it are no longer refused for it.";
 
-    /// <summary>The allowed-commands footer's last line under a prefix (2026-10-07). Pinned.</summary>
-    public const string AllowedCommandNote = "saved for good: a command that starts with this runs without asking";
+    /// <summary>The allowed-commands footer's last line under a saved prefix (2026-10-07; "allowed always" since 2026-11-23, to match <see cref="SavedAllowsHeading"/>). Pinned.</summary>
+    public const string AllowedCommandNote = "allowed always: a command that starts with this runs without asking";
+
+    /// <summary>
+    /// The allowed-commands list's heading over the session's own allows (2026-11-23, the user's ask: the approval pane's <i>Allow for this
+    /// session</i> listed first, set apart), shown only while the session holds any (<see cref="SessionAllows"/>). Pinned.
+    /// </summary>
+    public const string SessionAllowsHeading = "This session";
+
+    /// <summary>The allowed-commands list's heading over the saved prefixes while session allows show above them (2026-11-23, the user's pick: the approval's <i>Allow always</i>). Pinned.</summary>
+    public const string SavedAllowsHeading = "Always";
+
+    /// <summary>The note on <see cref="SavedAllowsHeading"/> while nothing is saved (2026-11-23): the house's empty group, no <see cref="NoAllowedCommandsRow"/> under it. Pinned.</summary>
+    public const string SavedAllowsEmptyNote = "none saved";
+
+    /// <summary>The allowed-commands footer's last line under a session allow (2026-11-23), kept to one row of the footer (<see cref="MenuFooter.Last"/>). Pinned.</summary>
+    public const string SessionAllowedNote = "this session only: runs without asking until the app closes or the profile changes";
+
+    /// <summary>The question before a session allow is forgotten (2026-11-23, the user's ask: as a saved prefix's remove asks). Pinned.</summary>
+    public static string ForgetSessionAllowQuestion(string prefix) => $"Forget \"{prefix}\" for this session? It will ask again.";
+
+    /// <summary>The notice after a session allow is forgotten (2026-11-23), shaped as <see cref="PrefixRemovedNotice"/>. Pinned.</summary>
+    public static string SessionForgottenNotice(string prefix) => FieldName(SettingsField.ShellCommandAllowed) + ": " + prefix + " forgotten for this session";
+
+    /// <summary>
+    /// After a session allow's prefix without the pane (2026-11-23): the Spectre prompt shows no heading rows, so each session row says what
+    /// it is. Drawn dim. Pinned.
+    /// </summary>
+    public const string SessionRowTag = " (this session)";
 
     /// <summary>The forbidden strings' footer's last line under a string (2026-10-07). Pinned.</summary>
     public const string ForbiddenStringNote = "a command that holds this is refused, whatever the policy says";
@@ -3930,22 +3967,23 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The allowed-commands list's first title-row button (2026-10-12, the user's ask: the third policy beside ask and yolo, first):
     /// the policy to <c>off</c>, at once and unasked, as ask is — no shell or script tool is offered from the next turn. ⊘, one cell
-    /// and monochrome as the checklists' ⊞ ⊠ ⊡. Pinned.
+    /// and monochrome as the checklists' ⊞ ⊠ ⊡, until 2026-11-23; since then 🚫 (the user's ask: a colour emoji beside ask's 🔒 and yolo's 🚀). Pinned.
     /// </summary>
-    public const string PolicyOffButton = "⊘ off";
+    public const string PolicyOffButton = "🚫 off";
 
 
     /// <summary>
     /// The allowed-commands list's ask button, the first until 2026-10-12 (2026-10-02, the user's ask: switch <c>Shell command policy</c> from the
     /// list <c>/cmdlist</c> opened — <c>/tools shell allowed</c> since 2026-10-09 —, without going through the Shell tab's picker): the policy to <c>ask</c>, at once. The bare word:
     /// the toolbar lock's glyph here would be a second lock on the screen, a click on it no click on the toolbar's. A check before
-    /// it since 2026-10-03 (the user's ask: every header button a glyph to its left, monochrome as the checklists' ⊞ ⊠ ⊡). Pinned.
+    /// it from 2026-10-03 (the user's ask: every header button a glyph to its left, monochrome as the checklists' ⊞ ⊠ ⊡); since 2026-11-23 the
+    /// toolbar's own 🔒 (the user's ask: the button matches the lock it sets, as yolo's 🚀 does). Pinned.
     /// </summary>
-    public const string PolicyAskButton = "✓ ask";
+    public const string PolicyAskButton = "🔒 ask";
 
 
-    /// <summary>The allowed-commands list's last button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it since 2026-10-03, two spaces after it (later that day, the user's ask: Windows Terminal gives ⚠ one cell, as <see cref="UI.TextCells"/> counts it, but draws it from the colour emoji font two cells wide over the space after it, so the second space is the one that shows). Pinned.</summary>
-    public const string PolicyYoloButton = "⚠  yolo";
+    /// <summary>The allowed-commands list's last button (2026-10-02): the policy to <c>yolo</c>, after a yes to <see cref="YoloConfirmQuestion"/>; the warning sign before it from 2026-10-03, with two spaces after it (Windows Terminal gave ⚠ one cell, as <see cref="UI.TextCells"/> counted it, but drew it two wide over the space after it); since 2026-11-23 the rocket, yolo's one emoji everywhere (the user's ask), two cells by both counts, so one space. Pinned.</summary>
+    public const string PolicyYoloButton = "🚀 yolo";
 
     /// <summary>The keys of the allowed-commands list's three policy buttons (2026-10-02; P for one cycling button from later on 2026-10-13 until 2026-11-21).</summary>
     public const char PolicyOffKey = 'o';
@@ -4062,48 +4100,12 @@ internal sealed partial class SettingsMenu
     public static IReadOnlyList<MenuButton> PoliceButtons(int count) => [new(PoliceStringsTitle(count), PoliceStringsKey, count > 0)];
 
     /// <summary>
-    /// The command-policy picker's first button (2026-10-09, the user's call: <c>/cmdlist</c> folded under <c>/tools shell</c>):
-    /// the allowed-commands list, ESC there coming back to the picker — the police page's strings button's shape. The word the
-    /// title starts with (<see cref="PolicyAllowedTitle"/>). Pinned.
-    /// </summary>
-    public const string PolicyAllowedButton = "≡ allowed";
-
-    /// <summary><see cref="PolicyAllowedButton"/> with the count: <c>≡ allowed (3)</c>, or <c>≡ allowed (none)</c>. Pinned.</summary>
-    public static string PolicyAllowedTitle(int count) =>
-        PolicyAllowedButton + " (" + (count == 0 ? "none" : count.ToString(CultureInfo.InvariantCulture)) + ")";
-
-    /// <summary>The key that is <see cref="PolicyAllowedButton"/>.</summary>
-    public const char PolicyAllowedKey = 'c';
-
-    /// <summary>The command-policy picker's second button (2026-10-09, <c>/police</c> folded in): the police's on/off page, ESC there coming back. Pinned.</summary>
-    public const string PolicyPoliceButton = "≡ police";
-
-    /// <summary><see cref="PolicyPoliceButton"/> with the police's state: <c>≡ police (on)</c>. Pinned.</summary>
-    public static string PolicyPoliceTitle(bool on) => PolicyPoliceButton + (on ? " (on)" : " (off)");
-
-    /// <summary>The key that is <see cref="PolicyPoliceButton"/>.</summary>
-    public const char PolicyPoliceKey = 'p';
-
-    /// <summary>The command-policy picker's hint on the pane, where the two buttons are (2026-10-09). Pinned.</summary>
-    public const string CommandPolicyPageKeys = "Enter = choose · c = allowed · p = police · Esc = back";
-
-    /// <summary>
-    /// The command-policy picker's buttons (2026-10-09): <see cref="PolicyAllowedTitle"/> for <paramref name="allowed"/> prefixes, lit
-    /// while any is allowed, and <see cref="PolicyPoliceTitle"/>, lit while <paramref name="police"/> is on. Each opens its page. Pinned.
-    /// </summary>
-    public static IReadOnlyList<MenuButton> CommandPolicyPageButtons(int allowed, bool police) =>
-    [
-        new(PolicyAllowedTitle(allowed), PolicyAllowedKey, allowed > 0),
-        new(PolicyPoliceTitle(police), PolicyPoliceKey, police),
-    ];
-
-    /// <summary>
     /// The offered button of the ComfyUI, SQL, Oracle, MySQL, SQLite, PostgreSQL and UNC tool pages (2026-10-05, the user's ask:
     /// the police page's strings button for the "… offered" checklists): the checklist, opened from wherever that page opens —
     /// the toolbar's 🎨 🛢️ 🔮 🐬 🪶 🐘 and UNC item, <c>/tools &lt;group&gt;</c>, the tab's switch row. Two spaces after the glyph
     /// (later that day, the user's ask: the one real space still read as "☑offered" — Windows Terminal gives ☑ one cell, as
     /// <see cref="UI.TextCells"/> counts it, but draws it from the colour emoji font two cells wide over the space after it, as
-    /// <see cref="PolicyYoloButton"/>'s ⚠, so the second space is the one that shows). Pinned.
+    /// the yolo button's ⚠ was until 2026-11-23, so the second space is the one that shows). Pinned.
     /// </summary>
     public const string OfferedButton = "☑  offered";
 
@@ -9455,34 +9457,16 @@ internal sealed partial class SettingsMenu
     /// The command-policy picker under the settings list (2026-09-21): one <see cref="CommandPolicyLabel"/> row per
     /// <see cref="Shell.CommandPolicy.Names"/> entry, the saved one under the cursor. A move into <c>yolo</c> asks
     /// <see cref="YoloConfirmQuestion"/> on the same pane first (2026-10-03, with the toolbar's shell: every way into yolo asks,
-    /// as the allowed-commands list's button does); No or ESC leaves the policy. Since 2026-10-09 (the user's call:
-    /// <c>/cmdlist</c> and <c>/police</c> folded under <c>/tools shell</c>) the title row carries <see cref="CommandPolicyPageButtons"/>
-    /// — C the allowed-commands list, P the police's page — each coming back here on ESC, the police page's strings-button shape.
+    /// as the allowed-commands list's button does); No or ESC leaves the policy. From 2026-10-09 to 2026-11-23 its title row carried an
+    /// allowed-commands and a police button; since 2026-11-23 (the user's ask) it is a plain pick, <see cref="PickKeys"/> its hint: the
+    /// toolbar's lock and officer, <c>/tools shell allowed</c> and <c>/tools shell police</c> and the Shell tab's rows still reach both pages.
+    /// <see cref="PickAsync"/>, never <see cref="PickChecklistAsync"/>, which with no buttons would draw the checklist's.
     /// </summary>
     private async Task<bool> PickCommandPolicyAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
-        var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandPolicy)), Shell.CommandPolicy.Names.Select(CommandPolicyLabel).ToList(), _pane.Enabled ? CommandPolicyPageKeys : PickKeys);
+        var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandPolicy)), Shell.CommandPolicy.Names.Select(CommandPolicyLabel).ToList(), PickKeys);
         int cursor = Array.IndexOf(Shell.CommandPolicy.Names, saved.ShellCommandPolicy);
-        int? picked;
-        while (true)
-        {
-            // Read again at each pass: a page the buttons open may have changed the list, the police or (the list's off, ask and yolo) the policy.
-            var current = _settings.Current;
-            var buttons = CommandPolicyPageButtons(Shell.CommandAllowList.Merge(current.ShellCommandAllowed, []).Count, current.ShellPolice);
-            var pressed = await PickChecklistAsync(page, cursor, cancellationToken, buttons).ConfigureAwait(false);
-            if (pressed is { Button: >= 0 } button)
-            {
-                cursor = button.Row;
-                _ = button.Button == 0
-                    ? await EditAllowedCommandsAsync(cancellationToken).ConfigureAwait(false)
-                    : await EditToggleAsync(SettingsField.ShellPolice, cancellationToken).ConfigureAwait(false);
-                continue;
-            }
-
-            picked = pressed?.Row;
-            break;
-        }
-
+        int? picked = await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false);
         saved = _settings.Current;
         if (picked is not { } index)
         {
@@ -9660,8 +9644,13 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The allowed-commands list under the settings list (2026-09-21): one row per prefix saved for
     /// good, Enter removing it (the list re-shown until ESC); <see cref="NoAllowedCommandsRow"/> alone
-    /// while it is empty. The session's own allows are not here: they live in the process, not the file.
-    /// True when anything was removed. Internal since later on 2026-09-21 for <see cref="ToolsMenu.ShowAllowedCommandsAsync"/>,
+    /// while it is empty. Since 2026-11-23 (the user's ask) the session's own allows (<see cref="SessionAllows"/>'
+    /// <see cref="Shell.CommandAllowList.SessionOnly"/>) show first under <see cref="SessionAllowsHeading"/>, the saved ones under
+    /// <see cref="SavedAllowsHeading"/> (with <see cref="SavedAllowsEmptyNote"/> and no row while none is saved); no headings while the
+    /// session holds none. Enter on a session row forgets it after <see cref="ForgetSessionAllowQuestion"/>, which changes no setting; a
+    /// saved prefix's remove forgets the session's copy too, so it asks again. Without the pane the headings are no choices, so each
+    /// session row carries <see cref="SessionRowTag"/>. True when a saved prefix was removed or the policy changed.
+    /// Internal since later on 2026-09-21 for <see cref="ToolsMenu.ShowAllowedCommandsAsync"/>,
     /// which opens it straight under the Tools crumb (<c>/tools shell allowed</c>, <c>/cmdlist</c> until 2026-10-09; the toolbar lock). Since 2026-10-02 (the user's ask) its
     /// title row carries <see cref="CommandPolicyButtons"/>: since 2026-11-21 (the user's ask) one button a <c>Shell command policy</c>, the saved
     /// one lit (one button stepping off → ask → yolo from later on 2026-10-13), <c>off</c> and <c>ask</c> saved at once, <c>yolo</c> after a yes to
@@ -9673,38 +9662,85 @@ internal sealed partial class SettingsMenu
     internal async Task<bool> EditAllowedCommandsAsync(CancellationToken cancellationToken)
     {
         bool changed = false;
-        int cursor = 0;
+        bool forgot = false;   // a session allow forgotten: no setting changed, but not "unchanged" either
+        int cursor = 0;        // a page row, kept across a forget or a remove
         string filter = "";
         while (true)
         {
             var allowed = Shell.CommandAllowList.Merge(_settings.Current.ShellCommandAllowed, []);
-            // Typed to filter, each prefix whole under the list (2026-10-07, the user's ask): the rows' indices into the list.
-            var shown = Enumerable.Range(0, allowed.Count).Where(i => MenuFilter.Matches(filter, allowed[i], null)).ToList();
-            IReadOnlyList<string> rows = allowed.Count == 0 ? [Markup.Escape(NoAllowedCommandsRow)]
-                : shown.Count == 0 ? [MenuFilter.NoMatchNameRow(filter)]
-                : shown.Select(i => Markup.Escape(allowed[i])).ToList();
-            var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandAllowed)), rows, allowed.Count == 0 ? AllowedCommandsEmptyKeys : MenuFilter.HintBeforeEsc(AllowedCommandsKeys, filter, letteredButtons: true))
+            var session = SessionAllows?.SessionOnly() ?? [];
+            int total = allowed.Count + session.Count;
+            // Typed to filter, each prefix whole under the list (2026-10-07, the user's ask), over both groups since 2026-11-23.
+            var shownSession = session.Where(prefix => MenuFilter.Matches(filter, prefix, null)).ToList();
+            var shownSaved = allowed.Where(prefix => MenuFilter.Matches(filter, prefix, null)).ToList();
+            int matched = shownSession.Count + shownSaved.Count;
+            var rows = new List<string>();
+            var items = new List<(string Prefix, bool Session)?>();
+            var headings = new HashSet<int>();
+            if (total == 0)
             {
-                Filter = allowed.Count == 0 ? null : filter,
-                Caption = MenuFilter.CaptionOrNull(filter, shown.Count, allowed.Count),
-                Footer = (_, row) => row < shown.Count ? new MenuFooter(allowed[shown[row]], AllowedCommandNote) : null,
+                rows.Add(Markup.Escape(NoAllowedCommandsRow));
+                items.Add(null);
+            }
+            else if (matched == 0)
+            {
+                rows.Add(MenuFilter.NoMatchNameRow(filter));
+                items.Add(null);
+            }
+            else
+            {
+                if (shownSession.Count > 0)
+                {
+                    headings.Add(rows.Count);
+                    rows.Add(SectionRule.Markup(SessionAllowsHeading, shownSession.Count.ToString(CultureInfo.InvariantCulture)));
+                    items.Add(null);
+                    foreach (string allow in shownSession)
+                    {
+                        rows.Add(Markup.Escape(allow) + (_pane.Enabled ? "" : Theme.DimMarkup(SessionRowTag)));
+                        items.Add((allow, true));
+                    }
+                }
+
+                // The Always heading only beside session allows; with nothing saved it carries the note and no row follows (the house's
+                // empty group), and a filter matching none of it drops it.
+                if (session.Count > 0 && (shownSaved.Count > 0 || (allowed.Count == 0 && filter.Length == 0)))
+                {
+                    headings.Add(rows.Count);
+                    rows.Add(SectionRule.Markup(SavedAllowsHeading, shownSaved.Count.ToString(CultureInfo.InvariantCulture), allowed.Count == 0 ? SavedAllowsEmptyNote : null));
+                    items.Add(null);
+                }
+
+                foreach (string allow in shownSaved)
+                {
+                    rows.Add(Markup.Escape(allow));
+                    items.Add((allow, false));
+                }
+            }
+
+            var page = new MenuPage(Crumb(FieldName(SettingsField.ShellCommandAllowed)), rows, total == 0 ? AllowedCommandsEmptyKeys : MenuFilter.HintBeforeEsc(AllowedCommandsKeys, filter, letteredButtons: true))
+            {
+                Filter = total == 0 ? null : filter,
+                Caption = MenuFilter.CaptionOrNull(filter, matched, total),
+                Headings = headings.Count > 0 ? headings : null,
+                Footer = (_, row) => row >= 0 && row < items.Count && items[row] is { } item
+                    ? new MenuFooter(item.Prefix, item.Session ? SessionAllowedNote : AllowedCommandNote)
+                    : null,
             };
             string policy = _settings.Current.ShellCommandPolicy;
-            int start = Math.Max(0, shown.IndexOf(cursor));
+            int start = page.StopFrom(Math.Clamp(cursor, 0, rows.Count - 1), +1);
             MenuPick? pick = _pane.Enabled
-                ? await _pane.PickAsync(page with { Buttons = CommandPolicyButtons(policy), Removes = shown.Count > 0 && allowed.Count > 0 }, start, cancellationToken).ConfigureAwait(false)
+                ? await _pane.PickAsync(page with { Buttons = CommandPolicyButtons(policy), Removes = matched > 0 }, start, cancellationToken).ConfigureAwait(false)
                 : await PickAsync(page, start, cancellationToken).ConfigureAwait(false) is { } plain ? new MenuPick(0, plain) : null;
             if (pick?.Filter is { } typed)
             {
                 filter = typed;
-                cursor = -1;   // the first row left
+                cursor = 0;   // the first row left
                 continue;
             }
 
-            (int Row, int Button)? picked = pick is { } p ? (p.Row >= 0 && p.Row < shown.Count ? shown[p.Row] : -1, p.Button) : null;
             // Every button is a policy, its index the policy's in Names (2026-11-21): one left unmapped would fall through to the
             // remove below and ask to remove the highlighted prefix.
-            if (picked is { Button: >= 0 } pressed && pressed.Button < Shell.CommandPolicy.Names.Length)
+            if (pick is { Button: >= 0 } pressed && pressed.Button < Shell.CommandPolicy.Names.Length)
             {
                 cursor = pressed.Row;
                 string chosen = Shell.CommandPolicy.Names[pressed.Button];
@@ -9735,9 +9771,9 @@ internal sealed partial class SettingsMenu
                 continue;
             }
 
-            if (picked is not { Row: var index } || allowed.Count == 0)
+            if (pick is not { } chosenRow || total == 0)
             {
-                if (!changed)
+                if (!changed && !forgot)
                 {
                     Sink.Notice(UnchangedNotice);
                 }
@@ -9745,13 +9781,29 @@ internal sealed partial class SettingsMenu
                 return changed;
             }
 
-            if (index < 0)
+            if (chosenRow.Row < 0 || chosenRow.Row >= items.Count || items[chosenRow.Row] is not { } target)
             {
                 continue;   // the no-match row
             }
 
-            string prefix = allowed[index];
-            cursor = index;
+            cursor = chosenRow.Row;
+            string prefix = target.Prefix;
+            if (target.Session)
+            {
+                // Forgotten for the session after a yes (2026-11-23, the user's ask): the next command it starts asks again.
+                var forgetting = new MenuPage(ForgetSessionAllowQuestion(prefix), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
+                if (await PickAsync(forgetting, 0, cancellationToken).ConfigureAwait(false) != 1)
+                {
+                    Sink.Notice(ChatScreen.KeptNotice);
+                    continue;
+                }
+
+                SessionAllows?.ForgetSessionAllow(prefix);
+                Sink.Notice(SessionForgottenNotice(prefix));
+                forgot = true;
+                continue;
+            }
+
             // Asked first (2026-10-07, every list's remove asks).
             var removing = new MenuPage(RemovePrefixQuestion(prefix), ConfirmRows, ConfirmKeys) { Hotkeys = ConfirmHotkeys };
             if (await PickAsync(removing, 0, cancellationToken).ConfigureAwait(false) != 1)
@@ -9761,9 +9813,10 @@ internal sealed partial class SettingsMenu
             }
 
             _settings.Update(d => d.ShellCommandAllowed = Shell.CommandAllowList.Without(d.ShellCommandAllowed, prefix));
+            // The session's copy too, so "It will ask again" holds even for a prefix allowed for the session before it was saved (2026-11-23).
+            SessionAllows?.ForgetSessionAllow(prefix);
             Sink.Notice(PrefixRemovedNotice(prefix));
             changed = true;
-            cursor = index;
         }
     }
 

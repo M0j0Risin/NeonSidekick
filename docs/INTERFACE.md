@@ -157,8 +157,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/browser list` | Enter opens in the [Browser window](#the-browser-window) · `a` add · `n` name · `e` address |
 | `/youtube`, `/youtube list`, `/browser list` | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | **Tools and safety** | |
-| `/tools shell` | `c` the allowed commands · `p` the police |
-| `/tools shell allowed` | Enter or Delete removes (asks) · `o` / `a` / `y` set *Shell command policy* off / ask / yolo (yolo asks; before typing a filter) · type to filter |
+| `/tools shell allowed` | Enter or Delete removes (asks; a *This session* row is forgotten for the session) · `o` / `a` / `y` set *Shell command policy* off / ask / yolo (yolo asks; before typing a filter) · type to filter |
 | `/tools shell police` | `s` the forbidden strings |
 | *Shell police forbidden strings* | top row adds · Enter or Delete removes (asks) · `r` restore defaults (asks) |
 | `/tools web` | `m` *Web browser mode* · `o` opens the Browser window (Windows, macOS 14+) |
@@ -390,7 +389,7 @@ Icons under the status bar (*Tool bar*), each shown while checked there. A click
 | 📣 | always | `/prompts` |
 | ⏳ | dark while *Queue mode* is `off` | `/queue` |
 | 🙋 | dark while *Ask user* is off | `/tools ask` |
-| 🔒 / 🔓 | *Shell command policy* `ask` / `yolo` (🔒 dark under `off`) | `/tools shell allowed` |
+| 🔒 / 🚀 | *Shell command policy* `ask` / `yolo` (🔒 dark under `off`) | `/tools shell allowed` |
 | 👮 / 🥷 | *Shell police* on / off (dark while the policy is `off`) | `/tools shell police` |
 | 🐚 | dark under `off` | `/tools shell` |
 | 📁 🖼️ 🌐 🦉 🐳 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ | dark while off | `/tools files`, `image`, `web`, `advisors`, `docker`, `obsidian`, `sql`, `oracle`, `mysql`, `sqlite`, `duckdb`, `postgres`, `unc`, `ha`, `comfy`, `camera`, `print` |

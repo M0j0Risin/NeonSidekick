@@ -38,7 +38,7 @@ public sealed class ShellTests
         Assert.Equal("yolo", CommandPolicy.Name(CommandPolicyMode.Yolo));
         Assert.Equal("no shell or script tool is offered", CommandPolicy.Describe("off"));
         Assert.Equal("you approve each command not on the allow list", CommandPolicy.Describe("ask"));
-        Assert.Equal("every command runs, nothing is asked", CommandPolicy.Describe("yolo"));
+        Assert.Equal("commands run unasked; the shell police still checks", CommandPolicy.Describe("yolo"));
         Assert.Equal(CommandPolicyMode.Yolo, CommandPolicy.Resolve(new AppSettingsData { ShellCommandPolicy = "yolo" }));
         Assert.Equal(CommandPolicyMode.Off, CommandPolicy.Resolve(new AppSettingsData { ShellCommandPolicy = "whatever" }));
         Assert.False(App.ChatScreen.ShellOffered(new AppSettingsData()));   // off by default since 2026-09-29
@@ -557,6 +557,54 @@ public sealed class ShellTests
         Assert.Equal(["a"], CommandAllowList.Without(["a", "B"], "b"));
         Assert.True(CommandAllowList.Contains(["Git Push"], "git push"));
         Assert.False(CommandAllowList.Contains([], "git push"));
+    }
+
+    // 2026-11-23, the user's ask: the allowed-commands list shows the session's own allows, forgets one, and a profile switch clears them.
+    [Fact]
+    public void CommandAllowList_SessionOnly_LeavesOutTheSaved_ForgetAndClear_LeaveTheSavedAllowed()
+    {
+        var saved = new List<string> { "Git Log" };
+        var list = new CommandAllowList(() => saved, merged => saved = [.. merged]);
+        list.AllowSession(["zip", "git log", "Dotnet Test"]);
+        Assert.Equal(["dotnet test", "zip"], list.SessionOnly());   // the saved one (any case) under Always alone, sorted ordinal
+
+        list.ForgetSessionAllow(" Dotnet Test ");   // trimmed and lower-cased, as AllowSession adds
+        Assert.False(list.IsAllowed("dotnet test"));
+        list.ForgetSessionAllow("git log");
+        Assert.True(list.IsAllowed("git log"));   // still saved
+        Assert.Equal(["zip"], list.SessionOnly());
+
+        list.ClearSessionAllows();
+        Assert.Empty(list.SessionSnapshot());
+        Assert.False(list.IsAllowed("zip"));
+        Assert.True(list.IsAllowed("git log"));   // the saved list alone answers
+    }
+
+    [Fact]
+    public void CommandAllowList_ForgetDropped_ForgetsOnlyTheCopiesAllowAlwaysMade()
+    {
+        var saved = new List<string>();
+        var list = new CommandAllowList(() => saved, merged => saved = [.. merged]);
+        list.ForgetDropped([]);   // nothing held: nothing to do
+
+        list.AllowPermanently(["python"]);
+        list.ForgetDropped(["Python"]);   // still saved (any case): kept
+        Assert.True(list.IsAllowed("python"));
+        Assert.Equal(["python"], list.SessionSnapshot());
+
+        list.AllowSession(["rm"]);
+        list.AllowPermanently(["rm"]);   // allowed for the session first: no copy
+        saved = [];
+        list.ForgetDropped(saved);
+        Assert.False(list.IsAllowed("python"));
+        Assert.True(list.IsAllowed("rm"));
+        Assert.Equal(["rm"], list.SessionSnapshot());
+
+        list.AllowPermanently(["zip"]);
+        list.ClearSessionAllows();   // the copies go with the session
+        list.AllowSession(["zip"]);
+        list.ForgetDropped([]);
+        Assert.True(list.IsAllowed("zip"));   // a later session allow is no copy
     }
 
     // ── The gate ─────────────────────────────────────────────────────────────

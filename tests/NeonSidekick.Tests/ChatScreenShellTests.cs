@@ -3,6 +3,7 @@ using NeonSidekick.App;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Llm;
 using NeonSidekick.Llm.Tools;
+using NeonSidekick.Settings;
 using NeonSidekick.Shell;
 using NeonSidekick.Tests.Fakes;
 using NeonSidekick.UI;
@@ -18,6 +19,9 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public partial class ChatScreenTests
 {
+    /// <summary>Steps <see cref="ShellFixture"/> and <see cref="ShellFixtureUnix"/> take after the turn, before <c>/exit</c> (2026-11-23); none by default. Set before the fixture.</summary>
+    private Action<ScriptedInput>[] _shellAfter = [];
+
     /// <summary>The model calls <c>run_command</c> once (<paramref name="command"/> in cmd), the pane is answered with <paramref name="keys"/>, then the reply.</summary>
     private void ShellFixture(ConsoleKeyInfo[] keys, string reply, string command = "echo hi", params string[] moreCommands)
     {
@@ -33,7 +37,7 @@ public partial class ChatScreenTests
 
         _chat.EnqueueText(reply);
         var input = Scripted();
-        StepsWhenIdle(Line("run it"), Line("/exit"));
+        StepsWhenIdle([Line("run it"), .. _shellAfter, Line("/exit")]);
         var idle = input.OnWait!;
         bool answered = false;
         input.OnWait = () =>
@@ -68,7 +72,7 @@ public partial class ChatScreenTests
 
         _chat.EnqueueText(reply);
         var input = Scripted();
-        StepsWhenIdle(Line("run it"), Line("/exit"));
+        StepsWhenIdle([Line("run it"), .. _shellAfter, Line("/exit")]);
         var idle = input.OnWait!;
         bool answered = false;
         input.OnWait = () =>
@@ -331,6 +335,50 @@ public partial class ChatScreenTests
         Assert.Equal("exit 0 in 0.0 s (cmd): echo again\nagain", ToolResult(_chat.Requests[2], "c2"));
         Assert.Contains("🛠️ exit 0 in 0.0 s (cmd): echo again\n", output);
         Assert.Empty(_settings.Current.ShellCommandAllowed);   // the session's, not the file's
+    }
+
+    /// <summary>
+    /// The session's allow on <c>/tools shell allowed</c> under This session, and gone after a profile switch (2026-11-23, the user's ask):
+    /// the list's first draw holds the heading and the prefix, the draw after <c>/profile work</c> neither.
+    /// </summary>
+    [WindowsFact]
+    public async Task RunCommand_AllowSession_ShowsOnTheAllowedList_AndAProfileSwitchClearsIt()
+    {
+        Profiles.Create(_dir, "work", AppSettings.Copy(_settings.Current));
+        _shellAfter = [Line("/tools shell allowed"), Key(Keys.Escape), Line("/profile work"), Line("/tools shell allowed"), Key(Keys.Escape)];
+        ShellFixture([Keys.Char('s'), Keys.Enter], "Done.");
+
+        string output = await RunAsync();
+
+        AssertSessionAllowThenCleared(output);
+    }
+
+    /// <summary>The Unix twin of <see cref="RunCommand_AllowSession_ShowsOnTheAllowedList_AndAProfileSwitchClearsIt"/>: zsh, where Windows runs cmd.exe.</summary>
+    [UnixFact]
+    public async Task RunCommand_AllowSession_ShowsOnTheAllowedList_AndAProfileSwitchClearsIt_Unix()
+    {
+        Profiles.Create(_dir, "work", AppSettings.Copy(_settings.Current));
+        _shellAfter = [Line("/tools shell allowed"), Key(Keys.Escape), Line("/profile work"), Line("/tools shell allowed"), Key(Keys.Escape)];
+        ShellFixtureUnix([Keys.Char('s'), Keys.Enter], "Done.");
+
+        string output = await RunAsync();
+
+        AssertSessionAllowThenCleared(output);
+    }
+
+    private void AssertSessionAllowThenCleared(string output)
+    {
+        Assert.Contains("(🔓 allowed for this session: echo)\n", output);
+        int split = output.LastIndexOf("/profile work", StringComparison.Ordinal);
+        Assert.True(split > 0, "the switch typed");
+        string before = output[..split];
+        string after = output[split..];
+        Assert.Contains(Titled(AllowedCommandsTitle), before);
+        Assert.Contains(Titled(AllowedCommandsTitle), after);
+        Assert.Contains("── " + SettingsMenu.SessionAllowsHeading + " · 1", before);
+        Assert.Contains("▸ echo\n", before);
+        Assert.DoesNotContain(SettingsMenu.SessionAllowsHeading, after);
+        Assert.Contains("\n▸ " + SettingsMenu.NoAllowedCommandsRow + "\n", after);
     }
 
     /// <summary>The Unix twin of <see cref="RunCommand_AllowSession_NotesIt_AndTheNextCallOfThePrefixNeverAsks"/> (2026-10-06, the macOS build): zsh and Unix lines, where Windows runs cmd.exe.</summary>

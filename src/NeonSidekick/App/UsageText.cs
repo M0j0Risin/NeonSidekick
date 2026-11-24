@@ -346,13 +346,22 @@ public static partial class UsageText
     public const string SyspromptWord = "sysprompt";
 
     /// <summary>The argument list's note beside <see cref="SyspromptWord"/>.</summary>
-    public const string SyspromptWordNote = "the next request's context to a Markdown file";
+    public const string SyspromptWordNote = "the system prompt and tools to a Markdown file";
+
+    /// <summary>
+    /// The word after <see cref="SyspromptWord"/> that adds this conversation (2026-11-23, the user's ask: bare, the export holds the system
+    /// message and the tools alone; the conversation only when asked for). Pinned.
+    /// </summary>
+    public const string ConversationWord = "conversation";
+
+    /// <summary>The argument list's note beside <c>sysprompt conversation</c>.</summary>
+    public const string ConversationWordNote = "this conversation's messages too";
 
     /// <summary>The argument list's note beside <c>sysprompt to=</c>, worded as <c>/pdf</c>'s.</summary>
     public const string SyspromptToNote = "to=notes/context.md, or a folder";
 
-    /// <summary>Anything but the bare word or one <c>to=</c> after it.</summary>
-    public const string SyspromptUsage = "/usage sysprompt takes nothing, or to=<file or folder>.";
+    /// <summary>Anything but the bare word, <see cref="ConversationWord"/> and one <c>to=</c> after it.</summary>
+    public const string SyspromptUsage = "/usage sysprompt takes conversation, to=<file or folder>, both or nothing.";
 
     /// <summary>Under the Claude Code server, worded as <see cref="ClaudeCodeContext"/>.</summary>
     public const string ExportClaudeCode = "The Claude Code server builds its own context, so there is no request here to write out.";
@@ -365,29 +374,37 @@ public static partial class UsageText
         Printing.PrintCommand.Words(args ?? "").FirstOrDefault() is { } first && string.Equals(first, SyspromptWord, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// <c>/usage sysprompt [to=&lt;path&gt;]</c>'s words (2026-11-23), split as <c>/pdf</c> splits them (a quoted path whole): not the word at all,
-    /// or the word with an optional non-empty <c>to=</c>; a second <c>to=</c>, an empty one or any other word is <see cref="SyspromptUsage"/>. Pure.
+    /// <c>/usage sysprompt [conversation] [to=&lt;path&gt;]</c>'s words (2026-11-23), split as <c>/pdf</c> splits them (a quoted path whole): not
+    /// the word at all, or the word with <see cref="ConversationWord"/> and a non-empty <c>to=</c>, each optional and in either order; either
+    /// one twice, an empty <c>to=</c> or any other word is <see cref="SyspromptUsage"/>. Pure.
     /// </summary>
-    public static (bool Is, string? To, string? Error) ParseSysprompt(string args)
+    public static (bool Is, bool Conversation, string? To, string? Error) ParseSysprompt(string args)
     {
         var words = Printing.PrintCommand.Words(args ?? "").ToList();
         if (words.Count == 0 || !string.Equals(words[0], SyspromptWord, StringComparison.OrdinalIgnoreCase))
         {
-            return (false, null, null);
+            return (false, false, null, null);
         }
 
+        bool conversation = false;
         string? to = null;
         foreach (string word in words.Skip(1))
         {
+            if (!conversation && string.Equals(word, ConversationWord, StringComparison.OrdinalIgnoreCase))
+            {
+                conversation = true;
+                continue;
+            }
+
             if (to is not null || !word.StartsWith(Pdf.PdfText.ToWord, StringComparison.OrdinalIgnoreCase) || word.Length == Pdf.PdfText.ToWord.Length)
             {
-                return (true, null, SyspromptUsage);
+                return (true, false, null, SyspromptUsage);
             }
 
             to = word[Pdf.PdfText.ToWord.Length..];
         }
 
-        return (true, to, null);
+        return (true, conversation, to, null);
     }
 
     /// <summary>
@@ -397,9 +414,10 @@ public static partial class UsageText
     public static string ExportFileName(DateTimeOffset at, int n) =>
         "neon-sysprompt-" + at.ToString("yyyyMMdd-HHmmss-fff", CultureInfo.InvariantCulture) + (n > 1 ? "-" + n.ToString(CultureInfo.InvariantCulture) : "") + ExportExtension;
 
-    /// <summary>The notice after the write.</summary>
-    public static string Exported(string shownPath, int tools, int messages) =>
-        $"(wrote the next request's context to {shownPath}: the system message, {Plural(tools, "tool", "tools")} and {Plural(messages, "message", "messages")}. It holds the whole conversation, so mind it before a commit.)";
+    /// <summary>The notice after the write: <paramref name="messages"/> null when the conversation was left out.</summary>
+    public static string Exported(string shownPath, int tools, int? messages) => messages is int count
+        ? $"(wrote the next request's context to {shownPath}: the system message, {Plural(tools, "tool", "tools")} and {Plural(count, "message", "messages")}. It holds the whole conversation, so mind it before a commit.)"
+        : $"(wrote the system prompt to {shownPath}: the system message and {Plural(tools, "tool", "tools")}.)";
 
     /// <summary>A <c>to=</c> naming a file already there: never written over.</summary>
     public static string ExportExists(string shownPath) => $"{shownPath} is already there; /usage sysprompt never writes over a file.";

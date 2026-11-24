@@ -241,13 +241,15 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// A picture attached from a file outside the working directory names its full path to the model (2026-11-23, the user's ask: a model handed
-    /// "[Image #1]" to set_splash_image and hunted for the file), and set_splash_image takes that path as written.
+    /// "[Image #1]" to set_splash_image and hunted for the file), and set_splash_image takes that path as written. The picture sits in the
+    /// profile's images folder (a ComfyUI picture, the case in the user's log), which set_splash_image reads by its full path; a folder
+    /// outside both the working directory and the images folder stays refused (2026-11-24: the test used one, and the sandbox held).
     /// </summary>
     [WindowsFact]
     public async Task AnAttachedPicture_OutsideTheWorkingDirectory_NamesItsFullPath_ThatSetSplashImageTakes()
     {
         _settings.Update(d => { d.TtsOutput = false; d.ImageTools = true; });
-        string outside = Path.Combine(_dir, "elsewhere");
+        string outside = Path.Combine(_settings.ProfileImagesDirectory, "comfy");
         Directory.CreateDirectory(outside);
         string picture = Path.Combine(outside, "lucia.png");
         File.WriteAllBytes(picture, Fakes.FakeHeadlessBrowser.TinyPng);

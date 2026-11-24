@@ -19,7 +19,7 @@ public static class KeyCheckText
     /// The toggle on <c>/help</c>'s Keys tab (2026-10-12, the user's ask: a "key check" action at the top of the tab, pressed again
     /// back to the keys): its title on the strip, its key and the hint's word for it. Two spaces after ⌨: Windows Terminal gives it
     /// one cell, as <see cref="UI.TextCells"/> counts it, but draws it two wide over the space after it (seen on the screen that day),
-    /// as <c>SettingsMenu.PolicyYoloButton</c>'s ⚠, so the second space is the one that shows. Pinned.
+    /// as the yolo button's ⚠ was until 2026-11-23, so the second space is the one that shows. Pinned.
     /// </summary>
     public const string ToggleTitle = "⌨  key check";
     public const char ToggleKey = 'k';

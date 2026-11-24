@@ -1921,6 +1921,7 @@ internal sealed partial class ChatScreen
         _menu.TestDirectoryDomain = TestDirectoryDomainAsync;
         _menu.JoinedDomain = () => _directory.Joined;
         _menu.Effective = _effective;
+        _menu.SessionAllows = _allowList;   // the allowed-commands list's This session group (2026-11-23)
         // The shopping stores' manager (2026-10-11): /tools › Home › Shopping's row and the /shopping pane's store button.
         _menu.Shopping = _shopping;
         // The home bar picker's Monitors tab (2026-10-23): only with a monitor system, its note the topology (no DDC/CI read).
@@ -2054,7 +2055,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     public const string AskToolGlyph = "🙋";
     public const string CmdAskToolGlyph = "🔒";
-    public const string CmdYoloToolGlyph = "🔓";
+
+    /// <summary>The lock item under <c>Shell command policy</c> <c>yolo</c>: a rocket (🔓 until 2026-11-23, the user's ask: yolo's one emoji everywhere). Pinned.</summary>
+    public const string CmdYoloToolGlyph = "🚀";
     public const string PoliceToolGlyph = "👮";
 
     /// <summary>
@@ -5826,11 +5829,23 @@ internal sealed partial class ChatScreen
 
             case SlashCommand.Usage:
                 // context (2026-11-01): the pane opened on its Context tab; prompt, tools and skills (2026-11-07, /sys' tabs folded in) in tab order.
-                // sysprompt (2026-11-23) after them, then its to= once the word and a space are typed.
-                if (argText.StartsWith(UsageText.SyspromptWord + " ", StringComparison.OrdinalIgnoreCase)
-                    && !argText[(UsageText.SyspromptWord.Length + 1)..].Contains(' ', StringComparison.Ordinal))
+                // sysprompt (2026-11-23) after them, then conversation and to= once the word and a space are typed, and to= after conversation.
+                if (argText.StartsWith(UsageText.SyspromptWord + " ", StringComparison.OrdinalIgnoreCase))
                 {
-                    return MentionCompleter.Matches([new CompletionItem(UsageText.SyspromptWord + " " + Pdf.PdfText.ToWord, UsageText.SyspromptToNote)], argText);
+                    string sysprompt = UsageText.SyspromptWord + " ";
+                    string withConversation = sysprompt + UsageText.ConversationWord + " ";
+                    if (!argText[sysprompt.Length..].Contains(' ', StringComparison.Ordinal))
+                    {
+                        return MentionCompleter.Matches(
+                        [
+                            new CompletionItem(sysprompt + UsageText.ConversationWord, UsageText.ConversationWordNote),
+                            new CompletionItem(sysprompt + Pdf.PdfText.ToWord, UsageText.SyspromptToNote),
+                        ], argText);
+                    }
+
+                    return argText.StartsWith(withConversation, StringComparison.OrdinalIgnoreCase) && !argText[withConversation.Length..].Contains(' ', StringComparison.Ordinal)
+                        ? MentionCompleter.Matches([new CompletionItem(withConversation + Pdf.PdfText.ToWord, UsageText.SyspromptToNote)], argText)
+                        : [];
                 }
 
                 return MentionCompleter.Matches(
@@ -7015,6 +7030,7 @@ internal sealed partial class ChatScreen
         HomeWebForget();   // the Web UI's Home tab: its sheet and lease are the last profile's (2026-10-15)
         HomeCameraForget();   // the camera chips' fetches and stills waiting to show were the last profile's (2026-10-27)
         _webVideo?.ForgetProfile();   // the Video tab: its held video and Resume offer were the last profile's; one playing plays on (2026-10-16)
+        _allowList.ClearSessionAllows();   // the shell's session allows were the last profile's, a reset's or a pull's (2026-11-23, the user's ask)
         _memory = new MemoryStore(_settings.ProfileDirectory);
         _persona = new PersonaFile(_settings.ProfileDirectory);
         _operata = new OperataFile(_settings.ProfileDirectory);

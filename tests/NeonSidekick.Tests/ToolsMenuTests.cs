@@ -1644,7 +1644,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
         AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default shell             powershell\n  Shell default timeout (s)       180\n  Shell max timeout (s)           600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)  300\n"), 100);
-        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
+        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo commands run unasked; the shell police still checks\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + PolicyStrip + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
@@ -1677,7 +1677,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal(180, _settings.Current.ShellTimeoutSeconds);
         // The ten rows padded to the tab's own column (27), then the picker's rows, the list's, and the notices on the status line.
         AssertTabEnds(Strips(ToolsText.CoreTabTitle) + Headed(ToolsText.ShellTabTitle, "▸ Shell command policy            ask\n  Shell allowed commands          2 prefixes\n  Shell police                    on\n  Shell police forbidden strings  none\n  Shell prefer native tools       on\n  Shell default shell             zsh\n  Shell default timeout (s)       180\n  Shell max timeout (s)           600\n  Shell output max chars          30,000 chars\n  Shell code languages            powershell, python, node\n  Shell code default timeout (s)  300\n"), 100);
-        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(2, police: true).Select(b => b.Title)) + " ") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo every command runs, nothing is asked\n", Output);
+        Assert.Contains("\n" + Titled(CoreCrumb + " › Shell command policy") + "\n \n  off  no shell or script tool is offered\n▸ ask  you approve each command not on the allow list\n  yolo commands run unasked; the shell police still checks\n", Output);
         Assert.Contains("  · Shell command policy: yolo\n", Output);
         Assert.Contains("\n" + Titled(CoreCrumb + " › Shell allowed commands │ " + PolicyStrip + " ") + "\n \n▸ dotnet build\n  git push\n", Output);
         Assert.Contains("  · Shell allowed commands: dotnet build removed\n▸ git push\n", Output);
@@ -2707,8 +2707,131 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  · Shell allowed commands\n  ·   " + SettingsMenu.NoAllowedCommandsRow + "\n", Output);
         Assert.Equal(["Shell allowed commands", "  dotnet build", "  git push"], ToolsMenu.AllowedCommandLines(new AppSettingsData { ShellCommandAllowed = ["git push", "dotnet build"] }));
         Assert.Equal(["Shell allowed commands", "  " + SettingsMenu.NoAllowedCommandsRow], ToolsMenu.AllowedCommandLines(new AppSettingsData()));
+        Assert.Equal(["Shell allowed commands", "  git push"], ToolsMenu.AllowedCommandLines(new AppSettingsData { ShellCommandAllowed = ["git push"] }, []));   // no session allows: as before
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
+    }
+
+    // ── The session's allows on the list (2026-11-23, the user's ask) ───────
+
+    /// <summary>The screen's allow list over this fixture's store, as ChatScreen builds it, set on the menu, with <paramref name="session"/> allowed for the session.</summary>
+    private NeonSidekick.Shell.CommandAllowList SessionAllows(SettingsMenu settings, params string[] session)
+    {
+        var list = new NeonSidekick.Shell.CommandAllowList(() => _settings.Current.ShellCommandAllowed, merged => _settings.Update(d => d.ShellCommandAllowed = [.. merged]));
+        list.AllowSession(session);
+        settings.SessionAllows = list;
+        return list;
+    }
+
+    [Fact]
+    public async Task ShowAllowedCommands_TheSessionsAllows_ComeFirstUnderTheirHeading_DownSkipsTheAlwaysHeading_EachKindHasItsFooter()
+    {
+        _settings.Update(d => d.ShellCommandAllowed = ["git log"]);
+        var (menu, pane, settings) = PaneMenu();
+        SessionAllows(settings, "dotnet test", "git log");   // git log is saved too: under Always alone
+        Push(Keys.Down, Keys.Escape);
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + PolicyStrip + " ") + "\n \n" + Heading("── " + SettingsMenu.SessionAllowsHeading + " · 1") + "\n▸ dotnet test\n" + Heading("── " + SettingsMenu.SavedAllowsHeading + " · 1") + "\n  git log\n", Output);
+        Assert.Contains("\n" + Heading("── Always · 1") + "\n▸ git log\n", Output);   // one Down, past the heading
+        Assert.Contains(SettingsMenu.SessionAllowedNote, Output);
+        Assert.Contains(SettingsMenu.AllowedCommandNote, Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task EditAllowedCommands_ASessionRow_IsForgottenAfterAYes_ANoKeepsIt_NoSettingChanges()
+    {
+        _settings.Update(d => d.ShellCommandAllowed = ["git log"]);
+        var (_, pane, settings) = PaneMenu();
+        var list = SessionAllows(settings, "dotnet test");
+        Push(Keys.Enter, Keys.Escape);               // forget?  no: kept
+        Push(Keys.Enter, Keys.Down, Keys.Enter);     // forget?  yes
+        Push(Keys.Escape);                           // close
+
+        bool changed = await settings.EditAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.False(changed);   // a forget is no setting change
+        Assert.False(list.IsAllowed("dotnet test"));
+        Assert.True(list.IsAllowed("git log"));
+        Assert.Equal(["git log"], _settings.Current.ShellCommandAllowed);
+        Assert.Contains(SettingsMenu.ForgetSessionAllowQuestion("dotnet test"), Output);
+        Assert.Contains("  · " + ChatScreen.KeptNotice + "\n", Output);
+        Assert.Contains("  · " + SettingsMenu.SessionForgottenNotice("dotnet test") + "\n▸ git log\n", Output);   // no headings left
+        Assert.DoesNotContain(SettingsMenu.UnchangedNotice, Output);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowAllowedCommands_AFilter_CountsBothGroups_AndDropsAGroupWithNoMatch()
+    {
+        _settings.Update(d => d.ShellCommandAllowed = ["dotnet build"]);
+        var (menu, pane, settings) = PaneMenu();
+        SessionAllows(settings, "dotnet test", "zip");
+        Push([.. "dotnet".Select(Keys.Char)]);
+        Push(Keys.Escape);                           // the filter cleared
+        Push([.. "build".Select(Keys.Char)]);
+        Push(Keys.Escape, Keys.Escape);              // cleared, closed
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Contains(MenuFilter.CaptionOrNull("dotnet", 2, 3)!, Output);
+        Assert.Contains(MenuFilter.CaptionOrNull("build", 1, 3)!, Output);
+        Assert.Contains("\n" + Heading("── This session · 1") + "\n▸ dotnet test\n" + Heading("── Always · 1") + "\n  dotnet build\n", Output);
+        // "build": no session row matches, so its heading goes; the Always one stays over its match
+        string built = Output[Output.IndexOf(MenuFilter.CaptionOrNull("build", 1, 3)!, StringComparison.Ordinal)..];
+        built = built[..built.IndexOf(Rule(_console.Profile.Width), StringComparison.Ordinal)];
+        Assert.Contains("\n" + Heading("── Always · 1") + "\n▸ dotnet build\n", built);
+        Assert.DoesNotContain(SettingsMenu.SessionAllowsHeading, built);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowAllowedCommands_OnlySessionAllows_TheAlwaysHeadingSaysNoneSaved_AndTheListStillRemoves()
+    {
+        var (menu, pane, settings) = PaneMenu();
+        SessionAllows(settings, "dotnet test", "make [x]");
+        Push(Keys.End, Keys.Escape);
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Contains("\n" + Heading("── This session · 2") + "\n▸ dotnet test\n  make [x]\n" + Heading("── Always · 0 ── " + SettingsMenu.SavedAllowsEmptyNote) + "\n", Output);   // the prefix drawn literally
+        Assert.Contains("\n  dotnet test\n▸ make [x]\n" + Heading("── Always · 0 ── none saved") + "\n", Output);   // End stays on the last session row
+        Assert.DoesNotContain("\n  " + SettingsMenu.NoAllowedCommandsRow + "\n", Output);
+        Assert.Contains(MenuFilter.HintBeforeEsc(SettingsMenu.AllowedCommandsKeys, "", letteredButtons: true), Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public async Task ShowAllowedCommands_RemovingASavedPrefix_ForgetsTheSessionsCopyToo_SoItAsksAgain()
+    {
+        var (menu, pane, settings) = PaneMenu();
+        var list = SessionAllows(settings);
+        list.AllowPermanently(["python"]);
+        Assert.Equal(["python"], _settings.Current.ShellCommandAllowed);
+        Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);   // remove? yes; close
+
+        await menu.ShowAllowedCommandsAsync(CancellationToken.None);
+
+        Assert.Empty(_settings.Current.ShellCommandAllowed);
+        Assert.False(list.IsAllowed("python"));
+        Assert.Empty(list.SessionOnly());
+        Assert.DoesNotContain(SettingsMenu.SessionAllowsHeading, Output);
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    [Fact]
+    public void AllowedCommandLines_TheSessionsAllowsFirst_UnderThePanesHeadings()
+    {
+        Assert.Equal(["Shell allowed commands", "  This session:", "    dotnet test", "  Always:", "    git log"],
+            ToolsMenu.AllowedCommandLines(new AppSettingsData { ShellCommandAllowed = ["git log"] }, ["dotnet test"]));
+        Assert.Equal(["Shell allowed commands", "  This session:", "    dotnet test", "  Always:", "    " + SettingsMenu.SavedAllowsEmptyNote],
+            ToolsMenu.AllowedCommandLines(new AppSettingsData(), ["dotnet test"]));
     }
 
     private static ConsoleKeyInfo[] Typed(string text) => [.. text.Select(Keys.Char), Keys.Enter];
@@ -2792,42 +2915,29 @@ public partial class ToolsMenuTests : IDisposable
     private static string ForbiddenListTitle => ToolsText.Label + " › Shell police forbidden strings │ " + SettingsMenu.RestoreForbiddenButton + " ";
 
     /// <summary>
-    /// The command-policy picker's buttons (2026-10-09, the user's call: /cmdlist and /police folded under /tools shell): C opens the
-    /// allowed-commands list and P the police page, ESC on either coming back to the picker, whose buttons say the list's count and
-    /// the police's state as they stand; ESC there closes the pane with the policy unchanged.
+    /// The command-policy picker is a plain pick (2026-11-23, the user's ask: its allowed and police buttons, 2026-10-09, went): the title
+    /// row is the crumb alone, none of the checklist's buttons on it (a slip back to <c>PickChecklistAsync</c> would draw them), the hint
+    /// <see cref="SettingsMenu.PickKeys"/>; c and p open nothing, and Esc closes the pane with the policy and the police unchanged.
     /// </summary>
     [Fact]
-    public async Task ShowSwitch_ThePolicyPicker_COpensTheAllowedList_POpensThePolice_EscComesBack()
+    public async Task ShowSwitch_ThePolicyPicker_HasNoButtons_CAndPOpenNothing_EscCloses()
     {
         _settings.Update(d => { d.ShellCommandPolicy = "ask"; d.ShellCommandAllowed = ["git push"]; });
         var (menu, pane, settings) = PaneMenu();
-        Push(Keys.Char('c'), Keys.Escape);                      // the list, back
-        Push(Keys.Char('p'), Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // the police page: off picked, yes to the question, back
-        Push(Keys.Escape);                                      // the picker closed
+        Push(Keys.Char('c'), Keys.Char('p'), Keys.Escape);
 
         await menu.ShowSwitchAsync(SettingsField.ShellCommandPolicy, CancellationToken.None);
 
-        string picker(bool police) => Titled(ToolsText.Label + " › Shell command policy │ " + string.Join(" · ", SettingsMenu.CommandPolicyPageButtons(1, police).Select(b => b.Title)) + " ");
-        Assert.True(Output.Split(picker(police: true)).Length - 1 >= 2, Output);   // before the list and after it
-        Assert.Contains(picker(police: false), Output);                         // after the police went off
-        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell allowed commands │ " + PolicyStrip + " ") + "\n", Output);
-        Assert.Contains("\n" + ToolsText.Label + " › Shell police │ ", Output);
-        Assert.Contains(SettingsMenu.CommandPolicyPageKeys, Output);
-        Assert.False(_settings.Current.ShellPolice);
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › Shell command policy") + "\n", Output);
+        Assert.All(SettingsMenu.ChecklistButtons, b => Assert.DoesNotContain(b.Title, Output));
+        Assert.Contains(SettingsMenu.PickKeys, Output);
+        Assert.DoesNotContain(" › Shell allowed commands", Output);
+        Assert.DoesNotContain(" › Shell police", Output);
+        Assert.True(_settings.Current.ShellPolice);
         Assert.Equal("ask", _settings.Current.ShellCommandPolicy);
         Assert.Equal(SettingsMenu.Title, settings.Root);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
-    }
-
-    /// <summary>The picker's button wording (2026-10-09): the list's count or none, the police's state, each lit while it holds.</summary>
-    [Fact]
-    public void CommandPolicyPageButtons_Wording()
-    {
-        Assert.Equal(["≡ allowed (none)", "≡ police (on)"], SettingsMenu.CommandPolicyPageButtons(0, police: true).Select(b => b.Title));
-        Assert.Equal(["≡ allowed (3)", "≡ police (off)"], SettingsMenu.CommandPolicyPageButtons(3, police: false).Select(b => b.Title));
-        Assert.Equal([false, true], SettingsMenu.CommandPolicyPageButtons(0, police: true).Select(b => b.On));
-        Assert.Equal(['c', 'p'], SettingsMenu.CommandPolicyPageButtons(1, police: false).Select(b => b.Key!.Value));
     }
 
     /// <summary>

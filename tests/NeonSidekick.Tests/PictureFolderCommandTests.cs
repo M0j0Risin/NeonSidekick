@@ -139,7 +139,7 @@ public sealed class PictureFolderCommandTests
         Assert.Equal("Usage: /pasted view|thumbs|purge", PastedCommand.Usage);
         Assert.Equal("Usage: /ha stills view|thumbs|purge", HaText.StillsUsage);
         Assert.EndsWith(" · /ha stills view|thumbs|purge", HaText.Usage, StringComparison.Ordinal);
-        Assert.Equal("(the built-in splash pictures show until this folder has some; drop pictures here, or ask the model to set_splash_image)", SplashCommand.BuiltInNotice);
+        Assert.Equal("(the built-in splash pictures show until this folder has some; drop pictures here, use a picture's right-click Add to the splash images, or ask the model to set_splash_image)", SplashCommand.BuiltInNotice);   // the menu row since 2026-11-23
         Assert.Contains(NeonSidekick.Llm.Tools.SetSplashImageTool.ToolName, SplashCommand.BuiltInNotice, StringComparison.Ordinal);
         Assert.Equal("/tools comfy", ChatScreen.ComfyToolsLine);
     }

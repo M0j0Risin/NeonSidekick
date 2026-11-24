@@ -30,7 +30,7 @@ internal sealed class ProcessMenu
     /// <summary>
     /// The title row's button: the highlighted process stopped, after a yes/no. Two spaces after the glyph (2026-10-05, the user's
     /// ask: it read as "✖kill" — Windows Terminal draws ✖ from the colour emoji font two cells wide over the one space after it,
-    /// though it and <see cref="UI.TextCells"/> count one, as <c>SettingsMenu.PolicyYoloButton</c>'s ⚠).
+    /// though it and <see cref="UI.TextCells"/> count one, as the yolo button's ⚠ was until 2026-11-23).
     /// </summary>
     public const string KillButton = "✖  kill";
 

@@ -31,8 +31,11 @@ public static class NoticeGlyphs
     /// <summary>The MCP pane and an MCP connect cancelled (the toolbar's plug).</summary>
     public const string Mcp = NeonSidekick.Mcp.McpText.Glyph + " ";
 
-    /// <summary>A shell command allowed on the approval pane (the toolbar's open lock).</summary>
-    public const string Allowed = ChatScreen.CmdYoloToolGlyph + " ";
+    /// <summary>
+    /// A shell command allowed on the approval pane: the open lock, its own since 2026-11-23 (the toolbar's yolo item, whose glyph it was, became
+    /// 🚀 that day; allowing a command is not yolo).
+    /// </summary>
+    public const string Allowed = "🔓 ";
 
     /// <summary>The message queue.</summary>
     public const string Queue = "⏳ ";

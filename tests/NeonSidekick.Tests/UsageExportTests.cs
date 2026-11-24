@@ -28,10 +28,14 @@ public sealed class UsageExportTests
             new ChatMessage(ChatRole.Assistant, "Done."),
         ]));
 
-        Assert.StartsWith(UsageExport.Heading + "\nExported 2026-11-23 19:42:07 · model qwen3 · profile neon · ~17.3k tokens of 151.4k\n" + UsageExport.AsSentLine + "\n", md);
-        Assert.Contains("## System message (~9.8k tokens)\n```text\nYou are Neon.\nBe brief.\n```\n", md);
-        Assert.Contains("## Tools (1, ~120 tokens)\n" + UsageExport.SchemaLine + "\n\n### echo\n```text\nEchoes the text back.\n```\n```json\n{\n  \"type\": \"object\",", md);
-        Assert.Contains("## History (4 messages, ~7.4k tokens)\n", md);
+        Assert.StartsWith(UsageExport.Heading + "\n\n- **Exported:** 2026-11-23 19:42:07\n- **Model:** `qwen3`\n- **Profile:** `neon`\n"
+            + "- **Context:** ~17.3k of 151.4k tokens (11%): system message ~9.8k, tools ~120, conversation ~7.4k\n\n*" + UsageExport.AsSentLine + "*\n", md);
+        Assert.Contains("*\n\n" + UsageExport.ContentsLine + "\n\n## System message\n", md);
+        Assert.Equal("**Contents:** [System message](#system-message) · [Tools](#tools) · [Conversation](#conversation)", UsageExport.ContentsLine);
+        Assert.Contains("## System message\n~9.8k tokens.\n```text\nYou are Neon.\nBe brief.\n```\n", md);
+        Assert.Contains("## Tools\n1 tool, ~120 tokens.\n" + UsageExport.SchemaLine + "\n\n### echo\n```text\nEchoes the text back.\n```\n```json\n{\n  \"type\": \"object\",", md);
+        Assert.Contains("## Conversation\n4 messages, ~7.4k tokens.\n", md);
+        Assert.DoesNotContain(UsageExport.NoMessagesLine, md);
         int user = md.IndexOf("### 1 · user\n```text\nsay hi\n```", StringComparison.Ordinal);
         int asked = md.IndexOf("### 2 · assistant\n```text\nCalling.\n```\nCalls `echo` (call_ab12):\n```json\n{\n  \"text\": \"hi\"\n}\n```", StringComparison.Ordinal);
         int result = md.IndexOf("### 3 · tool\nResult of `echo` (call_ab12):\n```text\necho: hi\n```", StringComparison.Ordinal);
@@ -78,7 +82,20 @@ public sealed class UsageExportTests
     public void Markdown_NoModelYet_SaysSo()
     {
         var facts = Facts([]) with { Model = null, Window = null };
-        Assert.Contains("· model not known yet · profile neon · ~17.3k tokens\n", UsageExport.Markdown(facts));
+        string md = UsageExport.Markdown(facts);
+        Assert.Contains("- **Model:** " + UsageExport.NoModelYet + "\n", md);
+        Assert.Contains("- **Context:** ~17.3k tokens: system message ~9.8k, tools ~120, conversation ~7.4k\n", md);
+        Assert.EndsWith("## Conversation\n0 messages, ~7.4k tokens.\n" + UsageExport.NoMessagesLine + "\n", md);
+    }
+
+    /// <summary>The header's facts one list item each (2026-11-23, the user's ask), the working folder among them, each name in code no backtick closes.</summary>
+    [Fact]
+    public void Markdown_TheHeader_NamesTheWorkingFolder_InCodeNoBacktickCloses()
+    {
+        string md = UsageExport.Markdown(Facts([]) with { Folder = @"C:\My Project2", Model = "odd`model" });
+        Assert.Contains("- **Working folder:** `C:\\My Project2`\n", md);
+        Assert.Contains("- **Model:** `` odd`model ``\n", md);
+        Assert.DoesNotContain("Working folder", UsageExport.Markdown(Facts([])));
     }
 
     [Fact]
@@ -89,20 +106,39 @@ public sealed class UsageExportTests
     }
 
     [Theory]
-    [InlineData("sysprompt", true, null, null)]
-    [InlineData("SYSPROMPT to=x", true, "x", null)]
-    [InlineData("sysprompt to=x/", true, "x/", null)]
-    [InlineData("sysprompt \"to=my notes/c.md\"", true, "my notes/c.md", null)]
-    [InlineData("sysprompt foo", true, null, UsageText.SyspromptUsage)]
-    [InlineData("sysprompt to=", true, null, UsageText.SyspromptUsage)]
-    [InlineData("sysprompt to=a to=b", true, null, UsageText.SyspromptUsage)]
-    [InlineData("prompt", false, null, null)]
-    [InlineData("syspromptx", false, null, null)]
-    [InlineData("", false, null, null)]
-    public void ParseSysprompt_IsPinned(string args, bool isIt, string? to, string? error)
+    [InlineData("sysprompt", true, false, null, null)]
+    [InlineData("SYSPROMPT to=x", true, false, "x", null)]
+    [InlineData("sysprompt to=x/", true, false, "x/", null)]
+    [InlineData("sysprompt \"to=my notes/c.md\"", true, false, "my notes/c.md", null)]
+    [InlineData("sysprompt conversation", true, true, null, null)]
+    [InlineData("sysprompt CONVERSATION to=x", true, true, "x", null)]
+    [InlineData("sysprompt to=x conversation", true, true, "x", null)]
+    [InlineData("sysprompt foo", true, false, null, UsageText.SyspromptUsage)]
+    [InlineData("sysprompt to=", true, false, null, UsageText.SyspromptUsage)]
+    [InlineData("sysprompt to=a to=b", true, false, null, UsageText.SyspromptUsage)]
+    [InlineData("sysprompt conversation conversation", true, false, null, UsageText.SyspromptUsage)]
+    [InlineData("sysprompt --conversation", true, false, null, UsageText.SyspromptUsage)]
+    [InlineData("prompt", false, false, null, null)]
+    [InlineData("syspromptx", false, false, null, null)]
+    [InlineData("", false, false, null, null)]
+    public void ParseSysprompt_IsPinned(string args, bool isIt, bool conversation, string? to, string? error)
     {
-        Assert.Equal((isIt, to, error), UsageText.ParseSysprompt(args));
+        Assert.Equal((isIt, conversation, to, error), UsageText.ParseSysprompt(args));
         Assert.Equal(isIt, UsageText.IsSysprompt(args));
+    }
+
+    /// <summary>A bare <c>/usage sysprompt</c> (2026-11-23, the user's ask): the system message and the tools, no conversation section or figure.</summary>
+    [Fact]
+    public void Markdown_WithoutTheConversation_HoldsThePromptAndTools_NoConversationFigure()
+    {
+        string md = UsageExport.Markdown(Facts([new ChatMessage(ChatRole.User, "secret")]) with { Messages = null });
+        Assert.StartsWith(UsageExport.PromptHeading + "\n\n", md);
+        Assert.Contains("- **Size:** ~9.9k of 151.4k tokens (7%): system message ~9.8k, tools ~120\n", md);
+        Assert.Contains("\n\n" + UsageExport.PromptContentsLine + "\n\n## System message\n", md);
+        Assert.EndsWith("```\n", md);   // the last tool's schema
+        Assert.DoesNotContain("onversation", md);
+        Assert.DoesNotContain("secret", md);
+        Assert.Equal("(wrote the system prompt to a.md: the system message and 74 tools.)", UsageText.Exported("a.md", 74, null));
     }
 
     [Fact]

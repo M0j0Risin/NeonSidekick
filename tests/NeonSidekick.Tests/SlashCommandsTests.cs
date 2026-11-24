@@ -585,7 +585,7 @@ public class SlashCommandsTests
         Assert.StartsWith("Commands:\n" + Row("/about", Summary("/about")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/ad")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/advisor")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/avatar")) + Row(SlashCommands.HelpEntries.Single(e => e.Command == "/botchat")), SlashCommands.HelpText);   // A to Z since 2026-09-27 (the user's call); /settings led the grouped list until then
         Assert.Contains(Row("/settings, //", Summary("/settings"), "/settings", "/settings <words>", "/settings changed"), SlashCommands.HelpText);
         Assert.Contains(
-            Row("/profile", Summary("/profile"), "/profile [<name>]", "/profile add|delete <name>", "/profile rename <name> <new-name>", "/profile reset [<name>] [--all]", "/profile push|pull <name>",
+            Row("/profile", Summary("/profile"), "/profile [<name>]", "/profile add|delete <name>", "/profile add <name> --fresh", "/profile rename <name> <new-name>", "/profile reset [<name>] [--all]", "/profile push|pull <name>",
                 "/profile push|pull keys <name>", "/profile push|pull servers <name>", "/profile push|pull homeassistant <name>", "/profile push|pull toolbar <name>",
                 "/profile push|pull perfbar <name>", "/profile push|pull statusbar <name>", "/profile push|pull barorder <name>", "/profile push|pull allowed <name> [overwrite]",
                 "/profile push|pull history <name> [overwrite]", "/profile push|pull memory <name> [overwrite]", "/profile push|pull prompts <name> [overwrite]", "/profile push|pull mcp <name> [overwrite]", "/profile push|pull links <name> [overwrite]",

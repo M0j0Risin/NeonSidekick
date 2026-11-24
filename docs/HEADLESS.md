@@ -241,7 +241,7 @@ The run's shell policy comes from `--yolo`, then `NEONSIDEKICK_COMMAND_POLICY` (
   ```
 
 - In PowerShell, `$env:` lasts for the session, so remove the variable afterwards (`try { … } finally { Remove-Item Env:NEONSIDEKICK_COMMAND_POLICY }`).
-- `--yolo` works in the TUI too: for that launch the app never asks before running a command, and the toolbar shows 🔓.
+- `--yolo` works in the TUI too: for that launch the app never asks before running a command, and the toolbar shows 🚀.
 
 ### Turning off the path police
 

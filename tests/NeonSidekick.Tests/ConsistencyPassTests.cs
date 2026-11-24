@@ -27,6 +27,7 @@ public class ConsistencyPassTests
         Assert.Equal("💾 Forget \"Their name is Chris.\"?", MemoryMenu.RemovePrompt("Their name is Chris."));
         Assert.Equal("⏳ Remove \"fix the tests\" from the queue?", QueueMenu.RemovePrompt("fix the tests"));
         Assert.Equal("Remove \"git push\" from the allowed commands? It will ask again.", SettingsMenu.RemovePrefixQuestion("git push"));
+        Assert.Equal("Forget \"dotnet test\" for this session? It will ask again.", SettingsMenu.ForgetSessionAllowQuestion("dotnet test"));   // 2026-11-23
         Assert.Equal("Remove \"rm -rf\" from the forbidden strings? Commands holding it are no longer refused for it.", SettingsMenu.RemoveForbiddenQuestion("rm -rf"));
         Assert.Equal("Esc = close", MenuPane.EmptyKeys);
         Assert.Equal("d / o / s = pick · v = view · Enter = choose · Esc = deny", CameraMenu.AllowHintWithView);

@@ -12,7 +12,7 @@ public enum CommandPolicyMode
     /// <summary>Every command whose prefixes are not all on the allow list is put to the user first; with no screen to ask on it is refused.</summary>
     Ask,
 
-    /// <summary>Everything runs, nothing is asked. The user's word for it.</summary>
+    /// <summary>Commands run unasked; the shell police still checks (2026-11-23, the user's ask: "everything runs" overstated it). The user's word for it.</summary>
     Yolo,
 }
 
@@ -55,12 +55,15 @@ public static class CommandPolicy
         _ => "ask",
     };
 
-    /// <summary>The menu hint next to a mode. Pinned.</summary>
+    /// <summary>
+    /// The menu hint next to a mode. Pinned. Yolo's says the shell police still checks (2026-11-23, the user's ask: "every command runs, nothing is
+    /// asked" overstated it, since the police refuses a forbidden command under yolo too).
+    /// </summary>
     public static string Describe(string name) => name switch
     {
         "off" => "no shell or script tool is offered",
         "ask" => "you approve each command not on the allow list",
-        "yolo" => "every command runs, nothing is asked",
+        "yolo" => "commands run unasked; the shell police still checks",
         _ => "",
     };
 

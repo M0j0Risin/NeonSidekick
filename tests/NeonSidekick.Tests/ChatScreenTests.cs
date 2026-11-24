@@ -10796,7 +10796,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("yolo", _settings.Current.ShellCommandPolicy);
         // The Web page carries the browser-mode buttons on its title row since 2026-10-04 (the user's ask).
         Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.WebTools) + " │ " + SettingsMenu.WebModeButtonTitle("auto") + " ") + "\n", output);   // one cycling button since later on 2026-10-13
-        Assert.Contains("\n" + ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandPolicy) + " │ " + SettingsMenu.PolicyAllowedButton, output);   // the allowed and police buttons after it since 2026-10-09
+        Assert.Contains("\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ShellCommandPolicy)) + "\n", output);   // 2026-11-23: no buttons (the allowed and police ones from 2026-10-09 went)
         Assert.Contains("\n" + Titled(SettingsMenu.YoloConfirmQuestion) + "\n", output);
         Assert.DoesNotContain(ToolsText.Label + " │ Offered", output);   // the crumb, never the tabs
         Assert.All(new[] { "/tools" }, word => Assert.DoesNotContain("› " + word, output));
@@ -10819,6 +10819,9 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ToolsText.SwitchStateLine(SettingsField.SqlTools, _settings.Current) + "\n", output);
         Assert.Equal("SQL tools: off", ToolsText.SwitchStateLine(SettingsField.SqlTools, new AppSettingsData { SqlTools = false }));
         Assert.Contains("  · Shell command policy: ask\n", output);
+        // The policy's line alone since 2026-11-23 (the picker's buttons and their lines went): no allowed list or police after it.
+        Assert.DoesNotContain("  · Shell allowed commands", output);
+        Assert.DoesNotContain("  · Shell police", output);
         // Windows' words pinned on every system, and the message built from this system's (2026-10-22: a Mac leaves out services and tasks).
         Assert.Equal("/tools takes one of ask, shell, files, image, web, advisors, docker, eventlog, network, services, tasks, directory, obsidian, sql, oracle, mysql, sqlite, duckdb, postgres, unc, ha, comfy, camera, print, shopping, timers, clock, help, monitors, sessions, or nothing for the pane.", "/tools takes one of " + string.Join(", ", ToolsText.SwitchWordsFor(windows: true)) + ", or nothing for the pane.");
         Assert.Equal("/tools takes one of " + string.Join(", ", ToolsText.SwitchWordsHere) + ", or nothing for the pane.", ToolsText.SwitchUsageError);
@@ -10979,7 +10982,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),
             Line("/tools"),
             input => input.Push([.. Enumerable.Repeat(Keys.Right, ToolsMenuTests.LeafIndex(ToolsText.ShellTabTitle)), Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape]),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
-            input => { input.PushClick(Tb(ChatScreen.CmdYoloToolGlyph), 103); input.PushClick(Tb(ChatScreen.CmdYoloToolGlyph), 103); },    // 🔓: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14) (+3 since 🪄, 2026-11-01)
+            input => { input.PushClick(Tb(ChatScreen.CmdYoloToolGlyph), 103); input.PushClick(Tb(ChatScreen.CmdYoloToolGlyph), 103); },    // 🚀: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14) (+3 since 🪄, 2026-11-01)
             Key(Keys.Escape),
             Line("/exit"));
 
@@ -11007,7 +11010,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Escape),
             Line("/tools"),
             input => input.Push([.. Enumerable.Repeat(Keys.Right, ToolsMenuTests.LeafIndex(ToolsText.ShellTabTitle)), Keys.Enter, Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter, Keys.Escape]),   // the Shell tab, the policy picker on off, yolo picked and confirmed (2026-10-03), the pane closed: the row redrawn with the open lock
-            input => { input.PushClick(Tb(ChatScreen.CmdYoloToolGlyph), 103); input.PushClick(Tb(ChatScreen.CmdYoloToolGlyph), 103); },    // 🔓: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14) (+3 since 🪄, 2026-11-01)
+            input => { input.PushClick(Tb(ChatScreen.CmdYoloToolGlyph), 103); input.PushClick(Tb(ChatScreen.CmdYoloToolGlyph), 103); },    // 🚀: the list (+3 since ⏳, 2026-10-13) (+3 since 📣, 2026-10-14) (+3 since 📱, 2026-10-14) (+3 since 🪄, 2026-11-01)
             Key(Keys.Escape),
             Line("/exit"));
 
@@ -12648,7 +12651,7 @@ public partial class ChatScreenTests : IDisposable
         IReadOnlySet<string> Items(params string[] ids) => ToolbarItems.Resolve(ids);
         Assert.Equal(ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true), ChatScreen.ToolbarStripFor(ToolbarItems.Resolve([.. ToolbarItems.Names]), CommandPolicyMode.Ask, true));
         Assert.Equal("📊 💾", ChatScreen.ToolbarStripFor(Items("usage", "memory"), CommandPolicyMode.Ask, true));   // the disk whatever Memory is (later on 2026-10-03), its slab telling which
-        Assert.Equal("⚙️ 🔓", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
+        Assert.Equal("⚙️ 🚀", ChatScreen.ToolbarStripFor(Items("cmdlist", "settings"), CommandPolicyMode.Yolo, true));   // strip order, not the list's
         Assert.Equal("🔒 👮", ChatScreen.ToolbarStripFor(Items("cmdlist", "police"), CommandPolicyMode.Off, true));   // drawn under off since 2026-11-23 (the user's ask), on the slab
         Assert.Equal("", ChatScreen.ToolbarStripFor(Items("path"), CommandPolicyMode.Ask, true));
         Assert.Equal("⚙️ 🪪 🧮 📱 🛠️ 🔌 🎓 🪄 💬 🎹 📊 📣 ⏳ 🙋 🔒 👮 🐚 📁 🖼️ 🌐 🦉 🐳 🪵 📡 🧩 📅 🏢 💎 🛢️ 🔮 🐬 🪶 🦆 🐘 🔗 🏠 🎨 📸 🖨️ 📄 ⚡ 🎞️ 🪟 📺 ⭐ 🛒", ChatScreen.ToolbarStripFor(Items([.. ToolbarItems.Names.Where(n => n != "memory")]), CommandPolicyMode.Ask, true));   // the user's order (2026-10-03); 📈 last until it was retired (2026-10-14)
@@ -12764,16 +12767,16 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 " + Rest, ChatScreen.ToolbarStrip);   // the disk always drawn since later on 2026-10-03 (the user's ask); 🙋 after it, 2026-10-09; 📣 after the disk since 2026-10-14
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, false));   // the closed lock and the ninja under off (2026-11-23, the user's ask)
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, false));   // the ninja while the police is off (2026-10-02, the user's ask)
-        Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔓 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false));
+        Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🚀 🥷 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, false));
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 👮 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Off, true));   // the officer under off again since 2026-11-23 (none from later on 2026-09-22), on the slab
         Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔒 👮 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Ask, true));   // the defaults
-        Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🔓 👮 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, true));
+        Assert.Equal(Panes + " 💾 📣 ⏳ 🙋 🚀 👮 " + Rest, ChatScreen.ToolbarStripFor(CommandPolicyMode.Yolo, true));
         Assert.Equal("📊", ChatScreen.UsageToolGlyph);
         Assert.Equal("💾", ChatScreen.MemoryToolGlyph);
         Assert.Equal("🙋", ChatScreen.AskToolGlyph);   // 2026-10-09, the user's ask
         Assert.Equal("/tools ask", ChatScreen.ToolbarWord(ChatScreen.AskToolGlyph));
         Assert.Equal("🔒", ChatScreen.CmdAskToolGlyph);
-        Assert.Equal("🔓", ChatScreen.CmdYoloToolGlyph);
+        Assert.Equal("🚀", ChatScreen.CmdYoloToolGlyph);
         Assert.Equal("👮", ChatScreen.PoliceToolGlyph);
         Assert.Equal("🥷", ChatScreen.NinjaToolGlyph);
         Assert.Equal("  " + ChatScreen.PoliceToolGlyph + " ", TranscriptRenderer.PoliceGlyph);   // the officer the refusal line wears
@@ -18740,7 +18743,8 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(InputLine.DropOnLineHint, output);
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
-        Assert.EndsWith("[Image #1]look", user.Text);
+        Assert.EndsWith("[Image #1]look", PasteBlocks.WithoutSavedPaths(user.Text));   // 2026-11-23: a picture from a file names its file to the model ([Image #N, from <path>])
+        Assert.Contains(", from ", user.Text);
         // The /imagine note's picture and the dropped one.
         Assert.Equal(2, user.Contents.OfType<DataContent>().Count());
     }
@@ -18797,7 +18801,8 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, _chat.Requests.Count);
         var user = _chat.Requests[1].Last(m => m.Role == ChatRole.User);
-        Assert.Equal("[Image #1]look", user.Text);
+        Assert.Equal("[Image #1]look", PasteBlocks.WithoutSavedPaths(user.Text));   // 2026-11-23: a picture from a file names its file to the model ([Image #N, from <path>])
+        Assert.Contains(", from ", user.Text);
         Assert.Single(user.Contents.OfType<DataContent>());
     }
 
@@ -21857,7 +21862,8 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, _chat.Requests.Count);
         var first = _chat.Requests[0].Single(ConversationHistory.IsTurnStart);
-        Assert.Equal("what is [Image #1]?", first.Text);
+        Assert.Equal("what is [Image #1]?", PasteBlocks.WithoutSavedPaths(first.Text));   // 2026-11-23: a picture from a file names its file to the model ([Image #N, from <path>])
+        Assert.Contains(", from ", first.Text);
         var part = Assert.Single(first.Contents.OfType<DataContent>());
         Assert.Equal(ImageFile.Png, part.MediaType);
         Assert.True(part.Data.Length > 8);
@@ -21944,7 +21950,8 @@ public partial class ChatScreenTests : IDisposable
 
         await RunAsync(input);
 
-        Assert.Equal("[Image #1]", _chat.Requests[0].Last(m => m.Role == ChatRole.User).Text);
+        Assert.Equal("[Image #1]", PasteBlocks.WithoutSavedPaths(_chat.Requests[0].Last(m => m.Role == ChatRole.User).Text));   // 2026-11-23: a picture from a file names its file to the model ([Image #N, from <path>])
+        Assert.Contains(", from ", _chat.Requests[0].Last(m => m.Role == ChatRole.User).Text);
         Assert.False(Directory.Exists(PastedFolder));
     }
 
@@ -21983,7 +21990,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync(input);
 
-        Assert.Equal("[Image #1] [Image #2]", _chat.Requests[0].Single(ConversationHistory.IsTurnStart).Text);
+        Assert.Equal("[Image #1] [Image #2]", PasteBlocks.WithoutSavedPaths(_chat.Requests[0].Single(ConversationHistory.IsTurnStart).Text));   // 2026-11-23: a picture from a file names its file to the model ([Image #N, from <path>])
+        Assert.Contains(", from ", _chat.Requests[0].Single(ConversationHistory.IsTurnStart).Text);
         Assert.Contains("› [Image #1] [Image #2]\n  ▀▀▀▀  ▀▀▀▀\n  ▀▀▀▀  ▀▀▀▀\n", output);
     }
 
@@ -22002,7 +22010,8 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync(input);
 
         var user = _chat.Requests[0].Single(ConversationHistory.IsTurnStart);
-        Assert.Equal("[Image #1] [Image #2]", user.Text);
+        Assert.Equal("[Image #1] [Image #2]", PasteBlocks.WithoutSavedPaths(user.Text));   // 2026-11-23: a picture from a file names its file to the model ([Image #N, from <path>])
+        Assert.Contains(", from ", user.Text);
         Assert.Equal(2, user.Contents.OfType<DataContent>().Count());
         Assert.Contains("› [Image #1] [Image #2]\n  ▀▀▀▀  ▀▀▀▀\n  ▀▀▀▀  ▀▀▀▀\n", output);
     }
@@ -22020,7 +22029,8 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync(input);
 
         var user = _chat.Requests[0].Single(ConversationHistory.IsTurnStart);
-        Assert.Equal("[Image #1]", user.Text);
+        Assert.Equal("[Image #1]", PasteBlocks.WithoutSavedPaths(user.Text));   // 2026-11-23: a picture from a file names its file to the model ([Image #N, from <path>])
+        Assert.Contains(", from ", user.Text);
         Assert.Single(user.Contents.OfType<DataContent>());
         Assert.Contains("› [Image #1]\n", output);
         Assert.DoesNotContain("▀", output);
@@ -26550,7 +26560,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("replace the target's file if it has one", ChatScreen.ProfilePromptFileOverwriteNote);   // 2026-10-10 (/sys persona copy's notes until then)
         Assert.Equal("replace same-named servers with the source's", ChatScreen.ProfileMcpOverwriteNote);   // 2026-10-25
         Assert.Equal(["add", "delete", "edit", "pull", "push", "reload", "rename", "reset"], ChatScreen.ProfileVerbs.Select(v => v.Text));
-        Assert.Equal("add a profile: /profile add <name>", ChatScreen.ProfileVerbs[0].Note);
+        Assert.Equal("add a profile: /profile add <name> [--fresh]", ChatScreen.ProfileVerbs[0].Note);   // --fresh since 2026-11-23
         Assert.Equal("open this profile's profile.json in your editor: /profile edit", ChatScreen.ProfileVerbs[2].Note);
         Assert.Equal("read this profile's profile.json back from disk: /profile reload", ChatScreen.ProfileVerbs[5].Note);
         Assert.Equal("", ChatScreen.SwitchSubject(SlashCommand.Help));

@@ -241,7 +241,7 @@ public static partial class HelpSettings
         SettingsField.WebDownloadMaxMegabytes => "The largest file download_file saves (1–102,400 MB).",
 
         // /tools › Core › Shell
-        SettingsField.ShellCommandPolicy => "Shell commands for the model: off offers no shell tools; ask needs your approval for commands not on the allowed list; yolo runs everything without asking.",
+        SettingsField.ShellCommandPolicy => "Shell commands for the model: off offers no shell tools; ask needs your approval for commands not on the allowed list; yolo runs commands unasked, though the shell police still checks.",
         SettingsField.ShellCommandAllowed => "Command prefixes that run without asking (git status, dotnet build…). Enter on one removes it; the approval pane's Allow always adds one.",
         SettingsField.ShellPolice => "Refuses shell commands that reach outside the working directory or into places like .git or the app's home. Turning it off asks first and drops the forbidden strings and database rules too.",
         SettingsField.ShellPoliceForbiddenStrings => "Strings the shell police refuses, even under yolo, whatever their case or spacing; only while Shell police is on. A tripwire, not a sandbox: text built in pieces gets past it.",

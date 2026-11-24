@@ -2,8 +2,9 @@ namespace NeonSidekick.Shell;
 
 /// <summary>
 /// The prefixes (<see cref="CommandPrefix"/>) the user has allowed (2026-09-21): the session's,
-/// kept here for the process (the <see cref="Timers.TimerBoard"/> lifetime — a <c>/clear</c>, a
-/// <c>/new</c> or a profile switch keeps them), and the permanent ones, read through
+/// kept here for the process (the <see cref="Timers.TimerBoard"/> lifetime — a <c>/clear</c> or a
+/// <c>/new</c> keeps them; a profile switch, a reset or a pull into the loaded profile clears them, 2026-11-23, the user's ask, and a
+/// prefix dropped from the saved list loses the copy <i>Allow always</i> made, <see cref="ForgetDropped"/>), and the permanent ones, read through
 /// <paramref name="permanent"/> from the loaded profile's <c>Shell allowed commands</c> at every
 /// judgement and written back through <paramref name="persist"/> with the merged list (sorted
 /// ordinal, no duplicates — the <c>ToolsDisabled</c> shape). Thread-safe: the gate judges on the turn
@@ -13,6 +14,12 @@ public sealed class CommandAllowList
 {
     private readonly object _lock = new();
     private readonly HashSet<string> _session = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The prefixes <see cref="AllowPermanently"/> put into <see cref="_session"/> that were not there already (2026-11-23): the copies a
+    /// drop from the saved list takes back out (<see cref="ForgetDropped"/>). A prefix allowed for the session first is no copy.
+    /// </summary>
+    private readonly HashSet<string> _savedCopies = new(StringComparer.Ordinal);
     private readonly Func<IReadOnlyList<string>> _permanent;
     private readonly Action<IReadOnlyList<string>> _persist;
 
@@ -73,14 +80,91 @@ public sealed class CommandAllowList
         }
     }
 
-    /// <summary>Allows the prefixes for the session and saves them into the profile.</summary>
+    /// <summary>
+    /// Allows the prefixes for the session and saves them into the profile. The session's copy keeps the prefix allowed while the saved
+    /// list catches up; each one it adds is remembered as a copy (<see cref="_savedCopies"/>), so a later drop from the saved list
+    /// forgets it too (2026-11-23). <see cref="_persist"/> runs outside the lock: the store's change event calls back into
+    /// <see cref="ForgetDropped"/>.
+    /// </summary>
     public void AllowPermanently(IReadOnlyList<string> prefixes)
     {
-        AllowSession(prefixes);
+        ArgumentNullException.ThrowIfNull(prefixes);
+        lock (_lock)
+        {
+            foreach (string prefix in prefixes.Where(p => !IsNeverAllowed(p)))
+            {
+                string key = prefix.Trim().ToLowerInvariant();
+                if (key.Length > 0 && _session.Add(key))
+                {
+                    _savedCopies.Add(key);
+                }
+            }
+        }
+
         _persist(Merge(_permanent(), prefixes));
     }
 
-    /// <summary>The session's prefixes, sorted ordinal, for the list editor and the not-approved sentence.</summary>
+    /// <summary>
+    /// The session's prefixes not on the saved list (case-insensitive, as <see cref="IsAllowed"/> compares), sorted ordinal: the
+    /// allowed-commands pane's This session group (2026-11-23, the user's ask). A prefix allowed for the session and saved since shows
+    /// under the saved ones alone.
+    /// </summary>
+    public IReadOnlyList<string> SessionOnly()
+    {
+        var saved = _permanent();
+        return SessionSnapshot().Where(prefix => !Contains(saved, prefix)).ToList();
+    }
+
+    /// <summary>
+    /// Forgets <paramref name="prefix"/> for the session (2026-11-23, the pane's Enter on a This session row, and its remove of a saved
+    /// one): the next command it starts asks again unless the saved list holds it. Trimmed and lower-cased, as <see cref="AllowSession"/>
+    /// adds. Not <c>ForgetSession</c>: the screen's <c>ForgetSession</c> forgets the conversation.
+    /// </summary>
+    public void ForgetSessionAllow(string prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+        string key = prefix.Trim().ToLowerInvariant();
+        lock (_lock)
+        {
+            _session.Remove(key);
+            _savedCopies.Remove(key);
+        }
+    }
+
+    /// <summary>Forgets every session allow (2026-11-23, the user's ask: a profile switch, a reset or a pull into the loaded profile).</summary>
+    public void ClearSessionAllows()
+    {
+        lock (_lock)
+        {
+            _session.Clear();
+            _savedCopies.Clear();
+        }
+    }
+
+    /// <summary>
+    /// After a change to the saved list (2026-11-23): each copy <see cref="AllowPermanently"/> made that <paramref name="saved"/> no
+    /// longer holds leaves the session too, so a prefix removed, reset or overwritten by a pull asks again. A prefix allowed for the
+    /// session before it was saved stays. Nothing to do while no copy is held.
+    /// </summary>
+    public void ForgetDropped(IReadOnlyList<string> saved)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        lock (_lock)
+        {
+            if (_savedCopies.Count == 0)
+            {
+                return;
+            }
+
+            foreach (string copy in _savedCopies.Where(copy => !Contains(saved, copy)).ToList())
+            {
+                _session.Remove(copy);
+                _savedCopies.Remove(copy);
+            }
+        }
+    }
+
+    /// <summary>The session's prefixes, sorted ordinal, for the list editor (<see cref="SessionOnly"/>) and the not-approved sentence.</summary>
     public IReadOnlyList<string> SessionSnapshot()
     {
         lock (_lock)

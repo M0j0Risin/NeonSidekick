@@ -21,7 +21,7 @@ public partial class ChatScreenTests
         _chat.EnqueueText("Hello there.");
         PushLine("hi");
         PushLine("/usage sysprompt");
-        PushLine("/usage sysprompt");
+        PushLine("/usage sysprompt conversation");
         PushLine("/usage sysprompt to=notes/");
         PushLine("/usage sysprompt to=notes");
         PushLine("/usage sysprompt to=ctx");
@@ -41,13 +41,21 @@ public partial class ChatScreenTests
         Assert.True(File.Exists(Path.Combine(folder, "notes", UsageText.ExportFileName(now, 1))));
         Assert.True(File.Exists(Path.Combine(folder, "notes", UsageText.ExportFileName(now, 2))));   // an existing folder named bare
         Assert.True(File.Exists(Path.Combine(folder, "ctx.md")));
-        string text = File.ReadAllText(first);
+        string bare = File.ReadAllText(first);   // the system message and the tools alone (2026-11-23, the user's ask)
+        Assert.StartsWith(UsageExport.PromptHeading + "\n", bare);
+        Assert.Contains("## System message\n~", bare);
+        Assert.Contains(UsageExport.PromptContentsLine + "\n", bare);
+        Assert.DoesNotContain("## Conversation", bare);
+        Assert.DoesNotContain("Hello there.", bare);
+        Assert.Contains("- **Size:** ~", bare);
+        Assert.Contains("wrote the system prompt to " + UsageText.ExportFileName(now, 1), output);
+        string text = File.ReadAllText(Path.Combine(folder, UsageText.ExportFileName(now, 2)));
         Assert.StartsWith(UsageExport.Heading + "\n", text);
         Assert.Matches("### \\d+ · user\n```text\nhi\n```", text);   // after the app's own opening calls
         Assert.Matches("### \\d+ · assistant\n```text\nHello there.\n```", text);
-        Assert.Contains("## System message (~", text);
+        Assert.Contains(UsageExport.ContentsLine, text);
         Assert.DoesNotContain("\r", text);
-        Assert.Contains("wrote the next request's context to " + UsageText.ExportFileName(now, 1), output);
+        Assert.Contains("wrote the next request's context to " + UsageText.ExportFileName(now, 2), output);
         Assert.Contains(UsageText.ExportExists("ctx.md"), output);
         Assert.Contains(OutputNames.Refusal("out.pdf", UsageText.ExportExtension, _ => false)!, output);
         Assert.False(File.Exists(Path.Combine(folder, ".neon", "x.md")));
@@ -61,6 +69,7 @@ public partial class ChatScreenTests
     {
         Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Usage, "sysprompt"));
         Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Usage, "SYSPROMPT to=x"));
+        Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Usage, "sysprompt conversation"));
         Assert.Equal(ChatScreen.MidTurnPolicy(SlashCommand.Usage, hasArgs: true), ChatScreen.MidTurnPolicy(SlashCommand.Usage, "prompt"));
         Assert.Equal(ChatScreen.MidTurnPolicy(SlashCommand.Usage, hasArgs: false), ChatScreen.MidTurnPolicy(SlashCommand.Usage, ""));
         Assert.Equal("/usage takes context, prompt, tools, skills, models or sysprompt, or nothing for the pane.", UsageText.UsageError);
@@ -70,8 +79,12 @@ public partial class ChatScreenTests
     public void UsageSysprompt_TheCompletion_OffersTheWord_ThenItsTo()
     {
         Assert.Contains(new CompletionItem(UsageText.SyspromptWord, UsageText.SyspromptWordNote), ChatScreen.ArgumentItems("/usage", "sys", Sources()));
-        Assert.Equal([new CompletionItem("sysprompt to=", UsageText.SyspromptToNote)], ChatScreen.ArgumentItems("/usage", "sysprompt ", Sources()));
+        Assert.Equal(
+            [new CompletionItem("sysprompt conversation", UsageText.ConversationWordNote), new CompletionItem("sysprompt to=", UsageText.SyspromptToNote)],
+            ChatScreen.ArgumentItems("/usage", "sysprompt ", Sources()));
+        Assert.Equal([new CompletionItem("sysprompt conversation to=", UsageText.SyspromptToNote)], ChatScreen.ArgumentItems("/usage", "sysprompt conversation ", Sources()));
         Assert.Empty(ChatScreen.ArgumentItems("/usage", "sysprompt to=x", Sources()));
+        Assert.Empty(ChatScreen.ArgumentItems("/usage", "sysprompt to=x ", Sources()));
         Assert.Equal([new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote)], ChatScreen.ArgumentItems("/usage", "pro", Sources()));
     }
 }
