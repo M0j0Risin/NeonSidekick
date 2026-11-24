@@ -182,8 +182,9 @@ public partial class ChatScreenTests
         Assert.Contains(CameraText.Attached(file), output);
         Assert.Equal([file], _shotsShown);   // post: the viewer on the shot
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
-        Assert.StartsWith("[Image #1] what is this?", PasteBlocks.WithoutSavedPaths(user.Text));   // 2026-11-23: a picture from a file names its file to the model ([Image #N, from <path>])
-        Assert.Contains(", from ", user.Text);
+        // 2026-11-23: a picture with a file names it to the model; a camera photo, a file the app wrote, as "saved as" with its full path (2026-11-24).
+        Assert.StartsWith("[Image #1] what is this?", PasteBlocks.WithoutSavedPaths(user.Text));
+        Assert.StartsWith(PasteBlocks.SavedLabel(1, file) + " what is this?", user.Text);
         var picture = Assert.Single(user.Contents.OfType<DataContent>());
         Assert.Equal(file, ConversationHistory.CameraPath(picture));
         Assert.Equal(1, _cameraSystem!.Opens);

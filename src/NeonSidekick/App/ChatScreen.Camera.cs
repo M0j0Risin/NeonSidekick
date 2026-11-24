@@ -309,9 +309,13 @@ internal sealed partial class ChatScreen
     /// </summary>
     private IReadOnlyList<ImageAttachment> MarkCameraImages(IReadOnlyList<ImageAttachment> images)
     {
-        bool IsCamera(ImageAttachment i) => !i.Camera && (_cameraPaths.ContainsKey(i.Path) || (System.IO.Path.IsPathFullyQualified(i.Path) && InCameraFolder(i.Path)));
+        bool IsCamera(ImageAttachment i) => !i.Camera && IsCameraPicture(i);
         return images.Any(IsCamera) ? images.Select(i => IsCamera(i) ? i with { Camera = true } : i).ToList() : images;
     }
+
+    /// <summary>Whether <paramref name="image"/> is the camera's own: marked so, taken this run, or in the camera's folder or <c>home-cameras</c>.</summary>
+    private bool IsCameraPicture(ImageAttachment image) =>
+        image.Camera || _cameraPaths.ContainsKey(image.Path) || (System.IO.Path.IsPathFullyQualified(image.Path) && InCameraFolder(image.Path));
 
     /// <summary>
     /// <c>/camera [word …]</c> (2026-10-02): bare, the shutter pane, the photo onto the input line (a snap straight away without a
