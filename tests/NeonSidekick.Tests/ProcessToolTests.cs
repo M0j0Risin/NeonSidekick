@@ -275,8 +275,8 @@ public sealed class ProcessToolTests : IDisposable
 
         // The police reads what goes to stdin (Shell police, 2026-09-22): a line naming an outside path is refused and nothing is sent; off, it goes.
         var typed = Start("set /p name=&& call echo hello %name%");
-        Assert.Equal(@"Error: outside the working directory: 'C:\' — a command or a script may only name paths under it", await Invoke(("action", "submit"), ("session_id", typed.Id), ("data", @"cd C:\")));
-        Assert.Equal("Error: outside the working directory: '..' — a command or a script may only name paths under it", await Invoke(("action", "write"), ("session_id", typed.Id), ("data", "cd ..")));   // relative to where it started: the root
+        Assert.Equal(@"Error: outside the working directory: 'C:\' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("action", "submit"), ("session_id", typed.Id), ("data", @"cd C:\")));
+        Assert.Equal("Error: outside the working directory: '..' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("action", "write"), ("session_id", typed.Id), ("data", "cd ..")));   // relative to where it started: the root
         Assert.Equal("sent a line to " + typed.Id, await Invoke(("action", "submit"), ("session_id", typed.Id), ("data", "sub")));
         Assert.Equal(typed.Id + " exited 0 after 0.0 s (cmd): set /p name=&& call echo hello %name% — 1 new line\nhello sub", await Invoke(("action", "wait"), ("session_id", typed.Id), ("timeout", 30)));
         _settings.ShellPolice = false;

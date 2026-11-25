@@ -45,6 +45,7 @@ Get-Content error.log | NeonSidekick.exe --prompt "Why did this fail?"   # the l
   - the model's Docker changes, `print_file` under *Print action policy* `ask`, `neon_advisor` under *Advisor confirm*;
   - Home Assistant calls outside the safe services under *Home Assistant action policy* `ask`;
   - MCP tools that would ask, by their server's `"ask"` ([TOOLS.md](TOOLS.md#mcp-servers));
+  - `execute_code` scripts under *Shell command policy* `ask`;
   - `shopping_clear` with `all`, which `--allow` doesn't cover.
 - **No Browser window:** a web tool that meets a bot check reports it.
 - **The project file** (`NEON.md`, `AGENTS.md`, `CLAUDE.md`) is never changed; the model is told you can make the change.
@@ -163,8 +164,9 @@ They need no server unless the row says so.
 - **`/plan ralph [<name>] [<passes>]`** runs a [Ralph loop](COMMANDS.md#ralph-loop); typing it is the consent. Each pass is sent without waiting, echoed as its short line, with `[notice]` lines for its checks, and the line after the loop starts a new session.
 - **A plan that may not suit a loop** gets a `[notice]`, and the loop goes on. One with no `- [ ]` steps under `## Steps` is refused with an `[error]`.
 - **A Ralph loop names its checks** in a `[notice]` before running any. Under *Shell command policy* `ask` a check runs only if it's on the allow list, as `run_command`'s would (on the PC, approving the plan is the yes); `NEONSIDEKICK_COMMAND_POLICY=yolo` runs it.
-- **A Ralph loop refuses to start** when its `verify:` check fails on the project first:
-  - It prints the check's output. A check whose script isn't there yet is skipped.
+- **A Ralph loop starts with its `verify:` check pending** when it fails on the project first:
+  - It prints the check's output, then tries the check after each step that changes files: from its first pass it checks every step, else it runs once at the end.
+  - A check whose script isn't there yet is skipped.
   - A failing `final:` check alone gets a `[notice]`, and the loop goes on.
 - **No one to ask:** a headless loop has no checkpoint and no `ask_user`.
 - **Bare `/plan ralph`** resumes a loop stopped earlier in the run, with the checks it started with.
@@ -199,7 +201,7 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--log <path>` | Every diagnostic line to a file, first the flags, profile and variables in force; `{ts}` becomes the start time. | `--log C:\Logs\neon_{ts}.log` |
 | `--yolo` | Every shell command runs without asking ([below](#running-yolo-every-shell-command-allowed)). | `--yolo --cwd D:\Repo\MyApp` |
 | `--no-police` | The path police off ([below](#turning-off-the-path-police)). | `--no-police --cwd D:\Repo\MyApp` |
-| `--allow <list>` | Runs the calls that would ask: `docker`, `print`, `ha`, `advisor`, `mcp` (every server) or `mcp:<server>`. Repeats join; each allowed call is logged with `--log`. | `--allow mcp:github,docker` |
+| `--allow <list>` | Runs the calls that would ask: `docker`, `print`, `ha`, `advisor`, `mcp` (every server), `mcp:<server>`, `code` (every script language) or `code:<language>`. Repeats join; each allowed call is logged with `--log`. | `--allow mcp:github,docker` |
 | `--prompt "<text>"` | One line, then the end ([One question, one answer](#one-question-one-answer)); implies `--headless`. | `--prompt "Summarize README.md"` |
 | `--prompt-file <file>` | As `--prompt`, the file one message; a relative path starts from where you launch. A missing or blank file is exit 2. | `--prompt-file D:\Jobs\ask.md` |
 | `--quiet` | Only the replies on stdout; everything else on stderr. | `--quiet 2> run.log` |
@@ -222,7 +224,7 @@ Special servers for `--url`:
 The run's shell policy comes from `--yolo`, then `NEONSIDEKICK_COMMAND_POLICY` (`off`, `ask` or `yolo`), then the profile's *Shell command policy*. Neither the flag nor the variable is saved.
 
 - `off` (the default): no shell tools.
-- `ask`: with no screen to ask on, only commands on the profile's *Shell allowed commands* run.
+- `ask`: with no screen to ask on, only commands on the profile's *Shell allowed commands* run. Scripts are never saved there: one runs only with `--allow code` or `code:<language>`.
 - `yolo`: every `run_command` command and `execute_code` script runs without asking. Use it only when you trust the job and the folder.
 - **`yolo` does not turn off the shell police.** With *Shell police* on (the default), these are still refused and count toward exit code 3:
   - a path outside the working directory;
@@ -276,11 +278,12 @@ The run carries on. At the end, if a command was refused, it prints a summary an
 [notice] 2 commands were not run: "npm install", "python script"
 ```
 
-A call that would ask (MCP, Docker, print, Home Assistant, an advisor) is refused the same way, with a line per kind naming its `--allow`:
+A call that would ask (MCP, Docker, print, Home Assistant, an advisor, a script) is refused the same way, with a line per kind naming its `--allow`:
 
 ```
 [notice] 2 MCP calls were refused: github__create_issue, github__push_files (--allow mcp:github allows them)
 [notice] 1 Docker change was refused (--allow docker allows it)
+[notice] 1 script was refused (--allow code:python allows it)
 ```
 
 Shell police refusals count too, under `--yolo` as well.
@@ -288,7 +291,7 @@ Shell police refusals count too, under `--yolo` as well.
 ## Exit codes
 
 - **0:** nothing failed, and nothing `--allow` covers was refused.
-- **2:** nothing ran: a bad argument, an unknown profile, an `--allow mcp:<server>` that names no server or several, a missing or blank `--prompt-file`, piped stdin that can't be read, a `--session` naming no stored session or whose sessions store can't be opened, a settings zip `--import-settings` refused, or an old copy started during or just after an [update](COMMANDS.md#updating).
+- **2:** nothing ran: a bad argument, an unknown profile, an `--allow mcp:<server>` that names no server or several, an `--allow code:<language>` naming no language it knows, a missing or blank `--prompt-file`, piped stdin that can't be read, a `--session` naming no stored session or whose sessions store can't be opened, a settings zip `--import-settings` refused, or an old copy started during or just after an [update](COMMANDS.md#updating).
 - **3:** at least one command or call `--allow` covers was refused.
 - **4:** a message or a command failed: a turn that failed after its retries, a message with no server, a command's `[error]` line, a Ralph loop that ended short of done (its pass limit and stalls too, not a stop you made) or crashed, a gap review or code audit whose pass failed (not a canceled pass, its limit or a stall), a call to an MCP server that needs a sign-in, or a session that wasn't saved. 4 beats 3.
 

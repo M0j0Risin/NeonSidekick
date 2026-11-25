@@ -92,10 +92,10 @@ public sealed class RunCommandUnixTests : IDisposable
     {
         _settings.ShellCommandPolicy = "ask";
         Directory.CreateDirectory(Path.Combine(_root, "sub"));
-        Assert.Equal("Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it", await Invoke(("command", "cat /etc/hosts")));
-        Assert.Equal("Error: outside the working directory: '../..' — a command or a script may only name paths under it", await Invoke(("command", "cd ../.."), ("workdir", "sub")));
-        Assert.Equal("Error: outside the working directory: '~' — a command or a script may only name paths under it", await Invoke(("command", "ls ~")));
-        Assert.Equal("Error: outside the working directory: '$HOME' — a command or a script may only name paths under it", await Invoke(("command", "ls $HOME/Desktop")));
+        Assert.Equal("Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("command", "cat /etc/hosts")));
+        Assert.Equal("Error: outside the working directory: '../..' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("command", "cd ../.."), ("workdir", "sub")));
+        Assert.Equal("Error: outside the working directory: '~' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("command", "ls ~")));
+        Assert.Equal("Error: outside the working directory: '$HOME' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("command", "ls $HOME/Desktop")));
         Assert.Empty(_asked);
         Assert.Equal("Error: the command was denied by the user: ls " + _root + "; do not retry it or work around the refusal", await Invoke(("command", "ls " + _root)));
         Assert.Single(_asked);

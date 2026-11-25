@@ -9,8 +9,10 @@ namespace NeonSidekick.Shell;
 /// on by default): reads the text the model sends a shell — a <c>run_command</c> line, an
 /// <c>execute_code</c> script, the text <c>process</c> writes to a background process's stdin — and names
 /// the first token that points outside the working directory, so the tool can refuse the call before
-/// the gate is asked. It is lexical, and says so: it sees the text, not what runs, so a script that
-/// computes a path (<c>os.environ["X"]</c>, a registry read) is not seen; it is a guard against the
+/// the gate is asked. It is lexical, and says so: it sees the text, not what runs, so it catches a named
+/// read of a folder variable (rule 7) but not every way to compute one: a path built from the whole
+/// environment (<c>dict(os.environ)</c>, <c>env=os.environ</c>), a string joined later or a registry read
+/// is not seen, and the refusal's "don't try another way" covers the rest; it is a guard against the
 /// model's ordinary attempts, paired with tool descriptions and rules that no longer say the shell can
 /// reach outside. Pure but for <c>exists</c>, an injected "is there a file or folder here" the
 /// single-segment rule needs, and <c>linkTarget</c>, an injected "where does this link lead" (the real
@@ -30,7 +32,7 @@ namespace NeonSidekick.Shell;
 /// <item>A rooted token (<c>/etc/hosts</c>, <c>\Windows\x</c>) resolves against the root's drive on Windows, so it is an escape in every shell and interpreter: two or more segments are outside; a bare <c>/</c> or <c>\</c> is outside as a command's first argument (<c>cd /</c>, <c>ls -la /</c>, <c>cd \</c>: the drive root; options are <c>-x</c> and one-letter <c>/x</c> switches) and nothing elsewhere (<c>-replace '\\', '/'</c>, division); a single segment (<c>/s</c>, <c>/MIR</c>, <c>/t:Build</c> — but also <c>/Users</c>) is outside only when something by that name exists at the drive's root, since a switch names nothing on the disk — but a <c>cd</c>'s folder argument is a folder, never a switch (<c>cd /etc</c>, 2026-10-03, the review: in Git Bash <c>/etc</c> is its own install's). <c>//…</c> and <c>/*</c> are comments, <c>\\…</c> without a share (<c>\\d+</c>) and a token of separators alone are nothing, and in a script a backslash-rooted token is not read at all — <c>"\t\n"</c> and <c>\d+\s</c> are escapes and regexes far more often than paths.</item>
 /// <item>A token with a <c>..</c> segment (<c>../x</c>, <c>sub\..\..\x</c>; <c>...</c> and <c>1..10</c> are not one) resolves against the folder the text runs in and is outside unless it lands under the root.</item>
 /// <item><c>~</c>, <c>~/…</c> and <c>~\…</c> are the home folder (<c>~x</c> is a bitwise not).</item>
-/// <item>A folder variable anywhere in the text — <see cref="FolderVariables"/> as <c>%NAME%</c>, <c>$env:NAME</c>, <c>${env:NAME}</c>, <c>$NAME</c> or <c>${NAME}</c> — and a runtime call that means the same (<see cref="FolderCalls"/>: <c>Path.home(</c>, <c>expanduser(</c>, <c>GetFolderPath(</c>…) is outside; the app cannot see where it points, and every one of them points away from the root. Any other variable (<c>%PATH%</c>, <c>$env:CI</c>) passes: the user's call, folder variables only.</item>
+/// <item>A folder variable anywhere in the text — <see cref="FolderVariables"/> as <c>%NAME%</c>, <c>$env:NAME</c>, <c>${env:NAME}</c>, <c>$NAME</c> or <c>${NAME}</c> — and a runtime call that means the same (<see cref="FolderCalls"/>: <c>Path.home(</c>, <c>expanduser(</c>, <c>GetFolderPath(</c>…) is outside; the app cannot see where it points, and every one of them points away from the root. Any other variable (<c>%PATH%</c>, <c>$env:CI</c>) passes: the user's call, folder variables only. Since 2026-11-24 (the session log review) cmd's <c>!NAME!</c> is one of the spellings, and a read by call (<see cref="EnvironmentCalls"/>, <c>process.env.NAME</c>, <c>Env:NAME</c>, <c>printenv NAME</c>) is judged by its name argument: a folder variable is outside, a computed name is outside since it can't be read, any other literal passes.</item>
 /// <item>A path inside a token (2026-10-03, the user's pick): a drive-absolute path after a character that is not a letter or a digit (<c>-out:C:\x</c>, <c>@C:\x\args.rsp</c>, <c>FileSystem::C:\x</c>), a <c>\\server\share</c> the same way in a command line, a <c>..</c> after <c>:</c> or <c>@</c> (<c>-o:..\x</c>), any of the three glued to a one-letter switch (<c>-oC:\x</c>, <c>-IC:\x</c>, <c>-I..\x</c>: 2026-10-03, the review), and a <c>file:</c> URL (<c>file:///C:/x</c>, <c>file://server/share/x</c>) are judged as the path they hold, so <c>/out:</c> a folder under the root passes where the rooted rule refused it until that day.</item>
 /// <item>A bare drive in a command line (2026-10-03): <c>C:</c> on its own (<c>C: &amp;&amp; dir</c>, <c>cd /d C:</c>, <c>Set-Location E:</c>) moves to that drive and is outside unless it is the root's; a stray <c>a:</c> argument is refused with it, the price.</item>
 /// <item>A bare <c>cd</c> (2026-10-03): <see cref="BareCdCommands"/> with no folder argument in a command line's segment — alone, or with only options and redirects (<c>cd -P</c>, <c>cd &gt;/dev/null</c>, <c>Set-Location -PassThru</c>: 2026-10-03, the review) — go to the home folder in PowerShell 7 and bash; in cmd, where it only prints the folder, it passes. <c>cd -</c> is an argument, the previous folder, and not followed.</item>
@@ -76,6 +78,12 @@ public static partial class PathPolice
         "expanduser(", "Path.home(", "homedir(", "tmpdir(", "gettempdir(", "GetFolderPath(", "GetTempPath(",
     ];
 
+    /// <summary>
+    /// The calls that read one environment variable by its name (rule 7, 2026-11-24, the session log review: a refused <c>%TEMP%</c> came
+    /// back as <c>[Environment]::GetEnvironmentVariable('TEMP')</c>), matched without case; the name argument decides (<see cref="EnvironmentRead"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<string> EnvironmentCalls = ["GetEnvironmentVariable(", "os.environ[", "os.environ.get(", "os.getenv(", "process.env["];
+
     /// <summary>The commands that change folder (rule 11), matched without case: the cmd, bash and PowerShell spellings.</summary>
     public static readonly IReadOnlyList<string> CdCommands = ["cd", "chdir", "pushd", "Set-Location", "sl", "Push-Location"];
 
@@ -85,13 +93,147 @@ public static partial class PathPolice
     // What stands for a space inside a quoted path under the root (rule 10): not whitespace and not a delimiter, so the path is one token; never in real text.
     private const char Joiner = '\u0001';
 
-    // %NAME% | $env:NAME | ${env:NAME} | $NAME | ${NAME}, the name not continued by a word character ($HOMEPAGE is not $HOME).
-    [GeneratedRegex(@"(?:%(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD|PROFILE|PSHOME|COMMONPROGRAMFILES|COMMONPROGRAMFILES\(X86\)|COMMONPROGRAMW6432|ONEDRIVECONSUMER|ONEDRIVECOMMERCIAL|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_RUNTIME_DIR)%)|(?:\$\{?(?:env:)?(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD|PROFILE|PSHOME|COMMONPROGRAMFILES|COMMONPROGRAMW6432|ONEDRIVECONSUMER|ONEDRIVECOMMERCIAL|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_RUNTIME_DIR)(?![A-Za-z0-9_])\}?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    // %NAME% | !NAME! (cmd's delayed expansion, 2026-11-24) | $env:NAME | ${env:NAME} | $NAME | ${NAME}, the name not continued by a word character ($HOMEPAGE is not $HOME).
+    [GeneratedRegex(@"(?:%(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD|PROFILE|PSHOME|COMMONPROGRAMFILES|COMMONPROGRAMFILES\(X86\)|COMMONPROGRAMW6432|ONEDRIVECONSUMER|ONEDRIVECOMMERCIAL|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_RUNTIME_DIR)%)|(?:!(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMFILES\(X86\)|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD|PROFILE|PSHOME|COMMONPROGRAMFILES|COMMONPROGRAMFILES\(X86\)|COMMONPROGRAMW6432|ONEDRIVECONSUMER|ONEDRIVECOMMERCIAL|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_RUNTIME_DIR)!)|(?:\$\{?(?:env:)?(?:USERPROFILE|HOMEPATH|HOMEDRIVE|HOME|APPDATA|LOCALAPPDATA|TEMP|TMP|TMPDIR|PROGRAMFILES|PROGRAMW6432|PROGRAMDATA|ALLUSERSPROFILE|PUBLIC|ONEDRIVE|SYSTEMROOT|SYSTEMDRIVE|WINDIR|OLDPWD|PROFILE|PSHOME|COMMONPROGRAMFILES|COMMONPROGRAMW6432|ONEDRIVECONSUMER|ONEDRIVECOMMERCIAL|XDG_CONFIG_HOME|XDG_DATA_HOME|XDG_CACHE_HOME|XDG_STATE_HOME|XDG_RUNTIME_DIR)(?![A-Za-z0-9_])\}?)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex FolderVariablePattern();
 
     // \\server\share or //server/share: two separators, a server, a separator — the share is what makes it a path.
     [GeneratedRegex(@"^(?:\\\\|//)[^\\/\s]+[\\/]", RegexOptions.CultureInvariant)]
     private static partial Regex UncPattern();
+
+    // Node's process.env.NAME, a property read by name.
+    [GeneratedRegex(@"(?<![\w$.])process\.env\.(?<name>[A-Za-z_$][A-Za-z0-9_$]*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex ProcessEnvPattern();
+
+    // PowerShell's env drive in every spelling (Env:TEMP, Env:\TEMP, env:/TEMP, quoted, after -Path): the name, a $ (a computed one), or nothing (the whole drive).
+    [GeneratedRegex(@"(?<![\w$:{\\/.-])env:[\\/]?(?<name>\$|[A-Za-z0-9_]+(?:\(x86\))?)?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex EnvDrivePattern();
+
+    // bash's printenv and the words after it on its segment.
+    [GeneratedRegex(@"(?<![\w-])printenv(?<words>(?:[ \t]+[^\s;|&)]+)*)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex PrintenvPattern();
+
+    /// <summary>
+    /// A named read of a folder variable by call (rule 7, 2026-11-24, the session log review), or null. The name argument decides: a literal
+    /// one of <see cref="FolderVariables"/> (<c>os.environ.get('TEMP')</c>, <c>process.env.TEMP</c>, <c>Get-Item Env:TEMP</c>, <c>printenv TEMP</c>)
+    /// is named; a computed one (<c>GetEnvironmentVariable('TE' + 'MP')</c>, <c>os.environ[key]</c>, <c>Env:$n</c>) can't be read, so the call is
+    /// named; any other literal (<c>os.environ['PATH']</c>) passes. A read of the whole environment (<c>dict(os.environ)</c>, <c>env=os.environ</c>,
+    /// <c>Get-ChildItem Env:</c>, a bare <c>printenv</c>) passes: refusing it would break ordinary subprocess code, the limit the class doc states.
+    /// </summary>
+    private static string? EnvironmentRead(string text)
+    {
+        foreach (string call in EnvironmentCalls)
+        {
+            for (int at = text.IndexOf(call, StringComparison.OrdinalIgnoreCase); at >= 0; at = text.IndexOf(call, at + call.Length, StringComparison.OrdinalIgnoreCase))
+            {
+                if (at > 0 && (char.IsAsciiLetterOrDigit(text[at - 1]) || text[at - 1] == '_'))
+                {
+                    continue;
+                }
+
+                int i = at + call.Length;
+                while (i < text.Length && char.IsWhiteSpace(text[i]))
+                {
+                    i++;
+                }
+
+                if (QuotedName(text, ref i) is not { } name)
+                {
+                    return text[at..(at + call.Length)];
+                }
+
+                while (i < text.Length && char.IsWhiteSpace(text[i]))
+                {
+                    i++;
+                }
+
+                if (i >= text.Length || text[i] is not (')' or ']' or ','))
+                {
+                    return text[at..(at + call.Length)];
+                }
+
+                if (IsFolderVariable(name))
+                {
+                    return text[at..(text[i] == ',' ? i : i + 1)] + (text[i] == ',' ? ")" : "");
+                }
+            }
+        }
+
+        foreach (Match read in ProcessEnvPattern().Matches(text))
+        {
+            if (IsFolderVariable(read.Groups["name"].Value))
+            {
+                return read.Value;
+            }
+        }
+
+        foreach (Match read in EnvDrivePattern().Matches(text))
+        {
+            string name = read.Groups["name"].Value;
+            int after = read.Index + read.Length;
+            bool wildcard = name.Length > 0 && after < text.Length && text[after] is '*' or '?' or '[';
+            if (name == "$" || wildcard || IsFolderVariable(name))
+            {
+                return read.Value;
+            }
+        }
+
+        foreach (Match read in PrintenvPattern().Matches(text))
+        {
+            foreach (string word in read.Groups["words"].Value.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                string bare = word.Trim('"', '\'');
+                if (bare.StartsWith('-'))
+                {
+                    continue;
+                }
+
+                if (bare.Contains('$') || bare.Contains('`'))
+                {
+                    return "printenv";
+                }
+
+                if (IsFolderVariable(bare))
+                {
+                    return "printenv " + bare;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The quoted literal at <paramref name="i"/> (<c>'TEMP'</c>, <c>"TEMP"</c>, a Python <c>r'TEMP'</c>, a JS backtick without <c>${</c>), <paramref name="i"/> moved past it; null for anything else.</summary>
+    private static string? QuotedName(string text, ref int i)
+    {
+        int start = i;
+        if (start < text.Length - 1 && text[start] is 'r' or 'R' or 'b' or 'B' or 'u' or 'U' && text[start + 1] is '\'' or '"')
+        {
+            start++;
+        }
+
+        if (start >= text.Length || text[start] is not ('\'' or '"' or '`'))
+        {
+            return null;
+        }
+
+        int end = text.IndexOf(text[start], start + 1);
+        if (end < 0)
+        {
+            return null;
+        }
+
+        string name = text[(start + 1)..end];
+        if (text[start] == '`' && name.Contains("${", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        i = end + 1;
+        return name;
+    }
+
+    private static bool IsFolderVariable(string name) => FolderVariables.Contains(name, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The first token of <paramref name="text"/> that names a path outside <paramref name="root"/>, or
@@ -112,7 +254,19 @@ public static partial class PathPolice
         ArgumentNullException.ThrowIfNull(baseFolder);
         ArgumentNullException.ThrowIfNull(exists);
         ArgumentNullException.ThrowIfNull(linkTarget);
-        var judging = new Judging(root, isScript, shell, exists, linkTarget, realPath ?? NoRealPath);
+        return FirstOutside(text, new Judging(root, isScript, shell, exists, linkTarget, realPath ?? NoRealPath), baseFolder, depth: 0);
+    }
+
+    /// <summary>
+    /// <see cref="FirstOutside(string, string, string, bool, Func{string, bool}, Func{string, string?}, ShellKind, Func{string, string?}?)"/>'s
+    /// work, <paramref name="depth"/> shells down: a nested shell's script (2026-11-24, <see cref="CommandPrefix.NestedScript"/>) is judged again as a
+    /// line of its own from each folder its segment may run in, so its own <c>cd</c>s are followed; past <see cref="CommandPrefix.MaxDepth"/> its
+    /// tokens are judged from the outer folders alone, as every script's are.
+    /// </summary>
+    private static string? FirstOutside(string text, Judging judging, string baseFolder, int depth)
+    {
+        bool isScript = judging.IsScript;
+        var shell = judging.Shell;
         var variable = FolderVariablePattern().Match(text);
         if (variable.Success)
         {
@@ -125,6 +279,11 @@ public static partial class PathPolice
             {
                 return call;
             }
+        }
+
+        if (EnvironmentRead(text) is { } read)
+        {
+            return read;
         }
 
         // Every folder the next segment may run in (rule 11): one, until a cd leaves it in doubt whether it moved.
@@ -160,6 +319,18 @@ public static partial class PathPolice
                 if (folders.Any(folder => IsOutside(token, judging, folder, first, folderArgument: i == cdIndex)))
                 {
                     return token;
+                }
+            }
+
+            // A shell given a line (powershell -c "cd ..\..; rm ..\x"): its script's cds are its own, so it is judged as a line from each folder.
+            if (!isScript && depth < CommandPrefix.MaxDepth && CommandPrefix.NestedScript(piece, shell) is { Unreadable: false, Script: { } script } nested)
+            {
+                foreach (string folder in folders)
+                {
+                    if (FirstOutside(script, judging with { Shell = nested.Shell }, folder, depth + 1) is { } inner)
+                    {
+                        return inner;
+                    }
                 }
             }
 
@@ -473,7 +644,7 @@ public static partial class PathPolice
     private static bool IsOption(string token, ShellKind shell) =>
         (token.Length > 1 && token[0] == '-') || (OperatingSystem.IsWindows() && shell != ShellKind.Bash && token.Length == 2 && token[0] == '/' && char.IsAsciiLetter(token[1]));
 
-    // A redirect and its target (>x, 2>>x, &>x, >&2, <x, a dangling 2> when Segments cut 2>&1 at its &): no argument of the command's.
+    // A redirect and its target (>x, 2>>x, &>x, >&2, <x, 2>&1, which Segments no longer cut since 2026-11-24): no argument of the command's.
     [GeneratedRegex(@"(?:\d|&)?>>?(?:&\d+|\s*[^\s<>|&;]*)|\d?<\s*[^\s<>|&;]*", RegexOptions.CultureInvariant)]
     private static partial Regex RedirectPattern();
 

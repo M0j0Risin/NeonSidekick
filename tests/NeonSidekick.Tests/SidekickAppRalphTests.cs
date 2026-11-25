@@ -115,19 +115,23 @@ public partial class SidekickAppTests
         Assert.Equal(PlanStatus.Incomplete, HeadlessPlanStatus);
     }
 
+    /// <summary>A failing baseline headless (2026-11-24, the session log review): pending, as on the screen, never refused.</summary>
     [Fact]
-    public async Task Headless_PlanRalph_AFailingBaseline_IsRefusedWithItsTail()
+    public async Task Headless_PlanRalph_AFailingBaseline_IsPending_WithItsTail()
     {
         ServerOn1234("llama");
         HeadlessRalphPlan();
         _ralphVerifier.Fail("error CS0103: the name 'x' does not exist");
+        HeadlessRalphPass("1");
+        HeadlessRalphPass("2");
 
-        string output = await Headless("/plan ralph add-guide\n", exitCode: 4);
+        string output = await Headless("/plan ralph add-guide\n");
 
-        Assert.Empty(_chat.Requests);
         Assert.Contains("error CS0103", output);
-        Assert.Contains("[error] " + RalphText.BaselineRefusedHeadless("dotnet build"), output);
-        Assert.Equal(PlanStatus.Incomplete, HeadlessPlanStatus);
+        Assert.Contains("[notice] " + RalphText.BaselinePendingNotice("dotnet build"), output);
+        Assert.Contains("[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 7, finalOnly: true), output);
+        Assert.Equal(["dotnet build", "dotnet build"], _ralphVerifier.Commands);   // the baseline, then once at the end
+        Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);
     }
 
     [Fact]
@@ -154,7 +158,7 @@ public partial class SidekickAppTests
         string output = await Headless("/plan ralph add-guide\n");
 
         Assert.Contains("[notice] " + RalphText.BaselineNotThereNotice(check, "hello.py"), output);
-        Assert.DoesNotContain(RalphText.BaselineRefusedHeadless(check), output);
+        Assert.DoesNotContain(RalphText.BaselinePendingNotice(check), output);
         Assert.Equal([check, check], _ralphVerifier.Commands);   // no baseline run, then each step's check
         Assert.Contains("[notice] " + RalphText.StartedNotice(HeadlessPlanPath, 2, 6, finalOnly: false), output);
         Assert.Equal(PlanStatus.Done, HeadlessPlanStatus);

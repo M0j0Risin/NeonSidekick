@@ -314,4 +314,33 @@ public class SessionHistoryTests
         Assert.Equal(1, json.Split("\"Typed\"").Length - 1);
         Assert.Equal(1, json.Split("\"AppWritten\"").Length - 1);
     }
+
+    /// <summary>
+    /// A pass's mark survives the store, written only for a pass (2026-11-24, the session log review), and a reflection's window leaves a pass's
+    /// turn out while an app-written one that is no pass stays.
+    /// </summary>
+    [Fact]
+    public void ThePassMark_RoundTrips_AndTheReflectionWindowLeavesPassesOut()
+    {
+        var history = new ConversationHistory("");
+        history.AddUser("Plan it.", [], null, TurnMark.App);
+        history.AddAssistant("Planned.");
+        history.AddUser("Gap pass 1.", [], null, TurnMark.Pass);
+        history.AddAssistant("Pass done.");
+        history.AddUser("mine");
+
+        string json = SessionHistory.ToJson(history.Messages);
+        var back = SessionHistory.FromJson(json);
+
+        Assert.False(ConversationHistory.IsPass(back[0]));
+        Assert.True(ConversationHistory.IsPass(back[2]));
+        Assert.True(ConversationHistory.IsAppWritten(back[2]));
+        Assert.False(ConversationHistory.IsPass(back[4]));
+        Assert.Equal(1, json.Split("\"Pass\"").Length - 1);
+        Assert.Equal(["Plan it.", "Planned.", "mine"], ConversationHistory.WithoutPassTurns(back).Select(m => m.Text));
+
+        var plain = new ChatMessage(ChatRole.User, "x");
+        ConversationHistory.SetTurnMark(plain, TurnMark.App);
+        Assert.False(plain.AdditionalProperties!.ContainsKey(ConversationHistory.PassKey));
+    }
 }

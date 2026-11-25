@@ -349,6 +349,8 @@ public sealed class PlanGapLoop
         _retryTaken = false;
         _followUpTaken = false;
         _shapeRefused = false;
+        _capRefused = false;
+        PassHeld = false;
         AdvisorAskedThisPass = false;
     }
 
@@ -443,6 +445,34 @@ public sealed class PlanGapLoop
         return true;
     }
 
+    private bool _capRefused;
+
+    /// <summary>
+    /// Whether this pass may still send a revision over <see cref="PlanText.PlanSizeLimit"/> back (2026-11-24, the session log review: a third of a
+    /// 21-pass review trimmed to the limit, a pass each; <see cref="PlanText.OverCapResult"/>): once a pass, gap and clean reports alike, so a model that
+    /// can't fit it never loops; its next call is saved as before and its result says the count.
+    /// </summary>
+    public bool CapRefusalLeft => !_capRefused && Pass > 0;
+
+    /// <summary>The pass's one over-the-limit refusal taken (<see cref="CapRefusalLeft"/>): true when it was there to take.</summary>
+    public bool TakeCapRefusal()
+    {
+        if (!CapRefusalLeft)
+        {
+            return false;
+        }
+
+        _capRefused = true;
+        return true;
+    }
+
+    /// <summary>
+    /// This pass's clean report would have ended the review but changed the steps (2026-11-24, the session log review: a converging pass reworded a
+    /// Done when line no pass then read), so it was held (<see cref="MarkClean"/> with <c>held</c>): the streak stands at its target and the next
+    /// clean pass converges. Cleared as each pass begins.
+    /// </summary>
+    public bool PassHeld { get; private set; }
+
     /// <summary>
     /// Whether an advisor was asked in this pass (2026-11-17, the gap-audit-reliability plan): a pass may span turns (a retry, a
     /// follow-up), so each after-turn ORs its turn's call in (<see cref="NoteAdvisor"/>) and the pass's log line reads it. Not
@@ -466,12 +496,14 @@ public sealed class PlanGapLoop
 
     /// <summary>
     /// A revision presented with no gaps that does not end the review yet (2026-10-17): the streak grows when the pass ends. <paramref name="light"/>
-    /// (2026-11-17): changes it recorded that keep the streak (<see cref="PassLight"/>).
+    /// (2026-11-17): changes it recorded that keep the streak (<see cref="PassLight"/>). <paramref name="held"/> (2026-11-24): a report that would have
+    /// converged but changed the steps (<see cref="PassHeld"/>).
     /// </summary>
-    public void MarkClean(IReadOnlyList<string>? @checked = null, IReadOnlyList<string>? minor = null, IReadOnlyList<string>? light = null)
+    public void MarkClean(IReadOnlyList<string>? @checked = null, IReadOnlyList<string>? minor = null, IReadOnlyList<string>? light = null, bool held = false)
     {
         Presented++;
         PassClean = true;
+        PassHeld = held;
         PassChecked = @checked ?? [];
         AddMinor(minor);
         AddLight(light);

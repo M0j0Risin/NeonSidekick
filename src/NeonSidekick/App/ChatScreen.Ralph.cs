@@ -730,7 +730,8 @@ internal sealed partial class ChatScreen
 
         string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text, step.Twins > 1 ? step.Index : null));
         bool reviewed = snapshot.Reviewer != RalphReviewer.Off;
-        string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null, byHand: step?.ByHand ?? false);
+        string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step), reviewed && step is not null, canAsk: snapshot.Checkpoint > 0, notes, RalphLog.LearnedText(log), finalFix: step is null, byHand: step?.ByHand ?? false,
+            pending: snapshot.FinalOnly && !snapshot.Unchecked ? snapshot.Verify : null);
         _ralphTurn = new PlanTurn(directive, _finishStep);
         int windowChars = RalphWindowChars();
         string message = step is null
@@ -767,7 +768,7 @@ internal sealed partial class ChatScreen
         _lastTurnFailure = TurnFailure.None;
         try
         {
-            exit = await RunMessageAsync(message, images, cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
+            exit = await RunMessageAsync(message, images, cancellationToken, Llm.TurnMark.Pass).ConfigureAwait(false);
         }
         finally
         {
@@ -793,7 +794,7 @@ internal sealed partial class ChatScreen
             _lastTurnFailure = TurnFailure.None;
             try
             {
-                exit = await RunMessageAsync(RalphText.NudgeMessage, [], cancellationToken, Llm.TurnMark.App).ConfigureAwait(false);
+                exit = await RunMessageAsync(RalphText.NudgeMessage, [], cancellationToken, Llm.TurnMark.Pass).ConfigureAwait(false);
             }
             finally
             {
@@ -825,6 +826,12 @@ internal sealed partial class ChatScreen
         }
 
         var judged = await JudgeRalphPassAsync(loop, step, total, lines, headed, before, images.Count > 0, cancellationToken).ConfigureAwait(false);
+        if (judged.Adopted && _executingPlan is { } executing)
+        {
+            // The check adopted (2026-11-24): stored again, so the session's save and a resume read it as the steps' check.
+            _executingPlan = RalphStart.Stored(loop.Snapshot, executing.Requirement ?? "");
+        }
+
         var stop = loop.EndPass(judged.Facts, PlanMeter());
         bool logged = RalphLogPass(loop, step, judged);
         _ralphTurn = null;
@@ -904,9 +911,9 @@ internal sealed partial class ChatScreen
         public Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken) =>
             screen.RunRalphCheckAsync(files, command, shell, effective, label, cancellationToken);
 
-        public async Task<bool> StartAnywayAsync(string command, bool verify, CancellationToken cancellationToken)
+        public async Task<bool> StartAnywayAsync(string command, CancellationToken cancellationToken)
         {
-            if (await screen.RalphConfirmAsync(verify ? RalphText.BaselineQuestion(command) : RalphText.FinalBaselineQuestion(command), cancellationToken).ConfigureAwait(false))
+            if (await screen.RalphConfirmAsync(RalphText.FinalBaselineQuestion(command), cancellationToken).ConfigureAwait(false))
             {
                 return true;
             }

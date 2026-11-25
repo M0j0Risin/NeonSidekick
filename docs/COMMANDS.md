@@ -389,7 +389,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 #### Closing gaps
 
-**Close gaps…** or `/plan gaps` reviews the plan, one turn a pass, each fixing what would stall the work (a missing step, an open choice, an unread file, an unchecked source, a step too big, a plan too long) and saving a revision.
+**Close gaps…** or `/plan gaps` reviews the plan, one turn a pass, each fixing what would stall the work (a missing step, an open choice, an unread file, an unchecked source, a step too big) and saving a revision.
 
 * **Clean passes:** it ends after *Plan gap clean passes* in a row find no gaps; wording or formatting fixes don't break a streak. Each pass after a clean one checks another area (order, verification, risks, assumptions, size), or, with *Confirm focus by change*, an area the last change touched, the most-changed first, and says which.
 * **Who reviews** (with advisors offered): the model alone (`m`), a fitting advisor (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
@@ -397,6 +397,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Your answers:** a question you skip is the pass's to settle, noted in `## Risks` as "Assumed (left to me):". One you decline becomes an "Open question (your call):", unless your note settles it.
 * **The plan's shape:** no clean end while a step lacks `Done when:`, one step is oversized, steps sit outside `## Steps` or a parent has a by-hand check. A plan too long for a Ralph pass to send whole is noted, not a gap.
   * A clean pass that drops unfinished steps, ticks or sections, or cuts much of the plan, is refused; a pass with gaps is told what it dropped.
+  * A plan over 20,000 characters is refused once in its pass and trimmed there, a minor fix; a clean pass that changed steps is checked by one more.
 * **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on Esc; at the count given or *Plan gap max passes*.
   * A server failure is tried once more; a pass that ends without `present_plan` is asked for it once.
   * A message (PC or Web UI) pauses it after the pass: `/plan gaps resume` goes on, `/plan show` says where it stands.
@@ -411,7 +412,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
 * **A pass** gets the plan, its step and `Done when:` line, what earlier passes learned and every tool, and reports `done`, `partial`, `blocked` or `split`. Each pass is its own session, shown by 🔁 on the [lower rule](INTERFACE.md#the-screen).
-* **The app decides if a step stands:** the `verify:` command, then the evidence (files changed or committed) and a review (*Ralph loop reviewer*).
+* **The app decides if a step stands:** the `verify:` command, then the evidence (files changed or committed; untracked build output such as `bin/` and `obj/` doesn't count) and a review (*Ralph loop reviewer*).
   * The reviewer's diff is redacted; a secrets file (`.env`, a key) is named, never shown. A failed check unticks the step, its output going to the next pass.
   * **Only the app ticks boxes.** A pass's edits to the steps or the `verify:` and `final:` lines are undone, an added step removed; a stopped pass decides nothing. The plan as the pass left it stays in `as-left.md` beside the log; type a message to pause the loop before editing the plan.
   * After a crash or profile switch mid-pass, the plan is put back first; a pass that deleted unfinished steps blocks the start until you restore them. A plan revised, approved or run since is left as is (the start says so: check that step's box).
@@ -419,7 +420,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
   * Under `ask`, a pass's own commands still ask, so an unattended loop waits on each: allow what it needs, or use `yolo`.
 * **Before it starts,** a plan unfit for a loop asks "Start anyway?" on the PC and the Web UI; no leaves it presented. One with no `- [ ]` steps is refused.
   * Unfit: steps outside `## Steps`, one step in a long plan, steps with no `Done when:`, no check with the reviewer off, or too long to send whole (24,000 characters, or a quarter of a smaller window).
-  * **The baseline:** the checks run once on the project as it is. A failing `verify:` lets you start anyway, the steps unchecked and verify run once at the end; a failing `final:` alone keeps the steps checked.
+  * **The baseline:** the checks run once on the project as it is. A failing `verify:` is tried after each step, a fail or refusal never stopping the loop, and checks every step from its first pass (else it runs at the end); a failing `final:` asks.
   * A check whose script isn't there yet is skipped, then counts as failed after a step until the script exists. The police read the script before it runs.
 * **The log:** an entry a pass in `.neon/plans/<name>/ralph.md` (step, outcome, redacted check output, review, files changed, time, tokens, lessons), the oldest dropped as it grows. Mind that folder before you commit `.neon/`.
   * **The loop's lock:** `ralph.lock` keeps a second Neon Sidekick from running, opening, revising or approving the plan while it runs. One another PC wrote is never taken over: the error names that PC and the file to delete if its run is gone.

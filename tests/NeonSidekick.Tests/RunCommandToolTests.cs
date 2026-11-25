@@ -102,10 +102,10 @@ public sealed class RunCommandToolTests : IDisposable
         // Shell police (2026-09-22): under ask, a line naming a path outside the sandbox is refused with the 👮 sentence and the asker is never called.
         _settings.ShellCommandPolicy = "ask";
         Directory.CreateDirectory(Path.Combine(_root, "sub"));
-        Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it", await Invoke(("command", @"type C:\Windows\win.ini")));
-        Assert.Equal(@"Error: outside the working directory: '..\..' — a command or a script may only name paths under it", await Invoke(("command", @"cd ..\.."), ("workdir", "sub")));   // relative to the workdir: sub\..\.. leaves the root
-        Assert.Equal("Error: outside the working directory: '~' — a command or a script may only name paths under it", await Invoke(("command", "dir ~")));
-        Assert.Equal("Error: outside the working directory: '%USERPROFILE%' — a command or a script may only name paths under it", await Invoke(("command", "dir %USERPROFILE%\\Desktop")));
+        Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("command", @"type C:\Windows\win.ini")));
+        Assert.Equal(@"Error: outside the working directory: '..\..' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("command", @"cd ..\.."), ("workdir", "sub")));   // relative to the workdir: sub\..\.. leaves the root
+        Assert.Equal("Error: outside the working directory: '~' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("command", "dir ~")));
+        Assert.Equal("Error: outside the working directory: '%USERPROFILE%' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("command", "dir %USERPROFILE%\\Desktop")));
         Assert.Empty(_asked);
         // A line under the root is put to the gate as before (the asker denies here).
         Assert.Equal("Error: the command was denied by the user: dir " + _root + "; do not retry it or work around the refusal", await Invoke(("command", "dir " + _root)));

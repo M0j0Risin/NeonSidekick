@@ -1236,6 +1236,8 @@ public class ProjectSkillsTests : IDisposable
     [InlineData("Move-Item tmp -Destination:.agents", "powershell")]
     [InlineData("Copy-Item tmp .agents -Recurse", "powershell")]
     [InlineData("cmd /c move tmp .agents", "powershell")]
+    [InlineData("Start-Process xcopy -ArgumentList '/e','/i','tmp','.agents'", "powershell")]
+    [InlineData("powershell -c \"git status; mv tmp .agents\"", "powershell")]   // 2026-11-24: read inside, still judged by every word   // 2026-11-24: read through, still judged by every word
     public void TheTripwire_AMoveOrCopyOntoAgents_IsRefused(string command, string kind)
     {
         Directory.CreateDirectory(Path.Combine(_repo, "tmp", "skills", "x"));

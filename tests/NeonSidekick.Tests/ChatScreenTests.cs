@@ -9407,7 +9407,7 @@ public partial class ChatScreenTests : IDisposable
         var work = ReadProfile(Profiles.ProfileFile(_dir, "work"));
         Assert.Equal(new[] { "dir", "echo", "git status" }, work.ShellCommandAllowed);   // normalised: lower case, sorted
         Assert.Equal("work-model", work.LlmModel);                                        // the rest of the file round-trips
-        Assert.Equal(new[] { "ECHO ", "git status" }, _settings.Current.ShellCommandAllowed);   // the source untouched
+        Assert.Equal(new[] { "echo", "git status" }, _settings.Current.ShellCommandAllowed);   // the source as it loaded: tidied (2026-11-24, CommandAllowList.Tidy), no more
         Assert.Equal(Profiles.DefaultName, _settings.ProfileName);
         Assert.Empty(_chat.Requests);
     }

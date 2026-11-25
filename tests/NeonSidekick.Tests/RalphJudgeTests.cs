@@ -370,7 +370,7 @@ public sealed class RalphJudgeTests
 
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
 
-        public ByHandRun(string words, RalphReviewer reviewer, int checkpoint = 0, string? verify = null, string requirement = "Guide", string body = ByHandBody, bool finalOnly = false, bool checksOff = false)
+        public ByHandRun(string words, RalphReviewer reviewer, int checkpoint = 0, string? verify = null, string requirement = "Guide", string body = ByHandBody, bool finalOnly = false, bool checksOff = false, RalphOutcome outcome = RalphOutcome.Done)
         {
             Files = new WorkingDirectory(() => _dir, Time);
             Host = new FakeRalphHost(Files, Time);
@@ -383,7 +383,7 @@ public sealed class RalphJudgeTests
             Before = RalphChanges.Snapshot(Files, null);
             Loop = new RalphLoop(new RalphSnapshot(Plan, _dir, "Guide", verify, null, finalOnly, "pwsh", reviewer, checkpoint, 0, 3, 60, 0, 1, Unchecked: checksOff), 3);
             Loop.BeginPass(Step, new PlanPassMeter(Time.GetUtcNow(), 0, 0));
-            Assert.Null(Loop.Record(new FinishReport(RalphOutcome.Done, "the pass did it", ["ran it"], null, [], [])));
+            Assert.Null(Loop.Record(new FinishReport(outcome, "the pass did it", ["ran it"], null, [], [])));
             Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => Files.WriteText("hello.py", "print('hi')\n", overwrite: true)).Outcome);
             Assert.Equal(FileOutcome.Ok, WriteGuard.AsApp(() => Files.WriteText(Plan, PlanSteps.WithBox(text, Step, true)!, overwrite: true)).Outcome);
         }
@@ -646,11 +646,12 @@ public sealed class RalphJudgeTests
             Assert.Equal([RalphText.NoAppCheckLine], run.Host.AppChecks);
         }
 
-        // Why none ran, as it is (2026-11-23, review #35): a check kept for the end, or checks the user turned off.
+        // Why none decided it, as it is (2026-11-23, review #35): a check that doesn't pass yet (its trial's output since 2026-11-24), or checks off.
         using (var run = new ByHandRun("Write hello", RalphReviewer.Model, verify: "python hello.py", finalOnly: true))
         {
+            run.Host.CheckResults.Enqueue(new RalphCheckResult(RalphCheckKind.Failed, 1, "NameError: x", TimeSpan.Zero));
             await run.JudgeAsync();
-            Assert.Equal([RalphText.FinalOnlyAppCheckLine], run.Host.AppChecks);
+            Assert.Equal([RalphText.PendingAppCheckLine("python hello.py", "NameError: x")], run.Host.AppChecks);
         }
 
         using (var run = new ByHandRun("Write hello", RalphReviewer.Model, verify: "python hello.py", checksOff: true))
@@ -658,6 +659,67 @@ public sealed class RalphJudgeTests
             await run.JudgeAsync();
             Assert.Equal([RalphText.ChecksOffAppCheckLine], run.Host.AppChecks);
         }
+    }
+
+    /// <summary>
+    /// A pending check (2026-11-24, the session log review) is tried after a done pass that changed files: a pass adopts it, the step counted as
+    /// checked; a fail decides nothing, said shortly, the reviewer told what it printed and that the claims are unverified; a cancel stops the pass.
+    /// </summary>
+    [Fact]
+    public async Task APendingCheck_IsTriedAfterADonePass_AdoptedOncePassing()
+    {
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Model, verify: "python hello.py", finalOnly: true))
+        {
+            run.Host.CheckResults.Enqueue(new RalphCheckResult(RalphCheckKind.Failed, 1, "NameError: x", TimeSpan.Zero));
+            var failed = await run.JudgeAsync();
+            Assert.False(failed.Adopted);
+            Assert.True(failed.Facts.Stands);   // the review decides, as before
+            Assert.Equal(RalphText.TrialFailedWord, failed.Check);
+            Assert.Contains(RalphText.TrialFailedNotice, run.Host.Notices);
+            Assert.True(run.Loop.Snapshot.FinalOnly);
+            Assert.Equal([("python hello.py", RalphText.TrialLabel("python hello.py"))], run.Host.Checks);
+            Assert.Contains(RalphText.UnverifiedClaimsLine, RalphText.ReviewRequest("Write hello", null, "did it", [], [], ["hello.py"], "", appCheck: run.Host.AppChecks[0]));
+        }
+
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Off, verify: "python hello.py", finalOnly: true))
+        {
+            var adopted = await run.JudgeAsync();
+            Assert.True(adopted.Adopted);
+            Assert.True(adopted.Facts.Stands);
+            Assert.Equal(RalphText.AdoptedWord, adopted.Check);
+            Assert.False(run.Loop.Snapshot.FinalOnly);
+            Assert.Equal("python hello.py", run.Loop.Snapshot.StepCheck);
+            Assert.Null(run.Loop.Snapshot.FinalCheck);   // no final command: nothing left for the end
+            Assert.Contains(RalphText.CheckAdoptedNotice("python hello.py"), run.Host.Notices);
+            Assert.Contains(RalphText.StepDoneNotice(1, 3, "Write hello"), run.Host.Notices);   // checked, not "unchecked"
+            Assert.Single(run.Host.Checks);
+        }
+
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Off, verify: "python hello.py", finalOnly: true))
+        {
+            run.Host.CheckResults.Enqueue(new RalphCheckResult(RalphCheckKind.Cancelled, null, "", TimeSpan.Zero));
+            var stopped = await run.JudgeAsync();
+            Assert.True(stopped.Facts.Cancelled);
+            Assert.False(stopped.Facts.Stands);
+            Assert.False(run.Ticked);
+            Assert.Contains(RalphText.CheckStoppedNotice, run.Host.Notices);
+        }
+
+        // A partial pass, and a check that already decides, run no trial.
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Off, verify: "python hello.py", finalOnly: true, outcome: RalphOutcome.Partial))
+        {
+            await run.JudgeAsync();
+            Assert.Empty(run.Host.Checks);
+        }
+
+        using (var run = new ByHandRun("Write hello", RalphReviewer.Off, verify: "python hello.py"))
+        {
+            await run.JudgeAsync();
+            Assert.Equal([("python hello.py", RalphText.CheckLabel("python hello.py"))], run.Host.Checks);
+        }
+
+        Assert.DoesNotContain(RalphText.UnverifiedClaimsLine, RalphText.ReviewRequest("x", null, "s", [], [], [], "", appCheck: RalphText.AppCheckLine("c", "passed", TimeSpan.Zero)));
+        Assert.Contains(RalphText.UnverifiedClaimsLine, RalphText.ReviewRequest("x", null, "s", [], [], [], "", appCheck: RalphText.NoAppCheckLine));
     }
 
     /// <summary>A fix plan's step that stands ticks the findings it closes in the report (2026-11-22, the session review); one that fails ticks none.</summary>

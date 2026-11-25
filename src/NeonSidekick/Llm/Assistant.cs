@@ -1720,6 +1720,9 @@ public sealed class Assistant
 
     private const string Category = "Llm";
 
+    /// <summary>The file area's category, for the project-file ask's own lines (2026-11-24): a files decision, not the model's.</summary>
+    private const string FilesCategory = "Files";
+
     private readonly IChatClient _client;
     private readonly ConversationHistory _history;
     private readonly LlmTimeouts _timeouts;
@@ -3510,12 +3513,18 @@ public sealed class Assistant
         }
 
         // The refused attempt wrote nothing (2026-11-23, #64): with nobody to ask, a pass the ask returns, or a no, the call is not journaled.
+        // The refusal's own log line was held back (WriteGuard.WatchedRefusal, 2026-11-24, the session log review: "answered an error" read as a
+        // failure while the user was being asked): written here when the model gets it, else the ask and its answer.
         if (ProjectFileAsk is not { } ask || FindTool(_tools, NeonSidekick.Llm.Tools.AskUserTool.ToolName) is null)
         {
+            DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, answer.Text));
             return answer with { NothingRan = true };
         }
 
+        string name = Path.GetFileName(refused);
+        DiagnosticLog.Debug(FilesCategory, Files.FileText.ProjectFileAskingLogLine(call.Name, name));
         bool? allowed = await ask(refused, cancellationToken).ConfigureAwait(false);
+        DiagnosticLog.Info(FilesCategory, Files.FileText.ProjectFileAnswerLogLine(name, allowed));
         if (allowed is null)
         {
             return answer with { NothingRan = true };
@@ -3678,7 +3687,10 @@ public sealed class Assistant
         // throws and the transcript shows a quiet tool's line alone.
         if (IsToolError(answer.Text))
         {
-            DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, answer.Text));
+            if (Files.WriteGuard.WatchedRefusal is null)   // a project-file refusal is logged by the watching turn (InvokeWatchedAsync)
+            {
+                DiagnosticLog.Info(Category, ToolErrorLogLine(call.Name, answer.Text));
+            }
         }
         else
         {

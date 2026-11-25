@@ -84,6 +84,6 @@ public sealed class ShellUnixTests
     {
         Assert.Equal("Error: bash is not installed (no bash found)", ShellText.ShellNotInstalled(ShellKind.Bash));
         Assert.Equal("Error: powershell is not installed (no pwsh found)", ShellText.ShellNotInstalled(ShellKind.PowerShell));
-        Assert.Equal("Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it", ShellText.OutsidePath("/etc/hosts"));
+        Assert.Equal("Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", ShellText.OutsidePath("/etc/hosts"));
     }
 }

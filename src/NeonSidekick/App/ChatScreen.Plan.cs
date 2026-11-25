@@ -1371,7 +1371,9 @@ internal sealed partial class ChatScreen
         var reviewer = offered ? loop.PassReviewer : PlanReviewer.Model;
         // The plan on disk measured (2026-11-18, known problems up front): the pass is told its structural problems before it revises.
         var measured = body is null ? null : PlanFit.Structural(body);
-        return new GapAfterTurn(PlanText.GapPassMessage(path, loop.Pass, loop.Limit, reviewer, loop.CleanStreak, measured), null);
+        // Over the 20,000 limit on disk (2026-11-24, the session log review): the pass is told to trim it, a minor fix.
+        int? overCap = body is null ? null : PlanDocument.CapChars(body);
+        return new GapAfterTurn(PlanText.GapPassMessage(path, loop.Pass, loop.Limit, reviewer, loop.CleanStreak, measured, overCap), null);
     }
 
     /// <summary>
@@ -1516,9 +1518,15 @@ internal sealed partial class ChatScreen
         {
             // A clean pass short of the streak (2026-10-17): the log every time, the notice only when another pass follows (a stop says its own).
             DiagnosticLog.Info(AppCategory, PlanText.CleanPassLogLine(loop.Pass, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, advisorAsked, cost));
+            if (loop.PassHeld)
+            {
+                // Clean, but it changed the steps where it would have ended the review (2026-11-24): one more pass checks the change.
+                DiagnosticLog.Info(AppCategory, PlanText.CleanHeldLogLine(loop.Pass));
+            }
+
             if (stop is null)
             {
-                HeadedNotice(PlanText.CleanPassNoticeLines(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor));
+                HeadedNotice(PlanText.CleanPassNoticeLines(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, loop.PassHeld));
             }
         }
 

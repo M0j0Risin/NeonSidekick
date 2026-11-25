@@ -142,8 +142,11 @@ public sealed record SidekickOptions(
 
     /// <summary>The refusal for an entry <c>--allow</c> doesn't know, naming the ones it does.</summary>
     public static string AllowUnknown(string entry) =>
-        "--allow doesn't know " + (entry.Length == 0 ? "an empty entry" : "\"" + entry + "\"") + "; use " + string.Join(", ", HeadlessAllowances.Words) + " or mcp:<server>";
+        "--allow doesn't know " + (entry.Length == 0 ? "an empty entry" : "\"" + entry + "\"") + "; use " + string.Join(", ", HeadlessAllowances.Words) + ", mcp:<server> or code:<language>";
 
+    /// <summary>The refusal for a <c>code:&lt;language&gt;</c> naming no language it knows, or none (2026-11-24). Pinned through the parse tests.</summary>
+    public static string AllowUnknownLanguage(string language) =>
+        "--allow code: doesn't know " + (language.Length == 0 ? "an empty language" : "\"" + language + "\"") + "; use " + string.Join(", ", Shell.CodeLanguages.Names);
 
     /// <summary>
     /// <c>--midi-check</c> (2026-11-12, the MIDI plan): run <see cref="App.MidiCheck"/> and exit 0/1 — the inputs listed and opened, every message
@@ -286,7 +289,7 @@ public sealed record SidekickOptions(
         "  --import-settings <zip>  add a /settings export zip's profiles and files before the start; a refused zip exits 2, one already imported is skipped\n" +
         "  --yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)\n" +
         "  --no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)\n" +
-        "  --allow <list>  --headless or --prompt only: run the calls that would ask, this run only: docker, print, ha, advisor, mcp or mcp:<server>, comma-separated\n" +
+        "  --allow <list>  --headless or --prompt only: run the calls that would ask, this run only: docker, print, ha, advisor, mcp, code, mcp:<server> or code:<language>, comma-separated\n" +
         "  --prompt <text>  one input line, then exit; implies --headless; stdout carries the reply alone; piped stdin joins it as context\n" +
         "  --prompt-file <file>  as --prompt, the whole file one message (never a command)\n" +
         "  --quiet        --headless only: stdout carries only the replies; everything else goes to stderr\n" +

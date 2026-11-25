@@ -58,9 +58,10 @@ internal interface IRalphHost
 /// pass, and left a parent the judge had ticked standing). <paramref name="PlanUnread"/> (2026-10-20, a review) says the plan could not be read whole
 /// after the pass, so nothing was put back: the log keeps the in-pass mark, whose lines are the only copy of the plan's from before the pass, for a later
 /// start to put back. <paramref name="ByHand"/> (2026-10-21) is the user's answer to the by-hand question when one was given (a Redo's note for the
-/// screen to apply); <see cref="RalphPassFacts.HandCheck"/> says what it came to.
+/// screen to apply); <see cref="RalphPassFacts.HandCheck"/> says what it came to. <paramref name="Adopted"/> (2026-11-24): the pending check passed
+/// its trial this pass, so the host stores the loop again (<see cref="RalphStart.Stored"/>) with the check adopted.
 /// </summary>
-internal sealed record RalphJudged(RalphPassFacts Facts, string Check, string? Tail, string Review, IReadOnlyList<string> Flags, string Diff, PlanStep? Target = null, PlanStep? Parent = null, bool PlanUnread = false, RalphCheckpointAnswer? ByHand = null);
+internal sealed record RalphJudged(RalphPassFacts Facts, string Check, string? Tail, string Review, IReadOnlyList<string> Flags, string Diff, PlanStep? Target = null, PlanStep? Parent = null, bool PlanUnread = false, RalphCheckpointAnswer? ByHand = null, bool Adopted = false);
 
 /// <summary>
 /// The Ralph loop's judgment of a pass (2026-10-18), shared by the screen and headless (<see cref="IRalphHost"/>): the plan read again, the boxes put
@@ -175,6 +176,7 @@ internal static class RalphJudge
         }
 
         bool split = false;
+        bool adopted = false;
         bool stands = false;
         bool checkFailed = false;
         string check = "none";
@@ -237,10 +239,43 @@ internal static class RalphJudge
                     break;
                 }
 
-                // Why no check ran, as it is (2026-11-23, review #35): checks off, a check kept for the end, or none in the plan.
+                // Why no check ran, as it is (2026-11-23, review #35): checks off, a check that doesn't pass yet, or none in the plan.
                 string appCheck = snapshot.Unchecked ? RalphText.ChecksOffAppCheckLine
                     : snapshot.FinalOnly && !string.IsNullOrWhiteSpace(snapshot.Verify) ? RalphText.FinalOnlyAppCheckLine
                     : RalphText.NoAppCheckLine;
+
+                // A pending check is tried after a done pass that changed files (2026-11-24, the session log review: a Ralph run whose step built the
+                // harness had every step after it checked by nothing but the review). A pass adopts it and counts as checked; a fail, a refusal or a check
+                // that can't run decides nothing, said shortly, its tail for the log and the reviewer; only a cancel is the user's stop.
+                if (snapshot.FinalOnly && !snapshot.Unchecked && snapshot.Verify is { Length: > 0 } pending && report?.Outcome == RalphOutcome.Done && delta.Changed.Count > 0)
+                {
+                    var trial = await host.CheckAsync(pending, ShellOf(snapshot), RalphText.TrialLabel(pending), cancellationToken).ConfigureAwait(false);
+                    if (trial is { Kind: RalphCheckKind.Cancelled } || cancellationToken.IsCancellationRequested)
+                    {
+                        SetBox(host, path, target, false);
+                        host.Notice(RalphText.CheckStoppedNotice);
+                        return new RalphJudged(new RalphPassFacts(false, false, delta.Changed.Count > 0, false, failed, true, delta.Changed, removed), trial?.Word ?? "stopped", null, review, delta.Flags, delta.Diff);
+                    }
+
+                    if (trial is { Passed: true })
+                    {
+                        loop.Adopt();
+                        adopted = true;
+                        check = RalphText.AdoptedWord;
+                        appCheck = RalphText.AppCheckLine(pending, trial.Word, trial.Elapsed);
+                        host.Notice(RalphText.CheckAdoptedNotice(pending));
+                        host.Log($"ralph: the check passes after pass {loop.Pass}, adopted: {pending}");
+                    }
+                    else
+                    {
+                        string trialTail = RalphLog.CleanTail(trial?.Tail ?? "");
+                        check = RalphText.TrialFailedWord;
+                        tail = trial?.Tail;
+                        appCheck = RalphText.PendingAppCheckLine(pending, trialTail);
+                        host.Notice(RalphText.TrialFailedNotice);
+                        host.Log($"ralph: trial of the check after pass {loop.Pass}: {trial?.Word ?? RalphText.CheckWord(RalphCheckKind.NotRun, null)}");
+                    }
+                }
                 if (snapshot.StepCheck is { } verify)
                 {
                     var result = await host.CheckAsync(verify, ShellOf(snapshot), RalphText.CheckLabel(verify), cancellationToken).ConfigureAwait(false);
@@ -385,7 +420,7 @@ internal static class RalphJudge
 
                 stands = true;
                 host.Notice(handCheck == RalphHandCheck.Passed ? RalphText.StepCheckedByYouNotice(step.Index, total, step.Text)
-                    : snapshot.StepCheck is null && snapshot.Reviewer == RalphReviewer.Off ? RalphText.StepUncheckedNotice(step.Index, total, step.Text)
+                    : snapshot.StepCheck is null && !adopted && snapshot.Reviewer == RalphReviewer.Off ? RalphText.StepUncheckedNotice(step.Index, total, step.Text)
                     : RalphText.StepDoneNotice(step.Index, total, step.Text));
                 break;
         }
@@ -399,7 +434,7 @@ internal static class RalphJudge
 
         MarkProgress(host.Files, path, requirement, time);
         return new RalphJudged(new RalphPassFacts(stands, checkFailed, delta.Changed.Count > 0, split, failed, false, delta.Changed, removed, HandCheck: handCheck, Waited: handWaited),
-            check, tail, review, delta.Flags, delta.Diff, target, parentTicked, ByHand: byHandAnswer);
+            check, tail, review, delta.Flags, delta.Diff, target, parentTicked, ByHand: byHandAnswer, Adopted: adopted);
     }
 
     /// <summary>

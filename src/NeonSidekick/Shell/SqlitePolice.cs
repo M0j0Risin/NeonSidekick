@@ -212,30 +212,6 @@ public static partial class SqlitePolice
         ScriptPaths(command, workdir, root).Where(file => file.Length > MaxScriptBytes).Select(file => Path.GetFileName(file.Full)).FirstOrDefault();
 
     /// <summary>
-    /// The programs that run the file named after them (2026-10-22, review L4: a script was found by its extension alone, so
-    /// <c>bash run</c> or <c>python job</c> ran a file no police read). Matched without case, a <c>.exe</c> off.
-    /// </summary>
-    public static readonly IReadOnlySet<string> Interpreters = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "python", "python3", "py", "pythonw", "node", "deno", "bun", "bash", "sh", "zsh", "dash", "ksh", "ruby", "perl", "php", "lua",
-        "pwsh", "powershell", "Rscript", "dotnet-script", "cscript", "wscript", "call", "source", ".",
-        // 2026-10-24 (review Q2): more shells and launchers that run a file named after them.
-        "fish", "tclsh", "wish", "awk", "gawk", "julia", "ts-node", "tsx", "csi", "scriptcs", "osascript", "groovy", "kotlin", "elixir", "swift",
-    };
-
-    /// <summary>The interpreters' options whose next word is code or a module, never a script file (<c>-c</c>, <c>-e</c>, <c>-m</c>, <c>-Command</c>).</summary>
-    private static readonly IReadOnlySet<string> InlineOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "-c", "-e", "-p", "-m", "-r", "--eval", "--print", "-Command", "-EncodedCommand", "-ec", "-enc", "/c", "/k", "--command",
-    };
-
-    /// <summary>The interpreters' options that take a value before the script (2026-10-24, review Q2: <c>python -X utf8 job</c> ran <c>job</c> unread).</summary>
-    private static readonly IReadOnlySet<string> ValueOptions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "-X", "-W", "--require", "--import", "-ExecutionPolicy", "-ep", "-WindowStyle", "-ConfigurationName", "--allow-read", "--loader",
-    };
-
-    /// <summary>
     /// The words of <paramref name="command"/> that name a script: by extension; the first word after an interpreter and its options (a value
     /// option's value stepped over, an inline-code option ending the search); and since 2026-10-24 (review Q2) a command named without an
     /// extension at a statement's start, which cmd looks up as a <c>.bat</c> or <c>.cmd</c> beside it.
@@ -272,11 +248,11 @@ public static partial class SqlitePolice
             {
                 // An interpreter option: an inline command or a module ends the search (2026-10-22, the shell-review fixes: `bash -c echo hi`
                 // read `echo` as a script); a value option's value is stepped over; any other flag leaves the script still to come.
-                if (InlineOptions.Contains(word))
+                if (ShellLaunchers.InlineOptions.Contains(word))
                 {
                     afterInterpreter = false;
                 }
-                else if (ValueOptions.Contains(word))
+                else if (ShellLaunchers.ValueOptions.Contains(word))
                 {
                     skipValue = true;
                 }
@@ -293,7 +269,7 @@ public static partial class SqlitePolice
             }
 
             string program = Path.GetFileNameWithoutExtension(word.Replace('\\', '/').Split('/')[^1]);
-            if (Interpreters.Contains(program) || Interpreters.Contains(word) || program.Equals("cmd", StringComparison.OrdinalIgnoreCase))
+            if (ShellLaunchers.Runners.Contains(program) || ShellLaunchers.Runners.Contains(word) || program.Equals("cmd", StringComparison.OrdinalIgnoreCase))
             {
                 afterInterpreter = !program.Equals("cmd", StringComparison.OrdinalIgnoreCase);
                 atStart = program.Equals("cmd", StringComparison.OrdinalIgnoreCase);   // cmd /c run: what follows is a command
@@ -352,7 +328,7 @@ public static partial class SqlitePolice
             bool runs = (afterInterpreter && !word.StartsWith('-') && !(word.StartsWith('/') && word.Length == 2))
                 || word.StartsWith("./", StringComparison.Ordinal) || word.StartsWith(".\\", StringComparison.Ordinal);
             string program = Path.GetFileNameWithoutExtension(word.Replace('\\', '/').Split('/')[^1]);
-            afterInterpreter = !runs && (Interpreters.Contains(program) || Interpreters.Contains(word));
+            afterInterpreter = !runs && (ShellLaunchers.Runners.Contains(program) || ShellLaunchers.Runners.Contains(word));
             if (!runs || word.Contains('$') || word.Contains('%'))
             {
                 continue;

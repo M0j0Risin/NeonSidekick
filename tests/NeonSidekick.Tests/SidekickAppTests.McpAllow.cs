@@ -120,6 +120,82 @@ public partial class SidekickAppTests
         Assert.Contains("[notice] " + AllowText.ChangesNothing("docker", AllowText.DockerOff), output);
     }
 
+    /// <summary>
+    /// <c>--allow code:powershell</c> (2026-11-24, the user's choice): a script of that language runs under <c>ask</c>, the start logs why, and the
+    /// profile's allow list is untouched. PowerShell is the interpreter every Windows machine has; the Mac's run is a box in the Mac to-do note.
+    /// </summary>
+    [WindowsFact]
+    public async Task Headless_AllowCodeLanguage_RunsItsScripts_AndSavesNothing()
+    {
+        ServerOn1234("llama");
+        _chat.Enqueue(FakeChatClient.Call("c1", "execute_code", new Dictionary<string, object?> { ["language"] = "powershell", ["code"] = "Write-Output 7" }));
+        _chat.EnqueueText("It said 7.");
+        var lines = CaptureLog(out var handler);
+        string output;
+        try
+        {
+            output = await Headless("run it\n", options: SidekickOptions.None with { AllowList = ["code:powershell"] });
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= handler;
+        }
+
+        Assert.Contains("[tool] execute_code -> exit 0", output);
+        Assert.DoesNotContain("[notice] ", output);
+        Assert.Empty(_settings.Current.ShellCommandAllowed);
+        lock (lines)
+        {
+            Assert.Contains(AllowText.ScriptsAllowedLogLine(["code:powershell"]), lines);
+        }
+    }
+
+    /// <summary>
+    /// A script another entry doesn't cover is refused with the sentence naming its own <c>--allow</c>, summed up by it, exit 3; a script the
+    /// police refuse is no <c>--allow</c> refusal (2026-11-24).
+    /// </summary>
+    [WindowsFact]
+    public async Task Headless_AScriptNoEntryCovers_IsRefused_NamingItsEntry_AndExits3()
+    {
+        ServerOn1234("llama");
+        _chat.Enqueue(FakeChatClient.Call("c1", "execute_code", new Dictionary<string, object?> { ["language"] = "powershell", ["code"] = "Write-Output 7" }));
+        _chat.EnqueueText("Then not.");
+
+        string output = await Headless("run it\n", options: SidekickOptions.None with { AllowList = ["code:python"] }, exitCode: SidekickApp.HeadlessRefusedExitCode);
+
+        Assert.Contains("[tool] execute_code -> " + NeonSidekick.Shell.ShellText.ScriptNotAskable("powershell", ["code:python"]), output);
+        Assert.Contains("[notice] " + AllowText.ScriptsRefusedSummary(1, ["code:powershell"]), output);
+
+        _chat.Enqueue(FakeChatClient.Call("c2", "execute_code", new Dictionary<string, object?> { ["language"] = "powershell", ["code"] = "Get-Content C:\\Windows\\win.ini" }));
+        _chat.EnqueueText("Then not.");
+        output = await Headless("read it\n", exitCode: SidekickApp.HeadlessRefusedExitCode);
+        Assert.DoesNotContain("allows it)", output);   // the police's refusal: --allow wouldn't lift it
+    }
+
+    /// <summary><c>--allow code</c> that changes nothing says so (2026-11-24): the policy off or yolo, or the language off in <i>Shell code languages</i>.</summary>
+    [Fact]
+    public async Task Headless_AnAllowCodeThatChangesNothing_IsANotice()
+    {
+        ServerOn1234("llama");
+        _settings.Update(d => d.ShellCommandPolicy = "yolo");
+        _chat.EnqueueText("Hello.");
+        string output = await Headless("hi\n", options: SidekickOptions.None with { AllowList = ["code", "code:python"] });
+        Assert.Contains("[notice] " + AllowText.ChangesNothing("code", AllowText.CodePolicyYolo), output);
+        Assert.Contains("[notice] " + AllowText.ChangesNothing("code:python", AllowText.CodePolicyYolo), output);
+
+        _settings.Update(d => d.ShellCommandPolicy = "off");
+        _chat.EnqueueText("Hello.");
+        output = await Headless("hi\n", options: SidekickOptions.None with { AllowList = ["code"] });
+        Assert.Contains("[notice] " + AllowText.ChangesNothing("code", AllowText.CodePolicyOff), output);
+
+        _settings.Update(d => { d.ShellCommandPolicy = "ask"; d.ShellCodeLanguages = ["powershell"]; });
+        _chat.EnqueueText("Hello.");
+        output = await Headless("hi\n", options: SidekickOptions.None with { AllowList = ["code:node", "code:powershell"] });
+        Assert.Contains("[notice] " + AllowText.ChangesNothing("code:node", AllowText.LanguageOff("node")), output);
+        Assert.DoesNotContain("code:powershell changes nothing", output);
+        Assert.Equal("--allow code:node changes nothing: node isn't on in Shell code languages", AllowText.ChangesNothing("code:node", AllowText.LanguageOff("node")));
+    }
+
     /// <summary>A Docker change headless: refused and counted without <c>--allow docker</c>; with it, the change goes on to the engine.</summary>
     [DockerHereFact]
     public async Task Headless_ADockerChange_IsCountedWithoutAllowDocker_AndRunsWithIt()

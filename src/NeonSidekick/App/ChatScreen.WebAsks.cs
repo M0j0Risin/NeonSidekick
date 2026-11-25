@@ -219,15 +219,19 @@ internal sealed partial class ChatScreen
         _ => true,
     };
 
-    /// <summary>The page's form of a command's approval: the whole command (the PC's View), the PC's four rows, the prefixes named.</summary>
+    /// <summary>
+    /// The page's form of a command's approval: the whole command (the PC's View), the PC's rows, the prefixes named. A row the PC hides (2026-11-24:
+    /// nothing to hold, or Always for a script) is left out, so the page draws no button for it and the broker refuses its id.
+    /// </summary>
     internal static WebAskSpec ApprovalSpec(CommandRequest request) =>
         new("approval", request.IsScript ? ShellText.ScriptApprovalTitle : ShellText.ApprovalTitle,
-            [
-                new WebChoice("deny", ShellText.DenyRow),
-                new WebChoice("once", ShellText.OnceRow),
-                new WebChoice("session", ShellText.SessionRow(request)),
-                new WebChoice("permanent", ShellText.PermanentRow(request)),
-            ],
+            CommandApprovalMenu.ChoicesFor(request).Select(choice => choice switch
+            {
+                CommandChoice.Deny => new WebChoice("deny", ShellText.DenyRow),
+                CommandChoice.Once => new WebChoice("once", ShellText.OnceRow),
+                CommandChoice.Session => new WebChoice("session", ShellText.SessionRow(request)),
+                _ => new WebChoice("permanent", ShellText.PermanentRow(request)),
+            }).ToList(),
             Lines: ShellText.WholeCommandLines(request));
 
     /// <summary>The page's answer to an approval as the gate reads it.</summary>

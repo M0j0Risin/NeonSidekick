@@ -423,7 +423,7 @@ The loaded skills with scope (`profile`, `global`, `external` or `project`), ver
 
 | Setting | What it does | Default |
 |---|---|---|
-| Reflection (auto-learn) | After enough tool calls, or a tool error the model recovered from, a background reflection writes or improves a skill. It waits while a gap review or code audit runs. | on |
+| Reflection (auto-learn) | After enough tool calls, or a tool error the model recovered from, a background reflection writes or improves a skill. A loop's passes (gap review, audit, Ralph, `/project-init`) never feed one, and it waits while a gap review or audit runs. | on |
 | Reflection reasoning | Its reasoning effort: `none`, `low`, `medium`, `high`, `xhigh`, or `profile` (the profile's level). | `none` |
 | Reflection window | Recent turns a reflection reads (1–5). | 3 |
 | Reflection min tool calls | The model's own tool calls since the last reflection that make a task worth a skill (3–20). | 4 |
@@ -543,7 +543,7 @@ The tools most profiles use, and the pane's own options.
 | Setting | What it does | Default |
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list asks first) or `yolo` (runs unasked; the shell police still checks). See [Shell guards](#shell-guards). | `off` |
-| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); the approval's *Allow … always* adds one. The list also shows this session's allows ([Pane keys](INTERFACE.md#pane-keys)). | empty |
+| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); *Allow … always* adds one, never a script. Entries that aren't commands are dropped as the profile loads; the list also shows this session's allows ([Pane keys](INTERFACE.md#pane-keys)). | empty |
 | Shell police | Refuses a command, script or process input naming a path outside the working directory or a [trusted file](TOOLS.md#shell). Turning it off asks first, and stops the forbidden strings and database rules too. | on |
 | Shell police forbidden strings | Strings the police refuses outright, ignoring case and spacing. A new profile starts with a list of harmful actions; `r` restores it, `/profile push policestrings` copies it. | the starter list |
 | Shell prefer native tools | Sends back a lone shell command one of the app's own tools covers, once a turn. | on |
@@ -557,9 +557,10 @@ The tools most profiles use, and the pane's own options.
 ##### Shell guards
 
 * **Approval (`ask`):** Deny, Allow once, Allow for this session (until the app closes or the profile changes), or Allow always; **≡ view** (`v`) shows the whole command. `--yolo` and `NEONSIDEKICK_COMMAND_POLICY` set the policy for one launch.
-* **Prefixes:** a command is allowed by its program, plus the verb where it takes one (`git status`, `npm run`). A program run by its path keeps its folder (`./build`), so `.\git.cmd` is never `git`.
-* **Programs that run another:** `env`, `nohup`, `nice`, `timeout`, `stdbuf`, `setsid` and `caffeinate` are read through (`nohup git push` is `git push`). These always ask:
-  * `sudo`, `xargs`, `watch` and the like, `eval`, and PowerShell's `Invoke-Expression` (`iex`), `Start-Process` and `Set-Alias`.
+* **Prefixes:** a command is allowed by its program, plus the verb where it takes one (`git status`); a PowerShell value or keyword never is, and `2>&1` never splits one. A program run by its path keeps its folder (`./build`), so `.\git.cmd` is never `git`.
+* **Programs that run another:** `env`, `nohup`, `nice`, `timeout`, `stdbuf`, `setsid` and `caffeinate` are read through (`nohup git push` is `git push`), as is `Start-Process` with known parameters. These always ask:
+  * `sudo`, `xargs`, `watch` and the like, `eval`, and PowerShell's `Invoke-Expression` (`iex`) and `Set-Alias`.
+  * `Start-Process` with `-Verb`, `-Credential`, a shell, a document or a URL.
   * `find -exec` or `-delete`, and docker's `--context`.
 * **Options that run a command** always ask, however written (quoted, glued, bundled as `-avze`, shortened as `--to-comm=`):
   * `tar -I`, `--to-command` or `--checkpoint-action`; `rsync -e` or `--rsync-path`; `zip -TT`; `man -P`; `less +…`; `vim -c` or `+…`.
@@ -568,11 +569,12 @@ The tools most profiles use, and the pane's own options.
   * `go test -exec`, `npm --script-shell`, `make -f` or `--eval`, `kubectl --kubeconfig`, after the verb too.
   * Any of these programs with a variable, unquoted glob, brace expansion or PowerShell splat (`@a`) among its words (`tar cf a.tar *`): a file's name can become an option.
   * Their variables (`TAR_OPTIONS`, `RSYNC_RSH`, `VIMINIT`, `LESS`…) ask as `PATH` does.
+* **Shells given a line:** `powershell -Command`, `cmd /c` and `bash`/`sh`/`zsh -c` are allowed by the commands in their line, so an allowed `powershell` never runs any line. An unknown switch or `-Command -` asks.
 * **Scripts run in the shell** are allowed one by one: `source ./a.sh` is `source ./a`, PowerShell's `. .\a.ps1` is `. ./a`, `cmd`'s `call a.bat` is `a`.
 * **PowerShell jobs** too: `Start-Job -FilePath .\a.ps1` is `start-job ./a` (`Invoke-Command`, `Start-ThreadJob`, `sajb`, `icm` alike). A `-ScriptBlock`, `{ … }`, variable or splat always asks.
 * **The working folder:** `cmd` runs a program there only by its path (`.\build.bat`), as PowerShell does, never by its bare name.
 * **Every command in the line** must be allowed: each part of a pipe or `&&` chain, and each command a substitution runs. A substitution the app can't read always asks.
-* **Path police:** refuses an absolute path (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~` or a folder variable (`%USERPROFILE%`, `$HOME`), in switches and URLs too. The transcript shows 👮.
+* **Path police:** refuses an absolute path (`C:\…`, a UNC share, `/etc/hosts`), a `..` that climbs out, `~` or a folder variable (`%USERPROFILE%`, `$HOME`, `!TEMP!`), named or read by call (`os.environ['TEMP']`, `Env:TEMP`), in switches and URLs too. The transcript shows 👮.
 * **What the police sees:** only the text written, not what runs, so a computed path gets past it. `--no-police` and `NEONSIDEKICK_SHELL_POLICE` override it; `--yolo` doesn't.
 * **Forbidden strings:** while the police is on, a line holding a listed string is refused, even under `yolo` and even when it only searches for it. Case is ignored and runs of spaces count as one (`rm -rf` catches `RM   -RF`). A tripwire, not a sandbox.
   * **The starter list:** actions that do harm anywhere, such as `reset --hard`, `push --force`, `| iex` and `.ssh/id_`; on Windows also `Format-Volume` and `diskpart`, on a Mac `diskutil erase` and `dump-keychain`.

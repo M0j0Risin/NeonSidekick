@@ -514,9 +514,9 @@ public class PlanTests : IDisposable
             // 2026-10-21: a check only a person can make is marked, on a leaf.
             + "where only a person can tell (something seen or felt in a real window, terminal or device), its words start with By hand: and say what to look for, on a step with no sub-steps), "
             + "## Files and areas, ## Risks, ## Verification. Use plain bullets outside ## Steps, never checkboxes.", PlanText.PlanShape);
-        Assert.Equal("- If you have seen how this project checks itself (its README, CI file or scripts), pass present_plan a quick command as verify (it builds, or its tests pass) and, when there is one, a slower whole check as final, such as dotnet build, npm test, cargo test or pytest -q; leave both out rather than guess.", PlanText.VerifyLine);
+        Assert.Equal("- If you have seen how this project checks itself (its README, CI file or scripts), pass present_plan a quick command as verify (it builds, or its tests pass) and, when there is one, a slower whole check as final, such as dotnet build, npm test, cargo test or pytest -q; leave both out rather than guess. The commands in a plan run under the app's path police: name no path outside the working folder (no temp, home or app-data folder); keep test output inside the project.", PlanText.VerifyLine);
         // Later on 2026-10-18 (the user's 170,000-character sample): the plan kept short, after the checks' bullet.
-        Assert.Equal("- Keep the plan short, under 20,000 characters: the decisions and how to carry them out, never how they were reached. No pass-by-pass notes, and a revision rewrites a passage rather than adding a correction beside it.", PlanText.PlanSizeLine);
+        Assert.Equal("- Keep the plan short, under 20,000 characters: the decisions and how to carry them out, never how they were reached. No pass-by-pass notes, and a revision rewrites a passage rather than adding a correction beside it. A trim to fit is a minor fix, not a gap.", PlanText.PlanSizeLine);
         string directive = PlanText.Directive("Add a guide", null, 0);
         Assert.Contains("- When no open question is left, call present_plan with the whole plan as Markdown: " + PlanText.PlanShape + "\n" + PlanText.VerifyLine + "\n" + PlanText.PlanSizeLine + "\n- Never write", directive);
         Assert.DoesNotContain("## References", directive);
@@ -529,7 +529,8 @@ public class PlanTests : IDisposable
 
         var gap = new PlanGapState(1, 5, PlanReviewer.Model);
         Assert.Contains(", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell, or one only a person can judge that does not start with By hand:), "
-            + "a step too big for one fresh session to do and check, a plan past 20,000 characters or one carrying its review's history. Wording and style are not gaps.", PlanText.GapReviewLines(gap, advisorsOffered: false));
+            + "a step too big for one fresh session to do and check, or a plan carrying its review's history. The commands in a plan run under the app's path police: name no path outside the working folder (no temp, home or app-data folder); keep test output inside the project. A command that does is a gap. "
+            + "Trimming a plan past 20,000 characters to fit is a minor fix, not a gap. Wording and style are not gaps.", PlanText.GapReviewLines(gap, advisorsOffered: false));
     }
 
     [Fact]

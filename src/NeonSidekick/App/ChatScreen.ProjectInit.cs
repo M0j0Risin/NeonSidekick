@@ -202,7 +202,7 @@ internal sealed partial class ChatScreen
             _lastTurnCancelled = false;
             _lastTurnFailed = true;
             _lastTurnFailure = TurnFailure.None;
-            bool exit = await RunMessageAsync(ProjectInitText.Message(start.Focus), images, cancellationToken, new TurnMark(typed, AppWritten: true), putBack: false).ConfigureAwait(false);
+            bool exit = await RunMessageAsync(ProjectInitText.Message(start.Focus), images, cancellationToken, new TurnMark(typed, AppWritten: true, IsPass: true), putBack: false).ConfigureAwait(false);
 
             // No answer: no draft, or a Revise with no new one (review #97); a failed write said so itself, as a refused one did (review #61).
             if (_projectInit.Answer == ProjectInitAnswer.None && !_projectInit.WriteFailed && !_projectInit.WriteRefused && !_lastTurnCancelled && !_lastTurnFailed)

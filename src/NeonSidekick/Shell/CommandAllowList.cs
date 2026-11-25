@@ -1,3 +1,6 @@
+using System.Text.RegularExpressions;
+using NeonSidekick.Diagnostics;
+
 namespace NeonSidekick.Shell;
 
 /// <summary>
@@ -9,8 +12,12 @@ namespace NeonSidekick.Shell;
 /// judgement and written back through <paramref name="persist"/> with the merged list (sorted
 /// ordinal, no duplicates — the <c>ToolsDisabled</c> shape). Thread-safe: the gate judges on the turn
 /// task, the pane answers on the watcher's.
+///
+/// <para>Since 2026-11-24 (the session log review: a profile's list held <c>$null</c>, <c>exit=$code</c>, <c>if</c> and <c>code:python</c>) it holds
+/// only what reads as a command: <see cref="IsNotACommand"/>'s shapes are never held or saved, a script (<c>code:&lt;language&gt;</c>) is held for the
+/// session but never saved (<see cref="Holdable"/>), and <see cref="Tidy"/> drops both from a saved list as the profile loads.</para>
 /// </summary>
-public sealed class CommandAllowList
+public sealed partial class CommandAllowList
 {
     private readonly object _lock = new();
     private readonly HashSet<string> _session = new(StringComparer.Ordinal);
@@ -35,8 +42,9 @@ public sealed class CommandAllowList
     public bool IsAllowed(string prefix)
     {
         ArgumentNullException.ThrowIfNull(prefix);
-        // A command no reading could name (2026-10-12) is never allowed, whatever a hand-edited list holds.
-        if (IsNeverAllowed(prefix))
+        // A command no reading could name (2026-10-12) is never allowed, whatever a hand-edited list holds; nor, since 2026-11-24, a shape
+        // no reader makes ($null, exit=$code, if), which a hand edit could still save.
+        if (IsNeverAllowed(prefix) || IsNotACommand(prefix))
         {
             return false;
         }
@@ -49,7 +57,8 @@ public sealed class CommandAllowList
             }
         }
 
-        return Contains(_permanent(), prefix);
+        // A script is held for the session only (2026-11-24, the user's call): a saved code:* entry, hand-edited or from before, allows nothing.
+        return !IsScript(prefix) && Contains(_permanent(), prefix);
     }
 
     /// <summary>Whether every prefix is allowed; true for none (a blank command has nothing to judge, and the gate never runs one).</summary>
@@ -67,41 +76,68 @@ public sealed class CommandAllowList
         return true;
     }
 
-    /// <summary>Allows the prefixes for the rest of the process.</summary>
-    public void AllowSession(IReadOnlyList<string> prefixes)
+    /// <summary>Allows the prefixes for the rest of the process; returns those it held (<see cref="Holdable"/>), for the log line.</summary>
+    public IReadOnlyList<string> AllowSession(IReadOnlyList<string> prefixes)
     {
         ArgumentNullException.ThrowIfNull(prefixes);
+        var kept = Holdable(prefixes, forSave: false);
         lock (_lock)
         {
-            foreach (string prefix in prefixes.Where(p => !IsNeverAllowed(p)))
+            foreach (string prefix in kept)
             {
-                _session.Add(prefix.Trim().ToLowerInvariant());
+                _session.Add(prefix);
             }
         }
+
+        return kept;
     }
 
     /// <summary>
     /// Allows the prefixes for the session and saves them into the profile. The session's copy keeps the prefix allowed while the saved
     /// list catches up; each one it adds is remembered as a copy (<see cref="_savedCopies"/>), so a later drop from the saved list
     /// forgets it too (2026-11-23). <see cref="_persist"/> runs outside the lock: the store's change event calls back into
-    /// <see cref="ForgetDropped"/>.
+    /// <see cref="ForgetDropped"/>. Returns the prefixes it saved (<see cref="Holdable"/> for a save: never a script), for the log line.
     /// </summary>
-    public void AllowPermanently(IReadOnlyList<string> prefixes)
+    public IReadOnlyList<string> AllowPermanently(IReadOnlyList<string> prefixes)
     {
         ArgumentNullException.ThrowIfNull(prefixes);
+        var kept = Holdable(prefixes, forSave: true);
         lock (_lock)
         {
-            foreach (string prefix in prefixes.Where(p => !IsNeverAllowed(p)))
+            foreach (string key in kept)
             {
-                string key = prefix.Trim().ToLowerInvariant();
-                if (key.Length > 0 && _session.Add(key))
+                if (_session.Add(key))
                 {
                     _savedCopies.Add(key);
                 }
             }
         }
 
-        _persist(Merge(_permanent(), prefixes));
+        _persist(Merge(_permanent(), kept));
+        return kept;
+    }
+
+    /// <summary>
+    /// The saved list tidied (2026-11-24, the session log review), once as the profile loads (the screen's <c>BindProfile</c>, the headless start):
+    /// <see cref="Merge"/>'s reading saved when it differs, which drops scripts and entries that aren't commands and writes <c>%</c>, <c>?</c> and a
+    /// backslash path verb the way the reader now does. Each dropped entry is named in one log line. A hand edit later is caught by
+    /// <see cref="IsAllowed"/>, which never matches a dropped shape.
+    /// </summary>
+    public void Tidy()
+    {
+        var saved = _permanent();
+        var tidied = Merge(saved, []);
+        if (tidied.SequenceEqual(saved, StringComparer.Ordinal))
+        {
+            return;
+        }
+
+        var dropped = saved.Select(e => e.Trim()).Where(e => e.Length > 0 && !Keeps(Normalized(e), forSave: true)).Distinct(StringComparer.Ordinal).ToList();
+        _persist(tidied);
+        if (dropped.Count > 0)
+        {
+            DiagnosticLog.Info(ShellKinds.Category, ShellText.TidiedLogLine(dropped));
+        }
     }
 
     /// <summary>
@@ -175,14 +211,99 @@ public sealed class CommandAllowList
         }
     }
 
-    /// <summary>Every allowed prefix, session and permanent, sorted ordinal, no duplicates.</summary>
-    public IReadOnlyList<string> Snapshot() => Merge(_permanent(), SessionSnapshot());
+    /// <summary>
+    /// Every allowed prefix, session and permanent, sorted ordinal, no duplicates: the saved list as <see cref="Merge"/> reads it plus the session's
+    /// as it stands (2026-11-24), so a script allowed for the session still shows while a saved <c>code:*</c> does not.
+    /// </summary>
+    public IReadOnlyList<string> Snapshot()
+    {
+        var all = new SortedSet<string>(Merge(_permanent(), []), StringComparer.Ordinal);
+        all.UnionWith(SessionSnapshot());
+        return all.ToList();
+    }
 
     /// <summary>
-    /// <see cref="CommandPrefix.Unreadable"/>: never allowed and never added, so a Session or Permanent pick on a line carrying it
-    /// allows its other prefixes and leaves the next unreadable substitution to the pane again.
+    /// <see cref="CommandPrefix.Unreadable"/> and, since 2026-11-24, <see cref="CommandPrefix.NoCommand"/>: never allowed and never added, so a
+    /// Session or Permanent pick on a line carrying one allows its other prefixes and leaves the rest to the pane again.
     /// </summary>
-    public static bool IsNeverAllowed(string prefix) => string.Equals(prefix.Trim(), CommandPrefix.Unreadable, StringComparison.OrdinalIgnoreCase);
+    public static bool IsNeverAllowed(string prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+        string trimmed = prefix.Trim();
+        return string.Equals(trimmed, CommandPrefix.Unreadable, StringComparison.OrdinalIgnoreCase) || string.Equals(trimmed, CommandPrefix.NoCommand, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// A shape no reader makes (2026-11-24, the session log review: <c>$null</c>, <c>exit=$code</c>, <c>"EXIT=$LASTEXITCODE"</c> and <c>if</c> were
+    /// saved): any <c>$</c>, <c>=</c> or quote, a number alone (<c>1</c>; <c>7z</c> is a command), a lone PowerShell keyword. Never held, saved or
+    /// matched. A <c>:</c> is no sign: <c>[system.io.file]::readalltext</c> and <c>c:/tools/x</c> are real prefixes.
+    /// </summary>
+    public static bool IsNotACommand(string prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+        string trimmed = prefix.Trim();
+        return trimmed.IndexOfAny(['$', '=', '"', '\'', '`']) >= 0 || NumberAlonePattern().IsMatch(trimmed) || CommandPrefix.Keywords.Contains(trimmed);
+    }
+
+    // A number alone: 1, 1.5, 0x1f, -2.
+    [GeneratedRegex(@"^[+-]?(?:0x[0-9a-f]+|\d+(?:\.\d+)?|\.\d+)$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex NumberAlonePattern();
+
+    /// <summary>Whether <paramref name="prefix"/> is a script's pseudo-prefix, <c>code:&lt;language&gt;</c> (<see cref="ShellText.ScriptPrefix"/>).</summary>
+    public static bool IsScript(string prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+        return prefix.Trim().StartsWith(ShellText.ScriptPrefix(""), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The prefixes a Session (<paramref name="forSave"/> false) or Always pick holds (2026-11-24): trimmed, lower case, no duplicates, never
+    /// <see cref="IsNeverAllowed"/> or <see cref="IsNotACommand"/>, and for a save never a script. The pane's rows, the Web page's buttons, the
+    /// notice and <see cref="AllowSession"/>/<see cref="AllowPermanently"/> all read this one rule, so they agree.
+    /// </summary>
+    public static IReadOnlyList<string> Holdable(IReadOnlyList<string> prefixes, bool forSave)
+    {
+        ArgumentNullException.ThrowIfNull(prefixes);
+        var kept = new List<string>();
+        foreach (string prefix in prefixes)
+        {
+            string key = prefix.Trim().ToLowerInvariant();
+            if (Keeps(key, forSave) && !kept.Contains(key, StringComparer.Ordinal))
+            {
+                kept.Add(key);
+            }
+        }
+
+        return kept;
+    }
+
+    private static bool Keeps(string key, bool forSave) => key.Length > 0 && !IsNeverAllowed(key) && !IsNotACommand(key) && !(forSave && IsScript(key));
+
+    /// <summary>
+    /// A saved entry as the reader now writes it (2026-11-24): trimmed, lower case; PowerShell's <c>%</c> and <c>foreach</c> (the alias) as
+    /// <c>foreach-object</c>, <c>?</c> as <c>where-object</c>; a two-word entry whose second word holds a <c>\</c> (the old lower-case path verb,
+    /// <c>dotnet bin\debug\x.dll</c>) with that word read as a path (<see cref="CommandPrefix.Program"/>), so an allow already given keeps working.
+    /// </summary>
+    internal static string Normalized(string entry)
+    {
+        string key = entry.Trim().ToLowerInvariant();
+        switch (key)
+        {
+            case "%":
+            case "foreach":
+                return "foreach-object";
+            case "?":
+                return "where-object";
+        }
+
+        int space = key.IndexOf(' ');
+        if (space > 0 && key.IndexOf(' ', space + 1) < 0 && key.IndexOf('\\', space) > space)
+        {
+            return key[..space] + " " + CommandPrefix.Program(key[(space + 1)..]);
+        }
+
+        return key;
+    }
 
     /// <summary>Whether the saved list holds <paramref name="prefix"/>, case-insensitive.</summary>
     public static bool Contains(IReadOnlyList<string> saved, string prefix)
@@ -200,27 +321,22 @@ public sealed class CommandAllowList
         return false;
     }
 
-    /// <summary>The saved list with <paramref name="prefixes"/> added, lower case, sorted ordinal, no duplicates — a hand-edited file's doubles go at the first save.</summary>
+    /// <summary>
+    /// The saved list with <paramref name="prefixes"/> added, lower case, sorted ordinal, no duplicates — a hand-edited file's doubles go at the first save.
+    /// Since 2026-11-24 each entry is <see cref="Normalized"/>, and scripts and entries that aren't commands are left out (<see cref="Holdable"/>'s rule
+    /// for a save), so a save, a <c>/profile push|pull allowed</c> and the list views never carry one.
+    /// </summary>
     public static List<string> Merge(IReadOnlyList<string> saved, IReadOnlyList<string> prefixes)
     {
         ArgumentNullException.ThrowIfNull(saved);
         ArgumentNullException.ThrowIfNull(prefixes);
         var set = new HashSet<string>(StringComparer.Ordinal);
-        foreach (string entry in saved)
+        foreach (string entry in saved.Concat(prefixes))
         {
-            string trimmed = entry.Trim().ToLowerInvariant();
-            if (trimmed.Length > 0 && !IsNeverAllowed(trimmed))
+            string key = Normalized(entry);
+            if (Keeps(key, forSave: true))
             {
-                set.Add(trimmed);
-            }
-        }
-
-        foreach (string prefix in prefixes)
-        {
-            string trimmed = prefix.Trim().ToLowerInvariant();
-            if (trimmed.Length > 0 && !IsNeverAllowed(trimmed))
-            {
-                set.Add(trimmed);
+                set.Add(key);
             }
         }
 

@@ -137,6 +137,9 @@ public sealed class AuditSessionTests : IDisposable
             AuditText.ShadowLogLine(4, new AuditShadowPass([0, 0, 0, 0], 2, true, false), 2, null, true, 1));
         Assert.StartsWith("code audit shadow: pass 5: no present_audit; shadow streak 2 of 2, would converge; real: ",
             AuditText.ShadowLogLine(5, new AuditShadowPass([0, 0, 0, 0], 2, false, false), 2, PlanGapStop.NoRevision, false, 0));
+        // Past its target, both counts shown at it (2026-11-24, the session log review: "3 of 2").
+        Assert.Equal("code audit shadow: pass 6: no findings; shadow streak 2 of 2, would converge; real: clean 2 of 2",
+            AuditText.ShadowLogLine(6, new AuditShadowPass([0, 0, 0, 0], 3, true, false), 2, null, true, 3));
     }
 
     private void WriteOtherLock(string report, string? host = null) =>

@@ -15,6 +15,9 @@ public enum AllowKind
     Ha,
     Advisor,
     Mcp,
+
+    /// <summary><c>execute_code</c> scripts under <i>Shell command policy</i> <c>ask</c> (2026-11-24, the user's choice): a script is never saved, so a run allows its own.</summary>
+    Code,
 }
 
 /// <summary>
@@ -38,6 +41,7 @@ public sealed class HeadlessAllowances
         new(AllowKind.Ha, "ha", HomeAssistant.HaText.Category, "Home Assistant call", "Home Assistant calls"),
         new(AllowKind.Advisor, "advisor", Advisors.AdvisorText.Category, "advisor call", "advisor calls"),
         new(AllowKind.Mcp, "mcp", McpConfigFile.Category, "MCP call", "MCP calls"),
+        new(AllowKind.Code, "code", Shell.ShellKinds.Category, "script", "scripts"),
     ];
 
     /// <summary>The words an entry may be, besides <c>mcp:&lt;server&gt;</c>, in the order the help names them.</summary>
@@ -49,8 +53,12 @@ public sealed class HeadlessAllowances
     /// <summary>The prefix of a one-server MCP entry.</summary>
     public const string McpServerPrefix = "mcp:";
 
+    /// <summary>The prefix of a one-language script entry (2026-11-24): <c>code:python</c>, the exact prefix <c>execute_code</c> asks for.</summary>
+    public const string CodeLanguagePrefix = "code:";
+
     private readonly HashSet<AllowKind> _kinds = [];
     private readonly List<string> _mcpServers = [];
+    private readonly List<string> _scriptLanguages = [];
     private readonly List<(AllowKind Kind, string? Server, string? Name)> _refusals = [];
     private IReadOnlyList<string> _known = [];
 
@@ -62,6 +70,10 @@ public sealed class HeadlessAllowances
             if (entry.StartsWith(McpServerPrefix, StringComparison.Ordinal))
             {
                 _mcpServers.Add(entry[McpServerPrefix.Length..]);
+            }
+            else if (entry.StartsWith(CodeLanguagePrefix, StringComparison.Ordinal))
+            {
+                _scriptLanguages.Add(entry[CodeLanguagePrefix.Length..]);
             }
             else if (KindOf(entry) is { } kind)
             {
@@ -93,6 +105,18 @@ public sealed class HeadlessAllowances
                 }
 
                 canonical = McpServerPrefix + server;
+            }
+            else if (entry.StartsWith(CodeLanguagePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                // One language (2026-11-24): as CodeLanguages reads it, stored by its saved word, so CODE:Python is code:python.
+                string language = entry[CodeLanguagePrefix.Length..].Trim();
+                if (!Shell.CodeLanguages.TryParse(language, out var parsed))
+                {
+                    error = SidekickOptions.AllowUnknownLanguage(language);
+                    return false;
+                }
+
+                canonical = CodeLanguagePrefix + Shell.CodeLanguages.Name(parsed);
             }
             else
             {
@@ -151,6 +175,27 @@ public sealed class HeadlessAllowances
 
     /// <summary>The <c>mcp:&lt;server&gt;</c> entries as given, for the start's never-asks notices.</summary>
     public IReadOnlyList<string> McpServers => _mcpServers;
+
+    /// <summary>The <c>code:&lt;language&gt;</c> entries' languages (2026-11-24), for the start's notices. Not <c>CodeLanguages</c>: that would hide the type.</summary>
+    public IReadOnlyList<string> ScriptLanguages => _scriptLanguages;
+
+    /// <summary>
+    /// The script prefixes the run allows (2026-11-24): every language for <c>code</c>, else each <c>code:&lt;language&gt;</c>'s, as
+    /// <see cref="Shell.ShellText.ScriptPrefix"/> writes them. The headless start puts them in the allow list's session set, never the profile.
+    /// </summary>
+    public IReadOnlyList<string> ScriptPrefixes =>
+        (Allows(AllowKind.Code) ? Shell.CodeLanguages.Names : (IEnumerable<string>)_scriptLanguages)
+        .Select(Shell.ShellText.ScriptPrefix).Distinct(StringComparer.Ordinal).ToList();
+
+    /// <summary>
+    /// A script the gate refused for want of an allow (2026-11-24, <c>CommandGate</c>'s <c>scriptRefused</c>): recorded as an <c>--allow</c>
+    /// refusal, so the closing summary names <c>--allow code:&lt;language&gt;</c>.
+    /// </summary>
+    public void ScriptRefused(string language)
+    {
+        ArgumentNullException.ThrowIfNull(language);
+        Refused(AllowKind.Code, null, language);
+    }
 
     /// <summary>Whether the run allows <paramref name="kind"/> (for MCP: every server). No log line.</summary>
     public bool Allows(AllowKind kind) => _kinds.Contains(kind);
@@ -289,6 +334,11 @@ public sealed class HeadlessAllowances
                 var names = of.Select(r => r.Name!).Distinct(StringComparer.Ordinal).ToList();
                 var servers = of.Select(r => McpText.AllowEntry(r.Server!)).Distinct(StringComparer.Ordinal).ToList();
                 lines.Add(AllowText.McpRefusedSummary(of.Count, names, servers));
+            }
+            else if (info.Kind == AllowKind.Code)
+            {
+                var entries = of.Select(r => CodeLanguagePrefix + r.Name).Distinct(StringComparer.Ordinal).ToList();
+                lines.Add(AllowText.ScriptsRefusedSummary(of.Count, entries));
             }
             else
             {

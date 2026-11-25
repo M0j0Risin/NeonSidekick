@@ -68,13 +68,13 @@ public sealed class RalphChangesTests : IDisposable
         // 2026-10-19, the fifth review: every changed and untracked file was read whole before and after every pass.
         var (files, git, root) = Repo();
         Write(root, "dirty.cs", "a\nbefore the pass\n");
-        Write(root, "bin/untouched.dll.txt", "build output\n");
+        Write(root, "assets/untouched.dll.txt", "build output\n");
         var before = RalphChanges.Snapshot(files, git);
 
         Write(root, "dirty.cs", "a\nbefore the pass\nand after\n");
         var after = RalphChanges.Snapshot(files, git, since: before);
 
-        Assert.Same(before.Files["bin/untouched.dll.txt"], after.Files["bin/untouched.dll.txt"]);   // as it was: taken over unread
+        Assert.Same(before.Files["assets/untouched.dll.txt"], after.Files["assets/untouched.dll.txt"]);   // as it was: taken over unread
         Assert.NotSame(before.Files["dirty.cs"], after.Files["dirty.cs"]);
         Assert.Equal(["dirty.cs"], RalphChanges.Delta(before, after, files, git, []).Changed);
 
@@ -300,6 +300,32 @@ public sealed class RalphChangesTests : IDisposable
         Assert.Contains("web/src/a.cs", changed.Paths.Select(p => p.Replace('\\', '/')));
         Assert.DoesNotContain(changed.Paths, p => p.Contains("node_modules", StringComparison.Ordinal));
         Assert.Throws<OperationCanceledException>(() => git.ChangedPaths("", new CancellationToken(canceled: true)));
+    }
+
+    /// <summary>
+    /// Unignored build output is no evidence (2026-11-24, the session log review: a step's changed files were its bin/ and obj/): left out at the top
+    /// (status's own entry) and inside a new project folder (the walk); a tracked file under bin/ still counts, and with no list nothing is left out.
+    /// </summary>
+    [Fact]
+    public void UntrackedBuildOutput_IsLeftOut_ATrackedFileUnderBin_StillCounts()
+    {
+        var (files, git, root) = Repo();
+        GitAccessTests.CommitFile(Path.Combine(_dir, "repo"), "tools/bin/run.cmd", "echo 1\n", "a tracked bin");
+        var before = RalphChanges.Snapshot(files, git);
+        Write(root, "bin/Debug/app.dll", "x\n");
+        Write(root, "obj/project.assets.json", "{}\n");
+        Write(root, "NewApp/Program.cs", "class P {}\n");
+        Write(root, "NewApp/bin/Debug/NewApp.dll", "x\n");
+        Write(root, "NewApp/OBJ/x.cache", "x\n");
+        Write(root, "tools/bin/run.cmd", "echo 2\n");
+
+        var delta = RalphChanges.Delta(before, RalphChanges.Snapshot(files, git), files, git, []);
+        var changed = delta.Changed.Select(p => p.Replace('\\', '/')).ToList();
+
+        Assert.Contains("NewApp/Program.cs", changed);
+        Assert.Contains("tools/bin/run.cmd", changed);
+        Assert.DoesNotContain(changed, p => p.Contains("/bin/Debug", StringComparison.Ordinal) || p.StartsWith("bin/", StringComparison.Ordinal) || p.StartsWith("obj/", StringComparison.Ordinal) || p.Contains("OBJ/", StringComparison.Ordinal));
+        Assert.Contains("bin/Debug/app.dll", git.ChangedPaths("").Paths.Select(p => p.Replace('\\', '/')));   // no list: everything, as before
     }
 
     [Fact]

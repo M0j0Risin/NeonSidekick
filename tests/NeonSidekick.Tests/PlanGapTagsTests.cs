@@ -56,9 +56,9 @@ public sealed class PlanGapTagsTests
             PlanText.ShadowLogLine(3, new GapShadowPass([1, 0, 2, 1], 0, true, true), 2, null, false, 0));
         Assert.Equal("plan gaps shadow: pass 4: 2 low; shadow streak 2 of 2, would converge; real: found something",
             PlanText.ShadowLogLine(4, new GapShadowPass([0, 0, 2, 0], 2, true, false), 2, null, false, 0));
-        Assert.Equal("plan gaps shadow: pass 5: no gaps; shadow streak 3 of 2, would converge; real: clean 1 of 2",
+        Assert.Equal("plan gaps shadow: pass 5: no gaps; shadow streak 2 of 2, would converge; real: clean 1 of 2",   // past its target, shown at it (2026-11-24)
             PlanText.ShadowLogLine(5, new GapShadowPass([0, 0, 0, 0], 3, true, false), 2, null, true, 1));
-        Assert.Equal("plan gaps shadow: pass 6: no present_plan; shadow streak 3 of 2, would converge; real: no report",
+        Assert.Equal("plan gaps shadow: pass 6: no present_plan; shadow streak 2 of 2, would converge; real: no report",
             PlanText.ShadowLogLine(6, new GapShadowPass([0, 0, 0, 0], 3, false, false), 2, PlanGapStop.NoRevision, false, 0));
         Assert.StartsWith(PlanText.ShadowLogPrefix + " pass ", PlanText.ShadowLogLine(1, GapShadow.Empty, 2, PlanGapStop.Converged, true, 2));
     }

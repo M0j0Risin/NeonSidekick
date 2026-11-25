@@ -342,11 +342,28 @@ public static class PlanText
     /// one (2026-10-17, <paramref name="cleanSoFar"/> above 0) asks for another look, not a "confirm", so the model isn't steered toward agreeing.
     /// Since 2026-11-18 (phase 3 item 2, known problems up front) the structural problems of the plan on disk follow (<paramref name="measured"/>,
     /// <see cref="PlanFit.Structural"/>; null or empty: as before), so a pass closes them in its one revision instead of hearing of them after it.
+    /// Since 2026-11-24 (the session log review) a plan on disk over <see cref="PlanSizeLimit"/> adds <see cref="OverCapOnDiskSentence"/> (<paramref name="overCapChars"/>,
+    /// its <see cref="PlanDocument.CapChars"/>; null: under), a sentence of its own since <see cref="MeasuredOnDiskSentence"/> calls each a gap.
     /// </summary>
-    public static string GapPassMessage(string path, int pass, int limit, PlanReviewer reviewer, int cleanSoFar = 0, IReadOnlyList<string>? measured = null) => (cleanSoFar > 0
+    public static string GapPassMessage(string path, int pass, int limit, PlanReviewer reviewer, int cleanSoFar = 0, IReadOnlyList<string>? measured = null, int? overCapChars = null) => (cleanSoFar > 0
         ? $"Gap review pass {PassOf(pass, limit)} for the plan in {path} (reviewer: {ReviewerWord(reviewer)}): the last pass found no gaps; review it again, close any you find, then call present_plan."
         : $"Gap review pass {PassOf(pass, limit)} for the plan in {path} (reviewer: {ReviewerWord(reviewer)}): find and close its gaps, then call present_plan.")
-        + (measured is { Count: > 0 } m ? " " + MeasuredOnDiskSentence(m) : "");
+        + (measured is { Count: > 0 } m ? " " + MeasuredOnDiskSentence(m) : "")
+        + (overCapChars is { } over && over > PlanSizeLimit ? " " + OverCapOnDiskSentence(over) : "");
+
+    /// <summary>
+    /// What a pass's message says of a plan on disk over <see cref="PlanSizeLimit"/> (2026-11-24, the session log review: a third of a 21-pass review
+    /// was spent trimming, each trim counted a gap): trimmed in this pass, a minor fix. Pinned.
+    /// </summary>
+    public static string OverCapOnDiskSentence(int chars) =>
+        $"The app counted the plan on disk at {RalphText.Count(chars)} characters, over the {RalphText.Count(PlanSizeLimit)} limit: trim it to fit in this pass, as a minor fix.";
+
+    /// <summary>
+    /// A pass's revision over <see cref="PlanSizeLimit"/>, sent back before it is saved (2026-11-24, the session log review), once a pass
+    /// (<see cref="PlanGapLoop.TakeCapRefusal"/>), gap and clean reports alike; the pass's next call is saved as it is. Pinned.
+    /// </summary>
+    public static string OverCapResult(int chars) =>
+        $"Error: nothing was saved: the body is {RalphText.Count(chars)} characters, over the {RalphText.Count(PlanSizeLimit)} limit; cut restatement and send the whole plan again in this pass.";
 
     /// <summary>
     /// What a pass's message says of the plan on disk when the app measured a structural problem in it (2026-11-18, known problems up front): each is a
@@ -381,18 +398,34 @@ public static class PlanText
     /// A clean pass that did not end the review (2026-10-17): the streak, its minor fixes, then what it checked and each minor fix (at most
     /// <see cref="PassNoticeGaps"/> lines). Said only when another pass follows. Pinned.
     /// </summary>
-    public static IReadOnlyList<string> CleanPassNoticeLines(int pass, int limit, int clean, int needed, IReadOnlyList<string> @checked, IReadOnlyList<string>? minor = null)
+    public static IReadOnlyList<string> CleanPassNoticeLines(int pass, int limit, int clean, int needed, IReadOnlyList<string> @checked, IReadOnlyList<string>? minor = null, bool held = false)
     {
         ArgumentNullException.ThrowIfNull(@checked);
         minor ??= [];
-        var lines = new List<string>(PassNoticeGaps + 2) { CleanPassNotice(pass, limit, clean, needed, minor.Count) };
+        var lines = new List<string>(PassNoticeGaps + 2) { held ? CleanHeldNotice(pass, limit) : CleanPassNotice(pass, limit, clean, needed, minor.Count) };
         lines.AddRange(ReportLines(@checked, minor));
         return lines;
     }
 
     /// <summary>The head of <see cref="CleanPassNoticeLines"/>: <c>📝 Gap review pass 2 of 5: no gaps found (1 of 2 clean passes); checking again.</c> Pinned.</summary>
     public static string CleanPassNotice(int pass, int limit, int clean, int needed, int minor = 0) =>
-        $"{Glyph} Gap review pass {PassOf(pass, limit)}: no gaps found ({N(clean)} of {CleanPassesWord(needed)}){MinorPart(minor)}; checking again.";
+        $"{Glyph} Gap review pass {PassOf(pass, limit)}: no gaps found ({N(Capped(clean, needed))} of {CleanPassesWord(needed)}){MinorPart(minor)}; checking again.";
+
+    /// <summary>
+    /// The head of a held clean pass's notice (2026-11-24, the session log review, <see cref="PlanGapLoop.PassHeld"/>): in place of
+    /// <see cref="CleanPassNoticeLines"/>' head, whose "(2 of 2 clean passes); checking again" reads as done. Pinned.
+    /// </summary>
+    public static string CleanHeldNotice(int pass, int limit) =>
+        $"{Glyph} Gap review pass {PassOf(pass, limit)}: no gaps found, but the steps changed; one more pass checks the change.";
+
+    /// <summary>The --log line after a held clean pass's <see cref="CleanPassLogLine"/> (2026-11-24), a line of its own so GapBench's clean count still finds the pass.</summary>
+    public static string CleanHeldLogLine(int pass) => $"plan gaps: pass {N(pass)} held: no gaps, but it changed the steps; one more pass checks the change";
+
+    /// <summary>
+    /// A streak shown against its target (2026-11-24): held passes (<see cref="PlanGapLoop.PassHeld"/>) take the count past the target, and
+    /// "3 of 2" reads wrong, so every place that shows one shows at most the target.
+    /// </summary>
+    internal static int Capped(int count, int needed) => Math.Min(count, needed);
 
     /// <summary>A pass limit below the clean count (2026-10-17, the user's call): said once as pass 1 begins. Pinned.</summary>
     public static string CleanLoweredNotice(int limit, int asked) =>
@@ -434,7 +467,7 @@ public static class PlanText
     public static string StoppedNote(PlanGapStop reason, int passes, int left, int clean = 0, int needed = 1) => reason switch
     {
         PlanGapStop.Limit => $"gap review stopped at its limit after {Passes(passes)}; the last pass still closed {Gaps(left)}",
-        PlanGapStop.Unconfirmed => $"no gaps in the last pass, but the limit came after {N(clean)} of {CleanPassesWord(needed)}",
+        PlanGapStop.Unconfirmed => $"no gaps in the last pass, but the limit came after {N(Capped(clean, needed))} of {CleanPassesWord(needed)}",
         _ => $"gap review stalled after {Passes(passes)}: the plan stopped changing or the same gaps came back",
     };
 
@@ -524,7 +557,7 @@ public static class PlanText
     {
         ArgumentNullException.ThrowIfNull(@checked);
         minor ??= [];
-        return $"plan gaps: pass {N(pass)} clean ({N(clean)} of {N(needed)})" + (advisorAsked ? ", an advisor asked" : "") + CostPart(cost)
+        return $"plan gaps: pass {N(pass)} clean ({N(Capped(clean, needed))} of {N(needed)})" + (advisorAsked ? ", an advisor asked" : "") + CostPart(cost)
             + (@checked.Count > 0 ? ": " + CheckedLabel + string.Join(" | ", @checked.Select(Flatten)) : "")
             + (minor.Count > 0 ? (@checked.Count > 0 ? "; " : ": ") + MinorLabel + string.Join(" | ", minor.Select(Flatten)) : "");
     }
@@ -540,8 +573,9 @@ public static class PlanText
         string[] names = ["high", "medium", "low", "untagged"];
         var counts = shadow.Severities.Select((n, i) => (n, i)).Where(c => c.n > 0).Select(c => $"{N(c.n)} {names[c.i]}").ToList();
         string did = !shadow.Called ? "no present_plan" : (counts.Count > 0 ? string.Join(", ", counts) : "no gaps") + (shadow.Serious ? " (serious)" : "");
-        string real = stop is { } reason ? StopWord(reason) : passClean ? $"clean {N(cleanCount)} of {N(needed)}" : "found something";
-        return $"{ShadowLogPrefix} pass {N(pass)}: {did}; shadow streak {N(shadow.Streak)} of {N(needed)}"
+        string real = stop is { } reason ? StopWord(reason) : passClean ? $"clean {N(Capped(cleanCount, needed))} of {N(needed)}" : "found something";
+        // The shadow streak shown at most at its target (2026-11-24, the session log review: "3 of 2"); GapShadow keeps the raw count.
+        return $"{ShadowLogPrefix} pass {N(pass)}: {did}; shadow streak {N(Capped(shadow.Streak, needed))} of {N(needed)}"
             + (shadow.Streak >= needed ? ", would converge" : "") + "; real: " + real;
     }
 
@@ -735,7 +769,7 @@ public static class PlanText
         if (session.Closing is { Pending: false } loop)
         {
             lines.Add($"  Closing gaps: pass {PassOf(loop.Pass, loop.Limit)} ({ReviewerWord(loop.Reviewer)}), {Gaps(loop.Closed)} closed so far"
-                + (loop.CleanStreak > 0 ? $", {N(loop.CleanStreak)} of {CleanPassesWord(loop.CleanPasses)}" : ""));
+                + (loop.CleanStreak > 0 ? $", {N(Capped(loop.CleanStreak, loop.CleanPasses))} of {CleanPassesWord(loop.CleanPasses)}" : ""));
         }
         else if (session.Paused is { } paused)
         {
@@ -930,7 +964,7 @@ public static class PlanText
     /// </summary>
     public const string PlanSizeLine =
         "- Keep the plan short, under 20,000 characters: the decisions and how to carry them out, never how they were reached. " +
-        "No pass-by-pass notes, and a revision rewrites a passage rather than adding a correction beside it.";
+        "No pass-by-pass notes, and a revision rewrites a passage rather than adding a correction beside it. A trim to fit is a minor fix, not a gap.";
 
     /// <summary>
     /// The check commands' bullet (2026-10-18, the Ralph loop: the app runs them after each step and at the end): only commands seen in the project,
@@ -938,7 +972,8 @@ public static class PlanText
     /// </summary>
     public const string VerifyLine =
         "- If you have seen how this project checks itself (its README, CI file or scripts), pass present_plan a quick command as verify (it builds, or its tests pass) " +
-        "and, when there is one, a slower whole check as final, such as dotnet build, npm test, cargo test or pytest -q; leave both out rather than guess.";
+        "and, when there is one, a slower whole check as final, such as dotnet build, npm test, cargo test or pytest -q; leave both out rather than guess. " +
+        "The commands in a plan run under the app's path police: name no path outside the working folder (no temp, home or app-data folder); keep test output inside the project.";
 
     /// <summary>
     /// The pictures' bullet (2026-10-18, plan reference pictures): the conversation's pictures are saved beside the plan as <paramref name="names"/>;
@@ -981,6 +1016,12 @@ public static class PlanText
     public static string GapReviewLines(PlanGapState gap, bool advisorsOffered) => GapReviewLines(gap, advisorsOffered, web: false);
 
     /// <summary>
+    /// The advisor bullets' tail (2026-11-24, the session log review: advisor passes grew the plan past the limit, and a third of the passes
+    /// trimmed it back). No count: the pass message says it when the plan on disk is over (<see cref="OverCapOnDiskSentence"/>). Pinned.
+    /// </summary>
+    public const string AdvisorFitLine = "Fold what they name in within the 20,000 limit: trim restatement to make room.";
+
+    /// <summary>
     /// <see cref="GapReviewLines(PlanGapState, bool)"/> with the web offered (2026-10-17): an API, specification or version the plan
     /// assumes without checking is a gap, and the research line sends the model to the web for it. Pinned. The clean passes (later that
     /// day): the first bullet names the count a review ends on when it is above 1, a confirming pass gets its own bullet with its focus
@@ -999,21 +1040,22 @@ public static class PlanText
         {
             PlanReviewer.Model => "- Review it yourself; do not consult advisors on this pass.",
             _ when !advisorsOffered => "- No advisors are offered: review it yourself.",
-            PlanReviewer.Advisor when confirming => "- Ask at least one advisor with " + NeonSidekick.Llm.Tools.NeonAdvisorTool.ToolName + ", the one whose role fits best, to find the gaps: put the plan's text and this pass's focus in the question, then close what they name.",
-            PlanReviewer.Advisor => "- Ask at least one advisor with " + NeonSidekick.Llm.Tools.NeonAdvisorTool.ToolName + ", the one whose role fits best, to find the gaps: put the plan's text in the question, then close what they name.",
+            PlanReviewer.Advisor when confirming => "- Ask at least one advisor with " + NeonSidekick.Llm.Tools.NeonAdvisorTool.ToolName + ", the one whose role fits best, to find the gaps: put the plan's text and this pass's focus in the question, then close what they name. " + AdvisorFitLine,
+            PlanReviewer.Advisor => "- Ask at least one advisor with " + NeonSidekick.Llm.Tools.NeonAdvisorTool.ToolName + ", the one whose role fits best, to find the gaps: put the plan's text in the question, then close what they name. " + AdvisorFitLine,
             _ => "",
         };
         return
             "- A gap review is running (pass " + PassOf(gap.Pass, gap.Limit) + "): present_plan's gaps lists what each revision closed; " +
             (gap.CleanPasses > 1 ? $"only {N(gap.CleanPasses)} passes in a row with no gaps return the plan to the user.\n" : "only a pass with no gaps returns the plan to the user.\n") +
             (confirming
-                ? $"- The last pass found no gaps; this pass checks again (clean pass {N(gap.CleanSoFar + 1)} of {N(gap.CleanPasses)}). Review the plan as if seeing it for the first time, and look hardest at {focus}, which an earlier pass may have skimmed; then the rest as usual. Report every gap you find; an empty gaps list is right only when you find none.\n"
+                ? $"- The last pass found no gaps; this pass checks again (clean pass {N(Capped(gap.CleanSoFar + 1, gap.CleanPasses))} of {N(gap.CleanPasses)}). Review the plan as if seeing it for the first time, and look hardest at {focus}, which an earlier pass may have skimmed; then the rest as usual. Report every gap you find; an empty gaps list is right only when you find none.\n"
                 : "") +
             "- Read the plan again from its file. A gap is anything that would make whoever carries the plan out guess, fail or stop to ask: a missing or out-of-order step, a choice left open" + (gap.AskUser ? GapAskException : GapOpenQuestionException) + ", " +
             (web ? "a file, API, specification, version or setting assumed but not read or looked up" : "a file, API or setting assumed but not read") +
             // The fit (later on 2026-10-18): a step one fresh pass cannot finish, a plan too long to send whole, and a Done when: only a person can judge.
             ", a step with no Done when: line, a risk with no answer, no way to verify (a Done when: only a person can judge where a command could tell, or one only a person can judge that does not start with By hand:), " +
-            "a step too big for one fresh session to do and check, a plan past 20,000 characters or one carrying its review's history. Wording and style are not gaps.\n" +
+            "a step too big for one fresh session to do and check, or a plan carrying its review's history. The commands in a plan run under the app's path police: name no path outside the working folder (no temp, home or app-data folder); keep test output inside the project. A command that does is a gap. " +
+            "Trimming a plan past 20,000 characters to fit is a minor fix, not a gap. Wording and style are not gaps.\n" +
             (web
                 ? "- Research what you need with the read-only tools, and on the web for whatever the plan rests on from outside the working directory. " + decision + "\n"
                 : "- Research what you need with the read-only tools. " + decision + "\n") +
@@ -1099,8 +1141,9 @@ public static class PlanText
     public static string CouldNotSaveResult(string detail) => $"Error: the plan could not be saved: {detail}";
 
     /// <summary>
-    /// The plan length the gap definition and <see cref="PlanSizeLine"/> name (2026-10-21): a body past it is a gap, and every gap pass's result
-    /// says the body's count against it (<see cref="SizeSentence"/>). Both strings spell it as <c>20,000</c>; a test holds them to this.
+    /// The plan length the gap definition and <see cref="PlanSizeLine"/> name (2026-10-21): since 2026-11-24 a pass's revision past it is sent back
+    /// once (<see cref="OverCapResult"/>) and a trim to fit is a minor fix, not a gap; every gap pass's result says the body's count against it
+    /// (<see cref="SizeSentence"/>, measured by <see cref="PlanDocument.CapChars"/>). Both strings spell it as <c>20,000</c>; a test holds them to this.
     /// </summary>
     public const int PlanSizeLimit = 20_000;
 
@@ -1110,6 +1153,13 @@ public static class PlanText
     /// </summary>
     public static string GapPassResult(string path, int revision, int gaps, int minor = 0, IReadOnlyList<string>? measured = null, int? bodyChars = null, string? tooLong = null) =>
         $"Revision {N(revision)} of {path} is saved with {Gaps(gaps)} closed{MinorAnd(minor)}. Reply with one short line and call no more tools; the next review pass starts by itself." + Size(bodyChars) + Measured(measured) + Length(tooLong);
+
+    /// <summary>
+    /// A clean report that would have ended the review but changed the steps (2026-11-24, the session log review, <see cref="PlanGapLoop.PassHeld"/>):
+    /// it counts clean, and one more pass reviews the change. Pinned.
+    /// </summary>
+    public static string CleanHeldResult(string path, int revision, int minor = 0, int? bodyChars = null, string? tooLong = null) =>
+        $"No gaps found in this pass of {path} (revision {N(revision)}){MinorWith(minor)}, but it changed the steps; one more pass reviews the change. Reply with one short line and call no more tools; the next review pass starts by itself." + Size(bodyChars) + Length(tooLong);
 
     /// <summary>
     /// A clean pass that does not end the review (2026-10-17): no pane, the streak said, the next pass starts by itself. Pinned. Since later on

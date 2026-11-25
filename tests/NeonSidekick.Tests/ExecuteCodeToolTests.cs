@@ -240,9 +240,9 @@ public sealed class ExecuteCodeToolTests : IDisposable
         // Shell police (2026-09-22): the script's text is read before the gate; a refusal never asks, and off it goes through to the gate.
         _settings.ShellCommandPolicy = "ask";
         _answer = CommandChoice.Deny;
-        Assert.Equal(@"Error: outside the working directory: 'C:\Users\x.txt' — a command or a script may only name paths under it", await Invoke(("language", "powershell"), ("code", "Get-Content 'C:\\Users\\x.txt'")));   // powershell: always installed
-        Assert.Equal("Error: outside the working directory: 'GetFolderPath(' — a command or a script may only name paths under it", await Invoke(("language", "powershell"), ("code", "Write-Output ([Environment]::GetFolderPath('Desktop'))")));
-        Assert.Equal("Error: outside the working directory: '$env:APPDATA' — a command or a script may only name paths under it", await Invoke(("language", "powershell"), ("code", "Get-ChildItem $env:APPDATA")));
+        Assert.Equal(@"Error: outside the working directory: 'C:\Users\x.txt' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("language", "powershell"), ("code", "Get-Content 'C:\\Users\\x.txt'")));   // powershell: always installed
+        Assert.Equal("Error: outside the working directory: 'GetFolderPath(' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("language", "powershell"), ("code", "Write-Output ([Environment]::GetFolderPath('Desktop'))")));
+        Assert.Equal("Error: outside the working directory: '$env:APPDATA' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("language", "powershell"), ("code", "Get-ChildItem $env:APPDATA")));
         Assert.Empty(_asked);
         Assert.Equal("Error: the script was denied by the user (powershell); do not retry it or work around the refusal", await Invoke(("language", "powershell"), ("code", "Get-ChildItem '" + _root + "'")));   // under the root: the gate's turn
         Assert.Single(_asked);

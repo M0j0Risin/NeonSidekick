@@ -183,14 +183,8 @@ public sealed partial class SidekickApp
             return await context.Verifier.RunAsync(command, shell, files.EnsureExists(), TimeSpan.FromSeconds(RalphStart.CheckTimeoutSeconds(effective)), cancellationToken).ConfigureAwait(false);
         }
 
-        public async Task<bool> StartAnywayAsync(string command, bool verify, CancellationToken cancellationToken)
+        public async Task<bool> StartAnywayAsync(string command, CancellationToken cancellationToken)
         {
-            if (verify)
-            {
-                await ErrorAsync(RalphText.BaselineRefusedHeadless(command)).ConfigureAwait(false);
-                return false;
-            }
-
             await NoticeAsync(RalphText.FinalBaselineFailedNotice(command)).ConfigureAwait(false);
             return true;
         }
@@ -579,7 +573,8 @@ public sealed partial class SidekickApp
 
             string? notes = RalphLog.JoinNotes(loop.TakeNotes(), step is null ? null : RalphLog.RecentNotes(log, step.Text, step.Twins > 1 ? step.Index : null));
             string directive = RalphText.Directive(path, index, total, step?.Text ?? RalphText.FinalFixStep, step?.DoneWhen, snapshot.CheckFor(step),
-                snapshot.Reviewer != RalphReviewer.Off && step is not null, canAsk: false, notes, RalphLog.LearnedText(log), finalFix: step is null, byHand: step?.ByHand ?? false);
+                snapshot.Reviewer != RalphReviewer.Off && step is not null, canAsk: false, notes, RalphLog.LearnedText(log), finalFix: step is null, byHand: step?.ByHand ?? false,
+                pending: snapshot.FinalOnly && !snapshot.Unchecked ? snapshot.Verify : null);
             ralph.Turn = new PlanTurn(directive, ralph.Tool);
             ralph.Step = step;
             ralph.Total = total;
@@ -636,6 +631,11 @@ public sealed partial class SidekickApp
         try
         {
             var judged = await RalphJudge.JudgeAsync(host, loop, ralph.Step, ralph.Total, ralph.Lines, ralph.Headed, ralph.Before!, ralph.HadPictures, turn.Cancelled, turn.Failed, ralph.Requirement, _time, cancellationToken).ConfigureAwait(false);
+            if (judged.Adopted)
+            {
+                state.Executing = RalphStart.Stored(loop.Snapshot, ralph.Requirement);   // the check adopted (2026-11-24): saved and resumed as checked
+            }
+
             stop = loop.EndPass(judged.Facts, HeadlessPlanMeter(state.RalphContext!.Session));
             if (RalphJudge.LogPass(files, loop, ralph.Step, judged, _time) is { } problem)
             {

@@ -87,6 +87,17 @@ public static class PlanDocument
         return body.TrimEnd();
     }
 
+    /// <summary>
+    /// The length <see cref="Plans.PlanText.PlanSizeLimit"/> is held to (2026-11-24, the session log review): <paramref name="body"/> without the app's
+    /// <c>## References</c> section, so the check before a save (over <see cref="SavedBody"/>, which has no app references yet) and the count after it
+    /// (over the saved body, which does) agree. <see cref="PlanFit.TooLong"/>, the inline limit, still measures the whole body: a Ralph pass inlines it all.
+    /// </summary>
+    public static int CapChars(string body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        return PlanReferences.WithoutSection(body.Replace("\r\n", "\n", StringComparison.Ordinal)).TrimEnd().Length;
+    }
+
     /// <summary>The front-matter block alone, fences included, ending in a newline.</summary>
     public static string HeaderText(PlanHeader header)
     {

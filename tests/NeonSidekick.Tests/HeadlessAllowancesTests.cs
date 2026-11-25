@@ -114,6 +114,49 @@ public class HeadlessAllowancesTests
         Assert.Equal(SidekickOptions.AllowBlankServer, error);
         Assert.False(HeadlessAllowances.TryParse("shell", entries, out error));
         Assert.Equal(SidekickOptions.AllowUnknown("shell"), error);
-        Assert.Contains("docker, print, ha, advisor, mcp or mcp:<server>", error);
+        Assert.Contains("docker, print, ha, advisor, mcp, code, mcp:<server> or code:<language>", error);
+    }
+
+    /// <summary><c>--allow code</c> and <c>code:&lt;language&gt;</c> (2026-11-24, the user's choice): every language or one, as the tool's own prefix.</summary>
+    [Fact]
+    public void Code_AllowsEveryLanguage_OrOne_AsTheToolAsksForIt()
+    {
+        var entries = new List<string>();
+        Assert.True(HeadlessAllowances.TryParse("code:python, CODE:Python ,Code", entries, out var error));
+        Assert.Null(error);
+        Assert.Equal(["code:python", "code"], entries);
+
+        Assert.False(HeadlessAllowances.TryParse("code:ruby", entries, out error));
+        Assert.Equal(SidekickOptions.AllowUnknownLanguage("ruby"), error);
+        Assert.Equal("--allow code: doesn't know \"ruby\"; use powershell, python, node", error);
+        Assert.False(HeadlessAllowances.TryParse("code: ", entries, out error));
+        Assert.Equal(SidekickOptions.AllowUnknownLanguage(""), error);
+
+        var every = new HeadlessAllowances(["code"]);
+        Assert.True(every.Allows(AllowKind.Code));
+        Assert.Equal(["code:powershell", "code:python", "code:node"], every.ScriptPrefixes);
+        var one = new HeadlessAllowances(["code:python"]);
+        Assert.False(one.Allows(AllowKind.Code));
+        Assert.Equal(["python"], one.ScriptLanguages);
+        Assert.Equal(["code:python"], one.ScriptPrefixes);
+        Assert.Empty(new HeadlessAllowances(["docker"]).ScriptPrefixes);
+    }
+
+    /// <summary>A script the gate refused headless is summed up by the entry that allows it (2026-11-24); the start's log line and the model's sentence are pinned.</summary>
+    [Fact]
+    public void ARefusedScript_IsSummedUp_ByItsLanguagesEntry()
+    {
+        var allow = new HeadlessAllowances([]);
+        allow.ScriptRefused("node");
+        allow.ScriptRefused("python");
+        allow.ScriptRefused("node");
+
+        Assert.Equal([AllowText.ScriptsRefusedSummary(3, ["code:node", "code:python"])], allow.SummaryLines());
+        Assert.Equal("1 script was refused (--allow code:python allows it)", AllowText.ScriptsRefusedSummary(1, ["code:python"]));
+        Assert.Equal("3 scripts were refused (--allow code:node,code:python allows them)", AllowText.ScriptsRefusedSummary(3, ["code:node", "code:python"]));
+        Assert.Equal("--allow code lets this run's scripts run: code:python, code:node", AllowText.ScriptsAllowedLogLine(["code:python", "code:node"]));
+        Assert.Equal(
+            "Error: the python script was not run: there was no screen to ask the user on (Shell command policy is ask; --allow code:python or --yolo would let it run). Allowed prefixes: none. Do not retry it or work around the refusal; tell the user what could not run",
+            Shell.ShellText.ScriptNotAskable("python", []));
     }
 }

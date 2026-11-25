@@ -1371,11 +1371,12 @@ internal sealed partial class ChatScreen
 
         switch (choice)
         {
+            // Only what the pick holds (2026-11-24): printed before the gate holds it, so read through the same rule (CommandAllowList.Holdable).
             case CommandChoice.Session:
-                _transcript.Notice(ShellText.SessionAllowedNotice(request.Prefixes));
+                _transcript.Notice(ShellText.SessionAllowedNotice(CommandAllowList.Holdable(request.Prefixes, forSave: false)));
                 break;
             case CommandChoice.Permanent:
-                _transcript.Notice(ShellText.PermanentAllowedNotice(request.Prefixes));
+                _transcript.Notice(ShellText.PermanentAllowedNotice(CommandAllowList.Holdable(request.Prefixes, forSave: true)));
                 break;
         }
 

@@ -58,9 +58,10 @@ public static class RalphText
     /// The pass's directive, carried by the system prompt (so a compaction cannot lose it): the step, the rules of a pass, what the app checks, the
     /// notes (this step's earlier passes, a failed check's tail) and the learned facts, cut to <see cref="DirectiveBudget"/> — notes first. Without
     /// asking tools (<paramref name="canAsk"/> false), a question goes into <c>finish_step(blocked)</c>. Pinned. A step only a person can check
-    /// (<paramref name="byHand"/>, 2026-10-21) gets <see cref="ByHandRule"/>, in the part never cut.
+    /// (<paramref name="byHand"/>, 2026-10-21) gets <see cref="ByHandRule"/>, in the part never cut. <paramref name="pending"/> (2026-11-24, the
+    /// session log review): the plan's check that doesn't pass yet, tried after the step, so the model knows the check waits on it.
     /// </summary>
-    public static string Directive(string path, int step, int steps, string stepText, string? doneWhen, string? verify, bool reviewed, bool canAsk, string? notes, string? learned, bool finalFix = false, bool byHand = false)
+    public static string Directive(string path, int step, int steps, string stepText, string? doneWhen, string? verify, bool reviewed, bool canAsk, string? notes, string? learned, bool finalFix = false, bool byHand = false, string? pending = null)
     {
         ArgumentNullException.ThrowIfNull(path);
         ArgumentNullException.ThrowIfNull(stepText);
@@ -82,7 +83,9 @@ public static class RalphText
             (finalFix
                 ? "- End the pass by calling finish_step: done (the check passes now), partial (some of it, files changed) or blocked (you cannot go on).\n"
                 : "- End the pass by calling finish_step: done (the step is finished and checked), partial (some of it, files changed), blocked (you cannot go on) or split.\n") +
-            "- " + (verify is { Length: > 0 } v ? $"After finish_step the app runs {Cmd(v)}" + (reviewed ? " and has your work reviewed" : "") + "; the step stands only if that passes." : reviewed ? "After finish_step your work is reviewed; the step stands only if the review passes." : "After finish_step the app looks at what changed.") + "\n";
+            "- " + (verify is { Length: > 0 } v ? $"After finish_step the app runs {Cmd(v)}" + (reviewed ? " and has your work reviewed" : "") + "; the step stands only if that passes."
+                : pending is { Length: > 0 } p && !finalFix ? PendingCheckRule(p, reviewed)
+                : reviewed ? "After finish_step your work is reviewed; the step stands only if the review passes." : "After finish_step the app looks at what changed.") + "\n";
         // The notes and the learned facts fenced as data (2026-10-19, the fifth review): a failed check's output is the project's (a test can print
         // anything), the notes and facts the model's own; in the system prompt unmarked, they read with its authority, and a fact rides every pass.
         string learnedHead = "Learned in earlier passes (" + DataNote + "):\n";
@@ -99,6 +102,14 @@ public static class RalphText
 
         static string Fenced(string heading, string text) => text.Length == 0 ? "" : heading + UntrustedText.Quote(text) + "\n";
     }
+
+    /// <summary>
+    /// The directive's check line while the plan's check doesn't pass yet (2026-11-24, the session log review): the app tries it after the step, it
+    /// decides nothing until it first passes, and every step after must pass it. Pinned.
+    /// </summary>
+    public static string PendingCheckRule(string command, bool reviewed) =>
+        $"After finish_step the app tries {Cmd(command)}; it doesn't decide this step until it first passes, and from then on every step must pass it" +
+        (reviewed ? ". Your work is reviewed; the step stands only if the review passes." : ".");
 
     /// <summary>
     /// The directive's rule on scratch files (2026-11-22, the session review: a pass's <c>plain_check.txt</c> outlived it and became an audit's
@@ -272,9 +283,27 @@ public static class RalphText
     /// <summary>A check's busy label while it runs.</summary>
     public static string CheckLabel(string command) => "checking: " + Cut(ShownCommand(command), 60);
 
-    /// <summary>The baseline's verify command failed: its question, on the PC and the page. Pinned.</summary>
-    public static string BaselineQuestion(string command) =>
-        $"The check {Cmd(command)} fails before the loop starts. Start anyway? The steps then go unchecked and it runs once at the end.";
+    /// <summary>
+    /// The baseline's verify command failed (2026-11-24, the session log review: the start asked, and a yes left every step unchecked by the app): no
+    /// question; the check is pending, tried after each step until it first passes. Pinned.
+    /// </summary>
+    public static string BaselinePendingNotice(string command) =>
+        $"{Glyph} The check {Cmd(command)} fails before the loop starts: the app tries it after each step, checks every step from the first time it passes, and, if it never does, runs it once at the end.";
+
+    /// <summary>A pending check's trial's busy label (2026-11-24), in the shape of <see cref="CheckLabel"/>.</summary>
+    public static string TrialLabel(string command) => "trying the check: " + Cut(ShownCommand(command), 60);
+
+    /// <summary>A pending check's trial failed (2026-11-24): said once, short; its tail goes to the log and the reviewer only. Pinned.</summary>
+    public const string TrialFailedNotice = Glyph + " The check doesn't pass yet.";
+
+    /// <summary>A pending check passed its trial (2026-11-24): it runs after every step from here. Pinned.</summary>
+    public static string CheckAdoptedNotice(string command) => $"{Glyph} The check {Cmd(command)} passes now; it runs after every step from here.";
+
+    /// <summary>The log's check word for a trial that passed, and so adopted the check (2026-11-24).</summary>
+    public const string AdoptedWord = "passed (adopted)";
+
+    /// <summary>The log's check word for a trial that failed (2026-11-24).</summary>
+    public const string TrialFailedWord = "trial failed";
 
     /// <summary>
     /// Only the baseline's final command failed (2026-10-19, the fourth review: start anyway dropped the per-step verify that had just passed, though
@@ -293,10 +322,6 @@ public static class RalphText
     /// </summary>
     public static string BaselineNotThereNotice(string command, string script) =>
         $"{Glyph} The check {Cmd(command)} runs {Flatten(script)}, which isn't there yet: it first runs after a step, and the steps stay checked.";
-
-    /// <summary>The baseline failed headless, where nobody can be asked. Pinned.</summary>
-    public static string BaselineRefusedHeadless(string command) =>
-        $"The check {Cmd(command)} fails before the loop starts, and headless cannot ask: fix the project, or take the verify line out of the plan's header.";
 
     /// <summary>
     /// Headless, before the baseline (2026-10-19, the review: the plan's commands ran unannounced): the checks the loop will run, as the plan's header
@@ -435,7 +460,7 @@ public static class RalphText
 
     /// <summary>The loop began. Pinned.</summary>
     public static string StartedNotice(string path, int steps, int cap, bool finalOnly) =>
-        $"{Glyph} Ralph loop on {path}: {Steps(steps)} to go, at most {Passes(cap)}" + (finalOnly ? "; checked once at the end." : ".");
+        $"{Glyph} Ralph loop on {path}: {Steps(steps)} to go, at most {Passes(cap)}" + (finalOnly ? "; steps checked from the first time the check passes." : ".");
 
     /// <summary>A resume. Pinned.</summary>
     public static string ResumedNotice(string path, int steps, int cap) => $"{Glyph} Ralph loop resumed on {path}: {Steps(steps)} to go, at most {Passes(cap)}.";
@@ -965,6 +990,10 @@ public static class RalphText
         if (appCheck is { Length: > 0 })
         {
             text.Append(appCheck).Append('\n');
+            if (RanNothing(appCheck))
+            {
+                text.Append(UnverifiedClaimsLine).Append('\n');
+            }
         }
 
         if (flags.Count > 0)
@@ -987,13 +1016,33 @@ public static class RalphText
     public const string NoAppCheckLine = "What the app ran itself: nothing (the plan has no check command)";
 
     /// <summary>
-    /// <see cref="AppCheckLine"/> when the plan's check runs only once every step stands (2026-11-23, review #35: the reviewer was told there was
-    /// no check command). Pinned.
+    /// <see cref="AppCheckLine"/> while the plan's check doesn't pass yet and no trial ran (2026-11-23, review #35: the reviewer was told there was
+    /// no check command; 2026-11-24: the check is pending, tried after a step that changes files). Pinned.
     /// </summary>
-    public const string FinalOnlyAppCheckLine = "What the app ran itself: nothing after this step (the plan's check runs once, after the last step)";
+    public const string FinalOnlyAppCheckLine = "What the app ran itself: nothing after this step (the plan's check doesn't pass yet; it is tried after each step that changes files)";
+
+    /// <summary>
+    /// <see cref="AppCheckLine"/> after a pending check's trial failed (2026-11-24): the reviewer reads the failing output, which decides nothing yet.
+    /// Pinned.
+    /// </summary>
+    public static string PendingAppCheckLine(string command, string tail) =>
+        $"What the app ran itself: the plan's check {Cmd(command)}, which doesn't pass yet (pending until it does)" + (tail.Length == 0 ? "" : ":\n" + Fence(tail));
 
     /// <summary><see cref="AppCheckLine"/> when the user started the run with its checks off (2026-11-23, review #35). Pinned.</summary>
     public const string ChecksOffAppCheckLine = "What the app ran itself: nothing (the user turned the checks off for this run)";
+
+    /// <summary>
+    /// The review request's line when the app ran no check that decides the step (2026-11-24, the session log review: a step whose Done when rested on
+    /// a run the model only claimed stood on the claim). Pinned.
+    /// </summary>
+    public const string UnverifiedClaimsLine =
+        "The app verified none of the runs or outputs the model reports: judge them against the changes, and fail the step if its Done when rests only on a claim the changes contradict.";
+
+    /// <summary>Whether <paramref name="appCheck"/> says the app ran nothing that decides the step: none, none yet, checks off, or a pending check's failed trial.</summary>
+    private static bool RanNothing(string appCheck) =>
+        appCheck is NoAppCheckLine or FinalOnlyAppCheckLine or ChecksOffAppCheckLine || appCheck.Contains(PendingMark, StringComparison.Ordinal);
+
+    private const string PendingMark = "which doesn't pass yet (pending until it does)";
 
     /// <summary>A by-hand step's review request (2026-10-21): the reviewer need not judge what only the user can. Pinned.</summary>
     public const string ByHandReviewLine =

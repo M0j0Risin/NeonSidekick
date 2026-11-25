@@ -896,8 +896,9 @@ public static class AuditText
         string[] names = ["critical", "high", "medium", "low"];
         var counts = shadow.Severities.Select((n, i) => (n, i)).Where(c => c.n > 0).Select(c => $"{N(c.n)} {names[c.i]}").ToList();
         string did = !shadow.Called ? "no present_audit" : (counts.Count > 0 ? string.Join(", ", counts) : "no findings") + (shadow.Serious ? " (serious)" : "");
-        string real = stop is { } reason ? StopWord(reason) : passClean ? $"clean {N(cleanCount)} of {N(needed)}" : "found something";
-        return $"{ShadowLogPrefix} pass {N(pass)}: {did}; shadow streak {N(shadow.Streak)} of {N(needed)}"
+        // Both counts shown at most at their target (2026-11-24, the session log review: "3 of 2"); the audit shadow keeps the raw count.
+        string real = stop is { } reason ? StopWord(reason) : passClean ? $"clean {N(Math.Min(cleanCount, needed))} of {N(needed)}" : "found something";
+        return $"{ShadowLogPrefix} pass {N(pass)}: {did}; shadow streak {N(Math.Min(shadow.Streak, needed))} of {N(needed)}"
             + (shadow.Streak >= needed ? ", would converge" : "") + "; real: " + real;
     }
 

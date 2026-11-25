@@ -150,8 +150,8 @@ public sealed class ProcessUnixTests : IDisposable
         Assert.Equal(session.Id + " exited 0 after 0.0 s (zsh): " + ReadLine + " — 1 new line\nhello world", await Invoke(("action", "wait"), ("session_id", session.Id), ("timeout", 30)));
 
         var typed = Start(ReadLine);
-        Assert.Equal("Error: outside the working directory: '/etc' — a command or a script may only name paths under it", await Invoke(("action", "submit"), ("session_id", typed.Id), ("data", "cd /etc")));
-        Assert.Equal("Error: outside the working directory: '..' — a command or a script may only name paths under it", await Invoke(("action", "write"), ("session_id", typed.Id), ("data", "cd ..")));
+        Assert.Equal("Error: outside the working directory: '/etc' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("action", "submit"), ("session_id", typed.Id), ("data", "cd /etc")));
+        Assert.Equal("Error: outside the working directory: '..' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", await Invoke(("action", "write"), ("session_id", typed.Id), ("data", "cd ..")));
         Assert.Equal("sent a line to " + typed.Id, await Invoke(("action", "submit"), ("session_id", typed.Id), ("data", "sub")));
         Assert.Equal(typed.Id + " exited 0 after 0.0 s (zsh): " + ReadLine + " — 1 new line\nhello sub", await Invoke(("action", "wait"), ("session_id", typed.Id), ("timeout", 30)));
         Assert.Equal(["cd /etc", "cd .."], _gate.Refusals);

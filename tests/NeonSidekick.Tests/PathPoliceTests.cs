@@ -142,6 +142,52 @@ public sealed class PathPoliceTests
     public void AScript_UnderTheRoot_Passes(string code) =>
         Assert.Null(Script(code));
 
+    // 2026-11-24, the session log review: a refused %TEMP% came back as [Environment]::GetEnvironmentVariable('TEMP'). Text only, so every OS.
+    [Theory]
+    [InlineData("[Environment]::GetEnvironmentVariable('TEMP')", "GetEnvironmentVariable('TEMP')")]
+    [InlineData("[System.Environment]::GetEnvironmentVariable(\"temp\", 'User')", "GetEnvironmentVariable(\"temp\")")]
+    [InlineData("[Environment]::GetEnvironmentVariable('TE' + 'MP')", "GetEnvironmentVariable(")]   // computed: can't be read
+    [InlineData("[Environment]::GetEnvironmentVariable($n)", "GetEnvironmentVariable(")]
+    [InlineData("os.environ.get('TEMP')", "os.environ.get('TEMP')")]
+    [InlineData("os.environ['APPDATA']", "os.environ['APPDATA']")]
+    [InlineData("os.getenv(\"USERPROFILE\")", "os.getenv(\"USERPROFILE\")")]
+    [InlineData("os.environ[key]", "os.environ[")]
+    [InlineData("const t = process.env.TEMP;", "process.env.TEMP")]
+    [InlineData("process.env['HOME']", "process.env['HOME']")]
+    [InlineData("Get-Item Env:TEMP", "Env:TEMP")]
+    [InlineData("Get-Item -Path Env:\\temp", "Env:\\temp")]
+    [InlineData("(Get-Content 'env:/LocalAppData')", "env:/LocalAppData")]
+    [InlineData("Get-Item \"Env:$n\"", "Env:$")]
+    public void AScript_ReadingAFolderVariableByCall_IsRefused(string code, string token) =>
+        Assert.Equal(token, Script(code));
+
+    [Theory]
+    [InlineData("echo !TEMP!", "!TEMP!")]   // cmd's delayed expansion
+    [InlineData("printenv TEMP", "printenv TEMP")]
+    [InlineData("printenv -0 HOME", "printenv HOME")]
+    [InlineData("printenv $n", "printenv")]
+    public void ACommand_ReadingAFolderVariableByCall_IsRefused(string command, string token) =>
+        Assert.Equal(token, Command(command));
+
+    [Theory]
+    [InlineData("[Environment]::GetEnvironmentVariable('PATH')")]
+    [InlineData("[Environment]::GetEnvironmentVariables()")]
+    [InlineData("const mode = process.env.NODE_ENV;")]
+    [InlineData("subprocess.run(['x'], env=os.environ)")]   // the whole environment: the stated limit
+    [InlineData("env = dict(os.environ)")]
+    [InlineData("env = os.environ.copy()")]
+    [InlineData("Get-ChildItem Env:")]
+    [InlineData("Get-Item Env:CI")]
+    public void AScript_ReadingAnotherVariable_OrTheWholeEnvironment_Passes(string code) =>
+        Assert.Null(Script(code));
+
+    [Theory]
+    [InlineData("printenv")]
+    [InlineData("printenv PATH")]
+    [InlineData("echo !count!")]
+    public void ACommand_ReadingAnotherVariable_OrTheWholeEnvironment_Passes(string command) =>
+        Assert.Null(Command(command));
+
     [WindowsFact]
     public void TheFirstOffender_IsTheOneNamed()
     {
@@ -251,6 +297,19 @@ public sealed class PathPoliceTests
         Assert.Equal("..", In(ShellKind.Cmd, "cd .."));   // only the bare one
     }
 
+    /// <summary>
+    /// A nested shell's cds are its own (2026-11-24, the session log review): judged from the start folder alone, cd ..\.. reached the root and
+    /// ..\x stayed inside, though from the root it is outside.
+    /// </summary>
+    [WindowsFact]
+    public void ANestedShellsCd_IsFollowed_InsideItsScript()
+    {
+        Assert.Equal(@"..\x", Command(@"powershell -c ""cd ..\..; rm ..\x""", Sub + @"\deeper"));
+        Assert.Equal(@"..\x", Command(@"cmd /c ""cd .. & cd .. & del ..\x""", Sub + @"\deeper"));
+        Assert.Null(Command(@"powershell -c ""cd sub; dir"""));
+        Assert.Null(Command(@"powershell -c ""cd ..\..; dir""", Sub + @"\deeper"));
+    }
+
     private static string? In(ShellKind shell, string text, Func<string, string?>? links = null) =>
         PathPolice.FirstOutside(text, Root, Root, isScript: false, Exists, links ?? NoLinks, shell);
 
@@ -299,6 +358,8 @@ public sealed class PathPoliceTests
     [InlineData(ShellKind.Bash, @"cd sub && echo x | cat ../x")]   // a pipe after a cd that moved runs where it moved to
     [InlineData(ShellKind.Bash, @"cd - && ls")]   // the previous folder: not followed, not home
     [InlineData(ShellKind.Bash, @"cd sub 2>/dev/null && ls")]
+    [InlineData(ShellKind.Bash, @"cd sub &>/dev/null; cat ../notes.txt")]   // &> redirects, it is no background & (2026-11-24): the cd is followed
+    [InlineData(ShellKind.PowerShell, @"cd sub 2>&1 && Get-Content ..\x")]
     [InlineData(ShellKind.Cmd, @"type nul.txt")]
     [InlineData(ShellKind.Cmd, @"7z x a.zip -oD:\Repo\Project\out")]
     [InlineData(ShellKind.Cmd, @"cl -Iinclude a.c")]
@@ -428,9 +489,11 @@ public sealed class PathPoliceTests
     {
         Assert.Equal(["USERPROFILE", "HOMEPATH", "HOMEDRIVE", "HOME", "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "TMPDIR", "PROGRAMFILES", "PROGRAMFILES(X86)", "PROGRAMW6432", "PROGRAMDATA", "ALLUSERSPROFILE", "PUBLIC", "ONEDRIVE", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "OLDPWD", "PROFILE", "PSHOME", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432", "ONEDRIVECONSUMER", "ONEDRIVECOMMERCIAL", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_RUNTIME_DIR"], PathPolice.FolderVariables);   // the last twelve since 2026-10-22 (review L5)
         Assert.Equal(["expanduser(", "Path.home(", "homedir(", "tmpdir(", "gettempdir(", "GetFolderPath(", "GetTempPath("], PathPolice.FolderCalls);
+        Assert.Equal(["GetEnvironmentVariable(", "os.environ[", "os.environ.get(", "os.getenv(", "process.env["], PathPolice.EnvironmentCalls);   // 2026-11-24
         foreach (string name in PathPolice.FolderVariables)
         {
             Assert.Equal("%" + name + "%", Command("echo %" + name + "%"));
+            Assert.Equal("!" + name + "!", Command("echo !" + name + "!"));
             if (!name.Contains('('))
             {
                 Assert.Equal("$env:" + name, Command("echo $env:" + name));

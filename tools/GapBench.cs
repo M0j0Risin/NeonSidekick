@@ -697,6 +697,9 @@ static partial class Patterns
 
     // 2026-11-18 (phase 3 item 2): a gap revision sent back for a structural problem, and a saved one whose result still names one.
     public static readonly Regex ShapeGap = Template.Build(PlanText.ShapeGapResult([Template.S1]));
+
+    /// <summary>A revision over the 20,000 limit sent back unsaved (2026-11-24, the session log review, <c>PlanText.OverCapResult</c>).</summary>
+    public static readonly Regex CapRefusal = Template.Build(PlanText.OverCapResult(Template.N1));
     public static readonly Regex MeasuredLeft = Template.Build(PlanText.MeasuredSentence([Template.S1]));
     public static readonly Regex[] PlanFollowUp = [Template.Build(PlanText.FollowUpLogLine(Template.N1, false)), Template.Build(PlanText.FollowUpLogLine(Template.N1, true))];
     public static readonly Regex AuditPass = Template.Build(AuditText.PassLogLine(Template.N1, Template.N2, 0, false, false, null), cutBefore: Template.N2, capture: Template.N1);
@@ -1285,6 +1288,9 @@ sealed class RunScore
     /// <summary>The gap revisions sent back for a structural problem (2026-11-18, known problems up front, <c>PlanText.ShapeGapResult</c>).</summary>
     public int ShapeRefusals { get; set; }
 
+    /// <summary>The revisions sent back for being over the 20,000 limit (2026-11-24, <c>PlanText.OverCapResult</c>).</summary>
+    public int CapRefusals { get; set; }
+
     /// <summary>The gap revisions saved with a structural problem still standing (2026-11-18): their result ends in <c>PlanText.MeasuredSentence</c>.</summary>
     public int MeasuredLeft { get; set; }
 
@@ -1530,6 +1536,7 @@ static class Scorer
 
         score.SecondSavesRefused = score.Calls.Count(c => c.Refused && Patterns.SecondSave.IsMatch(c.Result!));
         score.ShapeRefusals = score.Calls.Count(c => c.Refused && Patterns.ShapeGap.IsMatch(c.Result!));
+        score.CapRefusals = score.Calls.Count(c => c.Refused && Patterns.CapRefusal.IsMatch(c.Result!));
         score.MeasuredLeft = score.Calls.Count(c => c.Accepted && c.List(PresentPlanTool.GapsArgument).Count > 0 && Patterns.MeasuredLeft.IsMatch(c.Result!));
         ScoreStepChanges(score, startBody, PlanDocument.TryParse(ReadText(Path.Combine(score.Folder, "start.md"))));
 
@@ -2685,6 +2692,7 @@ static class Report
             Row(md, material.Plan(item)?.Control == true ? "gaps reported (all false)" : "other gaps reported", runs.Select(r => (double)r.OtherGaps.Count));
             Row(md, "second saves refused", runs.Select(r => (double)r.SecondSavesRefused));
             Row(md, "shape refusals", runs.Select(r => (double)r.ShapeRefusals));
+            Row(md, "over-the-limit refusals", runs.Select(r => (double)r.CapRefusals));
             Row(md, "saved with a measured problem", runs.Select(r => (double)r.MeasuredLeft));
             Row(md, "clean reports that changed steps", runs.Select(r => (double)r.CleanStepChanges));
         }
@@ -2960,6 +2968,7 @@ static class Report
         ["gapsAfterShadow"] = new JsonArray([.. r.GapsAfterShadow.Select(g => (JsonNode?)g)]),
         ["secondSavesRefused"] = r.SecondSavesRefused,
         ["shapeRefusals"] = r.ShapeRefusals,
+        ["capRefusals"] = r.CapRefusals,
         ["measuredLeft"] = r.MeasuredLeft,
         ["cleanReports"] = r.CleanReports,
         ["cleanStepChanges"] = new JsonArray([.. r.StepChanges.Select(s => (JsonNode?)new JsonObject
@@ -3522,6 +3531,8 @@ static class SelfTest
                 "[tool] present_plan -> Plan saved as revision 2. " + PlanText.MeasuredSentence(["1 step has no indented Done when line"]),
                 "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"A gap only a shape-refused call sent\"], \"markdown\": \"x\"}",
                 "[tool] present_plan -> " + PlanText.ShapeGapResult(["1 step has no indented Done when line"]),
+                "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"A gap only a cap-refused call sent\"], \"markdown\": \"x\"}",
+                "[tool] present_plan -> " + PlanText.OverCapResult(20_500),
                 "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"A gap only a refused call sent\"], \"markdown\": \"x\"}",
                 "[tool] present_plan -> " + PlanText.CheckedRequiredResult,
                 "[tool] present_plan {\"title\": \"T\", \"gaps\": [\"never reported, but refused\"], \"markdown\": \"x\"}",
@@ -3539,10 +3550,11 @@ static class SelfTest
             score.StopReason = stop?.Reason;
             Scorer.ScorePlan(score, plan, stdout);
 
-            Expect(score.Calls.Count == 6, $"present_plan calls read: {score.Calls.Count}");
-            Expect(score.Calls.Count(c => c.Refused) == 4 && score.Calls.Count(c => c.Accepted) == 2, "four refused calls, two saved");
+            Expect(score.Calls.Count == 7, $"present_plan calls read: {score.Calls.Count}");
+            Expect(score.Calls.Count(c => c.Refused) == 5 && score.Calls.Count(c => c.Accepted) == 2, "five refused calls, two saved");
             Expect(score.SecondSavesRefused == 1, $"second saves refused: {score.SecondSavesRefused} (a CheckedRequired or shape refusal isn't one)");
             Expect(score.ShapeRefusals == 1, $"shape refusals: {score.ShapeRefusals}");
+            Expect(score.CapRefusals == 1, $"over-the-limit refusals: {score.CapRefusals}");
             Expect(score.MeasuredLeft == 1, $"saved with a measured problem: {score.MeasuredLeft}");
             Expect(score.CleanReports == 0 && score.CleanStepChanges == 0, $"no clean report among gap calls: {score.CleanReports}");
             Expect(score.Calls.Count(c => !c.Parsed) == 1 && score.Flags.Any(f => f.Contains("unparsed", StringComparison.Ordinal)), "the broken call is kept as unparsed");

@@ -24,6 +24,15 @@ public sealed class PathPoliceUnixTests
 
     private static string? Script(string text) => PathPolice.FirstOutside(text, Root, Root, isScript: true, Exists, NoLinks);
 
+    /// <summary>The Unix twin of <c>PathPoliceTests.ANestedShellsCd_IsFollowed_InsideItsScript</c> (2026-11-24): bash's and zsh's <c>-c</c>.</summary>
+    [UnixFact]
+    public void ANestedShellsCd_IsFollowed_InsideItsScript()
+    {
+        Assert.Equal("../x", PathPolice.FirstOutside("bash -c 'cd ..; rm ../x'", Root, Sub, isScript: false, Exists, NoLinks, ShellKind.Zsh));
+        Assert.Null(Command("zsh -c 'cd sub; ls'"));
+        Assert.Null(PathPolice.FirstOutside("bash -c 'cd ..; ls'", Root, Sub, isScript: false, Exists, NoLinks, ShellKind.Bash));
+    }
+
     [UnixTheory]
     [InlineData("cat /etc/passwd", "/etc/passwd")]
     [InlineData("cat /Users/other/secret", "/Users/other/secret")]

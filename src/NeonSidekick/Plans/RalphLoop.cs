@@ -100,8 +100,8 @@ public sealed record FinishReport(RalphOutcome Outcome, string Summary, IReadOnl
 
 /// <summary>
 /// What a Ralph loop is fixed to at its start (2026-10-18, snapshotted so a settings change or a rewrite of the plan mid-run changes nothing): the
-/// plan, the working directory's root, the checks (<paramref name="FinalOnly"/>: per-step checks skipped after a failing baseline the user started
-/// anyway), the shell, the reviewer, the checkpoint, the cap setting, the passes a step may take, the check timeout, the token budget, and the pass
+/// plan, the working directory's root, the checks (<paramref name="FinalOnly"/>: the step check is pending, since 2026-11-24 — it failed before the
+/// loop, is tried after each step and adopted the first time it passes, <see cref="RalphLoop.Adopt"/>; never passing, it runs once at the end), the shell, the reviewer, the checkpoint, the cap setting, the passes a step may take, the check timeout, the token budget, and the pass
 /// number to count on from (<see cref="RalphLog.PassCount"/> + 1 on a resume). <paramref name="Unchecked"/> (2026-10-19, the second review: a start
 /// under <c>Shell command policy</c> off saved the plan's checks as none, so a resume after the policy came back ran none either) is this run's
 /// "the steps go unchecked": no check runs, while <paramref name="Verify"/> and <paramref name="Final"/> keep the approved commands for the stored
@@ -229,7 +229,13 @@ public sealed class RalphLoop
         Pass = Math.Max(0, snapshot.StartPass - 1);
     }
 
-    public RalphSnapshot Snapshot { get; }
+    public RalphSnapshot Snapshot { get; private set; }
+
+    /// <summary>
+    /// The pending step check passed its trial (2026-11-24, the session log review): it runs after every step from here. <see cref="Cap"/> stays as
+    /// computed, the spare pass for a final fix going unused when there is no final command.
+    /// </summary>
+    public void Adopt() => Snapshot = Snapshot with { FinalOnly = false };
 
     /// <summary>The most passes this run may take.</summary>
     public int Cap { get; private set; }

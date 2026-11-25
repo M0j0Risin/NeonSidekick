@@ -341,7 +341,9 @@ public static partial class ConversationCompactor
     /// message, the opening and pending call pairs seeded inside it (kept in place, as <see cref="Split"/> keeps them),
     /// the earlier iterations the progress note replaces, and the last iteration — the last assistant message with a
     /// call and everything after it: its results and carrier, which the model has not read yet.
-    /// <see cref="Transcript"/> is everything ahead of the last iteration, in order: what the summariser reads.
+    /// <see cref="Transcript"/> is everything ahead of the last iteration, in order, but the opening call pairs: what the summariser reads. Those
+    /// pairs are put back as they are, in this turn or (carried across an earlier summary) in <see cref="Before"/>, so the summary never retells
+    /// them (2026-11-24, the session log review: a Ralph pass's summary restated its recall_memory and read_file openings).
     /// </summary>
     public sealed record TurnPlan(IReadOnlyList<ChatMessage> Before, ChatMessage Start, IReadOnlyList<ChatMessage> Opening, IReadOnlyList<ChatMessage> Earlier, IReadOnlyList<ChatMessage> Last, IReadOnlyList<ChatMessage> Transcript)
     {
@@ -401,7 +403,25 @@ public static partial class ConversationCompactor
             earlier.Add(messages[i]);
         }
 
-        return new TurnPlan([.. messages.Take(start)], messages[start], opening, earlier, [.. messages.Skip(last)], [.. messages.Take(last)]);
+        return new TurnPlan([.. messages.Take(start)], messages[start], opening, earlier, [.. messages.Skip(last)], WithoutOpeningPairs(messages, last));
+    }
+
+    /// <summary>The first <paramref name="count"/> messages without the opening call pairs (<see cref="Split"/>'s test: the call and its result).</summary>
+    private static List<ChatMessage> WithoutOpeningPairs(IReadOnlyList<ChatMessage> messages, int count)
+    {
+        var kept = new List<ChatMessage>(count);
+        for (int i = 0; i < count; i++)
+        {
+            if (OpeningCallId(messages[i]) is { } callId && i + 1 < count && HasResult(messages[i + 1], callId))
+            {
+                i++;
+                continue;
+            }
+
+            kept.Add(messages[i]);
+        }
+
+        return kept;
     }
 
     /// <summary>

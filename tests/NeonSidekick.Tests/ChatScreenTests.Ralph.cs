@@ -172,11 +172,15 @@ public partial class ChatScreenTests
         Assert.Equal(PlanStatus.Incomplete, PlanFileStatus);
     }
 
+    /// <summary>
+    /// A failing baseline asks nothing (2026-11-24, the session log review): the check is pending, tried only after a step that changes files, so with
+    /// none it runs once at the end.
+    /// </summary>
     [Fact]
-    public async Task Ralph_AFailingBaseline_StartAnyway_LeavesTheStepsUnchecked_AndChecksOnceAtTheEnd()
+    public async Task Ralph_AFailingBaseline_IsPending_AndWithNoStepChangingFiles_ChecksOnceAtTheEnd()
     {
         RalphPlan();
-        RalphFixture(Line("/plan ralph add-guide"), Yes, Yes, Line("/exit"));
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
         _ralphVerifier.Fail("error CS0103: the name 'x' does not exist");
         RalphPass("1");
         RalphPass("2");
@@ -185,17 +189,70 @@ public partial class ChatScreenTests
 
         Assert.Equal([RalphVerify, RalphVerify], _ralphVerifier.Commands);   // the baseline, then once as the final check
         Assert.Contains("error CS0103", output);
+        Assert.Contains(RalphText.BaselinePendingNotice(RalphVerify), output);
         Assert.Contains(RalphText.StartedNotice(PlanPath, 2, 7, finalOnly: true), output);   // three a step and one for the final check's fix
         Assert.Contains(RalphText.StepUncheckedNotice(1, 2, "One"), output);
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
 
+    /// <summary>
+    /// The check adopted on the step that makes it pass (2026-11-24, the session log review: a step built the harness and no later step was checked by
+    /// the app): tried after step 1, adopted, and from then on it decides, a failure on step 2 failing that step.
+    /// </summary>
     [Fact]
-    public async Task Ralph_AFailingBaseline_No_StartsNothing_AndLetsTheLockGo()
+    public async Task Ralph_APendingCheck_IsAdoptedOncePassing_AndThenFailsAStep()
     {
         RalphPlan();
-        RalphFixture(Line("/plan ralph add-guide"), Yes, No, Line("/exit"));
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
+        string folder = Path.Combine(_settings.ProfileDirectory, Files.WorkingDirectory.DefaultFolderName);
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (update == 0 && request % 2 == 0)
+            {
+                File.WriteAllText(Path.Combine(folder, "pass" + request.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".txt"), "x");   // each pass changes a file
+            }
+
+            return Task.CompletedTask;
+        };
+        _ralphVerifier.Fail("no harness yet").Pass().Fail("error CS1002: ; expected");
+        RalphPass("1");
+        RalphPass("2");
+        RalphPass("3");
+
+        string output = await RunAsync();
+
+        // The baseline, the trial after step 1 (adopted), step 2's check (failed), step 2's again; nothing left for the end.
+        Assert.Equal([RalphVerify, RalphVerify, RalphVerify, RalphVerify], _ralphVerifier.Commands);
+        Assert.Contains(RalphText.BaselinePendingNotice(RalphVerify), output);
+        Assert.Contains(RalphText.CheckAdoptedNotice(RalphVerify), output);
+        Assert.Contains(RalphText.CheckFailedNotice(RalphVerify), output);
+        Assert.Contains(RalphText.StepDoneNotice(1, 2, "One"), output);
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    /// <summary>A failing verify with a failing final asks nothing (2026-11-24): the final isn't baselined, since both fail for want of a harness.</summary>
+    [Fact]
+    public async Task Ralph_AFailingVerify_AndFinal_AskNothing_AndThePendingCheckWaits()
+    {
+        RalphPlan(final: "dotnet test");
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/exit"));
         _ralphVerifier.Fail();
+        RalphPass("1");
+        RalphPass("2");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain(RalphText.FinalBaselineQuestion("dotnet test"), output);
+        Assert.Equal([RalphVerify, "dotnet test"], _ralphVerifier.Commands);   // the verify's baseline, then the final check at the end
+        Assert.Equal(PlanStatus.Done, PlanFileStatus);
+    }
+
+    [Fact]
+    public async Task Ralph_AFailingFinalBaseline_No_StartsNothing_AndLetsTheLockGo()
+    {
+        RalphPlan(final: "dotnet test");
+        RalphFixture(Line("/plan ralph add-guide"), Yes, No, Line("/exit"));
+        _ralphVerifier.Pass().Fail();
 
         string output = await RunAsync();
 
@@ -311,7 +368,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(RalphText.BaselineNotThereNotice(RalphScriptCheck, "hello.py"), output);
-        Assert.DoesNotContain(RalphText.BaselineQuestion(RalphScriptCheck), output);
+        Assert.DoesNotContain(RalphText.BaselinePendingNotice(RalphScriptCheck), output);
         Assert.Equal([RalphScriptCheck, RalphScriptCheck], _ralphVerifier.Commands);   // the step checks run as the line would, police or not
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
@@ -568,9 +625,10 @@ public partial class ChatScreenTests
     [Fact]
     public async Task Ralph_FinalOnly_PausedBeforeTheFinalCheck_ResumesIntoIt()
     {
-        // 2026-10-19, the review: the resume read Final alone, and under final-only (start anyway) the verify command is the final check.
+        // 2026-10-19, the review: the resume read Final alone, and under final-only the verify command is the final check. Since 2026-11-24 the
+        // resume's baseline runs the pending check again, and its pass adopts it: the step it ran after stands, so nothing is left for the end.
         RalphPlan("# Guide\n\n## Steps\n- [ ] One\n  Done when: one.md exists\n");
-        RalphFixture(Line("/plan ralph add-guide"), Yes, Yes, Line("/plan ralph"), Line("/exit"));
+        RalphFixture(Line("/plan ralph add-guide"), Yes, Line("/plan ralph"), Line("/exit"));
         _ralphVerifier.Fail("error CS0103: the name 'x' does not exist");
         _chat.BeforeUpdateOf = async (request, update, ct) =>
         {
@@ -586,7 +644,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(RalphText.StopNotice(RalphStop.Paused, PlanPath, 1, 1), output);
-        Assert.Equal([RalphVerify, RalphVerify], _ralphVerifier.Commands);    // the baseline, then the final check on the resume
+        Assert.Equal([RalphVerify, RalphVerify], _ralphVerifier.Commands);    // the baseline, then the resume's, which adopts it
         Assert.Equal(PlanStatus.Done, PlanFileStatus);
     }
 

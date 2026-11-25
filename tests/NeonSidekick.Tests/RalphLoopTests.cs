@@ -271,13 +271,21 @@ public sealed class RalphLoopTests
     }
 
     [Fact]
-    public void FinalOnly_SkipsTheStepCheck_AndRunsVerifyAtTheEnd()
+    public void FinalOnly_SkipsTheStepCheck_AndRunsVerifyAtTheEnd_UntilAdopted()
     {
         var snapshot = Snapshot(verify: "dotnet build", finalOnly: true);
         Assert.Null(snapshot.StepCheck);
         Assert.Equal("dotnet build", snapshot.FinalCheck);
         Assert.Equal("dotnet test", Snapshot(final: "dotnet test").FinalCheck);
         Assert.Null(Snapshot().FinalCheck);
+
+        // Adopted (2026-11-24): the step check from here, nothing left for the end, the cap as it was.
+        var loop = new RalphLoop(snapshot, 2);
+        int cap = loop.Cap;
+        loop.Adopt();
+        Assert.Equal("dotnet build", loop.Snapshot.StepCheck);
+        Assert.Null(loop.Snapshot.FinalCheck);
+        Assert.Equal(cap, loop.Cap);
     }
 
     [Fact]

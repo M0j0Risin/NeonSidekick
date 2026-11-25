@@ -479,9 +479,11 @@ public class PlanGapLoopTests : IDisposable
         // Multi-byte punctuation: more bytes on disk than characters in the body.
         string over = "# Guide\n\n## Context\n\n" + new string('—', PlanText.PlanSizeLimit) + "\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: the link check passes\n";
 
+        // Over the limit, the first call of a pass is sent back unsaved (2026-11-24, PlanText.OverCapResult); the second is saved and says the count.
+        int body = BodyChars(over);
+        Assert.Equal(PlanText.OverCapResult(body), Assert.IsType<string>(await _tool.InvokeAsync(Args("Guide", over, new[] { "Add context" }))));
         string text = Assert.IsType<string>(await _tool.InvokeAsync(Args("Guide", over, new[] { "Add context" })));
 
-        int body = BodyChars(over);
         Assert.Contains(PlanText.SizeSentence(body), text);
         Assert.Contains("over the 20,000 limit", text);
         Assert.Equal(PlanDocument.Body(System.IO.File.ReadAllText(System.IO.Path.Combine(_files.Root, _session.Path!))).Length, body);

@@ -1003,7 +1003,7 @@ public class ConversationCompactorTests
         Assert.Equal("c1", Assert.Single(plan.Earlier[0].Contents.OfType<FunctionCallContent>()).CallId);
         Assert.Equal("c2", Assert.Single(plan.Last[0].Contents.OfType<FunctionCallContent>()).CallId);
         Assert.Equal(2, plan.Last.Count);
-        Assert.Equal(7, plan.Transcript.Count);                                          // everything ahead of c2
+        Assert.Equal(5, plan.Transcript.Count);                                          // everything ahead of c2 but the opening pair
         Assert.True(plan.HasEarlierIterations);
 
         // One iteration only: nothing earlier. No call of the model's, or no turn: no plan.
@@ -1011,6 +1011,52 @@ public class ConversationCompactorTests
         Assert.Null(ConversationCompactor.SplitTurn([User("go"), Assistant("hi")]));
         Assert.Null(ConversationCompactor.SplitTurn([User("go"), Call(NeonSidekick.Llm.Assistant.OpeningCwdCallId, "cwd"), Result(NeonSidekick.Llm.Assistant.OpeningCwdCallId, "D:")]));
         Assert.Null(ConversationCompactor.SplitTurn([]));
+    }
+
+    /// <summary>
+    /// The summariser never reads the opening calls (2026-11-24, the session log review: a Ralph pass's summary restated its recall_memory
+    /// opening): left out of the transcript whether seeded in this turn or carried in Before from an earlier summary, and put back as they are.
+    /// </summary>
+    [Fact]
+    public void SplitTurn_TheTranscript_LeavesOutTheOpeningPairs_InTheTurn()
+    {
+        string memory = NeonSidekick.Llm.Assistant.OpeningMemoryCallId;
+        var messages = new List<ChatMessage>
+        {
+            User("go"),
+            Call(memory, "recall_memory"), Result(memory, "the user likes tabs"),
+            Call("c1", "read_file"), Result("c1", Long(300)),
+            Call("c2", "read_file"), Result("c2", Long(300)),
+        };
+
+        var plan = ConversationCompactor.SplitTurn(messages)!;
+
+        Assert.DoesNotContain(plan.Transcript, m => m.Contents.OfType<FunctionResultContent>().Any(r => r.CallId == memory));
+        Assert.DoesNotContain(plan.Transcript, m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == memory));
+        Assert.Equal(["user", "assistant", "tool"], Roles(plan.Transcript));
+        Assert.Same(messages[1], ConversationCompactor.SummarisedTurn("s", plan)[1]);   // put back in place
+    }
+
+    [Fact]
+    public void SplitTurn_TheTranscript_LeavesOutTheOpeningPairs_CarriedInBefore()
+    {
+        string memory = NeonSidekick.Llm.Assistant.OpeningMemoryCallId;
+        var messages = new List<ChatMessage>
+        {
+            User("summary of earlier turns"),
+            Call(memory, "recall_memory"), Result(memory, "the user likes tabs"),
+            Assistant("ok"),
+            User("go"),
+            Call("c1", "read_file"), Result("c1", Long(300)),
+            Call("c2", "read_file"), Result("c2", Long(300)),
+        };
+
+        var plan = ConversationCompactor.SplitTurn(messages)!;
+
+        Assert.Equal(4, plan.Before.Count);                                              // Before kept whole
+        Assert.Equal(["user", "assistant", "user", "assistant", "tool"], Roles(plan.Transcript));
+        Assert.DoesNotContain(plan.Transcript, m => m.Contents.OfType<FunctionResultContent>().Any(r => r.CallId == memory));
+        Assert.Same(messages[2], ConversationCompactor.SummarisedTurn("s", plan)[2]);
     }
 
     [Fact]

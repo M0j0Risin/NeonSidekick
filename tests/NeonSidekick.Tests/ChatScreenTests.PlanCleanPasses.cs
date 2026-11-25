@@ -229,7 +229,7 @@ public partial class ChatScreenTests
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/exit");
         _chat.Enqueue(PresentPlanCall());
         _chat.EnqueueText("Closing.");
-        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown));   // review 1, pass 1: a revision, clean: converged; Close gaps… again
+        _chat.Enqueue(PresentGapsCall("p2", PlanMarkdown));   // review 1, pass 1: clean, the steps as they were: converged; Close gaps… again (a clean pass that changed them is held since 2026-11-24)
         _chat.EnqueueText("Again.");
         _chat.Enqueue(PresentGapsCall("p3", RevisedPlanMarkdown + "- [ ] Ship it\n  Done when: it ships\n", "Add a ship step"));   // review 2, pass 1: a gap
         _chat.EnqueueText("Pass 1 done.");

@@ -303,6 +303,13 @@ public sealed class ConversationHistory
     /// </summary>
     public const string AppWrittenKey = "neon.app";
 
+    /// <summary>
+    /// The <see cref="ChatMessage.AdditionalProperties"/> key on an automated run's pass message (value <c>true</c>, 2026-11-24, the session log
+    /// review: a reflection after a gap review read every pass's calls). Set through <see cref="TurnMark.IsPass"/>, saved as
+    /// <c>StoredMessage.Pass</c>; a reflection's window leaves such turns out (<see cref="WithoutPassTurns"/>). Never sent.
+    /// </summary>
+    public const string PassKey = "neon.pass";
+
     /// <summary>The line the user typed for <paramref name="message"/> when it differs from the text sent (<see cref="TypedKey"/>); null when none.</summary>
     public static string? TypedOf(ChatMessage message)
     {
@@ -317,7 +324,39 @@ public sealed class ConversationHistory
         return message.AdditionalProperties is { } properties && properties.TryGetValue(AppWrittenKey, out object? value) && value is true;
     }
 
-    /// <summary>Stamps <paramref name="mark"/>'s two keys on <paramref name="message"/> (<see cref="TypedKey"/>, <see cref="AppWrittenKey"/>), only those set.</summary>
+    /// <summary>Whether <paramref name="message"/> starts an automated run's pass (<see cref="PassKey"/>).</summary>
+    public static bool IsPass(ChatMessage message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        return message.AdditionalProperties is { } properties && properties.TryGetValue(PassKey, out object? value) && value is true;
+    }
+
+    /// <summary>
+    /// <paramref name="messages"/> (a run of whole turns, <see cref="LastTurns"/>) without the turns whose start <see cref="IsPass"/>: what a
+    /// reflection reads (2026-11-24). A message ahead of the first turn start stays. A copy.
+    /// </summary>
+    public static List<ChatMessage> WithoutPassTurns(IReadOnlyList<ChatMessage> messages)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        var kept = new List<ChatMessage>(messages.Count);
+        bool inPass = false;
+        foreach (var message in messages)
+        {
+            if (IsTurnStart(message))
+            {
+                inPass = IsPass(message);
+            }
+
+            if (!inPass)
+            {
+                kept.Add(message);
+            }
+        }
+
+        return kept;
+    }
+
+    /// <summary>Stamps <paramref name="mark"/>'s keys on <paramref name="message"/> (<see cref="TypedKey"/>, <see cref="AppWrittenKey"/>, <see cref="PassKey"/>), only those set.</summary>
     public static void SetTurnMark(ChatMessage message, TurnMark? mark)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -334,6 +373,11 @@ public sealed class ConversationHistory
         if (mark.AppWritten)
         {
             (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[AppWrittenKey] = true;
+        }
+
+        if (mark.IsPass)
+        {
+            (message.AdditionalProperties ??= new AdditionalPropertiesDictionary())[PassKey] = true;
         }
     }
 

@@ -572,7 +572,8 @@ public sealed class WriteGuardTests : IDisposable
 
     /// <summary>
     /// The turn asks about the project file only while it offers ask_user: yes runs the call again with the file allowed, no answers the
-    /// declined sentence, nobody to ask (null) keeps the refusal.
+    /// declined sentence, nobody to ask (null) keeps the refusal. The log (2026-11-24): with someone to ask, the ask and its answer, never "answered
+    /// an error"; with nobody, the error line as before.
     /// </summary>
     [Theory]
     [InlineData(true, true)]
@@ -595,7 +596,30 @@ public sealed class WriteGuardTests : IDisposable
         client.Enqueue(FakeChatClient.Call("c1", WriteFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "AGENTS.md", ["content"] = "rules", ["mode"] = "create" }));
         client.EnqueueText("done");
 
-        await foreach (var _e in assistant.RunTurnAsync("write it")) { }
+        var lines = new List<NeonSidekick.Diagnostics.DiagnosticEvent>();
+        void Seen(NeonSidekick.Diagnostics.DiagnosticEvent e) => lines.Add(e);
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += Seen;
+        try
+        {
+            await foreach (var _e in assistant.RunTurnAsync("write it")) { }
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= Seen;
+        }
+
+        bool errorLine = lines.Any(e => e.Message.StartsWith("Tool " + WriteFileTool.ToolName + " answered an error", StringComparison.Ordinal) && e.Message.Contains("project file", StringComparison.Ordinal));
+        if (offersAskUser)
+        {
+            Assert.False(errorLine);
+            Assert.Contains(lines, e => e.Level == NeonSidekick.Diagnostics.DiagnosticLevel.Debug && e.Category == "Files" && e.Message == FileText.ProjectFileAskingLogLine(WriteFileTool.ToolName, "AGENTS.md"));
+            Assert.Contains(lines, e => e.Level == NeonSidekick.Diagnostics.DiagnosticLevel.Info && e.Category == "Files" && e.Message == FileText.ProjectFileAnswerLogLine("AGENTS.md", answer));
+        }
+        else
+        {
+            Assert.True(errorLine);
+            Assert.DoesNotContain(lines, e => e.Category == "Files" && e.Message.Contains("asking the user", StringComparison.Ordinal));
+        }
 
         string result = client.Requests[1].SelectMany(m => m.Contents).OfType<FunctionResultContent>().Single().Result?.ToString() ?? "";
         Assert.Equal(offersAskUser ? 1 : 0, asked);

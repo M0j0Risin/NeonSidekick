@@ -140,6 +140,12 @@ public static class WriteGuard
     }
 
     /// <summary>
+    /// The project file the watched call was just refused, or null (2026-11-24, the session log review): the tool's own log line holds back, since
+    /// the turn may ask and run the call again, and logs the refusal, the ask and its answer itself.
+    /// </summary>
+    public static string? WatchedRefusal => s_slot.Value?.Path;
+
+    /// <summary>
     /// The call inside reports no project-file refusal to the watching turn (2026-11-23, review #4): the copy and unzip planners leave a guarded
     /// entry out and say so, so an <c>AGENTS.md</c> in an archive was asked about, and the whole call run again, for a file it never writes.
     /// </summary>

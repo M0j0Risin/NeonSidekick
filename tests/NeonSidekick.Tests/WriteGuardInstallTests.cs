@@ -540,6 +540,12 @@ public sealed class WriteGuardInstallTests : IDisposable
     [InlineData("bash -c \"rm -rf apps\"")]
     [InlineData("sh -c 'rm -rf apps'")]
     [InlineData("iex \"rm -rf apps\"")]
+    [InlineData("Start-Process rm -ArgumentList '-rf','apps'")]   // 2026-11-24: read through to rm, still judged by every word
+    [InlineData("saps cmd -ArgumentList '/c rd /s /q apps'")]
+    [InlineData("/bin/bash -c \"rm -rf apps\"")]   // a shell by its file name
+    [InlineData("pwsh -c \"git status; Remove-Item apps -Recurse\"")]   // 2026-11-24: read inside, still judged by every word
+    [InlineData("cmd /c \"dir & rd /s /q apps\"")]
+    [InlineData("bash -c 'ls; rm -rf apps'")]
     [InlineData("rm -R *")]
     [InlineData("rm -fr *")]
     [InlineData("rm --recursive *")]

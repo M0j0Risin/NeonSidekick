@@ -46,8 +46,9 @@ public static partial class CommandPrefix
 {
     /// <summary>
     /// The programs whose first argument is a verb the prefix keeps: allowing <c>git status</c> is
-    /// not allowing <c>git push</c>. Shells and interpreters are not here on purpose: <c>python -c …</c>
-    /// allows exactly <c>python</c>, which is what the pane shows. <c>net</c> since 2026-10-03, so
+    /// not allowing <c>git push</c>. Interpreters are not here on purpose: <c>python -c …</c>
+    /// allows exactly <c>python</c>, which is what the pane shows. A shell given a line is read inside instead
+    /// (<see cref="NestedScript"/>, 2026-11-24), so <c>powershell -c …</c> is its script's prefixes. <c>net</c> since 2026-10-03, so
     /// <see cref="NativeRedirect"/> can send <c>net use</c> to <c>unc_shares</c> and leave <c>net start</c>
     /// the shell's — and allowing <c>net view</c> is no longer allowing <c>net user</c>.
     /// </summary>
@@ -89,6 +90,13 @@ public static partial class CommandPrefix
     /// it and never adds it, so a line carrying it always goes to the pane. Pinned.
     /// </summary>
     public const string Unreadable = "(unreadable substitution)";
+
+    /// <summary>
+    /// The prefix of a line that runs no command it can name (2026-11-24, the session log review): values alone (<c>"EXIT=$LASTEXITCODE"</c>,
+    /// <c>$out</c>), a comment. Like <see cref="Unreadable"/>, <see cref="CommandAllowList"/> never holds it, so the pane offers Deny and Once
+    /// only. Pinned.
+    /// </summary>
+    public const string NoCommand = "(no command)";
 
     /// <summary>How deep substitutions inside substitutions are followed before the rest reads as <see cref="Unreadable"/>.</summary>
     public const int MaxDepth = 8;
@@ -516,6 +524,15 @@ public static partial class CommandPrefix
                 continue;
             }
 
+            // A redirect's & is no separator (2026-11-24, the session log review: dotnet build 2>&1 was the prefixes dotnet build and 1): the &
+            // right after a > (2>&1, *>&1, >&2), and in bash and zsh one right before a > (&>file, &>>file, both outputs to a file).
+            if (c == '&' && ((current.Length > 0 && current[^1] == '>')
+                || (shell is ShellKind.Bash or ShellKind.Zsh && i + 1 < command.Length && command[i + 1] == '>')))
+            {
+                current.Append(c);
+                continue;
+            }
+
             switch (c)
             {
                 case '&':
@@ -599,6 +616,20 @@ public static partial class CommandPrefix
                 continue;
             }
 
+            // Start-Process with a program and known parameters is read through to that program and its -ArgumentList (2026-11-24, the session
+            // log review: (Start-Process dotnet -ArgumentList 'run').ExitCode asked every time, and its Always row saved nothing).
+            if (shell == ShellKind.PowerShell && first + 1 < tokens.Count && IsStartProcess(word))
+            {
+                if (StartedProcess(tokens, first) is not { } started)
+                {
+                    return Unreadable;
+                }
+
+                tokens = started;
+                first = 0;
+                continue;
+            }
+
             // A program that runs the command after it (env, nohup, sudo, xargs…) or a string as code (eval, iex): read through, or the line
             // asks (2026-10-20, the code review: env was the prefix, so an allowed env ran any program with any variable).
             int runs = RunnerSkip(tokens, first, shell);
@@ -671,6 +702,13 @@ public static partial class CommandPrefix
             return "";
         }
 
+        // PowerShell's %, foreach (as a command, the alias) and ? written out (2026-11-24), so the allow list reads plainly; a saved one is
+        // rewritten by CommandAllowList.Tidy.
+        if (shell == ShellKind.PowerShell && program is "%" or "?" or "foreach")
+        {
+            program = program == "?" ? "where-object" : "foreach-object";
+        }
+
         // A path's program is judged by its folder too; its options and verb by its file's name. A substitution in the folder asks.
         int slash = program.LastIndexOf('/');
         string baseName = program[(slash + 1)..];
@@ -734,6 +772,15 @@ public static partial class CommandPrefix
                     continue;
                 }
 
+                // A redirect is no verb (2026-11-24, the session log review: make &>> build.log read as make &>>): skipped, and its file
+                // with it when the file is the next word (> out.txt); a 2>&1 or >&2 names no file.
+                var redirect = RedirectWordPattern().Match(verb);
+                if (redirect.Success)
+                {
+                    i += redirect.Groups["file"].Length == 0 && !redirect.Groups["dup"].Success ? 1 : 0;
+                    continue;
+                }
+
                 if (verb.Length > 0 && QuoteKind(verb[0], shell) != '\0')
                 {
                     // A quoted verb (git "push"): the quotes stripped and read, so a bare `git` never covers it (2026-10-19, the code
@@ -755,6 +802,474 @@ public static partial class CommandPrefix
 
         return program;
     }
+
+    /// <summary>
+    /// What a shell given a line runs (2026-11-24, the session log review): <paramref name="Script"/>, a line read under <paramref name="Shell"/>;
+    /// <paramref name="File"/>, a script file; or <paramref name="Unreadable"/>, a switch not known or a script from stdin.
+    /// </summary>
+    public readonly record struct NestedShell(ShellKind Shell, string? Script, string? File, bool Unreadable);
+
+    private static NestedShell Unread(ShellKind shell) => new(shell, null, null, Unreadable: true);
+
+    /// <summary>
+    /// The line or file the shell <paramref name="segment"/> runs (2026-11-24, the session log review), or null for a segment that runs no shell
+    /// or a shell with nothing to run (its own name is the prefix). The shell is found as <see cref="Of"/> finds a program, past assignments and
+    /// the runners it reads through, and known by its file name (<see cref="ShellLaunchers.IsShell"/>: <c>/bin/bash</c>, <c>cmd.exe</c>).
+    /// <c>powershell</c>/<c>pwsh</c> <c>-Command</c> (or <c>powershell</c>'s first word) and <c>-File</c> (or <c>pwsh</c>'s); <c>cmd /c</c>, <c>/k</c>;
+    /// <c>bash</c>/<c>sh</c>/<c>zsh</c> <c>-c</c> and a script file. The switches before it come from a list per shell; any other, a
+    /// <c>-Switch:value</c> word or <c>-Command -</c> is <see cref="NestedShell.Unreadable"/>. Read by <see cref="Collect"/> and the path police.
+    /// </summary>
+    public static NestedShell? NestedScript(string segment, ShellKind shell)
+    {
+        ArgumentNullException.ThrowIfNull(segment);
+        string text = segment.TrimStart();
+        if (shell == ShellKind.PowerShell)
+        {
+            // $x = pwsh -c "…": the right side is the statement, as StatementPrefix reads it.
+            for (var assignment = AssignmentPattern().Match(text); assignment.Success; assignment = AssignmentPattern().Match(text))
+            {
+                text = text[assignment.Length..].TrimStart();
+            }
+        }
+
+        var tokens = Tokens(text, shell);
+        int first = 0;
+        while (first < tokens.Count)
+        {
+            if (shell is ShellKind.Bash or ShellKind.Zsh && IsAssignment(tokens[first]))
+            {
+                first++;
+                continue;
+            }
+
+            int runs = RunnerSkip(tokens, first, shell);
+            if (runs == AskSkip)
+            {
+                return null;   // Of reads the line as Unreadable
+            }
+
+            int skip = runs > 0 ? runs : shell == ShellKind.PowerShell ? 0 : LeadingSkip(tokens, first, shell);
+            if (skip <= 0)
+            {
+                break;
+            }
+
+            first += skip;
+        }
+
+        if (first >= tokens.Count || !ShellLaunchers.IsShell(Program(tokens[first])))
+        {
+            return null;
+        }
+
+        string program = Program(tokens[first]);
+        var rest = tokens.Skip(first + 1).ToList();
+        return program[(program.LastIndexOf('/') + 1)..] switch
+        {
+            "cmd" => CmdScript(rest),
+            "powershell" => PowerShellScript(rest, pwsh: false),
+            "pwsh" => PowerShellScript(rest, pwsh: true),
+            "zsh" => PosixScript(rest, ShellKind.Zsh),
+            _ => PosixScript(rest, ShellKind.Bash),
+        };
+    }
+
+    // powershell.exe's and pwsh's switches before the script, matched as they match them (a start only one has), and their aliases.
+    private static readonly string[] PowerShellSwitches =
+    [
+        "noprofile", "nologo", "noninteractive", "noexit", "sta", "mta", "executionpolicy", "windowstyle", "inputformat", "outputformat", "command",
+        "file", "encodedcommand",
+    ];
+
+    private static readonly IReadOnlyDictionary<string, string> PowerShellSwitchAliases = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["ep"] = "executionpolicy", ["if"] = "inputformat", ["of"] = "outputformat", ["e"] = "encodedcommand", ["ec"] = "encodedcommand", ["c"] = "command",
+        ["f"] = "file", ["w"] = "windowstyle",
+    };
+
+    private static readonly IReadOnlySet<string> PowerShellValueSwitches = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "executionpolicy", "windowstyle", "inputformat", "outputformat",
+    };
+
+    private static NestedShell? PowerShellScript(List<string> words, bool pwsh)
+    {
+        for (int i = 0; i < words.Count; i++)
+        {
+            string word = words[i];
+            if (word.Length > 1 && word[0] == '-')
+            {
+                // powershell.exe -ExecutionPolicy:Bypass runs the word as the command's start, so a colon is never a value here.
+                string name = word[1..].ToLowerInvariant();
+                string? known = word.Contains(':', StringComparison.Ordinal) ? null
+                    : PowerShellSwitchAliases.TryGetValue(name, out string? aliased) ? aliased
+                    : PowerShellSwitches.Where(s => s.StartsWith(name, StringComparison.Ordinal)).Take(2).ToList() is [string only] ? only
+                    : null;
+                switch (known)
+                {
+                    case null or "encodedcommand":
+                        return Unread(ShellKind.PowerShell);
+                    case "command":
+                        return i + 1 >= words.Count || words[i + 1] == "-" ? Unread(ShellKind.PowerShell) : ScriptOf(words, i + 1, ShellKind.PowerShell);
+                    case "file":
+                        return FileOf(words, i + 1, ShellKind.PowerShell);
+                }
+
+                if (PowerShellValueSwitches.Contains(known) && ++i >= words.Count)
+                {
+                    return Unread(ShellKind.PowerShell);
+                }
+
+                continue;
+            }
+
+            // A first word that is no switch: Windows PowerShell's command, pwsh's script file.
+            return word[0] == '/' ? Unread(ShellKind.PowerShell) : pwsh ? FileOf(words, i, ShellKind.PowerShell) : ScriptOf(words, i, ShellKind.PowerShell);
+        }
+
+        return null;
+    }
+
+    private static readonly IReadOnlySet<string> CmdSwitches = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "/d", "/q", "/s", "/a", "/u", "/e:on", "/e:off", "/v:on", "/v:off",
+    };
+
+    private static NestedShell? CmdScript(List<string> words)
+    {
+        for (int i = 0; i < words.Count; i++)
+        {
+            string word = words[i];
+            if (word.Equals("/c", StringComparison.OrdinalIgnoreCase) || word.Equals("/k", StringComparison.OrdinalIgnoreCase))
+            {
+                return i + 1 >= words.Count ? Unread(ShellKind.Cmd) : ScriptOf(words, i + 1, ShellKind.Cmd);
+            }
+
+            if (!CmdSwitches.Contains(word))
+            {
+                return Unread(ShellKind.Cmd);
+            }
+        }
+
+        return null;
+    }
+
+    private static readonly IReadOnlySet<string> PosixLongSwitches = new HashSet<string>(StringComparer.Ordinal) { "--login", "--norc", "--noprofile" };
+
+    private static NestedShell? PosixScript(List<string> words, ShellKind kind)
+    {
+        bool command = false;
+        for (int i = 0; i < words.Count; i++)
+        {
+            string word = words[i];
+            if (word == "--")
+            {
+                i++;
+            }
+            else if (word.StartsWith("--", StringComparison.Ordinal))
+            {
+                if (!PosixLongSwitches.Contains(word))
+                {
+                    return Unread(kind);
+                }
+
+                continue;
+            }
+            else if (word.Length > 1 && word[0] is '-' or '+')
+            {
+                // A bundle of the known letters (bash -lc, -ex); -o takes the next word, as the bundle's last letter only.
+                for (int at = 1; at < word.Length; at++)
+                {
+                    char letter = word[at];
+                    if (letter == 'c' && word[0] == '-')
+                    {
+                        command = true;
+                    }
+                    else if (letter == 'o' && at == word.Length - 1 && i + 1 < words.Count)
+                    {
+                        i++;
+                    }
+                    else if ("liexu".IndexOf(letter, StringComparison.Ordinal) < 0)
+                    {
+                        return Unread(kind);
+                    }
+                }
+
+                continue;
+            }
+
+            if (i >= words.Count)
+            {
+                break;
+            }
+
+            // The script is one word; the words after it are $0, $1… and run nothing.
+            return command ? ScriptOf(words, i, kind, one: true) : FileOf(words, i, kind);
+        }
+
+        return command ? Unread(kind) : null;
+    }
+
+    /// <summary>The script from <paramref name="at"/> on: the words joined as the shell joins them, each one's outer quotes off; <paramref name="one"/> for bash's single word.</summary>
+    private static NestedShell ScriptOf(List<string> words, int at, ShellKind kind, bool one = false)
+    {
+        var parts = (one ? words.Skip(at).Take(1) : words.Skip(at)).Select(Unquoted).ToList();
+        string script = string.Join(' ', parts);
+        return script.Trim().Length == 0 ? Unread(kind) : new NestedShell(kind, script, null, Unreadable: false);
+    }
+
+    /// <summary>A script file's word: <see cref="Program"/> reads it as a typed one; a value or a missing word asks.</summary>
+    private static NestedShell FileOf(List<string> words, int at, ShellKind kind) =>
+        at >= words.Count || IsValueWord(words[at], kind == ShellKind.Cmd ? ShellKind.PowerShell : kind) || Unquoted(words[at]).Length == 0
+            ? Unread(kind)
+            : new NestedShell(kind, null, words[at], Unreadable: false);
+
+    private static string Unquoted(string word) =>
+        word.Length >= 2 && word[0] is '"' or '\'' && word[^1] == word[0] ? word[1..^1] : word;
+
+    /// <summary>PowerShell's <c>Start-Process</c> and its aliases <c>saps</c> and <c>start</c> (2026-11-24).</summary>
+    private static readonly IReadOnlySet<string> StartProcessNames = new HashSet<string>(StringComparer.Ordinal) { "start-process", "saps", "start" };
+
+    /// <summary>Whether <paramref name="word"/> is <c>Start-Process</c> or an alias, bare or module-qualified.</summary>
+    private static bool IsStartProcess(string word)
+    {
+        string program = Program(word);
+        int slash = program.LastIndexOf('/');
+        return StartProcessNames.Contains(program[(slash + 1)..]) && (slash < 0 || ModuleQualified(program[..(slash + 1)]));
+    }
+
+    /// <summary>
+    /// Whether a PowerShell <paramref name="segment"/> holds a <c>Start-Process</c> word (2026-11-24, the session log review), for the trusted-files
+    /// checks: <see cref="Of"/> reads the program through it, but their plain reading would take its quoted <c>-ArgumentList</c> as one word, so
+    /// they judge such a line by its every word, as they did while it read as <see cref="Unreadable"/>. Any word, so an assignment
+    /// (<c>$p = Start-Process …</c>) counts too.
+    /// </summary>
+    public static bool StartsProcess(string segment, ShellKind shell)
+    {
+        ArgumentNullException.ThrowIfNull(segment);
+        return shell == ShellKind.PowerShell && Tokens(segment, shell).Exists(IsStartProcess);
+    }
+
+    // Start-Process's parameters (5.1 and 7) and the common ones, their aliases, and the ones that make a line ask or take no value.
+    private static readonly string[] StartProcessParameters =
+    [
+        "filepath", "argumentlist", "credential", "workingdirectory", "loaduserprofile", "nonewwindow", "passthru", "redirectstandarderror",
+        "redirectstandardinput", "redirectstandardoutput", "verb", "windowstyle", "wait", "usenewenvironment", "environment",
+        "verbose", "debug", "erroraction", "warningaction", "informationaction", "progressaction", "errorvariable", "warningvariable",
+        "informationvariable", "outvariable", "outbuffer", "pipelinevariable",
+    ];
+
+    private static readonly IReadOnlyDictionary<string, string> StartProcessAliases = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        ["path"] = "filepath", ["pspath"] = "filepath", ["args"] = "argumentlist", ["runas"] = "credential", ["lup"] = "loaduserprofile",
+        ["nnw"] = "nonewwindow", ["rse"] = "redirectstandarderror", ["rsi"] = "redirectstandardinput", ["rso"] = "redirectstandardoutput",
+        ["vb"] = "verbose", ["db"] = "debug", ["ea"] = "erroraction", ["wa"] = "warningaction", ["infa"] = "informationaction",
+        ["proga"] = "progressaction", ["ev"] = "errorvariable", ["wv"] = "warningvariable", ["iv"] = "informationvariable", ["ov"] = "outvariable",
+        ["ob"] = "outbuffer", ["pv"] = "pipelinevariable",
+    };
+
+    // Another account, a profile, a verb (RunAs, open, print) or an environment of its own: what runs isn't the program read, so the line asks.
+    private static readonly IReadOnlySet<string> StartProcessAsks = new HashSet<string>(StringComparer.Ordinal) { "credential", "loaduserprofile", "verb", "environment" };
+
+    private static readonly IReadOnlySet<string> StartProcessSwitches = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "nonewwindow", "passthru", "wait", "usenewenvironment", "verbose", "debug",
+    };
+
+    // The files Start-Process runs as programs; any other extension opens by its association (a document, a .ps1 in Notepad).
+    private static readonly string[] StartProcessExtensions = [".exe", ".com", ".bat", ".cmd"];
+
+    /// <summary>A Start-Process parameter as PowerShell binds it: an alias, the full name, or a start only one name has; null for none or two.</summary>
+    private static string? StartProcessParameter(string name)
+    {
+        if (StartProcessAliases.TryGetValue(name, out string? aliased))
+        {
+            return aliased;
+        }
+
+        if (Array.IndexOf(StartProcessParameters, name) >= 0)
+        {
+            return name;
+        }
+
+        var starts = StartProcessParameters.Where(p => p.StartsWith(name, StringComparison.Ordinal)).Take(2).ToList();
+        return starts.Count == 1 ? starts[0] : null;
+    }
+
+    /// <summary>
+    /// The words a <c>Start-Process</c> at <paramref name="at"/> runs (2026-11-24, the session log review): its program (<c>-FilePath</c> or the first
+    /// positional word) and the words of its <c>-ArgumentList</c> (the second positional; a list or one string), or null when the line must ask:
+    /// an unknown parameter or one of <see cref="StartProcessAsks"/>; a program or argument from a value, a substitution or a script block; a
+    /// document, URL or a script by its association; or a shell (<see cref="ShellLaunchers.IsShell"/>: the line it is given isn't read here).
+    /// Other parameters' values are skipped; their paths are the path police's, which read the whole text.
+    /// </summary>
+    private static List<string>? StartedProcess(List<string> tokens, int at)
+    {
+        string? file = null;
+        string? arguments = null;
+        for (int i = at + 1; i < tokens.Count; i++)
+        {
+            string word = tokens[i];
+            if (word.Contains(Hole) || word.StartsWith('{') || word.StartsWith('@'))
+            {
+                return null;
+            }
+
+            if (word.Length > 1 && word[0] == '-' && char.IsAsciiLetter(word[1]))
+            {
+                int colon = word.IndexOf(':', StringComparison.Ordinal);
+                string? parameter = StartProcessParameter((colon < 0 ? word[1..] : word[1..colon]).ToLowerInvariant());
+                if (parameter is null || StartProcessAsks.Contains(parameter))
+                {
+                    return null;
+                }
+
+                if (StartProcessSwitches.Contains(parameter))
+                {
+                    if (colon >= 0 && word[(colon + 1)..].ToLowerInvariant() is not ("$true" or "$false"))
+                    {
+                        return null;
+                    }
+
+                    continue;
+                }
+
+                string? value = colon >= 0 && colon + 1 < word.Length ? word[(colon + 1)..] : ++i < tokens.Count ? tokens[i] : null;
+                if (value is null || value.Contains(Hole) || value[0] is '{' or '@' || (value.Length > 1 && value[0] == '-' && char.IsAsciiLetter(value[1])))
+                {
+                    return null;
+                }
+
+                if (parameter == "filepath")
+                {
+                    if (file is not null)
+                    {
+                        return null;
+                    }
+
+                    file = value;
+                }
+                else if (parameter == "argumentlist")
+                {
+                    if (arguments is not null || ListText(tokens, ref i, value) is not { } list)
+                    {
+                        return null;
+                    }
+
+                    arguments = list;
+                }
+
+                continue;
+            }
+
+            if (file is null)
+            {
+                file = word;
+            }
+            else if (arguments is null && ListText(tokens, ref i, word) is { } list)
+            {
+                arguments = list;
+            }
+            else
+            {
+                return null;
+            }
+        }
+
+        if (file is null || Literal(file) is not { Length: > 0 } program)
+        {
+            return null;
+        }
+
+        string name = program[(program.LastIndexOfAny(['\\', '/']) + 1)..];
+        int dot = name.LastIndexOf('.');
+        bool runs = dot < 0 || StartProcessExtensions.Contains(name[dot..], StringComparer.OrdinalIgnoreCase);
+        // A URL or a scheme (https://…, mailto:x) opens by its handler; a drive's colon is the second character.
+        int schemeColon = program.IndexOf(':', StringComparison.Ordinal);
+        if (!runs || (schemeColon >= 0 && schemeColon != 1) || ShellLaunchers.IsShell(Program(program)))
+        {
+            return null;
+        }
+
+        var started = new List<string> { program };
+        if (arguments is not null)
+        {
+            started.AddRange(Tokens(arguments, ShellKind.PowerShell));
+        }
+
+        return started;
+    }
+
+    /// <summary>
+    /// An <c>-ArgumentList</c> value as the one command line Start-Process passes (its elements joined by blanks), or null when an element is a value:
+    /// <c>'run','--'</c> and <c>'run', '--'</c> (a comma ending a word takes the next) are <c>run --</c>, <c>'run --project x'</c> is itself.
+    /// </summary>
+    private static string? ListText(List<string> tokens, ref int i, string first)
+    {
+        var text = new StringBuilder(first);
+        while (i + 1 < tokens.Count && (text[^1] == ',' || tokens[i + 1].StartsWith(',')))
+        {
+            text.Append(tokens[++i]);
+        }
+
+        var elements = new List<string>();
+        var current = new StringBuilder();
+        char quote = '\0';
+        foreach (char c in text.ToString())
+        {
+            if (quote == '\0' && c == ',')
+            {
+                elements.Add(current.ToString());
+                current.Clear();
+                continue;
+            }
+
+            quote = quote == '\0' && QuoteKind(c, ShellKind.PowerShell) is var opens and not '\0' ? opens
+                : quote != '\0' && QuoteKind(c, ShellKind.PowerShell) == quote ? '\0'
+                : quote;
+            current.Append(c);
+        }
+
+        if (quote != '\0')
+        {
+            return null;
+        }
+
+        elements.Add(current.ToString());
+        var literals = new List<string>();
+        foreach (string element in elements)
+        {
+            if (Literal(element.Trim()) is not { Length: > 0 } literal)
+            {
+                return null;
+            }
+
+            literals.Add(literal);
+        }
+
+        return string.Join(' ', literals);
+    }
+
+    /// <summary>A PowerShell word as the literal text it stands for, or null for a value: <c>'x'</c> and a bare word are; a <c>"…"</c> that expands and a <c>$</c> or <c>(</c> word aren't.</summary>
+    private static string? Literal(string word)
+    {
+        if (word.Length >= 2 && word[0] == '\'' && word[^1] == '\'')
+        {
+            return word[1..^1].Replace("''", "'", StringComparison.Ordinal);
+        }
+
+        if (word.Length >= 2 && word[0] == '"' && word[^1] == '"')
+        {
+            string inner = word[1..^1];
+            return inner.IndexOfAny(['$', '`', '"']) >= 0 ? null : inner;
+        }
+
+        return word.Length == 0 || word.IndexOfAny(['$', '(', ')', '{', '}', '@', '`', '\'', '"', Hole]) >= 0 ? null : word;
+    }
+
+    // A redirect word: an optional stream (2, &, *), > >> or <, an optional duplicate (&1), then the file glued on or none.
+    [GeneratedRegex(@"^(?:\d+|[&*])?(?:>>?|<)(?<dup>&\d+)?(?<file>.*)$", RegexOptions.CultureInvariant)]
+    private static partial Regex RedirectWordPattern();
 
     /// <summary>
     /// PowerShell's cmdlets that run a script file or a script block (later on 2026-10-20, the code review): <c>Start-Job</c> (<c>sajb</c>),
@@ -846,7 +1361,16 @@ public static partial class CommandPrefix
     /// <see cref="VerbCommandOptions"/> (later on 2026-10-20, the code review: <c>git rebase -x</c>, <c>git fetch --upload-pack</c>).
     /// </summary>
     private static string VerbPrefix(string program, string baseName, string verb, List<string> tokens, int after, ShellKind shell) =>
-        VerbCommandOptions.TryGetValue(baseName + " " + verb, out var rule) && RunsCommand(tokens, after, rule, shell) ? Unreadable : program + " " + verb;
+        VerbCommandOptions.TryGetValue(baseName + " " + verb, out var rule) && RunsCommand(tokens, after, rule, shell) ? Unreadable
+        : program + " " + (IsPathVerb(verb) ? Program(verb) : verb);
+
+    /// <summary>
+    /// A verb that is a path (2026-11-24, the session log review: <c>dotnet bin\Debug\x.dll</c> was saved as a lower-case backslash string): a
+    /// separator in it, or a <c>.dll</c>, <c>.exe</c>, <c>.csproj</c> or <c>.sln</c> at its end. Read by <see cref="Program"/>, as a program's path is.
+    /// </summary>
+    internal static bool IsPathVerb(string verb) =>
+        verb.IndexOfAny(['\\', '/']) >= 0 || verb.EndsWith(".dll", StringComparison.OrdinalIgnoreCase) || verb.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+        || verb.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase) || verb.EndsWith(".sln", StringComparison.OrdinalIgnoreCase);
 
     // LeadingSkip's answers besides a count: the line asks; the word is the prefix (command -v, a word with nothing after it).
     private const int AskSkip = -1;
@@ -1416,6 +1940,11 @@ public static partial class CommandPrefix
         ArgumentNullException.ThrowIfNull(command);
         var prefixes = new List<string>();
         Collect(command, shell, depth: 0, prefixes);
+        if (prefixes.Count == 0 && !string.IsNullOrWhiteSpace(command))
+        {
+            prefixes.Add(NoCommand);
+        }
+
         return prefixes;
     }
 
@@ -1436,15 +1965,49 @@ public static partial class CommandPrefix
         // A cmd line whose double quotes don't close (2026-10-22, review L1): the launch wraps it in a second cmd, the outer one counts the
         // quotes one more, and the text this reader takes for quoted runs there as commands of its own — so it asks.
         unreadable |= shell == ShellKind.Cmd && depth == 0 && CmdQuoteOpen(text);
-        foreach (string segment in Segments(outer, shell))
+        // A segment after PowerShell's call operator is a command, whatever it opens with (& 'C:\x y\tool.exe', & 'iex' $s): the segmenter
+        // cuts at the &, so it is known here by the join before it, or for the first by the line's own lead.
+        bool called = shell == ShellKind.PowerShell && outer.TrimStart() is ['&', not '&', ..];
+        foreach (var (segment, join) in JoinedSegments(outer, shell))
         {
+            bool afterCall = called;
+            called = shell == ShellKind.PowerShell && join == "&";
             // A PowerShell statement is read as one at every depth (the fourth shell review, 2026-10-19: at the top, $null = Remove-Item x was
-            // the prefix $null, so an allowed $null let any right side run); at the top a value keeps Of's prefix ($x), never none.
+            // the prefix $null, so an allowed $null let any right side run). A value runs no command and adds no prefix, at the top too since
+            // 2026-11-24 (the session log review: "EXIT=$LASTEXITCODE", $out and $null were saved as prefixes); a line of values alone is
+            // NoCommand (All), which still asks.
             string? read = shell != ShellKind.PowerShell ? Of(segment, shell: shell)
-                : depth > 0 ? StatementPrefix(segment)
-                : StatementPrefix(segment) ?? Of(segment, shell: shell);
+                : afterCall ? StatementPrefix(segment) ?? Of(segment, shell: shell)
+                : StatementPrefix(segment);
             if (read is not { Length: > 0 } prefix)
             {
+                continue;
+            }
+
+            // A shell given a line (2026-11-24, the session log review): its script's prefixes stand for the shell's, so a saved powershell, cmd or
+            // bash never holds what it is told to run; a script file is that file's prefix, and a switch not known here asks.
+            if (prefix != Unreadable && NestedScript(segment, shell) is { } nested)
+            {
+                if (nested.Unreadable)
+                {
+                    unreadable = true;
+                }
+                else if (nested.File is { } file)
+                {
+                    Add(prefixes, Program(file));
+                }
+                else
+                {
+                    Collect(nested.Script!, nested.Shell, depth + 1, prefixes);
+                }
+
+                continue;
+            }
+
+            // A program from a value after the call operator (& $tool -x): the value is no prefix, and the line asks.
+            if (afterCall && prefix[0] == '$')
+            {
+                unreadable = true;
                 continue;
             }
 
@@ -1535,8 +2098,37 @@ public static partial class CommandPrefix
             return InvokesMethodPattern().IsMatch(statement) ? Unreadable : null;
         }
 
-        return char.IsAsciiDigit(statement[0]) || QuoteKind(statement[0], ShellKind.PowerShell) != '\0' || statement[0] is '-' or '!' or '@' ? null : Of(statement);
+        // A number opens a value (1..10 | …, 1kb, 0x1F); a word that only starts with a digit is a command PowerShell runs (7z x a.zip,
+        // 2026-11-24: a digit alone made it a value with no prefix).
+        if (NumberPattern().IsMatch(statement) || QuoteKind(statement[0], ShellKind.PowerShell) != '\0' || statement[0] is '-' or '!' or '@')
+        {
+            return null;
+        }
+
+        // A keyword (2026-11-24, the session log review: if was saved as a prefix): its condition and its { … } bodies are substitutions,
+        // read on their own, so the statement adds nothing. foreach without its ( … ) is ForEach-Object's alias, a command.
+        int end = statement.IndexOfAny([' ', '\t', Hole]);
+        string first = end < 0 ? statement : statement[..end];
+        if (PowerShellKeywords.Contains(first) && !(first.Equals("foreach", StringComparison.OrdinalIgnoreCase) && !statement[first.Length..].TrimStart().StartsWith(Hole)))
+        {
+            return null;
+        }
+
+        return Of(statement);
     }
+
+    /// <summary>PowerShell's statement keywords (2026-11-24): never a prefix; their bodies are read as substitutions.</summary>
+    private static readonly IReadOnlySet<string> PowerShellKeywords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "if", "elseif", "else", "foreach", "for", "while", "do", "until", "switch", "try", "catch", "finally", "trap",
+    };
+
+    /// <summary>The PowerShell keywords <see cref="CommandAllowList.IsNotACommand"/> refuses as a saved entry, lower case.</summary>
+    internal static IReadOnlySet<string> Keywords => PowerShellKeywords;
+
+    // A PowerShell number at the start of a statement: decimal, hex, a fraction or exponent, a type suffix, a multiplier; then no word character.
+    [GeneratedRegex(@"^[+]?(?:0x[0-9a-f]+|(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(?:[dl]|u[lsy]?|[ysn])?(?:kb|mb|gb|tb|pb)?(?![\w])", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex NumberPattern();
 
     // A method call on a value: .Name( or ::Name( — the paren is a substitution by the time this runs (replaced by Hole), so match
     // either. A bare property read ($_.Length, $_.Name -like …) has neither and stays a value. The name is any word up to the paren

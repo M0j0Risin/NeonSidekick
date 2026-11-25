@@ -548,6 +548,19 @@ public sealed partial class WebUiTests : IDisposable
         Assert.Equal(Shell.CommandChoice.Deny, App.ChatScreen.ApprovalChoice(new WebAnswerRequest { Choice = "?" }));
     }
 
+    /// <summary>A script's approval on the page (2026-11-24): no Always button, and a permanent POST for it is no choice, the question left open.</summary>
+    [Fact]
+    public void AScriptsApproval_OnThePage_HasNoAlways_AndRefusesOne()
+    {
+        var request = new Shell.CommandRequest("python", "print(1)", [Shell.ShellText.ScriptPrefix("python")]);
+
+        var spec = App.ChatScreen.ApprovalSpec(request);
+
+        Assert.Equal([Shell.ShellText.DenyRow, Shell.ShellText.OnceRow, Shell.ShellText.SessionRow(request)], spec.Choices.Select(c => c.Label));
+        Assert.Equal(WebUiText.NoSuchChoice, WebAskBroker.Check(spec, new WebAnswerRequest { Choice = "permanent" })!.Value.Message);
+        Assert.Null(WebAskBroker.Check(spec, new WebAnswerRequest { Choice = "session" }));
+    }
+
     // ── The session ──────────────────────────────────────────────────────────
 
     [Fact]

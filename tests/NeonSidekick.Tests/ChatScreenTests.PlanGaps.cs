@@ -228,6 +228,58 @@ public partial class ChatScreenTests
         Assert.DoesNotContain(_chat.Requests, r => r[^1].Text == NeonSidekick.Skills.SkillLearner.Request(null));
     }
 
+    /// <summary>
+    /// A converging pass whose pane is answered inside its turn starts no reflection (2026-11-24, the session log review: Approve + Ralph on the
+    /// converged pane ended the review before the turn did, so the pass read as a normal turn and its calls queued one).
+    /// </summary>
+    [Fact]
+    public async Task PlanGaps_AConvergingPass_ItsPaneAnsweredInTheTurn_StartsNoReflection()
+    {
+        _settings.Update(d => { d.ReflectionAutoLearn = true; d.PlanGapCleanPasses = 1; });
+        PlanGapsFixture([[Keys.Escape], [Keys.Escape]], Line("/plan Add a guide"), Line("/plan gaps"), Line("/exit"));
+        _chat.Enqueue(PresentPlanCall());                                                                            // 0: presented; Esc
+        _chat.EnqueueText("Noted.");                                                                                 // 1
+        _chat.Enqueue([.. Enumerable.Range(1, 5).Select(i => FakeChatClient.Call("c" + i, GetCurrentTimeTool.ToolName)), PresentGapsCall("p2", PlanMarkdown)]);   // 2: clean, converged; Esc
+        _chat.EnqueueText("Noted.");                                                                                 // 3
+
+        string output = await RunAsync();
+
+        Assert.Contains(PlanText.ConvergedNotice(PlanPath, 1, 0), output);
+        Assert.Equal(4, _chat.Requests.Count);
+        Assert.DoesNotContain(_chat.Requests, r => r[^1].Text == NeonSidekick.Skills.SkillLearner.Request(null));
+    }
+
+    /// <summary>
+    /// A turn after a gap review reflects without the passes (2026-11-24): they are left out of the window, while the plan talk turn and the
+    /// approved plan's run (app-written, no pass) stay.
+    /// </summary>
+    [Fact]
+    public async Task PlanGaps_AReflectionAfterTheReview_LeavesThePassesOut()
+    {
+        _settings.Update(d => { d.ReflectionAutoLearn = true; d.PlanGapPasses = 1; d.ReflectionWindow = NeonSidekick.Skills.ReflectionWindow.Max; });
+        PlanGapsFixture([[Keys.Escape]],
+            Line("/plan Add a guide"),
+            input => { WaitForRequests(2); PushLine(input, "/plan gaps"); },
+            input => { WaitForRequests(4); PushLine(input, "what time is it"); },                                   // the limit's pane: its keys approve the plan
+            Line("/exit"));
+        _chat.Enqueue(PresentPlanCall());                                                                            // 0: presented; Esc
+        _chat.EnqueueText("Noted.");                                                                                 // 1
+        _chat.Enqueue(PresentGapsCall("p2", RevisedPlanMarkdown, "Add a test step"));                                // 2: pass 1 of 1
+        _chat.EnqueueText("Pass 1 done.");                                                                           // 3: the limit
+        _chat.Enqueue([.. Enumerable.Range(1, 5).Select(i => FakeChatClient.Call("c" + i, GetCurrentTimeTool.ToolName))]);   // 4: the approved plan's run
+        _chat.EnqueueText("Noon.");                                                                                  // 5
+
+        await RunAsync();
+
+        var reflection = Assert.Single(_chat.Requests, r => r[^1].Text == NeonSidekick.Skills.SkillLearner.Request(null));
+        string read = string.Join("\n", reflection.Select(m => m.Text));
+        Assert.Contains(PlanText.ExecuteMessage(PlanPath), read);
+        Assert.Contains("Noon.", read);
+        Assert.DoesNotContain(PlanText.GapPassMessage(PlanPath, 1, 1, PlanReviewer.Model), read);
+        Assert.DoesNotContain("Pass 1 done.", read);
+        Assert.Contains("Noted.", read);   // the plan talk turn stays
+    }
+
     [Fact]
     public async Task PlanGaps_ChosenOnThePane_AMessageQueuedUnderTheReply_GoesFirst()
     {

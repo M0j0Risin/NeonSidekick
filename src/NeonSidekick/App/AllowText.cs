@@ -35,6 +35,27 @@ public static class AllowText
         count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " MCP call was refused: " : " MCP calls were refused: ") + string.Join(", ", names)
         + " (" + Flag + " " + string.Join(",", entries) + (count == 1 ? " allows it)" : " allows them)");
 
+    /// <summary>
+    /// The closing summary's script line (2026-11-24): <c>1 script was refused (--allow code:python allows it)</c>, several languages joined as
+    /// MCP's entries are. Pinned.
+    /// </summary>
+    public static string ScriptsRefusedSummary(int count, IReadOnlyList<string> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        return count.ToString(CultureInfo.InvariantCulture) + (count == 1 ? " script was refused (" : " scripts were refused (") + Flag + " " + string.Join(",", entries)
+            + (count == 1 ? " allows it)" : " allows them)");
+    }
+
+    /// <summary>
+    /// The start's line under the shell category when <c>--allow code</c> lets scripts run (2026-11-24): <c>--allow code lets this run's scripts
+    /// run: code:python</c>. Each script then logs the gate's own "on the allow list"; this line ties it to the flag. Pinned.
+    /// </summary>
+    public static string ScriptsAllowedLogLine(IReadOnlyList<string> entries)
+    {
+        ArgumentNullException.ThrowIfNull(entries);
+        return Flag + " code lets this run's scripts run: " + string.Join(", ", entries);
+    }
+
     /// <summary>The closing summary's line for Docker, print, Home Assistant or an advisor: <c>1 Docker change was refused (--allow docker allows it)</c>.</summary>
     public static string RefusedSummary(AllowKind kind, int count)
     {
@@ -65,6 +86,11 @@ public static class AllowText
     public const string AdvisorOff = "the advisors are off";
     public const string AdvisorConfirmOff = "Advisor confirm is off";
     public const string McpOff = "MCP servers are off";
+    public const string CodePolicyOff = "Shell command policy is off";
+    public const string CodePolicyYolo = "Shell command policy is yolo, so scripts already run";
+
+    /// <summary>The reason for a <c>code:&lt;language&gt;</c> whose language is off (2026-11-24): <c>python isn't on in Shell code languages</c>.</summary>
+    public static string LanguageOff(string language) => language + " isn't on in Shell code languages";
 
     /// <summary>The reason for one server whose <c>"ask"</c> is <c>never</c>: <c>github's ask is never</c>.</summary>
     public static string AskNever(string server) => server + "'s ask is never";

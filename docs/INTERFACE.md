@@ -166,7 +166,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The question pane (`ask_user`) | ←/→ questions · Enter chooses, or toggles on a multi · Space marks or clears · 1–9 jump · Other… types your own · Submit (skipped ones go as skipped) · Decline with a note… · Esc declines |
-| The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies |
+| The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies. A script has no `a`; a line with nothing readable to hold has only `d` and `o`. |
 | A database write's approval | `d` deny · `o` once · `s` session · `v` the whole statement · Esc denies |
 | `/mcp` › Servers | `a` the server's ask (writes, always, never), written into its mcp.json; also on a skipped server whose ask is a typo. `s` signs in or out; Enter on a needs-sign-in row signs in, Esc calls a waiting sign-in off |
 | An MCP call's approval | `d` deny · `o` once · `s` session · `v` the arguments · Esc denies |

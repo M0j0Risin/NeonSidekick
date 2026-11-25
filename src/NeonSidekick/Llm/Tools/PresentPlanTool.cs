@@ -209,6 +209,14 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
             {
                 return PlanText.ShapeGapResult(shape);
             }
+
+            // A revision over the 20,000 limit (2026-11-24, the session log review: a third of a 21-pass review trimmed to it, a pass each): sent back
+            // once a pass, gap and clean reports alike, so the trim happens in this pass as a minor fix. Taken last, as the shape refusal is; the
+            // pass's next call is saved as it is and its result says the count.
+            if (PlanDocument.CapChars(PlanDocument.SavedBody(title, markdown)) is var capChars && capChars > PlanText.PlanSizeLimit && loop.TakeCapRefusal())
+            {
+                return PlanText.OverCapResult(capChars);
+            }
         }
 
         // The file as the pass found it, read once (2026-11-17): the unchanged check and the lost-content check (PlanLoss) both measure against it.
@@ -242,8 +250,10 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
         {
             // The body as the file holds it (2026-10-22, a review: headless saves with no references seam, and the count left out the # title line the
             // file has, below what the fit and a Ralph pass measure).
-            int bodyChars = saved.Markdown.Length;
-            string? tooLong = PlanFit.TooLong(bodyChars, _inlineLimit());
+            // Since 2026-11-24 the count said against the 20,000 limit leaves the app's ## References out (PlanDocument.CapChars), as the check
+            // before the save does; the inline limit still measures the whole body.
+            int bodyChars = PlanDocument.CapChars(saved.Markdown);
+            string? tooLong = PlanFit.TooLong(saved.Markdown.Length, _inlineLimit());
             if (gaps.Count > 0)
             {
                 loop.Record(gaps, minor);
@@ -261,7 +271,17 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
                 return result;
             }
 
-            LogStepChanges(loop.Pass, previous, saved.Markdown, checks);
+            bool changedSteps = LogStepChanges(loop.Pass, previous, saved.Markdown, checks);
+            if (changedSteps && loop.WouldConverge)
+            {
+                // A clean report that would end the review but changed the steps (2026-11-24, the session log review): it counts clean, but the
+                // passes that end a review must each have read the steps as they end up, so one more pass reviews the change. Never refused: a
+                // trim to fit may reword a Done when line.
+                loop.MarkClean(@checked, minor, held: true);
+                NoteShadow(loop, []);
+                return PlanText.CleanHeldResult(path, saved.Revision, minor.Count, bodyChars, tooLong);
+            }
+
             if (!loop.WouldConverge)
             {
                 // Clean, but the streak is short (2026-10-17): no pane; the next pass starts by itself. No structural problem stands (refused above).
@@ -304,13 +324,14 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
     /// <summary>
     /// A clean report's step changes logged (2026-11-18, phase 3 item 2, the mechanical minor check measured before it is trusted,
     /// <see cref="PlanStepChanges"/>): the file as the pass found it (<paramref name="previous"/>) against the body saved, and <c>verify</c>/<c>final</c>
-    /// against its header as <see cref="Unchanged"/> reads them. Nothing logged when nothing changed or the file wasn't read; nothing else changes.
+    /// against its header as <see cref="Unchanged"/> reads them. Nothing logged when nothing changed or the file wasn't read. Since 2026-11-24 it says
+    /// whether anything changed, so a converging report that changed the steps is held for one more pass.
     /// </summary>
-    private static void LogStepChanges(int pass, string? previous, string savedBody, PlanChecks? checks)
+    private static bool LogStepChanges(int pass, string? previous, string savedBody, PlanChecks? checks)
     {
         if (previous is null)
         {
-            return;
+            return false;
         }
 
         var report = PlanStepChanges.Compare(PlanDocument.Body(previous), savedBody);
@@ -320,7 +341,10 @@ public sealed class PresentPlanTool : AIFunction, IRefusesPrunedStubs
         if (report.Any || verify || final)
         {
             DiagnosticLog.Info("App", PlanText.StepChangesLogLine(pass, report, verify, final));
+            return true;
         }
+
+        return false;
     }
 
     /// <summary>

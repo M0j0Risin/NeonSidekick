@@ -148,12 +148,6 @@ public static class TrustedFilesPolice
 
     private static readonly string[] DestinationOptions = ["-destination", "-newname", "--target-directory"];
 
-    // The programs that run the line they're given (2026-11-05, review P22-5): cmd /c rd /s /q C:\Users\me passed where rm -rf C:\Users\me didn't.
-    private static readonly IReadOnlySet<string> ShellPrograms = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "cmd", "pwsh", "powershell", "bash", "sh", "zsh",
-    };
-
     private const string ShortDeleteFlags = "rRfvdiI";
 
     /// <summary>
@@ -622,10 +616,12 @@ public static class TrustedFilesPolice
                 return null;
             }
 
+            // A shell given a line is judged by its every word, as is a Start-Process line (2026-11-24): its quoted -ArgumentList ('-rf','apps')
+            // is one word to the plain branch, though CommandPrefix reads the program through it. A shell by its file name (/bin/bash) too.
             string prefix = CommandPrefix.Of(segment, shell: shell);
-            bool unreadable = prefix == CommandPrefix.Unreadable;
+            bool unreadable = prefix == CommandPrefix.Unreadable || CommandPrefix.StartsProcess(segment, shell);
             string first = CommandPrefix.Program(prefix.Split(' ')[0]);
-            if (unreadable || ShellPrograms.Contains(first))
+            if (unreadable || ShellLaunchers.IsShell(first))
             {
                 return Dropped(words, unreadable) ?? Dropped(pieces, unreadable);
             }
@@ -714,10 +710,12 @@ public static class TrustedFilesPolice
                 return null;
             }
 
+            // A shell given a line is judged by its every word, as is a Start-Process line (2026-11-24): its quoted -ArgumentList ('-rf','apps')
+            // is one word to the plain branch, though CommandPrefix reads the program through it. A shell by its file name (/bin/bash) too.
             string prefix = CommandPrefix.Of(segment, shell: shell);
-            bool unreadable = prefix == CommandPrefix.Unreadable;
+            bool unreadable = prefix == CommandPrefix.Unreadable || CommandPrefix.StartsProcess(segment, shell);
             string first = CommandPrefix.Program(prefix.Split(' ')[0]);
-            if (unreadable || ShellPrograms.Contains(first))
+            if (unreadable || ShellLaunchers.IsShell(first))
             {
                 return Planted(words) ?? Planted(pieces);
             }

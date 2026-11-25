@@ -437,6 +437,17 @@ public static class FileText
     public static string ProjectFileDeclined(string path) =>
         $"Error: the user did not allow the change to '{path}', the project file the system prompt reads every turn; do not try another way";
 
+    /// <summary>The turn asking about the project file, for the log (2026-11-24, the session log review): <c>delete: NEON.md is the project file; asking the user</c>.</summary>
+    public static string ProjectFileAskingLogLine(string tool, string path) => $"{tool}: {path} is the project file; asking the user";
+
+    /// <summary>The project-file ask's answer, for the log (2026-11-24): allowed, declined, or not answered (the pane closed, nobody there).</summary>
+    public static string ProjectFileAnswerLogLine(string path, bool? allowed) => allowed switch
+    {
+        true => $"the user allowed the change to {path}",
+        false => $"the user declined the change to {path}",
+        null => $"the change to {path} was not answered",
+    };
+
     /// <summary>
     /// The clause the writer tools' descriptions end on (2026-10-22, the write guard), so the model doesn't spend calls finding the refusals out.
     /// Prompt text.

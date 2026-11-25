@@ -4480,7 +4480,8 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var turn = assistant.History.LastTurns(ReflectionWindow.Resolve(effective));
+        // A loop's passes never feed a reflection (2026-11-24, the session log review): their turns are left out of the window.
+        var turn = Llm.ConversationHistory.WithoutPassTurns(assistant.History.LastTurns(ReflectionWindow.Resolve(effective)));
         if (turn.Count == 0)
         {
             if (forced)
@@ -7103,6 +7104,7 @@ internal sealed partial class ChatScreen
         HomeCameraForget();   // the camera chips' fetches and stills waiting to show were the last profile's (2026-10-27)
         _webVideo?.ForgetProfile();   // the Video tab: its held video and Resume offer were the last profile's; one playing plays on (2026-10-16)
         _allowList.ClearSessionAllows();   // the shell's session allows were the last profile's, a reset's or a pull's (2026-11-23, the user's ask)
+        _allowList.Tidy();   // scripts and entries that aren't commands leave the saved list as the profile loads (2026-11-24, the session log review)
         _memory = new MemoryStore(_settings.ProfileDirectory);
         _persona = new PersonaFile(_settings.ProfileDirectory);
         _operata = new OperataFile(_settings.ProfileDirectory);
@@ -17053,6 +17055,9 @@ internal sealed partial class ChatScreen
     /// <summary>A <c>/botchat</c> turn is running (2026-09-24): its usage events stay out of the main conversation's tally. Set and cleared on the turn task.</summary>
     private bool _botTurnRunning;
 
+    /// <summary>Whether the turn running began as an automated run's pass (<see cref="PassTurnNow"/> or a <c>/project-init</c> pass), set as it starts.</summary>
+    private bool _turnBeganAsPass;
+
     // Whether the bot turn running talks to the main link (2026-11-09): its too-long error's window is then the session's (TurnEvent.ServerLimit).
     private bool _botOnMainLink;
 
@@ -18520,7 +18525,7 @@ internal sealed partial class ChatScreen
     private async Task<bool> RunMessageAsync(string text, IReadOnlyList<ImageAttachment> images, CancellationToken cancellationToken, Llm.TurnMark? mark = null, bool putBack = true)
     {
         bool passMessage = _passMessage is { } pass && ReferenceEquals(pass, text);
-        mark = passMessage ? Llm.TurnMark.App : mark;
+        mark = passMessage ? Llm.TurnMark.Pass : mark;
         _passMessage = null;
         bool keep = passMessage || !putBack;   // nothing to put back: a pass's message, or no submitted line
         if (!await EnsureLlmAsync(cancellationToken).ConfigureAwait(false))
@@ -18629,7 +18634,8 @@ internal sealed partial class ChatScreen
 
             // Whether this turn was an automated run's pass, read before the runs move on (2026-10-22): such a turn starts no reflection below.
             // A /project-init pass (2026-11-23) too: a stranger's README must never become a skill; it keeps its file journal, so not PassTurnNow.
-            bool passTurn = PassTurnNow || _projectInit.InPass;
+            // Or one at its start (2026-11-24, the session log review): a converging pass whose pane started Ralph ended no longer reviewing.
+            bool passTurn = _turnBeganAsPass || PassTurnNow || _projectInit.InPass;
             // The gap-closing loop after the turn (2026-10-13), ahead of the approval: a converged loop is said and cleared before
             // the approval its pane gave goes ahead; otherwise the next pass, or the plan back on the pane, is acted on below.
             var gapPass = TakeGapPass(outcome);
@@ -19089,6 +19095,9 @@ internal sealed partial class ChatScreen
         // turn's end may send (EndTurnAsync). The previous turn's pane was awaited before this one.
         _turnRunning = true;
         _replyRunning = true;
+        // Whether the turn begins as an automated run's pass (2026-11-24, the session log review): its end reads this too, since a pane inside
+        // the turn (Approve + Ralph on the converging pass) may end the review before the turn does.
+        _turnBeganAsPass = PassTurnNow || _projectInit.InPass;
         BeginReplyRun();
         // The hint row is the turn's again (the usage part); the reading stays remembered for /read.
         _hintReading = null;
@@ -19502,7 +19511,7 @@ internal sealed partial class ChatScreen
                         DiagnosticLog.Info(SkillCatalog.Category, "The turn wrote a skill itself (" + trace + "); the tally starts over.");
                         _learnTrace = null;
                     }
-                    else if (!PassTurnNow)
+                    else if (!(_turnBeganAsPass || PassTurnNow || _projectInit.InPass))
                     {
                         // A pass of an automated run adds nothing (2026-10-22, the user's call after a review: the review's last turn reflected on every
                         // pass's calls, and asked for a skill for the review loop itself).

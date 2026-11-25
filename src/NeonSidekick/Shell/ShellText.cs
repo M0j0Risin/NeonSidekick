@@ -390,6 +390,17 @@ public static partial class ShellText
     /// <summary>The pseudo-prefix a script's approval is recorded under: <c>code:python</c>.</summary>
     public static string ScriptPrefix(string language) => "code:" + language;
 
+    /// <summary>
+    /// The log line <see cref="CommandAllowList.Tidy"/> writes (2026-11-24, the session log review), after the shell category: each saved entry it
+    /// dropped. Pinned.
+    /// </summary>
+    public static string TidiedLogLine(IReadOnlyList<string> dropped)
+    {
+        ArgumentNullException.ThrowIfNull(dropped);
+        string noun = dropped.Count == 1 ? "entry" : "entries";
+        return $"dropped {N(dropped.Count)} saved allow-list {noun} that can't be saved (scripts or not commands): {string.Join(", ", dropped)}";
+    }
+
     public const string CodeRequired = "Error: code is required";
     public static string LanguageNotInstalled(CodeLanguage language) => $"Error: {CodeLanguages.Name(language)} is not installed (no {CodeLanguages.FileName(language)} found)";
     public static string LanguageNotEnabled(string language) => $"Error: {language} is not enabled; the user can tick it in Shell code languages on the Shell tab of /tools";
@@ -427,6 +438,18 @@ public static partial class ShellText
     }
 
     /// <summary>
+    /// <see cref="NotAskable"/> for a script in a headless run (2026-11-24, the session log review): a script is never saved, so the profile's list
+    /// can't hold it; <c>--allow code:&lt;language&gt;</c> or <c>--yolo</c> lets it run. Pinned.
+    /// </summary>
+    public static string ScriptNotAskable(string language, IReadOnlyList<string> allowed)
+    {
+        ArgumentNullException.ThrowIfNull(language);
+        ArgumentNullException.ThrowIfNull(allowed);
+        string list = allowed.Count == 0 ? "none" : string.Join(", ", allowed);
+        return $"Error: the {language} script was not run: there was no screen to ask the user on (Shell command policy is ask; {App.SidekickOptions.AllowFlag} {ScriptPrefix(language)} or {App.SidekickOptions.YoloFlag} would let it run). Allowed prefixes: {list}. Do not retry it or work around the refusal; tell the user what could not run";
+    }
+
+    /// <summary>
     /// The notice a headless run ends with when anything was refused (2026-09-26), beside exit code 3:
     /// <c>2 commands were not run: "npm install", "choco upgrade"</c>, each once, in the order first refused. Pinned.
     /// </summary>
@@ -445,8 +468,12 @@ public static partial class ShellText
     /// </summary>
     public const string OutsideHead = "Error: outside the working directory: ";
 
-    /// <summary><c>Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it</c>. Pinned.</summary>
-    public static string OutsidePath(string token) => OutsideHead + $"'{token}' — a command or a script may only name paths under it";
+    /// <summary>
+    /// <c>Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it. Do not try
+    /// another way to reach it; tell the user it was refused.</c> Pinned. The last sentence is the forbidden strings' (2026-11-24, the session
+    /// log review: a refused <c>%TEMP%</c> was tried again as <c>[Environment]::GetEnvironmentVariable('TEMP')</c>).
+    /// </summary>
+    public static string OutsidePath(string token) => OutsideHead + $"'{token}' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.";
 
     /// <summary>Whether <paramref name="result"/> is the outside-paths police's refusal.</summary>
     public static bool IsOutside(string result)
@@ -833,6 +860,36 @@ public static partial class ShellText
     public const string OnceRow = "Allow once";
     public const string ApprovalKeys = "d / o / s / a = pick · v = view · Enter = choose · Esc = deny";
 
+    /// <summary>The keys when the Always row is hidden (2026-11-24): a script, held for the session only. Pinned.</summary>
+    public const string ApprovalKeysSession = "d / o / s = pick · v = view · Enter = choose · Esc = deny";
+
+    /// <summary>The keys when there is nothing to hold (2026-11-24): a line with nothing readable to allow. Pinned.</summary>
+    public const string ApprovalKeysOnce = "d / o = pick · v = view · Enter = choose · Esc = deny";
+
+    /// <summary>
+    /// The hint for <paramref name="request"/>'s rows (2026-11-24): <see cref="ApprovalKeys"/>, <see cref="ApprovalKeysSession"/> or
+    /// <see cref="ApprovalKeysOnce"/>, by what <see cref="CommandAllowList.Holdable"/> would hold.
+    /// </summary>
+    public static string ApprovalKeysFor(CommandRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return ShowsPermanentRow(request) ? ApprovalKeys : ShowsSessionRow(request) ? ApprovalKeysSession : ApprovalKeysOnce;
+    }
+
+    /// <summary>Whether the pane offers the Session row: something on the line can be held for the session (2026-11-24).</summary>
+    public static bool ShowsSessionRow(CommandRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return CommandAllowList.Holdable(request.Prefixes, forSave: false).Count > 0;
+    }
+
+    /// <summary>Whether the pane offers the Always row: something on the line can be saved, never a script (2026-11-24).</summary>
+    public static bool ShowsPermanentRow(CommandRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return CommandAllowList.Holdable(request.Prefixes, forSave: true).Count > 0;
+    }
+
     /// <summary>
     /// The approval pane's title-row button (2026-10-07, the user's ask: the caption cut a long command at three rows and showed a
     /// script's first line alone, so part of what was approved could go unseen): the whole command in a scrolling view. Pinned.
@@ -886,22 +943,40 @@ public static partial class ShellText
         return $"{request.Kind} · {Count(lines.Length)} {(lines.Length == 1 ? "line" : "lines")} · first line: {first}";
     }
 
-    /// <summary><c>Allow "git push" for this session</c>; several prefixes listed; a script's reads <c>Allow python scripts for this session</c>. Pinned.</summary>
+    /// <summary>
+    /// <c>Allow "git push" for this session</c>; several prefixes listed; a script's reads <c>Allow python scripts for this session</c>. Pinned.
+    /// Since 2026-11-24 it names only what the pick holds (<see cref="CommandAllowList.Holdable"/>), with <see cref="UnreadablePartClause"/> when
+    /// part of the line can't be held.
+    /// </summary>
     public static string SessionRow(CommandRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return $"Allow {What(request)} for this session";
+        return $"Allow {What(request, forSave: false)} for this session{Partial(request, forSave: false)}";
     }
 
-    /// <summary><c>Allow "git push" always (saved to the profile)</c>. Pinned.</summary>
+    /// <summary><c>Allow "git push" always (saved to the profile)</c>, what a save holds (never a script). Pinned.</summary>
     public static string PermanentRow(CommandRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return $"Allow {What(request)} always (saved to the profile)";
+        return $"Allow {What(request, forSave: true)} always (saved to the profile){Partial(request, forSave: true)}";
     }
 
-    private static string What(CommandRequest request) =>
-        request.IsScript ? $"{request.Kind} scripts" : string.Join(", ", request.Prefixes.Select(Quote));
+    /// <summary>The rows' clause when part of the line can't be held (2026-11-24): an unreadable part, a value. Pinned.</summary>
+    public const string UnreadablePartClause = " (the unreadable part asks each time)";
+
+    private static string What(CommandRequest request, bool forSave) =>
+        request.IsScript ? $"{request.Kind} scripts" : string.Join(", ", CommandAllowList.Holdable(request.Prefixes, forSave).Select(Quote));
+
+    private static string Partial(CommandRequest request, bool forSave)
+    {
+        if (request.IsScript)
+        {
+            return "";
+        }
+
+        var held = CommandAllowList.Holdable(request.Prefixes, forSave);
+        return request.Prefixes.Any(p => !held.Contains(p.Trim().ToLowerInvariant(), StringComparer.Ordinal)) ? UnreadablePartClause : "";
+    }
 
     /// <summary>The transcript's line after a Session pick: <c>(allowed for this session: git push)</c>. Pinned.</summary>
     public static string SessionAllowedNotice(IReadOnlyList<string> prefixes) => $"({App.NoticeGlyphs.Allowed}allowed for this session: {string.Join(", ", prefixes)})";

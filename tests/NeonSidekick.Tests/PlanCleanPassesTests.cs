@@ -1107,4 +1107,125 @@ public class PlanCleanPassesTests : IDisposable
 
         lock (lines) { Assert.DoesNotContain(lines, l => l.StartsWith(PlanText.StepChangesLogPrefix, StringComparison.Ordinal)); }
     }
+
+    // ── The 20,000 cap in the pass (2026-11-24, the session log review) ─────
+
+    /// <summary><see cref="Revised"/> with a context section that takes its body past the cap.</summary>
+    private static string Over(int extra = 10) => "# Guide\n\n## Context\n\n" + new string('x', PlanText.PlanSizeLimit + extra) + "\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n- [ ] Test it\n  Done when: the guide's check passes\n";
+
+    [Fact]
+    public async Task Tool_AGapRevisionOverTheCap_IsSentBackOnce_ThenSaved()
+    {
+        var loop = await PassOneAsync();
+        int chars = PlanDocument.CapChars(PlanDocument.SavedBody("Guide", Over()));
+
+        object? refused = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Over(), new[] { "Add context" }));
+
+        Assert.Equal(PlanText.OverCapResult(chars), refused);
+        Assert.Equal("Error: nothing was saved: the body is 20,042 characters, over the 20,000 limit; cut restatement and send the whole plan again in this pass.", PlanText.OverCapResult(20_042));
+        Assert.Equal(1, _session.Revision);
+        Assert.Equal(0, loop.Presented);
+        Assert.False(loop.CapRefusalLeft);
+
+        object? saved = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Over(), new[] { "Add context" }));
+
+        Assert.Equal(2, _session.Revision);
+        Assert.Contains(PlanText.SizeSentence(chars), (string)saved!);   // the count after the save is the count before it
+    }
+
+    [Fact]
+    public async Task Tool_ACleanReportOverTheCap_IsSentBackToo_AndEachPassGetsItsOwnRefusal()
+    {
+        var loop = await PassOneAsync();
+        int chars = PlanDocument.CapChars(PlanDocument.SavedBody("Guide", Over()));
+
+        Assert.Equal(PlanText.OverCapResult(chars), await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Over(), Array.Empty<string>(), Checked)));
+        Assert.Equal(PlanText.CleanPassResult(_session.Path!, 2, 1, 2, bodyChars: chars), await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Over(), Array.Empty<string>(), Checked)));
+        NextPass(loop);
+        Assert.True(loop.CapRefusalLeft);   // reset as the pass begins
+
+        Assert.Equal(PlanText.OverCapResult(PlanDocument.CapChars(PlanDocument.SavedBody("Guide", Over(20)))), await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Over(20), new[] { "More context" })));
+    }
+
+    [Fact]
+    public async Task Tool_ARevisionUnderTheCap_NeverSpendsTheRefusal()
+    {
+        var loop = await PassOneAsync();
+        await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", Revised, new[] { "Add a test step" }));
+        Assert.True(loop.CapRefusalLeft);
+    }
+
+    [Fact]
+    public void CapChars_LeavesTheAppsReferencesOut()
+    {
+        string body = "# Guide\n\n## Steps\n- [ ] Write it\n  Done when: guide.md exists\n\n## Context\n\n" + new string('x', PlanText.PlanSizeLimit - 100);
+        string withReferences = body + "\n\n## References\n" + string.Concat(Enumerable.Range(1, 40).Select(i => $"- picture-{i}.png: a screenshot of step {i}\n"));
+
+        Assert.True(withReferences.Length > PlanText.PlanSizeLimit);
+        Assert.Equal(body.TrimEnd().Length, PlanDocument.CapChars(withReferences));
+        Assert.Equal(body.Length, PlanDocument.CapChars(body));
+        Assert.Equal(PlanDocument.CapChars(withReferences.Replace("\n", "\r\n", StringComparison.Ordinal)), PlanDocument.CapChars(withReferences));
+    }
+
+    [Fact]
+    public void ThePassMessage_SaysAPlanOnDiskOverTheCap_AsAMinorFix()
+    {
+        Assert.Equal("The app counted the plan on disk at 20,500 characters, over the 20,000 limit: trim it to fit in this pass, as a minor fix.", PlanText.OverCapOnDiskSentence(20_500));
+        Assert.EndsWith(" " + PlanText.OverCapOnDiskSentence(20_500), PlanText.GapPassMessage("p.md", 2, 5, PlanReviewer.Model, 0, null, 20_500));
+        Assert.DoesNotContain("on disk at", PlanText.GapPassMessage("p.md", 2, 5, PlanReviewer.Model, 0, null, 20_000));
+        Assert.DoesNotContain("Each is a gap", PlanText.GapPassMessage("p.md", 2, 5, PlanReviewer.Model, 0, null, 20_500));   // a sentence of its own, not a measured gap
+        string advisor = PlanText.GapReviewLines(new PlanGapState(2, 5, PlanReviewer.Advisor), advisorsOffered: true);
+        Assert.Contains("then close what they name. " + PlanText.AdvisorFitLine, advisor);
+        Assert.Equal("Fold what they name in within the 20,000 limit: trim restatement to make room.", PlanText.AdvisorFitLine);
+    }
+
+    // ── A clean report that changes steps never ends the review (2026-11-24) ─
+
+    [Fact]
+    public async Task Tool_AConvergingCleanReportThatChangesADoneWhenLine_IsHeld_AndTheNextCleanPassConverges()
+    {
+        var loop = await PassOneAsync(clean: 1);
+        string reworded = Plan.Replace("guide.md exists", "guide.md exists and links work", StringComparison.Ordinal);
+
+        object? held = await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", reworded, Array.Empty<string>(), Checked));
+
+        Assert.Equal(PlanText.CleanHeldResult(_session.Path!, 2, bodyChars: BodyChars(reworded)), held);
+        Assert.True(loop.PassClean);
+        Assert.True(loop.PassHeld);
+        Assert.False(loop.Converged);
+        Assert.Empty(_presented);
+
+        NextPass(loop);
+        Assert.False(loop.PassHeld);   // cleared as the pass begins
+        await _tool.InvokeAsync(PlanGapLoopTests.Args("Guide", reworded, Array.Empty<string>(), Checked));
+
+        Assert.True(loop.Converged);
+        Assert.Single(_presented);
+    }
+
+    [Fact]
+    public void TheHeldNotice_AndLogLine_ArePinned_AndAStreakPastItsTarget_ShowsAtIt()
+    {
+        Assert.Equal("📝 Gap review pass 3 of 5: no gaps found, but the steps changed; one more pass checks the change.", PlanText.CleanHeldNotice(3, 5));
+        Assert.Equal("plan gaps: pass 3 held: no gaps, but it changed the steps; one more pass checks the change", PlanText.CleanHeldLogLine(3));
+        Assert.Equal(PlanText.CleanHeldNotice(3, 5), PlanText.CleanPassNoticeLines(3, 5, 3, 2, ["the steps"], held: true)[0]);
+        Assert.StartsWith("plan gaps: pass 4 clean (2 of 2)", PlanText.CleanPassLogLine(4, 3, 2, ["the steps"]));
+        Assert.Equal("no gaps in the last pass, but the limit came after 2 of 2 clean passes", PlanText.StoppedNote(PlanGapStop.Unconfirmed, 5, 0, 4, 2));
+    }
+
+    [Fact]
+    public async Task PlanShow_AfterTwoHeldPasses_ShowsTheStreakAtItsTarget()
+    {
+        var loop = await PassOneAsync();
+        loop.MarkClean();
+        NextPass(loop);
+        loop.MarkClean(held: true);
+        NextPass(loop);
+        loop.MarkClean(held: true);
+        NextPass(loop);
+
+        Assert.Equal(3, loop.CleanStreak);
+        Assert.Contains(PlanText.ShowLines(_session), l => l.EndsWith(", 2 of 2 clean passes", StringComparison.Ordinal));
+        Assert.DoesNotContain(PlanText.ShowLines(_session), l => l.Contains("3 of 2", StringComparison.Ordinal));
+    }
 }

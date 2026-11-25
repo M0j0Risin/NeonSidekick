@@ -734,8 +734,9 @@ public sealed class GitAccess
     /// <paramref name="room"/>: walked by <see cref="WorkingDirectory.ListFiles"/> (its budget, the token, never into a reparse point), a nested
     /// repository's folder left out as status leaves it, and an ignored folder never entered (2026-10-20, a review: its files spent the walk's
     /// budget before each was dropped as ignored, so a new folder's ignored <c>node_modules</c> left its sources unlisted); an ignored file dropped.
+    /// A folder named in <paramref name="skipFolders"/> (without case) is never entered either (2026-11-24, <see cref="ChangedPaths"/>' build output).
     /// </summary>
-    private List<string> WalkUntracked(Repository repo, RepoLocation location, string folderRepoPath, int room, CancellationToken cancellationToken, out bool cut)
+    private List<string> WalkUntracked(Repository repo, RepoLocation location, string folderRepoPath, int room, CancellationToken cancellationToken, out bool cut, IReadOnlyCollection<string>? skipFolders = null)
     {
         cut = false;
         string folder = Path.Combine(location.WorkTree, folderRepoPath.TrimEnd('/').Replace('/', Path.DirectorySeparatorChar));
@@ -746,7 +747,7 @@ public sealed class GitAccess
 
         string RepoPathOf(string fullPath) => Path.GetRelativePath(location.WorkTree, fullPath).Replace('\\', '/');
         var walked = _files.ListFiles(_files.Relative(folder), room, name => string.Equals(name, ".git", StringComparison.OrdinalIgnoreCase), cancellationToken,
-            skipFolder: full => IsNestedRepository(full) || repo.Ignore.IsPathIgnored(RepoPathOf(full) + "/"));
+            skipFolder: full => IsNestedRepository(full) || Skipped(skipFolders, full) || repo.Ignore.IsPathIgnored(RepoPathOf(full) + "/"));
         cut = walked.Cut;
         var files = new List<string>();
         foreach (string file in walked.Files)
@@ -759,6 +760,10 @@ public sealed class GitAccess
 
         return files;
     }
+
+    /// <summary>Whether <paramref name="folder"/>'s own name (a full path or a status entry's) is one of <paramref name="skipFolders"/>, without case.</summary>
+    private static bool Skipped(IReadOnlyCollection<string>? skipFolders, string folder) =>
+        skipFolders is { Count: > 0 } && skipFolders.Contains(Path.GetFileName(folder.TrimEnd('/', '\\')), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Whether a folder is a repository of its own (its own <c>.git</c>, a folder or a file): status leaves it out.</summary>
     private static bool IsNestedRepository(string folder) => Directory.Exists(Path.Combine(folder, ".git")) || File.Exists(Path.Combine(folder, ".git"));
@@ -777,8 +782,10 @@ public sealed class GitAccess
     /// untracked, unignored folder held the loop for minutes past Esc; untracked folders are walked as <see cref="TrackedFiles"/> walks them now
     /// (<see cref="WalkUntracked"/>), under <paramref name="cancellationToken"/>. A rename staged in the index names its old path too (only a
     /// rename in the working tree did, so <c>git mv</c>'s source was lost).</para>
+    /// <para>2026-11-24 (the session log review: a Ralph step's evidence listed every file of an unignored <c>bin/</c> and <c>obj/</c>): an untracked
+    /// folder named in <paramref name="skipFolders"/> is left out, status's own entry and any met in the walk; a tracked file under one still counts.</para>
     /// </summary>
-    public GitChangedReport ChangedPaths(string relative, CancellationToken cancellationToken = default) => Run(relative, GitChangedReport.Refused, (repo, location, full) =>
+    public GitChangedReport ChangedPaths(string relative, CancellationToken cancellationToken = default, IReadOnlyCollection<string>? skipFolders = null) => Run(relative, GitChangedReport.Refused, (repo, location, full) =>
     {
         if (RepoPath(location, full) is not { } prefix)
         {
@@ -799,9 +806,9 @@ public sealed class GitAccess
 
             if (entry.FilePath.EndsWith('/'))
             {
-                if (entry.State.HasFlag(FileStatus.NewInWorkdir))
+                if (entry.State.HasFlag(FileStatus.NewInWorkdir) && !Skipped(skipFolders, entry.FilePath))
                 {
-                    paths.AddRange(WalkUntracked(repo, location, entry.FilePath, room, cancellationToken, out bool cut));
+                    paths.AddRange(WalkUntracked(repo, location, entry.FilePath, room, cancellationToken, out bool cut, skipFolders));
                     truncated |= cut;
                 }
 

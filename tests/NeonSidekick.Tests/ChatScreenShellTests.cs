@@ -206,11 +206,11 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(@"👮 Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it" + "\n", output);
+        Assert.Contains(@"👮 Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused." + "\n", output);
         Assert.DoesNotContain("✗  Error: outside", output);
         Assert.DoesNotContain(ShellText.ApprovalTitle, output);   // the pane never opened
         Assert.Contains("Staying inside.", output);
-        Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it", ToolResult(_chat.Requests[1], "c1"));
+        Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", ToolResult(_chat.Requests[1], "c1"));
         Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the policed head, on by default
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
@@ -223,11 +223,11 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(@"👮 Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it" + "\n", output);
+        Assert.Contains(@"👮 Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused." + "\n", output);
         Assert.DoesNotContain("✗  Error: outside", output);
         Assert.DoesNotContain(ShellText.ApprovalTitle, output);   // the pane never opened
         Assert.Contains("Staying inside.", output);
-        Assert.Equal(@"Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it", ToolResult(_chat.Requests[1], "c1"));
+        Assert.Equal(@"Error: outside the working directory: '/etc/hosts' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", ToolResult(_chat.Requests[1], "c1"));
         Assert.Contains(Assistant.ShellRuleFor(police: true), _chat.Requests[0][0].Text!, StringComparison.Ordinal);   // the policed head, on by default
         Assert.DoesNotContain("reach the whole computer", _chat.Requests[0][0].Text!, StringComparison.Ordinal);
     }
@@ -673,7 +673,8 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npowershell · 2 lines · first line: $d = 'here'\n \n▸ Deny\n  Allow once\n  Allow powershell scripts for this session\n  Allow powershell scripts always (saved to the profile)\n", output);
+        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npowershell · 2 lines · first line: $d = 'here'\n \n▸ Deny\n  Allow once\n  Allow powershell scripts for this session\n", output);
+        Assert.DoesNotContain("Allow powershell scripts always", output);   // a script is never saved (2026-11-24)
         Assert.Contains("(🔓 allowed for this session: code:powershell)\n", output);
         Assert.DoesNotContain("first line: Write-Output again", output);   // the second script rode the session's allow
         string first = ToolResult(_chat.Requests[1], "c1");
@@ -722,7 +723,8 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npython · 3 lines · first line: import os\n \n▸ Deny\n  Allow once\n  Allow python scripts for this session\n  Allow python scripts always (saved to the profile)\n", output);
+        Assert.Contains("\n" + Titled(ShellText.ScriptApprovalTitle + ApprovalButtons) + "\npython · 3 lines · first line: import os\n \n▸ Deny\n  Allow once\n  Allow python scripts for this session\n", output);
+        Assert.DoesNotContain("Allow python scripts always", output);   // a script is never saved (2026-11-24)
         Assert.Contains("(🔓 allowed for this session: code:python)\n", output);
         Assert.DoesNotContain("first line: print('again')", output);
         Assert.Equal("exit 0 in 0.0 s (python): import os\nseen: True", ToolResult(_chat.Requests[1], "c1"));

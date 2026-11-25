@@ -177,7 +177,7 @@ public partial class ChatScreenTests
     public async Task PlanGaps_TheShadowLine_EveryPass_AndAPauseKeepsItsStreak()
     {
         // 2026-11-17, phase 3: the plan shadow logged once a pass, with the stop the screen goes on to use; a review paused for a message and
-        // resumed keeps its loop, so pass 2's shadow streak carries pass 1's.
+        // resumed keeps its loop, so pass 2's shadow streak carries pass 1's (shown at most at its target since 2026-11-24, so "1 of 1").
         _settings.Update(d => d.PlanGapCleanPasses = 1);
         PlanFixture([[Keys.Char('g'), Keys.Enter], [Keys.Char('c'), Keys.Enter]], "/plan Add a guide", "/plan gaps resume", "/exit");
         _chat.BeforeUpdateOf = (request, update, _) =>
@@ -212,7 +212,7 @@ public partial class ChatScreenTests
         Assert.Contains(PlanText.GapsPausedNotice(1), output);
         Assert.Equal(
             ["plan gaps shadow: pass 1: 1 low; shadow streak 1 of 1, would converge; real: you spoke",
-             "plan gaps shadow: pass 2: no gaps; shadow streak 2 of 1, would converge; real: converged"],
+             "plan gaps shadow: pass 2: no gaps; shadow streak 1 of 1, would converge; real: converged"],
             shadow);
         // The tag is the gap's own text: the user sees it as sent.
         Assert.Contains("[low] Add a test step", output);

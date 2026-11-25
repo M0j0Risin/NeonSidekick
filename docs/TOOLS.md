@@ -77,7 +77,7 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 | Tool | Arguments | What it does |
 |---|---|---|
 | `run_command` | `command, shell?, workdir?, timeout?, background?, notify?` | Runs a command in `powershell` (default), `cmd` or `bash`; on a Mac `zsh` (default), `bash` or `powershell`. `background` (or a long timeout) returns a `proc_…` id; `notify` tells you when it exits. |
-| `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script; a Python script imports the working folder's modules. It asks like `run_command`; allowing it for the session covers that language. |
+| `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script; a Python script imports the working folder's modules. It asks like `run_command`; allowing it for the session covers that language, never always ([headless: `--allow code`](HEADLESS.md#flags-in-headless-runs)). |
 | `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Up to 16 background commands (and the last 64 finished), by id prefix: `list`, `poll`, `log` (last 5,000 lines), `wait` (`until` a line holds a text), `kill`, `write` / `submit`, `close`. |
 
 * **The shell police also refuses** any line, script or `process` write naming `.git`, `.neon`, `.claude`, `.agents/skills`, a `.mcp.json`, the project file, the app's home or the install folder, moving or copying a folder onto `.agents`, or a script run before it exists. It reads the text, not what runs.

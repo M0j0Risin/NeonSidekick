@@ -144,7 +144,7 @@ public sealed class ShellTests
     [InlineData("zsh", "/usr/local/bin/xargs rm", CommandPrefix.Unreadable)]
     [InlineData("zsh", "/usr/bin/xargs", "/usr/bin/xargs")]
     [InlineData("powershell", "C:\\Windows\\System32\\sudo.exe del x", CommandPrefix.Unreadable)]
-    [InlineData("powershell", "Microsoft.PowerShell.Management\\Start-Process notepad", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Microsoft.PowerShell.Management\\Start-Process notepad", "notepad")]   // read through since 2026-11-24
     [InlineData("bash", "nohup git push", "git push")]
     [InlineData("bash", "nohup env PATH=/tmp/x git push", CommandPrefix.Unreadable)]
     [InlineData("bash", "nice -n 5 make test", "make test")]
@@ -183,7 +183,33 @@ public sealed class ShellTests
     [InlineData("powershell", "Invoke-Expression 'Remove-Item x'", CommandPrefix.Unreadable)]
     [InlineData("powershell", "Microsoft.PowerShell.Utility\\Invoke-Expression $s", CommandPrefix.Unreadable)]
     [InlineData("powershell", "iex", CommandPrefix.Unreadable)]   // alone, at a pipeline's end, it runs its input
-    [InlineData("powershell", "Start-Process notepad", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process notepad", "notepad")]
+    // Start-Process read through to its program and -ArgumentList (2026-11-24, the session log review), its parameters as PowerShell binds them.
+    [InlineData("powershell", "Start-Process -FilePath dotnet.exe -ArgumentList 'build --no-restore' -Wait", "dotnet build")]
+    [InlineData("powershell", "Start-Process dotnet -ArgumentList 'run','--','--test'", "dotnet run")]
+    [InlineData("powershell", "Start-Process dotnet -ArgumentList 'run', '--project', 'x'", "dotnet run")]
+    [InlineData("powershell", "Start-Process -File dotnet -Arg run -ErrorAction Stop", "dotnet run")]
+    [InlineData("powershell", "Start-Process git status -NoNewWindow -PassThru -Wait:$true", "git status")]
+    [InlineData("powershell", "saps dotnet", "dotnet")]
+    [InlineData("powershell", "start notepad -WindowStyle Hidden -RSO out.txt", "notepad")]
+    [InlineData("powershell", "Start-Process \"C:\\Tools\\x.exe\" -WorkingDirectory sub", "c:/tools/x")]
+    [InlineData("powershell", "Start-Process tool.cmd -ea SilentlyContinue", "tool")]
+    // It asks for another account, a verb, an unknown or ambiguous parameter, a value, a document, a URL, a script, or a shell.
+    [InlineData("powershell", "Start-Process dotnet -Verb RunAs", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process dotnet -RunAs $cred", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process dotnet -LoadUserProfile", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process dotnet -ArgumentList $a", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process dotnet -ArgumentList \"run $x\"", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process dotnet -Bogus x", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process dotnet -w x", CommandPrefix.Unreadable)]   // -w starts five names
+    [InlineData("powershell", "Start-Process report.pdf", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process .\\run.ps1", CommandPrefix.Unreadable)]   // a .ps1 opens in Notepad
+    [InlineData("powershell", "Start-Process https://example.com", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process $exe", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process dotnet run extra", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process powershell -ArgumentList '-c','Remove-Item x'", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "saps cmd -ArgumentList '/c rd /s /q apps'", CommandPrefix.Unreadable)]
+    [InlineData("powershell", "Start-Process C:\\Windows\\System32\\cmd.exe", CommandPrefix.Unreadable)]
     [InlineData("powershell", "Set-Alias git Remove-Item", CommandPrefix.Unreadable)]
     [InlineData("powershell", "sudo git push", CommandPrefix.Unreadable)]
     [InlineData("powershell", "env FOO=1 git push", CommandPrefix.Unreadable)]
@@ -404,6 +430,188 @@ public sealed class ShellTests
     }
 
     /// <summary>
+    /// What reached a saved allow list but is no command (2026-11-24, the session log review): a redirect's &amp; split a command, a
+    /// PowerShell value or keyword was a prefix, a path verb was a lower-case backslash string, a digit made <c>7z</c> a value.
+    /// </summary>
+    [Theory]
+    [InlineData("powershell", "dotnet build 2>&1", new[] { "dotnet build" })]
+    [InlineData("powershell", "dotnet test *>&1 | Out-File x.txt", new[] { "dotnet test", "out-file" })]
+    [InlineData("powershell", "Write-Error x 2>&1 >&2", new[] { "write-error" })]
+    [InlineData("bash", "ls &> out.txt", new[] { "ls" })]
+    [InlineData("bash", "make &>> build.log", new[] { "make" })]
+    [InlineData("zsh", "ls &> out.txt", new[] { "ls" })]
+    [InlineData("bash", "sleep 5 & ls", new[] { "sleep", "ls" })]   // a background & still splits
+    [InlineData("powershell", "\"EXIT=$LASTEXITCODE\"", new[] { CommandPrefix.NoCommand })]
+    [InlineData("powershell", "$out", new[] { CommandPrefix.NoCommand })]
+    [InlineData("powershell", "$p='c:\\x'", new[] { CommandPrefix.NoCommand })]
+    [InlineData("powershell", "$null | dotnet run", new[] { "dotnet run" })]
+    [InlineData("powershell", "$code = $LASTEXITCODE; exit $code", new[] { "exit" })]
+    [InlineData("powershell", "if ($ok) { Stop-Process -Id 5 }", new[] { "stop-process" })]
+    [InlineData("powershell", "if ($a) { git status } elseif ($b) { git log } else { dir }", new[] { "git status", "git log", "dir" })]
+    [InlineData("powershell", "foreach ($f in $files) { Remove-Item $f }", new[] { "remove-item" })]
+    [InlineData("powershell", "try { dotnet build } catch { Write-Host x } finally { dir }", new[] { "dotnet build", "write-host", "dir" })]
+    [InlineData("powershell", "Get-ChildItem | % { $_.Name }", new[] { "get-childitem", "foreach-object" })]
+    [InlineData("powershell", "Get-ChildItem | ? { $_.Length -gt 1 }", new[] { "get-childitem", "where-object" })]
+    [InlineData("powershell", "Get-ChildItem | foreach Delete", new[] { "get-childitem", "foreach-object" })]   // the alias, not the keyword
+    [InlineData("powershell", "dotnet bin\\Debug\\x.dll", new[] { "dotnet bin/debug/x.dll" })]
+    [InlineData("powershell", "dotnet run --project src\\App.csproj", new[] { "dotnet run" })]
+    [InlineData("powershell", "dotnet App.dll", new[] { "dotnet app.dll" })]
+    [InlineData("powershell", "7z x a.zip", new[] { "7z" })]
+    [InlineData("powershell", "1..3 | % { $_ }", new[] { "foreach-object" })]
+    [InlineData("powershell", "1kb", new[] { CommandPrefix.NoCommand })]
+    [InlineData("powershell", "# a comment", new[] { CommandPrefix.NoCommand })]
+    public void CommandPrefix_All_NeverMakesAPrefixOfWhatIsNoCommand(string shell, string command, string[] prefixes)
+    {
+        Assert.True(ShellKinds.TryParse(shell, out var kind));
+        Assert.Equal(prefixes, CommandPrefix.All(command, kind));
+    }
+
+    /// <summary>
+    /// A shell given a line is read inside (2026-11-24, the session log review): its script's prefixes stand for the shell's, past the switches each
+    /// shell takes; a script file is its own prefix; an unknown switch, a colon value or a script from stdin asks.
+    /// </summary>
+    [Theory]
+    [InlineData("powershell", "powershell -NoProfile -Command \"git status; Remove-Item x\"", new[] { "git status", "remove-item" })]
+    [InlineData("powershell", "pwsh -NoLogo -ExecutionPolicy Bypass -c \"dotnet build\"", new[] { "dotnet build" })]
+    [InlineData("powershell", "powershell -nop -ep bypass -noni -w hidden -c \"dotnet build\"", new[] { "dotnet build" })]
+    [InlineData("powershell", "powershell -c git status", new[] { "git status" })]   // unquoted words joined
+    [InlineData("powershell", "powershell \"git status; dir\"", new[] { "git status", "dir" })]   // Windows PowerShell's first word is the command
+    [InlineData("powershell", "$out = pwsh -c \"git log\"", new[] { "git log" })]
+    [InlineData("powershell", "powershell -File .\\x.ps1 -Name a", new[] { "./x" })]   // as a typed .\x.ps1 reads
+    [InlineData("powershell", "pwsh x.ps1", new[] { "x" })]   // pwsh's first word is a script file
+    [InlineData("powershell", "powershell -NoProfile", new[] { "powershell" })]   // nothing to run: the shell's own name
+    [InlineData("powershell", "powershell -Command -", new[] { CommandPrefix.Unreadable })]
+    [InlineData("powershell", "powershell -Bogus -c x", new[] { CommandPrefix.Unreadable })]
+    [InlineData("powershell", "powershell -ExecutionPolicy:Bypass -c \"x\"", new[] { CommandPrefix.Unreadable })]
+    [InlineData("powershell", "powershell -no -c x", new[] { CommandPrefix.Unreadable })]   // -no starts four switches
+    [InlineData("powershell", "powershell -File $script", new[] { CommandPrefix.Unreadable })]
+    [InlineData("powershell", "C:\\Windows\\System32\\cmd.exe /c \"dir & del x\"", new[] { "dir", "del" })]
+    [InlineData("powershell", "pwsh -c \"cmd /c 'type a.txt'\"", new[] { "type" })]   // two shells down
+    [InlineData("cmd", "cmd /d /s /c \"dir & del x\"", new[] { "dir", "del" })]
+    [InlineData("cmd", "cmd /c", new[] { CommandPrefix.Unreadable })]
+    [InlineData("cmd", "cmd /x /c dir", new[] { CommandPrefix.Unreadable })]
+    [InlineData("cmd", "cmd", new[] { "cmd" })]
+    [InlineData("bash", "bash -lc 'ls; rm x' arg0", new[] { "ls", "rm" })]   // the word after the script is $0
+    [InlineData("bash", "sh -c 'git status && make test'", new[] { "git status", "make test" })]
+    [InlineData("bash", "bash -e -o pipefail -c 'ls'", new[] { "ls" })]
+    [InlineData("bash", "/bin/bash -c 'ls; rm x'", new[] { "ls", "rm" })]   // a shell by its file name
+    [InlineData("bash", "env bash -c 'ls; rm x'", new[] { "ls", "rm" })]   // past the runners Of reads through
+    [InlineData("bash", "nohup bash -c 'rm x'", new[] { "rm" })]
+    [InlineData("bash", "FOO=1 bash -c 'ls'", new[] { "ls" })]
+    [InlineData("bash", "bash ./build.sh", new[] { "./build" })]
+    [InlineData("bash", "bash -s", new[] { CommandPrefix.Unreadable })]
+    [InlineData("bash", "bash -c", new[] { CommandPrefix.Unreadable })]
+    [InlineData("zsh", "zsh -c 'ls &> out.txt; rm x'", new[] { "ls", "rm" })]
+    [InlineData("zsh", "sudo bash -c 'ls'", new[] { CommandPrefix.Unreadable })]   // a runner that asks still asks
+    public void CommandPrefix_All_ReadsInsideAShellGivenALine(string shell, string command, string[] prefixes)
+    {
+        Assert.True(ShellKinds.TryParse(shell, out var kind));
+        Assert.Equal(prefixes, CommandPrefix.All(command, kind));
+    }
+
+    /// <summary>A saved shell no longer holds what it is told to run (2026-11-24): its own prefix stands only for itself with nothing to run.</summary>
+    [Fact]
+    public void CommandAllowList_ASavedShell_NeverHoldsItsScript()
+    {
+        var list = new CommandAllowList(() => ["powershell", "bash", "git status"], _ => { });
+        Assert.False(list.AllowsAll(CommandPrefix.All("powershell -c \"Remove-Item x\"")));
+        Assert.True(list.AllowsAll(CommandPrefix.All("powershell -NoProfile -c \"git status\"")));
+        Assert.False(list.AllowsAll(CommandPrefix.All("/bin/bash -c 'rm x'", ShellKind.Bash)));
+        Assert.True(list.AllowsAll(CommandPrefix.All("powershell -NoLogo")));
+        Assert.Equal(new CommandPrefix.NestedShell(ShellKind.Cmd, "dir", null, false), CommandPrefix.NestedScript("cmd /c dir", ShellKind.PowerShell));
+        Assert.Null(CommandPrefix.NestedScript("git status", ShellKind.PowerShell));
+        Assert.True(ShellLaunchers.IsShell("c:/windows/system32/cmd"));
+        Assert.True(ShellLaunchers.IsShell("/bin/bash"));
+        Assert.False(ShellLaunchers.IsShell("./bash-helper"));
+    }
+
+    /// <summary>A Start-Process in a value reads as its program (2026-11-24, the log's <c>(Start-Process dotnet -ArgumentList 'run').ExitCode</c>).</summary>
+    [Fact]
+    public void CommandPrefix_All_StartProcess_InAValue_IsItsProgram()
+    {
+        Assert.Equal(["dotnet run"], CommandPrefix.All("(Start-Process dotnet -ArgumentList 'run','--','--test' -PassThru -Wait).ExitCode"));
+        Assert.Equal(["rm"], CommandPrefix.All("Start-Process rm -ArgumentList '-rf','apps'"));
+        Assert.Equal(["xcopy"], CommandPrefix.All("Start-Process xcopy -ArgumentList '/e','/i','tmp','.agents'"));
+        Assert.True(CommandPrefix.StartsProcess("$p = saps dotnet", ShellKind.PowerShell));
+        Assert.True(CommandPrefix.StartsProcess("Microsoft.PowerShell.Management\\Start-Process x", ShellKind.PowerShell));
+        Assert.False(CommandPrefix.StartsProcess("start x", ShellKind.Bash));
+        Assert.False(CommandPrefix.StartsProcess("git status", ShellKind.PowerShell));
+    }
+
+    [Fact]
+    public void CommandPrefix_All_AnAssignedCall_NeverPrefixesItsTarget()
+    {
+        var prefixes = CommandPrefix.All("$out = & (Get-Command dotnet) build");
+        Assert.DoesNotContain("$out", prefixes);
+        Assert.Contains("get-command", prefixes);
+        Assert.Equal("(no command)", CommandPrefix.NoCommand);
+        Assert.Empty(CommandPrefix.All("   "));
+    }
+
+    /// <summary>
+    /// The shapes no reader makes, never held (2026-11-24, the session log review), and <see cref="CommandAllowList.Tidy"/> dropping them and
+    /// scripts from a saved list as the profile loads, rewriting <c>%</c>, <c>?</c> and a backslash path verb the way the reader now does.
+    /// </summary>
+    [Fact]
+    public void CommandAllowList_NeverHoldsWhatIsNoCommand_AndTidyCleansTheSavedList()
+    {
+        foreach (string junk in new[] { "$null", "$out", "exit=$code", "gate exit: $code", "\"x\"", "1", "1.5", "if", "Else", "foreach", CommandPrefix.NoCommand })
+        {
+            Assert.True(CommandAllowList.IsNotACommand(junk) || CommandAllowList.IsNeverAllowed(junk), junk);
+        }
+
+        foreach (string real in new[] { "7z", "git status", "[system.io.file]::readalltext", "c:/tools/x", "foreach-object", "dotnet junglerain/bin/debug/x.dll" })
+        {
+            Assert.False(CommandAllowList.IsNotACommand(real), real);
+        }
+
+        List<string> saved = ["$null", "exit=$code", "if", "code:python", "git status", "%", "?", "dotnet junglerain\\bin\\debug\\net10.0\\junglerain.dll", "dotnet junglerain/bin/debug/net10.0/junglerain.dll"];
+        var persisted = new List<IReadOnlyList<string>>();
+        var list = new CommandAllowList(() => saved, merged => { persisted.Add(merged); saved = [.. merged]; });
+        Assert.False(list.IsAllowed("$null"));   // a hand edit is never matched
+        Assert.False(list.IsAllowed("code:python"));   // a saved script allows nothing
+        var lines = new List<string>();
+        Action<NeonSidekick.Diagnostics.DiagnosticEvent> capture = e => { lock (lines) { lines.Add(e.Category + ": " + e.Message); } };
+        NeonSidekick.Diagnostics.DiagnosticLog.Emitted += capture;
+        try
+        {
+            list.Tidy();
+            list.Tidy();   // clean now: no second save
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.DiagnosticLog.Emitted -= capture;
+        }
+
+        Assert.Equal(["dotnet junglerain/bin/debug/net10.0/junglerain.dll", "foreach-object", "git status", "where-object"], Assert.Single(persisted));
+        Assert.True(list.IsAllowed(CommandPrefix.All("dotnet junglerain\\bin\\Debug\\net10.0\\JungleRain.dll").Single()));   // the old allow keeps working
+        lock (lines)
+        {
+            Assert.Equal("Shell: dropped 4 saved allow-list entries that can't be saved (scripts or not commands): $null, exit=$code, if, code:python", Assert.Single(lines, l => l.Contains("allow-list", StringComparison.Ordinal)));
+        }
+
+        Assert.Equal("dropped 1 saved allow-list entry that can't be saved (scripts or not commands): if", ShellText.TidiedLogLine(["if"]));
+    }
+
+    /// <summary>A script is held for the session but never saved (2026-11-24, the user's call); each pick says what it held.</summary>
+    [Fact]
+    public void CommandAllowList_AScript_IsHeldForTheSession_NeverSaved()
+    {
+        List<string> saved = [];
+        var list = new CommandAllowList(() => saved, merged => saved = [.. merged]);
+
+        Assert.Equal(["code:python"], list.AllowSession(["code:python"]));
+        Assert.True(list.IsAllowed("code:python"));
+        Assert.Equal(["git status"], list.AllowPermanently(["code:node", "git status", CommandPrefix.Unreadable, "$x"]));
+        Assert.Equal(["git status"], saved);
+        Assert.False(list.IsAllowed("code:node"));
+        Assert.Contains("code:python", list.Snapshot());   // the session's script shows
+        Assert.Equal(["git status"], CommandAllowList.Merge(["code:python", "Git Status"], []));
+        Assert.Equal(["git status", "code:python"], CommandAllowList.Holdable(["Git Status", "code:python", "git status", CommandPrefix.NoCommand], forSave: false));
+        Assert.Equal(["git status"], CommandAllowList.Holdable(["git status", "code:python"], forSave: true));
+    }
+
+    /// <summary>
     /// Substitutions (2026-10-12, the shell review): the commands they run are prefixes of the line too, so an allowed prefix never
     /// carries an unasked command inside it; what cannot be read is <see cref="CommandPrefix.Unreadable"/>.
     /// </summary>
@@ -424,7 +632,7 @@ public sealed class ShellTests
     [InlineData("powershell", "git log $(Remove-Item x; Stop-Process -Id 1)", new[] { "git log", "remove-item", "stop-process" })]   // the ; inside is the body's
     [InlineData("powershell", "Get-Item x # (an unclosed note", new[] { "get-item" })]   // a comment
     [InlineData("powershell", "git log $(Remove-Item x", new[] { "git log", CommandPrefix.Unreadable })]   // left open
-    [InlineData("powershell", "& $tool -x", new[] { "$tool", CommandPrefix.Unreadable })]   // the call operator on a value
+    [InlineData("powershell", "& $tool -x", new[] { CommandPrefix.Unreadable })]   // the call operator on a value (its $tool never a prefix since 2026-11-24)
     [InlineData("powershell", "git $(Write-Output push)", new[] { CommandPrefix.Unreadable, "write-output" })]   // a verb from a substitution
     [InlineData("bash", "git log `rm -rf src`", new[] { "git log", "rm" })]
     [InlineData("bash", "git log \"$(rm -rf src)\"", new[] { "git log", "rm" })]
@@ -671,6 +879,39 @@ public sealed class ShellTests
 
         // The record (2026-09-26): the denial and the never-asked, not the approvals.
         Assert.Equal(["git push origin", "rm -rf x"], gate.Refusals);
+    }
+
+    /// <summary>
+    /// An Always on a line with a part no reader can hold saves only the readable part (2026-11-24, the session log review), and the line asks
+    /// again; a line of values alone offers Deny and Once, and a script Deny, Once and the session.
+    /// </summary>
+    [Fact]
+    public async Task CommandGate_Always_OnAMixedLine_SavesOnlyTheReadablePart()
+    {
+        var settings = new AppSettingsData { ShellCommandPolicy = "ask" };
+        var saved = new List<string>();
+        var list = new CommandAllowList(() => saved, merged => saved = [.. merged]);
+        var answers = new Queue<CommandChoice?>();
+        var gate = new CommandGate(() => settings, list, (_, _) => Task.FromResult(answers.Dequeue()));
+
+        var mixed = Request("$out = 1; dotnet build; & $tool -x");
+        Assert.Equal(["dotnet build", CommandPrefix.Unreadable], mixed.Prefixes);
+        Assert.Equal(ShellText.ApprovalKeys, ShellText.ApprovalKeysFor(mixed));
+        answers.Enqueue(CommandChoice.Permanent);
+        Assert.True((await gate.JudgeAsync(mixed, CancellationToken.None)).Allowed);
+        Assert.Equal(["dotnet build"], saved);
+        answers.Enqueue(CommandChoice.Deny);
+        Assert.False((await gate.JudgeAsync(mixed, CancellationToken.None)).Allowed);   // the unreadable part asks each time
+        Assert.Empty(answers);
+
+        var values = Request("\"EXIT=$LASTEXITCODE\"");
+        Assert.Equal([CommandPrefix.NoCommand], values.Prefixes);
+        Assert.Equal([CommandChoice.Deny, CommandChoice.Once], App.CommandApprovalMenu.ChoicesFor(values));
+        Assert.Equal(ShellText.ApprovalKeysOnce, ShellText.ApprovalKeysFor(values));
+
+        var script = new CommandRequest("python", "print(1)", [ShellText.ScriptPrefix("python")]);
+        Assert.Equal([CommandChoice.Deny, CommandChoice.Once, CommandChoice.Session], App.CommandApprovalMenu.ChoicesFor(script));
+        Assert.Equal(ShellText.ApprovalKeysSession, ShellText.ApprovalKeysFor(script));
     }
 
     /// <summary>What a gate refused (2026-09-26): not approved without an asker, noted by a tool, never an approval, never the off policy's refusal.</summary>
@@ -1085,7 +1326,7 @@ public sealed class ShellTests
         Assert.Equal("approval: refused (denied by the user) — cmd \"dir\"", ShellText.RefusedLogLine(new CommandRequest("cmd", "dir", ["dir"]), "denied by the user"));
         Assert.Equal("run_command: cmd \"dir\" → exit 0 in 0.1 s (2,340 chars)", ShellText.RunLogLine("cmd", "dir", "exit 0 in 0.1 s", 2340));
         // The police (2026-09-22): the sentence names the token and the rule, never the setting; the transcript keys 👮 on its head.
-        Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it", ShellText.OutsidePath(@"C:\Windows\win.ini"));
+        Assert.Equal(@"Error: outside the working directory: 'C:\Windows\win.ini' — a command or a script may only name paths under it. Do not try another way to reach it; tell the user it was refused.", ShellText.OutsidePath(@"C:\Windows\win.ini"));
         Assert.True(ShellText.IsOutside(ShellText.OutsidePath("~")));
         Assert.False(ShellText.IsOutside(ShellText.WorkdirOutside("..")));
         Assert.False(ShellText.IsOutside("exit 0 in 0.0 s (cmd): dir\n"));
@@ -1106,10 +1347,26 @@ public sealed class ShellTests
         Assert.Equal("Run this command?", page.Title);
         Assert.Equal("powershell › git push origin main && rm x", page.Caption);
         Assert.Equal(["Deny", "Allow once", "Allow \"git push\", \"rm\" for this session", "Allow \"git push\", \"rm\" always (saved to the profile)"], page.Rows);
-        Assert.Equal(App.CommandApprovalMenu.Hotkeys, page.Hotkeys);
-        Assert.Equal(new Dictionary<char, int> { ['d'] = 0, ['o'] = 1, ['s'] = 2, ['a'] = 3 }, App.CommandApprovalMenu.Hotkeys);
-        Assert.Equal([CommandChoice.Deny, CommandChoice.Once, CommandChoice.Session, CommandChoice.Permanent], App.CommandApprovalMenu.Choices);
+        Assert.Equal(new Dictionary<char, int> { ['d'] = 0, ['o'] = 1, ['s'] = 2, ['a'] = 3 }, page.Hotkeys);
+        Assert.Equal([CommandChoice.Deny, CommandChoice.Once, CommandChoice.Session, CommandChoice.Permanent], App.CommandApprovalMenu.ChoicesFor(request));
+        Assert.Equal(ShellText.ApprovalKeys, page.Hint);
         Assert.Equal("Run this script?", App.CommandApprovalMenu.Page(script).Title);
+
+        // 2026-11-24, the session log review: a row that would hold nothing is hidden, a script is never saved, and the rows name only what they hold.
+        var scriptPage = App.CommandApprovalMenu.Page(script);
+        Assert.Equal(["Deny", "Allow once", "Allow python scripts for this session"], scriptPage.Rows);
+        Assert.Equal([CommandChoice.Deny, CommandChoice.Once, CommandChoice.Session], App.CommandApprovalMenu.ChoicesFor(script));
+        Assert.Equal(new Dictionary<char, int> { ['d'] = 0, ['o'] = 1, ['s'] = 2 }, scriptPage.Hotkeys);
+        Assert.Equal("d / o / s = pick · v = view · Enter = choose · Esc = deny", scriptPage.Hint);
+        var nothing = new CommandRequest("powershell", "\"EXIT=$LASTEXITCODE\"", [CommandPrefix.NoCommand]);
+        var nothingPage = App.CommandApprovalMenu.Page(nothing);
+        Assert.Equal(["Deny", "Allow once"], nothingPage.Rows);
+        Assert.Equal(new Dictionary<char, int> { ['d'] = 0, ['o'] = 1 }, nothingPage.Hotkeys);
+        Assert.Equal("d / o = pick · v = view · Enter = choose · Esc = deny", nothingPage.Hint);
+        var mixed = new CommandRequest("powershell", "git status; $(iex $x)", ["git status", CommandPrefix.Unreadable]);
+        Assert.Equal("Allow \"git status\" for this session (the unreadable part asks each time)", ShellText.SessionRow(mixed));
+        Assert.Equal("Allow \"git status\" always (saved to the profile) (the unreadable part asks each time)", ShellText.PermanentRow(mixed));
+        Assert.Equal("(🔓 allowed for this session: git status)", ShellText.SessionAllowedNotice(CommandAllowList.Holdable(mixed.Prefixes, forSave: false)));
 
         // The whole command (2026-10-07): the view's label and lines, a script's numbered, and the button on the title row.
         Assert.Equal([ShellText.ViewButton], App.CommandApprovalMenu.Page(script).Buttons!.Select(b => b.Title));

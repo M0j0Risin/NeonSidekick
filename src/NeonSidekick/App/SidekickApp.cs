@@ -1128,11 +1128,19 @@ public sealed partial class SidekickApp
         // allow list alone decides, and NEONSIDEKICK_COMMAND_POLICY=yolo is how a scripted run says yes.
         var interpreters = new Shell.Interpreters(_environment.System);
         var allowList = new Shell.CommandAllowList(() => EffectiveSettings.ShellCommandAllowed, allowed => _settings.Update(d => d.ShellCommandAllowed = [.. allowed]));
+        allowList.Tidy();   // as the screen's BindProfile does (2026-11-24, the session log review)
+        // --allow code (2026-11-24, the user's choice): a script can't be saved, so the run's own allow goes into the session set, never the profile.
+        if (_headlessAllowances.ScriptPrefixes is { Count: > 0 } scripts)
+        {
+            allowList.AllowSession(scripts);
+            DiagnosticLog.Info(Shell.ShellKinds.Category, AllowText.ScriptsAllowedLogLine(scripts));
+        }
+
         var runner = new Shell.ShellRunner(_time);
         // The background processes (2026-09-21): nothing to signal headless (the next line is read when it is read); the exits print as notices at the loop top and ride the next turn as seeded polls.
         using var processes = new Shell.ProcessRegistry(runner, Random.Shared, () => { });
         // Kept (2026-09-26): what it refused is the run's summary notice and exit code 3 at the end.
-        var gate = new Shell.CommandGate(() => EffectiveSettings, allowList, null);
+        var gate = new Shell.CommandGate(() => EffectiveSettings, allowList, null, _headlessAllowances.ScriptRefused);
         var shellTools = ChatScreen.ShellTools(runner, processes, files, gate, interpreters, () => EffectiveSettings, Random.Shared);
         var persona = BuildPersonaFile();
         var operata = BuildOperataFile();
@@ -2315,7 +2323,7 @@ public sealed partial class SidekickApp
                 }
 
                 // A pass's message is the app's (review P8-1), as the screen's pass messages are.
-                assistant.TurnMark = passTurn ? Llm.TurnMark.App : turnMark;
+                assistant.TurnMark = passTurn ? Llm.TurnMark.Pass : turnMark;
                 // An audit's views as its pass turn is sent (2026-11-17): a turn dropped for a retry forgets what it read.
                 var viewedMark = audit.InPass ? audit.ViewedMark() : null;
                 // What failed before this turn (2026-11-21, #41): a pass the app runs again takes back what its failed turn noted.
@@ -2767,7 +2775,7 @@ public sealed partial class SidekickApp
                 state.Draft = null;
                 // The plan on disk measured (2026-11-18, known problems up front), as the screen's BeginGapPass does.
                 return Plans.PlanText.GapPassMessage(path, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak,
-                    firstBody is null ? null : Plans.PlanFit.Structural(firstBody));
+                    firstBody is null ? null : Plans.PlanFit.Structural(firstBody), firstBody is null ? null : Plans.PlanDocument.CapChars(firstBody));
             }
 
             case ChatScreen.PlanCommand.Show:
@@ -2918,6 +2926,23 @@ public sealed partial class SidekickApp
             }
         }
 
+        // Scripts (2026-11-24): nothing to allow when no shell tool runs (off) or every script already does (yolo); the policy read as the
+        // gate reads it, so --yolo and the variable count. A code:<language> entry also when its language is off.
+        var policy = Shell.CommandPolicy.Resolve(effective);
+        Check(AllowKind.Code, (policy == Shell.CommandPolicyMode.Off, AllowText.CodePolicyOff), (policy == Shell.CommandPolicyMode.Yolo, AllowText.CodePolicyYolo));
+        var languages = Shell.CodeLanguages.Resolve(effective);
+        foreach (string language in _headlessAllowances.ScriptLanguages)
+        {
+            string? why = policy == Shell.CommandPolicyMode.Off ? AllowText.CodePolicyOff
+                : policy == Shell.CommandPolicyMode.Yolo ? AllowText.CodePolicyYolo
+                : !languages.Any(l => string.Equals(Shell.CodeLanguages.Name(l), language, StringComparison.Ordinal)) ? AllowText.LanguageOff(language)
+                : null;
+            if (why is not null)
+            {
+                notices.Add(AllowText.ChangesNothing(HeadlessAllowances.CodeLanguagePrefix + language, why));
+            }
+        }
+
         return notices;
     }
 
@@ -2982,9 +3007,14 @@ public sealed partial class SidekickApp
         {
             // A clean pass short of the streak (2026-10-17): the log every time, the notice only when another pass follows.
             DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.CleanPassLogLine(loop.Pass, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, advisorAsked, cost));
+            if (loop.PassHeld)
+            {
+                DiagnosticLog.Info(ChatScreen.AppCategory, Plans.PlanText.CleanHeldLogLine(loop.Pass));
+            }
+
             if (stop is null)
             {
-                lines.AddRange(Plans.PlanText.CleanPassNoticeLines(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor));
+                lines.AddRange(Plans.PlanText.CleanPassNoticeLines(loop.Pass, loop.Limit, loop.CleanCount, loop.CleanPasses, loop.PassChecked, loop.PassMinor, loop.PassHeld));
             }
         }
 
@@ -2994,7 +3024,7 @@ public sealed partial class SidekickApp
             loop.BeginPass(body, meter, offered);
             ChatScreen.LogGapFocus(loop);
             return Plans.PlanText.GapPassMessage(path!, loop.Pass, loop.Limit, offered ? loop.PassReviewer : Plans.PlanReviewer.Model, loop.CleanStreak,
-                body is null ? null : Plans.PlanFit.Structural(body));
+                body is null ? null : Plans.PlanFit.Structural(body), body is null ? null : Plans.PlanDocument.CapChars(body));
         }
 
         plan.StopClosing();

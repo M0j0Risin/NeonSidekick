@@ -53,8 +53,17 @@ internal sealed class FakeRalphHost(WorkingDirectory files, ManualTimeProvider t
 
     public void Log(string line) => Logs.Add(line);
 
-    public Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken) =>
-        Task.FromResult<RalphCheckResult?>(new RalphCheckResult(RalphCheckKind.Passed, 0, "", TimeSpan.Zero));
+    /// <summary>The checks' results in turn (2026-11-24: a failing trial, then a passing one); past the last, a pass.</summary>
+    public Queue<RalphCheckResult> CheckResults { get; } = new();
+
+    /// <summary>Each check run: its command and its busy label.</summary>
+    public List<(string Command, string Label)> Checks { get; } = [];
+
+    public Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken)
+    {
+        Checks.Add((command, label));
+        return Task.FromResult<RalphCheckResult?>(CheckResults.Count > 0 ? CheckResults.Dequeue() : new RalphCheckResult(RalphCheckKind.Passed, 0, "", TimeSpan.Zero));
+    }
 
     public string? SaveAuditReport(string path, Audits.AuditReport report, DateTimeOffset now) => Audits.AuditFiles.Save(files, path, report, now);
 

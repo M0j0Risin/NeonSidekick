@@ -79,7 +79,7 @@ public static class RalphChanges
     {
         ArgumentNullException.ThrowIfNull(files);
         var taken = DateTime.UtcNow;
-        if (git is not null && git.ChangedPaths("", cancellationToken) is { Outcome: GitOutcome.Ok } changed)
+        if (git is not null && git.ChangedPaths("", cancellationToken, Audits.AuditScopes.WalkSkips) is { Outcome: GitOutcome.Ok } changed)
         {
             // Each file's size and time first; its text then, the smallest first, while the budget lasts.
             var sizes = new Dictionary<string, RalphFileMark>(StringComparer.Ordinal);

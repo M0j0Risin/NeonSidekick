@@ -53,12 +53,19 @@ public sealed class CommandGate
     /// <param name="effective">The settings the policy is read from at every call.</param>
     /// <param name="allowList">The session's and the profile's allowed prefixes.</param>
     /// <param name="asker">Shows the request and waits: the choice, or null when nothing could ask (no watcher, the pane off) — read as <see cref="CommandChoice.Deny"/> with the no-screen sentence. Null headless.</param>
-    public CommandGate(Func<AppSettingsData> effective, CommandAllowList allowList, Func<CommandRequest, CancellationToken, Task<CommandChoice?>>? asker)
+    /// <param name="scriptRefused">
+    /// Told a refused script's language when nothing could ask (2026-11-24, <c>--allow code</c>): the headless start records it as an
+    /// <c>--allow</c> refusal for its closing summary. Null on the screen.
+    /// </param>
+    public CommandGate(Func<AppSettingsData> effective, CommandAllowList allowList, Func<CommandRequest, CancellationToken, Task<CommandChoice?>>? asker, Action<string>? scriptRefused = null)
     {
         _effective = effective ?? throw new ArgumentNullException(nameof(effective));
         _allowList = allowList ?? throw new ArgumentNullException(nameof(allowList));
         _asker = asker;
+        _scriptRefused = scriptRefused;
     }
+
+    private readonly Action<string>? _scriptRefused;
 
     /// <summary>The allow list the gate judges by.</summary>
     public CommandAllowList AllowList => _allowList;
@@ -122,6 +129,13 @@ public sealed class CommandGate
         {
             DiagnosticLog.Info(ShellKinds.Category, ShellText.RefusedLogLine(request, "no screen to ask on"));
             NoteRefused(request);
+            if (request.IsScript)
+            {
+                // A script can't be saved (2026-11-24): the profile's list can't hold it, --allow code can.
+                _scriptRefused?.Invoke(request.Kind);
+                return CommandVerdict.Refuse(ShellText.ScriptNotAskable(request.Kind, _allowList.Snapshot()));
+            }
+
             return CommandVerdict.Refuse(ShellText.NotAskable(_allowList.Snapshot()));
         }
 
@@ -131,13 +145,14 @@ public sealed class CommandGate
             case CommandChoice.Once:
                 DiagnosticLog.Info(ShellKinds.Category, ShellText.ApprovedLogLine(request, "allowed once"));
                 return CommandVerdict.Run;
+            // The log line names what was held (2026-11-24, the session log review: it named the unreadable part and values too).
             case CommandChoice.Session:
-                _allowList.AllowSession(request.Prefixes);
-                DiagnosticLog.Info(ShellKinds.Category, ShellText.ApprovedLogLine(request, "allowed for the session: " + string.Join(", ", request.Prefixes)));
+                var session = _allowList.AllowSession(request.Prefixes);
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.ApprovedLogLine(request, "allowed for the session: " + string.Join(", ", session)));
                 return CommandVerdict.Run;
             case CommandChoice.Permanent:
-                _allowList.AllowPermanently(request.Prefixes);
-                DiagnosticLog.Info(ShellKinds.Category, ShellText.ApprovedLogLine(request, "allowed always: " + string.Join(", ", request.Prefixes)));
+                var saved = _allowList.AllowPermanently(request.Prefixes);
+                DiagnosticLog.Info(ShellKinds.Category, ShellText.ApprovedLogLine(request, "allowed always: " + string.Join(", ", saved)));
                 return CommandVerdict.Run;
             case CommandChoice.Deny:
                 DiagnosticLog.Info(ShellKinds.Category, ShellText.RefusedLogLine(request, "denied by the user"));

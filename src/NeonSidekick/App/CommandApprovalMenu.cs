@@ -6,8 +6,8 @@ namespace NeonSidekick.App;
 
 /// <summary>
 /// The approval pane (2026-09-21): the question the gate puts to the user before a command runs
-/// — the command as its caption, four rows (<see cref="Rows"/>: Deny, Allow once, Allow the
-/// prefixes for the session, Allow them always) with <c>d</c> / <c>o</c> / <c>s</c> / <c>a</c> as hotkeys
+/// — the command as its caption, up to four rows (<see cref="Rows"/>: Deny, Allow once, Allow the
+/// prefixes for the session, Allow them always; since 2026-11-24 a row that would hold nothing is hidden, and a script has no Always) with <c>d</c> / <c>o</c> / <c>s</c> / <c>a</c> as hotkeys
 /// and the cursor on Deny, the <see cref="SettingsMenu.ConfirmAsync"/> shape: an Enter while a
 /// reply streams must never approve. ESC, the token and no keyboard are Deny. The pane closes with
 /// the answer. Runs on the watcher task through <see cref="ChatScreen"/>'s pane request, like the
@@ -31,33 +31,58 @@ public sealed class CommandApprovalMenu
     /// <summary>The title row's button: the whole command.</summary>
     public static readonly IReadOnlyList<MenuButton> Buttons = [new(ShellText.ViewButton, ShellText.ViewKey)];
 
-    /// <summary>The hotkeys: the first letter of each row, lower case.</summary>
-    public static readonly IReadOnlyDictionary<char, int> Hotkeys = new Dictionary<char, int> { ['d'] = 0, ['o'] = 1, ['s'] = 2, ['a'] = 3 };
-
-    /// <summary>The choice each row stands for, by index.</summary>
-    public static readonly IReadOnlyList<CommandChoice> Choices = [CommandChoice.Deny, CommandChoice.Once, CommandChoice.Session, CommandChoice.Permanent];
-
-    /// <summary>The four rows as markup, escaped. Pinned.</summary>
-    public static IReadOnlyList<string> Rows(CommandRequest request)
+    /// <summary>
+    /// The choice each row shown stands for, by index (2026-11-24, the session log review): Deny and Once always; Session when something on the
+    /// line can be held, Always when something can be saved (never for a script). Per request, so a hidden Session row can't shift Always onto its index.
+    /// </summary>
+    public static IReadOnlyList<CommandChoice> ChoicesFor(CommandRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return
-        [
-            Markup.Escape(ShellText.DenyRow),
-            Markup.Escape(ShellText.OnceRow),
-            Markup.Escape(ShellText.SessionRow(request)),
-            Markup.Escape(ShellText.PermanentRow(request)),
-        ];
+        var choices = new List<CommandChoice> { CommandChoice.Deny, CommandChoice.Once };
+        if (ShellText.ShowsSessionRow(request))
+        {
+            choices.Add(CommandChoice.Session);
+        }
+
+        if (ShellText.ShowsPermanentRow(request))
+        {
+            choices.Add(CommandChoice.Permanent);
+        }
+
+        return choices;
     }
+
+    /// <summary>The hotkeys of the rows shown: the first letter of each, lower case (<c>d</c> / <c>o</c> / <c>s</c> / <c>a</c>).</summary>
+    public static IReadOnlyDictionary<char, int> HotkeysFor(CommandRequest request)
+    {
+        var choices = ChoicesFor(request);
+        var keys = new Dictionary<char, int>();
+        for (int i = 0; i < choices.Count; i++)
+        {
+            keys[choices[i] switch { CommandChoice.Deny => 'd', CommandChoice.Once => 'o', CommandChoice.Session => 's', _ => 'a' }] = i;
+        }
+
+        return keys;
+    }
+
+    /// <summary>The rows shown as markup, escaped (<see cref="ChoicesFor"/>'s order). Pinned.</summary>
+    public static IReadOnlyList<string> Rows(CommandRequest request) =>
+        ChoicesFor(request).Select(choice => Markup.Escape(choice switch
+        {
+            CommandChoice.Deny => ShellText.DenyRow,
+            CommandChoice.Once => ShellText.OnceRow,
+            CommandChoice.Session => ShellText.SessionRow(request),
+            _ => ShellText.PermanentRow(request),
+        })).ToList();
 
     /// <summary>The page for <paramref name="request"/>: the title by kind, the command as the caption, the rows, the keys, and the view's button.</summary>
     public static MenuPage Page(CommandRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return new MenuPage(request.IsScript ? ShellText.ScriptApprovalTitle : ShellText.ApprovalTitle, Rows(request), ShellText.ApprovalKeys)
+        return new MenuPage(request.IsScript ? ShellText.ScriptApprovalTitle : ShellText.ApprovalTitle, Rows(request), ShellText.ApprovalKeysFor(request))
         {
             Caption = ShellText.Caption(request),
-            Hotkeys = Hotkeys,
+            Hotkeys = HotkeysFor(request),
             Buttons = Buttons,
         };
     }
@@ -71,6 +96,7 @@ public sealed class CommandApprovalMenu
             return null;
         }
 
+        var choices = ChoicesFor(request);
         try
         {
             int cursor = 0;
@@ -89,7 +115,7 @@ public sealed class CommandApprovalMenu
                     continue;
                 }
 
-                return pick is { } picked && picked.Row >= 0 && picked.Row < Choices.Count ? Choices[picked.Row] : CommandChoice.Deny;
+                return pick is { } picked && picked.Row >= 0 && picked.Row < choices.Count ? choices[picked.Row] : CommandChoice.Deny;
             }
         }
         finally

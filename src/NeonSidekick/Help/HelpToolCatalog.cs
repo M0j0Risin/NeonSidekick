@@ -120,7 +120,7 @@ internal static class HelpToolCatalog
             setup: "each line passes *Shell command policy* (ask, allowed list or yolo) and the shell police (*Shell police*)"),
         T(ProcessTool.ToolName, ShellGroup, SettingsField.ShellCommandPolicy, "Lists, polls, reads, feeds or ends the background processes `run_command` started."),
         T(ExecuteCodeTool.ToolName, ShellGroup, SettingsField.ShellCommandPolicy, "Runs a script in a fresh process in the working directory and gives back what it printed.",
-            setup: "needs an interpreter for one of the languages *Shell code languages* names"),
+            setup: "needs an interpreter for one of the languages *Shell code languages* names; each script asks once or for the session; a headless run refuses it unless it has --allow code"),
         // Obsidian
         T(VaultSearchTool.ToolName, ToolsText.ObsidianTabTitle, SettingsField.ObsidianTools, "Searches the user's Obsidian vault for a text, by line and by note name.", setup: "needs a vault in *Obsidian vault*"),
         T(VaultListTool.ToolName, ToolsText.ObsidianTabTitle, SettingsField.ObsidianTools, "Lists the vault's notes by folder, tag or property.", setup: "needs a vault in *Obsidian vault*"),

@@ -30,10 +30,10 @@ internal interface IRalphStartHost
     Task<RalphCheckResult?> CheckAsync(string command, ShellKind shell, string label, CancellationToken cancellationToken);
 
     /// <summary>
-    /// A failing baseline's answer: true to start anyway. <paramref name="verify"/> says the per-step command failed (yes leaves the steps unchecked);
-    /// false, only the final one (the steps stay checked). The host says what a no means.
+    /// A failing final baseline's answer: true to start anyway, the steps still checked. The host says what a no means. A failing verify asks nothing
+    /// since 2026-11-24 (the session log review): it is pending, tried after each step until it first passes.
     /// </summary>
-    Task<bool> StartAnywayAsync(string command, bool verify, CancellationToken cancellationToken);
+    Task<bool> StartAnywayAsync(string command, CancellationToken cancellationToken);
 }
 
 /// <summary>How a loop's baseline ended (<see cref="RalphStart.BaselineAsync"/>).</summary>
@@ -94,10 +94,11 @@ internal static class RalphStart
 
     /// <summary>
     /// The police and the policy over both commands (a refusal stops the start; the policy off runs nothing, the steps unchecked this run), then the
-    /// baseline: the verify command (skipped under <paramref name="finalOnly"/>) and the final one, in that order. A failing verify asks "start anyway?"
-    /// (yes: final-only checking, the final baseline not run); a failing final one asks too, but a yes keeps the steps checked (2026-10-19, the fourth
-    /// review: it set final-only, dropping the per-step verify that had just passed, though a final check that tests the work still to do fails before
-    /// the loop by design). A check whose script isn't there yet (2026-10-24, the user's report: a plan whose step writes the script its check runs
+    /// baseline: the verify command and the final one, in that order. A failing verify asks nothing (2026-11-24, the session log review: a yes to "start
+    /// anyway?" left every step unchecked by the app): the check is pending (<see cref="RalphBaseline.FinalOnly"/>), said, tried after each step until it
+    /// first passes, and the final baseline isn't run, since a project with no harness yet fails both for one reason. A verify that passes now adopts
+    /// it, a resume's pending one too (<paramref name="finalOnly"/>). A failing final one asks "start anyway?", a yes keeping the steps checked
+    /// (2026-10-19, the fourth review: a final check that tests the work still to do fails before the loop by design). A check whose script isn't there yet (2026-10-24, the user's report: a plan whose step writes the script its check runs
     /// was refused, and with the police off its failing baseline would have dropped the step checks) is skipped with a notice, police on or off, no
     /// question asked and the steps still checked; the pre-check lets it past the police (<c>missingScriptsPass</c>), and each run asks them again.
     /// </summary>
@@ -120,7 +121,8 @@ internal static class RalphStart
             }
         }
 
-        string? stepCheck = finalOnly ? null : verify;
+        string? stepCheck = verify;
+        bool pending = finalOnly;
         foreach (string command in new[] { stepCheck, final }.OfType<string>().Where(c => c.Length > 0).Distinct(StringComparer.Ordinal))
         {
             // A check whose script isn't there yet is skipped, whatever the police: the plan writes it, so it can't pass before a step.
@@ -141,8 +143,11 @@ internal static class RalphStart
                 return new RalphBaseline(RalphBaselineOutcome.Refused, finalOnly, false);
             }
 
+            // The per-step command (one that is the final command too counts as it).
+            bool isVerify = string.Equals(command, stepCheck, StringComparison.Ordinal);
             if (baseline.Passed)
             {
+                pending &= !isVerify;   // a pending check that passes now is adopted at once
                 continue;
             }
 
@@ -153,22 +158,21 @@ internal static class RalphStart
                 continue;
             }
 
-            // The per-step command (one that is the final command too counts as it: a failure leaves it for the end).
-            bool isVerify = string.Equals(command, stepCheck, StringComparison.Ordinal);
             await host.TailAsync(baseline.Tail).ConfigureAwait(false);
-            if (!await host.StartAnywayAsync(command, isVerify, cancellationToken).ConfigureAwait(false))
-            {
-                return new RalphBaseline(RalphBaselineOutcome.Declined, finalOnly, false);
-            }
-
             if (isVerify)
             {
-                // Start anyway: the steps unchecked, the verify command run once at the end in place of a final that is missing.
+                // Pending: tried after each step, adopted the first time it passes, else run once at the end in place of a final that is missing.
+                await host.NoticeAsync(RalphText.BaselinePendingNotice(command)).ConfigureAwait(false);
                 return new RalphBaseline(RalphBaselineOutcome.Go, true, false);
+            }
+
+            if (!await host.StartAnywayAsync(command, cancellationToken).ConfigureAwait(false))
+            {
+                return new RalphBaseline(RalphBaselineOutcome.Declined, pending, false);
             }
         }
 
-        return new RalphBaseline(RalphBaselineOutcome.Go, finalOnly, false);
+        return new RalphBaseline(RalphBaselineOutcome.Go, pending, false);
     }
 
     /// <summary>A baseline check skipped because <paramref name="script"/> isn't there yet: said and logged.</summary>
