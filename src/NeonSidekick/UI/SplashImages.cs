@@ -236,7 +236,7 @@ public static class SplashImages
     public const string FallbackStem = "splash";
 
     /// <summary>How many taken names a copy steps past after its look before it reports the failure.</summary>
-    private const int CopyTries = 5;
+    internal const int CopyTries = 5;
 
     /// <summary>
     /// Copies <paramref name="source"/> into the splash <paramref name="folder"/> (2026-11-23, shared by <c>set_splash_image</c> and the picture
@@ -252,7 +252,8 @@ public static class SplashImages
             return new SplashAdd(SplashAddResult.NotAnImage, "", false, "");
         }
 
-        if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(source)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase))
+        // The folder's own case rule (2026-11-24, review #25): on a case-sensitive disk cat.png and Cat.png are two pictures.
+        if (string.Equals(Path.GetDirectoryName(Path.GetFullPath(source)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), CaseRule.Comparison(folder)))
         {
             return new SplashAdd(SplashAddResult.Already, "", false, "");
         }
@@ -268,6 +269,9 @@ public static class SplashImages
 
         try
         {
+            // One source stream, opened before anything is made (2026-11-24, review #39): a vanished source fails here; each try rewinds it, as
+            // WriteNew reads it to the end before it finds a name taken.
+            using var content = File.OpenRead(source);
             Directory.CreateDirectory(folder);
             int n = 1;
             string target = Path.Combine(folder, stem + extension);
@@ -278,16 +282,20 @@ public static class SplashImages
                     target = Path.Combine(folder, stem + "-" + (++n).ToString(System.Globalization.CultureInfo.InvariantCulture) + extension);
                 }
 
-                try
+                // A temp sibling moved in, never over anything: a failed copy leaves no partial picture, and false is a name taken since the look
+                // (another add at the same moment) or by a folder (the last-7 review's #39).
+                content.Position = 0;
+                if (WorkingDirectory.WriteNew(target, content))
                 {
-                    File.Copy(source, target, overwrite: false);
                     break;
                 }
-                catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && tries < CopyTries && Path.Exists(target))
+
+                if (tries >= CopyTries)
                 {
-                    // The name taken since the look (another add at the same moment), or by a folder: the next one (2026-11-24, the last-7 review's #39).
-                    target = Path.Combine(folder, stem + "-" + (++n).ToString(System.Globalization.CultureInfo.InvariantCulture) + extension);
+                    return new SplashAdd(SplashAddResult.Failed, "", false, Images.ImageText.SplashNamesTaken(stem));
                 }
+
+                target = Path.Combine(folder, stem + "-" + (++n).ToString(System.Globalization.CultureInfo.InvariantCulture) + extension);
             }
 
             bool only = Directory.EnumerateFiles(folder).Count(ImageFile.IsImagePath) == 1;

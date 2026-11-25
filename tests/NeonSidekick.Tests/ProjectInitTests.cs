@@ -463,6 +463,62 @@ public sealed class ProjectInitTests : IDisposable
         Assert.Equal(ProjectInitAnswer.None, _session.Answer);
     }
 
+    /// <summary>A Write refused because the file changed meanwhile marks the session (2026-11-24, review #61); a retry that shows a pane clears it.</summary>
+    [Fact]
+    public async Task AChangedMeanwhileRefusal_MarksTheSession_UntilANewPane()
+    {
+        _box.Write(ProjectFile.PrimaryFileName, "# Old\n");
+        Begin(mode: ProjectInitMode.Improve);
+        int shows = 0;
+        var tool = new PresentProjectNotesTool(_session, _box.Files, (_, _) =>
+        {
+            shows++;
+            if (shows == 1)
+            {
+                _box.Write(ProjectFile.PrimaryFileName, "# Edited meanwhile\n");
+            }
+
+            return Task.FromResult<ProjectNotesVerdict?>(new ProjectNotesVerdict(shows == 1 ? ProjectNotesChoice.Write : ProjectNotesChoice.Revise));
+        });
+
+        await CallAsync(tool, Draft);
+        Assert.True(_session.WriteRefused);
+
+        await CallAsync(tool, Draft);
+        Assert.Equal(2, shows);
+        Assert.False(_session.WriteRefused);
+        Assert.True(_session.Presented);
+    }
+
+    /// <summary>
+    /// A folder moved while the pane waits marks the session (2026-11-24, review #61), and a retry the moved check refuses before any pane keeps
+    /// the mark, so the pass's end never reads "no revised draft". A new pass clears it.
+    /// </summary>
+    [Fact]
+    public async Task AMoveWhileThePaneWaits_MarksTheSession_AndARetryRefusedBeforeAPaneKeepsIt()
+    {
+        string root = _box.Root;
+        var files = new WorkingDirectory(() => root, new ManualTimeProvider());
+        Begin();
+        var tool = new PresentProjectNotesTool(_session, files, (_, _) =>
+        {
+            root = Path.Combine(_box.Root, "elsewhere");
+            Directory.CreateDirectory(root);
+            return Task.FromResult<ProjectNotesVerdict?>(new ProjectNotesVerdict(ProjectNotesChoice.Write));
+        });
+
+        var (text, _) = await CallAsync(tool, Draft);
+        Assert.Equal(ProjectInitText.MovedResult, text);
+        Assert.True(_session.WriteRefused);
+
+        (text, _) = await CallAsync(tool, Draft);
+        Assert.Equal(ProjectInitText.MovedResult, text);
+        Assert.True(_session.WriteRefused);
+
+        Begin();
+        Assert.False(_session.WriteRefused);
+    }
+
     /// <summary>A failed write marks the session (review #97/#91), and the next call clears the mark.</summary>
     [Fact]
     public async Task AFailedWrite_MarksTheSession_UntilTheNextCall()

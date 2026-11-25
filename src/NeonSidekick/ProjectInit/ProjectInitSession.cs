@@ -29,6 +29,13 @@ public sealed class ProjectInitSession
     /// </summary>
     public bool WriteFailed { get; private set; }
 
+    /// <summary>
+    /// Whether a Write was refused after the pane (2026-11-24, review #61): the folder moved or the file changed while the draft was shown. The
+    /// user was told then, so the pass's end says nothing more. Kept until a new pane is shown (<see cref="MarkPresented"/>), so a retry refused
+    /// before any pane still counts; cleared by <see cref="Begin"/>.
+    /// </summary>
+    public bool WriteRefused { get; private set; }
+
     /// <summary>Whether this turn offers <c>ask_user</c>, as the directive was last built (a Revise with no words reads it).</summary>
     public bool AskUser { get; private set; }
 
@@ -39,16 +46,24 @@ public sealed class ProjectInitSession
         Answer = ProjectInitAnswer.None;
         Presented = false;
         WriteFailed = false;
+        WriteRefused = false;
     }
 
     /// <summary>A call's Write failed (true), or a call began (false).</summary>
     public void MarkWriteFailed(bool failed) => WriteFailed = failed;
 
+    /// <summary>A Write refused after the pane (true): the folder moved or the file changed meanwhile.</summary>
+    public void MarkWriteRefused(bool refused) => WriteRefused = refused;
+
     /// <summary>The pass is over (the turn ended, however): nothing narrowed after it.</summary>
     public void End() => Start = null;
 
-    /// <summary>The pane was shown.</summary>
-    public void MarkPresented() => Presented = true;
+    /// <summary>The pane was shown: an earlier refusal is behind it.</summary>
+    public void MarkPresented()
+    {
+        Presented = true;
+        WriteRefused = false;
+    }
 
     /// <summary>The pass's one answer given: a later call in the same turn shows no pane.</summary>
     public void Finish(ProjectInitAnswer answer) => Answer = answer;

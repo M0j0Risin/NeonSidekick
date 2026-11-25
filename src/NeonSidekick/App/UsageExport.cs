@@ -15,7 +15,8 @@ namespace NeonSidekick.App;
 /// the thinking of a message before <paramref name="ThinkingFrom"/> isn't sent and is left out. Null <paramref name="Messages"/> leaves the
 /// conversation out (a bare <c>/usage sysprompt</c>, 2026-11-23, the user's ask). The token figures are the Context tab's estimates.
 /// <paramref name="ThinkingInFlightOnly"/> (2026-11-24, the last-7 review's #22): earlier thinking is left out because this server takes back
-/// only the turn in flight's, not because <c>LLM preserve thinking</c> is off.
+/// only the turn in flight's, not because <c>LLM preserve thinking</c> is off. <paramref name="PendingPolls"/> (2026-11-24, review #58): the
+/// <c>process</c> polls the next request carries for notified exits, after the opening calls.
 /// </summary>
 public sealed record UsageExportFacts(
     DateTimeOffset At,
@@ -30,7 +31,8 @@ public sealed record UsageExportFacts(
     int ThinkingFrom,
     long HistoryTokens,
     string? Folder = null,
-    bool ThinkingInFlightOnly = false);
+    bool ThinkingInFlightOnly = false,
+    int PendingPolls = 0);
 
 /// <summary>
 /// <c>/usage sysprompt</c>'s Markdown (2026-11-23, the user's ask): the system message, every tool offered (name, description, schema) and the
@@ -75,14 +77,22 @@ public static class UsageExport
 
     /// <summary>
     /// The Conversation section's line before the first message when the export's tools make opening calls (2026-11-24, the last-7 review's #62):
-    /// the clock, the working folder and the memory list, each only when its tool is offered, named in that order. Pinned.
+    /// the clock, the working folder and the memory list, each only when its tool is offered, named in that order. Pinned. <paramref name="polls"/>
+    /// (2026-11-24, review #58): the <c>process</c> polls for notified exits, which ride after the opening calls, so <c>process</c> is named last,
+    /// once, with its count past one; polls alone still make it a calls line.
     /// </summary>
-    public static string NoMessagesWithCallsLine(IReadOnlyList<string> calls)
+    public static string NoMessagesWithCallsLine(IReadOnlyList<string> calls, int polls = 0)
     {
         ArgumentNullException.ThrowIfNull(calls);
-        return calls.Count == 0
+        var named = calls.Select(c => "`" + c + "`").ToList();
+        if (polls > 0)
+        {
+            named.Add("`" + ProcessTool.ToolName + "`" + (polls > 1 ? " (" + polls.ToString(CultureInfo.InvariantCulture) + " polls)" : ""));
+        }
+
+        return named.Count == 0
             ? NoMessagesLine
-            : "No messages yet: the next request carries the app's opening calls (" + string.Join(", ", calls.Select(c => "`" + c + "`")) + ") and then the message you send.";
+            : "No messages yet: the next request carries the app's opening calls (" + string.Join(", ", named) + ") and then the message you send.";
     }
 
     /// <summary>The tools whose opening call the first request carries, in the order the turn makes them (<c>ChatScreen</c>'s opening calls).</summary>
@@ -156,7 +166,7 @@ public static class UsageExport
         if (messages.Count == 0)
         {
             var offered = facts.Tools.Select(t => t.Name).ToHashSet(StringComparer.Ordinal);
-            md.Append(NoMessagesWithCallsLine(OpeningCallTools.Where(offered.Contains).ToList())).Append('\n');
+            md.Append(NoMessagesWithCallsLine(OpeningCallTools.Where(offered.Contains).ToList(), facts.PendingPolls)).Append('\n');
         }
 
         if (thinkingLeftOut)

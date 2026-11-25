@@ -168,6 +168,28 @@ public class ProfilesTests : IDisposable
         Assert.Equal(new[] { "neon", "work" }, Profiles.List(_dir));
     }
 
+    /// <summary>
+    /// The name claimed by its profile.json (2026-11-24, review #33): one already there is left byte for byte and Create says false, with no
+    /// temp left; a bare folder is still claimed and seeded.
+    /// </summary>
+    [Fact]
+    public void Create_AProfileJsonAlreadyThere_IsLeft_ABareFolderIsClaimed()
+    {
+        string dir = Profiles.Directory(_dir, "work");
+        Directory.CreateDirectory(dir);
+        byte[] theirs = "{ \"LlmModel\": \"theirs\" }"u8.ToArray();
+        File.WriteAllBytes(Path.Combine(dir, Profiles.FileName), theirs);
+
+        Assert.False(Profiles.Create(_dir, "work", new AppSettingsData { LlmModel = "mine" }));
+        Assert.Equal(theirs, File.ReadAllBytes(Path.Combine(dir, Profiles.FileName)));
+        Assert.Equal(new[] { Profiles.FileName }, Directory.GetFileSystemEntries(dir).Select(Path.GetFileName));
+
+        string bare = Profiles.Directory(_dir, "bare");
+        Directory.CreateDirectory(bare);
+        Assert.True(Profiles.Create(_dir, "bare", new AppSettingsData { LlmModel = "seeded" }));
+        Assert.Contains("\"LlmModel\": \"seeded\"", File.ReadAllText(Path.Combine(bare, Profiles.FileName)));
+    }
+
     [Fact]
     public void Create_RefusesABadName()
     {

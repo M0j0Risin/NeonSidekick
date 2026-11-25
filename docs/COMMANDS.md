@@ -82,9 +82,9 @@ Elsewhere:
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
 | `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
 | `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
-| `/usage models` | The Models tab: each model's turns, sessions, tool calls a turn, tool-call error and cancel rates, output a turn and tok/s, from the saved sessions, most turns first. Turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out and counted in a note. |
+| `/usage models` | The Models tab: each model's turns, sessions, tool calls, error and cancel rates, output and tok/s, from the saved sessions. Turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out. |
 | `/usage prompt\|tools\|skills` | The Prompt tab (the system message, less the skills block), the Tools tab (each tool offered) or the Skills tab (the skills block: its directive, then each skill with its scope and file). |
-| `/usage sysprompt [conversation] [to=<path>]` | Writes the system message and every tool offered to `neon-sysprompt-<timestamp>.md` in the working folder, or at `to=` (a file or a folder in it), never over a file. With `conversation`, this conversation's messages too (pictures as placeholders): mind it before a commit. |
+| `/usage sysprompt [conversation] [to=<path>]` | Writes the system message and every tool offered to a Markdown file here, or at `to=` (a file or a folder), never over a file. `conversation` adds this conversation's messages: mind it before a commit. |
 
 ### Models and servers
 
@@ -394,7 +394,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 * **Clean passes:** it ends after *Plan gap clean passes* in a row find no gaps; wording or formatting fixes don't break a streak. Each pass after a clean one checks another area (order, verification, risks, assumptions, size), or, with *Confirm focus by change*, an area the last change touched, the most-changed first, and says which.
 * **Who reviews** (with advisors offered): the model alone (`m`), a fitting advisor (`a`), the model consulting advisors (`y`), or `confirm` (`c`): the model closes gaps and an advisor checks once it finds none (at least 2 clean passes).
 * **Unattended:** with *Plan gap ask user* off (or no `ask_user`), a pass asks nothing, takes no photo and captures no screen. A decision only you can make goes into `## Risks` as an "Open question (your call):" bullet, not a gap.
-* **Your answers:** a question you skip is the pass's to settle; it notes its pick in `## Risks` as "Assumed (left to me):". One you decline becomes an "Open question (your call):" bullet, unless your note settles it.
+* **Your answers:** a question you skip is the pass's to settle, noted in `## Risks` as "Assumed (left to me):". One you decline becomes an "Open question (your call):", unless your note settles it.
 * **The plan's shape:** no clean end while a step lacks `Done when:`, one step is oversized, steps sit outside `## Steps` or a parent has a by-hand check. A plan too long for a Ralph pass to send whole is noted, not a gap.
   * A clean pass that drops unfinished steps, ticks or sections, or cuts much of the plan, is refused; a pass with gaps is told what it dropped.
 * **When it stops:** after the clean passes (the approval pane returns); when a pass changes nothing or repeats itself; on Esc; at the count given or *Plan gap max passes*.
@@ -410,7 +410,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 
 Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
-* **A pass** gets the plan, its step and `Done when:` line, what earlier passes learned and every tool, and reports `done`, `partial`, `blocked` or `split`. Each pass is its own session; 🔁 on the [lower rule](INTERFACE.md#the-screen) shows the step and pass, and a double-click there pauses the loop after the pass in progress.
+* **A pass** gets the plan, its step and `Done when:` line, what earlier passes learned and every tool, and reports `done`, `partial`, `blocked` or `split`. Each pass is its own session, shown by 🔁 on the [lower rule](INTERFACE.md#the-screen).
 * **The app decides if a step stands:** the `verify:` command, then the evidence (files changed or committed) and a review (*Ralph loop reviewer*).
   * The reviewer's diff is redacted; a secrets file (`.env`, a key) is named, never shown. A failed check unticks the step, its output going to the next pass.
   * **Only the app ticks boxes.** A pass's edits to the steps or the `verify:` and `final:` lines are undone, an added step removed; a stopped pass decides nothing. The plan as the pass left it stays in `as-left.md` beside the log; type a message to pause the loop before editing the plan.
@@ -460,7 +460,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Clean passes:** it ends after *Code audit clean passes* in a row find nothing new (or, with [*Code audit low keeps streak*](SETTINGS.md#automation) on, only low changes); a pass after a clean one reads unread files first. *Code audit pass tool calls* guides, never cuts off. The pane says how much of the scope was read.
   * Only an audit that read the whole scope says "converged"; short of it, the end says how much it read and the way on.
 * **Retractions:** a retracted finding reported again is refused unless it says, in `reopen`, why the retraction was wrong; then it comes back under its own id.
-* **When it stops:** the clean passes, the pass limit, the same findings again, a pass with no `present_audit`, a message (PC or Web UI), a double-click on 🔎 on the [lower rule](INTERFACE.md#the-screen) (after the pass in progress), Esc, `/new`, `/clear`, a profile switch or a working directory change (the report stays in its folder). Each stop says why; `/code-audit resume <name>` runs more.
+* **When it stops:** the clean passes, the pass limit, the same findings again, a pass with no `present_audit`, a message, a double-click on 🔎, Esc, `/new`, `/clear`, or a profile or folder change. Each stop says why; `/code-audit resume <name>` runs more.
   * A server failure is tried once more; a pass that ends without `present_audit` is asked for it once.
   * A stop you didn't cause, a failed pass or a working directory change rings *Code audit stop tone*.
 * **The pane** shows the open findings and its choices, on the Web UI page too ([keys](INTERFACE.md#pane-keys)):
@@ -477,7 +477,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Which file:** an existing `NEON.md` is improved. With only `AGENTS.md` or `CLAUDE.md`, it asks: update that file, or create `NEON.md` (which is then read in its place). With none, it creates `NEON.md`.
 * **The survey:** the app reads the folder first: its files, build files and CI workflows, the README, other assistants' rule files, recent commits and project skills. Secret-looking files are skipped and values that look like secrets are masked.
 * **One turn:** the model gets only the file and git reads and `ask_user`, never your memories. It starts a new conversation when one is under way; the last one stays in `/sessions`.
-* **The pane:** Write, View (the change, or the whole draft rendered, its text on a Source tab; a warning names link-definition lines the rendering hides), Revise (with your words) or Cancel ([keys](INTERFACE.md#pane-keys)); on the Web UI page too. It shows the cost per turn and flags lines that look like secrets.
+* **The pane:** Write, View (the draft rendered, with a Source tab), Revise (with your words) or Cancel ([keys](INTERFACE.md#pane-keys)), on the Web UI too. It flags lines that look like secrets and links the rendering hides.
   * With *Project file* or *Agent skills* off, a **Write and turn on** row turns them on as it writes.
 * **Taking it back:** `/undo` or `/rewind` removes or restores the file; a setting turned on stays on.
 * Needs *LLM offer tools*, `read_file` and the bottom pane; refused in plan mode, during a pass or `/botchat`, and headless.
@@ -515,7 +515,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * A bare `/advisor` shows each one's server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`) and its description; a deleted profile is `(missing)`.
 * `/advisor list` opens *Advisor list* ([SETTINGS.md](SETTINGS.md#advisors)) to add, change or remove advisors; from the Web UI it runs at the PC only.
 * `/advisor templates` lists the templates: the built-in ones and your own in `advisors/` in the home.
-* `/advisor new <template> [<name>]` makes a profile from the template (named after it unless you give a one-word name) with its persona, role, description and avatar, on this profile's saved server and model, and adds it. No switch; a taken name is refused. It runs at the PC only from the Web UI.
+* `/advisor new <template> [<name>]` makes a profile from the template (its persona, role, description and avatar) on this profile's saved server and model, and adds it, with no switch. A taken name is refused.
 
 ### Your own shell line
 

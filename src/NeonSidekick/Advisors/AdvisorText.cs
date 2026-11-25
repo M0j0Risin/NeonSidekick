@@ -341,6 +341,9 @@ public static class AdvisorText
     /// <summary>A folder or file that could not be read. Pinned.</summary>
     public static string TemplateUnreadable(string detail) => "could not be read: " + Flat(detail);
 
+    /// <summary>A failed save's undo that failed in turn (2026-11-24, review #41): persona.md may not be as it was.</summary>
+    public static string TemplateUndoFailed(string detail) => "its persona.md could not be put back as it was: " + Flat(detail);
+
     /// <summary>A problem's warning: <c>Advisor template dba: …</c>. Pinned.</summary>
     public static string TemplateProblem(string shown, string problem) => "Advisor template " + shown + ": " + problem;
 

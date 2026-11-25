@@ -178,12 +178,17 @@ internal sealed class MidiMenu
     // The bindings tab's rows (2026-11-24, the user's ask): the bindings, a rule, the skipped lines, a rule, then Learn; a rule only between two
     // groups that both have rows, as RuledRows draws them. Each trigger padded to the widest, so the commands line up (the user's pick). A
     // rule's Row has no Index and isn't LearnRow, so a pick on it falls through to the loop's continue, and its band is empty.
+    // Padded to width, never cut below its own (TextCells.Cell alone cuts).
+    private static string Padded(string text, int width) => TextCells.Cell(text, Math.Max(width, TextCells.Width(text)));
+
     internal static List<Row> BindingRows(MidiBindingSet set)
     {
-        int width = set.Bindings.Select(b => TextCells.Width(MidiText.Describe(b.Trigger))).DefaultIfEmpty(0).Max();
+        // At most MidiText.TriggerCap (2026-11-24, review #64): a device's long name padded every row; a longer trigger prints whole, never cut,
+        // since the device's name tells two bindings apart.
+        int width = Math.Min(set.Bindings.Select(b => TextCells.Width(MidiText.Describe(b.Trigger))).DefaultIfEmpty(0).Max(), MidiText.TriggerCap);
         var groups = new List<List<Row>>
         {
-            set.Bindings.Select((b, i) => new Row(Markup.Escape(TextCells.Cell(MidiText.Describe(b.Trigger), width)) + Theme.DimMarkup("  → ") + Markup.Escape(b.Command), MidiText.BindingFooter, i)).ToList(),
+            set.Bindings.Select((b, i) => new Row(Markup.Escape(Padded(MidiText.Describe(b.Trigger), width)) + Theme.DimMarkup("  → ") + Markup.Escape(b.Command), MidiText.BindingFooter, i)).ToList(),
             set.Skipped.Select(skipped => new Row(Theme.DimMarkup(MidiText.SkippedLine(skipped)), null)).ToList(),
             new List<Row> { new(Markup.Escape(MidiText.LearnRow), MidiText.LearnRowFooter, LearnRow: true) },
         };

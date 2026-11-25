@@ -175,7 +175,9 @@ public sealed class ProcessUnixTests : IDisposable
         Assert.Equal("Error: 'proc_' matches 2 processes: " + a.Id + ", " + loud.Id, await Invoke(("action", "poll"), ("session_id", "proc_")));
         Assert.True(_registry.TryTakeAlert(out var alert));
         Assert.Equal(loud.Id + " exited 3 after 0.0 s: echo l; exit 3", ShellText.AlertLine(alert));
+        Assert.Equal([loud.Id], _registry.PeekNotes());   // a peek leaves the note for the turn (2026-11-24, review #58)
         Assert.Equal([loud.Id], _registry.TakeNotes());
+        Assert.Empty(_registry.PeekNotes());
 
         for (int i = 0; i < ProcessRegistry.MaxKept; i++)
         {

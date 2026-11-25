@@ -247,6 +247,68 @@ public partial class ChatScreenTests
         }
     }
 
+    /// <summary>
+    /// The notes file edited while the pane waits (2026-11-24, review #61): the refusal is said once, at once, in the user's words; the model's
+    /// "call present_project_notes again" never shows, and the end adds no "without a revised draft".
+    /// </summary>
+    [Fact]
+    public async Task ProjectInit_AFileEditedWhileThePaneWaits_SaysSoOnce_InTheUsersWords()
+    {
+        ProjectInitFixture([[Keys.Char('w'), Keys.Enter]], Line("/project-init"), Line("/exit"));
+        File.WriteAllText(NotesPath, "# Old\n");
+        EditTheNotesWhileThePaneWaits(panes: 1);
+        _chat.Enqueue(NotesCall("n1"));
+        _chat.EnqueueText("It changed; I'll stop.");
+
+        string output = await RunAsync();
+
+        Assert.Equal("# Edited meanwhile\n", File.ReadAllText(NotesPath));
+        string notice = ProjectInitText.WriteRefusedNotice(ProjectFile.PrimaryFileName);
+        Assert.Equal(1, Count(output, notice[..40]));
+        Assert.DoesNotContain("call present_project_notes again", output);
+        Assert.DoesNotContain(ProjectInitText.NoRevisedDraftNotice, output);
+        Assert.DoesNotContain(ProjectInitText.NoDraftNotice, output);
+    }
+
+    /// <summary>The model presents again after the refusal (review #61): the notice comes before the second pane, and that pane's Write lands.</summary>
+    [Fact]
+    public async Task ProjectInit_APresentAfterTheRefusal_FollowsTheNotice()
+    {
+        ProjectInitFixture([[Keys.Char('w'), Keys.Enter], [Keys.Char('w'), Keys.Enter]], Line("/project-init"), Line("/exit"));
+        File.WriteAllText(NotesPath, "# Old\n");
+        EditTheNotesWhileThePaneWaits(panes: 1);
+        _chat.Enqueue(NotesCall("n1"));
+        _chat.Enqueue(NotesCall("n2"));
+        _chat.EnqueueText("Done.");
+
+        string output = await RunAsync();
+
+        Assert.Equal(NotesDraft, File.ReadAllText(NotesPath).ReplaceLineEndings("\n"));
+        int notice = output.IndexOf(ProjectInitText.WriteRefusedNotice(ProjectFile.PrimaryFileName)[..40], StringComparison.Ordinal);
+        Assert.True(notice >= 0);
+        Assert.True(output.LastIndexOf(ProjectInitText.NotesTitle, StringComparison.Ordinal) > notice);
+    }
+
+    // The notes file edited the first `panes` times a pane waits, so the Write meets a changed file.
+    private void EditTheNotesWhileThePaneWaits(int panes)
+    {
+        var input = Scripted();
+        var wait = input.OnWait!;
+        int edited = 0;
+        Task? seen = null;
+        input.OnWait = () =>
+        {
+            if (_keys is { PendingLine: { IsCompleted: false } pane } && !ReferenceEquals(pane, seen) && edited < panes)
+            {
+                seen = pane;
+                edited++;
+                File.WriteAllText(NotesPath, "# Edited meanwhile\n");
+            }
+
+            wait();
+        };
+    }
+
     /// <summary>Every tool result's text in a request, joined.</summary>
     private static string ToolResultText(IReadOnlyList<ChatMessage> request) =>
         string.Join("\n", request.SelectMany(m => m.Contents).OfType<FunctionResultContent>().Select(r => r.Result?.ToString() ?? ""));}

@@ -181,6 +181,7 @@ public sealed class PathPoliceTests
     [InlineData("robocopy if e: /e", "e:")]   // the root is on D:, so the finding's d: is its own drive here
     [InlineData("dir as e:", "e:")]
     [InlineData("python -c \"x = 1\" && dir as e:", "e:")]   // another segment
+    [InlineData("del /q py if e:", "e:")]   // 2026-11-24, review #1: a Python word as an argument, not the segment's command
     public void AKeywordDrive_OutsideAPythonSegment_IsRefused(string command, string token) => Assert.Equal(token, Command(command));
 
     /// <summary>A real bare drive is still refused: after any other word, and after <c>in</c> (cmd's <c>for … in (e:)</c>).</summary>

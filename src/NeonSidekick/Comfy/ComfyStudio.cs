@@ -77,6 +77,7 @@ public sealed class ComfyStudio : IDisposable
     private readonly Random _random;
     private readonly object _gate = new();
     private readonly Func<int, PastedPicture?>? _pasted;
+    private readonly Func<int, PastedPicture?>? _pastedSource;
     private readonly TimeProvider _time;
 
     // The drain (2026-09-28, the hint row's double-click on the 🖼️ / 🎨): every generation's token is linked to the one in
@@ -93,7 +94,12 @@ public sealed class ComfyStudio : IDisposable
     /// The profile's images folder (2026-10-09, the user's ask): the <c>ComfyUI output folder</c> is under it, and an input picture named by
     /// its full path there is read from it. Null = the working directory holds both, as before (the tests that pass none).
     /// </param>
-    public ComfyStudio(ComfyWorkflowCatalog catalog, WorkingDirectory files, Func<AppSettingsData> effective, Func<Uri, ComfyClient>? clientFactory = null, Random? random = null, Func<int, PastedPicture?>? pasted = null, TimeProvider? time = null, WorkingDirectory? images = null)
+    /// <param name="pastedSource">
+    /// A paste's source by number without saving it (2026-11-24, review #5: <c>UI.PasteBlocks.Original</c>): what a label's file is compared with.
+    /// Null = <paramref name="pasted"/> answers, as before.
+    /// </param>
+    public ComfyStudio(ComfyWorkflowCatalog catalog, WorkingDirectory files, Func<AppSettingsData> effective, Func<Uri, ComfyClient>? clientFactory = null, Random? random = null, Func<int, PastedPicture?>? pasted = null, TimeProvider? time = null, WorkingDirectory? images = null,
+        Func<int, PastedPicture?>? pastedSource = null)
     {
         _time = time ?? TimeProvider.System;
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
@@ -103,6 +109,7 @@ public sealed class ComfyStudio : IDisposable
         _clientFactory = clientFactory ?? (url => new ComfyClient(url));
         _random = random ?? Random.Shared;
         _pasted = pasted;
+        _pastedSource = pastedSource;
     }
 
     public ComfyWorkflowCatalog Catalog => _catalog;
@@ -450,7 +457,8 @@ public sealed class ComfyStudio : IDisposable
             // A whole sent label names its file (2026-11-24, the last-7 review's #2): the paste store only when that paste is the same
             // file (this session, a picture attached from outside the sandbox kept working); else, after a restart or with the number now
             // another paste's, the label's own path, through the sandbox as any path is — the right picture or a plain refusal.
-            if (labelPath is null || (_pasted?.Invoke(number) is { Path: { Length: > 0 } own } && SameFile(own, labelPath)))
+            // The source is only looked up, never saved (2026-11-24, review #5): a probe of a clipboard paste no longer writes it.
+            if (labelPath is null || ((_pastedSource ?? _pasted)?.Invoke(number) is { Path: { Length: > 0 } own } && SameFile(own, labelPath)))
             {
                 return ReadPasted(number);
             }

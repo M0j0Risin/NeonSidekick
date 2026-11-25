@@ -1878,8 +1878,8 @@ public sealed class AppSettingsData
     public bool AskUser { get; set; } = true;
 
     /// <summary>
-    /// Whether <c>ask_user</c> refuses a repeat (2026-11-24, the ask_user plan's F, the user's call): on, the same questions asked
-    /// again in one turn after the user declined them (Esc, or a decline with a note) are not shown, and the model reads that
+    /// Whether <c>ask_user</c> refuses a repeat (2026-11-24, the ask_user plan's F, the user's call): on, the same questions with the same
+    /// choices (review #7: a re-ask with new options or of another kind is asked) asked again in one turn after the user declined them (Esc, or a decline with a note) are not shown, and the model reads that
     /// the user declined them (<c>AskUserText.AlreadyDeclined</c>); off (the default), every call shows the pane, as before.
     /// The current turn only, so a later message can ask them again. Read at each call, no reconnect. No variable.
     /// </summary>

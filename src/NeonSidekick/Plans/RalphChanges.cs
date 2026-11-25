@@ -17,8 +17,10 @@ public sealed record RalphFileMark(long Length, DateTime Written, string? Text, 
 /// spelled with <c>/</c>, <c>.neon/</c> never in it. <paramref name="Head"/> is HEAD's commit in a repository (null outside one, or with no commit
 /// yet): a pass that commits its work moves it (2026-10-19, the second review: a file changed and committed was in neither snapshot).
 /// <paramref name="Taken"/> (2026-10-20, a review) is when it was taken, UTC: past a <paramref name="Cut"/>, a file written before then was no pass's.
+/// <paramref name="Unborn"/> (2026-11-24, review #52): the repository has no commit yet, as the HEAD lookup answered, so a null
+/// <paramref name="Head"/> is told apart from a lookup that failed.
 /// </summary>
-public sealed record RalphSnapshotOfFiles(bool Git, IReadOnlyDictionary<string, RalphFileMark> Files, bool Cut, string? Head = null, DateTime Taken = default);
+public sealed record RalphSnapshotOfFiles(bool Git, IReadOnlyDictionary<string, RalphFileMark> Files, bool Cut, string? Head = null, DateTime Taken = default, bool Unborn = false);
 
 /// <summary>
 /// What a pass changed (2026-10-18): the files, the diff (cut to <see cref="RalphChanges.MaxDiffChars"/>), and the evidence's flags. <paramref name="Cut"/>
@@ -118,8 +120,9 @@ public static class RalphChanges
                 }
             }
 
-            string? head = git.MergeBase("", "HEAD", "HEAD") is { Outcome: GitOutcome.Ok, Head: { } tip } ? tip : null;
-            return new RalphSnapshotOfFiles(true, marks, changed.Truncated, head, taken);
+            var tipLookup = git.MergeBase("", "HEAD", "HEAD");
+            string? head = tipLookup is { Outcome: GitOutcome.Ok, Head: { } tip } ? tip : null;
+            return new RalphSnapshotOfFiles(true, marks, changed.Truncated, head, taken, tipLookup.Outcome == GitOutcome.Unborn);
         }
 
         // The walk's own size and time for each file (2026-10-20, a review: each was stat'ed again).
@@ -260,10 +263,19 @@ public static class RalphChanges
                 continue;
             }
 
-            // A repository with no commit yet (2026-11-23, review #30): no HEAD holds any file, so every fresh one is new.
-            if ((after.Git || before.Git) && before.Head is { } head)
+            // A repository with no commit yet (2026-11-23, review #30): no HEAD holds any file, so every fresh one is new. Keyed on the before
+            // snapshot (2026-11-24, review #52): a HEAD lookup that failed names nothing, where it named every dirty file; a folder made a
+            // repository during the pass had no lookup at all, and its fresh files are new as outside one.
+            if (before.Git)
             {
-                if (git?.Show(head, path) is not { Outcome: GitOutcome.Missing })
+                if (before.Head is { } head)
+                {
+                    if (git?.Show(head, path) is not { Outcome: GitOutcome.Missing })
+                    {
+                        continue;
+                    }
+                }
+                else if (!before.Unborn)
                 {
                     continue;
                 }

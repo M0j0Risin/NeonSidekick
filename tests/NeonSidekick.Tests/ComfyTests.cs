@@ -726,6 +726,35 @@ public sealed class ComfyTests : IDisposable
         Assert.DoesNotContain(ComfyText.PastedInput(own, 1), restarted.Text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A full-path label after a /cwd (2026-11-24, review #26/#27/#5): the paste store still answers when its source is the label's file, and the
+    /// comparison only looks the source up, so a paste that isn't that file is never saved by the probe.
+    /// </summary>
+    [Fact]
+    public async Task GenerateImage_AFullPathLabel_AfterACwd_ReadsThePicture_TheProbeSavesNothing()
+    {
+        Workflow("restyle", Img2Img);
+        ServeOnePicture();
+        string own = Path.Combine(_dir, "before-cwd", "cat.bmp");   // outside the working folder now
+        Directory.CreateDirectory(Path.GetDirectoryName(own)!);
+        byte[] bytes = SmokeChecks.SolidBmp(8, 8);
+        File.WriteAllBytes(own, bytes);
+        int saves = 0;
+        PastedPicture? source = new(bytes, "cat.bmp", own);
+        using var studio = new ComfyStudio(new ComfyWorkflowCatalog(() => [_profileComfy, _globalComfy]), _files, () => _settings,
+            url => new ComfyClient(url, new HttpClient(_stub), TimeSpan.FromMilliseconds(1)), new Random(7),
+            pasted: n => { saves++; return source; }, time: new ManualTimeProvider(), pastedSource: n => source);
+
+        var read = Assert.IsType<ToolImageResult>(await new GenerateImageTool(studio).InvokeAsync(Args(("prompt", "a"), ("image", PasteBlocksLabel(1, own)))));
+        Assert.Contains(ComfyText.PastedInput(own, 1), read.Text, StringComparison.Ordinal);
+        Assert.Equal(1, saves);   // the read itself
+
+        // A clipboard paste not saved yet: no path to match, so the label's own path is judged, and nothing is saved for the look.
+        source = new PastedPicture(bytes, null, null);
+        await new GenerateImageTool(studio).InvokeAsync(Args(("prompt", "b"), ("image", PasteBlocksLabel(1, own))));
+        Assert.Equal(1, saves);
+    }
+
     private static string PasteBlocksLabel(int number, string path) => NeonSidekick.UI.PasteBlocks.FileLabel(number, path);
 
     [Theory]

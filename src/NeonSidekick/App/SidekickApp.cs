@@ -2486,24 +2486,46 @@ public sealed partial class SidekickApp
         finally
         {
             _liveSession = null;
-            // A Ralph loop's lock goes with the run (2026-10-18), its report synced first (2026-11-23, review #74).
-            foreach (string line in HeadlessRalphDrop(planState))
+            // The notices are gathered and written last (2026-11-24, review #63): a closed pipe threw out of the first write and skipped the Docker
+            // stop, the MCP dispose, the unsubscribe and the echo's restore after it.
+            var notices = new List<string>();
+            try
             {
-                await HeadlessNoticeLineAsync("[notice] " + line).ConfigureAwait(false);
+                // A Ralph loop's lock goes with the run (2026-10-18), its report synced first (2026-11-23, review #74).
+                foreach (string line in HeadlessRalphDrop(planState))
+                {
+                    notices.Add("[notice] " + line);
+                }
+
+                // A code audit's lock too (2026-10-29): the report lists as stopped, and resume picks it up.
+                audit.Stop();
+                // Docker containers stop on exit (2026-10-02): off by default, the container keeps running.
+                foreach (string stopped in await StopDockerAtExitAsync(session, DockerExitBudget).ConfigureAwait(false))
+                {
+                    notices.Add("[notice] " + DockerServerExitNotice(stopped));
+                }
+
+                // The MCP servers go while the log still forwards through the headless writer: a
+                // `Stopped docker` line after the echo came back would land on stdout on its own.
+                await mcp.DisposeAsync().ConfigureAwait(false);
             }
-            // A code audit's lock too (2026-10-29): the report lists as stopped, and resume picks it up.
-            audit.Stop();
-            // Docker containers stop on exit (2026-10-02): off by default, the container keeps running.
-            foreach (string stopped in await StopDockerAtExitAsync(session, DockerExitBudget).ConfigureAwait(false))
+            finally
             {
-                await HeadlessNoticeLineAsync("[notice] " + DockerServerExitNotice(stopped)).ConfigureAwait(false);
+                DiagnosticLog.Emitted -= forward;
+                DiagnosticLog.EchoToConsole = previousEcho;
             }
 
-            // The MCP servers go while the log still forwards through the headless writer: a
-            // `Stopped docker` line after the echo came back would land on stdout on its own.
-            await mcp.DisposeAsync().ConfigureAwait(false);
-            DiagnosticLog.Emitted -= forward;
-            DiagnosticLog.EchoToConsole = previousEcho;
+            try
+            {
+                foreach (string notice in notices)
+                {
+                    await HeadlessNoticeLineAsync(notice).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+                // The reader went away (a closed pipe, a disposed writer): nobody is left to tell.
+            }
         }
     }
 

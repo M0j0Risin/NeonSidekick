@@ -147,11 +147,12 @@ public static partial class PathPolice
             for (int i = 0; i < tokens.Count; i++)
             {
                 string token = tokens[i];
-                if (i > 0 && IsBareDrive(token) && PythonColonWords.Contains(tokens[i - 1]) && tokens.Take(i).Any(IsPython))
+                if (i > 0 && IsBareDrive(token) && PythonColonWords.Contains(tokens[i - 1]) && IsPythonCommand(tokens))
                 {
                     // Python's except E as e:, lambda x:, if x: in a python -c line (2026-11-22, the session review: refused as drive e:); cmd's
                     // for … in (d:) names a drive, so "in" stays judged. Only in a segment a Python interpreter runs (2026-11-23, review #2 and #12:
-                    // robocopy if d: /e passed a drive through).
+                    // robocopy if d: /e passed a drive through). The segment's command itself, past its launchers (2026-11-24, review #1: del /q py if e:
+                    // took the word py, an argument, for the interpreter).
                     continue;
                 }
 
@@ -347,6 +348,24 @@ public static partial class PathPolice
 
     /// <summary>A bare drive, <c>X:</c> (rule 9's shape).</summary>
     private static bool IsBareDrive(string token) => token.Length == 2 && char.IsAsciiLetter(token[0]) && token[1] == ':';
+
+    /// <summary>The launcher words that may stand before the interpreter in a segment: <c>uv run python</c>, <c>pipx run</c>, <c>env python</c>, <c>call py</c>, <c>&amp; python</c>.</summary>
+    private static readonly string[] PythonLaunchers = ["uv", "run", "pipx", "poetry", "pdm", "env", "call", "&"];
+
+    /// <summary>
+    /// Whether the segment's command is a Python interpreter (2026-11-24, review #1): its first word, past the launcher words and their dash
+    /// options, is one <see cref="IsPython"/> names. A Python word further on (<c>del /q py if e:</c>) is an argument, never the command.
+    /// </summary>
+    private static bool IsPythonCommand(List<string> tokens)
+    {
+        int i = 0;
+        while (i < tokens.Count && (IsOneOf(tokens[i], PythonLaunchers) || (i > 0 && tokens[i].StartsWith('-'))))
+        {
+            i++;
+        }
+
+        return i < tokens.Count && IsPython(tokens[i]);
+    }
 
     /// <summary>
     /// Whether <paramref name="token"/> names a Python interpreter (2026-11-23, review #2): its file name, <c>.exe</c> off, is <c>python</c>,

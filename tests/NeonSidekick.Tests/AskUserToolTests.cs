@@ -257,6 +257,54 @@ public class AskUserToolTests
         Assert.Empty(_asked);
     }
 
+    /// <summary>No list under options, in any spelling, gives the choices beside it (2026-11-24, review #68/#40): each candidate unwrapped, then judged.</summary>
+    [Theory]
+    [InlineData("null")]
+    [InlineData("\"\"")]
+    [InlineData("[]")]
+    [InlineData("\"[]\"")]
+    [InlineData("\"null\"")]
+    public async Task Invoke_NoListUnderOptions_TakesTheChoices(string options)
+    {
+        _reply = AskReply.Answered([]);
+        await InvokeAsync("[{ \"question\": \"Pick?\", \"options\": " + options + ", \"choices\": [\"a\", \"b\"] }]");
+        var asked = Assert.Single(Assert.Single(_asked));
+        Assert.Equal(AskKind.Single, asked.Kind);
+        Assert.Equal("a|b", Labels(asked));
+    }
+
+    /// <summary>An option object's number or boolean label is its text, as the bare form's is (2026-11-24, review #48).</summary>
+    [Fact]
+    public async Task Invoke_AnOptionObjectsNumberOrBooleanLabel_IsItsText()
+    {
+        _reply = AskReply.Answered([]);
+        await InvokeAsync("""[{ "question": "How many?", "options": [{ "label": 3 }, { "text": true }, { "label": 2.5 }] }]""");
+        Assert.Equal("3|true|2.5", Labels(Assert.Single(Assert.Single(_asked))));
+    }
+
+    /// <summary>
+    /// A list under another key: an empty one is harmless (review #60); on a text question or a typed choice it is named, not dropped (review #29),
+    /// a typed choice never told to leave it out; the key echoed (review #15).
+    /// </summary>
+    [Fact]
+    public async Task Invoke_AStrayList_IsNamed_OnEveryPath_AnEmptyOneIsHarmless()
+    {
+        _reply = AskReply.Answered([]);
+        await InvokeAsync("""[{ "question": "Anything else?", "answers": [] }]""");
+        Assert.Equal(AskKind.Text, Assert.Single(Assert.Single(_asked)).Kind);
+
+        _asked.Clear();
+        Assert.Equal(AskUserText.StrayList(1, "answers"), await InvokeAsync("""[{ "question": "a?", "type": "text", "answers": ["x", "y"] }]"""));
+        Assert.Equal("Error: question 1 sends a list as \"answers\", which ask_user doesn't read; send the choices as \"options\".",
+            await InvokeAsync("""[{ "question": "a?", "type": "single", "answers": ["x", "y"] }]"""));
+        Assert.Equal(AskUserText.StrayList(1, "items", choice: true), await InvokeAsync("""[{ "question": "a?", "multi": true, "items": ["x", "y"] }]"""));
+        Assert.Empty(_asked);
+
+        string key = new('k', 100);
+        Assert.Contains(ArgumentText.Echo(key), AskUserText.StrayList(1, key), StringComparison.Ordinal);
+        Assert.DoesNotContain(key, AskUserText.StrayList(1, key), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Invoke_OptionObjects_LabelOrText_ADescription_AndTheRecommendedMark()
     {
@@ -461,6 +509,39 @@ public class AskUserToolTests
         _reply = AskReply.Answered([]);
         await InvokeAsync(again, next.Token);
         Assert.Equal(5, _asked.Count);
+    }
+
+    /// <summary>
+    /// A declined question is known by its options and kind too (2026-11-24, review #7): a corrected re-ask is asked. A later decline with no note
+    /// keeps the earlier note (review #50), and the joined notes are cut as one is (review #62).
+    /// </summary>
+    [Fact]
+    public async Task RepeatGuard_KeysOnTheChoices_KeepsANote_AndCutsTheJoinedNotes()
+    {
+        _effective.AskRepeatGuard = true;
+        using var turn = new CancellationTokenSource();
+        _reply = AskReply.Declined("not now");
+        await InvokeAsync("""[{ "question": "Which color?", "options": ["red", "blue"] }]""", turn.Token);
+
+        _reply = AskReply.Answered([]);
+        await InvokeAsync("""[{ "question": "Which color?", "options": ["red", "green"] }]""", turn.Token);
+        await InvokeAsync("""[{ "question": "Which color?", "type": "multi", "options": ["red", "blue"] }]""", turn.Token);
+        Assert.Equal(3, _asked.Count);
+
+        // Declined again beside a new question, with no note: the color keeps "not now".
+        _reply = AskReply.Declined();
+        await InvokeAsync("""[{ "question": "Which color?", "options": ["red", "blue"] }, { "question": "Size?" }]""", turn.Token);
+        Assert.Equal(4, _asked.Count);
+        Assert.Equal(AskUserText.AlreadyDeclined("not now"), await InvokeAsync("""[{ "question": "Which color?", "options": ["red", "blue"] }]""", turn.Token));
+
+        string first = new('a', 1_500);
+        string second = new('b', 1_500);
+        _reply = AskReply.Declined(first);
+        await InvokeAsync("""[{ "question": "One?" }]""", turn.Token);
+        _reply = AskReply.Declined(second);
+        await InvokeAsync("""[{ "question": "Two?" }]""", turn.Token);
+        Assert.Equal(AskUserText.AlreadyDeclined(NeonSidekick.Files.TextCut.Safe(first + "; " + second, AskUserText.NoteChars)),
+            await InvokeAsync("""[{ "question": "One?" }, { "question": "Two?" }]""", turn.Token));
     }
 
     [Fact]

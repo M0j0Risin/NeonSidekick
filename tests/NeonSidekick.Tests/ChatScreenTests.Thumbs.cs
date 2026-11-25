@@ -233,10 +233,10 @@ public partial class ChatScreenTests
         Assert.Contains("  ✗ square.bmp: Error: nope", output);
         Assert.Equal(FakePrintSpooler.Laser, Assert.Single(_printSpooler.Jobs).Printer);
         var user = _chat.Requests[0].Last(m => m.Role == ChatRole.User);
-        Assert.StartsWith(PasteBlocks.FileLabel(1, "square.bmp") + " what is this?", user.Text);   // its file named, relative inside the working directory (2026-11-23)
+        Assert.StartsWith(PasteBlocks.FileLabel(1, picture) + " what is this?", user.Text);   // its file named by its full path (2026-11-24, review #26)
         Assert.Single(user.Contents.OfType<DataContent>());
         Assert.Contains("[Image #1] what is this?", output);   // the transcript keeps the bare label
-        Assert.DoesNotContain(PasteBlocks.FileLabel(1, "square.bmp"), output);
+        Assert.DoesNotContain(PasteBlocks.FileLabel(1, picture), output);
     }
 
     /// <summary>

@@ -80,7 +80,7 @@ Under *Shell command policy*. Commands run in the working directory, guarded by 
 | `execute_code` | `language, code, timeout?` | Runs a one-off `python` (`python3` on a Mac), `node` or `powershell` script; a Python script imports the working folder's modules. It asks like `run_command`; allowing it for the session covers that language. |
 | `process` | `action, session_id?, data?, timeout?, until?, offset?, limit?` | Up to 16 background commands (and the last 64 finished), by id prefix: `list`, `poll`, `log` (last 5,000 lines), `wait` (`until` a line holds a text), `kill`, `write` / `submit`, `close`. |
 
-* **The shell police also refuses** any line, script, `execute_code` script or `process` write naming `.git`, `.neon`, `.claude`, `.agents/skills`, a `.mcp.json`, the project file, the app's home or a release package's install folder, a script run before it exists, or one holding a forbidden string. It reads the text, not what runs.
+* **The shell police also refuses** any line, script or `process` write naming `.git`, `.neon`, `.claude`, `.agents/skills`, a `.mcp.json`, the project file, the app's home or the install folder, moving or copying a folder onto `.agents`, or a script run before it exists. It reads the text, not what runs.
 * **A `git` command** is held only to the install folder, since the rest is git's own business.
 * **Deleting or moving a folder** that holds the install or the home is refused too, from any working folder. A wildcard counts for a move or a recursive delete, so `rm -rf *` is refused there and `rm -f *` isn't.
 * **A word that resolves into an install folder**, from where the command runs, is refused for `.update`, `update-manifest.json`, a wildcard, a new `.dll`, `.dylib` or `.exe`, or a name that exists there. A home kept inside the folder keeps the home's rules.
@@ -166,7 +166,7 @@ Under *File tools*. Paths are relative to the working directory; nothing outside
   * the folder a release package was unpacked into: the exe, its libraries and `.update`, so nothing can tamper with an update. Reading is allowed, and a copy you built isn't covered.
   * deleting or moving a folder that holds the install or the home
   * skill folders (`skill_editor` changes skills)
-  * the repo's own skills in `.agents/skills`, which only you change
+  * the repo's own skills in `.agents/skills`, which only you change, and moving a folder onto `.agents`
   * your commands folders, and where a linked one points (`/commands` changes them)
   * a SQLite or DuckDB database while its tools are on
 * **The file is judged, not its spelling:** a short `~1` name, a stream after `:` or a swapped-in link is refused too.

@@ -352,8 +352,11 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal(loud.Id + " exited 3 after 0.0 s: echo l & exit /b 3", ShellText.AlertLine(alert));
         Assert.False(_registry.TryTakeAlert(out _));
         Assert.Equal(1, _signals);
+        Assert.Equal([loud.Id], _registry.PeekNotes());   // a peek leaves the note for the turn (2026-11-24, review #58)
+        Assert.Equal([loud.Id], _registry.PeekNotes());
         Assert.Equal([loud.Id], _registry.TakeNotes());
         Assert.Empty(_registry.TakeNotes());
+        Assert.Empty(_registry.PeekNotes());
 
         var killed = Start("ping -n 30 127.0.0.1 >nul", notify: true);
         killed.Kill();
@@ -372,6 +375,16 @@ public sealed class ProcessToolTests : IDisposable
         Assert.Equal(16, ProcessRegistry.MaxRunning);
         Assert.Equal(64, ProcessRegistry.MaxKept);
         Assert.Equal(5, ProcessRegistry.MaxNotesPerTurn);
+
+        // A peek caps at what one turn takes.
+        for (int i = 0; i <= ProcessRegistry.MaxNotesPerTurn; i++)
+        {
+            await Exit(Start("echo n", notify: true));
+        }
+
+        Assert.Equal(ProcessRegistry.MaxNotesPerTurn, _registry.PeekNotes().Count);
+        Assert.Equal(_registry.PeekNotes(), _registry.TakeNotes());
+        Assert.Single(_registry.PeekNotes());
     }
 
     [WindowsFact]

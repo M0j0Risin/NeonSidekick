@@ -43,7 +43,7 @@ internal sealed partial class SettingsMenu
     internal static readonly string[] HomeHiddenDomains = ["persistent_notification", "sun", "conversation", "tts", "stt", "wake_word", "event", "assist_satellite", "tag", "image", "update", "todo", "calendar", "weather", "ai_task"];
 
     // One tab as built: its strip title and rows, and the reference behind each row (null for a heading, a gap or a note).
-    private sealed record HomeTab(MenuTab Tab, List<string?> Refs);
+    internal sealed record HomeTab(MenuTab Tab, List<string?> Refs);
 
     // The bar tab's last row (2026-10-13, the user's pick: "+ Add divider" under the items): no reference, this word instead.
     private const string AddDividerRef = "+divider";
@@ -411,7 +411,7 @@ internal sealed partial class SettingsMenu
     /// (later on 2026-10-12), and the bar's tab and it alone without <paramref name="home"/> (no Home Assistant). <paramref name="hidden"/>: the
     /// bar is hidden and <paramref name="sides"/> are its kept items (2026-11-21), drawn dim on the bar's tab. Pure over its data.
     /// </summary>
-    private static List<HomeTab> HomePickerTabs(HaCatalog catalog, ItemOrder.Sided sides, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true, IReadOnlyList<string>? monitors = null, bool hidden = false)
+    internal static List<HomeTab> HomePickerTabs(HaCatalog catalog, ItemOrder.Sided sides, string filter, IReadOnlyDictionary<string, string>? aliases, IReadOnlyDictionary<string, string>? glyphs, bool home = true, IReadOnlyList<string>? monitors = null, bool hidden = false)
     {
         var items = sides.All;
         bool monitorsHere = monitors is not null;
@@ -482,6 +482,9 @@ internal sealed partial class SettingsMenu
                 headWidth = Math.Max(headWidth, TextCells.Width(BarParts(catalog, item, number++, aliases, glyphs, monitorsHere).Head));
             }
         }
+
+        // At most the room pane's cap (2026-11-24, review #64): one long name padded every row past the pane; a longer head is cut, as the bar's own.
+        headWidth = Math.Min(headWidth, HomeBarText.RoomHeadCap);
 
         number = 1;
         foreach (var (title, group, empty) in sides.All.Count > 0 ? SidedHeadings(sides) : [])
@@ -556,7 +559,8 @@ internal sealed partial class SettingsMenu
             }
         }
 
-        return Sectioned(HomeBarText.RoomsTab, sections, items, filter, catalog.Areas.Select(a => TextCells.Width(a.Name)).DefaultIfEmpty(0).Max());
+        // Capped (2026-11-24, review #64): a longer name prints whole and the rest stay lined up.
+        return Sectioned(HomeBarText.RoomsTab, sections, items, filter, Math.Min(catalog.Areas.Select(a => TextCells.Width(a.Name)).DefaultIfEmpty(0).Max(), HomeBarText.RoomHeadCap));
     }
 
     private static HomeTab DomainTab(string title, HaCatalog catalog, IReadOnlyList<string> items, IReadOnlyList<HaEntity> entities, string filter, IReadOnlyDictionary<string, string>? aliases)
@@ -609,7 +613,7 @@ internal sealed partial class SettingsMenu
             sections.Add((HomeBarText.Extra, null, extra));
         }
 
-        return Sectioned(title, sections, items, filter, entities.Select(e => TextCells.Width(e.Name)).DefaultIfEmpty(0).Max());
+        return Sectioned(title, sections, items, filter, Math.Min(entities.Select(e => TextCells.Width(e.Name)).DefaultIfEmpty(0).Max(), HomeBarText.RoomHeadCap));
     }
 
     // A row's dim note with the item's alias quoted ahead of it, when it has one.

@@ -186,7 +186,23 @@ public static class SkillsText
             return name;
         }
 
-        string printable = new(name.Where(c => !SkillCatalog.IsUnprintable(c)).Take(SkillFrontmatter.MaxNameLength).ToArray());
+        // Printable runes until 64 characters, so a pair is never split (2026-11-24, review #2).
+        var printable = new System.Text.StringBuilder();
+        foreach (var rune in name.EnumerateRunes())
+        {
+            if (SkillCatalog.IsUnprintable(rune))
+            {
+                continue;
+            }
+
+            if (printable.Length + rune.Utf16SequenceLength > SkillFrontmatter.MaxNameLength)
+            {
+                break;
+            }
+
+            printable.Append(rune.ToString());
+        }
+
         return printable + "…";
     }
 
@@ -868,6 +884,10 @@ public static class SkillsText
 
     /// <summary>A copy refused because the root holds a skill of that name already. Pinned.</summary>
     public static string ProjectCopyNameTakenError(string name, SkillScope to) => $"Could not copy skill '{name}': the {SkillScopes.Name(to)} skills already have a skill named '{name}'";
+
+    /// <summary>A project skill's delete refused because its folder links outside the repo (2026-11-24, review #31): the delete would reach what the link points at.</summary>
+    public static string LinkedOutsideError(string name) =>
+        $"Could not delete skill '{ShownName(name)}': its skills folder is a link that leads outside the repo; nothing was deleted";
 
     /// <summary>A project skill changed since its folder was trusted (2026-11-23, review #102): only what you trusted is copied.</summary>
     public static string ProjectCopyChangedError(string name) =>

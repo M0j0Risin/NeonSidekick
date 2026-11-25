@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using NeonSidekick.Diagnostics;
 using NeonSidekick.Files;
 
@@ -473,11 +474,15 @@ public sealed class SkillCatalog
     /// another skill's name.
     /// </summary>
     public static bool IsBoundedName(string name) =>
-        name.Length <= SkillFrontmatter.MaxNameLength && !name.Any(IsUnprintable);
+        name.Length <= SkillFrontmatter.MaxNameLength && !name.EnumerateRunes().Any(IsUnprintable);
 
-    /// <summary>A control, format, line separator or paragraph separator character: one a skill's name never shows.</summary>
-    public static bool IsUnprintable(char c) =>
-        char.IsControl(c) || char.GetUnicodeCategory(c) is UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
+    /// <summary>
+    /// A control, format, line separator or paragraph separator character: one a skill's name never shows. Judged by rune (2026-11-24, review #2):
+    /// a supplementary format character (the U+E00xx tags) read as two surrogates and passed, and a broken pair's replacement rune counts as unprintable.
+    /// </summary>
+    public static bool IsUnprintable(Rune rune) =>
+        rune == Rune.ReplacementChar || Rune.IsControl(rune)
+        || Rune.GetUnicodeCategory(rune) is UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
 
     // A note set's Add under the gate (2026-11-23, review #53): two scans at once (the screen's and a turn's) shared the set unlocked.
     private bool NoteOnce(HashSet<string> noted, string key)
@@ -540,27 +545,28 @@ public sealed class SkillCatalog
     private static bool LinkedOutside(string level, ProjectSkillLevel kind, string directory, string bound)
     {
         string kindFolder = Path.GetDirectoryName(kind.SkillsFolder)!;
-        foreach (string path in new[] { kindFolder, kind.SkillsFolder, directory, Path.Combine(directory, FileName) })
+        _ = level;
+        return new[] { kindFolder, kind.SkillsFolder, directory, Path.Combine(directory, FileName) }.Any(path => LinksOutside(path, bound));
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is a link leading outside <paramref name="bound"/> (2026-11-24, review #28, lifted for the move and the delete):
+    /// judged on where it points, and one whose target can't be worked out counts as outside. A missing path or a plain folder is no link.
+    /// </summary>
+    internal static bool LinksOutside(string path, string bound)
+    {
+        if (WorkingDirectory.RealLinkTarget(path) is not { } target)
         {
-            if (WorkingDirectory.RealLinkTarget(path) is not { } target)
-            {
-                continue;
-            }
-
-            if (target.Length == 0)
-            {
-                return true;
-            }
-
-            string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, target)));
-            if (!WorkingDirectory.IsInside(bound, full))
-            {
-                return true;
-            }
+            return false;
         }
 
-        _ = level;
-        return false;
+        if (target.Length == 0)
+        {
+            return true;
+        }
+
+        string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, target)));
+        return !WorkingDirectory.IsInside(bound, full);
     }
 
     private static long SafeLength(string file)
@@ -615,8 +621,9 @@ public sealed class SkillCatalog
         return notes.Count == 0 ? null : string.Join("; ", notes);
     }
 
+    // Never through a surrogate pair (2026-11-24, review #57): an emoji across the cut left half of it.
     internal static string Cap(string description) =>
-        description.Length <= SkillFrontmatter.MaxDescriptionLength ? description : description[..(SkillFrontmatter.MaxDescriptionLength - 1)].TrimEnd() + "…";
+        description.Length <= SkillFrontmatter.MaxDescriptionLength ? description : Files.TextCut.Safe(description, SkillFrontmatter.MaxDescriptionLength - 1).TrimEnd() + "…";
 
     /// <summary>The subfolders of <paramref name="root"/> that hold a <see cref="FileName"/>, by name; none for a missing or unreadable root.</summary>
     internal static List<string> Folders(string root)

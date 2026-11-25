@@ -287,6 +287,17 @@ public sealed class ProcessRegistry : IDisposable
     }
 
     /// <summary>
+    /// The ids <see cref="TakeNotes"/> would take, left in place (2026-11-24, review #58): what <c>/usage sysprompt</c> says the next request carries.
+    /// </summary>
+    public IReadOnlyList<string> PeekNotes()
+    {
+        lock (_lock)
+        {
+            return _notes.Take(Math.Min(MaxNotesPerTurn, _notes.Count)).ToList();
+        }
+    }
+
+    /// <summary>
     /// Kills what still runs and forgets everything: the app's exit. Every kill is sent first and the exits awaited together under
     /// one <see cref="ProcessSession.DisposeGrace"/> (2026-10-12, the shell review: each session's own dispose waited its grace in
     /// turn, so 16 children slow to die held the exit for 80 s), then each handle goes with no wait left.

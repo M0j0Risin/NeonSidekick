@@ -279,9 +279,10 @@ public static class Profiles
     /// Creates the directory and writes <paramref name="seed"/> as its <c>profile.json</c> (a temp
     /// file then a move, like every settings write). The settings alone: the sidekick's files come
     /// along only through <see cref="CopySidekickFiles"/>, which the caller runs over <see cref="BasicSidekickFiles"/>. Throws <see cref="IOException"/> /
-    /// <see cref="UnauthorizedAccessException"/>; the caller reports.
+    /// <see cref="UnauthorizedAccessException"/>; the caller reports. Returns false, nothing written, when a <c>profile.json</c> is already there
+    /// (2026-11-24, review #33): the move never overwrites, so of two creators of one name only one claims it; a bare folder is still claimed.
     /// </summary>
-    public static void Create(string home, string name, AppSettingsData seed)
+    public static bool Create(string home, string name, AppSettingsData seed)
     {
         ArgumentNullException.ThrowIfNull(seed);
         if (!IsValidName(name))
@@ -290,8 +291,15 @@ public static class Profiles
         }
 
         System.IO.Directory.CreateDirectory(Directory(home, name));
-        WriteProfileFile(ProfileFile(home, name), seed);
+        byte[] bytes = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(seed, SettingsJsonContext.Default.AppSettingsData));
+        if (!Files.WorkingDirectory.WriteNew(ProfileFile(home, name), bytes))
+        {
+            DiagnosticLog.Info(Category, $"Profile \"{name}\" already has a {FileName}; nothing was written.");
+            return false;
+        }
+
         DiagnosticLog.Info(Category, $"Created profile \"{name}\".");
+        return true;
     }
 
     /// <summary>

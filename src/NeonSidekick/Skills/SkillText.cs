@@ -12,6 +12,9 @@ namespace NeonSidekick.Skills;
 /// </summary>
 public static class SkillText
 {
+    /// <summary>A move into a repo whose skills folder leads elsewhere (2026-11-24, review #28): the detail of its refusal.</summary>
+    public const string DestinationLinked = "the repo's skills folder is a link that leads outside the repo";
+
     // ── Reflections waiting (2026-10-22, a review: these lived in ChatScreen) ──
 
     /// <summary>Where a queued reflection waits, in its log line (<see cref="LearnQueuedLogLine"/>): behind the one running.</summary>

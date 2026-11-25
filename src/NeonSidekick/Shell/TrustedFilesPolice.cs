@@ -14,6 +14,9 @@ public enum TrustedFinding
 
     /// <summary>A delete or a move of a folder holding the install or the home.</summary>
     HoldsAppFolder,
+
+    /// <summary>A move or a copy onto <c>.agents</c> that would plant a repo's own skills folder (2026-11-24, review #44).</summary>
+    ProjectSkills,
 }
 
 /// <summary>
@@ -108,6 +111,13 @@ public static class TrustedFilesPolice
                     finding = TrustedFinding.HoldsAppFolder;
                     return dropped;
                 }
+
+                // Outside DropsAppFolder's early return (2026-11-24, review #44): it needs neither an install nor a home.
+                if (!git && judging.MovesOntoAgents(segment, words) is { } planted)
+                {
+                    finding = TrustedFinding.ProjectSkills;
+                    return planted;
+                }
             }
         }
 
@@ -127,6 +137,13 @@ public static class TrustedFilesPolice
     private static readonly IReadOnlySet<string> MovePrograms = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "mv", "move", "mi", "move-item", "ren", "rename", "rni", "rename-item",
+    };
+
+    // The copies that plant a folder as a move does (2026-11-24, review #44): cp -r tmp .agents made .agents/skills from tmp/skills. Their destination
+    // is also the last plain word or -Destination. robocopy stays out (its file list follows the destination): the hash trust is its backstop, as for git.
+    private static readonly IReadOnlySet<string> CopyPrograms = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "cp", "copy", "xcopy", "cpi", "copy-item",
     };
 
     private static readonly string[] DestinationOptions = ["-destination", "-newname", "--target-directory"];
@@ -261,9 +278,10 @@ public static class TrustedFilesPolice
 
     private static bool IsClaudeValue(string value)
     {
+        // Trailing dots and spaces dropped, as Windows drops them (2026-11-24, review #9's neighbors): .claude.\settings.json reached the real file.
         var parts = PartsOf(value);
-        return parts.Any(part => part.Equals(WriteGuard.ClaudeFolderName, StringComparison.OrdinalIgnoreCase))
-            || (parts.Length > 0 && parts[^1].Equals(WriteGuard.ClaudeMcpFileName, StringComparison.OrdinalIgnoreCase));
+        return parts.Any(part => Trimmed(part).Equals(WriteGuard.ClaudeFolderName, StringComparison.OrdinalIgnoreCase))
+            || (parts.Length > 0 && Trimmed(parts[^1]).Equals(WriteGuard.ClaudeMcpFileName, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>Whether <paramref name="word"/> names a repo's own skills, an <c>.agents</c> segment followed by <c>skills</c> (2026-11-23, review #25).</summary>
@@ -275,11 +293,11 @@ public static class TrustedFilesPolice
 
     private static bool IsProjectSkillsValue(string value)
     {
-        var parts = PartsOf(value);
-        for (int i = 1; i < parts.Length; i++)
+        var parts = SidePartsOf(value);
+        for (int i = 1; i < parts.Count; i++)
         {
-            if (parts[i - 1].TrimEnd('.', ' ').Equals(Skills.SkillRoots.ExternalDirectoryName, StringComparison.OrdinalIgnoreCase)
-                && parts[i].TrimEnd('.', ' ').Equals(Skills.SkillRoots.DirectoryName, StringComparison.OrdinalIgnoreCase))
+            if (parts[i - 1].Equals(Skills.SkillRoots.ExternalDirectoryName, StringComparison.OrdinalIgnoreCase)
+                && parts[i].Equals(Skills.SkillRoots.DirectoryName, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
@@ -288,35 +306,73 @@ public static class TrustedFilesPolice
         return false;
     }
 
+    // A part as Windows reads it: trailing dots and spaces dropped (2026-11-24, review #9 and its neighbors).
+    private static string Trimmed(string part) => part.TrimEnd('.', ' ');
+
+    /// <summary>
+    /// The parts of <paramref name="value"/> as the OS walks them, for the checks that need two side by side (2026-11-24, review #9's plan): each
+    /// trimmed, a <c>.</c> skipped and a <c>..</c> dropping the part before it, so <c>.agents/./skills</c> and <c>.agents/x/../skills</c> read as <c>.agents/skills</c>.
+    /// </summary>
+    private static List<string> SidePartsOf(string value)
+    {
+        var kept = new List<string>();
+        foreach (string part in PartsOf(value))
+        {
+            if (part.TrimEnd(' ') == "..")
+            {
+                if (kept.Count > 0)
+                {
+                    kept.RemoveAt(kept.Count - 1);
+                }
+
+                continue;
+            }
+
+            string bare = Trimmed(part);
+            if (bare.Length > 0)
+            {
+                kept.Add(bare);
+            }
+        }
+
+        return kept;
+    }
+
+    // The name of the folder a command runs in, for what a relative word joins (2026-11-24, review #19): a working folder that is .agents.
+    private static string BaseName(Guard guard) => Path.GetFileName(Path.TrimEndingDirectorySeparator(guard.Base));
+
     /// <summary>Whether <paramref name="value"/> names <c>.git</c>, <c>.neon</c>, Claude Code's files, a repo's own skills, the project file, the project skills' trust file or copies, the app's folder name, or a path under the home. It can't tell a read from a write, so a full path there is refused either way; a relative one from a working folder inside the home passes.</summary>
     private static bool NamesTrusted(string value, Guard guard, ShellKind shell, bool isScript)
     {
-        if (IsClaudeValue(value) || IsProjectSkillsValue(value))
+        if (IsClaudeValue(value) || IsProjectSkillsValue(value) || (!IsRooted(value) && IsProjectSkillsValue(BaseName(guard) + "/" + value)))
         {
             return true;
         }
 
+        // Each part as Windows reads it (2026-11-24, review #9's neighbors): .git.\config and project-trust.json. reach the real thing.
         var parts = PartsOf(value);
         foreach (string part in parts)
         {
-            if (part.Equals(WorkingDirectory.GitFolderName, StringComparison.OrdinalIgnoreCase)
-                || part.Equals(Plans.PlanSlug.AppFolder, StringComparison.OrdinalIgnoreCase)
-                || part.Equals(HomeFolderName, StringComparison.OrdinalIgnoreCase))
+            string bare = Trimmed(part);
+            if (bare.Equals(WorkingDirectory.GitFolderName, StringComparison.OrdinalIgnoreCase)
+                || bare.Equals(Plans.PlanSlug.AppFolder, StringComparison.OrdinalIgnoreCase)
+                || bare.Equals(HomeFolderName, StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
         }
 
-        if (parts.Length > 0 && Llm.ProjectFile.FileNames.Any(n => n.Equals(parts[^1], StringComparison.OrdinalIgnoreCase)))
+        string last = parts.Length > 0 ? Trimmed(parts[^1]) : "";
+        if (parts.Length > 0 && Llm.ProjectFile.FileNames.Any(n => n.Equals(last, StringComparison.OrdinalIgnoreCase)))
         {
             return true;
         }
 
         // The project skills' trust (2026-11-23, feature idea #16): by name wherever it points, since a relative ../configs/project-trust.json from the
         // default files folder passes the full-path check below. The model never trusts a folder for itself.
-        if (parts.Length > 0 && (parts[^1].Equals(Skills.ProjectSkillTrust.FileName, StringComparison.OrdinalIgnoreCase)
-            || parts[^1].Equals(Skills.ProjectSkillTrust.FileName + Skills.ProjectSkillTrust.BadSuffix, StringComparison.OrdinalIgnoreCase)
-            || IsCopiesFolder(parts)))
+        if (parts.Length > 0 && (last.Equals(Skills.ProjectSkillTrust.FileName, StringComparison.OrdinalIgnoreCase)
+            || last.Equals(Skills.ProjectSkillTrust.FileName + Skills.ProjectSkillTrust.BadSuffix, StringComparison.OrdinalIgnoreCase)
+            || IsCopiesFolder(value)))
         {
             return true;
         }
@@ -325,10 +381,11 @@ public static class TrustedFilesPolice
     }
 
     // The trust's copies folder: a project-trust segment right under configs (2026-11-23, review #10: any segment of that name tripped it, a repo's
-    // src/project-trust among them).
-    private static bool IsCopiesFolder(string[] parts)
+    // src/project-trust among them). Walked as the OS walks it, each part trimmed (2026-11-24, review #9).
+    private static bool IsCopiesFolder(string value)
     {
-        for (int i = 1; i < parts.Length; i++)
+        var parts = SidePartsOf(value);
+        for (int i = 1; i < parts.Count; i++)
         {
             if (parts[i].Equals(Skills.ProjectSkillTrust.CopiesFolderName, StringComparison.OrdinalIgnoreCase)
                 && parts[i - 1].Equals(Settings.Profiles.ConfigsDirectoryName, StringComparison.OrdinalIgnoreCase))
@@ -462,7 +519,7 @@ public static class TrustedFilesPolice
             bool rooted = IsRooted(value);
 
             // A word with no separator takes its folder's answer unless the folder is in the install: no disk for the common case. The install's own name still counts.
-            if (!rooted && !value.Contains('/', StringComparison.Ordinal) && value is not ("." or "..") && !BaseInInstall(install) && !value.Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(install)), StringComparison.OrdinalIgnoreCase))
+            if (!rooted && !value.Contains('/', StringComparison.Ordinal) && value is not ("." or "..") && !BaseInInstall(install) && !Trimmed(value).Equals(Path.GetFileName(Path.TrimEndingDirectorySeparator(install)), StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -477,13 +534,14 @@ public static class TrustedFilesPolice
                 return true;
             }
 
+            // Each part trimmed, as Windows drops trailing dots and spaces (2026-11-24, review #9's neighbors): a new x.dll. landed as x.dll.
             var parts = PartsOf(value);
             return parts.Length > 0
-                && (parts.Any(part => part.Equals(Updates.UpdateFolder.Name, StringComparison.OrdinalIgnoreCase))
-                    || parts[^1].Equals(Updates.UpdateManifest.FileName, StringComparison.OrdinalIgnoreCase)
+                && (parts.Any(part => Trimmed(part).Equals(Updates.UpdateFolder.Name, StringComparison.OrdinalIgnoreCase))
+                    || Trimmed(parts[^1]).Equals(Updates.UpdateManifest.FileName, StringComparison.OrdinalIgnoreCase)
                     || HasWildcard(value)
                     || Exists(full)
-                    || Path.GetExtension(parts[^1]) is { } extension && (extension.Equals(".dll", StringComparison.OrdinalIgnoreCase) || extension.Equals(".dylib", StringComparison.OrdinalIgnoreCase) || extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)));
+                    || Path.GetExtension(Trimmed(parts[^1])) is { } extension && (extension.Equals(".dll", StringComparison.OrdinalIgnoreCase) || extension.Equals(".dylib", StringComparison.OrdinalIgnoreCase) || extension.Equals(".exe", StringComparison.OrdinalIgnoreCase)));
         }
 
         private bool Exists(string full)
@@ -585,7 +643,7 @@ public static class TrustedFilesPolice
                 return null;
             }
 
-            int destination = DestinationAt(words, program);
+            int destination = DestinationAt(words, program, shell);
             bool wildcardsCount = unreadable
                 || MovePrograms.Contains(CommandPrefix.Program(words[program].Trim(WordEdges)))
                 || words.Skip(program + 1).Any(word => IsRecursive(word.Trim(WordEdges), shell));
@@ -612,11 +670,12 @@ public static class TrustedFilesPolice
             return null;
         }
 
-        // The destination's index, or -1: the value of -Destination or -t if it has one, else the last plain word when there are two or more.
-        private static int DestinationAt(List<string> words, int program)
+        // The destination's index, or -1: the value of -Destination or -t if it has one, else the last plain word when there are two or more. A move's
+        // or a copy's (2026-11-24, review #44), and a cmd switch is never plain: xcopy tmp .agents /e /i read /i as the destination.
+        private static int DestinationAt(List<string> words, int program, ShellKind shell)
         {
             string name = CommandPrefix.Program(words[program].Trim(WordEdges));
-            if (!MovePrograms.Contains(name))
+            if (!MovePrograms.Contains(name) && !CopyPrograms.Contains(name))
             {
                 return -1;
             }
@@ -632,7 +691,7 @@ public static class TrustedFilesPolice
                     return word.Length > head.Length ? i : i + 1;   // joined to its option, or the next word
                 }
 
-                if (!word.StartsWith('-'))
+                if (!word.StartsWith('-') && !IsSwitch(word, shell))
                 {
                     plain++;
                     lastPlain = i;
@@ -640,6 +699,116 @@ public static class TrustedFilesPolice
             }
 
             return plain >= 2 ? lastPlain : -1;
+        }
+
+        /// <summary>
+        /// The destination word of a move or a copy that lands on <c>.agents</c> while some source isn't an existing plain file, or null (2026-11-24,
+        /// review #44): <c>mv tmp .agents</c> and <c>cp -r tmp .agents</c> make <c>.agents/skills</c> from <c>tmp/skills</c>, and <c>mv skills .agents</c>
+        /// puts it there. A plain file can't make a skills folder, so <c>cp README.md .agents/</c> passes. Read as <see cref="DropsAppFolder"/> reads its programs.
+        /// </summary>
+        public string? MovesOntoAgents(string segment, List<string> words)
+        {
+            var pieces = words.SelectMany(word => HasBreak(word) ? PathPolice.Tokens(word) : [word]).ToList();
+            if (!pieces.Exists(IsPlantWord))
+            {
+                return null;
+            }
+
+            string prefix = CommandPrefix.Of(segment, shell: shell);
+            bool unreadable = prefix == CommandPrefix.Unreadable;
+            string first = CommandPrefix.Program(prefix.Split(' ')[0]);
+            if (unreadable || ShellPrograms.Contains(first))
+            {
+                return Planted(words) ?? Planted(pieces);
+            }
+
+            return MovePrograms.Contains(first) || CopyPrograms.Contains(first) ? Planted(words) : null;
+        }
+
+        private static bool IsPlantWord(string word)
+        {
+            string name = CommandPrefix.Program(word.Trim(WordEdges));
+            return MovePrograms.Contains(name) || CopyPrograms.Contains(name);
+        }
+
+        private string? Planted(List<string> words)
+        {
+            int program = words.FindIndex(IsPlantWord);
+            if (program < 0)
+            {
+                return null;
+            }
+
+            int destination = DestinationAt(words, program, shell);
+            if (destination < 0 || destination >= words.Count)
+            {
+                return null;
+            }
+
+            string word = words[destination].Trim(WordEdges);
+            if (!LandsOnAgents(word))
+            {
+                return null;
+            }
+
+            for (int i = program + 1; i < words.Count; i++)
+            {
+                string source = words[i].Trim(WordEdges);
+                if (i == destination || source.Length == 0 || source.StartsWith('-') || IsSwitch(source, shell))
+                {
+                    continue;
+                }
+
+                if (!IsPlainFile(source))
+                {
+                    return word;
+                }
+            }
+
+            return null;
+        }
+
+        // Whether a destination's last part, walked as the OS walks it, is .agents: its option head and quotes gone, a relative one joined to the
+        // name of the folder the command runs in, so mv ../x/skills . from a working folder that is .agents counts.
+        private bool LandsOnAgents(string word)
+        {
+            string value = word;
+            if (value.StartsWith('-') && value.IndexOfAny([':', '=']) is > 0 and var cut)
+            {
+                value = value[(cut + 1)..];
+            }
+
+            value = Unquoted(value);
+            if (OperatingSystem.IsWindows())
+            {
+                value = value.Replace('\\', '/');
+            }
+
+            var parts = SidePartsOf(IsRooted(value) ? value : BaseName(guard) + "/" + value);
+            return parts.Count > 0 && parts[^1].Equals(Skills.SkillRoots.ExternalDirectoryName, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string Unquoted(string value) =>
+            value.Replace("\"", "", StringComparison.Ordinal).Replace("'", "", StringComparison.Ordinal).Replace("`", "", StringComparison.Ordinal);
+
+        // An existing plain file. A wildcard, a name no path is made of, or one on another computer, which is never looked at (review P22-1), is not.
+        private bool IsPlainFile(string source)
+        {
+            foreach (string spelled in Spellings(Unquoted(source), isScript))
+            {
+                if (HasWildcard(spelled) || Full(spelled, guard, shell, isScript) is not { } full || IsRemote(full))
+                {
+                    continue;
+                }
+
+                guard.Looked?.Invoke(full);
+                if (File.Exists(full))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool Holds(string full, string? target)

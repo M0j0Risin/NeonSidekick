@@ -126,7 +126,6 @@ public static class AskUserText
         return names.Length == 0 ? Nothing : "no questions key; the arguments were " + names;
     }
 
-    /// <summary>More questions than the cap (<c>Ask max questions</c>) allows.</summary>
     /// <summary>
     /// A question's field sent at the top level beside a non-empty <c>questions</c> list (2026-11-15, the tool-arguments review's #110):
     /// it would be skipped, so the call is refused and the fields named, each echoed.
@@ -138,6 +137,7 @@ public static class AskUserText
         return $"Error: {names} sent beside questions; a question's fields go inside its item of questions. Nothing was asked.";
     }
 
+    /// <summary>More questions than the cap (<c>Ask max questions</c>) allows.</summary>
     public static string TooManyQuestions(int maxQuestions) => $"Error: at most {N(maxQuestions)} questions per call; ask the most important ones first.";
 
     public static string NoQuestionText(int number) => $"Error: question {N(number)} has no question text.";
@@ -156,10 +156,12 @@ public static class AskUserText
 
     /// <summary>
     /// A question with no options and no type but a list under another key (2026-11-24, the last-7 review's #20): the model misnamed its
-    /// options, so it is told, never asked a free-text question it didn't mean. Pinned.
+    /// options, so it is told, never asked a free-text question it didn't mean. Pinned. The key echoed (2026-11-24, review #15); a typed choice
+    /// (<paramref name="choice"/>, review #29) is never told to leave the list out, which would only bring <see cref="BadOptions"/>.
     /// </summary>
-    public static string StrayList(int number, string key) =>
-        $"Error: question {N(number)} sends a list as \"{key}\", which ask_user doesn't read; send the choices as \"options\", or leave the list out for a free-text question.";
+    public static string StrayList(int number, string key, bool choice = false) =>
+        $"Error: question {N(number)} sends a list as \"{ArgumentText.Echo(key)}\", which ask_user doesn't read; send the choices as \"options\""
+        + (choice ? "." : ", or leave the list out for a free-text question.");
 
     /// <summary>Too few or too many options for one question, the range as <see cref="BadOptions"/> names it.</summary>
     public static string OptionCount(int number, int count, int maxChoices) => $"Error: question {N(number)} has {N(count)} options; give {N(AskUserTool.MinOptions)} to {N(maxChoices)}.";

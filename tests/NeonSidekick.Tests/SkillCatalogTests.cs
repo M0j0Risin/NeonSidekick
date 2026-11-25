@@ -348,4 +348,17 @@ public class SkillCatalogTests : IDisposable
         Assert.False(catalog.GlobalEnabled);
         Assert.Equal(version + 1, catalog.Version);
     }
+
+    /// <summary>A long description is cut before an emoji whose pair straddles the cut, never through it (2026-11-24, review #57).</summary>
+    [Fact]
+    public void Cap_NeverSplitsAPair()
+    {
+        string description = new string('a', SkillFrontmatter.MaxDescriptionLength - 2) + "\U0001F600" + "tail";
+
+        string capped = SkillCatalog.Cap(description);
+
+        Assert.EndsWith("…", capped, StringComparison.Ordinal);
+        Assert.False(char.IsSurrogate(capped[^2]));
+        Assert.True(capped.Length <= SkillFrontmatter.MaxDescriptionLength);
+    }
 }

@@ -47,7 +47,7 @@ From top to bottom:
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
 * **The lower rule** shows the running jobs at its right, whatever the Status section shows: `── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ⚡1 ─`.
   * **📦** a new version and how its [update](COMMANDS.md#updating) stands (`📦 0.5.7`, `42%`, `checking`, `at quit`, `back to 0.5.6 at quit`); *Check for updates at start* off hides the plain `📦 0.5.7`.
-  * **The loop:** 🔁 a [Ralph loop](COMMANDS.md#ralph-loop) (`🔁 step 2/5 · pass 3`), 🔎 a [code audit](COMMANDS.md#code-audit) (`🔎 2/5`, or `🔎 2` with no limit), ⟳ a [`/loop`](COMMANDS.md#loops) (`⟳ 3/10`, or `⟳ 3`). `· ending` follows once a double-click asked it to end.
+  * **The loop:** 🔁 a [Ralph loop](COMMANDS.md#ralph-loop) (`🔁 step 2/5 · pass 3`), 🔎 a [code audit](COMMANDS.md#code-audit) (`🔎 2/5`), ⟳ a [`/loop`](COMMANDS.md#loops) (`⟳ 3/10`). A double-click ends it after the pass in progress (`· ending`).
   * **📥** an embedded model's download, **🖼️** (🎨 for a rework) ComfyUI pictures still rendering, **⚡n** the background processes running.
   * **A narrow window** drops 📦 first, then 🖼️, then 📥, then the loop; ⚡n stays. Each is shown whole or not at all.
 
@@ -512,7 +512,7 @@ What every window shares:
 A right-click in the viewer or the thumbnail browser.
 
 * **Edits:** rotate and flip, color (grayscale, sepia, negative, polaroid), resize, convert (PNG, JPEG, GIF, BMP), shrink the file under a size, strip metadata losslessly. *Image edit mode* decides whether an edit writes `photo-edited.png` or replaces the picture.
-* **The file:** copy its path, show it in Explorer (Finder on a Mac), attach it, print it, add it to the splash images, or delete it without asking (to the Recycle bin or Trash under *File deletes to Recycle bin*, else for good).
+* **The file:** copy its path, show it in Explorer (Finder on a Mac), attach, print or add it to the splash images, or delete it without asking (for good unless *File deletes to Recycle bin* is on).
 
 ### The thumbnail browser
 
@@ -717,7 +717,7 @@ The button at the message box's left (or a bare `/prompts` or `/queue` from the 
 
 * **On both sides at once** (the first answer wins): a command's approval, `ask_user`, an allow (camera, screen, a database write, an MCP call), a yes/no, the plan's approval, a code audit's done pane and a reflection's skill.
 * The page shows a command, a statement or an MCP call's arguments whole, and a reflection's skill as its summary with **Keep** and **Discard**.
-* **`ask_user`** on the page: **Submit** sends what you answered, the rest as skipped (a second tap clears a pick); **Decline** opens a note box; tap Decline again, or Send, to decline them all, with the note if you wrote one. What you picked or typed survives a reconnect.
+* **`ask_user`** on the page: **Submit** sends your answers, the rest as skipped; a second tap clears a pick. **Decline** opens a note box; a second tap or Send declines them all. Answers survive a reconnect.
 * **The camera's shutter** (*Camera shutter* `user`) offers **Take and send**: the PC's camera takes the photo, with no preview.
 * **At the PC only:** the plan's Close gaps and a code audit's reviewer page; meanwhile the page says "waiting for an answer at the PC".
 * **A bot check:** the allow question, then a card ([A bot check from the page](#a-bot-check-from-the-page)).

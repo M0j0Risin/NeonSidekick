@@ -56,6 +56,23 @@ public sealed class ThemeEditBandTests
         Assert.Equal(["⚠  2 code colors on the good diff, worst 1.5:1 (wants 3)", "⚠  1 code color on the bad diff, worst 2.9:1 (wants 3)"], lines.Skip(1));
     }
 
+    /// <summary>A short pane's slab (2026-11-24, review #65): the band is laid out for the rows it gets, so the worst pair still shows.</summary>
+    [Fact]
+    public void AShortPane_StillShowsTheWorstPair()
+    {
+        var problems = new[]
+        {
+            P("dimmer on bg", 2.4, 2.5, null, ThemeColorSlot.Dimmer, ThemeColorSlot.Bg),
+            P("panelBg on bg", 1.0, 1.2, null, ThemeColorSlot.PanelBg, ThemeColorSlot.Bg),
+        };
+
+        var lines = MenuPane.FooterLines(SettingsMenu.BandFooter(ThemeColorSlot.Bg, problems, 200), 200, slabRows: 2);
+
+        Assert.Equal([Note(ThemeColorSlot.Bg), ThemeText.ChecksMore(2)], lines);   // two rows: the note, then the count, never the note alone
+        lines = MenuPane.FooterLines(SettingsMenu.BandFooter(ThemeColorSlot.Bg, problems, 200), 200, slabRows: 3);
+        Assert.Equal([Note(ThemeColorSlot.Bg), "⚠  panelBg on bg 1.0:1 (wants 1.2)", "⚠  dimmer on bg 2.4:1 (wants 2.5)"], lines);
+    }
+
     [Fact]
     public void TooManyLines_EndOnAndNMore_WithNRight()
     {

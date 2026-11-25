@@ -346,7 +346,7 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
             var notes = new List<string>();
             foreach (var question in questions)
             {
-                if (!_declined.TryGetValue(AskAnswer.Collapse(question.Question), out string? own))
+                if (!_declined.TryGetValue(DeclineKey(question), out string? own))
                 {
                     return false;
                 }
@@ -357,7 +357,8 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
                 }
             }
 
-            note = notes.Count > 0 ? string.Join("; ", notes) : null;
+            // Cut as one note is (2026-11-24, review #62): several joined could run past the cap each was held to.
+            note = notes.Count > 0 ? Files.TextCut.Safe(string.Join("; ", notes), AskUserText.NoteChars) : null;
             return true;
         }
     }
@@ -375,10 +376,20 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
 
             foreach (var question in questions)
             {
-                _declined[AskAnswer.Collapse(question.Question)] = note;
+                // A decline with no note keeps the note an earlier one gave (2026-11-24, review #50).
+                string key = DeclineKey(question);
+                _declined[key] = note ?? (_declined.TryGetValue(key, out string? old) ? old : null);
             }
         }
     }
+
+    /// <summary>
+    /// What a declined question is known by (2026-11-24, review #7): its collapsed text, its kind and its collapsed option labels, joined by
+    /// separators a collapsed text can't hold, so a corrected re-ask (new options, another kind) is asked. The one key for the remember and the lookup.
+    /// </summary>
+    private static string DeclineKey(AskQuestion question) =>
+        AskAnswer.Collapse(question.Question) + "\u001F" + question.Kind + "\u001F"
+        + string.Join("\u001E", question.Options.Select(option => AskAnswer.Collapse(option.Label)));
 
     /// <summary>
     /// The questions out of the arguments, or the <c>Error:</c> sentence for a call that cannot be
@@ -476,7 +487,8 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
 
         foreach (var property in item.EnumerateObject())
         {
-            if (property.Value.ValueKind == JsonValueKind.Array && !ItemFields.Contains(property.Name))
+            // An empty list is harmless left unread (2026-11-24, review #60), as the top-level fields are.
+            if (property.Value.ValueKind == JsonValueKind.Array && !ItemFields.Contains(property.Name) && !ToolArgumentCheck.Harmless(property.Value))
             {
                 return property.Name;
             }
@@ -504,25 +516,17 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
         }
 
         string title = Flatten(Text(property(TitleArgument)));
-        var sent = property(OptionsArgument) ?? property(ChoicesArgument);
-        if (sent is { ValueKind: JsonValueKind.Null })
-        {
-            sent = null;
-        }
 
-        // The list written by hand inside a string: what a server's parser hands over when its own parse failed. Unwrapped before the
-        // kind is decided (2026-11-24, the last-7 review's #25), so "[]" in a string is the empty list it says.
-        using var encoded = sent is { ValueKind: JsonValueKind.String } s && s.GetString() is { } list ? LooseJson.TryParse(list, closeOpen: true) : null;
-        if (encoded is not null)
-        {
-            sent = encoded.RootElement;
-        }
+        // The list written by hand inside a string: what a server's parser hands over when its own parse failed. Each candidate is unwrapped
+        // before it is judged (2026-11-24, the last-7 review's #25, and review #68/#40): options: "[]" or null beside a real choices list
+        // gives the choices, never a free-text question.
+        using var encodedOptions = Unwrapped(property(OptionsArgument), out var sentOptions);
+        using var encodedChoices = Unwrapped(property(ChoicesArgument), out var sentChoices);
+        var sent = !NoList(sentOptions) ? sentOptions : !NoList(sentChoices) ? sentChoices : null;
 
-        // No options: none sent, a blank string, or an empty list. With no type that is a free-text question; a choice's own errors
-        // still read what was sent.
-        bool noOptions = sent is null
-            || (sent is { ValueKind: JsonValueKind.String } blank && string.IsNullOrWhiteSpace(blank.GetString()))
-            || (sent is { ValueKind: JsonValueKind.Array } empty && empty.GetArrayLength() == 0);
+        // No options: none sent, a JSON null, a blank string, or an empty list. With no type that is a free-text question; a choice's own
+        // errors still read what was sent.
+        bool noOptions = sent is null;
 
         AskKind kind;
         string type = Text(property(TypeArgument)).Trim();
@@ -561,8 +565,20 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
                 return AskUserText.TextTakesNoOptions(number);
             }
 
+            // A list under another name is named (2026-11-24, review #29), not dropped for a free-text question.
+            if (strayList is not null)
+            {
+                return AskUserText.StrayList(number, strayList);
+            }
+
             question = new AskQuestion(text, title.Length == 0 ? null : title, AskKind.Text, []);
             return null;
+        }
+
+        // A typed choice whose options came under another name (review #29): the name is the fix, not the generic shape.
+        if (noOptions && strayList is not null)
+        {
+            return AskUserText.StrayList(number, strayList, choice: true);
         }
 
         if (sent is not { ValueKind: JsonValueKind.Array } array)
@@ -614,10 +630,10 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
             case JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False:
                 return new AskOption(item.GetRawText());
             case JsonValueKind.Object:
-                string named = Flatten(Text(item.TryGetProperty(LabelArgument, out var l) ? l : null));
+                string named = Flatten(LabelText(item.TryGetProperty(LabelArgument, out var l) ? l : null));
                 if (named.Length == 0)
                 {
-                    named = Flatten(Text(item.TryGetProperty(TextArgument, out var t) ? t : null));
+                    named = Flatten(LabelText(item.TryGetProperty(TextArgument, out var t) ? t : null));
                 }
 
                 if (named.Length == 0)
@@ -631,6 +647,30 @@ public sealed class AskUserTool : AIFunction, IAcceptsArguments
             default:
                 return null;
         }
+    }
+
+    /// <summary>An option object's label: a string, or a number or a boolean as its text (2026-11-24, review #48), as the bare form takes them.</summary>
+    private static string LabelText(JsonElement? value) =>
+        value is { ValueKind: JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False } element ? element.GetRawText() : Text(value);
+
+    /// <summary>No list: missing, a JSON null, a blank string or an empty list (2026-11-24, review #68/#40).</summary>
+    private static bool NoList(JsonElement? value) =>
+        value is null
+        || value.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined
+        || (value.Value.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(value.Value.GetString()))
+        || (value.Value.ValueKind == JsonValueKind.Array && value.Value.GetArrayLength() == 0);
+
+    /// <summary>A list written inside a string, parsed (its document to dispose), else the value as sent.</summary>
+    private static JsonDocument? Unwrapped(JsonElement? value, out JsonElement? element)
+    {
+        element = value;
+        if (value is { ValueKind: JsonValueKind.String } s && s.GetString() is { } list && LooseJson.TryParse(list, closeOpen: true) is { } parsed)
+        {
+            element = parsed.RootElement;
+            return parsed;
+        }
+
+        return null;
     }
 
     /// <summary>A string value's text; empty when missing, null or not a string.</summary>

@@ -3487,8 +3487,8 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("work", _settings.ProfileName);
         Assert.Contains(SettingsMenu.ProfileKeys, Output);
         Assert.Contains("a–z = jump", SettingsMenu.SwitchKeys);
-        Assert.Contains("+ = add", SettingsMenu.SwitchKeys);   // the add row (2026-11-24)
-        Assert.Contains("+ = add", SettingsMenu.ProfileKeys);
+        Assert.Contains("+ = pick add", SettingsMenu.SwitchKeys);   // the add row (2026-11-24); "= pick" as the house's cursor keys (review #66)
+        Assert.Contains("+ = pick add", SettingsMenu.ProfileKeys);
         pane.Dispose();
     }
 

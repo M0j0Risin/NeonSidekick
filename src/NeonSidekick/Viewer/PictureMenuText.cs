@@ -78,6 +78,9 @@ public static class PictureMenuText
         + (robot ? "; they show while Welcome splash is image" : "")
         + ")";
 
+    /// <summary>A file the splash can't show (2026-11-24, review #67): the user's words, never the model's "Error:".</summary>
+    public static string SplashNotAnImage(string name) => $"{name} is not a picture the splash can show (png, jpg, gif, webp or bmp)";
+
     /// <summary>A picture already in the splash folder (2026-11-23).</summary>
     public static string SplashAlready(string name) => $"{name} is already one of the splash images";
 

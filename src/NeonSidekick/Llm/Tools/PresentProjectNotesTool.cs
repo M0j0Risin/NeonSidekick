@@ -115,9 +115,11 @@ public sealed class PresentProjectNotesTool : AIFunction, IRefusesPrunedStubs, I
                 return new ToolNothingRanResult(ProjectInitText.ReviseResult(verdict.Feedback, _session.AskUser));
         }
 
-        // Write, or Write and turn on. The folder checked again: the pane may have waited a long time.
+        // Write, or Write and turn on. The folder checked again: the pane may have waited a long time. A refusal here is told to the user in
+        // their words (2026-11-24, review #61), not the model's.
         if (_session.Moved(_files.Root))
         {
+            _session.MarkWriteRefused(true);
             return new ToolNothingRanResult(ProjectInitText.MovedResult);
         }
 
@@ -126,6 +128,7 @@ public sealed class PresentProjectNotesTool : AIFunction, IRefusesPrunedStubs, I
         var now = Draft(_files, start.Target, content);
         if (now.Unreadable || !string.Equals(now.OldText, draft.OldText, StringComparison.Ordinal))
         {
+            _session.MarkWriteRefused(true);
             return new ToolNothingRanResult(ProjectInitText.ChangedMeanwhileResult(start.Target));
         }
 

@@ -197,13 +197,15 @@ internal sealed partial class ChatScreen
         _customCommandTitle = typed;   // the new session's title is the typed line (LogTurn), not the generated message
         try
         {
-            // The flags from this turn alone (2026-11-23, review #79): an earlier turn's cancel or failure hid the notice.
+            // The flags from this turn alone (2026-11-23, review #79): an earlier turn's cancel or failure hid the notice. Failed until the turn
+            // runs, as Ralph's (2026-11-24, review #3): a message refused before its turn (no server) left false and printed "no draft".
             _lastTurnCancelled = false;
-            _lastTurnFailed = false;
+            _lastTurnFailed = true;
+            _lastTurnFailure = TurnFailure.None;
             bool exit = await RunMessageAsync(ProjectInitText.Message(start.Focus), images, cancellationToken, new TurnMark(typed, AppWritten: true), putBack: false).ConfigureAwait(false);
 
-            // No answer: no draft, or a Revise with no new one (review #97); a failed write said so itself.
-            if (_projectInit.Answer == ProjectInitAnswer.None && !_projectInit.WriteFailed && !_lastTurnCancelled && !_lastTurnFailed)
+            // No answer: no draft, or a Revise with no new one (review #97); a failed write said so itself, as a refused one did (review #61).
+            if (_projectInit.Answer == ProjectInitAnswer.None && !_projectInit.WriteFailed && !_projectInit.WriteRefused && !_lastTurnCancelled && !_lastTurnFailed)
             {
                 _transcript.Notice(_projectInit.Presented ? ProjectInitText.NoRevisedDraftNotice : ProjectInitText.NoDraftNotice);
             }

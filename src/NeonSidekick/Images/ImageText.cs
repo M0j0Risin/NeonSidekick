@@ -290,6 +290,11 @@ public static class ImageText
     /// <summary>A splash source already in the splash folder (2026-10-10, once a full path in the images folder could name one): copied, it would land beside itself. Pinned.</summary>
     public static string SplashAlready(string relative) => $"Error: '{relative}' is already in the splash folder";
 
+    /// <summary>
+    /// Every name a splash copy tried was taken (2026-11-24, review #39): the detail of a failed add, for the picture menu and the model alike.
+    /// </summary>
+    public static string SplashNamesTaken(string stem) => $"{stem} and the numbered names after it are all taken";
+
     /// <summary>A splash copy that failed on disk. Pinned.</summary>
     public static string SplashFailed(string target, string detail) => $"Error: could not copy into {target}: {Diagnostics.LogText.Excerpt(detail)}";
 }

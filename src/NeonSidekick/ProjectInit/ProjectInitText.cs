@@ -172,6 +172,9 @@ public static class ProjectInitText
     public const string NoDraftNotice = "(📝 /project-init ended without a draft; try again with a narrower focus, like /project-init build and test)";
 
     /// <summary>A Revise asked for, and the turn ended without a new draft (2026-11-23, review #97).</summary>
+    /// <summary>A Write refused after the pane (2026-11-24, review #61): the user's words for both causes, no promise of what comes next.</summary>
+    public static string WriteRefusedNotice(string file) => $"(📝 Nothing was written: {file} or the working folder changed while the draft was shown)";
+
     public const string NoRevisedDraftNotice = "(📝 /project-init ended without a revised draft; nothing was written. Run /project-init again with what to change)";
     public static string CanceledNotice(string file) => $"(📝 {file} left as it was)";
     public static string WroteNotice(string file, int chars, string? turnedOn) =>

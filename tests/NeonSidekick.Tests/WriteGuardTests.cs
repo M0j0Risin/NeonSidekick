@@ -233,6 +233,57 @@ public sealed class WriteGuardTests : IDisposable
         Assert.Contains(".agents/skills", FileText.GuardedPathsSentence, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// A working folder that is <c>.agents</c> still guards <c>skills/…</c> (2026-11-24, review #19); one inside <c>.agents/skills</c> keeps
+    /// writing there, the house rule for a skill root.
+    /// </summary>
+    [Fact]
+    public void AWorkingFolderThatIsAgents_StillGuardsItsSkills()
+    {
+        using var _ = WriteGuard.Configure(Facts());
+        string agents = Path.Combine(_root, ".agents");
+        Directory.CreateDirectory(agents);
+        var atAgents = new WorkingDirectory(() => agents, new ManualTimeProvider());
+        Assert.Equal(FileOutcome.ProjectSkillsProtected, atAgents.WriteText(Path.Combine("skills", "x", "SKILL.md"), "x", overwrite: true).Outcome);
+        Assert.Equal(FileOutcome.Ok, atAgents.WriteText("notes.md", "x", overwrite: true).Outcome);
+        Assert.Equal(FileOutcome.ProjectSkillsProtected, WriteGuard.GuardedFolder("skills/x", ".agents. "));
+        Assert.Null(WriteGuard.GuardedFolder("skills/x", "agents"));
+
+        string inside = Path.Combine(agents, "skills", "x");
+        Directory.CreateDirectory(inside);
+        var inSkill = new WorkingDirectory(() => inside, new ManualTimeProvider());
+        Assert.Equal(FileOutcome.Ok, inSkill.WriteText("SKILL.md", "x", overwrite: true).Outcome);
+    }
+
+    /// <summary>
+    /// A folder holding <c>skills</c> moved onto <c>.agents</c> would plant a repo's skills folder, so the move is refused and names
+    /// <c>.agents/skills</c> (2026-11-24, review #44); a copy leaves <c>.agents/skills</c> out and lists it, as before.
+    /// </summary>
+    [Fact]
+    public void AFolderHoldingSkills_MovedOntoAgents_IsRefused_ACopyLeavesThemOut()
+    {
+        using var _ = WriteGuard.Configure(Facts());
+        Directory.CreateDirectory(Path.Combine(_root, "tmp", "skills", "x"));
+        File.WriteAllText(Path.Combine(_root, "tmp", "skills", "x", "SKILL.md"), "x");
+        File.WriteAllText(Path.Combine(_root, "tmp", "notes.md"), "x");
+
+        var moved = _files.Move("tmp", ".agents", overwrite: false);
+        Assert.Equal(FileOutcome.ProjectSkillsProtected, moved.Outcome);
+        Assert.True(moved.AtDestination);
+        Assert.Contains("skills", moved.To, StringComparison.Ordinal);
+        Assert.True(Directory.Exists(Path.Combine(_root, "tmp", "skills", "x")));
+        Assert.False(Directory.Exists(Path.Combine(_root, ".agents")));
+
+        var copied = _files.Copy("tmp", ".agents", overwrite: false);
+        Assert.Equal(FileOutcome.Ok, copied.Outcome);
+        Assert.NotEmpty(copied.LeftOut);
+        Assert.False(Directory.Exists(Path.Combine(_root, ".agents", "skills")));
+        Assert.True(File.Exists(Path.Combine(_root, ".agents", "notes.md")));
+
+        Directory.CreateDirectory(Path.Combine(_root, "plain"));
+        Assert.Equal(FileOutcome.Ok, _files.Move("plain", Path.Combine("sub", ".agents"), overwrite: false).Outcome);
+    }
+
     /// <summary>Both commands folders are in the home, so a model write to either is refused, a working folder inside one too (2026-10-31, review P2-2).</summary>
     [Fact]
     public void TheCommandsFolders_AreTheApps()

@@ -56,6 +56,23 @@ public sealed class MidiBindingsTests : IDisposable
         Assert.Equal(Spectre.Console.Markup.Remove(rows[0].Markup).IndexOf("→", StringComparison.Ordinal), Spectre.Console.Markup.Remove(rows[1].Markup).IndexOf("→", StringComparison.Ordinal));
     }
 
+    /// <summary>A device's long name (2026-11-24, review #64): the triggers pad to at most the cap, and the long one prints whole.</summary>
+    [Fact]
+    public void TheBindingsTab_ALongDeviceName_PrintsWhole_AndPadsNoOtherRowPastTheCap()
+    {
+        string device = new('D', 100);
+        WriteFile("{ \"version\": 1, \"bindings\": ["
+            + "{ \"device\": \"FS-4\", \"kind\": \"cc\", \"channel\": 1, \"number\": 80, \"command\": \"/tts\" },"
+            + "{ \"device\": \"" + device + "\", \"kind\": \"note\", \"channel\": 10, \"number\": 36, \"command\": \"/camera snap\" } ] }");
+
+        var rows = MidiMenu.BindingRows(new MidiBindings(_dir).Load());
+
+        string shortRow = Spectre.Console.Markup.Remove(rows[0].Markup);
+        string longRow = Spectre.Console.Markup.Remove(rows[1].Markup);
+        Assert.Contains(device + "  → /camera snap", longRow);
+        Assert.Equal(MidiText.TriggerCap, TextCells.Width(shortRow[..shortRow.IndexOf("  →", StringComparison.Ordinal)]));
+    }
+
     /// <summary>A file with only a skipped entry opens on it, no rule above it; one rule before Learn.</summary>
     [Fact]
     public void TheBindingsTab_OnlySkipped_HasNoRuleOnTop()

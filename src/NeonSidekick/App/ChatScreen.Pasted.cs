@@ -43,17 +43,14 @@ internal sealed partial class ChatScreen
         for (int i = 0; i < images.Count; i++)
         {
             // An attached PDF (2026-10-14, the PDF plan's gap 27): its label names its file in the sent text, so the model, an advisor or a
-            // later turn can read_pdf it — the working directory's relative path when it is inside it, the full one otherwise.
+            // later turn can read_pdf it — by its full path (2026-11-24, review #26/#27, the user's pick: a relative one read another file after a /cwd).
             if (images[i].IsDocument && pastes.DocumentNumberOf(images[i]) is int document)
             {
                 string drafted = PdfText.DocumentLabel(document, Path.GetFileName(images[i].Path));
-                string where = _files.Contains(images[i].Path) && _files.Resolve(images[i].Path, forWrite: false, out string inside) == FileOutcome.Ok
-                    ? _files.Relative(inside)
-                    : images[i].Path;
                 int found = text.IndexOf(drafted, StringComparison.Ordinal);
                 if (found >= 0)
                 {
-                    text = string.Concat(text.AsSpan(0, found), PdfText.DocumentSentLabel(document, where), text.AsSpan(found + drafted.Length));
+                    text = string.Concat(text.AsSpan(0, found), PdfText.DocumentSentLabel(document, images[i].Path), text.AsSpan(found + drafted.Length));
                 }
 
                 continue;
@@ -66,17 +63,16 @@ internal sealed partial class ChatScreen
 
             if (SavePasted(number) is not { } saved)
             {
-                // A picture from a file (2026-11-23): its label names the file, relative inside the working directory as a PDF's is. A camera
-                // photo is a file the app wrote, so it reads "saved as" with its full path, as a pasted picture's does (2026-11-24, the user's pick);
-                // a screen capture too (later that day, the last-7 review's #52, the user's yes).
+                // A picture from a file (2026-11-23): its label names the file by its full path, as a PDF's does (2026-11-24, review #26/#27, the
+                // user's pick). A camera photo is a file the app wrote, so it reads "saved as", as a pasted picture's does (2026-11-24, the user's
+                // pick); a screen capture too (later that day, the last-7 review's #52, the user's yes).
                 if (!pastes.IsClipboard(number) && images[i].Path is { Length: > 0 } file && File.Exists(file))
                 {
-                    string where = _files.Contains(file) && _files.Resolve(file, forWrite: false, out string inside) == FileOutcome.Ok ? _files.Relative(inside) : file;
                     string bare = PasteBlocks.ImageLabel(number);
                     int found = text.IndexOf(bare, StringComparison.Ordinal);
                     if (found >= 0)
                     {
-                        string sent = IsCameraPicture(images[i]) || IsScreenPicture(images[i]) ? PasteBlocks.SavedLabel(number, file) : PasteBlocks.FileLabel(number, where);
+                        string sent = IsCameraPicture(images[i]) || IsScreenPicture(images[i]) ? PasteBlocks.SavedLabel(number, file) : PasteBlocks.FileLabel(number, file);
                         text = string.Concat(text.AsSpan(0, found), sent, text.AsSpan(found + bare.Length));
                     }
                 }

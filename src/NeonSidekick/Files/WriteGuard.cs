@@ -167,7 +167,8 @@ public static class WriteGuard
         string judged = OperatingSystem.IsMacOS() ? full.Normalize(NormalizationForm.FormC) : full;
         string judgedRoot = OperatingSystem.IsMacOS() ? root.Normalize(NormalizationForm.FormC) : root;
         string relative = WorkingDirectory.IsInside(judgedRoot, judged) ? WorkingDirectory.Under(judgedRoot, judged) : "";
-        if (GuardedFolder(relative) is { } folder)
+        // The root's own name seeds the walk (2026-11-24, review #19): a working folder that is .agents still guards skills/….
+        if (GuardedFolder(relative, Path.GetFileName(Path.TrimEndingDirectorySeparator(judgedRoot))) is { } folder)
         {
             // A configured skill root keeps its own refusal (2026-11-23, review #25): the External skills root is %USERPROFILE%\.agents\skills, and
             // skill_editor does change that one.
@@ -240,11 +241,13 @@ public static class WriteGuard
     /// <c>.claude</c> since 2026-11-02 (review P12-2): <c>/claude</c> runs <c>claude -p</c> in the working folder, which loads that folder's
     /// <c>.claude/settings.json</c> hooks and commands, so a model that wrote one there ran a command of its own choosing on the next <c>/claude</c>.
     /// <c>.agents/skills</c> since 2026-11-23 (review #25): a repo's own skills, which the user trusts by their hash.
+    /// <paramref name="above"/> is the name of the folder <paramref name="relative"/> starts in (2026-11-24, review #19): a working folder that
+    /// <em>is</em> <c>.agents</c> writing <c>skills/…</c> is still refused. One inside <c>.agents/skills</c> keeps writing there, as in a skill root.
     /// </summary>
-    public static FileOutcome? GuardedFolder(string relative)
+    public static FileOutcome? GuardedFolder(string relative, string? above = null)
     {
         ArgumentNullException.ThrowIfNull(relative);
-        string previous = "";
+        string previous = above?.TrimEnd('.', ' ') ?? "";
         foreach (string part in relative.Split(WorkingDirectory.Separators, StringSplitOptions.RemoveEmptyEntries))
         {
             string bare = part.TrimEnd('.', ' ');

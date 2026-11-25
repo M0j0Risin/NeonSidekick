@@ -674,6 +674,56 @@ public class SkillEditorTests : IDisposable
         Assert.Equal(SkillEditOutcome.Created, SkillEditor.Create(Off, SkillScope.Profile, "fresh", "d", "i", external: false).Outcome);   // the profile's as ever
     }
 
+    /// <summary>
+    /// A move into a repo whose <c>.agents</c> links outside it is refused, the source kept (2026-11-24, review #28); with no bound the level is the
+    /// bound, and a link inside the repo moves.
+    /// </summary>
+    [Fact]
+    public void MoveToProject_IntoARepoWhoseAgentsLinksOutside_IsRefused_TheSourceStays()
+    {
+        string repo = Path.Combine(_dir, "repo");
+        string outside = Path.Combine(_dir, "outside-agents");
+        Directory.CreateDirectory(Path.Combine(outside, "skills"));
+        Directory.CreateDirectory(Path.Combine(repo, "shared", "skills"));
+        string agents = Path.Combine(repo, ".agents");
+        string repoSkills = Path.Combine(agents, "skills");
+        Put(SkillScope.Profile, "haiku");
+        try
+        {
+            LinkFolder(agents, outside);
+
+            var moved = SkillEditor.MoveToProject(_roots, Scanned(SkillScope.Profile, "haiku"), repoSkills, bound: repo);
+            Assert.Equal((SkillEditOutcome.Failed, SkillText.DestinationLinked), (moved.Outcome, moved.Detail));
+            Assert.Equal(SkillEditOutcome.Failed, SkillEditor.MoveToProject(_roots, Scanned(SkillScope.Profile, "haiku"), repoSkills).Outcome);
+            Assert.True(File.Exists(FileOf(SkillScope.Profile, "haiku")));
+            Assert.False(Directory.Exists(Path.Combine(outside, "skills", "haiku")));
+
+            Directory.Delete(agents);
+            LinkFolder(agents, Path.Combine(repo, "shared"));
+            Assert.Equal(SkillEditOutcome.Moved, SkillEditor.MoveToProject(_roots, Scanned(SkillScope.Profile, "haiku"), repoSkills, bound: repo).Outcome);
+            Assert.True(File.Exists(Path.Combine(repo, "shared", "skills", "haiku", SkillCatalog.FileName)));
+        }
+        finally
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                Junction.DeleteTree(_dir);
+            }
+        }
+    }
+
+    private static void LinkFolder(string link, string target)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Junction.Make(link, target);
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(link, target);
+        }
+    }
+
     // ── The review fixes (2026-11-23, the last-10 review) ──
 
     // A move whose skill holds a linked folder: refused before anything is staged, the source and what the link points at kept (review #33).

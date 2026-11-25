@@ -718,9 +718,11 @@ public static class SkillEditor
     /// refusals for the source: <see cref="SkillEditOutcome.ExternalReadOnly"/>, <see cref="SkillEditOutcome.GlobalOff"/>, <see cref="SkillEditOutcome.Locked"/>,
     /// <see cref="SkillEditOutcome.Missing"/>; the copy's own (<see cref="SkillEditOutcome.Exists"/>, <see cref="SkillEditOutcome.Failed"/>) as they come.
     /// <see cref="SkillEditOutcome.Moved"/> (scope <see cref="SkillScope.Project"/>) when both went; <see cref="SkillEditOutcome.Copied"/> with the detail
-    /// when the copy landed but the source would not go (both stay).
+    /// when the copy landed but the source would not go (both stay). <paramref name="bound"/> is the repo (null: the level, two folders above
+    /// <paramref name="destinationRoot"/>): a <c>.agents</c> or <c>.agents\skills</c> linked outside it is refused as <see cref="SkillEditOutcome.Failed"/>
+    /// with <see cref="SkillText.DestinationLinked"/> (2026-11-24, review #28), checked just before the copy, so a link made after the page opened counts.
     /// </summary>
-    public static SkillEditResult MoveToProject(SkillRoots roots, Skill skill, string destinationRoot, CancellationToken cancellationToken = default)
+    public static SkillEditResult MoveToProject(SkillRoots roots, Skill skill, string destinationRoot, CancellationToken cancellationToken = default, string? bound = null)
     {
         ArgumentNullException.ThrowIfNull(roots);
         ArgumentNullException.ThrowIfNull(skill);
@@ -743,6 +745,12 @@ public static class SkillEditor
         if (!IsUnderItsRoot(roots, skill))
         {
             return new SkillEditResult(SkillEditOutcome.Missing, skill.Name, skill.Scope);
+        }
+
+        string level = Path.GetDirectoryName(Path.GetDirectoryName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(destinationRoot)))!)!;
+        if (ProjectSkillWalk.SkillsLinkedAway(level, bound ?? level))
+        {
+            return new SkillEditResult(SkillEditOutcome.Failed, skill.Name, SkillScope.Project, Detail: SkillText.DestinationLinked);
         }
 
         // A link inside refuses the move (2026-11-23, review #33): the copy would skip it, then the source and what it held would be deleted.
@@ -842,6 +850,11 @@ public static class SkillEditor
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(profileSkillsRoot));
         string destination = Path.Combine(root, name);
         string? temp = null;
+
+        // The folders this call makes (2026-11-24, review #70): a cancelled move into a repo with no .agents left an empty one behind.
+        string? madeParent = null;
+        string? madeRoot = null;
+        bool copied = false;
         try
         {
             var info = new DirectoryInfo(source);
@@ -886,6 +899,8 @@ public static class SkillEditor
                 return new SkillEditResult(SkillEditOutcome.Failed, name, SkillScope.Profile, Detail: full);
             }
 
+            madeParent = Directory.Exists(parent) ? null : parent;
+            madeRoot = Directory.Exists(root) ? null : root;
             SweepCopyTemps(root);
             temp = Path.Combine(parent, Path.GetFileName(root) + CopyTempInfix + Guid.NewGuid().ToString("N") + CopyTempSuffix);
             string staged = Path.Combine(temp, name);
@@ -925,6 +940,7 @@ public static class SkillEditor
                 return new SkillEditResult(SkillEditOutcome.Exists, name, SkillScope.Profile);
             }
 
+            copied = true;
             return new SkillEditResult(SkillEditOutcome.Copied, name, SkillScope.Profile, bytes);
         }
         catch (Exception ex) when (IsFileFailure(ex))
@@ -937,6 +953,33 @@ public static class SkillEditor
             {
                 DeleteCopyTemp(temp);
             }
+
+            if (!copied)
+            {
+                RemoveIfEmpty(madeRoot);
+                RemoveIfEmpty(madeParent);
+            }
+        }
+    }
+
+    // A folder this call made, gone again when nothing is in it (2026-11-24, review #70); never one that holds anything.
+    private static void RemoveIfEmpty(string? folder)
+    {
+        if (folder is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+            {
+                Directory.Delete(folder);
+            }
+        }
+        catch (Exception ex) when (IsFileFailure(ex))
+        {
+            // best effort: an empty folder left is harmless
         }
     }
 

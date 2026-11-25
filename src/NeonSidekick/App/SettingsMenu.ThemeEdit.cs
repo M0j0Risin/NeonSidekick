@@ -255,9 +255,7 @@ internal sealed partial class SettingsMenu
                 Buttons = EditButtons,
                 Nudges = true,
                 Side = (_, width, rows) => ThemePreview.Lines(current, width, rows, SidekickApp.BannerTitle.Trim(), SidekickApp.Version, effective.ThemedBackground, effective.DiffCollapseCount),
-                Footer = (_, row) => row >= 0 && row < ThemeKeys.Colors.Count
-                    ? new MenuFooter(string.Join('\n', BandLines((ThemeColorSlot)row, problems, bandWidth, ThemeEditBandRows))) { KeepLines = true }
-                    : null,
+                Footer = (_, row) => row >= 0 && row < ThemeKeys.Colors.Count ? BandFooter((ThemeColorSlot)row, problems, bandWidth) : null,
                 FooterRows = ThemeEditBandRows,
                 // The whole mock screen beside the list (2026-11-24): on a tall window its blank rows show and the notices stop crowding.
                 SideRows = ThemePreview.ScreenRows(effective.DiffCollapseCount) + MenuPane.FooterRuleRows + ThemeEditBandRows,
@@ -447,6 +445,15 @@ internal sealed partial class SettingsMenu
 
         return rows;
     }
+
+    /// <summary>The band as the page's footer (2026-11-24, review #65): its full rows as the text, laid out again for the rows a short pane gives.</summary>
+    internal static MenuFooter BandFooter(ThemeColorSlot role, IReadOnlyList<ContrastProblem> problems, int width) =>
+        new(string.Join('\n', BandLines(role, problems, width, ThemeEditBandRows)))
+        {
+            KeepLines = true,
+            // Laid out for the rows the slab gives (2026-11-24, review #65): a short pane keeps the worst pairs, never the note alone.
+            Layout = rows => string.Join('\n', BandLines(role, problems, width, rows)),
+        };
 
     /// <summary>
     /// The band under the list for <paramref name="role"/> (2026-11-24, the user's pick "Notes in the band"): <c>role: what it colors</c> wrapped to

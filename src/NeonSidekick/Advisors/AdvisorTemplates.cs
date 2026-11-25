@@ -255,7 +255,8 @@ public static class AdvisorTemplates
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            DiagnosticLog.Warn(AdvisorText.Category, AdvisorText.TemplateUnreadable(ex.Message));
+            // Named and worded as an undo (2026-11-24, review #41): it read "could not be read" with no template named.
+            DiagnosticLog.Warn(AdvisorText.Category, AdvisorText.TemplateProblem(Path.GetFileName(folder), AdvisorText.TemplateUndoFailed(ex.Message)));
         }
     }
 

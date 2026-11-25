@@ -133,6 +133,7 @@ public static partial class ShellText
     {
         TrustedFinding.Install => InstallPoliced,
         TrustedFinding.HoldsAppFolder => HoldsAppFolderPoliced,
+        TrustedFinding.ProjectSkills => ProjectSkillsPoliced,
         _ => TrustedFilesPolice.IsClaudeFile(token) ? ClaudePoliced : TrustedFilesPolice.IsProjectSkillsFile(token) ? ProjectSkillsPoliced : TrustedPoliced,
     };
 
@@ -143,8 +144,14 @@ public static partial class ShellText
         {
             TrustedFinding.Install => ", the app's install folder",
             TrustedFinding.HoldsAppFolder => ", a folder holding the app's own files",
-            _ => TrustedFilesPolice.IsClaudeFile(token) ? ", Claude Code's settings only the user changes" : ", a file only the app's tools change",
+            TrustedFinding.ProjectSkills => ProjectSkillsShown,
+            _ => TrustedFilesPolice.IsClaudeFile(token) ? ", Claude Code's settings only the user changes"
+                : TrustedFilesPolice.IsProjectSkillsFile(token) ? ProjectSkillsShown
+                : ", a file only the app's tools change",
         };
+
+    /// <summary>The transcript's phrase for a repo's own skills (2026-11-24, review #44): it read ".agents/skills" as "a file only the app's tools change".</summary>
+    public const string ProjectSkillsShown = ", the repo's own skills, which only you change";
 
     public static string TrustedLogLine(CommandRequest request, string token, string? file) =>
         $"police: trusted files ('{token}'{(file is null ? "" : " in " + file)}) — {request.Kind} {Quote(request.Command)}";

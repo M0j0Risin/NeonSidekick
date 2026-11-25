@@ -88,4 +88,71 @@ public partial class ChatScreenTests
         Assert.Empty(ChatScreen.ArgumentItems("/usage", "sysprompt to=x conversation ", Sources()));
         Assert.Equal([new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote)], ChatScreen.ArgumentItems("/usage", "pro", Sources()));
     }
+
+    /// <summary>
+    /// A quoted to= path with a space in it (2026-11-24, review #51): the word ends at its first space outside quotes, so conversation is offered
+    /// after it, whole or half typed, and kept as typed; an open quote is still the to= word.
+    /// </summary>
+    [Fact]
+    public void UsageSysprompt_TheCompletion_ReadsAQuotedTo_AsOneWord()
+    {
+        var offered = new CompletionItem("sysprompt to=\"my notes.md\" conversation", UsageText.ConversationWordNote);
+        Assert.Equal([offered], ChatScreen.ArgumentItems("/usage", "sysprompt to=\"my notes.md\" ", Sources()));
+        Assert.Equal([offered], ChatScreen.ArgumentItems("/usage", "sysprompt to=\"my notes.md\" co", Sources()));
+        Assert.Empty(ChatScreen.ArgumentItems("/usage", "sysprompt to=\"my ", Sources()));
+        Assert.Equal([new CompletionItem("sysprompt to=x conversation", UsageText.ConversationWordNote)], ChatScreen.ArgumentItems("/usage", "sysprompt to=x co", Sources()));
+        Assert.Equal(-1, ChatScreen.FirstSpaceOutsideQuotes("to=\"a b"));
+        Assert.Equal(12, ChatScreen.FirstSpaceOutsideQuotes("to=\"my a.md\" x"));
+    }
+
+    /// <summary>
+    /// The write never lands over a name already taken (2026-11-24, review #49): a folder at to=x's x.md is "already there", a parent that is a
+    /// file fails, and a folder at the first made name moves on to the -2 name.
+    /// </summary>
+    [Fact]
+    public async Task UsageSysprompt_ANameTakenByAFolder_IsAlreadyThere_OrTheNextName()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string folder = Path.Combine(_dir, "work");
+        Directory.CreateDirectory(Path.Combine(folder, "x.md"));
+        File.WriteAllText(Path.Combine(folder, "f.txt"), "a file");
+        var now = _time.GetLocalNow();
+        Directory.CreateDirectory(Path.Combine(folder, "d", UsageText.ExportFileName(now, 1)));
+        _settings.Update(d => d.WorkingDirectory = folder);
+        PushLine("/usage sysprompt to=x");
+        PushLine("/usage sysprompt to=f.txt/y.md");
+        PushLine("/usage sysprompt to=d/");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(UsageText.ExportExists("x.md"), output);
+        Assert.Contains("Could not write f.txt", output);
+        Assert.True(File.Exists(Path.Combine(folder, "d", UsageText.ExportFileName(now, 2))), output);
+        Assert.Empty(Directory.GetFiles(Path.Combine(folder, "x.md")));
+        Assert.Single(Directory.GetFiles(folder, "*.md", SearchOption.AllDirectories));   // the -2 name alone, no temp left
+    }
+
+    /// <summary>
+    /// A to= of separators alone names the root, never "here" (2026-11-24, review #55): outside the sandbox it is refused; a blank to= names
+    /// nothing. No export lands in the working folder either way.
+    /// </summary>
+    [Fact]
+    public async Task UsageSysprompt_ToTheRoot_IsJudgedAsTheRoot_ABlankToIsTheUsage()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        string folder = Path.Combine(_dir, "work");
+        Directory.CreateDirectory(folder);
+        _settings.Update(d => d.WorkingDirectory = folder);
+        PushLine("/usage sysprompt to=/");
+        PushLine("/usage sysprompt to=\\");
+        PushLine("/usage sysprompt \"to= \"");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.DoesNotContain("(wrote the", output);
+        Assert.Contains(UsageText.SyspromptUsage, output);
+        Assert.Empty(Directory.GetFiles(folder, "neon-sysprompt-*", SearchOption.AllDirectories));
+    }
 }

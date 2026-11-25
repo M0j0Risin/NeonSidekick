@@ -412,7 +412,6 @@ public sealed partial class InputLine
         }
     }
 
-    /// <summary>The transcript line for something the user said, its lines after the first under the glyph (<see cref="ContinuationIndent"/>). Escaped.</summary>
     /// <summary>
     /// What two hint-row clicks must share to pair (<see cref="DoubleClick.Second"/>): the zone, or
     /// for a strip glyph its column past every zone's number (2026-09-18; <c>2 + column</c> until the

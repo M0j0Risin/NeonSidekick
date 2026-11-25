@@ -126,7 +126,7 @@ public static class PictureMenu
 
     /// <summary>Whether <paramref name="path"/> sits directly in <paramref name="folder"/>.</summary>
     private static bool InFolder(string path, string folder) =>
-        string.Equals(Path.GetDirectoryName(Path.GetFullPath(path)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), StringComparison.OrdinalIgnoreCase);
+        string.Equals(Path.GetDirectoryName(Path.GetFullPath(path)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)), Files.CaseRule.Comparison(folder));   // the folder's own case rule (review #25)
 
     /// <summary>
     /// An edit row run on the picture at <paramref name="path"/> on a pool thread; <paramref name="done"/> gets the outcome there (the
@@ -297,7 +297,7 @@ public static class PictureMenu
                 Report(PictureMenuText.SplashAlready(name), true);
                 break;
             case NeonSidekick.UI.SplashAddResult.NotAnImage:
-                Report(PictureMenuText.Failed(name, Images.ImageText.SplashNotAnImage(name)), true);
+                Report(PictureMenuText.SplashNotAnImage(name), true);
                 break;
             default:
                 Report(PictureMenuText.SplashFailed(name, added.Detail), true);

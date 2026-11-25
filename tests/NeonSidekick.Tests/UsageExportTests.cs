@@ -101,6 +101,28 @@ public sealed class UsageExportTests
             UsageExport.NoMessagesWithCallsLine([RecallMemoryTool.ToolName]));
     }
 
+    /// <summary>
+    /// The process polls the next request carries for notified exits (2026-11-24, review #58): named last, once, with a count past one; polls alone
+    /// still make it a calls line.
+    /// </summary>
+    [Fact]
+    public void NoMessagesWithCallsLine_NamesThePendingPolls_Last()
+    {
+        Assert.Equal(UsageExport.NoMessagesLine, UsageExport.NoMessagesWithCallsLine([], 0));
+        Assert.Equal("No messages yet: the next request carries the app's opening calls (`process`) and then the message you send.",
+            UsageExport.NoMessagesWithCallsLine([], 1));
+        Assert.Equal("No messages yet: the next request carries the app's opening calls (`process` (2 polls)) and then the message you send.",
+            UsageExport.NoMessagesWithCallsLine([], 2));
+        Assert.Equal("No messages yet: the next request carries the app's opening calls (`recall_memory`) and then the message you send.",
+            UsageExport.NoMessagesWithCallsLine([RecallMemoryTool.ToolName], 0));
+        Assert.Equal("No messages yet: the next request carries the app's opening calls (`recall_memory`, `process`) and then the message you send.",
+            UsageExport.NoMessagesWithCallsLine([RecallMemoryTool.ToolName], 1));
+        Assert.Equal("No messages yet: the next request carries the app's opening calls (`recall_memory`, `process` (2 polls)) and then the message you send.",
+            UsageExport.NoMessagesWithCallsLine([RecallMemoryTool.ToolName], 2));
+        string md = UsageExport.Markdown(Facts([]) with { Tools = [new NamedTool(RecallMemoryTool.ToolName)], PendingPolls = 2 });
+        Assert.EndsWith(UsageExport.NoMessagesWithCallsLine([RecallMemoryTool.ToolName], 2) + "\n", md);
+    }
+
     private sealed class NamedTool(string name) : AIFunction
     {
         public override string Name => name;

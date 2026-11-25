@@ -67,7 +67,11 @@ public static class AdvisorFromTemplate
 
         try
         {
-            Profiles.Create(home, typed, seed);
+            // Taken meanwhile by another creator (2026-11-24, review #33): said so, and no persona written into its profile.
+            if (!Profiles.Create(home, typed, seed))
+            {
+                return new AdvisorCreation(null, null, AdvisorText.TakenError(typed, template.Id, AdvisorRoster.Contains(settings.Current.AdvisorList, typed)));
+            }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

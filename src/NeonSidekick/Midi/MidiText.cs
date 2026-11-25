@@ -14,6 +14,9 @@ public static class MidiText
 
     public const string Title = Glyph + " MIDI";
 
+    /// <summary>The widest the bindings tab pads a trigger to (2026-11-24, review #64), as the home room pane's: a longer one prints whole. Pinned.</summary>
+    public const int TriggerCap = 32;
+
     // ----- The system's refusals (MidiException messages) -----
 
     public const string NoneHere = "MIDI isn't available here.";

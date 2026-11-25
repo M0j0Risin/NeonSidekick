@@ -581,6 +581,13 @@ public sealed class ThumbsTests
             Run(Path.Combine(folder, "Sunset.png"));
             Assert.Equal((PictureMenuText.SplashAlready("Sunset.png"), true), lines[^1]);
             Assert.Equal(2, Directory.GetFiles(folder).Length);
+
+            // A file the splash can't show (2026-11-24, review #67): said in the user's words, no "Error:".
+            string notes = Path.Combine(dir, "notes.txt");
+            File.WriteAllText(notes, "x");
+            Run(notes);
+            Assert.Equal((PictureMenuText.SplashNotAnImage("notes.txt"), true), lines[^1]);
+            Assert.DoesNotContain("Error:", lines[^1].Line);
         }
         finally
         {

@@ -51,7 +51,8 @@ public static class AuditTicks
         }
 
         string plan = PlanName(planPath);
-        var others = PlanSteps.Flat(PlanSteps.Parse(PlanDocument.Body(text)))
+        // The whole file, as the judge parses it (2026-11-24, review #8): stood steps carry the file's lines, never the body's.
+        var others = PlanSteps.Flat(PlanSteps.Parse(text))
             .Where(s => !s.Ticked && !stood.Any(t => t.Line == s.Line && string.Equals(t.Text, s.Text, StringComparison.Ordinal)))
             .ToList();
         var ticks = new List<AuditTick>();

@@ -89,6 +89,18 @@ public static class ProjectSkillWalk
     }
 
     /// <summary>
+    /// Whether the repo's skills folder at <paramref name="level"/> leads outside <paramref name="bound"/> (2026-11-24, review #28): <c>.agents</c> or
+    /// <c>.agents/skills</c> a link out of the repo, so a move into it would land the skill somewhere else. The scope page's <c>project</c> row hides then.
+    /// </summary>
+    public static bool SkillsLinkedAway(string level, string bound)
+    {
+        ArgumentNullException.ThrowIfNull(level);
+        ArgumentNullException.ThrowIfNull(bound);
+        string agents = Path.Combine(level, AgentsFolderName);
+        return SkillCatalog.LinksOutside(agents, bound) || SkillCatalog.LinksOutside(Path.Combine(agents, SkillRoots.DirectoryName), bound);
+    }
+
+    /// <summary>
     /// The repo root above (or at) <paramref name="workingFolder"/> that the walk may climb to: <see cref="GitAccess.FindGitEntry"/>'s folder, or
     /// null for none, for one at or above <paramref name="userHome"/>, and for one at or above <paramref name="appHome"/> while the working folder is
     /// inside the app's home.

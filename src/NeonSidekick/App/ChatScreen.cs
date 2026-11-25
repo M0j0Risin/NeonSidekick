@@ -1550,7 +1550,8 @@ internal sealed partial class ChatScreen
         // A pasted picture as generate_image's input (later still on 2026-09-24): the line's store at full size, read at
         // call time — the input line is built below, so the lambda reads the field then, not now. Saved first when it was not
         // sent yet (2026-10-09, PastedForComfy). The pictures go to the profile's images folder (2026-10-09).
-        _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: PastedForComfy, time: _time, images: _images);
+        _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: PastedForComfy, time: _time, images: _images,
+            pastedSource: n => _input?.Pastes.Original(n));
         _comfyTools = ComfyTools(_comfy);
         // The Home Assistant tools (2026-09-28): the client made for the URL and token in force; an asked call waits on the pane.
         _ha = new HaSession(_effective, haClient, _time);
@@ -3543,6 +3544,7 @@ internal sealed partial class ChatScreen
         ProjectSkillWalk.MoveTarget(_files.Root, _projectSource.UserHome, _projectSource.AppHome) is { } level
         && WriteGuard.Judge(_files.Root, Path.Combine(level, ProjectSkillWalk.AgentsFolderName), WriteRole.Write) is null
         && WriteGuard.Judge(_files.Root, Path.Combine(level, SkillsText.ProjectSkillsFolder(claude: false)), WriteRole.Write) is null or FileOutcome.ProjectSkillsProtected
+        && !ProjectSkillWalk.SkillsLinkedAway(level, ProjectRepoRoot() ?? _files.Root)   // 2026-11-24, review #28: a .agents linked out of the repo
             ? level
             : null;
 
@@ -5909,9 +5911,10 @@ internal sealed partial class ChatScreen
                             : [];
                     }
 
-                    // conversation after to=… too (2026-11-24, the last-7 review's #31): the command takes the two in either order.
+                    // conversation after to=… too (2026-11-24, the last-7 review's #31): the command takes the two in either order. The to= word ends
+                    // at its first space outside quotes (review #51: to="my notes.md" was cut at its inner space), as ParseSysprompt's Words reads it.
                     string rest = argText[sysprompt.Length..];
-                    int space = rest.IndexOf(' ', StringComparison.Ordinal);
+                    int space = FirstSpaceOutsideQuotes(rest);
                     return rest.StartsWith(Pdf.PdfText.ToWord, StringComparison.OrdinalIgnoreCase) && space > 0 && !rest[(space + 1)..].Contains(' ', StringComparison.Ordinal)
                         ? MentionCompleter.Matches([new CompletionItem(sysprompt + rest[..(space + 1)] + UsageText.ConversationWord, UsageText.ConversationWordNote)], argText)
                         : [];
@@ -20343,8 +20346,14 @@ internal sealed partial class ChatScreen
                 break;
             case TurnEvent.ToolResult result when string.Equals(result.Name, PresentProjectNotesTool.ToolName, StringComparison.Ordinal):
                 // The draft and the answer were printed as it ran (ReviewProjectNotesAsync, OnProjectNotesWritten): no diff a second time, only a refusal.
-                // A failed write's own error was shown (2026-11-23, review #91): not its model-facing twin too.
-                if (result.Text.StartsWith("Error:", StringComparison.Ordinal) && !_projectInit.WriteFailed)
+                // A failed write's own error was shown (2026-11-23, review #91): not its model-facing twin too. A Write refused after the pane
+                // (2026-11-24, review #61) is said in the user's words, in place of the model's "call present_project_notes again".
+                if (_projectInit.WriteRefused && _projectInit.Start is { } refusedStart
+                    && (result.Text == ProjectInitText.MovedResult || result.Text == ProjectInitText.ChangedMeanwhileResult(refusedStart.Target)))
+                {
+                    _transcript.Notice(ProjectInitText.WriteRefusedNotice(refusedStart.Target));
+                }
+                else if (result.Text.StartsWith("Error:", StringComparison.Ordinal) && !_projectInit.WriteFailed)
                 {
                     _transcript.ToolNote(result.Text, time);
                 }

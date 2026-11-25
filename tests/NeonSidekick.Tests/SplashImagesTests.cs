@@ -51,6 +51,38 @@ public class SplashImagesTests
             File.WriteAllBytes(dog, Fakes.FakeHeadlessBrowser.TinyPng);
             var dogAdd = SplashImages.Add(folder, dog);
             Assert.Equal((SplashAddResult.Added, Path.Combine(folder, "Dog-2.png")), (dogAdd.Result, dogAdd.Target));
+            Assert.Equal(Fakes.FakeHeadlessBrowser.TinyPng, File.ReadAllBytes(dogAdd.Target));   // the stream rewound for the second try (review #39)
+
+            // A source gone before the add opens it (review #39): failed, and nothing lands in the folder.
+            int before = Directory.GetFiles(folder).Length;
+            var gone = SplashImages.Add(folder, Path.Combine(dir, "Gone.png"));
+            Assert.Equal(SplashAddResult.Failed, gone.Result);
+            Assert.Equal(before, Directory.GetFiles(folder).Length);
+
+            // Every name taken (review #39): failed, with a detail that says so.
+            string bird = Path.Combine(dir, "Bird.png");
+            File.WriteAllBytes(bird, Fakes.FakeHeadlessBrowser.TinyPng);
+            Directory.CreateDirectory(Path.Combine(folder, "Bird.png"));
+            for (int i = 2; i <= SplashImages.CopyTries + 1; i++)
+            {
+                Directory.CreateDirectory(Path.Combine(folder, "Bird-" + i.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".png"));
+            }
+
+            var birdAdd = SplashImages.Add(folder, bird);
+            Assert.Equal((SplashAddResult.Failed, Images.ImageText.SplashNamesTaken("Bird")), (birdAdd.Result, birdAdd.Detail));
+            Assert.Equal(before, Directory.GetFiles(folder).Length);
+
+            // "Already there" by the folder's own case rule (review #25): another case is the same folder only where the disk ignores case.
+            string otherCase = Path.Combine(dir, "SPLASH", "Cat.png");
+            using (Files.CaseRule.Override(_ => false))
+            {
+                Assert.Equal(SplashAddResult.Already, SplashImages.Add(folder, otherCase).Result);
+            }
+
+            using (Files.CaseRule.Override(_ => true))
+            {
+                Assert.NotEqual(SplashAddResult.Already, SplashImages.Add(folder, otherCase).Result);
+            }
 
             // A name that cleans to nothing but dots (#60): the fallback stem.
             Assert.Equal(Path.Combine(folder, SplashImages.FallbackStem + ".png"), SplashImages.Add(folder, picture, "..").Target);

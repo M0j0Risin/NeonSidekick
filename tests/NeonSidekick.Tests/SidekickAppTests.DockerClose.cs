@@ -166,6 +166,90 @@ public partial class SidekickAppTests
         Assert.Contains("[notice] " + Docker.DockerText.Glyph + " " + Docker.DockerServerText.LeftForThisComputer(["sglang_a"], embedded: false), stdout.ToString());
     }
 
+    /// <summary>A writer that throws on every write once a line holding <paramref name="trip"/> is asked for; it keeps every text asked for.</summary>
+    private sealed class BreakingWriter(string trip) : StringWriter
+    {
+        public List<string> Asked { get; } = [];
+
+        public bool Broken { get; private set; }
+
+        public override void Write(char value) => Take(value.ToString());
+
+        public override void Write(string? value) => Take(value);
+
+        public override void Write(char[] buffer, int index, int count) => Take(new string(buffer, index, count));
+
+        public override Task WriteAsync(char value)
+        {
+            Take(value.ToString());
+            return Task.CompletedTask;
+        }
+
+        public override Task WriteAsync(string? value)
+        {
+            Take(value);
+            return Task.CompletedTask;
+        }
+
+        public override Task WriteLineAsync(string? value)
+        {
+            Take(value + NewLine);
+            return Task.CompletedTask;
+        }
+
+        public override Task FlushAsync() => Broken ? throw new IOException("The pipe has been ended.") : Task.CompletedTask;
+
+        private void Take(string? value)
+        {
+            lock (Asked)
+            {
+                Asked.Add(value ?? "");
+            }
+
+            if (Broken || (value?.Contains(trip, StringComparison.Ordinal) ?? false))
+            {
+                Broken = true;
+                throw new IOException("The pipe has been ended.");
+            }
+
+            base.Write(value);
+        }
+    }
+
+    /// <summary>
+    /// A headless exit whose stdout broke at its first notice (2026-11-24, review #63): the run still returns, the Docker stop and the cleanup after
+    /// it all run, the echo is restored and the log no longer forwards to the writer.
+    /// </summary>
+    [Fact]
+    public async Task Headless_ABrokenPipeAtTheExitsNotice_StillCleansUp()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        _settings.Update(d =>
+        {
+            d.DockerServers = true;
+            d.DockerServerContainers = ["sglang_a"];
+            d.DockerServerStopOnExit = true;
+            d.LlmUrl = "docker:sglang_a";
+            d.LlmContextLength = 8192;
+        });
+        var docker = new FakeDockerServers();
+        var stdout = new BreakingWriter(SidekickApp.DockerServerExitNotice("sglang_a"));
+        bool echo = DiagnosticLog.EchoToConsole;
+        var app = App(stdin: new StringReader(""), stdout: stdout, dockerServers: () => docker);
+
+        Assert.Equal(0, await app.RunAsync(SidekickOptions.None with { Headless = true }, CancellationToken.None));
+
+        Assert.True(stdout.Broken);   // the exit's Docker stop ran and its notice was asked for
+        Assert.Equal(echo, DiagnosticLog.EchoToConsole);
+        int asked = stdout.Asked.Count;
+        DiagnosticLog.Info(ChatScreen.AppCategory, "after the run (review #63)");
+        Assert.Equal(asked, stdout.Asked.Count);
+    }
+
     [Fact]
     public void TheWindowsClose_WithNoRunLive_DoesNothing()
     {

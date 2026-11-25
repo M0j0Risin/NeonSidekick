@@ -3707,6 +3707,21 @@ public sealed class WorkingDirectory
     /// </summary>
     public MoveResult Copy(string from, string to, bool overwrite) => Transfer(from, to, overwrite, move: false);
 
+    /// <summary>
+    /// Whether moving the folder <paramref name="source"/> to <paramref name="destination"/> makes a repo's <c>.agents/skills</c> (2026-11-24,
+    /// review #44): the source has a <c>skills</c> child and <c>destination/skills</c> is a guarded folder, the root's own name seeding the walk.
+    /// </summary>
+    private bool PlantsProjectSkills(string source, string destination)
+    {
+        if (WriteGuard.InAppWrites || !Directory.Exists(Path.Combine(source, Skills.SkillRoots.DirectoryName)) || !IsInside(Root, destination))
+        {
+            return false;
+        }
+
+        string relative = Under(Root, destination) + "/" + Skills.SkillRoots.DirectoryName;
+        return WriteGuard.GuardedFolder(relative, Path.GetFileName(Path.TrimEndingDirectorySeparator(Root))) == FileOutcome.ProjectSkillsProtected;
+    }
+
     private MoveResult Transfer(string from, string to, bool overwrite, bool move)
     {
         // A move renames a link itself (its target never moves); a copy reads through it, so a copy's source is judged whole.
@@ -3750,6 +3765,16 @@ public sealed class WorkingDirectory
             if (isDirectory && IsInside(FinalPath(source), FinalPath(destination)))
             {
                 return new MoveResult(FileOutcome.IntoItself, fromDisplay, toDisplay, isDirectory, false);
+            }
+
+            // A folder holding skills moved onto .agents plants a repo's skills folder (2026-11-24, review #44); a copy already leaves
+            // .agents/skills out (PlanCopy judges every target), so this is the move's alone.
+            if (move && isDirectory && PlantsProjectSkills(source, destination))
+            {
+                return new MoveResult(FileOutcome.ProjectSkillsProtected, fromDisplay, Relative(Path.Combine(destination, Skills.SkillRoots.DirectoryName), isDirectory: true), isDirectory, false)
+                {
+                    AtDestination = true,
+                };
             }
 
             // A case-only change of name is a rename only where case is blind (2026-10-22, review G17: on a case-sensitive folder it

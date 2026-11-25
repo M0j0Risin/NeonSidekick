@@ -226,7 +226,7 @@ The run's shell policy comes from `--yolo`, then `NEONSIDEKICK_COMMAND_POLICY` (
 - `yolo`: every `run_command` command and `execute_code` script runs without asking. Use it only when you trust the job and the folder.
 - **`yolo` does not turn off the shell police.** With *Shell police* on (the default), these are still refused and count toward exit code 3:
   - a path outside the working directory;
-  - `.git`, `.neon`, `.claude`, `.agents/skills`, a `.mcp.json`, the project file, the app's home or a release package's install folder, and deleting or moving a folder holding the install or the home ([TOOLS.md](TOOLS.md));
+  - `.git`, `.neon`, `.claude`, `.agents/skills`, a `.mcp.json`, the project file, the app's home or a release package's install folder, moving or copying a folder onto `.agents`, and deleting or moving a folder holding the install or the home ([TOOLS.md](TOOLS.md));
   - the *Shell police forbidden strings* (disk wipes, shutdown, `push --force`, `reset --hard`…; see [Shell guards](SETTINGS.md#shell-guards));
   - reaching a database some other way while its tools are on.
 

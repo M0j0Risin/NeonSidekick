@@ -1081,7 +1081,7 @@ internal sealed class SkillsMenu
             var before = catalog.ReadProjectFolder(level, bound);
             var held = trust.Trusted(level);
             bool safe = before.Order.Count == 0 || (held is not null && string.Equals(held.Fingerprint, before.Fingerprint, StringComparison.Ordinal));
-            var result = SkillEditor.MoveToProject(roots, skill, root, cancellationToken);
+            var result = SkillEditor.MoveToProject(roots, skill, root, cancellationToken, bound);
             if (result.Outcome is not (SkillEditOutcome.Moved or SkillEditOutcome.Copied))
             {
                 return result;
@@ -1774,6 +1774,10 @@ internal sealed class SkillsMenu
     /// this skill, <see cref="SameButFor"/>), and its name leaves the disabled list unless a twin of that name remains at the level. True when anything
     /// may have changed (the facts are stale).
     /// </summary>
+    // The skill's kind folder (.agents or .claude) or its skills folder is a link leading outside the repo (2026-11-24, review #31).
+    private static bool LinkedAway(string skillsFolder, string bound) =>
+        SkillCatalog.LinksOutside(Path.GetDirectoryName(skillsFolder)!, bound) || SkillCatalog.LinksOutside(skillsFolder, bound);
+
     private async Task<bool> DeleteProjectAsync(Skill skill, SkillsFacts facts, CancellationToken cancellationToken)
     {
         if (skill.TrustFolder is not { } level || skill.ProjectKey is not { } key)
@@ -1801,6 +1805,15 @@ internal sealed class SkillsMenu
             return true;
         }
 
+        // A kind folder or skills folder linked out of the repo (2026-11-24, review #31): the delete would reach what the link points at. Checked here
+        // and again after the yes, since a link can be made while the question waits.
+        string bound = facts.RepoRoot ?? facts.WorkingFolder ?? level;
+        if (LinkedAway(expected, bound))
+        {
+            Sink.Error(SkillsText.LinkedOutsideError(skill.Name));
+            return true;
+        }
+
         // The way, decided once: the yes below is to this question, so the delete is handed this bin (or none), never the setting again.
         IRecycleBin? bin = null;
         string? why = null;
@@ -1822,9 +1835,14 @@ internal sealed class SkillsMenu
             return false;
         }
 
+        if (LinkedAway(expected, bound))
+        {
+            Sink.Error(SkillsText.LinkedOutsideError(skill.Name));
+            return true;
+        }
+
         var catalog = _catalog;
         var trust = _trust;
-        string bound = facts.RepoRoot ?? facts.WorkingFolder ?? level;
         ProjectFolderState? before = null;
         ProjectTrustKind? held = null;
         if (catalog is not null && trust is not null)
@@ -1939,7 +1957,8 @@ internal sealed class SkillsMenu
         }
 
         // Only what was trusted is copied (2026-11-23, review #102): a skill edited since its trust is refused here and again just before the copy.
-        if (_catalog is { } catalog && !catalog.StillTrusted(skill))
+        // Off the screen's thread, as the second (2026-11-24, review #69): it reads and hashes the skill's files.
+        if (_catalog is { } catalog && !await Task.Run(() => catalog.StillTrusted(skill), cancellationToken).ConfigureAwait(false))
         {
             Sink.Error(SkillsText.ProjectCopyChangedError(skill.Name));
             return true;

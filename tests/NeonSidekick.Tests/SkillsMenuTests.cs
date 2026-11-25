@@ -1056,6 +1056,49 @@ public class SkillsMenuTests : IDisposable
         Assert.Contains(SkillsText.ProjectDeletedNotice("linked", SkillsText.ThisFolderLabel, DeleteWay.Deleted, null, link: true, trusted: true, loaded: false), Output);
     }
 
+    /// <summary>
+    /// A delete whose <c>.agents</c> turns into a link leading out of the repo while the question waits is refused after the yes (2026-11-24,
+    /// review #31): nothing is deleted, and the skill outside stays. The link is made inside the bin's probe, between the two checks.
+    /// </summary>
+    [Fact]
+    public async Task ProjectDelete_AnAgentsLinkedOutsideMeanwhile_IsRefused()
+    {
+        string repo = UseRepo();
+        PutProject(repo, "deploy", "Ships it.");
+        TrustRepo(repo);
+        string agents = Path.Combine(repo, ".agents");
+        string outside = Path.Combine(_dir, "elsewhere", "agents");
+        _bin = new FakeRecycleBin
+        {
+            OnProbe = _ =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(outside)!);
+                Directory.Move(agents, outside);
+                if (OperatingSystem.IsWindows())
+                {
+                    Junction.Make(agents, outside);
+                }
+                else
+                {
+                    Directory.CreateSymbolicLink(agents, outside);
+                }
+            },
+        };
+        var menu = DeleteMenu();
+        PushDeleteFirstProjectSkill();
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SkillsText.LinkedOutsideError("deploy")[..60], Output);
+        Assert.Empty(_bin.Moved);
+        Assert.True(File.Exists(Path.Combine(outside, "skills", "deploy", SkillCatalog.FileName)));
+        if (OperatingSystem.IsWindows())
+        {
+            Directory.Delete(agents);
+        }
+    }
+
     /// <summary>The pane: the three tabs under the strip, the Offered rows first; Enter or Space on a heading does nothing (the page re-shown); the Project file toggle is an Options row since 2026-10-01 (the one row of a Project tab of its own from later on 2026-09-19 until then) — Enter opens its page, off picked, the status line saying so; ESC closes with nothing in the transcript.</summary>
     [Fact]
     public async Task OnThePane_TheThreeTabs_EnterOnAHeadingDoesNothing_TheProjectFileRowFlips()

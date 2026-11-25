@@ -439,6 +439,28 @@ public sealed class RalphChangesTests : IDisposable
         Write(repo, "scratch.py", "print(1)");
 
         Assert.Equal(["scratch.py"], RalphChanges.Delta(before, RalphChanges.Snapshot(files, git), files, git, []).UnnamedNew);
+        Assert.True(before.Unborn);
+    }
+
+    /// <summary>
+    /// A HEAD lookup that failed in a repository with commits (2026-11-24, review #52) names no file as new, where it named every dirty one; a folder
+    /// made a repository during the pass (no lookup before it) still names its new files.
+    /// </summary>
+    [Fact]
+    public void AFailedHeadLookup_NamesNothing_ARepositoryMadeDuringThePass_StillNames()
+    {
+        string repo = GitAccessTests.Init(Path.Combine(_dir, "headless"));
+        var files = new WorkingDirectory(() => repo, _time);
+        var git = new GitAccess(files, _time);
+        Write(repo, "scratch.py", "print(1)");
+        var after = RalphChanges.Snapshot(files, git);
+        var empty = new Dictionary<string, RalphFileMark>(StringComparer.Ordinal);
+
+        var failed = new RalphSnapshotOfFiles(Git: true, empty, Cut: false, Head: null, Unborn: false);
+        Assert.Empty(RalphChanges.Delta(failed, after, files, git, []).UnnamedNew!);
+
+        var plain = new RalphSnapshotOfFiles(Git: false, empty, Cut: false);
+        Assert.Equal(["scratch.py"], RalphChanges.Delta(plain, after, files, git, []).UnnamedNew);
     }
 
     /// <summary>A name in another case (2026-11-23, review #39): it names the file where the folder ignores case, and not where it doesn't.</summary>

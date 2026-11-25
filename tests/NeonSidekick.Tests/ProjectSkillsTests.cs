@@ -156,6 +156,45 @@ public class ProjectSkillsTests : IDisposable
     }
 
     /// <summary>
+    /// The project row hides when the repo's skills folder leads out of the repo (2026-11-24, review #28): <c>.agents</c> or <c>.agents/skills</c>
+    /// linked outside; none there, or a link inside the repo, keeps it.
+    /// </summary>
+    [Fact]
+    public void SkillsLinkedAway_OnlyForALinkLeadingOutTheRepo()
+    {
+        string agents = Path.Combine(_repo, ".agents");
+        string outside = Path.Combine(_dir, "outside");
+        Directory.CreateDirectory(Path.Combine(outside, "skills"));
+        string inside = Path.Combine(_repo, "shared");
+        Directory.CreateDirectory(Path.Combine(inside, "skills"));
+
+        Assert.False(ProjectSkillWalk.SkillsLinkedAway(_repo, _repo));
+        LinkFolder(agents, inside);
+        Assert.False(ProjectSkillWalk.SkillsLinkedAway(_repo, _repo));
+        Directory.Delete(agents);
+        LinkFolder(agents, outside);
+        Assert.True(ProjectSkillWalk.SkillsLinkedAway(_repo, _repo));
+        Directory.Delete(agents);
+        Directory.CreateDirectory(agents);
+        LinkFolder(Path.Combine(agents, "skills"), Path.Combine(outside, "skills"));
+        Assert.True(ProjectSkillWalk.SkillsLinkedAway(_repo, _repo));
+        Directory.Delete(Path.Combine(agents, "skills"));
+    }
+
+    // A folder link by each system's means: a junction on Windows (no privilege needed), a symlink elsewhere.
+    private static void LinkFolder(string link, string target)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            Junction.Make(link, target);
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(link, target);
+        }
+    }
+
+    /// <summary>
     /// The after-check a move or delete trusts by (2026-11-23): the same folder but for the one skill passes; another skill changed, added (hashed, or past
     /// the cap in the order alone) or removed does not.
     /// </summary>
@@ -229,6 +268,22 @@ public class ProjectSkillsTests : IDisposable
         _catalog.Scan(false);
         Assert.Equal(SkillEditOutcome.Locked, SkillEditor.MoveToProject(_roots, _catalog.Find("locked")!, destination).Outcome);
         Assert.False(Directory.Exists(Path.Combine(destination, "locked")));
+    }
+
+    /// <summary>A cancelled move into a repo with no .agents leaves none behind (2026-11-24, review #70): the copy takes back the folders it made.</summary>
+    [Fact]
+    public void MoveToProject_Cancelled_LeavesNoAgentsFolderBehind()
+    {
+        PutOwn(SkillScope.Profile, "haiku");
+        _catalog.Scan(false);
+        string agents = Path.Combine(_repo, ".agents");
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+
+        Assert.ThrowsAny<OperationCanceledException>(() => SkillEditor.MoveToProject(_roots, _catalog.Find("haiku")!, Path.Combine(agents, "skills"), cancelled.Token));
+
+        Assert.False(Directory.Exists(agents));
+        Assert.True(File.Exists(Path.Combine(_roots.Profile, "haiku", SkillCatalog.FileName)));
     }
 
     // ── The catalog ──
@@ -474,6 +529,24 @@ public class ProjectSkillsTests : IDisposable
         Assert.Equal(ProjectPendingReason.BadName, Assert.Single(_catalog.ProjectPending).Reason);
         Assert.Equal("deployexe.sh…", SkillsText.ShownName(name));
         Assert.False(SkillCatalog.IsBoundedName("a\u2028b"));
+    }
+
+    /// <summary>
+    /// Names judged by rune (2026-11-24, review #2): the U+E00xx tag characters are format characters a lone char read as surrogates, and a broken
+    /// pair counts as unprintable; the shown name keeps whole pairs.
+    /// </summary>
+    [Fact]
+    public void TagCharacters_AndABrokenPair_AreUnprintable_TheShownNameKeepsWholePairs()
+    {
+        string tagged = "deploy\U000E0061\U000E0062";
+        Assert.False(SkillCatalog.IsBoundedName(tagged));
+        Assert.Equal("deploy…", SkillsText.ShownName(tagged));
+        Assert.False(SkillCatalog.IsBoundedName("a\uD83Db"));
+        Assert.True(SkillCatalog.IsBoundedName("emoji-\U0001F600"));
+
+        string longEmoji = new string('a', SkillFrontmatter.MaxNameLength - 1) + "\U0001F600" + "\u202E";
+        string shown = SkillsText.ShownName(longEmoji);
+        Assert.Equal(new string('a', SkillFrontmatter.MaxNameLength - 1) + "…", shown);
     }
 
     /// <summary>Review #60: each file is framed by its length, so bytes moved across a file's edge hash differently.</summary>
@@ -727,6 +800,7 @@ public class ProjectSkillsTests : IDisposable
         TrustFolder(_repo);
         File.WriteAllText(Path.Combine(directory, SkillCatalog.FileName), Skill("deploy", "Edited since."));
         var state = _catalog.ReadProjectFolder(_repo, _repo);
+        var old = Directory.EnumerateDirectories(_trust.CopiesPath).ToHashSet();
         File.SetAttributes(_trust.FilePath, FileAttributes.ReadOnly);
         try
         {
@@ -741,9 +815,17 @@ public class ProjectSkillsTests : IDisposable
             File.SetAttributes(_trust.FilePath, FileAttributes.Normal);
         }
 
+        // The same name again is the same texts (2026-11-24, review #13): the failed try's folder is kept, not replaced, and a stray temp swept.
+        string kept = Assert.Single(Directory.EnumerateDirectories(_trust.CopiesPath), folder => !old.Contains(folder));
+        File.WriteAllText(Path.Combine(kept, "marker"), "m");
+        string stray = kept + ".tmp-x";
+        Directory.CreateDirectory(stray);
+
         // The next save that lands takes the new copies and sweeps the old and the failed try's.
         Assert.Equal(ProjectTrustSave.Saved, _trust.Trust(_repo, state.Fingerprint, () => _catalog.ReadProjectFolder(_repo, _repo)));
         Assert.Equal(Skill("deploy", "Edited since."), _trust.CopyOf(_repo, ".agents/skills/deploy"));
+        Assert.True(File.Exists(Path.Combine(kept, "marker")));
+        Assert.False(Directory.Exists(stray));
         Assert.Single(Directory.EnumerateDirectories(_trust.CopiesPath));
     }
 
@@ -1097,6 +1179,110 @@ public class ProjectSkillsTests : IDisposable
         Assert.NotNull(TrustedFilesPolice.Find("type configs/project-trust/abc/SKILL.md", guard));
         Assert.NotNull(TrustedFilesPolice.Find("type configs/project-trust.json", guard));
     }
+
+    /// <summary>
+    /// Names read as Windows reads them (2026-11-24, review #9 and its neighbors): trailing dots and spaces dropped, a <c>.</c> skipped and a
+    /// <c>..</c> taking the part before it, so none of these reach the real file unnamed.
+    /// </summary>
+    [Fact]
+    public void TheTripwire_ReadsTrailingDots_AndDotSegments()
+    {
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home-app"), _repo);
+
+        Assert.NotNull(TrustedFilesPolice.Find("type .git.\\config", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("type project-trust.json.", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("type .claude.\\settings.json", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("type .mcp.json.", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("type configs./project-trust/abc/SKILL.md", guard, out _, "bash"));
+        Assert.NotNull(TrustedFilesPolice.Find("type .agents\\.\\skills\\x\\SKILL.md", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("cat .agents/x/../skills/y/SKILL.md", guard, out _, "bash"));
+        Assert.Null(TrustedFilesPolice.Find("cat .agents/notes/../readme.md", guard, out _, "bash"));
+    }
+
+    /// <summary>
+    /// From a working folder that is <c>.agents</c>, a relative word joins its name (2026-11-24, review #19): <c>skills/…</c> is the repo's own skills,
+    /// and <c>mv ../x/skills .</c> would plant them.
+    /// </summary>
+    [Fact]
+    public void TheTripwire_FromAWorkingFolderThatIsAgents_GuardsItsSkills()
+    {
+        string agents = Path.Combine(_repo, ".agents");
+        Directory.CreateDirectory(agents);
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home-app"), _repo, Workdir: agents);
+
+        Assert.NotNull(TrustedFilesPolice.Find("type skills/x/SKILL.md", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("cat ../.agents/skills/x/SKILL.md", guard, out _, "bash"));
+        Assert.Null(TrustedFilesPolice.Find("type notes.md", guard));
+        Assert.NotNull(TrustedFilesPolice.Find("mv ../x/skills .", guard, out var finding, "bash"));
+        Assert.Equal(TrustedFinding.ProjectSkills, finding);
+        Assert.Null(TrustedFilesPolice.Find("mv a.txt b.txt", guard, out _, "bash"));
+    }
+
+    /// <summary>
+    /// A move or a copy onto <c>.agents</c> plants a repo's skills folder from one holding <c>skills</c> (2026-11-24, review #44), in each shell's
+    /// spelling; a plain file passes, since it can't make a folder, and a git line is git's business.
+    /// </summary>
+    [Theory]
+    [InlineData("move tmp .agents", "cmd")]
+    [InlineData("ren tmp .agents", "cmd")]
+    [InlineData("xcopy /e /i tmp .agents", "cmd")]
+    [InlineData("mv tmp .agents/", "bash")]
+    [InlineData("mv skills .agents", "bash")]
+    [InlineData("cp -r tmp .agents", "bash")]
+    [InlineData("mv tmp .agents/.", "bash")]
+    [InlineData("mv tmp x/../.agents", "bash")]
+    [InlineData("cp *.md .agents", "bash")]
+    [InlineData("Rename-Item tmp -NewName .agents", "powershell")]
+    [InlineData("Move-Item tmp -Destination:.agents", "powershell")]
+    [InlineData("Copy-Item tmp .agents -Recurse", "powershell")]
+    [InlineData("cmd /c move tmp .agents", "powershell")]
+    public void TheTripwire_AMoveOrCopyOntoAgents_IsRefused(string command, string kind)
+    {
+        Directory.CreateDirectory(Path.Combine(_repo, "tmp", "skills", "x"));
+        Directory.CreateDirectory(Path.Combine(_repo, "skills", "x"));
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home-app"), _repo);
+
+        Assert.NotNull(TrustedFilesPolice.Find(command, guard, out var finding, kind));
+        Assert.Equal(TrustedFinding.ProjectSkills, finding);
+        Assert.Equal(ShellText.ProjectSkillsPoliced, ShellText.TrustedPolicedFor(".agents", finding));
+        Assert.EndsWith(ShellText.ProjectSkillsShown, ShellText.TrustedShown(".agents", null, finding), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("cp README.md .agents/", "bash")]
+    [InlineData("mv notes.md .agents", "bash")]
+    [InlineData("copy README.md .agents", "cmd")]
+    [InlineData("mv a.txt b.txt", "bash")]
+    [InlineData("mv .agents-old x", "bash")]
+    [InlineData("git mv tmp .agents", "bash")]
+    public void TheTripwire_APlainFileOntoAgents_Passes(string command, string kind)
+    {
+        Directory.CreateDirectory(Path.Combine(_repo, "tmp", "skills", "x"));
+        File.WriteAllText(Path.Combine(_repo, "README.md"), "x");
+        File.WriteAllText(Path.Combine(_repo, "notes.md"), "x");
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home-app"), _repo);
+
+        Assert.Null(TrustedFilesPolice.Find(command, guard, out _, kind));
+    }
+
+    /// <summary>A cmd switch after the destination is never the destination (2026-11-24, review #44): <c>xcopy tmp .agents /e /i</c> read <c>/i</c> as it. Windows' switch rule.</summary>
+    [WindowsTheory]
+    [InlineData("xcopy tmp .agents /e /i")]
+    [InlineData("copy tmp .agents /y")]
+    [InlineData("move tmp .agents /y")]
+    public void TheTripwire_TrailingSwitches_StillFindTheDestination(string command)
+    {
+        Directory.CreateDirectory(Path.Combine(_repo, "tmp", "skills", "x"));
+        var guard = new TrustedFilesPolice.Guard(Path.Combine(_dir, "home-app"), _repo);
+
+        Assert.NotNull(TrustedFilesPolice.Find(command, guard, out var finding, "cmd"));
+        Assert.Equal(TrustedFinding.ProjectSkills, finding);
+    }
+
+    /// <summary>The transcript names .agents/skills as the repo's own skills (2026-11-24, review #44), not "a file only the app's tools change".</summary>
+    [Fact]
+    public void TheTripwire_ShowsAProjectSkillsWord_AsTheReposSkills() =>
+        Assert.EndsWith(ShellText.ProjectSkillsShown, ShellText.TrustedShown(".agents/skills/x", null), StringComparison.Ordinal);
 
     /// <summary>A folder whose only skill is manual-only (review #56): a trust would offer nothing, so no notice; one that would offer a skill still has one.</summary>
     [Fact]

@@ -126,7 +126,7 @@ public sealed class AuditTicksTests : IDisposable
     {
         SaveReport(Finding("A1"), Finding("A2"), Finding("A3"), Finding("A4", retracted: true));
         SavePlan("- [x] **Step 1 — Fix two (closes A1, A2).** In src\n  Done when: it builds\n- [ ] Step 2 (closes A3)\n  Done when: it builds\n");
-        var step = PlanSteps.Parse(PlanDocument.Body(File.ReadAllText(_box.Full(PlanPath))))[0];
+        var step = PlanSteps.Parse(File.ReadAllText(_box.Full(PlanPath)))[0];
 
         var outcome = AuditTicks.Tick(_box.Files, PlanPath, [step], Save);
 
@@ -171,13 +171,13 @@ public sealed class AuditTicksTests : IDisposable
     {
         SaveReport(Finding("A1"), Finding("A2"));
         SavePlan("- [x] One (closes A1, A2)\n  Done when: x\n- [ ] Two (closes A2)\n  Done when: x\n");
-        var first = PlanSteps.Parse(PlanDocument.Body(File.ReadAllText(_box.Full(PlanPath))))[0];
+        var first = PlanSteps.Parse(File.ReadAllText(_box.Full(PlanPath)))[0];
 
         AuditTicks.Tick(_box.Files, PlanPath, [first], Save);
         Assert.Equal([true, false], Report().Findings.Select(f => f.Settled));
 
         SavePlan("- [x] One (closes A1, A2)\n  Done when: x\n- [x] Two (closes A2)\n  Done when: x\n");
-        var second = PlanSteps.Parse(PlanDocument.Body(File.ReadAllText(_box.Full(PlanPath))))[1];
+        var second = PlanSteps.Parse(File.ReadAllText(_box.Full(PlanPath)))[1];
         AuditTicks.Tick(_box.Files, PlanPath, [second], Save);
         Assert.True(Report().Findings[1].Settled);
         Assert.Equal(AuditText.SettledNote("fix-audit-findings-a1-a4", 2), Report().Findings[1].Notes[^1]);
@@ -214,7 +214,7 @@ public sealed class AuditTicksTests : IDisposable
     {
         SaveReport(Finding("A1"));
         SavePlan("- [x] Parent (closes A1)\n  - [x] One\n    Done when: x\n  - [x] Two\n    Done when: x\n");
-        var parent = PlanSteps.Parse(PlanDocument.Body(File.ReadAllText(_box.Full(PlanPath))))[0];
+        var parent = PlanSteps.Parse(File.ReadAllText(_box.Full(PlanPath)))[0];
 
         AuditTicks.Tick(_box.Files, PlanPath, [parent], Save);
 

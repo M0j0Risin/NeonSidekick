@@ -103,6 +103,13 @@ public sealed record MenuFooter(string Text, string? Last = null)
     /// tool's description) may carry line breaks that were always read as spaces.
     /// </summary>
     public bool KeepLines { get; init; }
+
+    /// <summary>
+    /// The text laid out for the rows the slab really gives (2026-11-24, review #65: the theme editor's band was built for its full eight rows,
+    /// so a short pane's cut kept the note and lost every failing pair); null reads <see cref="Text"/>. It is given the rows
+    /// <see cref="MenuPane.FooterLines"/> leaves for the text.
+    /// </summary>
+    public Func<int, string>? Layout { get; init; }
 }
 
 /// <summary>
@@ -529,7 +536,8 @@ public sealed class MenuPane : INoticeSink
     {
         ArgumentNullException.ThrowIfNull(footer);
         int room = footer.Last is null ? slabRows : slabRows - 1;
-        var rows = new List<string>(footer.KeepLines ? KeptLines(footer.Text, width, room) : CaptionRows(footer.Text, width, room));
+        string text = footer.Layout?.Invoke(room) ?? footer.Text;
+        var rows = new List<string>(footer.KeepLines ? KeptLines(text, width, room) : CaptionRows(text, width, room));
         if (footer.Last is { } last && width > 0)
         {
             rows.AddRange(CaptionRows(last, width, 1));
@@ -593,7 +601,8 @@ public sealed class MenuPane : INoticeSink
     /// <summary>
     /// The footer band's slab rows on a pane of <paramref name="content"/> rows under a <paramref name="header"/> (2026-11-24, the last-7 review's
     /// #55): the page's own count, cut so the list keeps its rows up to <see cref="CaptionKeepRows"/> (three and the more row), never under one
-    /// slab row. The text is cut to the rows given (<see cref="FooterLines"/>), so a worst-first band drops its least. Pure.
+    /// slab row. The text is cut to the rows given (<see cref="FooterLines"/>); a footer with a <see cref="MenuFooter.Layout"/> (the theme editor's
+    /// worst-first band) is laid out for them instead, so it drops its least. Pure.
     /// </summary>
     internal static int SlabRows(MenuPage page, int content, int header)
     {

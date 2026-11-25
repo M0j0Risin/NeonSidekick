@@ -636,20 +636,21 @@ public sealed class ProjectSkillTrust
     {
         string root = CopiesPath;
         string final = Path.Combine(root, name);
-        string temp = final + ".tmp-" + Guid.NewGuid().ToString("N")[..8];
-        Directory.CreateDirectory(temp);
-        foreach (var (skillKey, text) in copies)
+
+        // The same name is the same fingerprint, so the same texts, and a move only ever lands whole: a folder already there is kept, never
+        // deleted (2026-11-24, review #13: deleting it first lost the old entry's copies when the move then failed).
+        if (!Directory.Exists(final))
         {
-            WorkingDirectory.WriteAtomically(Path.Combine(temp, FileHash(skillKey)), Encoding.UTF8.GetBytes(text));
+            string temp = final + ".tmp-" + Guid.NewGuid().ToString("N")[..8];
+            Directory.CreateDirectory(temp);
+            foreach (var (skillKey, text) in copies)
+            {
+                WorkingDirectory.WriteAtomically(Path.Combine(temp, FileHash(skillKey)), Encoding.UTF8.GetBytes(text));
+            }
+
+            Directory.Move(temp, final);
         }
 
-        // The same name is the same fingerprint, so the same texts: the folder is replaced, never another entry's.
-        if (Directory.Exists(final))
-        {
-            Directory.Delete(final, recursive: true);
-        }
-
-        Directory.Move(temp, final);
         foreach (string stale in Directory.EnumerateDirectories(root, "*.tmp-*"))
         {
             TryDelete(stale);

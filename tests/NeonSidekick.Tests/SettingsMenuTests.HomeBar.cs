@@ -27,6 +27,43 @@ public partial class SettingsMenuTests
             new HaEntity("switch.kettle", "Kettle", "off", null, default, null),
         ]);
 
+    /// <summary>
+    /// One long name (2026-11-24, review #64): the bar tab's heads, the rooms' and a domain tab's names pad to at most the room pane's cap; the bar
+    /// cuts a longer head, as the bar does, and the checklists print a longer name whole.
+    /// </summary>
+    [Fact]
+    public void ThePickersTabs_PadToTheCap_NeverToOneLongName()
+    {
+        string longName = new('x', 60);
+        var catalog = new HaCatalog(
+            [new HaFloor("ground", "Ground", 0)],
+            [new HaAreaEntry("den", "Den", "ground"), new HaAreaEntry("long", longName, "ground")],
+            [],
+            [
+                new HaRegistryEntity("light.den_lamp", null, "den", null, false, false, null, []),
+                new HaRegistryEntity("light.long", null, "den", null, false, false, null, []),
+            ],
+            [],
+            [
+                new HaEntity("light.den_lamp", "Den Lamp", "on", null, default, null),
+                new HaEntity("light.long", longName, "off", null, default, null),
+            ]);
+        var sides = ItemOrder.Split(["entity:light.den_lamp", "entity:light.long"], new HashSet<string>());
+
+        var tabs = SettingsMenu.HomePickerTabs(catalog, sides, "", null, null);
+
+        static int Gap(IEnumerable<string> rows, string after) =>
+            rows.Select(Spectre.Console.Markup.Remove).Select(r => Regex.Match(r, Regex.Escape(after) + "( +)")).First(m => m.Success).Groups[1].Length;
+        var bar = tabs.Single(t => t.Tab.Title == HomeBarText.BarTab).Tab.Rows;
+        Assert.InRange(Gap(bar, "Den Lamp"), 1, HomeBarText.RoomHeadCap);
+        Assert.Contains(bar.Select(Spectre.Console.Markup.Remove), r => r.Contains('…') && !r.Contains(longName, StringComparison.Ordinal));
+        var rooms = tabs.Single(t => t.Tab.Title == HomeBarText.RoomsTab).Tab.Rows;
+        Assert.InRange(Gap(rooms, "[ ] Den"), 1, HomeBarText.RoomHeadCap);
+        var lights = tabs.Single(t => t.Tab.Title == HomeBarText.LightsTab).Tab.Rows;
+        Assert.InRange(Gap(lights, "Den Lamp"), 1, HomeBarText.RoomHeadCap);
+        Assert.Contains(lights.Select(Spectre.Console.Markup.Remove), r => r.Contains(longName, StringComparison.Ordinal));
+    }
+
     [Fact]
     public void ShowHomeBar_IsTheToolbarsTabsRowAfterThePerformanceBar_OffByDefault()
     {

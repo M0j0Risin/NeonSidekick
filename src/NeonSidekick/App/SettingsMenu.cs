@@ -1429,7 +1429,7 @@ public enum SettingsField
     ProjectSkills,
 
     /// <summary>
-    /// Toggle: whether <c>ask_user</c> refuses the same questions asked again in one turn after the user declined them
+    /// Toggle: whether <c>ask_user</c> refuses the same questions with the same choices asked again in one turn after the user declined them
     /// (<see cref="Settings.AppSettingsData.AskRepeatGuard"/>, 2026-11-24, the ask_user plan's F, the user's name). <c>/tools</c> › Ask, under
     /// <see cref="AskUser"/>; read at each call, no reconnect. Last in the enum, as every newcomer.
     /// </summary>
@@ -1594,7 +1594,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The hint of a picker with a <c>(none)</c> row (<c>TTS voice 2</c>): Backspace moves the cursor to it.</summary>
     public const string NoneKeys = "Enter = choose · Backspace = none · Esc = back";
-    public const string SwitchKeys = "Enter = switch · + = add · a–z = jump · Esc = back";
+    public const string SwitchKeys = "Enter = switch · + = pick add · a–z = jump · Esc = back";
     public const string KeepKeys = "Enter = choose · Esc = keep";
 
     /// <summary>The model picker's hint on the pane (2026-10-03, the user's ask): <see cref="KeepKeys"/> with the type-to-filter. Pinned.</summary>
@@ -1850,7 +1850,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary><c>/profile</c>'s picker label; ESC keeps the loaded profile. The settings row's level is <see cref="Breadcrumb"/> over <see cref="FieldName"/> (no glyph under the crumb) + <see cref="SwitchKeys"/>.</summary>
     public const string ProfileTitle = ChatScreen.ProfileToolGlyph + " Profile";   // the glyph the toolbar wears for the picker (later on 2026-09-29)
-    public const string ProfileKeys = "Enter = switch · + = add · a–z = jump · Esc = keep";
+    public const string ProfileKeys = "Enter = switch · + = pick add · a–z = jump · Esc = keep";
 
     /// <summary>The <c>/server</c> picker's label; ESC keeps the server in use.</summary>
     public const string ServerTitle = "🖥️ LLM server";
@@ -5753,25 +5753,47 @@ internal sealed partial class SettingsMenu
             return (ChatScreen.ProfileExistsError(existing), null);
         }
 
+        // What was there before this call (2026-11-24, review #33): a folder that turned up after Resolve is never this call's to delete.
+        string folder = Profiles.Directory(home, name);
+        bool existed = Directory.Exists(folder);
+        var hadFiles = existed ? Profiles.BasicSidekickFiles.Where(f => File.Exists(Profiles.SidekickFilePath(folder, f))).ToHashSet(StringComparer.Ordinal) : [];
+        bool claimed = false;
         try
         {
+            // A profile.json already there (another creator meanwhile): taken, nothing written.
+            claimed = Profiles.Create(home, name, fresh ? Profiles.FreshProfileSeed() : Profiles.NewProfileSeed(_settings.Current));
+            if (!claimed)
+            {
+                return (ChatScreen.ProfileExistsError(name), null);
+            }
+
             if (fresh)
             {
-                Profiles.Create(home, name, Profiles.FreshProfileSeed());
                 return (null, ProfileText.ProfileCreatedFreshNotice(name));
             }
 
-            Profiles.Create(home, name, Profiles.NewProfileSeed(_settings.Current));
             IReadOnlyList<string> copied = Profiles.CopySidekickFiles(_settings.ProfileDirectory, home, name, Profiles.BasicSidekickFiles);
             return (null, ChatScreen.ProfileCreatedNotice(name, copied));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // All or nothing (2026-11-24, the last-7 review's #36): a half-made profile (its folder made, its profile.json or a copy not) is
-            // taken back. Safe: Resolve above found no profile of that name, and any folder there counts as one, so this run made it.
+            // taken back. A folder this call made goes whole; one that was there before (a bare folder that turned up after Resolve, review
+            // #33) loses only the profile.json this call claimed and the copies it wrote.
             try
             {
-                Profiles.Delete(home, name);
+                if (!existed)
+                {
+                    Profiles.Delete(home, name);
+                }
+                else if (claimed)
+                {
+                    File.Delete(Profiles.ProfileFile(home, name));
+                    foreach (string file in Profiles.BasicSidekickFiles.Where(f => !hadFiles.Contains(f)))
+                    {
+                        File.Delete(Profiles.SidekickFilePath(folder, file));
+                    }
+                }
             }
             catch (Exception cleanup) when (cleanup is IOException or UnauthorizedAccessException)
             {

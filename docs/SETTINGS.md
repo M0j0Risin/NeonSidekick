@@ -101,7 +101,7 @@ What `/botchat` bots get. See [Bot conversations](COMMANDS.md#bot-conversations)
 * **`automatic`:** after each reply the model writes an image prompt and the app draws it; bots get no tool. With *Botchat limited skills* ticked, the prompt writer may load a skill first ("use the pony-prompts skill for pictures").
 * **`autonomous`:** the bots get `generate_image`, limited to those workflows. A call written as text still runs.
 * **Reworks:** with a picture and an image → image workflow, the prompt writer picks a new picture or a rework.
-* **Async on:** 🖼️ (🎨 for a rework) shows on the lower rule while a picture renders. **Async off:** Esc on a reply waiting for its picture cuts that bot short; Esc under the picture's spinner skips it.
+* **Async on:** 🖼️ (🎨 for a rework) shows on the lower rule while a picture renders. **Async off:** Esc cuts a waiting reply short; Esc under the picture's spinner skips the picture.
 
 #### Web UI
 
@@ -132,7 +132,7 @@ The bars under the input line, under **Bars**, and their order, under **Order**.
 |---|---|---|
 | Hints bar | `auto` (its own bar over the status bar while there is a hint, held until the next send), `always`, or `off` (hints share the status bar). See [The hints bar](INTERFACE.md#the-hints-bar). | `auto` |
 | Status bar | The status bar's sections, order and sides. Enter opens the [checklist](INTERFACE.md#bar-checklists); see [The status bar](INTERFACE.md#the-status-bar). | `default`: every section but Working directory; Model and Working directory pinned right |
-| Tool bar | The toolbar's icons, order and sides. Enter (or `/toolbar edit`) opens the checklist ([The toolbar](INTERFACE.md#the-toolbar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | Settings, Profile, Themes, Web UI, Tools, Skills, Commands, Sessions, Usage, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Web, Advisors, path (19 of 49), with five dividers |
+| Tool bar | The toolbar's icons, order and sides: Enter (or `/toolbar edit`) opens [the checklist](INTERFACE.md#the-toolbar), whose [**bar:**](INTERFACE.md#bar-checklists) hides it. | Settings, Profile, Themes, Web UI, Tools, Skills, Commands, Sessions, Usage, Memory, Saved prompts, Queue, Shell allowed commands, Shell police, Shell, Files, Web, Advisors, path (19 of 49), with five dividers |
 | Performance bar | Its meters and places: Enter (or `/perfbar edit`) opens the checklist. **look:** (`l`) or `/perfbar text`, `gauge` or `led` picks the look ([The performance bar](INTERFACE.md#the-performance-bar)); [**bar:**](INTERFACE.md#bar-checklists) (`h`) hides or shows it. | CPU, RAM, GPU, VRAM, `led` |
 | Home bar | Home Assistant rooms and devices, and the shopping list's 🛒, as chips on their own row. Enter (or `/homebar edit`) opens the [picker](INTERFACE.md#the-home-bar); [**bar:**](INTERFACE.md#bar-checklists) hides or shows it. | off |
 | Toolbar order | The order of the five bars under the input line. Enter opens the list; Shift+↑/↓ moves a bar. | `default` (hints bar, status bar, toolbar, performance bar, home bar) |
@@ -276,7 +276,7 @@ Your own LLM containers (vLLM, SGLang, anything serving an OpenAI-compatible API
 | Docker container stop timeout (s) | How long a stopping container gets before the engine kills it (0–120). | 30 |
 | Docker container post-stop delay (s) | The wait after a stop (a container or the embedded model) before the next model loads, so GPU memory frees (0–60). | 2 |
 | Docker container ready timeout (s) | How long a started container may take to answer on its OpenAI-compatible API (30–3600). | 900 |
-| Docker containers one at a time | Starting a chosen container stops the other chosen ones first. Off: they keep running side by side, through a profile switch too (even to one with Docker servers off); each needs its own host port and GPU share. | on |
+| Docker containers one at a time | Starting a chosen container stops the other chosen ones first. Off: they run side by side, even through a profile switch, each needing its own host port and GPU share. | on |
 | Docker containers stop on exit | Once the app has started one, stops the running chosen containers when it exits, the window's close button included. | off |
 
 #### Anthropic
@@ -414,7 +414,7 @@ Skills are folders of instructions the model can load ([Skills](TOOLS.md#skills)
 The loaded skills with scope (`profile`, `global`, `external` or `project`), version, last change and description, then shadowed duplicates and skipped folders with the reason. A second tab row narrows to one scope; the `project` tab holds a repo's own skills ([Project skills and trust](#project-skills-and-trust)). Enter on a skill can:
 
 * move it between the profile and global folders (while *Global skills* is on) or to another profile, copy it to another profile (with no history), or rename it;
-* move it into the working folder's `.agents/skills`, where it becomes the repo's skill ([Project skills and trust](#project-skills-and-trust));
+* move it into the working folder's `.agents/skills`, where it becomes the repo's skill ([Project skills and trust](#project-skills-and-trust)); refused when the repo's `.agents` is a link leading outside it;
 * edit its `SKILL.md` in your editor, or revert it to a kept version ([Skill history](#skill-history));
 * lock it (`🔒 v4`; [Locking a skill](#locking-a-skill)) or disable it (`⛔ v4` on a dim row; [Disabling a skill](#disabling-a-skill));
 * delete it, after a yes.
@@ -494,7 +494,7 @@ Enter on a skill, then `disable`, switches it off without removing it; `enable` 
 A repo can carry its own skills. While *Project skills* is on, the app looks for them and offers them only once you trust them.
 
 * **Where:** each folder's `.agents/skills`, then `.claude/skills`, from the working folder up to the repo root, nearest first; outside a repo, the working folder alone. Never your user folder or the app's home.
-* **Trust per folder:** the `project` tab of `/skills` lists them dim under each folder. Enter on its `trust` row lists every skill with a **View** of its whole `SKILL.md`, rendered, with the exact text on its Source tab (a warning names link-definition lines the rendering hides); trust saves exactly what you saw.
+* **Trust per folder:** the `project` tab of `/skills` lists them under each folder. Its `trust` row views each whole `SKILL.md`, rendered, with the exact text on a Source tab and hidden links named; trust saves exactly what you saw.
 * **Asked again on any change:** an edit, an added or removed skill or a changed bundled file stops it being offered. The next turn says so, and the question shows what changed, with a diff for a changed `SKILL.md`.
 * **Your own move or delete** from `/skills` keeps the folder trusted when nothing else in it changed; otherwise it waits like any change.
 * **Ranked last:** your profile, global and external skills win a name clash; the trust tells you which are hidden. At most 50 project skills are offered.
@@ -502,7 +502,7 @@ A repo can carry its own skills. While *Project skills* is on, the app looks for
 * **At the PC only:** the Web UI page shows the notice but never asks. Headless uses saved trust and prints a `[notice]` for a folder not trusted.
 * **Claude Code's fields grant nothing:** `allowed-tools`, `hooks`, `model` and the like are ignored. A `.claude/skills` skill marked `disable-model-invocation` is listed, never offered; in `.agents/skills` that field is ignored too.
 * **The model never changes one:** nor does reflection.
-* **Enter on one** can edit it in your editor (asking for trust again), copy it to your profile or global skills, disable it, or delete it after a yes (to the Recycle bin while *File deletes to Recycle bin* is on, else for good). A copy is refused when the skill changed since you trusted it.
+* **Enter on one** can edit it (asking for trust again), copy it out (refused if it changed since you trusted it), disable it, or delete it after a yes, refused if its folder links outside the repo.
 * **Untrust** from the folder's row. A skill this conversation already loaded stays in it until `/clear` or a new session.
 * **Where trust is kept:** `configs/project-trust.json` and its `project-trust` copies in the profile, left out of the settings zip. The model's tools can't reach them, so it can't trust a folder for itself.
 
@@ -543,7 +543,7 @@ The tools most profiles use, and the pane's own options.
 | Setting | What it does | Default |
 |---|---|---|
 | Shell command policy | How the model may run shell commands: `off` (no shell tools), `ask` (anything not on the allowed list asks first) or `yolo` (runs unasked; the shell police still checks). See [Shell guards](#shell-guards). | `off` |
-| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); the approval's *Allow … always* adds one. The list shows this session's allows above them and can remove one or set the policy ([Pane keys](INTERFACE.md#pane-keys)). | empty |
+| Shell allowed commands | Command prefixes allowed for good (`git status`, `dotnet build`); the approval's *Allow … always* adds one. The list also shows this session's allows ([Pane keys](INTERFACE.md#pane-keys)). | empty |
 | Shell police | Refuses a command, script or process input naming a path outside the working directory or a [trusted file](TOOLS.md#shell). Turning it off asks first, and stops the forbidden strings and database rules too. | on |
 | Shell police forbidden strings | Strings the police refuses outright, ignoring case and spacing. A new profile starts with a list of harmful actions; `r` restores it, `/profile push policestrings` copies it. | the starter list |
 | Shell prefer native tools | Sends back a lone shell command one of the app's own tools covers, once a turn. | on |
@@ -611,7 +611,7 @@ The tools most profiles use, and the pane's own options.
 | Setting | What it does | Default |
 |---|---|---|
 | Ask user | Offers `ask_user`: questions you answer in the app, by choice or in your own words. `/tools ask` and the toolbar's 🙋 open its on/off page. | on |
-| Ask repeat guard | On, the same questions asked again in one reply after you declined them aren't shown; the model is told you declined. | off |
+| Ask repeat guard | On, the same questions with the same choices, asked again in one reply after you declined them, aren't shown; the model is told you declined. | off |
 | Ask max questions | Questions per call (1–10). | 10 |
 | Ask max choices per question | Options per question (2–15). | 10 |
 
