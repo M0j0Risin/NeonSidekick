@@ -38,7 +38,7 @@ public sealed record AuditArguments(
 /// <summary>
 /// <c>/code-audit</c>'s grammar (2026-10-18, <see cref="Pdf.PdfCommand"/>'s shape):
 /// <code>
-/// /code-audit [model|advisor|any|confirm] [&lt;passes&gt;] [diff|staged|branch [&lt;base&gt;]|&lt;path&gt; ...] [&lt;focus&gt; ...] [--] [&lt;brief&gt;]
+/// /code-audit [model|advisor|any|confirm] [&lt;passes&gt;] [diff|staged|branch [&lt;base&gt;]|commit &lt;rev&gt;|commit &lt;from&gt;..&lt;to&gt;|&lt;path&gt; ...] [&lt;focus&gt; ...] [--] [&lt;brief&gt;]
 /// /code-audit open [&lt;name&gt;]
 /// /code-audit fix [&lt;name&gt;]
 /// /code-audit resume [&lt;name&gt;] [model|advisor|any|confirm] [&lt;passes&gt;]
@@ -47,7 +47,9 @@ public sealed record AuditArguments(
 /// words come in any order; the first word that is none of reviewer, count, scope, path or focus starts the brief, and <c>--</c> makes the
 /// rest the brief; the brief is the raw text from there, quotes and all. A focus word is a focus word even when a folder has its name
 /// (<c>tests/</c> or <c>./tests</c> is the folder). A word that looks like a path and names nothing is refused, so a typo never becomes a
-/// brief; a path in <c>.neon/</c> is refused by name. Pure over <c>existing</c>.
+/// brief; a path in <c>.neon/</c> is refused by name. <c>commit</c> (2026-11-25) always takes the next word as its revision, whatever it looks
+/// like (a digits-only short sha is no count, <c>feature/x</c> no path), so a brief starting with <c>commit</c> needs <c>--</c> first. Pure over
+/// <c>existing</c>.
 /// </summary>
 public static partial class AuditCommand
 {
@@ -78,6 +80,7 @@ public static partial class AuditCommand
         int? passes = null;
         var kind = AuditScopeKind.Tree;
         string? @base = null;
+        string? revision = null;
         var paths = new List<string>();
         var focus = new List<string>();
         bool all = false;
@@ -137,6 +140,19 @@ public static partial class AuditCommand
                 continue;
             }
 
+            if (kind is AuditScopeKind.Tree && lower == AuditText.CommitWord)
+            {
+                string? next = i + 1 < words.Count ? words[i + 1].Word : null;
+                if (RevisionError(next) is { } bad)
+                {
+                    return Refused(bad);
+                }
+
+                kind = AuditScopeKind.Commits;
+                revision = words[++i].Word;
+                continue;
+            }
+
             if (lower == AuditFocus.AllWord)
             {
                 all = true;
@@ -185,7 +201,7 @@ public static partial class AuditCommand
 
         var scopeKind = kind == AuditScopeKind.Tree && paths.Count > 0 ? AuditScopeKind.Paths : kind;
         IReadOnlyList<string>? chosen = all ? AuditFocus.Dimensions : focus.Count > 0 ? AuditFocus.Normalize(focus) : null;
-        return new AuditArguments(AuditVerb.Start, null, reviewer, passes, new AuditScopeRequest(scopeKind, paths, @base), chosen, brief);
+        return new AuditArguments(AuditVerb.Start, null, reviewer, passes, new AuditScopeRequest(scopeKind, paths, @base, revision), chosen, brief);
     }
 
     /// <summary>
@@ -204,6 +220,7 @@ public static partial class AuditCommand
 
         var kind = AuditScopeKind.Paths;
         string? @base = null;
+        string? revision = null;
         int at = 0;
         switch (split[0].ToLowerInvariant())
         {
@@ -220,6 +237,17 @@ public static partial class AuditCommand
                 @base = split.Count > 1 ? split[1] : null;
                 at = 2;
                 break;
+            case AuditText.CommitWord:
+                // A hand-edited header may hold no revision, or a bad one (2026-11-25): said, never an index past the end.
+                kind = AuditScopeKind.Commits;
+                revision = split.Count > 1 ? split[1] : null;
+                if (RevisionError(revision) is { } bad)
+                {
+                    return (null, bad);
+                }
+
+                at = 2;
+                break;
         }
 
         var paths = new List<string>();
@@ -233,7 +261,26 @@ public static partial class AuditCommand
             paths.Add(path);
         }
 
-        return (new AuditScopeRequest(kind, paths, @base), null);
+        return (new AuditScopeRequest(kind, paths, @base, revision, Pinned: kind == AuditScopeKind.Commits), null);
+    }
+
+    /// <summary>
+    /// Why a word after <c>commit</c> is no revision (2026-11-25), or null: missing or blank (a quoted <c>""</c> would read as HEAD), <c>--</c>, a range
+    /// with no start (with the end held to the checked-out branch, <c>HEAD..b</c> is only ever empty or backwards), or three dots.
+    /// </summary>
+    private static string? RevisionError(string? word)
+    {
+        if (string.IsNullOrWhiteSpace(word) || word == AuditText.BriefSwitch)
+        {
+            return AuditText.NoRevision;
+        }
+
+        if (word.Contains("...", StringComparison.Ordinal))
+        {
+            return AuditText.ThreeDots;
+        }
+
+        return word.StartsWith(AuditText.RangeDots, StringComparison.Ordinal) ? AuditText.NoRevision : null;
     }
 
     /// <summary>
@@ -249,10 +296,12 @@ public static partial class AuditCommand
 
     /// <summary>
     /// The completion list for the argument typed so far: the verbs as the first word, a report's name after <c>open</c>, <c>fix</c> or
-    /// <c>resume</c>, and otherwise the reviewer, scope and focus words and the working directory's folders (a blank-holding folder in
+    /// <c>resume</c>, the recent commits alone after <c>commit</c> (2026-11-25, <paramref name="commits"/>, read only then; behind a typed
+    /// <c>from..</c> too), and otherwise the reviewer, scope and focus words and the working directory's folders (a blank-holding folder in
     /// double quotes, so the line parses back to the same path).
     /// </summary>
-    public static IReadOnlyList<CompletionItem> Complete(string argText, Func<IReadOnlyList<CompletionItem>>? reports, Func<string, IReadOnlyList<string>> folders)
+    public static IReadOnlyList<CompletionItem> Complete(
+        string argText, Func<IReadOnlyList<CompletionItem>>? reports, Func<string, IReadOnlyList<string>> folders, Func<IReadOnlyList<CompletionItem>>? commits = null)
     {
         ArgumentNullException.ThrowIfNull(argText);
         ArgumentNullException.ThrowIfNull(folders);
@@ -279,12 +328,23 @@ public static partial class AuditCommand
             return MentionCompleter.Matches(items.Select(i => new CompletionItem(head + i.Text, i.Note)).ToList(), argText);
         }
 
+        // The revision is required, so nothing but the commits after commit, and only where the parser takes it (no scope word before).
+        if (typed.Count > 0 && typed[^1] == AuditText.CommitWord && first != AuditText.ResumeWord
+            && !typed.Take(typed.Count - 1).Any(w => w is AuditText.DiffWord or AuditText.StagedWord or AuditText.BranchWord or AuditText.CommitWord))
+        {
+            int dots = last.IndexOf(AuditText.RangeDots, StringComparison.Ordinal);
+            string left = dots < 0 ? "" : last[..(dots + AuditText.RangeDots.Length)];
+            var shas = (commits?.Invoke() ?? []).Select(c => new CompletionItem(head + left + c.Text, c.Note)).ToList();
+            return MentionCompleter.Matches(shas, argText);
+        }
+
         items.AddRange(Reviewers);
         if (first != AuditText.ResumeWord)
         {
             items.Add(new(AuditText.DiffWord, AuditText.DiffNote));
             items.Add(new(AuditText.StagedWord, AuditText.StagedNote));
             items.Add(new(AuditText.BranchWord, AuditText.BranchNote));
+            items.Add(new(AuditText.CommitWord, AuditText.CommitNote));
             items.AddRange(AuditFocus.Dimensions.Select(d => new CompletionItem(d, AuditText.FocusNote)));
             items.Add(new(AuditFocus.AllWord, AuditText.AllFocusNote));
             items.AddRange(folders(last.TrimStart('"')).Select(f => new CompletionItem(f.Any(char.IsWhiteSpace) ? "\"" + f + "\"" : f, "")));
@@ -356,7 +416,7 @@ public static partial class AuditCommand
 
     /// <summary>
     /// A path as a scope word that reads back as that path (2026-10-19, the review: a folder named <c>diff</c>, <c>staged</c> or <c>branch</c> was
-    /// kept bare in the header's <c>scope:</c>, and <c>resume</c> read it as a git scope): a path the grammar would read as another kind of word
+    /// kept bare in the header's <c>scope:</c>, and <c>resume</c> read it as a git scope; <c>commit</c> since 2026-11-25): a path the grammar would read as another kind of word
     /// — a scope word, a verb, a reviewer, a count, a focus, <c>all</c>, <c>--</c> — gains <c>./</c>; a blank-holding one is quoted
     /// (<see cref="AuditPath.Word"/>).
     /// </summary>
@@ -368,13 +428,13 @@ public static partial class AuditCommand
 
     private static bool Reserved(string word) =>
         word == AuditText.BriefSwitch || PlanText.ParseReviewer(word) is not null || IsNumber(word) || AuditFocus.Parse(word) is not null
-        || word.ToLowerInvariant() is AuditText.DiffWord or AuditText.StagedWord or AuditText.BranchWord or AuditFocus.AllWord
+        || word.ToLowerInvariant() is AuditText.DiffWord or AuditText.StagedWord or AuditText.BranchWord or AuditText.CommitWord or AuditFocus.AllWord
             or AuditText.OpenWord or AuditText.FixWord or AuditText.ResumeWord;
 
     /// <summary>A word after <c>branch</c> that names its base: anything the grammar would read as another kind of word is not.</summary>
     private static bool IsBase(string word, Func<string, string?> existing) =>
         word != AuditText.BriefSwitch && PlanText.ParseReviewer(word) is null && !IsNumber(word)
-        && word.ToLowerInvariant() is not (AuditText.DiffWord or AuditText.StagedWord or AuditText.BranchWord or AuditFocus.AllWord)
+        && word.ToLowerInvariant() is not (AuditText.DiffWord or AuditText.StagedWord or AuditText.BranchWord or AuditText.CommitWord or AuditFocus.AllWord)
         && AuditFocus.Parse(word) is null && existing(word) is null;
 
     private static AuditArguments Refused(string error, AuditVerb verb = AuditVerb.Start) => new(verb, null, null, null, null, null, "", error);

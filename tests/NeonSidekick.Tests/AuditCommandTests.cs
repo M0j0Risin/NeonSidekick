@@ -158,4 +158,89 @@ public sealed class AuditCommandTests : IDisposable
         // The completed quoted folder parses back to the same path.
         Assert.Equal(["My Folder"], Parse("security \"My Folder/\"").Scope!.Paths);
     }
+
+    // ---- commit <rev> and commit <from>..<to> (2026-11-25) ----
+
+    [Theory]
+    [InlineData("commit abc", "abc")]
+    [InlineData("commit a..b", "a..b")]
+    [InlineData("commit a..", "a..")]
+    [InlineData("commit 1234567", "1234567")]
+    [InlineData("commit feature/x", "feature/x")]
+    [InlineData("commit feature/x..main", "feature/x..main")]
+    public void Commit_TakesTheNextWordAsItsRevision_WhateverItLooksLike(string line, string revision)
+    {
+        var parsed = Parse(line);
+        Assert.Null(parsed.Error);
+        Assert.Equal(AuditScopeKind.Commits, parsed.Scope!.Kind);
+        Assert.Equal(revision, parsed.Scope.Revision);
+        Assert.False(parsed.Scope.Pinned);
+        Assert.Null(parsed.Passes);
+        Assert.Empty(parsed.Scope.Paths);
+    }
+
+    [Theory]
+    [InlineData("commit")]
+    [InlineData("commit \"\"")]
+    [InlineData("commit --")]
+    [InlineData("commit ..b")]
+    [InlineData("commit ..")]
+    public void Commit_WithNoRevision_IsRefused(string line) => Assert.Equal(AuditText.NoRevision, Parse(line).Error);
+
+    [Fact]
+    public void Commit_ThreeDots_AreRefused() => Assert.Equal(AuditText.ThreeDots, Parse("commit a...b").Error);
+
+    [Fact]
+    public void Commit_WithPathsFocusAndABrief_AfterIt()
+    {
+        var parsed = Parse("commit HEAD~1 src/Web security check the parser");
+        Assert.Null(parsed.Error);
+        Assert.Equal(AuditScopeKind.Commits, parsed.Scope!.Kind);
+        Assert.Equal("HEAD~1", parsed.Scope.Revision);
+        Assert.Equal(["src/Web"], parsed.Scope.Paths);
+        Assert.Equal(["security"], parsed.Focus);
+        Assert.Equal("check the parser", parsed.Brief);
+        // Another scope word first keeps today's rule: commit then starts the brief.
+        var diff = Parse("diff commit x");
+        Assert.Equal(AuditScopeKind.Diff, diff.Scope!.Kind);
+        Assert.Equal("commit x", diff.Brief);
+        Assert.Equal("./commit", AuditCommand.PathWord("commit"));
+    }
+
+    [Fact]
+    public void Commit_ScopeFromHeader_RoundTrips_AndABadHeaderIsSaidNeverThrown()
+    {
+        string from = new string('a', 40), to = new string('b', 40);
+        var (request, error) = AuditCommand.ScopeFromHeader($"commit {from}..{to} src/Web", _box.Existing);
+        Assert.Null(error);
+        Assert.Equal(AuditScopeKind.Commits, request!.Kind);
+        Assert.Equal($"{from}..{to}", request.Revision);
+        Assert.True(request.Pinned);
+        Assert.Equal(["src/Web"], request.Paths);
+        Assert.Equal(AuditText.NoRevision, AuditCommand.ScopeFromHeader("commit", _box.Existing).Error);
+        Assert.Equal(AuditText.NoRevision, AuditCommand.ScopeFromHeader("commit ..x", _box.Existing).Error);
+        Assert.Equal(AuditText.ThreeDots, AuditCommand.ScopeFromHeader("commit a...b", _box.Existing).Error);
+    }
+
+    [Fact]
+    public void Complete_OffersCommit_ThenTheCommitsAlone()
+    {
+        int asked = 0;
+        IReadOnlyList<CompletionItem> Reports() => [];
+        IReadOnlyList<string> Folders(string prefix) => ["src/"];
+        IReadOnlyList<CompletionItem> Commits()
+        {
+            asked++;
+            return [new("1a2b3c4", "the newest"), new("5e6f7a8", "the one before")];
+        }
+
+        Assert.Contains(AuditCommand.Complete("com", Reports, Folders, Commits), i => i.Text == "commit" && i.Note == AuditText.CommitNote);
+        Assert.Equal(0, asked);
+        Assert.Equal(["commit 1a2b3c4", "commit 5e6f7a8"], AuditCommand.Complete("commit ", Reports, Folders, Commits).Select(i => i.Text));
+        Assert.Equal(["security commit 1a2b3c4"], AuditCommand.Complete("security commit 1a2", Reports, Folders, Commits).Select(i => i.Text));
+        Assert.Equal(["commit HEAD~3..1a2b3c4", "commit HEAD~3..5e6f7a8"], AuditCommand.Complete("commit HEAD~3..", Reports, Folders, Commits).Select(i => i.Text));
+        Assert.DoesNotContain(AuditCommand.Complete("resume ", Reports, Folders, Commits), i => i.Text == "resume commit");
+        Assert.DoesNotContain(AuditCommand.Complete("diff commit ", Reports, Folders, Commits), i => i.Text == "diff commit 1a2b3c4");
+        Assert.Empty(AuditCommand.Complete("commit ", Reports, Folders));
+    }
 }

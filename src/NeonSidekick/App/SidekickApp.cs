@@ -1276,7 +1276,9 @@ public sealed partial class SidekickApp
                 DirectoryEnabled = ChatScreen.DirectoryOffered(effective, directory),
                 // A Ralph pass headless never asks (no checkpoint): the asking tools go as a tool switched off on /tools does.
                 Disabled = planState.Ralph is { Loop.InPass: true } ? Plans.PlanTools.WithoutAsking(disabled) : disabled,
-                Plan = plan.Turn(presentPlan, gapAsks: false) ?? audit.Turn(presentAudit, askUser: false, effective.CodeAuditPassToolCalls, effective.LlmMaxToolIterations),
+                // A commit scope's gitlib_diff call is named only where the tool is offered (2026-11-25), as GitEnabled offers it.
+                Plan = plan.Turn(presentPlan, gapAsks: false) ?? audit.Turn(presentAudit, askUser: false, effective.CodeAuditPassToolCalls, effective.LlmMaxToolIterations,
+                    effective.LlmOfferTools && effective.GitLibTools && !disabled.Contains(Llm.Tools.GitDiffTool.ToolName)),
                 Pass = planState.Ralph is { Loop.InPass: true } ralphPass ? ralphPass.Turn : null,
                 // A code audit's pass headless (2026-10-18): its read-only tools alone, as the screen's TurnInputs narrows them.
                 OnlyTools = audit.InPass ? Audits.AuditTools.Allowed(effective) : null,

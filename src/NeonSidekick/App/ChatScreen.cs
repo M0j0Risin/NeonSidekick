@@ -846,6 +846,9 @@ internal sealed partial class ChatScreen
 
     // The code audit (2026-10-18, /code-audit): its state, its done pane and the tool a pass reports through (ChatScreen.Audit.cs).
     private readonly AuditSession _audit;
+
+    /// <summary>The recent commits <c>/code-audit commit </c> offers (2026-11-25), cached by folder and HEAD's tip; the PC's and the page's lists share it.</summary>
+    private readonly AuditCommitList _auditCommits;
     private readonly AuditDoneMenu _auditMenu;
     private readonly PresentAuditTool _presentAudit;
     private readonly IReadOnlyList<AIFunction> _askTools;
@@ -1523,6 +1526,7 @@ internal sealed partial class ChatScreen
         _webTools = WebTools(_web, _files, _effective, SolveBotCheckAsync, WebLinkHooksFor(), _browserWindow is null ? null : OpenForTool, OpenYouTubeForToolAsync);
         // The git tools (2026-09-20) sit on the same sandbox: the repository is looked for from a sandbox path, never above the root.
         _git = new GitAccess(_files, time);
+        _auditCommits = new AuditCommitList(() => _git.ResolveCommit("", GitAccess.Head).Sha, count => _git.Log("", GitAccess.Head, count));
         _gitTools = GitTools(_git, _effective);
         // The vault tools (2026-09-22): their own root, the setting Obsidian vault read at every call.
         // The system's bin for a vault whose trashOption is system (2026-10-22, review U6): the screen's, null in a test without one.
@@ -5526,7 +5530,7 @@ internal sealed partial class ChatScreen
         Func<string, IReadOnlyList<CompletionItem>>? Cameras = null, Func<string, IReadOnlyList<CompletionItem>>? Midi = null,
         Func<string, MentionResult>? VideoFiles = null, Func<IReadOnlyList<string>>? SettingsZips = null,
         Func<IReadOnlyList<CompletionItem>>? CustomThemes = null, Func<IReadOnlyList<CompletionItem>>? AdvisorTemplates = null,
-        bool AdvisorPane = false);
+        bool AdvisorPane = false, Func<IReadOnlyList<CompletionItem>>? AuditCommits = null);
 
     /// <summary>The note beside <c>on</c> / <c>off</c> on a switch's list: what the switch is. Pinned.</summary>
     public static string SwitchSubject(SlashCommand command) => command switch
@@ -6309,8 +6313,9 @@ internal sealed partial class ChatScreen
             }
 
             case SlashCommand.CodeAudit:
-                // 2026-10-18: the verbs, the reports after open, fix and resume, the reviewer, scope and focus words, and the folders.
-                return AuditCommand.Complete(argText, sources.Audits, sources.Folders);
+                // 2026-10-18: the verbs, the reports after open, fix and resume, the reviewer, scope and focus words, and the folders; the recent
+                // commits after commit (2026-11-25), offered only while File tools is on.
+                return AuditCommand.Complete(argText, sources.Audits, sources.Folders, sources.AuditCommits);
 
             case SlashCommand.Video:
                 // The verbs while one is being typed (2026-11-12); a path otherwise, through ArgumentPaths.
@@ -6840,6 +6845,7 @@ internal sealed partial class ChatScreen
             Tasks: TaskChoices,
             Ad: AdChoices,
             Audits: AuditChoices,
+            AuditCommits: _effective().FileTools ? AuditCommitChoices : null,
             Monitor: MonitorChoices,
             PlanState: PlanCompletionNow(web: false),
             EditPlans: EditPlanChoices,
@@ -8597,10 +8603,11 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The turn's audit part while a pass is under way (2026-10-18, <see cref="AuditSession.Turn"/>), else null: its ask wording only where <c>ask_user</c>
-    /// is really offered (<see cref="AuditMayAsk"/>, 2026-10-22).
+    /// is really offered (<see cref="AuditMayAsk"/>, 2026-10-22), and a commit scope's <c>gitlib_diff</c> call only where that tool is (<see cref="AuditMayDiff"/>,
+    /// 2026-11-25).
     /// </summary>
     private PlanTurn? AuditTurn(AppSettingsData effective, IReadOnlySet<string>? disabled = null) =>
-        _audit.Turn(_presentAudit, AuditMayAsk(effective, disabled), effective.CodeAuditPassToolCalls, effective.LlmMaxToolIterations);   // the admin families (2026-10-15, the admin-tools plan): ChatScreen.Admin.cs
+        _audit.Turn(_presentAudit, AuditMayAsk(effective, disabled), effective.CodeAuditPassToolCalls, effective.LlmMaxToolIterations, AuditMayDiff(effective, disabled));   // the admin families (2026-10-15, the admin-tools plan): ChatScreen.Admin.cs
 
     /// <summary>
     /// <paramref name="tools"/> less every one whose name is in <paramref name="disabled"/> (the

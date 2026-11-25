@@ -296,4 +296,39 @@ public partial class SidekickAppTests
         Assert.Contains("[error] " + AuditText.PlanningError, output);
         Assert.Single(_chat.Requests);
     }
+
+    [Fact]
+    public async Task Headless_CodeAudit_ACommitScope_ItsNoticeAndDiffCall_AndOnResumeTheFilesChangedSince()
+    {
+        // 2026-11-25, /code-audit commit: the notice after the start's, the directive's gitlib_diff call with GitLib tools on, and after an edit
+        // the resume's notice names the file changed since.
+        ServerOn1234("llama");
+        HeadlessAuditFiles();
+        _settings.Update(d => { d.CodeAuditPasses = 1; d.GitLibTools = true; });
+        string file = Path.Combine(HeadlessAuditRoot, "src", "a.cs");
+        GitAccessTests.Init(HeadlessAuditRoot);
+        string sha = GitAccessTests.CommitFile(HeadlessAuditRoot, "src/a.cs", File.ReadAllText(file), "first");
+        _chat.Enqueue(FakeChatClient.Call("r1", ReadFileTool.ToolName, new Dictionary<string, object?> { ["path"] = "src/a.cs" }));
+        _chat.Enqueue(HeadlessAuditCall("a1", "{\"findings\":[{\"severity\":\"high\",\"dimension\":\"security\",\"file\":\"src/a.cs\",\"line\":3,\"title\":\"SQL built from input\",\"detail\":\"Joined.\"}]}"));
+        _chat.EnqueueText("Pass 1.");
+        _chat.Enqueue(HeadlessAuditCall("a2", "{\"checked\":[\"the rest\"]}"));
+        _chat.EnqueueText("Pass 2.");
+        _chat.BeforeUpdateOf = (request, update, _) =>
+        {
+            if (request == 2)
+            {
+                File.AppendAllText(file, "// edited after the commit\n");
+            }
+
+            return Task.CompletedTask;
+        };
+
+        string output = await Headless("/code-audit commit HEAD\n/code-audit resume\n");
+
+        string shortSha = sha[..NeonSidekick.Git.GitAccess.ShortShaLength];
+        Assert.Contains($"[notice] {AuditText.Glyph} HEAD is {shortSha}.", output);
+        Assert.Contains($"gitlib_diff with ref={sha} shows exactly what it changed.", _chat.Requests[0][0].Text);
+        Assert.Contains($"[notice] {AuditText.Glyph} 1 of the files has changed since {shortSha}", output);
+        Assert.Contains("- These files changed after it (1 file): ", _chat.Requests[3][0].Text);
+    }
 }

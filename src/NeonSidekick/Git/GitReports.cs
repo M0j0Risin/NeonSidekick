@@ -162,6 +162,15 @@ public sealed record GitMergeBaseReport(GitOutcome Outcome, string Detail, strin
     public static GitMergeBaseReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, null, null);
 }
 
+/// <summary>
+/// The commit a revision names (2026-11-25, <c>/code-audit commit</c>, <see cref="GitAccess.ResolveCommit"/>): its full sha, so an audit is pinned
+/// to it and a resume never re-reads <c>HEAD~3</c>; null when refused.
+/// </summary>
+public sealed record GitCommitIdReport(GitOutcome Outcome, string Detail, string? Sha)
+{
+    public static GitCommitIdReport Refused(GitOutcome outcome, string detail = "") => new(outcome, detail, null);
+}
+
 /// <summary>The branches and tags (<c>gitlib_branch list</c>): the local branches, the remote-tracking ones, the tags, each capped.</summary>
 public sealed record GitRefsReport(GitOutcome Outcome, string Detail, string? Current, bool Detached, IReadOnlyList<GitRef> Local, IReadOnlyList<GitRef> Remote, IReadOnlyList<GitRef> Tags, bool Truncated)
 {

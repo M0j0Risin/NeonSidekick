@@ -20,15 +20,25 @@ public enum AuditScopeKind
 
     /// <summary>The branch's commits since it left its base (merge-base..HEAD).</summary>
     Branch,
+
+    /// <summary>One commit, or a range, on the checked-out branch, pinned to shas at the start (2026-11-25, <c>/code-audit commit</c>).</summary>
+    Commits,
 }
 
-/// <summary>A scope as the line asked for it: its kind, the paths named (<see cref="AuditPath"/> form) and a branch's base when one was named.</summary>
-public sealed record AuditScopeRequest(AuditScopeKind Kind, IReadOnlyList<string> Paths, string? Base = null);
+/// <summary>
+/// A scope as the line asked for it: its kind, the paths named (<see cref="AuditPath"/> form) and a branch's base when one was named; since
+/// 2026-11-25 a commit scope's revision as typed (<c>HEAD~1</c>, <c>v1..main</c>), <paramref name="Pinned"/> when it came from a report's header
+/// (full shas), so one the repository lost is said as gone rather than unknown.
+/// </summary>
+public sealed record AuditScopeRequest(AuditScopeKind Kind, IReadOnlyList<string> Paths, string? Base = null, string? Revision = null, bool Pinned = false);
 
 /// <summary>
 /// A code audit's scope, resolved once at the start (2026-10-18): the kind, the paths named, a branch's base, the files to read (at most
 /// <see cref="AuditText.MaxScopeFiles"/>, sorted, the one path form) and how many more there were, the files a git change deletes, what the
-/// exclusions left out (secret-looking, binary, vendored or generated), and whether the walk was cut by its budget.
+/// exclusions left out (secret-looking, binary, vendored or generated), and whether the walk was cut by its budget. A commit scope's
+/// (2026-11-25): its pinned full shas (<paramref name="From"/> null for one commit, the merge base when <paramref name="FromMergeBase"/>), the
+/// scoped files changed after <paramref name="To"/> (<paramref name="ChangedSinceCut"/> when that diff was cut), the files it changed that are
+/// gone since, and the revision as typed, for <see cref="AuditText.CommitsNotice"/>.
 /// </summary>
 public sealed record AuditScope(
     AuditScopeKind Kind,
@@ -40,31 +50,52 @@ public sealed record AuditScope(
     int Secret,
     int Binary,
     int Vendored,
-    bool Cut = false)
+    bool Cut = false,
+    string? From = null,
+    string? To = null,
+    bool FromMergeBase = false,
+    IReadOnlyList<string>? ChangedSince = null,
+    bool ChangedSinceCut = false,
+    int GoneSince = 0,
+    string? Revision = null)
 {
-    /// <summary>How the notices and the pass message name it: a path, <c>diff</c>, <c>staged</c>, <c>branch main..HEAD</c>, <c>the working directory</c>.</summary>
+    /// <summary>The scoped files changed after the commits; empty for every other scope.</summary>
+    public IReadOnlyList<string> ChangedSince { get; init; } = ChangedSince ?? [];
+
+    /// <summary>
+    /// How the notices and the pass message name it: a path, <c>diff</c>, <c>staged</c>, <c>branch main..HEAD</c>, <c>commit 1a2b3c4</c>,
+    /// <c>commits 1a2b3c4..5e6f7a8</c>, <c>the working directory</c>. A commit scope's is its shas, never the typed revision (2026-11-25): it is the
+    /// report's title, and the Web UI's markdown reads <c>~x~</c> and <c>^x^</c> as sub- and superscript; it also stays the same on a resume.
+    /// </summary>
     public string Label => Kind switch
     {
         AuditScopeKind.Tree => "the working directory",
         AuditScopeKind.Paths => string.Join(", ", Paths),
         AuditScopeKind.Diff => Narrowed(AuditText.DiffWord),
         AuditScopeKind.Staged => Narrowed(AuditText.StagedWord),
+        AuditScopeKind.Commits => Narrowed(From is { } from
+            ? "commits " + AuditText.ShortSha(from) + AuditText.RangeDots + AuditText.ShortSha(To ?? "")
+            : AuditText.CommitWord + " " + AuditText.ShortSha(To ?? "")),
         _ => Narrowed($"{AuditText.BranchWord} {Base}..HEAD"),
     };
 
-    /// <summary>What the report's name is made of: <c>tree</c>, the paths, <c>diff</c>, <c>staged</c>, <c>branch main</c>.</summary>
+    /// <summary>What the report's name is made of: <c>tree</c>, the paths, <c>diff</c>, <c>staged</c>, <c>branch main</c>, <c>commit 1a2b3c4</c>, <c>commits 1a2b3c4 5e6f7a8</c>.</summary>
     public string NameLabel => Kind switch
     {
         AuditScopeKind.Tree => "tree",
         AuditScopeKind.Paths => string.Join(" ", Paths),
         AuditScopeKind.Diff => AuditText.DiffWord,
         AuditScopeKind.Staged => AuditText.StagedWord,
+        AuditScopeKind.Commits => From is { } from
+            ? "commits " + AuditText.ShortSha(from) + " " + AuditText.ShortSha(To ?? "")
+            : AuditText.CommitWord + " " + AuditText.ShortSha(To ?? ""),
         _ => AuditText.BranchWord + " " + Base,
     };
 
     /// <summary>
     /// The scope as the report's header keeps it, the words <c>/code-audit</c> takes (a blank-holding path quoted), so <c>resume</c> reads it
-    /// back through the same splitter; empty for the whole tree.
+    /// back through the same splitter; empty for the whole tree. A commit scope keeps its full shas (2026-11-25): a resume never re-reads
+    /// <c>HEAD~3</c>, and a full sha never comes back ambiguous.
     /// </summary>
     public string Words => string.Join(' ', Kind switch
     {
@@ -72,6 +103,7 @@ public sealed record AuditScope(
         AuditScopeKind.Paths => Paths.Select(AuditCommand.PathWord),
         AuditScopeKind.Diff => [AuditText.DiffWord, .. Paths.Select(AuditCommand.PathWord)],
         AuditScopeKind.Staged => [AuditText.StagedWord, .. Paths.Select(AuditCommand.PathWord)],
+        AuditScopeKind.Commits => [AuditText.CommitWord, From is { } from ? from + AuditText.RangeDots + To : To ?? "", .. Paths.Select(AuditCommand.PathWord)],
         _ => [AuditText.BranchWord, Base ?? "", .. Paths.Select(AuditCommand.PathWord)],
     });
 
@@ -79,7 +111,7 @@ public sealed record AuditScope(
     public string Skipped => AuditText.SkippedText(Secret, Binary, Vendored);
 
     /// <summary>A git change rather than files on disk.</summary>
-    public bool IsGit => Kind is AuditScopeKind.Diff or AuditScopeKind.Staged or AuditScopeKind.Branch;
+    public bool IsGit => Kind is AuditScopeKind.Diff or AuditScopeKind.Staged or AuditScopeKind.Branch or AuditScopeKind.Commits;
 
     private string Narrowed(string word) => Paths.Count == 0 ? word : word + " of " + string.Join(", ", Paths);
 }
@@ -90,7 +122,8 @@ public sealed record AuditScopeResult(AuditScope? Scope, string? Error);
 /// <summary>
 /// Resolving a code audit's scope (2026-10-18). Tree and path scopes: inside a repository the index's files and the untracked ones
 /// (<see cref="GitAccess.TrackedFiles"/>), elsewhere a walk (<see cref="WorkingDirectory.ListFiles"/>) that never enters <see cref="WalkSkips"/>;
-/// git scopes through <see cref="GitAccess.Diff"/> (and <see cref="GitAccess.MergeBase"/> for a branch). Every list then loses, in this order,
+/// git scopes through <see cref="GitAccess.Diff"/> (and <see cref="GitAccess.MergeBase"/> for a branch and, since 2026-11-25, a commit range,
+/// whose sides <see cref="GitAccess.ResolveCommit"/> pins). Every list then loses, in this order,
 /// <c>.neon/</c>, the secret-looking files (<see cref="SecretPatterns"/>), the vendored and generated ones (<see cref="SkippedPatterns"/>, judged
 /// on the part of the path below the named path holding it, so a path named through one is audited, <see cref="Vendored"/>) and the binary ones, before the <see cref="AuditText.MaxScopeFiles"/> cut; past the cut the rest is counted
 /// by name alone, never opened. The repository is found by <see cref="GitAccess.Locate"/>, never <c>Repository.Discover</c>.
@@ -255,7 +288,18 @@ public static class AuditScopes
 
         string? @base = request.Base;
         string? from = null;
-        if (request.Kind == AuditScopeKind.Branch)
+        Pinned? pinned = null;
+        if (request.Kind == AuditScopeKind.Commits)
+        {
+            var resolved = PinCommits(git, at, request);
+            if (resolved.Error is { } error)
+            {
+                return new AuditScopeResult(null, error);
+            }
+
+            pinned = resolved.Commits;
+        }
+        else if (request.Kind == AuditScopeKind.Branch)
         {
             var refs = git.Refs(at);
             if (refs.Outcome != GitOutcome.Ok)
@@ -300,6 +344,12 @@ public static class AuditScopes
             {
                 AuditScopeKind.Diff => new[] { git.DiffPaths(new GitDiffRequest(GitDiffKind.Unstaged, path), cancellationToken), git.DiffPaths(new GitDiffRequest(GitDiffKind.Staged, path), cancellationToken) },
                 AuditScopeKind.Staged => new[] { git.DiffPaths(new GitDiffRequest(GitDiffKind.Staged, path), cancellationToken) },
+                AuditScopeKind.Commits => new[]
+                {
+                    pinned!.From is { } start
+                        ? git.DiffPaths(new GitDiffRequest(GitDiffKind.Range, path, From: start, To: pinned.To), cancellationToken)
+                        : git.DiffPaths(new GitDiffRequest(GitDiffKind.Commit, path, Reference: pinned.To), cancellationToken),
+                },
                 _ => new[] { git.DiffPaths(new GitDiffRequest(GitDiffKind.Range, path, From: from, To: GitAccess.Head), cancellationToken) },
             };
             foreach (var report in reports)
@@ -329,6 +379,11 @@ public static class AuditScopes
         var kept = new HashSet<string>(changed, AuditPath.Comparer);
         var gone = deleted.Where(d => !kept.Contains(d)).Distinct(AuditPath.Comparer).Where(d => !AuditPath.InAppFolder(d) && !LooksSecret(d) && !Vendored(d, request.Paths)).ToList();
         var scope = Filter(files, request with { Base = @base }, changed, gone, cut, cancellationToken);
+        if (pinned is not null)
+        {
+            scope = scope with { From = pinned.From, To = pinned.To, FromMergeBase = pinned.FromMergeBase };
+        }
+
         if (scope.Files.Count == 0 && scope.Deleted.Count == 0)
         {
             string why = changed.Count + deleted.Count == 0
@@ -336,13 +391,168 @@ public static class AuditScopes
                 {
                     AuditScopeKind.Diff => AuditText.CleanTree,
                     AuditScopeKind.Staged => AuditText.NothingStaged,
+                    AuditScopeKind.Commits => AuditText.CommitTouchesNothing(scope.Label),
                     _ => AuditText.NoCommits(@base!, GitAccess.Head),
                 }
-                : AuditText.NoFilesLeft(scope.Label, scope.Skipped);
+                // Every file gone since, and nothing left out for another reason (2026-11-25): said as such, not "no text file".
+                : request.Kind == AuditScopeKind.Commits && scope.GoneSince > 0 && scope.Skipped.Length == 0
+                    ? AuditText.AllGoneSince(scope.Label)
+                    : AuditText.NoFilesLeft(scope.Label, scope.Skipped);
             return new AuditScopeResult(null, AuditText.NothingToAudit(why));
         }
 
+        if (pinned is not null)
+        {
+            var since = ChangedSince(git, request.Paths, pinned.To, scope.Files, cancellationToken);
+            if (since.Error is { } error)
+            {
+                return new AuditScopeResult(null, error);
+            }
+
+            scope = scope with { ChangedSince = since.Files, ChangedSinceCut = since.Cut };
+        }
+
         return new AuditScopeResult(scope, null);
+    }
+
+    /// <summary>A commit scope's pinned shas: <see cref="From"/> null for one commit, the merge base when <see cref="FromMergeBase"/>.</summary>
+    private sealed record Pinned(string? From, string To, bool FromMergeBase);
+
+    /// <summary>
+    /// A commit scope's revision pinned to full shas (2026-11-25), or the one sentence that refuses it. The checks run in this order, so each
+    /// case has one message: each side resolves; a range's sides differ (<see cref="AuditText.NoCommits"/>); its end, or the one commit, is on
+    /// the checked-out branch (<see cref="AuditText.NotOnBranch"/>, the user's pick); the sides share history; the end isn't behind the start;
+    /// and a start that isn't behind the end is swapped for their merge base (git's <c>a..b</c>: the commits on <c>b</c> not on <c>a</c>).
+    /// </summary>
+    private static (Pinned? Commits, string? Error) PinCommits(GitAccess git, string at, AuditScopeRequest request)
+    {
+        string revision = request.Revision ?? "";
+        var range = AuditText.SplitRange(revision);
+        string left = range?.Left ?? "";
+        string right = range is { } r ? (r.Right.Length == 0 ? GitAccess.Head : r.Right) : revision;
+
+        // An unknown revision typed on the line may be a brief's first word (commit messages are…); a pinned one is a commit the repository lost.
+        string? Refusal(GitCommitIdReport report, string side)
+        {
+            if (report.Outcome == GitOutcome.RefNotFound && request.Pinned)
+            {
+                return AuditText.CommitGone(side);
+            }
+
+            string bare = Bare(GitText.Error(report.Outcome, report.Detail));
+            return report.Outcome == GitOutcome.RefNotFound ? bare + " — " + AuditText.BriefAfterDashes : bare;
+        }
+
+        string? from = null;
+        if (range is not null)
+        {
+            var start = git.ResolveCommit(at, left);
+            if (start.Outcome != GitOutcome.Ok)
+            {
+                return (null, Refusal(start, left));
+            }
+
+            from = start.Sha;
+        }
+
+        var end = git.ResolveCommit(at, right);
+        if (end.Outcome != GitOutcome.Ok)
+        {
+            return (null, Refusal(end, right));
+        }
+
+        string to = end.Sha!;
+        string Typed(string side) => request.Pinned ? AuditText.ShortSha(side) : side;
+        if (from is not null && string.Equals(from, to, StringComparison.Ordinal))
+        {
+            return (null, AuditText.NothingToAudit(AuditText.NoCommits(Typed(left), Typed(right))));
+        }
+
+        // On the checked-out branch: the end is HEAD or behind it.
+        var onBranch = git.MergeBase(at, to, GitAccess.Head);
+        if (onBranch.Outcome != GitOutcome.Ok)
+        {
+            return (null, Bare(GitText.Error(onBranch.Outcome, onBranch.Detail)));
+        }
+
+        if (!string.Equals(onBranch.Sha, to, StringComparison.Ordinal))
+        {
+            string named = Typed(right);
+            string shown = string.Equals(AuditText.ShortSha(to), named, StringComparison.OrdinalIgnoreCase) || to.StartsWith(named, StringComparison.OrdinalIgnoreCase)
+                ? named
+                : $"{named} ({AuditText.ShortSha(to)})";
+            var refs = git.Refs(at);
+            string branch = refs.Outcome == GitOutcome.Ok && refs.Current is { } current ? current : AuditText.ShortSha(onBranch.Head ?? "");
+            return (null, AuditText.NotOnBranch(shown, branch));
+        }
+
+        if (from is null)
+        {
+            return (new Pinned(null, to, false), null);
+        }
+
+        var merge = git.MergeBase(at, from, to);
+        if (merge.Outcome != GitOutcome.Ok)
+        {
+            return (null, Bare(GitText.Error(merge.Outcome, merge.Detail)));
+        }
+
+        if (merge.Sha is null)
+        {
+            return (null, AuditText.NoSharedHistory(Typed(left), Typed(right)));
+        }
+
+        if (string.Equals(merge.Sha, to, StringComparison.Ordinal))
+        {
+            return (null, AuditText.RangeBackwards(Typed(left), Typed(right)));
+        }
+
+        bool swapped = !string.Equals(merge.Sha, from, StringComparison.Ordinal);
+        return (new Pinned(merge.Sha, to, swapped), null);
+    }
+
+    /// <summary>
+    /// The scope's files that differ between <paramref name="to"/> and the working tree (2026-11-25): the commits since, then the unstaged and
+    /// staged changes, per named path, under the token; cut when a diff was.
+    /// </summary>
+    private static (IReadOnlyList<string> Files, bool Cut, string? Error) ChangedSince(
+        GitAccess git, IReadOnlyList<string> paths, string to, IReadOnlyList<string> scoped, CancellationToken cancellationToken)
+    {
+        var inScope = new HashSet<string>(scoped, AuditPath.Comparer);
+        var found = new HashSet<string>(AuditPath.Comparer);
+        bool cut = false;
+        foreach (string path in paths.Count > 0 ? paths : [""])
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var reports = new List<GitDiffReport>(3);
+            var head = git.ResolveCommit(path, GitAccess.Head);
+            if (head.Outcome == GitOutcome.Ok && !string.Equals(head.Sha, to, StringComparison.Ordinal))
+            {
+                reports.Add(git.DiffPaths(new GitDiffRequest(GitDiffKind.Range, path, From: to, To: GitAccess.Head), cancellationToken));
+            }
+
+            reports.Add(git.DiffPaths(new GitDiffRequest(GitDiffKind.Unstaged, path), cancellationToken));
+            reports.Add(git.DiffPaths(new GitDiffRequest(GitDiffKind.Staged, path), cancellationToken));
+            foreach (var report in reports)
+            {
+                if (report.Outcome != GitOutcome.Ok)
+                {
+                    return ([], false, Bare(GitText.Error(report.Outcome, report.Detail)));
+                }
+
+                cut |= report.FilesTruncated;
+                foreach (var change in report.Files)
+                {
+                    string file = AuditPath.FromRelative(change.Path);
+                    if (inScope.Contains(file))
+                    {
+                        found.Add(file);
+                    }
+                }
+            }
+        }
+
+        return (found.OrderBy(f => f, StringComparer.Ordinal).ToList(), cut, null);
     }
 
     /// <summary>
@@ -351,7 +561,7 @@ public static class AuditScopes
     /// </summary>
     private static AuditScope Filter(WorkingDirectory files, AuditScopeRequest request, IEnumerable<string> candidates, IReadOnlyList<string> deleted, bool cut, CancellationToken cancellationToken)
     {
-        int secret = 0, binary = 0, vendored = 0, more = 0;
+        int secret = 0, binary = 0, vendored = 0, more = 0, gone = 0;
         var kept = new List<string>();
         foreach (string path in candidates.Distinct(AuditPath.Comparer).OrderBy(p => p, StringComparer.Ordinal))
         {
@@ -381,6 +591,7 @@ public static class AuditScopes
 
             if (files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || !File.Exists(full))
             {
+                gone++;
                 continue;
             }
 
@@ -393,7 +604,9 @@ public static class AuditScopes
             kept.Add(path);
         }
 
-        return new AuditScope(request.Kind, request.Paths, request.Base, kept, more, deleted, secret, binary, vendored, cut);
+        // A commit scope counts the files it changed that are gone since (2026-11-25); the other kinds say nothing of them, as before.
+        return new AuditScope(request.Kind, request.Paths, request.Base, kept, more, deleted, secret, binary, vendored, cut,
+            GoneSince: request.Kind == AuditScopeKind.Commits ? gone : 0, Revision: request.Revision);
     }
 
     /// <summary>A tool sentence without its <c>Error: </c> lead, for the screen's own error line.</summary>

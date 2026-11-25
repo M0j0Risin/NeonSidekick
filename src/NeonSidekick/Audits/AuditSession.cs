@@ -62,7 +62,7 @@ public sealed class AuditSession
     private WorkingDirectory? _pinned;
 
     /// <summary>What <see cref="Turn"/> last built its directive from, and that state (see <see cref="Turn"/>).</summary>
-    private (PlanGapLoop Loop, int Pass, int Version, bool AskUser, int ToolBudget, int MaxToolIterations)? _turnKey;
+    private (PlanGapLoop Loop, int Pass, int Version, bool AskUser, int ToolBudget, int MaxToolIterations, bool GitDiff)? _turnKey;
 
     private AuditDirectiveState? _turnState;
 
@@ -512,13 +512,14 @@ public sealed class AuditSession
     /// <summary>
     /// The turn's audit part while a pass is under way, else null: the directive (with the advisors and web lines through <c>Compose</c>) and
     /// <paramref name="tool"/>, <c>present_audit</c>. <paramref name="askUser"/> is <c>Code audit ask user</c>; <paramref name="toolBudget"/>
-    /// <c>Code audit pass tool calls</c>, named against <paramref name="maxToolIterations"/>.
+    /// <c>Code audit pass tool calls</c>, named against <paramref name="maxToolIterations"/>. <paramref name="gitDiff"/> (2026-11-25): <c>gitlib_diff</c>
+    /// is offered this turn, so a commit scope's directive may name the call that shows its change (<see cref="AuditText.CommitChangeLine"/>).
     /// <para>2026-10-19, the review: built afresh on every call it parsed the report, read the sidecar and checked every scope file (up to
     /// 5,000) each time the turn's inputs were built — every advisor call and <c>/sys</c> too. Now the directive's state is built once per pass
     /// and kept until <see cref="Changed"/> (a recorded <c>present_audit</c> call, a start or a stop) or a setting it names changes; an edit
     /// made in an editor mid-pass reaches the next pass, as the files read mid-pass reach its unread list.</para>
     /// </summary>
-    public PlanTurn? Turn(AIFunction tool, bool askUser, int toolBudget, int maxToolIterations)
+    public PlanTurn? Turn(AIFunction tool, bool askUser, int toolBudget, int maxToolIterations, bool gitDiff = false)
     {
         ArgumentNullException.ThrowIfNull(tool);
         if (!Reviewing || Running is not { } loop || Path is not { } path || Scope is not { } scope)
@@ -526,7 +527,7 @@ public sealed class AuditSession
             return null;
         }
 
-        var key = (loop, loop.Pass, _version, askUser, toolBudget, maxToolIterations);
+        var key = (loop, loop.Pass, _version, askUser, toolBudget, maxToolIterations, gitDiff);
         if (_turnState is { } kept && _turnKey == key)
         {
             return new PlanTurn(AuditText.Directive(kept), tool) { Compose = (advisors, research) => AuditText.Directive(kept, advisors, research) };
@@ -539,7 +540,8 @@ public sealed class AuditSession
         var state = new AuditDirectiveState(path, scope.Label, scope.Files, scope.MoreFiles, scope.Skipped, coverage.Unread,
             AuditFocus.PassFocus(Focus, loop.Focus + 1), Brief, open, report?.SettledCount ?? 0,
             loop.Pass, loop.Limit, loop.Reviewer, passReviewer, loop.CleanStreak, loop.CleanPasses, loop.Confirmation,
-            askUser, toolBudget, maxToolIterations, scope.Deleted.Count > 0, scope.IsGit, scope.Cut, loop.LastLight);
+            askUser, toolBudget, maxToolIterations, scope.Deleted.Count > 0, scope.IsGit, scope.Cut, loop.LastLight,
+            AuditText.CommitChangeLine(scope, gitDiff), scope.ChangedSince);
         _turnKey = key;
         _turnState = state;
         return new PlanTurn(AuditText.Directive(state), tool) { Compose = (advisors, research) => AuditText.Directive(state, advisors, research) };

@@ -49,6 +49,12 @@ internal sealed partial class ChatScreen
         AuditFiles.List(_files, _audit.Path).Select(r => new CompletionItem(r.Name, AuditText.CompletionNote(r))).ToList();
 
     /// <summary>
+    /// The <c>/code-audit commit </c> completion list (2026-11-25): the last commits on HEAD in the working folder's repository, short sha and
+    /// subject, through <see cref="AuditCommitList"/>'s cache (one tip read while nothing changed). On the screen's task only.
+    /// </summary>
+    private IReadOnlyList<CompletionItem> AuditCommitChoices() => _auditCommits.For(_files.Root);
+
+    /// <summary>
     /// Why an audit cannot start now, or null (2026-10-18): plan mode on, tools off, or a turn that would not offer <c>read_file</c> (File
     /// tools off, or <c>read_file</c> off on <c>/tools</c>) — a pass could verify nothing. The model is checked after these, by
     /// <see cref="ModelOrSayAsync"/>, so a refusal never waits on a reload first (2026-11-16, the review's #11).
@@ -162,6 +168,11 @@ internal sealed partial class ChatScreen
         MarkAuditBaseline();
         images = AuditPictures(images);
         _transcript.Notice(AuditText.StartedNotice(scope.Label, scope.Files.Count, scope.MoreFiles, scope.Skipped, focus, loop.Limit, path, scope.Cut));
+        // A commit scope's own notice (2026-11-25): the typed revision against its shas, the merge base, the files changed or gone since.
+        if (AuditText.CommitsNotice(scope) is { } commits)
+        {
+            _transcript.Notice(commits);
+        }
         DiagnosticLog.Info(AppCategory, $"code audit: started {path}, {scope.Files.Count} files, focus {AuditFocus.Label(focus)}, reviewer {PlanText.ReviewerWord(reviewer)}");
         return await SendPassAsync(BeginAuditPass(loop), images, cancellationToken).ConfigureAwait(false);
     }
@@ -309,6 +320,11 @@ internal sealed partial class ChatScreen
         if (said)
         {
             _transcript.Notice(AuditText.ResumedNotice(System.IO.Path.GetFileNameWithoutExtension(path), newest));
+            // After Fix via plan the fixed files show as changed since (2026-11-25); More passes… continues in place and doesn't repeat it.
+            if (AuditText.CommitsNotice(scope) is { } commits)
+            {
+                _transcript.Notice(commits);
+            }
         }
 
         if (scope.Cut)

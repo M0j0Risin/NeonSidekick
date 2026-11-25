@@ -853,6 +853,16 @@ public sealed class GitAccess
         return new GitMergeBaseReport(GitOutcome.Ok, "", shared?.Sha, repo.Head.Tip?.Sha);
     });
 
+    /// <summary>
+    /// The full sha of the commit <paramref name="reference"/> names (2026-11-25, <c>/code-audit commit</c>): <see cref="TryCommit"/>'s reading (blank
+    /// or <c>HEAD</c> = HEAD's tip, <see cref="GitOutcome.Unborn"/> in an empty repository, a tag peeled, an unknown or ambiguous name refused).
+    /// </summary>
+    public GitCommitIdReport ResolveCommit(string relative, string reference) => Run(relative, GitCommitIdReport.Refused, (repo, location, full) =>
+    {
+        var found = TryCommit(repo, reference, out var commit, out string detail);
+        return found == GitOutcome.Ok ? new GitCommitIdReport(GitOutcome.Ok, "", commit!.Sha) : GitCommitIdReport.Refused(found, detail);
+    });
+
     // ---- writes ----
 
     /// <summary>A branch <paramref name="name"/> at <paramref name="startPoint"/> (blank = HEAD), checked out when <paramref name="switchTo"/>.</summary>

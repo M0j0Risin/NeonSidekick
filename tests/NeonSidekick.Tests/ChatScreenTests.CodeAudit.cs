@@ -619,4 +619,24 @@ public partial class ChatScreenTests
         // A multi-line draft or one holding a paste token is no command (CommandText null), so it is never refused.
         Assert.Null(new SubmittedLine("/code-audit\nmore", "/code-audit\nmore", [], "").CommandText);
     }
+
+    [Fact]
+    public async Task CodeAudit_ACommitScope_SaysItsNotice_AndWithGitLibOff_NamesTheChangeWithoutTheCall()
+    {
+        // 2026-11-25, /code-audit commit: GitLib tools is off by default, so the directive names the change but never a tool the turn lacks.
+        AuditFixture(Line("/code-audit commit HEAD"), Key(Keys.Escape), Line("/exit"));
+        _settings.Update(d => { d.CodeAuditPasses = 1; d.GitLibTools = false; });   // the fixture opts in
+        GitAccessTests.Init(AuditRoot);
+        string sha = GitAccessTests.CommitFile(AuditRoot, "src/a.cs", AuditSource, "first");
+        _chat.Enqueue(ReadCall("r1"));
+        _chat.Enqueue(FindingCall("a1"));
+        _chat.EnqueueText("Pass 1.");
+
+        string output = await RunAsync();
+
+        string shortSha = sha[..NeonSidekick.Git.GitAccess.ShortShaLength];
+        Assert.Contains($"{AuditText.Glyph} HEAD is {shortSha}.", output);
+        Assert.Contains($"- The change is commit {shortSha}.\n", _chat.Requests[0][0].Text);
+        Assert.DoesNotContain("gitlib_diff with", _chat.Requests[0][0].Text);
+    }
 }

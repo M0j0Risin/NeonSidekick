@@ -451,7 +451,9 @@ internal sealed partial class ChatScreen
     /// not run anyway (sessions, themes, servers, the screen's targets, processes, any drive's folders) and the embedded models. Since 2026-10-27
     /// (the user's call: the page's <c>/vault &lt;path&gt;</c> already lists a folder's contents, so the names reveal nothing new) the vault's
     /// folders too, its root read here once and nothing while <i>Obsidian tools</i> is off; the saved prompts and links read here once (the
-    /// links' <c>unsave &lt;n&gt;</c> alone, since a number opens a window on the PC); the stopwatches. Nothing here refreshes, probes or writes.
+    /// links' <c>unsave &lt;n&gt;</c> alone, since a number opens a window on the PC); the stopwatches. Since 2026-11-25 the recent commits for
+    /// <c>/code-audit commit </c> (the page may run <c>/code-audit</c>), read here once, eagerly, so libgit2 is never reached from a Kestrel thread,
+    /// and only while <i>File tools</i> is on, as the paths are. Nothing here refreshes, probes or writes.
     /// </summary>
     private WebCompletionSnapshot WebCompletionsNow()
     {
@@ -478,6 +480,7 @@ internal sealed partial class ChatScreen
         var workflowList = WorkflowChoices();
         var plans = PlanChoices();
         var audits = AuditChoices();
+        IReadOnlyList<CompletionItem> commits = files ? AuditCommitChoices() : [];
         var ha = _ha.Last;
         var docker = _docker.Last;
         var printers = _printerNames.Last;
@@ -509,6 +512,7 @@ internal sealed partial class ChatScreen
             Ad: AdChoices,
             Monitor: MonitorChoices,
             Audits: () => audits,
+            AuditCommits: () => commits,
             PlanState: PlanCompletionNow(web: true),   // 2026-10-20: only the /plan verbs that run, and no edit (the page refuses it)
             Stopwatches: stopwatches,
             Prompts: argText => PromptsCommand.Complete(argText, () => promptList),

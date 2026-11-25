@@ -88,10 +88,75 @@ public sealed class GitAccessTests : IDisposable
         File.WriteAllText(full, content);
         using var repo = new Repository(folder);
         Commands.Stage(repo, relative);
-        // Each commit a minute later than the one before, so a time-sorted log is deterministic.
-        int commit = s_commits.AddOrUpdate(Path.GetFullPath(folder), 1, (_, count) => count + 1);
-        var sig = new Signature("Test User", "test@example.invalid", new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.FromHours(-7)).AddMinutes(commit));
+        var sig = Stamp(folder);
         return repo.Commit(message, sig, sig).Sha;
+    }
+
+    /// <summary>The test signature, each commit a minute later than the one before in its repository, so a time-sorted log is deterministic.</summary>
+    private static Signature Stamp(string folder)
+    {
+        int commit = s_commits.AddOrUpdate(Path.GetFullPath(folder), 1, (_, count) => count + 1);
+        return new Signature("Test User", "test@example.invalid", new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.FromHours(-7)).AddMinutes(commit));
+    }
+
+    /// <summary>
+    /// A two-parent commit of HEAD and <paramref name="other"/> (2026-11-25, <c>/code-audit commit</c>'s tests), with <paramref name="other"/>'s tree
+    /// overlaid on HEAD's (no merge machinery): HEAD's branch moved to it. The sha.
+    /// </summary>
+    internal static string CommitMerge(string folder, string other, string message)
+    {
+        using var repo = new Repository(folder);
+        var head = repo.Head.Tip;
+        var theirs = repo.Lookup<Commit>(other);
+        var tree = new TreeDefinition();
+        foreach (var entry in head.Tree)
+        {
+            tree.Add(entry.Name, entry);
+        }
+
+        foreach (var entry in theirs.Tree)
+        {
+            tree.Add(entry.Name, entry);
+        }
+
+        var sig = Stamp(folder);
+        var merged = repo.ObjectDatabase.CreateCommit(sig, sig, message, repo.ObjectDatabase.CreateTree(tree), [head, theirs], prettifyMessage: true);
+        repo.Refs.UpdateTarget(repo.Refs[repo.Head.CanonicalName], merged.Id);
+        repo.Reset(ResetMode.Hard, merged);
+        return merged.Sha;
+    }
+
+    /// <summary>HEAD pointed at an unborn branch <paramref name="branch"/> with an empty index and tree (2026-11-25): an orphan, sharing no history.</summary>
+    internal static void StartOrphan(string folder, string branch)
+    {
+        using var repo = new Repository(folder);
+        foreach (var entry in repo.Index.ToList())
+        {
+            File.Delete(Path.Combine(folder, entry.Path));
+            repo.Index.Remove(entry.Path);
+        }
+
+        repo.Index.Write();
+        repo.Refs.UpdateTarget("HEAD", "refs/heads/" + branch);
+    }
+
+    /// <summary>Removes <paramref name="relative"/> and writes <paramref name="other"/> in one commit (2026-11-25), so the commit isn't empty. The sha.</summary>
+    internal static string CommitRemove(string folder, string relative, string other, string message)
+    {
+        File.WriteAllText(Path.Combine(folder, other), "kept " + message);
+        using var repo = new Repository(folder);
+        Commands.Remove(repo, relative);
+        Commands.Stage(repo, other);
+        var sig = Stamp(folder);
+        return repo.Commit(message, sig, sig).Sha;
+    }
+
+    /// <summary>A commit that changes nothing (2026-11-25). The sha.</summary>
+    internal static string CommitEmpty(string folder, string message)
+    {
+        using var repo = new Repository(folder);
+        var sig = Stamp(folder);
+        return repo.Commit(message, sig, sig, new CommitOptions { AllowEmptyCommit = true }).Sha;
     }
 
     private void Write(string relative, string content)
@@ -874,5 +939,33 @@ public sealed class GitAccessTests : IDisposable
         Assert.Equal("Reset hard to main (abc1234)", GitAccess.DiscardedLogLine(null, "main", "abc1234"));
         Assert.Equal("Deleted stash stash@{1} (was abc1234)", GitAccess.DeletedLogLine(GitDeleteKind.Stash, "stash@{1}", "abc1234"));
         Assert.Equal("Popped stash@{0}", GitAccess.StashAppliedLogLine(0, true));
+    }
+
+    // ---- ResolveCommit (2026-11-25, /code-audit commit) ----
+
+    [Fact]
+    public void ResolveCommit_GivesTheFullSha_ForEachKindOfRevision()
+    {
+        Init();
+        string first = CommitFile(_root, "a.txt", "1", "first");
+        string second = CommitFile(_root, "a.txt", "2", "second");
+        Assert.Equal(GitOutcome.Ok, _git.CreateTag("", "v1", first, "release one").Outcome);
+
+        Assert.Equal(second, _git.ResolveCommit("", "HEAD").Sha);
+        Assert.Equal(second, _git.ResolveCommit("", "head").Sha);
+        Assert.Equal(first, _git.ResolveCommit("", "HEAD~1").Sha);
+        Assert.Equal(first, _git.ResolveCommit("", first[..7]).Sha);
+        Assert.Equal(second, _git.ResolveCommit("", "main").Sha);
+        Assert.Equal(first, _git.ResolveCommit("", "v1").Sha);   // the annotated tag peeled to its commit
+        var unknown = _git.ResolveCommit("", "nosuch");
+        Assert.Equal(GitOutcome.RefNotFound, unknown.Outcome);
+        Assert.Null(unknown.Sha);
+    }
+
+    [Fact]
+    public void ResolveCommit_InAnEmptyRepository_IsUnborn()
+    {
+        Init();
+        Assert.Equal(GitOutcome.Unborn, _git.ResolveCommit("", "HEAD").Outcome);
     }
 }

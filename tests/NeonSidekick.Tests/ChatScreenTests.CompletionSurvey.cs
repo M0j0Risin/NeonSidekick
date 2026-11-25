@@ -42,6 +42,16 @@ public partial class ChatScreenTests
     }
 
     [Fact]
+    public void ArgumentItems_CodeAudit_TheCommitsAfterCommit_Alone()
+    {
+        // 2026-11-25, /code-audit commit: the source's commits alone after commit, and none without the source (File tools off).
+        var sources = Sources() with { AuditCommits = () => [new CompletionItem("1a2b3c4", "the newest")] };
+        Assert.Null(ChatScreen.ArgumentPaths("/code-audit", "commit ", sources));
+        Assert.Equal(["commit 1a2b3c4"], Texts(ChatScreen.ArgumentItems("/code-audit", "commit ", sources)));
+        Assert.Empty(ChatScreen.ArgumentItems("/code-audit", "commit ", Sources()));
+    }
+
+    [Fact]
     public void ArgumentPaths_ViewsFlags_AndImaginesPictures()
     {
         var sources = Sources();

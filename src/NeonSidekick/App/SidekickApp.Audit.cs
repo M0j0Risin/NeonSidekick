@@ -241,6 +241,11 @@ public sealed partial class SidekickApp
         if (resuming)
         {
             await HeadlessNoticeLineAsync("[notice] " + AuditText.ResumedNotice(Path.GetFileNameWithoutExtension(path), parsed.Name is null)).ConfigureAwait(false);
+            if (AuditText.CommitsNotice(scope) is { } resumedCommits)
+            {
+                await HeadlessNoticeLineAsync("[notice] " + resumedCommits).ConfigureAwait(false);
+            }
+
             if (scope.Cut)
             {
                 await HeadlessNoticeLineAsync("[notice] " + AuditText.ScopeCutNotice).ConfigureAwait(false);
@@ -255,6 +260,11 @@ public sealed partial class SidekickApp
         if (parsed.Verb == AuditVerb.Start)
         {
             await HeadlessNoticeLineAsync("[notice] " + AuditText.StartedNotice(scope.Label, scope.Files.Count, scope.MoreFiles, scope.Skipped, audit.Focus, loop.Limit, path, scope.Cut)).ConfigureAwait(false);
+            // A commit scope's own notice (2026-11-25), as the screen prints it.
+            if (AuditText.CommitsNotice(scope) is { } commits)
+            {
+                await HeadlessNoticeLineAsync("[notice] " + commits).ConfigureAwait(false);
+            }
         }
 
         if (loop.CleanLowered)

@@ -138,6 +138,12 @@ public sealed class RalphChangesTests : IDisposable
             Assert.NotNull(AuditScopes.Resolve(files, git, new AuditScopeRequest(kind, []), CancellationToken.None).Scope);
         }
 
+        // A commit scope (2026-11-25): its revparse, merge bases and changed-since diffs (HEAD~1's dirty.cs is dirty, so they all run).
+        foreach (string revision in new[] { "HEAD", "HEAD~1", "HEAD~2..HEAD~1" })
+        {
+            Assert.NotNull(AuditScopes.Resolve(files, git, new AuditScopeRequest(AuditScopeKind.Commits, [], Revision: revision), CancellationToken.None).Scope);
+        }
+
         Assert.Equal(fingerprint, GitFolderFingerprint(repo));
     }
 

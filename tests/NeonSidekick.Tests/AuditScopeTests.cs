@@ -304,4 +304,227 @@ public sealed class AuditScopeTests : IDisposable
     [InlineData("environment.cs", false)]
     [InlineData("Auth/Credentials.cs", false)]
     public void LooksSecret(string path, bool expected) => Assert.Equal(expected, AuditScopes.LooksSecret(path));
+
+    // ---- commit <rev> and commit <from>..<to> (2026-11-25) ----
+
+    private AuditScopeResult ResolveCommits(string revision, bool pinned = false, params string[] paths) =>
+        AuditScopes.Resolve(_box.Files, _box.Git, new AuditScopeRequest(AuditScopeKind.Commits, paths, Revision: revision, Pinned: pinned), CancellationToken.None);
+
+    private static string S(string sha) => sha[..GitAccess.ShortShaLength];
+
+    private void Checkout(string what)
+    {
+        using var repo = new Repository(_box.Root);
+        if (repo.Branches[what] is { } branch)
+        {
+            Commands.Checkout(repo, branch);
+        }
+        else
+        {
+            Commands.Checkout(repo, repo.Lookup<Commit>(what));
+        }
+    }
+
+    [Fact]
+    public void Commit_One_AuditsTheFilesItChanged_PinnedToItsSha()
+    {
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "first");
+        string second = GitAccessTests.CommitFile(_box.Root, "b.cs", "b", "second");
+        var scope = ResolveCommits("HEAD").Scope!;
+        Assert.Equal(["b.cs"], scope.Files);
+        Assert.Null(scope.From);
+        Assert.Equal(second, scope.To);
+        Assert.Equal("commit " + S(second), scope.Label);
+        Assert.Equal("commit " + S(second), scope.NameLabel);
+        Assert.Equal("commit " + second, scope.Words);
+        Assert.True(scope.IsGit);
+        Assert.Equal($"{AuditText.Glyph} HEAD is {S(second)}.", AuditText.CommitsNotice(scope));
+        // Typed as its own short sha, the notice has nothing to say.
+        Assert.Null(AuditText.CommitsNotice(ResolveCommits(S(second).ToUpperInvariant()).Scope!));
+    }
+
+    [Fact]
+    public void Commit_TheRootCommit_AuditsEveryFileItHolds()
+    {
+        GitAccessTests.Init(_box.Root);
+        string root = GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "first");
+        GitAccessTests.CommitFile(_box.Root, "b.cs", "b", "second");
+        Assert.Equal(["a.cs"], ResolveCommits(root).Scope!.Files);
+    }
+
+    [Fact]
+    public void Commit_ARange_ItsLabelHoldsShasAlone_AndTheNoticeNamesTheTypedRange()
+    {
+        GitAccessTests.Init(_box.Root);
+        string first = GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "first");
+        GitAccessTests.CommitFile(_box.Root, "b.cs", "b", "second");
+        string third = GitAccessTests.CommitFile(_box.Root, "c.cs", "c", "third");
+        var scope = ResolveCommits("HEAD~2..HEAD").Scope!;
+        Assert.Equal(["b.cs", "c.cs"], scope.Files);
+        Assert.Equal(first, scope.From);
+        Assert.Equal(third, scope.To);
+        Assert.False(scope.FromMergeBase);
+        Assert.Equal($"commits {S(first)}..{S(third)}", scope.Label);
+        Assert.DoesNotContain('~', scope.Label);
+        Assert.Equal($"commits {S(first)} {S(third)}", scope.NameLabel);
+        Assert.Equal($"commit {first}..{third}", scope.Words);
+        Assert.Equal($"{AuditText.Glyph} HEAD~2..HEAD is {S(first)}..{S(third)}.", AuditText.CommitsNotice(scope));
+        Assert.Equal(["b.cs", "c.cs"], ResolveCommits("HEAD~2..").Scope!.Files);
+        var older = ResolveCommits("HEAD~2..HEAD~1").Scope!;
+        Assert.Equal(["b.cs"], older.Files);
+        Assert.DoesNotContain('~', older.Label);
+        Assert.DoesNotContain('^', older.Label);
+        Assert.StartsWith($"{AuditText.Glyph} HEAD~2..HEAD~1 is ", AuditText.CommitsNotice(older));
+    }
+
+    [Fact]
+    public void Commit_ARangeWhoseStartIsNotBehindItsEnd_StartsAtTheMergeBase_AndSaysSo()
+    {
+        GitAccessTests.Init(_box.Root);
+        string fork = GitAccessTests.CommitFile(_box.Root, "base.cs", "b", "first");
+        Assert.Equal(GitOutcome.Ok, _box.Git.CreateBranch("", "feature", "", switchTo: true).Outcome);
+        GitAccessTests.CommitFile(_box.Root, "feature.cs", "f", "on the branch");
+        Checkout("main");
+        GitAccessTests.CommitFile(_box.Root, "main.cs", "m", "on main");
+        var scope = ResolveCommits("feature..main").Scope!;
+        Assert.Equal(["main.cs"], scope.Files);
+        Assert.Equal(fork, scope.From);
+        Assert.True(scope.FromMergeBase);
+        Assert.Contains(AuditText.RangeFromMergeBase("feature", "main", fork) + ".", AuditText.CommitsNotice(scope));
+    }
+
+    [Fact]
+    public void Commit_TheRefusals_EachSayTheirOwnCase()
+    {
+        GitAccessTests.Init(_box.Root);
+        string first = GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "first");
+        string second = GitAccessTests.CommitFile(_box.Root, "b.cs", "b", "second");
+        Assert.Equal(AuditText.NothingToAudit(AuditText.NoCommits("HEAD", "main")), ResolveCommits("HEAD..main").Error);
+        Assert.Equal(AuditText.RangeBackwards("HEAD", "HEAD~1"), ResolveCommits("HEAD..HEAD~1").Error);
+        Assert.Equal("'nosuch' names no commit, branch or tag — " + AuditText.BriefAfterDashes, ResolveCommits("nosuch").Error);
+        // A brief starting with commit took its next word as the revision: the way out is said.
+        var typed = AuditCommand.Parse("commit messages are never checked", _box.Existing);
+        Assert.Null(typed.Error);
+        var asBrief = AuditScopes.Resolve(_box.Files, _box.Git, typed.Scope!, CancellationToken.None);
+        Assert.EndsWith(" — " + AuditText.BriefAfterDashes, asBrief.Error);
+        // A pinned sha the repository lost is gone, not unknown.
+        string lost = new string('0', 39) + "1";
+        Assert.Equal(AuditText.CommitGone(lost), ResolveCommits(lost, pinned: true).Error);
+        // A commit only on another branch, then a detached HEAD at an older commit.
+        Assert.Equal(GitOutcome.Ok, _box.Git.CreateBranch("", "feature", "", switchTo: true).Outcome);
+        string feature = GitAccessTests.CommitFile(_box.Root, "f.cs", "f", "on the branch");
+        Checkout("main");
+        Assert.Equal(AuditText.NotOnBranch($"feature ({S(feature)})", "main"), ResolveCommits("feature").Error);
+        Assert.Equal(AuditText.NotOnBranch($"feature ({S(feature)})", "main"), ResolveCommits("main..feature").Error);
+        Checkout(first);
+        Assert.Equal(AuditText.NotOnBranch($"main ({S(second)})", S(first)), ResolveCommits("main").Error);
+        Assert.Equal(["a.cs"], ResolveCommits(first).Scope!.Files);   // HEAD itself counts
+    }
+
+    [Fact]
+    public void Commit_UnrelatedHistories_ShareNone()
+    {
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "first");
+        GitAccessTests.StartOrphan(_box.Root, "orphan");
+        GitAccessTests.CommitFile(_box.Root, "o.cs", "o", "orphan's first");
+        Assert.Equal(AuditText.NoSharedHistory("main", "HEAD"), ResolveCommits("main..HEAD").Error);
+    }
+
+    [Fact]
+    public void Commit_AMerge_AuditsWhatItBroughtIn_AndAnEmptyCommitIsNothing()
+    {
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, "base.cs", "b", "first");
+        Assert.Equal(GitOutcome.Ok, _box.Git.CreateBranch("", "feature", "", switchTo: true).Outcome);
+        string feature = GitAccessTests.CommitFile(_box.Root, "feature.cs", "f", "on the branch");
+        Checkout("main");
+        GitAccessTests.CommitFile(_box.Root, "main.cs", "m", "on main");
+        GitAccessTests.CommitMerge(_box.Root, feature, "merge feature");
+        Assert.Equal(["feature.cs"], ResolveCommits("HEAD").Scope!.Files);
+        string empty = GitAccessTests.CommitEmpty(_box.Root, "nothing");
+        Assert.Equal(AuditText.NothingToAudit(AuditText.CommitTouchesNothing("commit " + S(empty))), ResolveCommits("HEAD").Error);
+    }
+
+    [Fact]
+    public void Commit_NarrowedByAPath_AndADeletedFileIsDeleted()
+    {
+        GitAccessTests.Init(_box.Root);
+        string first = GitAccessTests.CommitFile(_box.Root, "x.cs", "x", "first");
+        GitAccessTests.CommitFile(_box.Root, "src/a.cs", "a", "second");
+        string third = GitAccessTests.CommitFile(_box.Root, "lib/b.cs", "b", "third");
+        var narrowed = ResolveCommits("HEAD~2..HEAD", false, "src").Scope!;
+        Assert.Equal(["src/a.cs"], narrowed.Files);
+        Assert.Equal($"commits {S(first)}..{S(third)} of src", narrowed.Label);
+        Assert.Equal($"commit {first}..{third} src", narrowed.Words);
+        GitAccessTests.CommitRemove(_box.Root, "x.cs", "y.cs", "remove x");
+        var removed = ResolveCommits("HEAD").Scope!;
+        Assert.Equal(["y.cs"], removed.Files);
+        Assert.Equal(["x.cs"], removed.Deleted);
+    }
+
+    [Fact]
+    public void Commit_FilesChangedSince_AndGoneSince_AreNamed()
+    {
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, "x.cs", "x", "first");
+        GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "second");
+        string third = GitAccessTests.CommitFile(_box.Root, "b.cs", "b", "third");
+        GitAccessTests.CommitFile(_box.Root, "a.cs", "a2", "a later change");
+        _box.Write("b.cs", "b, edited");
+        var scope = ResolveCommits("HEAD~3..HEAD~1").Scope!;
+        Assert.Equal(["a.cs", "b.cs"], scope.Files);
+        Assert.Equal(["a.cs", "b.cs"], scope.ChangedSince);
+        Assert.Contains($"2 of the files have changed since {S(third)}", AuditText.CommitsNotice(scope));
+
+        File.Delete(_box.Full("b.cs"));
+        var gone = ResolveCommits("HEAD~3..HEAD~1").Scope!;
+        Assert.Equal(["a.cs"], gone.Files);
+        Assert.Equal(1, gone.GoneSince);
+        Assert.Contains("1 file they changed is gone since.", AuditText.CommitsNotice(gone));
+        File.Delete(_box.Full("a.cs"));
+        var all = ResolveCommits("HEAD~3..HEAD~1");
+        Assert.Null(all.Scope);
+        Assert.Equal(AuditText.NothingToAudit(AuditText.AllGoneSince(gone.Label)), all.Error);
+    }
+
+    [Fact]
+    public void Commit_TheHeaderHoldsShas_SoAResumeAfterANewCommitAuditsTheSameFiles()
+    {
+        GitAccessTests.Init(_box.Root);
+        GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "first");
+        GitAccessTests.CommitFile(_box.Root, "b.cs", "b", "second");
+        var started = ResolveCommits("HEAD~1..").Scope!;
+        GitAccessTests.CommitFile(_box.Root, "c.cs", "c", "third");
+        var (request, error) = AuditCommand.ScopeFromHeader(started.Words, _box.Existing);
+        Assert.Null(error);
+        Assert.True(request!.Pinned);
+        var resumed = AuditScopes.Resolve(_box.Files, _box.Git, request, CancellationToken.None).Scope!;
+        Assert.Equal(started.Files, resumed.Files);
+        Assert.Equal(started.Label, resumed.Label);
+        Assert.Null(AuditText.CommitsNotice(resumed));   // the typed text is the shas: nothing to repeat
+    }
+
+    [Fact]
+    public void Commit_FromAnAnnotatedTag()
+    {
+        GitAccessTests.Init(_box.Root);
+        string first = GitAccessTests.CommitFile(_box.Root, "a.cs", "a", "first");
+        Assert.Equal(GitOutcome.Ok, _box.Git.CreateTag("", "v1", first, "release one").Outcome);
+        GitAccessTests.CommitFile(_box.Root, "b.cs", "b", "second");
+        var scope = ResolveCommits("v1..").Scope!;
+        Assert.Equal(["b.cs"], scope.Files);
+        Assert.Equal(first, scope.From);
+    }
+
+    [Fact]
+    public void Commit_ASandboxInsideARepo_IsRefusedAsDiffIs()
+    {
+        GitAccessTests.Init(_box.Dir);
+        _box.Write("a.cs", "a");
+        var result = ResolveCommits("HEAD");
+        Assert.Null(result.Scope);
+        Assert.Contains("above the working directory", result.Error);
+    }
 }

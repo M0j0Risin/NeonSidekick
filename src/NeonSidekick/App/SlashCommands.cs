@@ -203,7 +203,7 @@ public enum SlashCommand
     Plan,
 
     /// <summary>
-    /// <c>/code-audit [model|advisor|any|confirm] [passes] [diff|staged|branch [base]|path …] [focus …] [--] [brief]</c> (2026-10-18, the user's idea:
+    /// <c>/code-audit [model|advisor|any|confirm] [passes] [diff|staged|branch [base]|commit rev|commit from..to|path …] [focus …] [--] [brief]</c> (2026-10-18, the user's idea:
     /// <c>/plan gaps</c>' engine for code): read-only passes over the tree, a path or the git changes, each reporting through <c>present_audit</c> into
     /// <c>.neon/audits/&lt;name&gt;.md</c>, until enough passes in a row find nothing new; <c>open</c>, <c>fix</c> and <c>resume</c> work on a kept report.
     /// Waits for the idle line under a reply; refused under a running <c>/botchat</c> (but <c>open</c>).

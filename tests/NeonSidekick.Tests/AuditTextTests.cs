@@ -258,4 +258,42 @@ public sealed class AuditTextTests
         Assert.Equal("converged", PlanText.StopWord(PlanGapStop.Converged));
         Assert.Equal("you spoke", PlanText.StopWord(PlanGapStop.UserSpoke));
     }
+
+    // ---- commit scopes (2026-11-25) ----
+
+    private static AuditScope CommitScope(string? from, string to, params string[] paths) =>
+        new(AuditScopeKind.Commits, paths, null, ["a.cs"], 0, [], 0, 0, 0, From: from, To: to);
+
+    [Fact]
+    public void CommitChangeLine_ItsThreeShapes_WithTheFullShas()
+    {
+        string from = new('a', 40), to = new('b', 40);
+        var branch = new AuditScope(AuditScopeKind.Branch, [], "main", ["a.cs"], 0, [], 0, 0, 0);
+        Assert.Equal("", AuditText.CommitChangeLine(branch, gitDiff: true));
+        Assert.Null(AuditText.CommitsNotice(branch));
+        Assert.Equal("The change is commit bbbbbbb.", AuditText.CommitChangeLine(CommitScope(null, to), gitDiff: false));
+        Assert.Equal($"The change is commit bbbbbbb: gitlib_diff with ref={to} shows exactly what it changed.", AuditText.CommitChangeLine(CommitScope(null, to), gitDiff: true));
+        Assert.Equal($"The change is commits aaaaaaa..bbbbbbb: gitlib_diff with from={from} and to={to} and path=src shows exactly what they changed.",
+            AuditText.CommitChangeLine(CommitScope(from, to, "src"), gitDiff: true));
+        Assert.Contains("pass path= with each named path in turn (src, lib)", AuditText.CommitChangeLine(CommitScope(from, to, "src", "lib"), gitDiff: true));
+    }
+
+    [Fact]
+    public void TheDirective_CarriesTheCommitLine_AndTheFilesChangedSince_FoldedWithinTheBudget()
+    {
+        string to = new('b', 40);
+        string line = AuditText.CommitChangeLine(CommitScope(null, to), gitDiff: true);
+        string directive = AuditText.Directive(State() with { GitScope = true, GitDiffCall = line, ChangedSince = ["src/folder0/file0.cs"] });
+        Assert.Contains("- " + line + "\n", directive);
+        Assert.Contains("- These files changed after it (1 file): ", directive);
+        Assert.Contains("a problem a later change already fixed is not a finding", directive);
+        Assert.DoesNotContain("gitlib_diff", AuditText.Directive(State() with { GitScope = true, GitDiffCall = AuditText.CommitChangeLine(CommitScope(null, to), gitDiff: false) }));
+        Assert.DoesNotContain("changed after it", AuditText.Directive(State() with { GitScope = true }));
+
+        var many = Enumerable.Range(0, 300).Select(i => $"src/folder{i % 50}/file{i}.cs").ToList();
+        string folded = AuditText.Directive(State(files: 300, unread: 300, findings: 40) with { GitDiffCall = line, ChangedSince = many });
+        Assert.True(folded.Length <= AuditText.DirectiveBudget, folded.Length.ToString());
+        Assert.Contains("- These files changed after it (300 files): ", folded);
+        Assert.DoesNotContain("file299.cs", folded);
+    }
 }

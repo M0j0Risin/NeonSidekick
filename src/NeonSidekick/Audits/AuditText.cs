@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using NeonSidekick.Git;
 using NeonSidekick.Plans;
 
 namespace NeonSidekick.Audits;
@@ -10,6 +11,10 @@ namespace NeonSidekick.Audits;
 /// stands (the pass and its limit, the reviewer chosen and this pass's, the clean streak and the count it ends on, the confirmation), whether
 /// it may ask the user, and its tool budget against the hard cap. <paramref name="LastLight"/> (2026-11-17, <see cref="Settings.AppSettingsData.CodeAuditLowKeepsStreak"/>):
 /// the low changes the last pass recorded, so a confirming pass after one is never told the last pass found nothing new.
+/// <paramref name="GitDiffCall"/> (2026-11-25, <c>/code-audit commit</c>): a commit scope's line naming the change, with the <c>gitlib_diff</c>
+/// call that shows it when that tool is offered (<see cref="AuditText.CommitChangeLine"/>); empty for every other scope.
+/// <paramref name="ChangedSince"/> (2026-11-25): the scope's files changed after the commits, so a pass reads them as they stand and never
+/// reports a problem a later change already fixed.
 /// </summary>
 public sealed record AuditDirectiveState(
     string ReportPath,
@@ -35,7 +40,9 @@ public sealed record AuditDirectiveState(
     bool DeletedFiles = false,
     bool GitScope = false,
     bool Cut = false,
-    int LastLight = 0);
+    int LastLight = 0,
+    string GitDiffCall = "",
+    IReadOnlyList<string>? ChangedSince = null);
 
 /// <summary>
 /// A code audit's words (2026-10-18, <c>/code-audit</c>, the user's idea: <c>/plan gaps</c>' engine for code): the command's words and
@@ -58,6 +65,12 @@ public static class AuditText
     public const string DiffWord = "diff";
     public const string StagedWord = "staged";
     public const string BranchWord = "branch";
+
+    /// <summary>One commit, or a range <c>from..to</c>, on the checked-out branch (2026-11-25, the user's ask). Pinned.</summary>
+    public const string CommitWord = "commit";
+
+    /// <summary>What splits a commit range's two sides.</summary>
+    public const string RangeDots = "..";
 
     /// <summary>The word that ends the scope and focus words: everything after it is the brief.</summary>
     public const string BriefSwitch = "--";
@@ -125,6 +138,149 @@ public static class AuditText
     public static string NoOpenFindings(string name) => $"{name} has no open findings: nothing to fix";
     public static string ReportUnreadable(string path) => $"The report {path} could not be read whole";
     public static string NoBaseBranch => "No base branch: main and master are missing; name one, /code-audit branch <base>";
+
+    // ── commit <rev> and commit <from>..<to> (2026-11-25, the user's ask and answers) ──
+
+    /// <summary><c>commit</c> with no revision after it, a blank one, <c>--</c>, or a range with no start. Pinned.</summary>
+    public const string NoRevision = "Name the commits: /code-audit commit <rev>, or commit <from>..<to>";
+
+    /// <summary>A three-dot range, which git reads as both sides' own commits. Pinned.</summary>
+    public const string ThreeDots = "A range is <from>..<to>, not three dots; for a branch's own commits since its base, use /code-audit branch <base>";
+
+    /// <summary>A range whose sides share no history (an orphan branch). Pinned.</summary>
+    public static string NoSharedHistory(string from, string to) => $"{from} and {to} share no history, so there are no commits between them";
+
+    /// <summary>A range whose end is behind its start: nothing on it. Pinned.</summary>
+    public static string RangeBackwards(string from, string to) => $"{to} is behind {from}, so the range holds no commits; did you mean /code-audit commit {to}..{from}?";
+
+    /// <summary>
+    /// A commit not on the checked-out branch (2026-11-24, the user's pick: refused, not audited against files that never held it); a detached
+    /// HEAD names its short sha for the branch. Pinned.
+    /// </summary>
+    public static string NotOnBranch(string revision, string branch) =>
+        $"{revision} isn't on {branch}, so the files here don't hold its changes; check out a branch that has it first";
+
+    /// <summary>A commit, or range, that changes no file (an empty commit, a merge that brought nothing in): a lowercase reason. Pinned.</summary>
+    public static string CommitTouchesNothing(string label) => $"{label} changes no files";
+
+    /// <summary>Every file the commits changed is gone from the working tree since: a lowercase reason. Pinned.</summary>
+    public static string AllGoneSince(string label) => $"every file {label} changed is gone since";
+
+    /// <summary>A resumed report's pinned commit the repository no longer has (rebased away and collected, a shallow clone). Pinned.</summary>
+    public static string CommitGone(string sha) =>
+        $"Commit {ShortSha(sha)} is no longer in this repository, so this report can't be resumed; start a new audit";
+
+    /// <summary>
+    /// An unknown revision typed on the line: a brief starting with <c>commit</c> took its next word as the revision, so the way out is said, as
+    /// <see cref="NoSuchReport"/> says it for the verbs. Pinned.
+    /// </summary>
+    public const string BriefAfterDashes = "a brief that starts with commit needs -- first (/code-audit -- commit messages are never checked)";
+
+    /// <summary>A range whose start isn't behind its end, audited from their merge base (2026-11-24, the user's pick, said). Pinned.</summary>
+    public static string RangeFromMergeBase(string from, string to, string mergeBase) =>
+        $"The range starts at {ShortSha(mergeBase)}, the merge base of {from} and {to}, since {from} isn't behind {to}";
+
+    /// <summary>
+    /// A commit scope's own notice, after the start's or a resume's (2026-11-25): the typed revision against its shas when it isn't just a sha's
+    /// prefix, the merge-base note, the files changed since and the files gone since; null for every other scope, or with nothing to say.
+    /// </summary>
+    public static string? CommitsNotice(AuditScope scope)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (scope.Kind != AuditScopeKind.Commits || scope.To is not { } to)
+        {
+            return null;
+        }
+
+        var sentences = new List<string>(4);
+        string shas = scope.From is { } from ? ShortSha(from) + RangeDots + ShortSha(to) : ShortSha(to);
+        if (scope.Revision is { } typed && !TypedIsShas(typed, scope.From, to))
+        {
+            sentences.Add($"{typed} is {shas}.");
+        }
+
+        if (scope.FromMergeBase && scope.Revision is { } range && SplitRange(range) is ({ } left, { } right))
+        {
+            sentences.Add(RangeFromMergeBase(left, right.Length == 0 ? GitAccess.Head : right, scope.From!) + ".");
+        }
+
+        if (scope.ChangedSinceCut)
+        {
+            sentences.Add($"Some of the files may have changed since {ShortSha(to)}; findings are judged on the files as they stand.");
+        }
+        else if (scope.ChangedSince.Count > 0)
+        {
+            sentences.Add(scope.ChangedSince.Count == 1
+                ? $"1 of the files has changed since {ShortSha(to)}; findings are judged on the files as they stand."
+                : $"{N(scope.ChangedSince.Count)} of the files have changed since {ShortSha(to)}; findings are judged on the files as they stand.");
+        }
+
+        if (scope.GoneSince > 0)
+        {
+            string they = scope.From is null ? "it" : "they";
+            sentences.Add(scope.GoneSince == 1 ? $"1 file {they} changed is gone since." : $"{N(scope.GoneSince)} files {they} changed are gone since.");
+        }
+
+        return sentences.Count == 0 ? null : Glyph + " " + string.Join(' ', sentences);
+    }
+
+    /// <summary>
+    /// The directive's line naming a commit scope's change (2026-11-25): the short shas to read, and, when <paramref name="gitDiff"/> (<c>gitlib_diff</c>
+    /// is offered this turn: the 2026-10-22 review's lesson, a directive never names a tool the turn lacks), the call that shows it with the full
+    /// shas (a short one could come back ambiguous) and the named paths. Empty for every other scope. Pinned.
+    /// </summary>
+    public static string CommitChangeLine(AuditScope scope, bool gitDiff)
+    {
+        ArgumentNullException.ThrowIfNull(scope);
+        if (scope.Kind != AuditScopeKind.Commits || scope.To is not { } to)
+        {
+            return "";
+        }
+
+        string lead = "The change is " + (scope.From is { } from ? "commits " + ShortSha(from) + RangeDots + ShortSha(to) : "commit " + ShortSha(to));
+        if (!gitDiff)
+        {
+            return lead + ".";
+        }
+
+        string call = scope.From is { } f
+            ? $"{Llm.Tools.GitDiffTool.ToolName} with {Llm.Tools.GitDiffTool.FromArgument}={f} and {Llm.Tools.GitDiffTool.ToArgument}={to}"
+            : $"{Llm.Tools.GitDiffTool.ToolName} with {Llm.Tools.GitTool.ReferenceArgument}={to}";
+        string what = scope.From is null ? "it" : "they";
+        return scope.Paths.Count switch
+        {
+            0 => $"{lead}: {call} shows exactly what {what} changed.",
+            1 => $"{lead}: {call} and {Llm.Tools.GitTool.PathArgument}={Flat(scope.Paths[0])} shows exactly what {what} changed.",
+            _ => $"{lead}: {call} shows exactly what {what} changed; pass {Llm.Tools.GitTool.PathArgument}= with each named path in turn ({Flat(string.Join(", ", scope.Paths))}).",
+        };
+    }
+
+    /// <summary>A sha cut to <see cref="GitAccess.ShortShaLength"/>.</summary>
+    public static string ShortSha(string sha)
+    {
+        ArgumentNullException.ThrowIfNull(sha);
+        return sha.Length > GitAccess.ShortShaLength ? sha[..GitAccess.ShortShaLength] : sha;
+    }
+
+    /// <summary>A range's two sides as typed, or null when <paramref name="revision"/> holds no <see cref="RangeDots"/>.</summary>
+    public static (string Left, string Right)? SplitRange(string revision)
+    {
+        ArgumentNullException.ThrowIfNull(revision);
+        int dots = revision.IndexOf(RangeDots, StringComparison.Ordinal);
+        return dots < 0 ? null : (revision[..dots], revision[(dots + RangeDots.Length)..]);
+    }
+
+    /// <summary>Whether each typed side is its sha's prefix (ignoring case; an empty right side counts), so the notice needn't repeat it.</summary>
+    private static bool TypedIsShas(string typed, string? from, string to)
+    {
+        static bool Prefix(string side, string sha) => side.Length > 0 && sha.StartsWith(side, StringComparison.OrdinalIgnoreCase);
+        if (SplitRange(typed) is ({ } left, { } right))
+        {
+            return from is not null && Prefix(left, from) && (right.Length == 0 || Prefix(right, to));
+        }
+
+        return from is null && Prefix(typed, to);
+    }
 
     /// <summary>The skipped files as the notices and the directive say them: <c>3 secret-looking, 12 binary, 40 vendored or generated</c>; empty when none.</summary>
     public static string SkippedText(int secret, int binary, int vendored)
@@ -349,8 +505,9 @@ public static class AuditText
     /// <summary>
     /// The directive a pass carries in the system prompt (2026-10-18): what the audit is and allows, the focus, the brief, the scope and
     /// what no pass has read, the open findings, the rules for a finding, how to report, the pass's tool budget, then the advisors and the
-    /// web lines when offered and the reviewer's sentence. Inside <see cref="DirectiveBudget"/>: the scope's list shrinks first to its top
-    /// folders, then the unread list, then the open findings to a count. Pinned.
+    /// web lines when offered and the reviewer's sentence; since 2026-11-25 a commit scope's change line and the files changed since. Inside
+    /// <see cref="DirectiveBudget"/>: the scope's list shrinks first to its top folders, then the unread and changed-since lists, then the open
+    /// findings to a count. Pinned.
     /// </summary>
     public static string Directive(AuditDirectiveState state, IReadOnlyList<Settings.AdvisorEntry>? advisors = null, IReadOnlyList<string>? research = null)
     {
@@ -412,6 +569,19 @@ public static class AuditText
         {
             sb.Append("- The scope is a git change: read the files as they stand with read_file; a diff is a guide, not a read.")
               .Append(s.DeletedFiles ? " A file the change deletes may be reported with no line and no evidence.\n" : "\n");
+        }
+
+        // A commit scope's change and the files changed after it (2026-11-25, /code-audit commit): the names fenced as the scope's are.
+        if (s.GitDiffCall.Length > 0)
+        {
+            sb.Append("- ").Append(s.GitDiffCall).Append('\n');
+        }
+
+        if (s.ChangedSince is { Count: > 0 } since)
+        {
+            sb.Append("- These files changed after it (").Append(Files(since.Count)).Append("): ")
+              .Append(NamesFenced(unreadFolders || since.Count > DirectiveFiles ? Folders(since) : string.Join(", ", since)))
+              .Append("; read them as they stand, and a problem a later change already fixed is not a finding.\n");
         }
 
         if (s.Unread.Count > 0)
@@ -867,6 +1037,7 @@ public static class AuditText
     public const string DiffNote = "the working changes: unstaged, staged and untracked";
     public const string StagedNote = "the staged changes";
     public const string BranchNote = "the branch's commits since its base (main, else master)";
+    public const string CommitNote = "one commit, or a range <from>..<to>, on the checked-out branch";
     public const string FocusNote = "focus";
     public const string AllFocusNote = "every focus";
     public const string ModelReviewerNote = "the model audits alone";

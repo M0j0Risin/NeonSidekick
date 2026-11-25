@@ -357,7 +357,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/plan edit [<name>]` | Opens a plan file in its default app to change it by hand; plan mode is left as it is. Alone, lists the plans and the template to pick from. At the PC only. |
 | `/plan template` | Writes an example plan in the Ralph loop's shape to `.neon/plans/plan-template.md`, replacing an older copy. Copy it to a new name to use it. |
 | `/plan ralph [<name>] [passes]` | Runs a plan as a Ralph loop, a step a pass, each checked before it stands; alone, it resumes a paused loop, else lists the plans. See [Ralph loop](#ralph-loop). |
-| `/code-audit [model\|advisor\|any\|confirm] [<passes>] [diff\|staged\|branch [<base>]\|<path> ...] [<focus> ...] [--] [<brief>]` | Audits the code in read-only passes until passes in a row find nothing new, into a report under `.neon/audits/`. See [Code audit](#code-audit). |
+| `/code-audit [model\|advisor\|any\|confirm] [<passes>] [diff\|staged\|branch [<base>]\|commit <rev>\|commit <from>..<to>\|<path> ...] [<focus> ...] [--] [<brief>]` | Audits the code in read-only passes until passes in a row find nothing new, into a report under `.neon/audits/`. See [Code audit](#code-audit). |
 | `/code-audit open [<name>]` | Lists the reports, or shows one. |
 | `/code-audit fix [<name>]` | Starts plan mode on a report's open findings (the newest report without a name). Each step names the findings it closes, and the app ticks them as steps pass. |
 | `/code-audit resume [<name>] [model\|advisor\|any\|confirm] [<passes>]` | Runs more passes on a kept report (the newest without a name). |
@@ -444,7 +444,8 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
 `/code-audit` has the model audit the code with read-only tools, pass after pass, until passes in a row find nothing new. It starts in a new conversation. It needs *LLM offer tools* and `read_file` (*File tools* on), and is refused in plan mode and during a reply. Settings: `/settings` › [Automation](SETTINGS.md#automation).
 
-* **Scope:** the working directory or a path (quoted if it has a blank); `diff` (unstaged, staged and untracked changes), `staged`, or `branch [<base>]` (commits since `main`, else `master`). Past 5,000 files the list is cut, and the start says so.
+* **Scope:** the working directory or a path (quoted if it has a blank); `diff` (unstaged, staged and untracked changes), `staged`, `branch [<base>]` (commits since `main`, else `master`), or `commit <rev>` or `commit <from>..<to>` (one commit or a range). Past 5,000 files the list is cut, and the start says so.
+  * **Commits:** on the checked-out branch; a merge covers what it brought in. They're pinned at the start, so `resume` audits the same ones, and files changed or gone since are named.
   * **Left out:** git-ignored files (outside a repository, `bin`, `obj`, `node_modules`, `dist` and the like); minified, map and lock files, generated C# and `vendor/` unless a named path holds them; secret-looking files (`.env`, keys, certificates) always. `.neon/` is refused.
 * **Focus:** any mix of security, correctness, performance, maintainability and tests (`all`; none means *Code audit focus*). A pass after a clean one takes one in turn, or, with *Confirm focus by change*, an area the last change touched, the most-changed first; with one chosen, an angle (edge cases, error paths, concurrency, outside input).
 * **The brief** starts at the first other word, or is all after `--` (`/code-audit src -- tests are flaky`); a path-like word that names nothing is refused.

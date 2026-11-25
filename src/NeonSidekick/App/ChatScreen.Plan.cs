@@ -497,6 +497,13 @@ internal sealed partial class ChatScreen
     private bool AuditMayAsk(AppSettingsData effective, IReadOnlySet<string>? disabled = null) => effective.CodeAuditAskUser && AskUserOffered(effective, disabled);
 
     /// <summary>
+    /// Whether <c>gitlib_diff</c> is really offered this turn (2026-11-25, <c>/code-audit commit</c>; the 2026-10-22 lesson of <see cref="AuditMayAsk"/>):
+    /// tools offered, <c>GitLib tools</c> on (off by default), the tool not off on <c>/tools</c>. Only then does a commit scope's directive name the call.
+    /// </summary>
+    private static bool AuditMayDiff(AppSettingsData effective, IReadOnlySet<string>? disabled = null) =>
+        effective.LlmOfferTools && effective.GitLibTools && !(disabled ?? ToolsText.DisabledSet(effective.ToolsDisabled)).Contains(GitDiffTool.ToolName);
+
+    /// <summary>
     /// The /usage Tools tab's groups with <c>present_plan</c>'s while planning, in its alphabetical place (2026-10-04, the groups' order since;
     /// ahead of the questions, where the turn offers it, until then).
     /// </summary>
