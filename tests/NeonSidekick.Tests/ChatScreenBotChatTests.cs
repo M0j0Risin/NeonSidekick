@@ -782,15 +782,14 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public void BotChatStrip_PutsTheResumeAndExtrasGlyphsFirst()
+    public void BotChatStrip_PutsTheResumeGlyphFirst()
     {
-        Assert.Equal("🔊", ChatScreen.BotChatStrip(false, false, "🔊"));
-        Assert.Equal("", ChatScreen.BotChatStrip(false, false, ""));
-        Assert.Equal(BotChat.ResumeGlyph, ChatScreen.BotChatStrip(true, false, ""));
-        Assert.Equal(BotChat.ResumeGlyph + ChatScreen.GlyphSeparator + BotChat.ExtrasGlyph + ChatScreen.GlyphSeparator + "🔊", ChatScreen.BotChatStrip(true, true, "🔊"));
-        Assert.Equal(BotChat.ExtrasGlyph + ChatScreen.GlyphSeparator + "🔊", ChatScreen.BotChatStrip(false, true, "🔊"));
+        Assert.Equal("🔊", ChatScreen.BotChatStrip(false, "🔊"));
+        Assert.Equal("", ChatScreen.BotChatStrip(false, ""));
+        Assert.Equal(BotChat.ResumeGlyph, ChatScreen.BotChatStrip(true, ""));
+        Assert.Equal(BotChat.ResumeGlyph + ChatScreen.GlyphSeparator + "🔊", ChatScreen.BotChatStrip(true, "🔊"));
         Assert.Equal(BotChat.ResumeLine, BotChat.GlyphLine(BotChat.ResumeGlyph));
-        Assert.Equal(BotChat.KillLine, BotChat.GlyphLine(BotChat.ExtrasGlyph));
+        Assert.Null(BotChat.GlyphLine(BotChat.ExtrasGlyph));   // the lower rule's since 2026-11-25
         Assert.Null(BotChat.GlyphLine("🔊"));
         Assert.Equal((SlashCommand.BotChat, BotChat.ResumeSwitch), SlashCommands.Parse(BotChat.ResumeLine));
         Assert.Equal((SlashCommand.BotChat, BotChat.KillSwitch), SlashCommands.Parse(BotChat.KillLine));

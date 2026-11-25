@@ -350,7 +350,7 @@ public sealed class TaskAccess
     public static void Audit(bool byUser, string action, string path, TaskSource source, string outcome)
     {
         ArgumentNullException.ThrowIfNull(source);
-        DiagnosticLog.Info(TaskText.Category, ComputerText.AuditLine(byUser ? ComputerText.ByYou : ComputerText.ByModel, TaskText.AuditAct(action, path), source.Where, outcome));
+        DiagnosticLog.Audit(TaskText.Category, ComputerText.AuditLine(byUser ? ComputerText.ByYou : ComputerText.ByModel, TaskText.AuditAct(action, path), source.Where, outcome));
     }
 
     /// <summary>A computer tried as it stands (the wizard's Test and <c>--tasks-check</c>): connected and the tasks listed, nothing changed.</summary>

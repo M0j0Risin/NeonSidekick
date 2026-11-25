@@ -71,13 +71,13 @@ public sealed class DockerPruneTool : DockerTool
         var reply = await Docker.Client().PostAsync(PrunePath(kind, all), DockerSession.CleanupTimeout, cancellationToken).ConfigureAwait(false);
         if (!reply.Ok)
         {
-            DiagnosticLog.Info(DockerText.Category, DockerText.AuditLine(DockerText.ByModel, "prune " + kind, reply.Error!));
+            DiagnosticLog.Audit(DockerText.Category, DockerText.AuditLine(DockerText.ByModel, "prune " + kind, reply.Error!));
             return reply.Error;
         }
 
         var (deleted, reclaimed) = DockerJson.PruneResult(reply.Body) ?? (0, 0);
         string result = DockerText.Pruned(kind, deleted, reclaimed);
-        DiagnosticLog.Info(DockerText.Category, DockerText.AuditLine(DockerText.ByModel, "prune " + kind, result));
+        DiagnosticLog.Audit(DockerText.Category, DockerText.AuditLine(DockerText.ByModel, "prune " + kind, result));
         return result;
     }
 

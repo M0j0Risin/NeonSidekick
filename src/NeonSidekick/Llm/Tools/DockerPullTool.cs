@@ -56,7 +56,7 @@ public sealed class DockerPullTool : DockerTool
         var reply = await Docker.Client().PullAsync(image, tag, DockerSession.PullTimeout, cancellationToken).ConfigureAwait(false);
         var (status, error) = reply.Ok ? DockerJson.PullResult(reply.Body) : (null, reply.Error);
         string outcome = error is null ? status ?? "done" : error;
-        DiagnosticLog.Info(DockerText.Category, DockerText.AuditLine(DockerText.ByModel, "pull " + reference, outcome));
+        DiagnosticLog.Audit(DockerText.Category, DockerText.AuditLine(DockerText.ByModel, "pull " + reference, outcome));
         if (error is not null)
         {
             return error.StartsWith("Error:", StringComparison.Ordinal) ? error : DockerText.PullFailed(reference, error);

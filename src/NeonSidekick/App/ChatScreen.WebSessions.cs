@@ -71,7 +71,9 @@ internal sealed partial class ChatScreen
     /// <summary>The Sessions tab's tag (2026-11-16, the review's #78): the store's version and the session on screen, so an open tab reads again.</summary>
     private string WebSessionsTagNow() =>
         WebSessionsPair.Store.Version.ToString(System.Globalization.CultureInfo.InvariantCulture) + "-"
-        + (_sessionId is { } id ? id.ToString(System.Globalization.CultureInfo.InvariantCulture) : "none");
+        + (_sessionId is { } id ? id.ToString(System.Globalization.CultureInfo.InvariantCulture) : "none")
+        // The private state too (2026-11-25): switching an unsaved conversation moves neither the store's version nor the id.
+        + "-" + _private.StretchId + (_session.History.Messages.Count == 0 ? "-e" : "");
 
     /// <summary>The Sessions tab's view for <paramref name="query"/> (any thread, reads only).</summary>
     private WebSessionsView WebSessionsNow(string? query)
@@ -113,7 +115,7 @@ internal sealed partial class ChatScreen
         }
 
         var verdict = WebCommands.Check(SlashCommand.Session, "1", "/sessions 1", WebCommandSettingsNow());
-        return new WebSessionsView(profile, rows, found, verdict.Allowed, verdict.Allowed ? null : verdict.Reason, !_effective().SessionLogging);
+        return new WebSessionsView(profile, rows, found, verdict.Allowed, verdict.Allowed ? null : verdict.Reason, !_effective().SessionLogging) { Private = _private.StretchId, PrivateForced = _private.Forced, Empty = _session.History.Messages.Count == 0, NewPrivateLabel = PrivateText.NewPrivateButton, PrivateLabel = PrivateText.PrivateButton, PrivateNote = _private.IsPrivate ? PrivateText.NotSavedNotice : null };
     }
 
     /// <summary>

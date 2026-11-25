@@ -277,7 +277,7 @@ public static class Keys
 
     /// <summary>
     /// Ctrl+L, the background learning's cancel (2026-10-04, the user's ask: "cancels a running background learning turn") — what a
-    /// double-click on the strip's 🧠 does, from the keyboard. A chord with no command, so never a <see cref="ShortcutLine"/>:
+    /// double-click on the lower rule's 🧠 does, from the keyboard. A chord with no command, so never a <see cref="ShortcutLine"/>:
     /// <see cref="KeySource.LearnCancel"/> spends it wherever the key is read, <see cref="IsKillSwitch"/>'s way, so it never waits
     /// for a reply or a pane and a pane stays open. Control held, Alt and Shift not (Ctrl+Alt+L was the allowed-commands list until 2026-10-18, free since), and no
     /// character but the console's own FF (<c>'\x0c'</c>; a test <see cref="Ctrl"/> builds <c>'\0'</c>), so a typed "L" stays an "L".

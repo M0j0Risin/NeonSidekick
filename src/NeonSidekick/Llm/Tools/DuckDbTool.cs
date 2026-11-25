@@ -666,7 +666,7 @@ public sealed class DuckDbExecuteTool : DuckDbTool
         }
         catch (OperationCanceledException)
         {
-            Diagnostics.DiagnosticLog.Info(DuckDbConfigFile.Category, DuckDbText.AuditLogLine(target.Name, target.FullPath, creating, DatabaseAudit.Word(DatabaseAuditOutcome.Canceled, null), DatabaseAudit.Statement(body)));
+            Diagnostics.DiagnosticLog.Audit(DuckDbConfigFile.Category, DuckDbText.AuditLogLine(target.Name, target.FullPath, creating, DatabaseAudit.Word(DatabaseAuditOutcome.Canceled, null), DatabaseAudit.Statement(body)));
             throw;
         }
 
@@ -676,7 +676,7 @@ public sealed class DuckDbExecuteTool : DuckDbTool
             run = run with { Changes = null };
         }
 
-        Diagnostics.DiagnosticLog.Info(DuckDbConfigFile.Category, DuckDbText.AuditLogLine(target.Name, target.FullPath, creating && run.Outcome == SqlOutcome.Ok, DatabaseAudit.Word(DatabaseAudit.OutcomeOf(run), run.Changes), DatabaseAudit.Statement(body)));
+        Diagnostics.DiagnosticLog.Audit(DuckDbConfigFile.Category, DuckDbText.AuditLogLine(target.Name, target.FullPath, creating && run.Outcome == SqlOutcome.Ok, DatabaseAudit.Word(DatabaseAudit.OutcomeOf(run), run.Changes), DatabaseAudit.Statement(body)));
         return run.Outcome != SqlOutcome.Ok ? DuckDbText.Error(run) : DuckDbText.Executed(run, creating, rows, SqlTool.ResultChars(effective));
     }
 

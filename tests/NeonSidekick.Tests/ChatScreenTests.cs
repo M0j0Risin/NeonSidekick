@@ -1005,7 +1005,7 @@ public partial class ChatScreenTests : IDisposable
 
     /// <summary>
     /// The TTS server's probe held open past the grace (2026-09-29; Ctrl+C under a spinner until then): the setup goes
-    /// behind the line, 🔈 on the strip in the switch's place, and a double-click there cancels it — the session not ready
+    /// behind the line, 🔈 on the lower rule (the strip's until 2026-11-25), and a double-click there cancels it — the session not ready
     /// with the reason, the cancelled line printed at the loop top, the app staying.
     /// </summary>
     [Fact]
@@ -1031,8 +1031,8 @@ public partial class ChatScreenTests : IDisposable
                     step++;
                     Volatile.Write(ref idle, true);
                     _time.Advance(ScreenPane.Tick);
-                    input.PushClick(0, 102);                  // 🔈 at 0–1
-                    input.PushClick(1, 102);
+                    input.PushClick(238, 101);                // 🔈 alone on the lower rule: the space after it at the right edge
+                    input.PushClick(238, 101);
                     break;
                 case 1:
                     if (Output.Contains(ChatScreen.ConnectCancelledNotice(NoticeGlyphs.Tts), StringComparison.Ordinal))
@@ -12833,7 +12833,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("/process", ChatScreen.ToolbarWord(ChatScreen.ProcessToolGlyph));
         Assert.False(ChatScreen.TogglesWindow("/process"));
         Assert.Equal(ChatScreen.ProcessToolGlyph + " Process", ProcessMenu.Title);
-        Assert.Equal(NeonSidekick.Viewer.ViewerText.StripButton, ChatScreen.ComfyViewToolGlyph);   // the picture strip's button, one source
+        Assert.Equal(NeonSidekick.Viewer.ViewerText.StripButton, ChatScreen.ComfyViewToolGlyph);   // the upper rule's, one source
         Assert.Equal(NeonSidekick.Docker.DockerText.Glyph, ChatScreen.DockerToolGlyph);
         Assert.All(ToolsText.SwitchWords.Where(w => w is not (ToolsText.ShoppingSwitchWord or ToolsText.TimersSwitchWord or ToolsText.ClockSwitchWord or ToolsText.HelpSwitchWord or ToolsText.MonitorsSwitchWord or ToolsText.SessionsSwitchWord)), word => Assert.Equal(ToolsText.SwitchLine(word), ChatScreen.ToolbarWord(ToolbarItems.Glyph(word))));   // 💾 opens /sessions (2026-11-21)   // shopping has no switch glyph: 🛒 opens the list (2026-10-11)
         Assert.True(ChatScreen.TogglesWindow("/log") && ChatScreen.TogglesWindow("/comfy view") && ChatScreen.TogglesWindow("/comfy thumbs"));
@@ -13210,7 +13210,7 @@ public partial class ChatScreenTests : IDisposable
         string[] advanced = CommandsTabLines(advanced: true);
         var basicEntries = SlashCommands.HelpEntries.Where(SlashCommands.IsBasic).ToArray();
         var advancedEntries = SlashCommands.HelpEntries.Where(e => !SlashCommands.IsBasic(e)).ToArray();
-        Assert.Equal(37, basicEntries.Length);   // /remember left 2026-11-20 (into /memory); /usage 2026-11-07; /commands 2026-10-30; /undo 2026-10-28; /mark and /theme 2026-10-25; /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
+        Assert.Equal(38, basicEntries.Length);   // /private 2026-11-25; /remember left 2026-11-20 (into /memory); /usage 2026-11-07; /commands 2026-10-30; /undo 2026-10-28; /mark and /theme 2026-10-25; /prompts 2026-10-13; /avatar 2026-10-11; /msgclear 2026-10-10; /wake gone 2026-10-09 (into /stt); /rename 2026-10-05; seven more from the advanced tab on 2026-10-03, the user's pick; /terminal later that day
         Assert.Equal(SlashCommands.HelpEntries.Count, basicEntries.Length + advancedEntries.Length);
         // Three columns since 2026-10-05 (the user's ask): label, description, forms — each further form on a line of its own.
         Assert.Equal(basicEntries.SelectMany(HelpRows), basic.Select(l => l.TrimEnd()));
@@ -13218,7 +13218,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(
         [
-            "/about", "/avatar", "/clear", "/commands", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar",
+            "/about", "/avatar", "/clear", "/commands", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/private",
             "/profile", "/prompts", "/queue", "/reasoning", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme",
             "/toolbar", "/tools", "/tree", "/tts", "/undo", "/usage",
         ], basicEntries.Select(e => e.Command));   // /usage since 2026-11-07 (the user's pick: where what the model is sent shows)
@@ -13315,22 +13315,18 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(expected, ChatScreen.SpeechGlyphs(ttsOn, sttOn, wakeReady, interruptReady));
 
     /// <summary>
-    /// The strip (2026-09-18): the brain while a reflection runs, the tag while the model writes a session title (the user's place: right after the
-    /// brain), the jobs, then the speech glyphs; each only while on. The pending pictures moved to the lower rule (2026-11-23).
+    /// The strip (2026-09-18): the tag while the model writes a session title, then the speech glyphs; each only while on. The pending pictures
+    /// moved to the lower rule (2026-11-23), the brain and the jobs behind the line on 2026-11-25.
     /// </summary>
     [Theory]
-    [InlineData(false, false, false, false, false, false, "", "")]
-    [InlineData(true, false, false, false, false, false, "", "🧠")]
-    [InlineData(false, true, false, false, false, false, "", "🏷️")]
-    [InlineData(true, true, false, false, false, false, "", "🧠 🏷️")]
-    [InlineData(true, false, true, false, false, false, "", "🧠 🔊")]
-    [InlineData(false, true, true, false, false, false, "", "🏷️ 🔊")]
-    [InlineData(true, true, true, true, false, false, "", "🧠 🏷️ 🔊 🎤")]
-    [InlineData(true, false, false, true, true, true, "", "🧠 🎤 👂 ✋")]
-    [InlineData(false, false, true, true, false, false, "", "🔊 🎤")]
-    [InlineData(true, true, true, false, false, false, "🔌 1/3", "🧠 🏷️ 🔌 1/3 🔊")]   // the jobs before the speech
-    public void StripGlyphs_IsPinned(bool learning, bool titling, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string jobs, string expected) =>
-        Assert.Equal(expected, ChatScreen.StripGlyphs(learning, titling, ttsOn, sttOn, wakeReady, interruptReady, jobs));
+    [InlineData(false, false, false, false, false, "")]
+    [InlineData(true, false, false, false, false, "🏷️")]
+    [InlineData(true, true, false, false, false, "🏷️ 🔊")]
+    [InlineData(true, true, true, false, false, "🏷️ 🔊 🎤")]
+    [InlineData(false, false, true, true, true, "🎤 👂 ✋")]
+    [InlineData(false, true, true, false, false, "🔊 🎤")]
+    public void StripGlyphs_IsPinned(bool titling, bool ttsOn, bool sttOn, bool wakeReady, bool interruptReady, string expected) =>
+        Assert.Equal(expected, ChatScreen.StripGlyphs(titling, ttsOn, sttOn, wakeReady, interruptReady));
 
     /// <summary>The rule above the input row (2026-09-18): every title under all-names, a model-written or typed one alone under model-written, nothing under none or without a session.</summary>
     [Fact]
@@ -18862,40 +18858,89 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// The picture viewer's button on the strip's own rule (2026-09-27): one click hands the ComfyUI output folder's full path
-    /// to the viewer. The input row at 100, the upper rule at 99, the strip's own rule with the
-    /// button at its left edge (2026-09-28), <see cref="ScreenPane.StripPaneRows"/> over the upper rule.
+    /// The strip's own rule holds the × alone (2026-11-25; the viewer's 🎞️ was at its left edge): a click at its left end opens
+    /// no viewer and leaves the strip. The input row at 100, the upper rule at 99, the strip's own rule
+    /// <see cref="ScreenPane.StripPaneRows"/> over it.
     /// </summary>
     [Fact]
-    public async Task PictureStrip_TheViewerButton_OneClick_OpensTheOutputFolder()
+    public async Task PictureStrip_ItsRulesLeftEnd_OneClick_DoesNothing()
     {
         ComfyServer();
         PaneOf40Rows();
         var viewed = new List<string>();
         _openViewer = viewed.Add;
-        var rule = ScreenPane.StripRule(NeonSidekick.Viewer.ViewerText.StripButton, _console.Profile.Width);
-        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => input.PushClick(rule.ButtonColumn + 1, 99 - ScreenPane.StripPaneRows), Line("/exit"));
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        var rule = ScreenPane.StripRule(_console.Profile.Width);
+        StepsWhenIdle(
+            Line("/imagine a cat --seed 5"),
+            input => { input.PushClick(2, 99 - ScreenPane.StripPaneRows); input.PushClick(3, 99 - ScreenPane.StripPaneRows); },
+            Key(Keys.Right), Key(Keys.Enter),
+            Line("/exit"));
 
         string output = await RunAsync();
 
         Assert.Contains(rule.Text, output);
-        Assert.Equal(Path.GetDirectoryName(ComfyPicture("pony-5.png")), Assert.Single(viewed));
-        Assert.DoesNotContain(NeonSidekick.Viewer.ViewerText.Opened(viewed[0]), output);   // a click is silent
+        Assert.Empty(viewed);
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);   // still open: → and Enter work it
     }
 
-    /// <summary>With no viewer to open (not Windows) the strip's rule is bare, and a click there opens nothing.</summary>
+    /// <summary>
+    /// The upper rule's 🎞️ with the strip open (2026-11-25, the user's ask): one click closes it as the × does, another brings
+    /// it back, at idle and under a reply; the setting is untouched.
+    /// </summary>
     [Fact]
-    public async Task PictureStrip_WithoutAViewer_HasNoButton()
+    public async Task PictureStrip_TheUpperRulesFilm_ClosesTheOpenStrip_AndOpensIt()
     {
         ComfyServer();
         PaneOf40Rows();
-        StepsWhenIdle(Line("/imagine a cat --seed 5"), input => input.PushClick(_console.Profile.Width - 4, 99 - ScreenPane.StripPaneRows), Line("/exit"));
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => opened.Add((path, editor));
+        var upper = ScreenPane.UpperRule("", folds: false, _console.Profile.Width, NeonSidekick.Viewer.ViewerText.StripButton);
+        StepsWhenIdle(
+            Line("/imagine a cat --seed 5"),
+            input => input.PushClick(upper.StripColumn, 99),
+            Key(Keys.Right), Key(Keys.Enter),            // closed: the keys are the line's
+            input => input.PushClick(upper.StripColumn, 99),
+            Key(Keys.Right), Key(Keys.Enter),
+            Line("/exit"));
 
-        string output = await RunAsync();
+        await RunAsync();
 
-        // The strip's rule has no viewer button (the click, on its ×, puts the upper rule's 🎞️ up — that one brings the strip back, 2026-10-03).
-        Assert.DoesNotContain(ScreenPane.StripRule(NeonSidekick.Viewer.ViewerText.StripButton, _console.Profile.Width).Text, output);
-        Assert.Contains(ScreenPane.StripRule(null, _console.Profile.Width).Text, output);   // the × stays
+        Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
+        Assert.True(_settings.Current.ComfyPictureStrip);
+    }
+
+    /// <summary>The same 🎞️ under a reply (2026-11-25): the watcher's click closes the open strip, so → and Enter after the reply open nothing.</summary>
+    [Fact]
+    public async Task PictureStrip_TheUpperRulesFilm_UnderAReply_ClosesTheStrip()
+    {
+        ComfyServer();
+        PaneOf40Rows();
+        var opened = new List<(string Path, string Editor)>();
+        _openImage = (path, editor) => { lock (opened) { opened.Add((path, editor)); } };
+        var upper = ScreenPane.UpperRule("", folds: false, _console.Profile.Width, NeonSidekick.Viewer.ViewerText.StripButton);
+        _chat.EnqueueText("Hello ", "there.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                // Mid-reply: the second update held until the watcher has read the click.
+                _scripted!.PushClick(upper.StripColumn, 99);
+                for (int tries = 0; tries < 500 && _scripted.IsAvailable; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+            }
+        };
+        StepsWhenIdle(Line("/imagine a cat --seed 5"), Line("hi"), Key(Keys.Right), Key(Keys.Enter), Line("/exit"));
+
+        await RunAsync();
+
+        lock (opened)
+        {
+            Assert.Empty(opened);
+        }
     }
 
     /// <summary>
@@ -18910,7 +18955,7 @@ public partial class ChatScreenTests : IDisposable
         PaneOf40Rows();
         var opened = new List<(string Path, string Editor)>();
         _openImage = (path, editor) => opened.Add((path, editor));
-        var rule = ScreenPane.StripRule(null, _console.Profile.Width);
+        var rule = ScreenPane.StripRule(_console.Profile.Width);
         var upper = ScreenPane.UpperRule("", folds: false, _console.Profile.Width, NeonSidekick.Viewer.ViewerText.StripButton);
         StepsWhenIdle(
             Line("/imagine a cat --seed 5"),
@@ -18918,7 +18963,7 @@ public partial class ChatScreenTests : IDisposable
             Key(Keys.Right), Key(Keys.Enter),
             Line("/imagine a cat --seed 6"),
             Key(Keys.Right), Key(Keys.Right), Key(Keys.Enter),
-            input => input.PushClick(upper.ReopenColumn, 99),
+            input => input.PushClick(upper.StripColumn, 99),
             Key(Keys.Right), Key(Keys.Right), Key(Keys.Enter),
             Line("/exit"));
 
@@ -18978,18 +19023,18 @@ public partial class ChatScreenTests : IDisposable
         var opened = new List<(string Path, string Editor)>();
         _openImage = (path, editor) => opened.Add((path, editor));
         string film = NeonSidekick.Viewer.ViewerText.StripButton;
-        var rule = ScreenPane.StripRule(null, _console.Profile.Width);
+        var rule = ScreenPane.StripRule(_console.Profile.Width);
         var upper = ScreenPane.UpperRule("", folds: false, _console.Profile.Width, film);
         StepsWhenIdle(
             Line("/imagine a cat --seed 5"),
             input => input.PushClick(rule.CloseColumn, 99 - ScreenPane.StripPaneRows),
-            input => input.PushClick(upper.ReopenColumn, 99),
+            input => input.PushClick(upper.StripColumn, 99),
             Key(Keys.Right), Key(Keys.Enter),
             Line("/exit"));
 
         string output = await RunAsync();
 
-        Assert.Contains(ScreenPane.RuleGlyph + " " + film + " ", output);   // no viewer here, so the only 🎞️ is the upper rule's
+        Assert.Contains(ScreenPane.RuleGlyph + " " + film + " ", output);   // the only 🎞️ is the upper rule's
         Assert.Equal(ComfyPicture("pony-5.png"), Assert.Single(opened).Path);
         Assert.True(_settings.Current.ComfyPictureStrip);
     }
@@ -23752,7 +23797,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         Assert.NotNull(running);
         string lastRunning = running[(running.LastIndexOf(rule + "\n", StringComparison.Ordinal) + rule.Length + 1)..];
-        Assert.Contains(ChatScreen.LearnStripGlyph, lastRunning);                         // the brain led the row while the job ran (the tick's redraw alone, since later still on 2026-09-19 no start line redraws the pane)
+        Assert.Contains(ChatScreen.LearnStripGlyph, lastRunning);                         // the brain was on the lower rule while the job ran (the tick's redraw alone; the strip's until 2026-11-25)
         string lastIdle = output[(output.LastIndexOf(rule + "\n", StringComparison.Ordinal) + rule.Length + 1)..];
         Assert.DoesNotContain(ChatScreen.LearnStripGlyph, lastIdle);                        // and left it with the job
         Assert.Contains("(🧠 learned: created skill 'greeting'", output);
@@ -24102,7 +24147,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ADoubleClickOnTheBrain_CancelsTheReflection()
     {
-        // The strip's rule for the brain (2026-09-18): drawn only while a reflection runs, so the double-click is its cancel — the pinned notice, no learned line.
+        // The brain (2026-09-18; the lower rule's since 2026-11-25): drawn only while a reflection runs, so the double-click is its cancel — the pinned notice, no learned line.
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
         _console.Profile.Width = 240;
@@ -24123,8 +24168,8 @@ public partial class ChatScreenTests : IDisposable
                     WaitForRequests(2);
                     Assert.True(_session.IsLearning);
                     _time.Advance(ScreenPane.Tick);
-                    input.PushClick(0, 102);         // 🧠 at 0–1
-                    input.PushClick(1, 102);
+                    input.PushClick(238, 101);       // 🧠 alone on the lower rule: the space after it at the right edge
+                    input.PushClick(238, 101);
                     break;
                 case 3:
                     if (_session.Learning is { IsCompleted: true } && Output.Contains(ChatScreen.LearnCancelledNotice, StringComparison.Ordinal))
@@ -24150,7 +24195,7 @@ public partial class ChatScreenTests : IDisposable
     [Fact]
     public async Task ADoubleClickOnTheBrain_MidTurn_CancelsTheReflection_AndSaysSoAfterTheReply()
     {
-        // The busy row's brain (2026-09-24, the user's ask: a reflection sharing the server holds the reply up): the
+        // The brain under a reply (2026-09-24, the user's ask: a reflection sharing the server holds the reply up; the lower rule's since 2026-11-25): the
         // watcher's click hook cancels it; the line waits for the reply's end, the turn task being the transcript's one writer.
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 40;
@@ -24170,9 +24215,8 @@ public partial class ChatScreenTests : IDisposable
             {
                 Assert.True(_session.IsLearning);
                 _time.Advance(ScreenPane.Tick);
-                int brain = BusyRows.ColumnOf(Output, "🧠");   // after the spinner's label on the busy row (2026-10-13: it follows the sides)
-                Scripted().PushClick(brain, 102);
-                Scripted().PushClick(brain + 1, 102);
+                Scripted().PushClick(238, 101);   // 🧠 alone on the lower rule
+                Scripted().PushClick(238, 101);
                 var until = DateTime.UtcNow + TimeSpan.FromSeconds(20);
                 while (_session.Learning is not { IsCompleted: true } && DateTime.UtcNow < until)
                 {

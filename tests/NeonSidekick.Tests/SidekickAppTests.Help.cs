@@ -130,7 +130,7 @@ public partial class SidekickAppTests
             [EnvironmentOverrides.AnthropicApiVariable] = "on", [EnvironmentOverrides.AnthropicApiKeyVariable] = "sk-ant", [EnvironmentOverrides.LlmSamplingVariable] = "{\"temperature\":0.3}",
             [EnvironmentOverrides.ClaudeCodeServerVariable] = "on", [EnvironmentOverrides.DockerPipeVariable] = "npipe:////./pipe/x", [EnvironmentOverrides.OpenAIApiVariable] = "yes",
             [EnvironmentOverrides.OpenAIApiKeyVariable] = "sk-o", [EnvironmentOverrides.YouTubeApiKeyVariable] = "AIza", [EnvironmentOverrides.AdvisorsVariable] = "on",
-            [EnvironmentOverrides.BraveApiKeyVariable] = "BSA",
+            [EnvironmentOverrides.BraveApiKeyVariable] = "BSA", [EnvironmentOverrides.PrivateVariable] = "on",
         };
         var app = App(env: new EnvironmentOverrides(name => values.GetValueOrDefault(name)));
 

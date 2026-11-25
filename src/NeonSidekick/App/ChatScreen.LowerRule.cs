@@ -1,4 +1,5 @@
 using NeonSidekick.Audits;
+using NeonSidekick.Camera;
 using NeonSidekick.UI;
 using NeonSidekick.Viewer;
 
@@ -6,9 +7,10 @@ namespace NeonSidekick.App;
 
 /// <summary>
 /// The lower rule's jobs group (2026-11-23, the user's ask, #17 and #18): left to right the update's marker, the loop under way (🔁 a Ralph
-/// loop, 🔎 a code audit, ⟳ a <c>/loop</c>), an embedded model's download, the ComfyUI pictures still rendering, and the running processes'
-/// count — each drawn whole, each with its own double-click (<see cref="LowerRuleClick"/>). The loop, the download and the pictures were the
-/// status bar's until then.
+/// loop, 🔎 a code audit, ⟳ a <c>/loop</c>), an embedded model's download, the MCP, voice and speech setups, the ComfyUI pictures still
+/// rendering, the reflection, the botchat's idle extra servers, the camera held open, and the running processes' count — each drawn whole,
+/// each with its own double-click (<see cref="LowerRuleClick"/>). The loop, the download and the pictures were the status bar's until then;
+/// the setups, the reflection, the extras and the camera until 2026-11-25 (the user's ask: unchecking Status hid them, the camera too).
 /// </summary>
 internal sealed partial class ChatScreen
 {
@@ -71,7 +73,7 @@ internal sealed partial class ChatScreen
     /// <summary>The lower rule's items now, left to right, each only while it has something to say. Any thread (the pane's draw and tick).</summary>
     private IReadOnlyList<LowerRuleItem> LowerRuleItemsNow()
     {
-        var items = new List<LowerRuleItem>(5);
+        var items = new List<LowerRuleItem>(11);
         if (UpdateMarkerNow() is { Length: > 0 } update)
         {
             items.Add(new(LowerRuleKind.Update, update));
@@ -87,9 +89,32 @@ internal sealed partial class ChatScreen
             items.Add(new(LowerRuleKind.Download, download));
         }
 
+        foreach (var (job, kind) in SetupItems)
+        {
+            if (_jobs.Strip(k => k == job) is { Length: > 0 } setup)
+            {
+                items.Add(new(kind, setup));
+            }
+        }
+
         if (_pendingPictures.Glyph is { Length: > 0 } pictures)
         {
             items.Add(new(LowerRuleKind.Pictures, pictures));
+        }
+
+        if (_session.IsLearning)
+        {
+            items.Add(new(LowerRuleKind.Learning, LearnStripGlyph));
+        }
+
+        if (BotExtrasIdle)
+        {
+            items.Add(new(LowerRuleKind.Extras, BotChat.ExtrasGlyph));
+        }
+
+        if (_camera.Live)
+        {
+            items.Add(new(LowerRuleKind.Camera, CameraText.Glyph));
         }
 
         if (ProcessWindowText.RuleTitle(_processes.Running) is { Length: > 0 } processes)
@@ -100,12 +125,23 @@ internal sealed partial class ChatScreen
         return items;
     }
 
+    /// <summary>The setups behind the line, in the rule's order (2026-11-25), each its own item so a double-click cancels that one.</summary>
+    private static readonly (BackgroundJobKind Job, LowerRuleKind Kind)[] SetupItems =
+    [
+        (BackgroundJobKind.Mcp, LowerRuleKind.Mcp),
+        (BackgroundJobKind.Voice, LowerRuleKind.Voice),
+        (BackgroundJobKind.Speech, LowerRuleKind.Speech),
+    ];
+
     /// <summary>
     /// A double-click on the lower rule's <paramref name="kind"/>, under a reply or at the idle line: the word to run for the update's marker
     /// (<c>/update</c>) and the processes' count (<c>/process</c>); otherwise it acts here and answers null — the loop ends after the pass in
-    /// progress, the download is canceled (its end said by the jobs' drain), the pictures are canceled while the reply goes on.
+    /// progress, the download, a setup or the reflection is canceled (their ends said by the drains), the pictures are canceled while the
+    /// reply goes on, the camera is let go at once (2026-11-25), its notice queued as the reflection's is so it waits for a running reply.
+    /// The extras' 🧟 is <c>/botchat --kill</c>: the word at idle; on the watcher (<paramref name="watched"/>) the line held for the idle line
+    /// here, as Ctrl+Alt+K's is, since a clicked word has no row behind it and a deferred one would be declined.
     /// </summary>
-    private string? LowerRuleClick(LowerRuleKind kind)
+    private string? LowerRuleClick(LowerRuleKind kind, bool watched = false)
     {
         switch (kind)
         {
@@ -122,8 +158,53 @@ internal sealed partial class ChatScreen
             case LowerRuleKind.Pictures:
                 DrainPictures();
                 return null;
+            case LowerRuleKind.Mcp:
+                _jobs.Cancel(BackgroundJobKind.Mcp);
+                return null;
+            case LowerRuleKind.Voice:
+                _jobs.Cancel(BackgroundJobKind.Voice);
+                return null;
+            case LowerRuleKind.Speech:
+                _jobs.Cancel(BackgroundJobKind.Speech);
+                return null;
+            case LowerRuleKind.Learning:
+                CancelLearnNow();
+                return null;
+            case LowerRuleKind.Camera:
+                // Never RunOrPost: clicks are live on the watcher in waits that are no turn (/claude, a compaction, a listen), where it would
+                // write the transcript beside its one writer, and a posted act would wait for the next message's turn.
+                _learnNotices.Enqueue(CameraText.Off(CameraOff()));
+                SignalAlert();
+                return null;
+            case LowerRuleKind.Extras when watched:
+                HoldExtrasKill();
+                return null;
+            case LowerRuleKind.Extras:
+                return BotChat.KillLine;
             default:
                 return null;
+        }
+    }
+
+    /// <summary>
+    /// The 🧟's <c>/botchat --kill</c> double-clicked on the watcher (2026-11-25): held as a typed line would be, with the deferred notice while a
+    /// turn runs (the queue, or the pending lines under <c>Queue mode</c> <c>disabled</c>), else pending for the idle line.
+    /// </summary>
+    private void HoldExtrasKill()
+    {
+        string line = BotChat.KillLine;
+        var submitted = new SubmittedLine(line, line, [], line);
+        if (_turnRunning)
+        {
+            Post(() => _transcript.Notice(MidTurnDeferredNotice(CommandWord(line))));
+            if (_botChatRunning || !QueueLine(submitted))
+            {
+                Pend(submitted);
+            }
+        }
+        else
+        {
+            Pend(submitted);
         }
     }
 

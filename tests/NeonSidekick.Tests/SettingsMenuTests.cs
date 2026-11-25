@@ -982,7 +982,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ReflectionAutoLearn, SettingsField.ReflectionReasoning, SettingsField.ReflectionWindow, SettingsField.ReflectionMinToolCalls, SettingsField.ReflectionMaxRequests,
                 SettingsField.HideExitAutocomplete, SettingsField.CommandTypoIntercept, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory,
                 SettingsField.QueueMode, SettingsField.QueueCancelMode,
-                SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults,
+                SettingsField.SessionLogging, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.PrivateAtStart, SettingsField.PrivatePictures, SettingsField.PrivateLogText, SettingsField.PrivateLearning, SettingsField.SessionTool, SettingsField.SessionSearchMaxResults,
                 SettingsField.ToolsDollarMention, SettingsField.ReflectionCooldownMinutes, SettingsField.ReflectionIncludesSessions, SettingsField.ReflectionCooldownMode,
                 SettingsField.DraftEditor, SettingsField.FileViewImageMaxPerCall,
                 SettingsField.McpServers, SettingsField.McpConnectTimeoutSeconds, SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits,
@@ -3786,7 +3786,7 @@ public partial class SettingsMenuTests : IDisposable
 
         // Each tab under the strip, padded to its own column (26, 26, 32, 19, 26; Common 32 until its plan, Ralph and audit rows went to Automation, 2026-10-21), the whole tab in view, nothing of another tab on it.
         // Every tab headed since later on 2026-10-10 (the user's ask), Sessions' save thinking up in the Saving run.
-        AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging           on\n  Session save thinking     off\n  Session retention (days)  forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode       model-written\n  Session show name         all\n", 120);   // padded to 26 since its Search tool rows went to /tools › Core › Sessions (2026-11-21; 28 until then)
+        AssertTabEnds("\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging           on\n  Session save thinking     off\n  Session retention (days)  forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode       model-written\n  Session show name         all\n" + MenuLayout.Heading("Private", 120) + "\n  Private at start          off\n  Private pictures          ask\n  Private log text          hide\n  Private learning          off\n", 120);   // padded to 26 since its Search tool rows went to /tools › Core › Sessions (2026-11-21; 28 until then)
         // The Web UI tab (2026-10-14, the user's ask): the switch, the port and the reach under Server; since 2026-10-16 (the user's ask) what the
         // page may do under Guardrails and which tabs it shows under Tabs ("The page" held both until then); the connection details off since then; the bot check control on under them since 2026-10-17; the reach local since 2026-11-08.
         AssertTabEnds("\n \n" + MenuLayout.Heading("Server", 120) + "\n▸ Web UI                     off\n  Web UI port                8765\n  Web UI reach               local\n  Web UI HTTPS address       auto\n  Web UI sign in mode        one-time-link\n" + MenuLayout.Heading("Guardrails", 120) + "\n  Web UI commands            off\n  Web UI connection details  off\n  Web UI bot check control   off\n" + MenuLayout.Heading("Tabs", 120) + "\n  Web UI profile theme       on\n  Web UI chat controls       on\n  Web UI voice controls      off\n  Web UI home controls       off\n  Web UI shopping controls   off\n  Web UI video controls      off\n", 120);
@@ -4799,7 +4799,7 @@ public partial class SettingsMenuTests : IDisposable
     public async Task Toggle_DollarMention_IsRow79_TheLast_OnByDefault_NoReconnect()
     {
         // The $-mention switch (2026-09-19): the enum's last member, /tools' Options tab on the pane.
-        Down(78);   // one row up since Allow skill delete went, 2026-09-23; one down for Show header, 2026-10-01
+        Down(82);   // one row up since Allow skill delete went, 2026-09-23; one down for Show header, 2026-10-01; four down for the Private rows, 2026-11-25
         Push(Keys.Enter, Keys.Down, Keys.Enter, Keys.Escape);
 
         Assert.Equal(SettingsChanges.None, await _menu.ShowAsync(CancellationToken.None));
@@ -4819,7 +4819,7 @@ public partial class SettingsMenuTests : IDisposable
     {
         // 2026-09-19: the enum's last member, the General tab's last row on the pane; a command line, not a path, so nothing is checked here.
         _console.Profile.Width = 240;
-        Down(82);   // one row up since Allow skill delete went, 2026-09-23; one down for Show header, 2026-10-01
+        Down(86);   // one row up since Allow skill delete went, 2026-09-23; one down for Show header, 2026-10-01; four down for the Private rows, 2026-11-25
         Push(Keys.Enter);                           // Draft editor: empty
         _console.Input.PushText("code --wait");
         Push(Keys.Enter);                           // saved
@@ -4964,7 +4964,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(30, _settings.Current.SessionRetentionDays);
         // The seven rows padded to the tab's own column (28) in the user's order (the show-name picker under the naming mode, the tool above the search cap; save thinking last
         // from 2026-09-28, under the logging switch since 2026-10-10), in three runs since 2026-10-10, then the picker's page, then the notices on the status line.
-        AssertTabEnds("\n" + Head(SettingsTab.Sessions) + "\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging           on\n  Session save thinking     off\n  Session retention (days)  forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode       model-written\n  Session show name         all\n", 120);   // padded to 26 since its Search tool rows went to /tools › Core › Sessions (2026-11-21; 28 until then)
+        AssertTabEnds("\n" + Head(SettingsTab.Sessions) + "\n \n" + MenuLayout.Heading("Saving", 120) + "\n▸ Session logging           on\n  Session save thinking     off\n  Session retention (days)  forever\n" + MenuLayout.Heading("Titles", 120) + "\n  Session naming mode       model-written\n  Session show name         all\n" + MenuLayout.Heading("Private", 120) + "\n  Private at start          off\n  Private pictures          ask\n  Private log text          hide\n  Private learning          off\n", 120);   // padded to 26 since its Search tool rows went to /tools › Core › Sessions (2026-11-21; 28 until then)
         AssertPickerEnds("\n" + Titled(GroupBreadcrumb(SettingsTab.Sessions, "Session naming mode")) + "\n \n  first-line     the session is named after its first sent line\n▸ model-written  the model writes a short title after the first turn\n", 120);
         Assert.Contains("\n  · Session retention (days): 30 days\n", Output);
         Assert.Contains("\n▸ Session retention (days)  30 days\n", Output);
@@ -4980,7 +4980,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(SettingsTab.Common, (SettingsTab)5);        // after the Client group since later on 2026-10-10 (fifth since Toolbars, 2026-11-21); second from 2026-10-04, the user's order (LLM until 2026-10-10)
         Assert.Equal(SettingsTab.Http, (SettingsTab)6);        // right after Common, 2026-10-10
         Assert.Equal(SettingsTab.Embedded, (SettingsTab)7);   // after Http since 2026-10-10; third from 2026-10-04 until Http, 2026-10-10; second from 2026-09-29 (the user's order) until LLM, 2026-10-04
-        Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);   // the tool switch and the search cap on /tools › Core › Sessions since 2026-11-21
+        Assert.Equal([SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays, SettingsField.SessionNamingMode, SettingsField.SessionShowName, SettingsField.PrivateAtStart, SettingsField.PrivatePictures, SettingsField.PrivateLogText, SettingsField.PrivateLearning], SettingsMenu.TabFields[(int)SettingsTab.Sessions]);   // the Private rows 2026-11-25   // the tool switch and the search cap on /tools › Core › Sessions since 2026-11-21
         // Save thinking (2026-09-28): a toggle off by default; the Sessions tab's last row until 2026-10-10, under the logging switch since.
         Assert.True(SettingsMenu.IsToggle(SettingsField.SessionSaveThinking));
         Assert.Equal("off", SettingsMenu.FieldValue(SettingsField.SessionSaveThinking, new AppSettingsData(), ""));
@@ -4992,7 +4992,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal("must be 1 to 20 results", SettingsMenu.SessionSearchMaxResultsRangeError);
         Assert.Equal("forever", SettingsMenu.Days(0));
         Assert.Equal("1 day", SettingsMenu.Days(1));
-        Assert.Equal("every completed turn is written to this profile's session store", SettingsMenu.ToggleDescribe(SettingsField.SessionLogging, true));
+        Assert.Equal("every turn is written to the session store, except a private one's", SettingsMenu.ToggleDescribe(SettingsField.SessionLogging, true));   // the private-conversations plan, 2026-11-25
         Assert.Equal("nothing is written; stored sessions can still be restored or purged", SettingsMenu.ToggleDescribe(SettingsField.SessionLogging, false));
         Assert.Equal("the model can search, list and read this profile's earlier sessions", SettingsMenu.ToggleDescribe(SettingsField.SessionTool, true));
         Assert.Equal("the model never sees an earlier session", SettingsMenu.ToggleDescribe(SettingsField.SessionTool, false));
@@ -6113,7 +6113,7 @@ public partial class SettingsMenuTests : IDisposable
         Assert.Equal(["Connection", "Requests"], SettingsMenu.TabSections[SettingsTab.OpenAI].Select(s => s.Title));
         Assert.Equal(["Text-to-speech", "Voices"], SettingsMenu.TabSections[SettingsTab.Tts].Select(s => s.Title));
         Assert.Equal(["Speech-to-text", "Wake word", "Interruptions"], SettingsMenu.TabSections[SettingsTab.Stt].Select(s => s.Title));
-        Assert.Equal(["Saving", "Titles"], SettingsMenu.TabSections[SettingsTab.Sessions].Select(s => s.Title));   // Search tool /tools › Core › Sessions since 2026-11-21
+        Assert.Equal(["Saving", "Titles", "Private"], SettingsMenu.TabSections[SettingsTab.Sessions].Select(s => s.Title));   // Private 2026-11-25   // Search tool /tools › Core › Sessions since 2026-11-21
         Assert.Equal(["Server", "Guardrails", "Tabs"], SettingsMenu.TabSections[SettingsTab.WebUi].Select(s => s.Title));   // 2026-10-16, the user's ask
         Assert.Equal(["The panel", "Each call", "Threads and servers"], SettingsMenu.TabSections[SettingsTab.Advisors].Select(s => s.Title));
         Assert.Equal(Enum.GetValues<SettingsTab>(), SettingsMenu.TabSections.Keys.Order());   // every tab headed

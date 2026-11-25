@@ -213,7 +213,7 @@ public sealed class DockerSession : IDisposable
         try
         {
             var reply = await Client().PostAsync(path, timeout, cancellationToken).ConfigureAwait(false);
-            DiagnosticLog.Info(DockerText.Category, DockerText.AuditLine(who, action + " " + target.Name, reply.Ok ? (reply.Already ? "already so" : "done") : reply.Error!));
+            DiagnosticLog.Audit(DockerText.Category, DockerText.AuditLine(who, action + " " + target.Name, reply.Ok ? (reply.Already ? "already so" : "done") : reply.Error!));
             return reply;
         }
         finally

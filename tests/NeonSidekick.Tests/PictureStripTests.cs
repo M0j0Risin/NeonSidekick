@@ -499,7 +499,7 @@ public partial class PictureStripTests : IDisposable
         Assert.StartsWith(new string('\n', 9) + Rule(36) + " " + ScreenPane.CloseGlyph + " ─\n" + row + "\n", Output);
     }
 
-    /// <summary>A click on the strip rule's × or the cell either side hits it (2026-09-28); the button's with none drawn misses.</summary>
+    /// <summary>A click on the strip rule's × or the cell either side hits it (2026-09-28).</summary>
     [Fact]
     public void Pane_HitsTheStripsClose_OnItsRule()
     {
@@ -514,7 +514,7 @@ public partial class PictureStripTests : IDisposable
         Assert.True(pane.TryHitStripClose(38, 92));
         Assert.False(pane.TryHitStripClose(35, 92));
         Assert.False(pane.TryHitStripClose(37, 93));
-        Assert.False(pane.TryHitStripButton(2, 92));
+        Assert.False(pane.TryHitStripClose(2, 92));   // the rule's left end, the viewer's button's until 2026-11-25
     }
 
     /// <summary>A click on the strip's ‹ or › (2026-10-10, the user's ask): their column on any of the strip's rows, −1 and +1; a tile, the rules and an arrow not drawn miss.</summary>
@@ -553,21 +553,22 @@ public partial class PictureStripTests : IDisposable
     }
 
     /// <summary>
-    /// The closed strip's 🎞️ on the upper rule (2026-10-03, the user's ask): the × puts the strip away and the 🎞️ on the rule
-    /// at once (RedrawStrip); it takes a click on its cells and the space either side (no ⤡ beside it); the reopen takes it
-    /// away with the strip back; under an overlay it goes, and the tick follows the provider.
+    /// The strip's 🎞️ on the upper rule (2026-10-03, the user's ask; open or closed since 2026-11-25): it takes a click on its
+    /// cells and the space either side (no ⤡ beside it), with the strip open and with it closed; under an overlay it goes, and
+    /// the tick follows the provider.
     /// </summary>
     [Fact]
-    public void Pane_ClosedStrip_PutsTheReopenOnTheUpperRule()
+    public void Pane_TheStripsToggle_IsOnTheUpperRule_OpenAndClosed()
     {
         _cursorTop = 100;   // the upper rule at 99
         string film = NeonSidekick.Viewer.ViewerText.StripButton;
         bool offered = true;
         var strip = StripOf(2, 12, 12);
         using var pane = Pane(strip, () => !strip.Closed);
-        pane.StripReopen = () => offered && strip.Closed ? film : null;
+        pane.StripToggle = () => offered ? film : null;
         pane.Show();
-        Assert.False(pane.TryHitStripReopen(2, 99));   // open: no button
+        Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
+        Assert.True(pane.TryHitStripToggle(2, 99));   // open: there too, to close it
 
         int mark = Output.Length;
         strip.Close();
@@ -576,43 +577,41 @@ public partial class PictureStripTests : IDisposable
         Assert.Contains(ScreenPane.UpperRule("", folds: false, 40, film).Text + "\n" + InputLine.PromptGlyph, Output[mark..]);
         foreach (int x in new[] { 1, 2, 3, 4 })   // the space, 🎞️'s two cells, the space
         {
-            Assert.True(pane.TryHitStripReopen(x, 99));
+            Assert.True(pane.TryHitStripToggle(x, 99));
         }
 
-        Assert.False(pane.TryHitStripReopen(0, 99));
-        Assert.False(pane.TryHitStripReopen(5, 99));
-        Assert.False(pane.TryHitStripReopen(2, 98));
+        Assert.False(pane.TryHitStripToggle(0, 99));
+        Assert.False(pane.TryHitStripToggle(5, 99));
+        Assert.False(pane.TryHitStripToggle(2, 98));
         Assert.False(pane.TryHitFoldButton(2, 99));
 
         pane.ShowOverlay(new Markup("a"), "Esc closes");
-        Assert.False(pane.TryHitStripReopen(2, 99));
+        Assert.False(pane.TryHitStripToggle(2, 99));
         pane.CloseOverlay();
-        Assert.True(pane.TryHitStripReopen(2, 99));
+        Assert.True(pane.TryHitStripToggle(2, 99));
 
         strip.Open();
         pane.RedrawStrip();
         Assert.Equal(ScreenPane.StripPaneRows, pane.StripRows);
-        Assert.False(pane.TryHitStripReopen(2, 99));
+        Assert.True(pane.TryHitStripToggle(2, 99));
 
-        strip.Close();
-        pane.RedrawStrip();
         offered = false;   // the setting turned off in the app: the tick takes the button away
         _time.Advance(ScreenPane.Tick);
-        Assert.False(pane.TryHitStripReopen(2, 99));
+        Assert.False(pane.TryHitStripToggle(2, 99));
     }
 
     /// <summary>A window with no room for the strip draws no 🎞️ either: it would bring back nothing to see.</summary>
     [Fact]
-    public void Pane_ShortWindow_DrawsNoReopen()
+    public void Pane_ShortWindow_DrawsNoToggle()
     {
         _cursorTop = 100;
         _console.Profile.Height = 14;
         var strip = StripOf(1);
         strip.Close();
         using var pane = Pane(strip, () => !strip.Closed);
-        pane.StripReopen = () => NeonSidekick.Viewer.ViewerText.StripButton;
+        pane.StripToggle = () => NeonSidekick.Viewer.ViewerText.StripButton;
         pane.Show();
-        Assert.False(pane.TryHitStripReopen(2, 99));
+        Assert.False(pane.TryHitStripToggle(2, 99));
         Assert.DoesNotContain(NeonSidekick.Viewer.ViewerText.StripButton, Output);
     }
 

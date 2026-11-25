@@ -70,7 +70,8 @@ public class EnvironmentOverridesTests
             (EnvironmentOverrides.OpenAIApiKeyVariable, " sk-openai-env "),
             (EnvironmentOverrides.YouTubeApiKeyVariable, " AIza-yt-env "),
             (EnvironmentOverrides.AdvisorsVariable, " on "),
-            (EnvironmentOverrides.BraveApiKeyVariable, " BSA-env "));
+            (EnvironmentOverrides.BraveApiKeyVariable, " BSA-env "),
+            (EnvironmentOverrides.PrivateVariable, " Yes "));   // 2026-11-25, the private-conversations plan
 
         var e = env.ApplyTo(new AppSettingsData());
 
@@ -111,6 +112,7 @@ public class EnvironmentOverridesTests
         Assert.Equal("AIza-yt-env", e.YouTubeApiKey);   // trimmed (2026-10-05)
         Assert.Equal("BSA-env", e.WebMetasearchBraveApiKey);   // trimmed (2026-11-07)
         Assert.True(e.Advisors);   // a switch word (2026-10-10)
+        Assert.True(e.PrivateAtStart);   // a switch word (2026-11-25)
         Assert.Equal(EnvironmentOverrides.AllVariables.Length - 2, env.ActiveVariables().Count);   // everything but HOME and PROFILE
     }
 

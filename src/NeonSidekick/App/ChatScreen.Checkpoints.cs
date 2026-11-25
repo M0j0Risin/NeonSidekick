@@ -82,7 +82,7 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        string session = effective.SessionLogging && _sessionId is { } id ? id.ToString(CultureInfo.InvariantCulture) : CheckpointStore.NoSession;
+        string session = SavesSession(effective) && _sessionId is { } id ? id.ToString(CultureInfo.InvariantCulture) : CheckpointStore.NoSession;
         CheckpointTurns.Commit(store, assistant.History, turn, text, session, effective, _time.GetUtcNow());
     }
 

@@ -96,6 +96,7 @@ public static class WebCommands
         SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Docx,
         SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
         SlashCommand.MsgClear, SlashCommand.Mark,   // /mark (2026-10-18): the PC's rules, set from the page too
+        SlashCommand.Private,   // 2026-11-25: the private-conversations plan, its yes and its pictures question raced on the page and the PC
         SlashCommand.Custom,   // 2026-10-30: the user's own commands, a message once expanded
         SlashCommand.Update,   // 2026-11-04, self-update: /update notes alone
         SlashCommand.BotChat,   // 2026-11-12, the user's ask: every form, the chat shown on the page (no webcam from the page)
@@ -180,7 +181,7 @@ public static class WebCommands
             // 2026-11-23: /advisor list opens the Advisor list, a pane at the PC; the page is pointed at the bare /advisor, which lists here.
             SlashCommand.Advisor when Advisors.AdvisorText.ParseSetup(args, settings.AdvisorTemplateIds) is { Kind: Advisors.AdvisorSetupKind.List } =>
                 Pane(word + " " + Advisors.AdvisorText.ListWord, Advisors.AdvisorText.Word),
-            SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Timer or SlashCommand.Mark
+            SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Timer or SlashCommand.Mark or SlashCommand.Private
                 or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Imagine => WebCommandVerdict.Run,
             // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.
             SlashCommand.MsgClear => WebCommandVerdict.Run,

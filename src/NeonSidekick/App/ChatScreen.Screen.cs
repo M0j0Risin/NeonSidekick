@@ -187,7 +187,7 @@ internal sealed partial class ChatScreen
         {
             if (string.Equals(args.Trim(), ScreenText.ViewWord, StringComparison.OrdinalIgnoreCase))
             {
-                OpenViewerOn(_effective().ScreenOutputFolder, notice: true);
+                OpenViewerOn(_effective().ScreenOutputFolder);
             }
             else
             {

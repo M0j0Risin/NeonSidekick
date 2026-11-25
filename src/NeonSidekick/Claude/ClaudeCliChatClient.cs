@@ -155,9 +155,11 @@ public sealed class ClaudeCliChatClient : IChatClient
         string executable = _context.Executable() ?? throw new ClaudeStartException(ClaudeText.NotFound);
         var tools = options?.Tools?.OfType<AIFunction>().ToList() ?? [];
         string prompt = tools.Count > 0 ? input.SystemPrompt + "\n\n" + ClaudeCliText.ToolNamesNote : input.SystemPrompt;
+        // A private conversation (2026-11-25): the launch says so, so a switch restarts the child; it never resumes, and a start opens with the preamble.
+        bool hidden = Diagnostics.PrivateMode.Active;
         var launch = new ClaudeServerLaunch(executable, sessionId, ClaudeCliEndpoint.ModelOf(Endpoint.ModelId), EffortOf(options), _context.WorkingDirectory,
-            prompt, string.Join(",", tools.Select(t => t.Name)));
-        bool resume = _started.Contains(sessionId) || input.HasEarlierTurns;
+            prompt, string.Join(",", tools.Select(t => t.Name)), hidden);
+        bool resume = !hidden && (_started.Contains(sessionId) || input.HasEarlierTurns);
         var turn = new Turn(sessionId, launch, tools, input, resume);
         await StartAsync(turn, input.NewContent, cancellationToken).ConfigureAwait(false);
         return turn;

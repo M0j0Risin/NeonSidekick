@@ -729,6 +729,33 @@ public sealed class AppSettingsData
     public string SessionShowName { get; set; } = Sessions.SessionShowName.Default;
 
     /// <summary>
+    /// Whether every conversation starts private (2026-11-25, the private-conversations plan): nothing of it is saved to
+    /// <c>sessions.db</c>, the input-line history, the skills or memory, and it leaves per <see cref="PrivatePictures"/> and
+    /// <see cref="PrivateLogText"/>. <c>/private off</c> starts a normal one; the next <c>/new</c> or start is private again.
+    /// <c>--private</c> and <c>NEONSIDEKICK_PRIVATE</c> set it for one run (and then <c>/private off</c> is refused).
+    /// </summary>
+    public bool PrivateAtStart { get; set; }
+
+    /// <summary>
+    /// What a private conversation's pictures do when it ends (2026-11-25): one of <see cref="Sessions.PrivatePictures.Names"/> —
+    /// <c>ask</c> (the default: the end asks Keep or Delete), <c>keep</c>, <c>delete</c> (saved under <c>images\private\&lt;run&gt;</c>
+    /// and deleted at the end, with those saved before the switch). Fixed when the conversation goes private. No variable.
+    /// </summary>
+    public string PrivatePictures { get; set; } = Sessions.PrivatePictures.Default;
+
+    /// <summary>
+    /// Whether the <c>--log</c> file hides what a private conversation says (2026-11-25): <c>hide</c> (the default: every line keeps its time,
+    /// level and category and reads <c>[private]</c>, audit lines whole) or <c>keep</c>. Fixed when the conversation goes private. No variable.
+    /// </summary>
+    public string PrivateLogText { get; set; } = Sessions.PrivateLogText.Default;
+
+    /// <summary>
+    /// Whether reflection may learn skills and the model save memories during a private conversation (2026-11-25; off by default). Read at
+    /// each turn, so turned on mid-conversation it holds from the next turn. No variable.
+    /// </summary>
+    public bool PrivateLearning { get; set; }
+
+    /// <summary>
     /// Whether <c>session_manager</c> is offered to the model (the <c>Ask user</c> shape: a per-group
     /// offer, no clear): search, list and read earlier sessions of this profile. Read at each turn,
     /// no reconnect. No variable.

@@ -1349,7 +1349,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable, Mcp.IMcpResour
         }
         finally
         {
-            DiagnosticLog.Info(Category, McpText.AuditLogLine(audited, decision, outcome, json));
+            DiagnosticLog.Audit(Category, McpText.AuditLogLine(audited, decision, outcome, PrivateMode.HideLog ? PrivateMode.Placeholder : json));
         }
     }
 
@@ -1588,7 +1588,7 @@ internal sealed class McpSession : IAsyncDisposable, IDisposable, Mcp.IMcpResour
         }
         finally
         {
-            DiagnosticLog.Info(Category, McpText.AuditLogLine(McpReadToolName + " " + name + " " + method, decision, outcome, json));
+            DiagnosticLog.Audit(Category, McpText.AuditLogLine(McpReadToolName + " " + name + " " + method, decision, outcome, PrivateMode.HideLog ? PrivateMode.Placeholder : json));
         }
     }
 

@@ -1826,7 +1826,7 @@ internal sealed partial class LlmSession : IDisposable
         return Titling;
     }
 
-    private void CancelTitling()
+    public void CancelTitling()
     {
         if (_titlingCts is { } cts && IsTitling)
         {

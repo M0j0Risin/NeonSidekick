@@ -21,7 +21,8 @@ public sealed record ClaudeRequest(
     ClaudePermissionLevel Permission,
     string Executable = "",
     string? Model = null,
-    string? Effort = null);
+    string? Effort = null,
+    bool Private = false);
 
 /// <summary>What a <c>/claude</c> run reports as it goes (<see cref="ClaudeStreamParser"/> reads them off the CLI's <c>stream-json</c>).</summary>
 public abstract record ClaudeEvent

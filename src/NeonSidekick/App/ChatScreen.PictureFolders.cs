@@ -22,7 +22,7 @@ internal sealed partial class ChatScreen
         {
             // The note only after a window opened (2026-10-20, the code review: it followed a refusal too).
             case PictureFolderVerb.View:
-                if (OpenViewerOn(folder, notice: true))
+                if (OpenViewerOn(folder))
                 {
                     SayIfNoSplashPictures();
                 }
@@ -59,7 +59,7 @@ internal sealed partial class ChatScreen
         switch (PastedCommand.Parse(args))
         {
             case PictureFolderVerb.View:
-                OpenViewerOn(folder, notice: true);
+                OpenViewerOn(folder);
                 return;
             case PictureFolderVerb.Thumbs:
                 OpenThumbsOn(folder);
@@ -84,7 +84,7 @@ internal sealed partial class ChatScreen
         switch (verb)
         {
             case PictureFolderVerb.View:
-                OpenViewerOn(folder, notice: true);
+                OpenViewerOn(folder);
                 return;
             case PictureFolderVerb.Thumbs:
                 OpenThumbsOn(folder);

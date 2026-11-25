@@ -58,6 +58,9 @@ public sealed class EnvironmentOverrides
     public const string DockerPipeVariable = Prefix + "DOCKER_PIPE";
     public const string YouTubeApiKeyVariable = Prefix + "YOUTUBE_API_KEY";
     public const string BraveApiKeyVariable = Prefix + "BRAVE_API_KEY";
+
+    /// <summary><c>Private at start</c> for one run (2026-11-25): a switch word, <c>off</c> beating a saved on. <c>--private</c> outranks it.</summary>
+    public const string PrivateVariable = Prefix + "PRIVATE";
     public const string AdvisorsVariable = Prefix + "ADVISORS";
 
     /// <summary>The terminal's own variable, read by <see cref="TerminalProgram"/>: not an override, so not in <see cref="AllVariables"/>.</summary>
@@ -84,7 +87,7 @@ public sealed class EnvironmentOverrides
         AnthropicApiVariable, AnthropicApiKeyVariable, LlmSamplingVariable, HomeAssistantUrlVariable,
         HomeAssistantTokenVariable, EmbeddedBackendVariable, EmbeddedContextVariable, ClaudeCodeServerVariable,
         DockerPipeVariable, OpenAIApiVariable, OpenAIApiKeyVariable, YouTubeApiKeyVariable, AdvisorsVariable,
-        BraveApiKeyVariable,
+        BraveApiKeyVariable, PrivateVariable,
     };
 
     /// <summary>
@@ -113,6 +116,7 @@ public sealed class EnvironmentOverrides
         [SearxngUrlVariable] = App.SettingsField.WebSearxngUrl,
         [CommandPolicyVariable] = App.SettingsField.ShellCommandPolicy,
         [ShellPoliceVariable] = App.SettingsField.ShellPolice,
+        [PrivateVariable] = App.SettingsField.PrivateAtStart,
         [ShellNativeVariable] = App.SettingsField.ShellPreferNative,
         [ObsidianVaultVariable] = App.SettingsField.ObsidianVault,
         [ComfyUrlVariable] = App.SettingsField.ComfyUrl,
@@ -216,6 +220,9 @@ public sealed class EnvironmentOverrides
     /// outranks it. Separate from <see cref="ShellCommandPolicy"/> on purpose: <c>yolo</c> never implies it.
     /// </summary>
     public bool? ShellPolice => ReadSwitch(ShellPoliceVariable);
+
+    /// <summary><c>Private at start</c> for this run, or null when unset or not a switch word (2026-11-25). <c>on</c> makes every conversation private and holds <c>/private off</c> back.</summary>
+    public bool? Private => ReadSwitch(PrivateVariable);
 
     /// <summary>
     /// <c>Shell prefer native tools</c> for this launch, or null when unset or not a switch word (2026-09-26, the
@@ -365,6 +372,7 @@ public sealed class EnvironmentOverrides
                 LlmContextVariable => LlmContextLength is not null,
                 CommandPolicyVariable => ShellCommandPolicy is not null,
                 ShellPoliceVariable => ShellPolice is not null,
+                PrivateVariable => Private is not null,
                 ShellNativeVariable => ShellNative is not null,
                 AdvisorsVariable => Advisors is not null,
                 AnthropicApiVariable => AnthropicApi is not null,
@@ -437,6 +445,7 @@ public sealed class EnvironmentOverrides
         if (WebSearxngUrl is { } searxng) effective.WebSearxngUrl = searxng;
         if (ShellCommandPolicy is { } policy) effective.ShellCommandPolicy = policy;
         if (ShellPolice is { } police) effective.ShellPolice = police;
+        if (Private is { } privateAtStart) effective.PrivateAtStart = privateAtStart;
         if (ShellNative is { } native) effective.ShellPreferNative = native;
         if (ObsidianVault is { } vault) effective.ObsidianVault = vault;
         if (ComfyUrl is { } comfy) effective.ComfyUrl = comfy;

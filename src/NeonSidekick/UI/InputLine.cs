@@ -197,7 +197,71 @@ public sealed partial class InputLine
     /// The newest <see cref="HistoryCap"/> entries, drafts among them, the oldest dropped past it (2026-10-17, the user's call: it grew
     /// for the whole run until then).
     /// </summary>
-    private readonly List<(string Text, bool Draft)> _history = new();
+    private readonly List<HistoryEntry> _history = new();
+
+    /// <summary>
+    /// One history entry: the line, whether it is a draft set aside, and how a private conversation touched it (2026-11-25, the
+    /// private-conversations plan): <see cref="PrivateMark.Added"/> went in while private, <see cref="PrivateMark.SentDraft"/> was a draft set aside
+    /// earlier and sent while private, so <see cref="ForgetPrivate"/> takes the first out and makes the second a draft again.
+    /// </summary>
+    private readonly record struct HistoryEntry(string Text, bool Draft, PrivateMark Private = PrivateMark.None);
+
+    /// <summary>How a private conversation touched a history entry.</summary>
+    private enum PrivateMark : byte
+    {
+        None,
+        Added,
+        SentDraft,
+    }
+
+    /// <summary>
+    /// Whether a line added now belongs to a private conversation (2026-11-25): set by the screen while one runs, read under the history's lock, so a
+    /// Web UI line joining on a Kestrel thread is tagged by the state its add sees.
+    /// </summary>
+    public bool TagPrivate
+    {
+        get
+        {
+            lock (_historyGate)
+            {
+                return _tagPrivate;
+            }
+        }
+
+        set
+        {
+            lock (_historyGate)
+            {
+                _tagPrivate = value;
+            }
+        }
+    }
+
+    private bool _tagPrivate;
+
+    /// <summary>
+    /// A private conversation's lines dropped from Up (2026-11-25): those it added go, a draft set aside before it and sent during it is a draft again,
+    /// and the chat row's walk forgets the line it holds. Never a reload: with <c>Keep message history</c> off it would empty the earlier lines too.
+    /// How many entries went.
+    /// </summary>
+    public int ForgetPrivate()
+    {
+        int removed;
+        lock (_historyGate)
+        {
+            removed = _history.RemoveAll(e => e.Private == PrivateMark.Added);
+            for (int i = 0; i < _history.Count; i++)
+            {
+                if (_history[i].Private == PrivateMark.SentDraft)
+                {
+                    _history[i] = _history[i] with { Draft = true, Private = PrivateMark.None };
+                }
+            }
+        }
+
+        _chat?.ForgetWalk();
+        return removed;
+    }
 
     /// <summary>The most entries the history holds: the stored history's cap, so the two never drift apart (2026-10-17).</summary>
     public const int HistoryCap = Sessions.SessionStore.CommandHistoryCap;
@@ -355,12 +419,12 @@ public sealed partial class InputLine
                 tell = keep && _history[^1].Draft;
                 if (tell)
                 {
-                    _history[^1] = (text, false);
+                    _history[^1] = new HistoryEntry(text, false, _tagPrivate ? PrivateMark.SentDraft : PrivateMark.None);
                 }
             }
             else
             {
-                _history.Add((text, !keep));
+                _history.Add(new HistoryEntry(text, !keep, _tagPrivate ? PrivateMark.Added : PrivateMark.None));
                 if (_history.Count > HistoryCap)
                 {
                     _history.RemoveRange(0, _history.Count - HistoryCap);
@@ -391,12 +455,12 @@ public sealed partial class InputLine
     public void ReplaceHistory(IEnumerable<string> lines)
     {
         ArgumentNullException.ThrowIfNull(lines);
-        var fresh = new List<(string, bool)>();
+        var fresh = new List<HistoryEntry>();
         foreach (string line in lines)
         {
-            if (line.Length > 0 && (fresh.Count == 0 || !string.Equals(fresh[^1].Item1, line, StringComparison.Ordinal)))
+            if (line.Length > 0 && (fresh.Count == 0 || !string.Equals(fresh[^1].Text, line, StringComparison.Ordinal)))
             {
-                fresh.Add((line, false));
+                fresh.Add(new HistoryEntry(line, false));
             }
         }
 
@@ -513,9 +577,6 @@ public sealed partial class InputLine
     /// </summary>
     public Action<int>? SelectPicture { get; set; }
 
-    /// <summary>What a click on the picture strip's button does (2026-09-27, <see cref="ScreenPane.StripButton"/>): the screen's picture viewer; null = nothing.</summary>
-    public Action? OpenViewer { get; set; }
-
     /// <summary>What a click on the picture strip's close × does (2026-09-28, <see cref="ScreenPane.TryHitStripClose"/>): the screen puts the strip away until the 🎞️ brings it back; null = nothing.</summary>
     public Action? CloseStrip { get; set; }
 
@@ -525,8 +586,8 @@ public sealed partial class InputLine
     /// <summary>What one click on a toolbar glyph does (2026-10-04, the UI review): the screen flashes the glyph's note on the hint row; null = nothing. The second click of a pair still ends the read.</summary>
     public Action<ScreenPane.ToolbarHit>? ToolbarNote { get; set; }
 
-    /// <summary>What a click on the upper rule's 🎞️ does (2026-10-03, <see cref="ScreenPane.TryHitStripReopen"/>): the screen brings its closed strip back; null = nothing.</summary>
-    public Action? ReopenStrip { get; set; }
+    /// <summary>What a click on the upper rule's 🎞️ does (2026-10-03, <see cref="ScreenPane.TryHitStripToggle"/>): the screen closes its strip, or brings the closed one back; null = nothing.</summary>
+    public Action? ToggleStrip { get; set; }
 
     /// <summary>
     /// The picture behind an id (<see cref="ScreenPane.PictureAt"/>'s, the strip's and the transcript's alike) for a drag

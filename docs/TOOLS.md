@@ -1210,7 +1210,7 @@ Offered only during [`/project-init`](COMMANDS.md#project-notes), at the PC or o
 Under *MCP servers enabled*. An MCP (Model Context Protocol) server is an outside program that offers the model more tools.
 
 * Each connected server is a tool group, its tools named `<server>__<tool>` (`gateway__get_current_time`). `/mcp` switches servers and single tools.
-* Servers connect in the background (🔌 on the status bar); a reply started meanwhile gets those already connected.
+* Servers connect in the background (🔌 on the lower rule); a reply started meanwhile gets those already connected.
 * **A server that drops** reconnects once at its next call, or on Enter at its `/mcp` row. A call cut off by the drop is sent again only if the server marks it read-only and not destructive.
 * A server's changed tool list applies from your next message.
 * **Server text is untrusted:** each text a tool returns reaches the model fenced (`⟪ ⟫`); a failed call starts `Error:`. A server's tool descriptions aren't fenced: trusting a server is your choice in `mcp.json`.

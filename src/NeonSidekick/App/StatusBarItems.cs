@@ -69,7 +69,7 @@ public static class StatusBarItems
     public static string Describe(string id) => id switch
     {
         Spinner => "turn activity spinner, info and stop hint: always on",
-        Status => "status icons: 🔊 🎤 👂 ✋, 🧠, 🏷️…",
+        Status => "status icons: 🔊 🎤 👂 ✋, 🏷️, 📝, 👥",
         Queued => "queue status when messages are queued",
         Timers => "timer info while timer(s) active",
         Reading => "reading info while reading is active (/read or /echo)",

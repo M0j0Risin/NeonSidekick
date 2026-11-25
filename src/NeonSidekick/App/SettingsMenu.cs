@@ -229,6 +229,18 @@ public enum SettingsField
     /// <summary>A picker over <see cref="Sessions.SessionShowName.Names"/>: which session names the rule above the input row shows (<see cref="Settings.AppSettingsData.SessionShowName"/>). The Sessions tab's fifth row, under the naming mode (2026-09-18; fourth until 2026-10-10); no reconnect (read at each draw).</summary>
     SessionShowName,
 
+    /// <summary>A toggle: every conversation starts private (<see cref="Settings.AppSettingsData.PrivateAtStart"/>). The Sessions tab's Private run, first (2026-11-25); read at each start and <c>/new</c>.</summary>
+    PrivateAtStart,
+
+    /// <summary>A picker over <see cref="Sessions.PrivatePictures.Names"/> (<see cref="Settings.AppSettingsData.PrivatePictures"/>, 2026-11-25); fixed when a conversation goes private.</summary>
+    PrivatePictures,
+
+    /// <summary>A picker over <see cref="Sessions.PrivateLogText.Names"/> (<see cref="Settings.AppSettingsData.PrivateLogText"/>, 2026-11-25); fixed when a conversation goes private.</summary>
+    PrivateLogText,
+
+    /// <summary>A toggle: reflection and <c>save_memory</c> while private (<see cref="Settings.AppSettingsData.PrivateLearning"/>, 2026-11-25); read at each turn.</summary>
+    PrivateLearning,
+
     /// <summary>A toggle: whether <c>session_manager</c> is offered to the model (<see cref="Settings.AppSettingsData.SessionTool"/>). <i>Session tools</i>, the first row of <c>/tools</c> › Core › Sessions since 2026-11-21 (the user's ask and name; <i>Session tool</i> on <c>/settings</c>' Sessions tab until then, its sixth row, first of the Search tool run, 2026-10-10; fifth from 2026-09-18, the user's order; last that morning, fourth until the show-name row); no reconnect (read at each turn).</summary>
     SessionTool,
 
@@ -1937,7 +1949,8 @@ internal sealed partial class SettingsMenu
          SettingsField.Theme, SettingsField.ThemedBackground, SettingsField.ThemedExternalWindows, SettingsField.GradientRules, SettingsField.WelcomeSplash, SettingsField.ShowHeader, SettingsField.ShowWorkingDirectory, SettingsField.MenuMaxHeight,
          SettingsField.DraftEditor, SettingsField.ImageEditor],
         [SettingsField.SessionLogging, SettingsField.SessionSaveThinking, SettingsField.SessionRetentionDays,
-         SettingsField.SessionNamingMode, SettingsField.SessionShowName],
+         SettingsField.SessionNamingMode, SettingsField.SessionShowName,
+         SettingsField.PrivateAtStart, SettingsField.PrivatePictures, SettingsField.PrivateLogText, SettingsField.PrivateLearning],
         [SettingsField.BotChatLlmMode, SettingsField.BotChatMultiEmbedded, SettingsField.BotChatMultiEmbeddedKill, SettingsField.BotChatLimitedComfyWorkflows, SettingsField.BotChatImageMode, SettingsField.BotChatImg2ImgMode, SettingsField.BotChatImageAsync, SettingsField.BotChatNonTtsDelaySeconds, SettingsField.BotChatLimitedTools, SettingsField.BotChatLimitedSkills, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.BotChatVision, SettingsField.BotChatCamera, SettingsField.BotChatRecentContext],
         [SettingsField.WebUi, SettingsField.WebUiPort, SettingsField.WebUiReach, SettingsField.WebUiHttpsAddress, SettingsField.WebUiSignInMode, SettingsField.WebUiCommands, SettingsField.WebUiConnectionDetails, SettingsField.WebUiBotCheckControl, SettingsField.WebUiProfileTheme, SettingsField.WebUiChatControls, SettingsField.WebUiVoice, SettingsField.WebUiHomeControls, SettingsField.WebUiShoppingControls, SettingsField.WebUiYouTubeControls],
         // Toolbars (2026-11-21, the user's ask): Chat's Tool bars run as it was, Bars then Order.
@@ -2495,7 +2508,7 @@ internal sealed partial class SettingsMenu
             or SettingsField.AgentSkills or SettingsField.GlobalSkills or SettingsField.ExternalSkills or SettingsField.ProjectSkills or SettingsField.ProjectFile or SettingsField.TranscriptMarkdown
             or SettingsField.SkillHashMention or SettingsField.ReflectionAutoLearn
             or SettingsField.HideExitAutocomplete or SettingsField.EmojiPicker or SettingsField.MidiInput or SettingsField.CommandTypoIntercept or SettingsField.KeepMessageHistory or SettingsField.ShowHeader or SettingsField.ShowWorkingDirectory or SettingsField.ThemedExternalWindows or SettingsField.ThemedBackground or SettingsField.GradientRules or SettingsField.ReplyFooter or SettingsField.WebFooter or SettingsField.CheckForUpdatesAtStart
-            or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking
+            or SettingsField.SessionLogging or SettingsField.SessionTool or SettingsField.SessionSaveThinking or SettingsField.PrivateAtStart or SettingsField.PrivateLearning
             or SettingsField.ToolsDollarMention or SettingsField.ShowFileDiffs or SettingsField.ReflectionIncludesSessions or SettingsField.ReflectionYieldsToTurns or SettingsField.ReflectionEditsSupportingFiles or SettingsField.McpServers or SettingsField.GitLibTools
             or SettingsField.LlmCompactShowSummary or SettingsField.ShellPolice or SettingsField.ShellPreferNative
             or SettingsField.ObsidianTools or SettingsField.ObsidianAllowDelete or SettingsField.SqlTools or SettingsField.SqlPercentMention or SettingsField.ComfyTools or SettingsField.ComfyReinforceNegatives or SettingsField.ComfyShowPrompts or SettingsField.ComfyCaretMention or SettingsField.ComfyPictureStrip
@@ -2956,6 +2969,10 @@ internal sealed partial class SettingsMenu
         SettingsField.SessionLogging => "Session logging",
         SettingsField.SessionNamingMode => "Session naming mode",
         SettingsField.SessionShowName => "Session show name",
+        SettingsField.PrivateAtStart => "Private at start",
+        SettingsField.PrivatePictures => "Private pictures",
+        SettingsField.PrivateLogText => "Private log text",
+        SettingsField.PrivateLearning => "Private learning",
         SettingsField.SessionRetentionDays => "Session retention (days)",
         SettingsField.SessionSearchMaxResults => "Session search max results",
         SettingsField.SessionTool => "Session tools",   // "Session tool" until 2026-11-21 (the user's name, as Clock tools and Timer tools)
@@ -3375,6 +3392,10 @@ internal sealed partial class SettingsMenu
             SettingsField.SessionLogging => OnOff(data.SessionLogging),
             SettingsField.SessionNamingMode => data.SessionNamingMode,
             SettingsField.SessionShowName => data.SessionShowName,
+            SettingsField.PrivateAtStart => OnOff(data.PrivateAtStart),
+            SettingsField.PrivatePictures => data.PrivatePictures,
+            SettingsField.PrivateLogText => data.PrivateLogText,
+            SettingsField.PrivateLearning => OnOff(data.PrivateLearning),
             SettingsField.SessionRetentionDays => Days(data.SessionRetentionDays),
             SettingsField.SessionSearchMaxResults => Results(data.SessionSearchMaxResults),
             SettingsField.SessionTool => OnOff(data.SessionTool),
@@ -4342,6 +4363,14 @@ internal sealed partial class SettingsMenu
     /// <summary>One row of the session-naming-mode picker: the word and its hint, padded to fifteen (<c>model-written</c> is thirteen). Pinned.</summary>
     public static string SessionNamingModeLabel(string name) =>
         Markup.Escape(name.PadRight(15)) + Theme.DimMarkup(Sessions.SessionNamingMode.Describe(name));
+
+    /// <summary>One row of the private-pictures picker (2026-11-25): the word and its hint, padded to eight. Pinned.</summary>
+    public static string PrivatePicturesLabel(string name) =>
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Sessions.PrivatePictures.Describe(name));
+
+    /// <summary>One row of the private-log-text picker (2026-11-25): the word and its hint, padded to eight. Pinned.</summary>
+    public static string PrivateLogTextLabel(string name) =>
+        Markup.Escape(name.PadRight(8)) + Theme.DimMarkup(Sessions.PrivateLogText.Describe(name));
 
     /// <summary>One row of the session-show-name picker: the word and its hint, padded to fifteen like the naming mode's. Pinned.</summary>
     public static string SessionShowNameLabel(string name) =>
@@ -6126,6 +6155,16 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.SessionShowName)
         {
             return await PickSessionShowNameAsync(saved, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.PrivatePictures)
+        {
+            return await PickWordAsync(field, Sessions.PrivatePictures.Names, PrivatePicturesLabel, saved.PrivatePictures, (d, w) => d.PrivatePictures = w, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (field == SettingsField.PrivateLogText)
+        {
+            return await PickWordAsync(field, Sessions.PrivateLogText.Names, PrivateLogTextLabel, saved.PrivateLogText, (d, w) => d.PrivateLogText = w, cancellationToken).ConfigureAwait(false);
         }
 
         if (field == SettingsField.QueueMode)
@@ -8364,6 +8403,21 @@ internal sealed partial class SettingsMenu
         return true;
     }
 
+    /// <summary>A picker of words under the settings list (2026-11-25, the Private run's two): one <paramref name="label"/> row per word, the saved one under the cursor.</summary>
+    private async Task<bool> PickWordAsync(SettingsField field, string[] names, Func<string, string> label, string saved, Action<AppSettingsData, string> set, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(Crumb(FieldName(field)), names.Select(label).ToList(), PickKeys);
+        int? picked = await PickAsync(page, Array.FindIndex(names, n => string.Equals(n, saved?.Trim(), StringComparison.OrdinalIgnoreCase)), cancellationToken).ConfigureAwait(false);
+        if (picked is not { } index)
+        {
+            return Unchanged();
+        }
+
+        string name = names[index];
+        Apply(field, d => set(d, name));
+        return true;
+    }
+
     /// <summary>The session-show-name picker under the settings list: one <see cref="SessionShowNameLabel"/> row per <see cref="Sessions.SessionShowName.Names"/> entry, the saved one under the cursor.</summary>
     private async Task<bool> PickSessionShowNameAsync(AppSettingsData saved, CancellationToken cancellationToken)
     {
@@ -8968,6 +9022,8 @@ internal sealed partial class SettingsMenu
             SettingsField.WebFooter => data.WebFooter,
             SettingsField.CheckForUpdatesAtStart => data.CheckForUpdatesAtStart,
             SettingsField.SessionLogging => data.SessionLogging,
+            SettingsField.PrivateAtStart => data.PrivateAtStart,
+            SettingsField.PrivateLearning => data.PrivateLearning,
             SettingsField.SessionTool => data.SessionTool,
             SettingsField.ShellPolice => data.ShellPolice,
             SettingsField.ShellPreferNative => data.ShellPreferNative,
@@ -9117,6 +9173,8 @@ internal sealed partial class SettingsMenu
             case SettingsField.WebFooter: data.WebFooter = on; break;
             case SettingsField.CheckForUpdatesAtStart: data.CheckForUpdatesAtStart = on; break;
             case SettingsField.SessionLogging: data.SessionLogging = on; break;
+            case SettingsField.PrivateAtStart: data.PrivateAtStart = on; break;
+            case SettingsField.PrivateLearning: data.PrivateLearning = on; break;
             case SettingsField.SessionTool: data.SessionTool = on; break;
             case SettingsField.ShellPolice: data.ShellPolice = on; break;
             case SettingsField.ShellPreferNative: data.ShellPreferNative = on; break;
@@ -9273,7 +9331,9 @@ internal sealed partial class SettingsMenu
         SettingsField.ReplyFooter => on ? "a dim line under each reply: time, tokens, speed, tool calls, model" : "no line under replies",
         SettingsField.WebFooter => on ? "a dim 📚 line under a reply: the pages, files and searches it used" : "no sources line under replies",
         SettingsField.CheckForUpdatesAtStart => on ? "asks GitHub for a new version at every launch" : "no request at start; /update still works by hand",
-        SettingsField.SessionLogging => on ? "every completed turn is written to this profile's session store" : "nothing is written; stored sessions can still be restored or purged",
+        SettingsField.SessionLogging => on ? "every turn is written to the session store, except a private one's" : "nothing is written; stored sessions can still be restored or purged",
+        SettingsField.PrivateAtStart => on ? "every conversation starts private: nothing of it is saved" : "conversations are saved as Session logging says",
+        SettingsField.PrivateLearning => on ? "a private conversation may learn skills and save memories" : "a private conversation learns nothing and saves no memory",
         SettingsField.SessionTool => on ? "the model can search, list and read this profile's earlier sessions" : "the model never sees an earlier session",
         SettingsField.ShellPolice => on ? "shell police enabled" : "shell police disabled",   // the user's wording, 2026-10-03
         SettingsField.ShellPreferNative => on ? "a command a native tool covers is sent back to that tool first" : "the shell runs whatever it is given",

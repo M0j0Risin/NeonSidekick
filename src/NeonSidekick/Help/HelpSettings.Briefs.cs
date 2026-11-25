@@ -25,7 +25,7 @@ public static partial class HelpSettings
         SettingsField.CheckForUpdatesAtStart => "Checks GitHub for a new version at each launch and shows a notice when one is out. It sends no user data. Off, /update still works by hand.",
         SettingsField.QueueMode => "automatic: messages sent during a reply wait in /queue and go when it ends. manual: every message waits until you send it from /queue. off: no queue.",
         SettingsField.QueueCancelMode => "When you cancel a reply: hold keeps the queue until your next message, drain sends the next queued message at once, and empty clears the queue.",
-        SettingsField.KeepMessageHistory => "Saves your ↑/↓ input history (the newest 100 lines) so it survives restarts and profile switches. Off deletes the saved lines when the profile next loads.",
+        SettingsField.KeepMessageHistory => "Saves your ↑/↓ input history (the newest 100 lines, never a private conversation's) so it survives restarts and profile switches. Off deletes the saved lines when the profile next loads.",
         SettingsField.CommandTypoIntercept => "Asks \"Did you mean /clear?\" when you type a command without its slash, or with extra slashes, instead of sending it to the model.",
         SettingsField.HideExitAutocomplete => "Lists /exit in the / autocomplete. Off leaves it out, so a stray pick can't close the app; typing /exit in full still works.",
         SettingsField.MidiInput => "Listens to the MIDI devices your bindings name, so a learned pedal or pad button runs its command. /midi learns them.",
@@ -50,10 +50,14 @@ public static partial class HelpSettings
         SettingsField.ImageEditor => "Where a picture you double-click, or the model opens, is shown. Empty: the built-in viewer. system: your system's app for the file type. Anything else: a command.",
 
         // /settings › Client › Sessions
-        SettingsField.SessionLogging => "Saves every finished turn to the profile's session database, so /sessions can list, search and restore it.",
+        SettingsField.SessionLogging => "Saves every finished turn, except a private conversation's, so /sessions can list, search and restore it.",
         SettingsField.SessionSaveThinking => "Saves each reply's thinking with the session, so a resumed session can send it back while LLM preserve thinking is on. Makes the database bigger.",
         SettingsField.SessionRetentionDays => "Deletes sessions at startup once their last turn is older than this many days (0–3650; 0 = keep forever).",
         SettingsField.SessionNamingMode => "A session's title: model-written asks the model for a short name after the first turn; first-line uses the first line you sent.",
+        SettingsField.PrivateAtStart => "Every conversation starts private, so nothing of it is saved.",
+        SettingsField.PrivatePictures => "A private conversation's pictures at its end: ask, keep or delete.",
+        SettingsField.PrivateLogText => "Whether the --log file hides what a private conversation says.",
+        SettingsField.PrivateLearning => "Lets a private conversation learn skills and save memories.",
         SettingsField.SessionShowName => "Which session titles show above the input row: all, model-written (only names the model wrote or you typed) or none.",
 
         // /settings › Client › Botchat

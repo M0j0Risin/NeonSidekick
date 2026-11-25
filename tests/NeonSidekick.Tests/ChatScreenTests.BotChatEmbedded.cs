@@ -196,6 +196,69 @@ public partial class ChatScreenTests
         Assert.Empty(embedded.ExtrasOf(ExtraOwner.BotChat));
     }
 
+    /// <summary>🧟 on the lower rule (2026-11-25; the strip's until then): drawn with Status unchecked, and a double-click is <c>/botchat --kill</c>.</summary>
+    [Fact]
+    public async Task BotChat_TheLowerRulesExtras_ADoubleClickStopsThem()
+    {
+        _settings.Update(d => { d.TtsOutput = false; d.StatusBarItems = ["timers", "usage"]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the lower rule at 101
+        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
+        var input = WhenIdle(i =>
+        {
+            i.PushClick(238, 101);   // 🧟 alone on the lower rule: the space after it at the right edge
+            i.PushClick(238, 101);
+            PushLine(i, "/exit");
+        });
+
+        string output = await RunAsync(input);
+
+        Assert.Contains(" " + BotChat.ExtrasGlyph + " ─", output);
+        Assert.Contains(BotChat.ExtrasStoppedNotice(["Gemma 4 E2B"]), output);
+        Assert.Empty(embedded.Extras);
+        Assert.Empty(_chat.Requests);
+    }
+
+    /// <summary>The same 🧟 under a reply (2026-11-25): held as Ctrl+Alt+K's line is, said as waiting, and run when the reply ends.</summary>
+    [Fact]
+    public async Task BotChat_TheLowerRulesExtras_UnderAReply_RunsWhenTheReplyEnds()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        var embedded = UseEmbedded(new FakeEmbeddedLlm().Installed("gemma-4-e2b"));
+        await embedded.StartExtraAsync(EmbeddedModelCatalog.Find("gemma-4-e2b")!, new AppSettingsData(), ExtraOwner.BotChat, null, CancellationToken.None);
+        int stillRunning = -1;
+        ScriptedInput? keys = null;
+        _chat.EnqueueText("Hello ", "there.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                keys!.PushClick(238, 101);
+                keys.PushClick(238, 101);
+                for (int tries = 0; tries < 500 && keys.IsAvailable; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                stillRunning = embedded.Extras.Count;
+            }
+        };
+        var input = WhenIdle(i => PushLine(i, "hi"), i => PushLine(i, "/exit"));
+        keys = input;
+
+        string output = await RunAsync(input);
+
+        Assert.Equal(1, stillRunning);   // held: not mid-reply
+        Assert.Contains(ChatScreen.MidTurnDeferredNotice(SlashCommands.FirstWord(BotChat.KillLine)), output);
+        Assert.True(output.IndexOf("there.", StringComparison.Ordinal) < output.IndexOf(BotChat.ExtrasStoppedNotice(["Gemma 4 E2B"]), StringComparison.Ordinal));
+        Assert.Empty(embedded.Extras);
+    }
+
     /// <summary>Ctrl+Alt+K (2026-10-11, the user's ask) is <c>/botchat --kill</c> from the keyboard: the extras stopped, then none.</summary>
     [Fact]
     public async Task BotChat_CtrlAltK_StopsTheExtras_AsTheTypedKillDoes()

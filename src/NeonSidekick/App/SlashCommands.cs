@@ -168,6 +168,13 @@ public enum SlashCommand
     Prompts,
 
     /// <summary>
+    /// <c>/private [new|off]</c> (2026-11-25, the private-conversations plan): the conversation on screen goes private (nothing of it saved; a saved row and
+    /// its input lines deleted after a yes), <c>new</c> ends it as <c>/clear</c> does and starts a private one, <c>off</c> ends the private one. Headless,
+    /// an error naming <c>--private</c>.
+    /// </summary>
+    Private,
+
+    /// <summary>
     /// <c>/commands</c> (2026-10-30, the user's ask: their own slash commands, Claude Code's way): the custom commands' pane, or
     /// <c>new &lt;name&gt; [--global]</c> (the template in the editor) and <c>save &lt;name&gt; [--global]</c> (the last message sent) typed
     /// (<see cref="CustomCommandsCommand"/>). A pane under a reply bare, waits for its end with a verb.
@@ -553,6 +560,7 @@ public static class SlashCommands
             new("/pdf", "make PDFs, or merge, cut or turn them"),
             new(Viewer.ProcessWindowText.Word, "watch the model's background processes"),
             new("/print", "print a file or the last reply"),
+            new("/private", "a conversation that isn't saved"),
             new("/profile", "switch or manage profiles"),
             new(ProjectInit.ProjectInitText.Word, ProjectInit.ProjectInitText.HelpSummary),
             new("/prompts", "saved prompts to send"),
@@ -599,7 +607,7 @@ public static class SlashCommands
     public static readonly IReadOnlySet<string> BasicCommands = new HashSet<string>(StringComparer.Ordinal)
     {
         "/about", "/avatar", "/clear", "/compact", "/copy", "/cwd", "/draft", "/exit", "/explore", "/help", "/mark", "/memory", "/model", "/msgclear", "/new", "/perfbar", "/profile",
-        "/prompts", "/commands", "/queue", "/reasoning", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme", "/toolbar",
+        "/prompts", "/private", "/commands", "/queue", "/reasoning", "/rename", "/rewind", "/server", "/sessions", "/settings", "/skills", "/stt", "/sys", "/terminal", "/theme", "/toolbar",
         "/tools", "/tree", "/tts", "/undo", "/usage",
     };
 
@@ -682,7 +690,7 @@ public static class SlashCommands
     }
 
     /// <summary>Every command word, for help and completion.</summary>
-    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/video", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/midi", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/project-init", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/update", "/exit" };
+    public static readonly string[] Words = { "/help", "/clear", "/new", "/splash", "/rewind", "/undo", "/theme", "/mark", "/avatar", "/queue", "/sessions", "/private", "/rename", "/compact", "/server", "/model", "/reasoning", "/sampling", "/settings", "//", "/tools", "/mcp", "/tts", "/stt", "/read", "/memory", "/keycheck", "/cmd", "/msgclear", "/sys", "/usage", "/perfbar", "/homebar", "/toolbar", "/header", "/profile", "/prompts", "/commands", "/timer", "/cwd", "/tree", "/vault", "/explore", "/browse", "/browser", "/open", "/terminal", "/shortcut", "/log", "/process", "/view", "/video", "/imagine", "/comfy", "/pasted", "/ha", "/docker", "/eventlog", "/net", "/services", "/tasks", "/ad", "/monitor", "/midi", "/camera", "/screen", "/youtube", "/shopping", "/print", "/pdf", "/docx", "/echo", "/gituser", "/copy", "/draft", "/loop", "/plan", "/code-audit", "/project-init", "/botchat", "/claude", "/advisor", "/test", "/expand", "/collapse", "/find", "/window", "/skills", "/learn", "/about", "/webui", "/update", "/exit" };
 
     /// <summary>The <c>/queue</c> word: what a double-click on the hint row's queued part sends through the mid-turn line hook, so the pane opens exactly as the typed command's does (2026-09-18). Pinned.</summary>
     public const string QueueWord = "/queue";
@@ -758,6 +766,7 @@ public static class SlashCommands
             "/header" => SlashCommand.Header,
             "/profile" => SlashCommand.Profile,
             "/prompts" => SlashCommand.Prompts,
+            "/private" => SlashCommand.Private,
             "/commands" => SlashCommand.Commands,
             "/timer" => SlashCommand.Timer,
             "/cwd" => SlashCommand.Cwd,
@@ -880,7 +889,7 @@ public static class SlashCommands
         or SlashCommand.Tts or SlashCommand.Voice or SlashCommand.Read or SlashCommand.View or SlashCommand.Imagine or SlashCommand.Comfy or SlashCommand.Echo
         or SlashCommand.Learn
         or SlashCommand.Sys
-        or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Commands or SlashCommand.Custom or SlashCommand.Timer
+        or SlashCommand.Memory or SlashCommand.Profile or SlashCommand.Prompts or SlashCommand.Private or SlashCommand.Commands or SlashCommand.Custom or SlashCommand.Timer
         or SlashCommand.Cwd or SlashCommand.Tree or SlashCommand.Vault or SlashCommand.Explore or SlashCommand.Open or SlashCommand.Browse or SlashCommand.Browser or SlashCommand.Terminal or SlashCommand.Shortcut or SlashCommand.Copy or SlashCommand.Session or SlashCommand.Rename or SlashCommand.GitUser
         or SlashCommand.Loop or SlashCommand.Plan or SlashCommand.CodeAudit or SlashCommand.ProjectInit or SlashCommand.BotChat or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Cmd or SlashCommand.Queue or SlashCommand.Skills or SlashCommand.Test
         or SlashCommand.HomeAssistant or SlashCommand.Docker or SlashCommand.EventLog or SlashCommand.Net or SlashCommand.Services or SlashCommand.Tasks or SlashCommand.Ad or SlashCommand.Monitor or SlashCommand.Midi or SlashCommand.Camera or SlashCommand.Screen or SlashCommand.YouTube or SlashCommand.Video or SlashCommand.Shopping or SlashCommand.Print or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Perf or SlashCommand.HomeBar or SlashCommand.Toolbar or SlashCommand.Header or SlashCommand.Rewind or SlashCommand.Undo

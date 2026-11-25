@@ -174,7 +174,11 @@ public sealed partial class SidekickApp
             }
         }
 
-        if (!EffectiveSettings.SessionLogging)
+        if (HeadlessPrivate)
+        {
+            notices.Add(PrivateText.CopyNotice(id));   // a private copy (2026-11-25): the row is read, never written
+        }
+        else if (!EffectiveSettings.SessionLogging)
         {
             notices.Add(HeadlessText.SessionNotSaved);
         }

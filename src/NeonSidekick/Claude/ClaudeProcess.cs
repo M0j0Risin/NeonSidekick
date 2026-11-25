@@ -147,6 +147,12 @@ public sealed class ClaudeProcess : IClaudeCli
         }
     }
 
+    /// <summary>Claude Code's variable that skips its transcripts and prompt history in any mode, set on a private conversation's children. Pinned.</summary>
+    public const string SkipPromptHistoryVariable = "CLAUDE_CODE_SKIP_PROMPT_HISTORY";
+
+    /// <summary>Claude Code's variable that forces them on: taken out of a private conversation's children. Pinned.</summary>
+    public const string ForceSessionPersistenceVariable = "CLAUDE_CODE_FORCE_SESSION_PERSISTENCE";
+
     /// <summary>
     /// Starts a Claude CLI child with its three streams redirected as UTF-8 (no BOM) and <see cref="ChildEnvironment"/> on
     /// top of the inherited variables: the one place this app starts <c>claude</c>, <c>/claude</c>'s per-message children
@@ -154,6 +160,7 @@ public sealed class ClaudeProcess : IClaudeCli
     /// </summary>
     internal static Process Start(ProcessLaunch launch)
     {
+        ArgumentNullException.ThrowIfNull(launch);
         var start = new ProcessStartInfo(launch.Executable)
         {
             UseShellExecute = false,
@@ -172,6 +179,13 @@ public sealed class ClaudeProcess : IClaudeCli
         }
 
         ChildEnvironment.Apply(start, launch);
+        if (Diagnostics.PrivateMode.Active)
+        {
+            // A private conversation (2026-11-25): Claude Code's own prompt history and transcripts skipped, and an inherited force to keep them taken out.
+            start.Environment[SkipPromptHistoryVariable] = "1";
+            start.Environment.Remove(ForceSessionPersistenceVariable);
+        }
+
         try
         {
             return Process.Start(start) ?? throw new ClaudeStartException(ClaudeText.CouldNotStart(launch.Executable, "no process"));

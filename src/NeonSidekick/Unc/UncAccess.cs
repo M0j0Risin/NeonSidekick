@@ -225,7 +225,7 @@ public sealed class UncAccess
     public static void Audit(UncNamedShare share, string action, string path)
     {
         ArgumentNullException.ThrowIfNull(share);
-        DiagnosticLog.Info(UncConfigFile.Category, UncText.AuditLogLine(share.Name, Account(share), action, path));
+        DiagnosticLog.Audit(UncConfigFile.Category, UncText.AuditLogLine(share.Name, Account(share), action, path));
     }
 
     /// <summary>
@@ -236,7 +236,7 @@ public sealed class UncAccess
     public static void Audit(UncNamedShare share, string action, string path, string? to, bool partial = false)
     {
         ArgumentNullException.ThrowIfNull(share);
-        DiagnosticLog.Info(UncConfigFile.Category, UncText.AuditLogLine(share.Name, Account(share), action, path, to, partial));
+        DiagnosticLog.Audit(UncConfigFile.Category, UncText.AuditLogLine(share.Name, Account(share), action, path, to, partial));
     }
 
     /// <summary>Who a share is reached as: the <c>runas</c> account, else the user running the app.</summary>

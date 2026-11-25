@@ -794,7 +794,9 @@ internal sealed partial class ChatScreen
             QueueTag: WebQueueTagNow(),
             // Its Files tab re-reads when this moves (2026-11-16, #41), and its Sessions tab when this one does (the review's #78).
             FilesTag: WebFilesTagNow(),
-            SessionsTag: WebSessionsTagNow());
+            SessionsTag: WebSessionsTagNow(),
+            // The private stretch's id (2026-11-25): the header's 🕶️, and a page that kept another drops its draft and its ↑ list.
+            Private: _private.StretchId);
     }
 
     /// <summary>
@@ -983,6 +985,11 @@ internal sealed partial class ChatScreen
         if (Volatile.Read(ref _lastBotChat) is not { } saved)
         {
             return new WebReply(WebOutcome.Conflict, BotChat.NothingToResumeError);
+        }
+
+        if (saved.Private.Length == 0 && _private.IsPrivate)
+        {
+            return new WebReply(WebOutcome.Conflict, PrivateText.BotResumeRefused);   // 2026-11-25
         }
 
         if (!Profiles.NameEquals(saved.Starter, _settings.ProfileName))

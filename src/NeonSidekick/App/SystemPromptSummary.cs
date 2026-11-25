@@ -152,7 +152,8 @@ public sealed record SystemPromptFacts(
     bool DuckDbWrite = false,
     IReadOnlyList<Mcp.McpServerNote>? McpNotes = null,
     bool MemoryHere = false,
-    int ProjectNotOffered = 0)
+    int ProjectNotOffered = 0,
+    bool SkillEditor = true)
 {
     /// <summary>
     /// These facts with the group <paramref name="group"/> switches turned off (2026-11-02, the review: the <c>/usage</c> Context tab's
@@ -589,7 +590,7 @@ public static class SystemPromptSummary
         }
 
         // The skills block (2026-09-16): after the memory section, only with tools to load one.
-        sections.Add(new(SkillsLabel, SkillsStatus(facts), SkillsSent(facts) ? SkillsPrompt.Section(facts.Skills ?? [], facts.GlobalSkills) : ""));
+        sections.Add(new(SkillsLabel, SkillsStatus(facts), SkillsSent(facts) ? SkillsPrompt.Section(facts.Skills ?? [], facts.GlobalSkills, facts.SkillEditor) : ""));
 
         // The MCP servers' notes (2026-11-19, feature idea #59) under the prompt's own gate: MCP tools offered, and notes to send.
         if (facts.Mcp && facts.McpNotes is { Count: > 0 } notes)

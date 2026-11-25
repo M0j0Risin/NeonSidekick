@@ -921,6 +921,32 @@ public sealed class WorkingDirectory
     /// <param name="root">The resolved root, read on every call (<see cref="Resolve(string, string)"/> over the effective settings).</param>
     /// <param name="time">The clock behind the dates shown.</param>
     /// <param name="options">How the root is treated: <see cref="WorkingDirectoryOptions.Sandbox"/> (the default) for the working directory, <see cref="WorkingDirectoryOptions.Share"/> for a UNC share (2026-09-30).</param>
+    /// <summary>
+    /// Told the full path of each file a write here created, never one it replaced (2026-11-25, the private-conversations plan: the images folder's
+    /// writers — pasted, phone, camera, screen, Home Assistant, ComfyUI, the image tools — are known to a private conversation by it). Any thread.
+    /// </summary>
+    public Action<string>? Created { get; set; }
+
+    /// <summary><see cref="WriteNew(string, byte[])"/> that tells <see cref="Created"/>; a listener's throw never fails the write.</summary>
+    private bool CreateNew(string full, byte[] bytes)
+    {
+        if (!WriteNew(full, bytes))
+        {
+            return false;
+        }
+
+        try
+        {
+            Created?.Invoke(full);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Diagnostics.DiagnosticLog.Warn("Files", "A created-file listener failed: " + ex.GetType().Name, ex);
+        }
+
+        return true;
+    }
+
     public WorkingDirectory(Func<string> root, TimeProvider time, WorkingDirectoryOptions? options = null)
     {
         _root = root ?? throw new ArgumentNullException(nameof(root));
@@ -2809,7 +2835,7 @@ public sealed class WorkingDirectory
 
             var mark = PrepareWrite(() => FileJournal.Writing(this, full), full);
             // A new file made only if it is still not there (2026-10-22, review J3: Exists then a move with overwrite clobbered one made between).
-            if (!existed && !WriteNew(full, encoded))
+            if (!existed && !CreateNew(full, encoded))
             {
                 FileJournal.TakeBack(mark);
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
@@ -2856,7 +2882,7 @@ public sealed class WorkingDirectory
             }
 
             var mark = PrepareWrite(() => FileJournal.Writing(this, full), full);
-            if (!existed && !WriteNew(full, bytes))
+            if (!existed && !CreateNew(full, bytes))
             {
                 FileJournal.TakeBack(mark);
                 return new WriteResult(FileOutcome.Exists, display, 0, false);
@@ -3029,7 +3055,7 @@ public sealed class WorkingDirectory
             {
                 WriteAtomically(full, encoded, _options.PreserveOnReplace);
             }
-            else if (!WriteNew(full, encoded))
+            else if (!CreateNew(full, encoded))
             {
                 FileJournal.TakeBack(mark);
                 return new WriteResult(FileOutcome.Exists, display, 0, false);

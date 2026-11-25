@@ -30,6 +30,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch and is neve
 |---|---|---|
 | `NEONSIDEKICK_HOME` | The home folder: settings, profiles, models, llama.cpp, skills and the connection files. | A folder path. Default `%USERPROFILE%\.neonsidekick` (`~/.neonsidekick` on a Mac). |
 | `NEONSIDEKICK_PROFILE` | The profile for this launch (`--profile` wins; with neither, `neon`). An unknown name exits with code 2. | A profile name. |
+| `NEONSIDEKICK_PRIVATE` | *Private at start* (`--private` wins): every conversation [private](INTERFACE.md#private-conversations); `off` beats a saved on. | on/off |
 
 ## LLM
 

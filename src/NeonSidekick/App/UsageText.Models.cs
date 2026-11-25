@@ -77,10 +77,10 @@ public static partial class UsageText
     internal static int FiguresWidth(IReadOnlyList<ModelStat> stats) => FigureWidths(stats).Sum(w => w + ModelsGap);
 
     /// <summary>The pane's tab: the caption, the table and its notes, or <see cref="ModelsEmpty"/>; <paramref name="width"/> the cells the body has, its indent taken off already (#109).</summary>
-    public static IRenderable ModelsTab(IReadOnlyList<ModelStat> stats, bool logging, int width)
+    public static IRenderable ModelsTab(IReadOnlyList<ModelStat> stats, bool logging, int width, bool isPrivate = false)
     {
         ArgumentNullException.ThrowIfNull(stats);
-        var lines = ModelsRows(stats, logging, width);
+        var lines = ModelsRows(stats, logging, width, isPrivate);
         var parts = new List<IRenderable>();
         foreach (var (text, dim, rule) in lines)
         {
@@ -92,8 +92,8 @@ public static partial class UsageText
     }
 
     /// <summary>The tab's lines with no pane (a redirected console), at the transcript's width.</summary>
-    public static IEnumerable<string> ModelsLines(IReadOnlyList<ModelStat> stats, bool logging, int width) =>
-        ModelsRows(stats, logging, width).Select(r => r.Text);
+    public static IEnumerable<string> ModelsLines(IReadOnlyList<ModelStat> stats, bool logging, int width, bool isPrivate = false) =>
+        ModelsRows(stats, logging, width, isPrivate).Select(r => r.Text);
 
     /// <summary>
     /// The tab's lines, which show dim and which are rules: the caption, the heading, a rule, a row a model (dim under <see cref="ModelsFewTurns"/>),
@@ -102,7 +102,7 @@ public static partial class UsageText
     /// keep <see cref="ModelsModelMin"/>. Since 2026-11-23 (the user's asks) the turns a command answered (<see cref="SessionText.IsSideTurnModel"/>)
     /// leave the table for one note, and the models go by turns, most first, then by last use. Pure.
     /// </summary>
-    public static IReadOnlyList<(string Text, bool Dim, bool Rule)> ModelsRows(IReadOnlyList<ModelStat> stats, bool logging, int width)
+    public static IReadOnlyList<(string Text, bool Dim, bool Rule)> ModelsRows(IReadOnlyList<ModelStat> stats, bool logging, int width, bool isPrivate = false)
     {
         ArgumentNullException.ThrowIfNull(stats);
         var rows = new List<(string, bool, bool)>();
@@ -125,7 +125,11 @@ public static partial class UsageText
         {
             Wrapped(stats.Count == 0 ? ModelsEmpty : ModelsNoModelTurns);
             SideNote();
-            if (!logging)
+            if (isPrivate)
+            {
+                Wrapped(PrivateText.UsageNote);   // 2026-11-25: a private conversation's turns, as logging off says its own
+            }
+            else if (!logging)
             {
                 Wrapped(ModelsLoggingOff);
             }
@@ -177,7 +181,11 @@ public static partial class UsageText
             Wrapped(ModelsUntaggedNote);
         }
 
-        if (!logging)
+        if (isPrivate)
+        {
+            Wrapped(PrivateText.UsageNote);
+        }
+        else if (!logging)
         {
             Wrapped(ModelsLoggingOff);
         }

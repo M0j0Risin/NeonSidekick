@@ -424,11 +424,9 @@ public sealed class CameraPureTests
     }
 
     [Fact]
-    public void TheStrip_LeadsWithTheCamera_WhileItIsOpen()
+    public void TheCamerasGlyph_IsTwoCells()
     {
-        Assert.Equal("🧠", ChatScreen.CameraStrip(false, "🧠"));
-        Assert.Equal("📷 🧠", ChatScreen.CameraStrip(true, "🧠"));
-        Assert.Equal("📷", ChatScreen.CameraStrip(true, ""));
+        Assert.Equal("📷", NeonSidekick.Camera.CameraText.Glyph);   // the lower rule's item since 2026-11-25 (LowerRuleKind.Camera)
         Assert.Equal(2, NeonSidekick.UI.TextCells.Width(CameraText.Glyph));
     }
 

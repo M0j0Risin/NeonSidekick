@@ -1219,13 +1219,6 @@ public sealed partial class SessionStore : IDisposable
         }
     }
 
-    /// <summary>One sent line appended, the oldest past <see cref="CommandHistoryCap"/> dropped. The caller de-duplicates (<c>InputLine.Remember</c>).</summary>
-    public void AppendCommand(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-        AddCommandHistory([text], overwrite: false);
-    }
-
     /// <summary>
     /// Lines appended in order (<c>/cmdcopy --history</c>, 2026-09-25; <c>/profile push|pull history</c> since 2026-10-09) — or in place of every stored one when
     /// <paramref name="overwrite"/> — a line equal to the one before it skipped, as the input line's own history

@@ -8,7 +8,7 @@ The screen, the input line, panes, keys, the bars and the app's own windows. Bac
 - [Panes](#panes) · [Keyboard shortcuts](#keyboard-shortcuts) · [Commands typed during a reply](#commands-typed-during-a-reply)
 - [The hints bar](#the-hints-bar) · [The status bar](#the-status-bar) · [The toolbar](#the-toolbar) · [The performance bar](#the-performance-bar)
 - [The home bar](#the-home-bar) · [Bar checklists](#bar-checklists) · [The avatar picker](#the-avatar-picker) · [The welcome splash](#the-welcome-splash)
-- [The app's windows](#the-apps-windows)
+- [The app's windows](#the-apps-windows) · [Private conversations](#private-conversations)
   - [picture viewer](#the-picture-viewer) · [picture menu](#the-picture-menu) · [thumbnail browser](#the-thumbnail-browser) · [log](#the-log-window)
   - [process](#the-process-window) · [Docker log](#the-docker-log-window) · [camera](#the-camera-window) · [video](#the-video-window) · [Browser](#the-browser-window)
 - [Web UI](#web-ui)
@@ -42,14 +42,15 @@ From top to bottom:
 * **Scrolled up**, a row under the transcript counts the rows written since you left the bottom and names the top message; a double-click goes back down.
 * **Links and paths:** Ctrl+click opens a link in your browser, or a path in `/browse`; hovering shows where it goes. A Mac's chord differs ([MAC.md](MAC.md#keys--mouse)).
 * **Sources:** with [Web footer](SETTINGS.md#chat) on, under a reply that read a page or saved a file, 📚 lists the first five (📥 for a file), each title with its site, then how many more and how many searches. Each title is a link, opened as above.
-* **The picture strip**, while there are ComfyUI pictures: 🎞️ opens the [picture viewer](#the-picture-viewer), × closes the strip.
-* **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), and 🎞️ to bring a closed picture strip back.
+* **The picture strip**, while there are ComfyUI pictures: × closes it. The [picture viewer](#the-picture-viewer) opens from the toolbar's 🎞️.
+* **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), 🎞️ (a click closes or opens the picture strip), and 🕶️ while the conversation is [private](#private-conversations).
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
-* **The lower rule** shows the running jobs at its right, whatever the Status section shows: `── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ⚡1 ─`.
+* **The lower rule** shows the running jobs at its right, whatever the Status section shows: `── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🔌 1/3 ── 🎙️ 42% ── 🔈 ── 🖼️ 2 ── 🧠 ── 🧟 ── 📷 ── ⚡1 ─`.
   * **📦** a new version and how its [update](COMMANDS.md#updating) stands (`📦 0.5.7`, `42%`, `checking`, `at quit`, `back to 0.5.6 at quit`); *Check for updates at start* off hides the plain `📦 0.5.7`.
   * **The loop:** 🔁 a [Ralph loop](COMMANDS.md#ralph-loop) (`🔁 step 2/5 · pass 3`), 🔎 a [code audit](COMMANDS.md#code-audit) (`🔎 2/5`), ⟳ a [`/loop`](COMMANDS.md#loops) (`⟳ 3/10`). A double-click ends it after the pass in progress (`· ending`).
-  * **📥** an embedded model's download, **🖼️** (🎨 for a rework) ComfyUI pictures still rendering, **⚡n** the background processes running.
-  * **A narrow window** drops 📦 first, then 🖼️, then 📥, then the loop; ⚡n stays. Each is shown whole or not at all.
+  * **📥** an embedded model's download; **🔌**, **🎙️**, **🔈** the MCP servers, voice input and speech output setting up; **🖼️** (🎨 for a rework) ComfyUI pictures still rendering.
+  * **🧠** background learning, **🧟** a botchat's extra embedded servers left running, **📷** the camera on, **⚡n** the background processes running.
+  * **A narrow window** drops 📦, 🖼️, 🧠, 🔈, 🎙️, 🔌, 📥, the loop, then 🧟; ⚡n goes only to make room for 📷, which always stays. Each is shown whole or not at all.
 
 | Double-click on the lower rule | Does |
 |---|---|
@@ -58,7 +59,11 @@ From top to bottom:
 | 🔎 | stops the audit after the pass in progress, the report kept for `/code-audit resume` |
 | ⟳ | ends the loop after the message or run in progress; Esc ends it at once |
 | 📥 | pauses the download |
+| 🔌 / 🎙️ / 🔈 | cancels that setup |
 | 🖼️/🎨 | cancels the pictures; the reply goes on |
+| 🧠 | cancels the learning, like Ctrl+L |
+| 🧟 | `/botchat --kill` (after a reply, if one is running) |
+| 📷 | `/camera off` |
 | ⚡n | `/process` |
 * **A mark:** `/mark <color>` colors both rules for the conversation, kept with its session; `/mark default` takes it off.
 * **Five bars**, in *Toolbar order*: [hints](#the-hints-bar) (while there is a hint), [status](#the-status-bar), [toolbar](#the-toolbar), [performance](#the-performance-bar), [home](#the-home-bar).
@@ -351,14 +356,14 @@ The keys that apply right now, on a row of their own over the status bar (*Hints
 
 The row under the hints bar (*Status bar*); [Bar checklists](#bar-checklists) moves and pins its sections.
 
-* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🧠, 🏷️…), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Queued**, **Timers** (⏰ countdowns, ⏱️ stopwatches), **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
+* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🏷️, 📝, 👥), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Queued**, **Timers** (⏰ countdowns, ⏱️ stopwatches), **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
 * **Right by default:** **Model** (name and reasoning icon, 💤 while [unloaded when idle](SETTINGS.md#embedded)) and **Working directory** (off by default). The busy row keeps the same sides.
 * **The spinner's word:** `thinking`, `writing` for the text, `writing present_audit` while the model writes a tool call, then the tool's name while it runs.
 * **A call's size**, `(41.0k chars)`, shows past 1,000 characters where the server sends the call as it's written; elsewhere nothing shows until it's done.
 * **A runaway `present_audit` call** (the model repeating itself) is stopped, and the reply ends on an error.
 * **Narrow window:** the model's name and the path shrink, then go; then the right group gives way, then the left. The spinner goes last.
-* **Background setups** (MCP servers connecting, the voice models' first load) show 🔌, 🎙️ or 🔈; the input line stays yours.
-* **Leading the Status section:** 📝 in plan mode. Loops, downloads and rendering pictures show on [the lower rule](#the-screen).
+* **Background setups** (MCP servers connecting, the voice models' first load) show 🔌, 🎙️ or 🔈 on [the lower rule](#the-screen); the input line stays yours.
+* **Leading the Status section:** 📝 in plan mode. Jobs (loops, downloads, setups, learning, the camera) show on [the lower rule](#the-screen).
 * **An audit that ends on its own** prints its open findings as a table (most severe first, at most 40) and opens its done pane on **Keep report** ([Pane keys](#pane-keys), [Code audit](COMMANDS.md#code-audit)).
 
 | Double-click | Does |
@@ -368,12 +373,9 @@ The row under the hints bar (*Status bar*); [Bar checklists](#bar-checklists) mo
 | the working directory | `/cwd browse` |
 | the tokens or spinner | `/usage` |
 | 🖼️/🎨 (beside the spinner, ComfyUI rendering) | cancels the pictures; the reply goes on |
-| 🧠 (background learning) | cancels it, like Ctrl+L |
-| 🔌 / 🎙️ / 🔈 | cancels that setup |
 | the queued count | `/queue` |
 | the timers | asks, then cancels them all |
-| 📷 (camera on) | `/camera off` |
-| 👥 / 🧟 (after a botchat) | `/botchat --resume` / `/botchat --kill` |
+| 👥 (after a botchat) | `/botchat --resume` |
 | blank space (a right-click too) | `/settings` |
 
 ## The toolbar
@@ -601,6 +603,36 @@ A browser window of the app's own (Windows; macOS 14+ on a Mac, where it is WebK
 * **A PDF:** `/view report.pdf` shows a working-directory PDF in the window's viewer, from a copy deleted when the window closes; the open button opens the file in its own program.
   * Not kept in the history, can't be saved as a link, hands no cookies over. A policy that makes Edge download PDFs makes the window download it.
   * Where the window can't take it (a bot check waiting, no WebView2 runtime, a Mac before macOS 14 or over SSH), it opens in its own program (Preview on a Mac).
+
+## Private conversations
+
+A private conversation leaves nothing in the session history. `/private` makes the one on screen private, `/private new` starts a fresh one, and `/private off` ends it. 🕶️ on the upper rule marks it.
+
+* **Going private:** a saved conversation asks first, then its session and its input lines are deleted from `sessions.db`, with its file checkpoints.
+* **Every conversation:** `--private`, `NEONSIDEKICK_PRIVATE` or [Private at start](SETTINGS.md#sessions). Under the flag or variable `/private off` is refused; `/new` starts a fresh private one.
+* **It ends** with `/private off`, `/new`, `/clear`, a profile switch, restoring a session (it asks first) or the exit. Its screen, ↑ lines and `/log` lines go with it.
+* **Pictures:** under *Private pictures* `ask` (the default), the end asks whether to keep or delete the pictures and phone PDFs saved meanwhile. A delete is permanent.
+* **Under the flag,** restoring a session opens a private copy: the stored session isn't changed.
+* **Headless,** `--private` covers the whole run ([HEADLESS.md](HEADLESS.md#carrying-on-a-session)).
+
+Not kept:
+
+* Turns, titles and typed lines in `sessions.db`, and the session's Claude Code threads.
+* Reflections, skill uses and the model's own memories, unless *Private learning* is on.
+* The words in the `--log` file under *Private log text* `hide`: each line reads `[private]`, and `crash.log` keeps no messages. Database, Docker and admin audit lines stay whole.
+* The pictures you choose to delete.
+
+Kept on purpose:
+
+* What the tools change (files, commits, databases, the home) and their file checkpoints.
+* What you save yourself: `/memory remember`, prompts, commands, exports, prints, plans, audits and saved links.
+
+Out of its reach:
+
+* What servers it talks to keep: the LLM, speech and MCP servers, Home Assistant, ComfyUI and the sites it reads.
+* What the system keeps: the search index, Recall, the page file, a crash dump, backups and sync, and a deleted file's bytes on the disk.
+* Windows left open, the same session open in another copy of the app, and the Browser and video windows' own history and cookies.
+* Without the screen (a redirected console), the terminal keeps what was printed.
 
 ## Web UI
 

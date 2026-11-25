@@ -735,6 +735,28 @@ function staleAssets(tag) {
 
 // ── The state ─────────────────────────────────────────────────────────
 
+// The private stretch this page last saw (2026-11-25, the private-conversations plan), kept in sessionStorage so a page away at the end, or over an
+// app restart, drops what it held as it returns. Going private from none drops nothing.
+function privateSeen(id) {
+  let kept = null;
+  try { kept = sessionStorage.getItem('neon.private'); } catch { /* private mode */ }
+  if (kept && kept !== id) {
+    draft.value = '';
+    try { sessionStorage.removeItem('neon.draft'); sessionStorage.removeItem('neon.stripSeen'); } catch { /* private mode */ }
+    try {
+      msgHistory.lines = [];
+      msgHistory.cleared = [];
+      msgHistory.saved = '';
+      historyReset();
+    } catch { /* not built yet */ }
+  }
+
+  try {
+    if (id) sessionStorage.setItem('neon.private', id);
+    else sessionStorage.removeItem('neon.private');
+  } catch { /* private mode */ }
+}
+
 function applyState(s) {
   if (Neon.tabs(s.chatTab, s.homeTab, s.shoppingTab, s.youTubeTab)) return;   // Chat turned off at the PC: on to a tab that is on
   state = s;
@@ -742,7 +764,10 @@ function applyState(s) {
   // User line style (2026-10-21): the user's lines as the transcript draws them, app.css's body[data-user-line] rules.
   document.body.dataset.userLine = s.userLine || 'bold';
   profileEl.textContent = (s.modelAvatar ? s.modelAvatar + ' ' : '') + s.profile + (s.planMode ? ' · plan' : '');
-  modelEl.textContent = s.model + (s.title ? ' · ' + s.title : '');
+  // A private conversation (2026-11-25): 🕶️ beside the model; a page that kept another stretch's id drops its draft and its ↑ list.
+  modelEl.textContent = (s.private ? '🕶️ ' : '') + s.model + (s.title ? ' · ' + s.title : '');
+  modelEl.title = s.private ? (words.privateTitle || 'Private conversation') : '';
+  privateSeen(s.private || '');
   drawStop();   // ■ while busy or this page owes audio (2026-11-13)
   if (sentSpoken && !s.busy && Date.now() - sentSpoken > 3000) sentSpoken = 0;
   holdWake();

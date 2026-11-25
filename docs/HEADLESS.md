@@ -148,6 +148,7 @@ They need no server unless the row says so.
 | `/midi …` | An error: MIDI buttons are heard only by the full-screen app. |
 | `/update …` | An error: [updates](COMMANDS.md#updating) run only in the full-screen app. |
 | `/project-init …` | An error: it asks before it writes, so it runs only in the full-screen app. |
+| `/private …` | An error: use `--private`, which makes the whole run private. |
 
 - Case doesn't matter. `/exit`, `/new`, `/clear` and `/splash` must be alone on the line: `/new please` goes to the model as text.
 - With no server, messages and the commands that need one get `Neon: [error] No LLM server. Set NEONSIDEKICK_LLM_URL and restart.`
@@ -206,6 +207,7 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--prompt-file <file>` | As `--prompt`, the file one message; a relative path starts from where you launch. A missing or blank file is exit 2. | `--prompt-file D:\Jobs\ask.md` |
 | `--quiet` | Only the replies on stdout; everything else on stderr. | `--quiet 2> run.log` |
 | `--session <id>\|last` | Carries on a stored session ([below](#carrying-on-a-session)). An unknown id is exit 2. | `--session last` |
+| `--private` | Nothing of the run reaches the session store or the log's words ([Private conversations](INTERFACE.md#private-conversations)). | `--private --prompt "…"` |
 
 `mcp:<server>` names a server as `mcp.json` spells it; another case matches only when one server fits. A name that matches no server, or several, is exit 2 before anything starts. An entry that changes nothing under the run's settings gets a `[notice]`.
 
@@ -361,6 +363,8 @@ For a scheduled job, run a script like these from Task Scheduler (`cron` or `lau
 - **Its folder:** without `--cwd`, the run works in the session's folder, for this run only; a folder that's gone, or written for the other system, gets a `[notice]`.
 - **Its id:** every run that wrote a session ends with `[notice] session #12` on stderr. Pass that id rather than `last` when another copy may be writing.
 - With *Session logging* off, the session still loads, but nothing the run does changes its stored row (turns, `/rewind`, `/undo`, plan saves).
+- A private run (`--private`, `NEONSIDEKICK_PRIVATE` or *Private at start*) opens it as a private copy: no row changes, no Claude thread resumes, and no `session #` line, so `--session last` chains stop. `NEONSIDEKICK_PRIVATE=off` turns the setting off for a run.
+- The shell keeps a `--prompt` text typed there in its own history: pipe the text in or use `--prompt-file`.
 
 ```powershell
 NeonSidekick.exe --prompt "Read src\Parser.cs and list its public methods." --cwd D:\Repo\MyApp
@@ -371,7 +375,7 @@ NeonSidekick.exe --prompt "Which of those have no tests?" --session last
 
 Flags beat variables, and variables beat the profile's saved values. [ENVIRONMENT.md](ENVIRONMENT.md) says what each one takes.
 
-- **Profile and home:** `NEONSIDEKICK_PROFILE`, `NEONSIDEKICK_HOME`.
+- **Profile and home:** `NEONSIDEKICK_PROFILE`, `NEONSIDEKICK_HOME`, `NEONSIDEKICK_PRIVATE`.
 - **Server and model:** `NEONSIDEKICK_LLM_URL`, `NEONSIDEKICK_LLM_MODEL`, `NEONSIDEKICK_LLM_API_KEY`, `NEONSIDEKICK_LLM_REASONING`, `NEONSIDEKICK_LLM_SAMPLING`, `NEONSIDEKICK_LLM_CONTEXT`, `NEONSIDEKICK_LLM_TURN_TIMEOUT` and `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` (raise these two for long jobs).
 - **Hosted and embedded models:** `NEONSIDEKICK_ANTHROPIC_API`, `NEONSIDEKICK_ANTHROPIC_API_KEY`, `NEONSIDEKICK_OPENAI_API`, `NEONSIDEKICK_OPENAI_API_KEY`, `NEONSIDEKICK_CLAUDE_CODE_SERVER`, `NEONSIDEKICK_EMBEDDED_BACKEND`, `NEONSIDEKICK_EMBEDDED_CONTEXT`.
 - **Shell:** `NEONSIDEKICK_COMMAND_POLICY`, `NEONSIDEKICK_SHELL_POLICE`, `NEONSIDEKICK_SHELL_NATIVE`.

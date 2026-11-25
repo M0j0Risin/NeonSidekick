@@ -76,10 +76,6 @@ internal sealed partial class ChatScreen
     private bool CameraOffered(AppSettingsData effective) =>
         CameraOffered(effective, _camera.Available, _pane.Enabled, _session.EmbeddedServer is { Vision: false });
 
-    /// <summary>The hint row's strip with the camera's glyph first while the camera is open (privacy before preference: drawn whatever else the row shows).</summary>
-    public static string CameraStrip(bool live, string strip) =>
-        !live ? strip : strip.Length == 0 ? CameraText.Glyph : CameraText.Glyph + GlyphSeparator + strip;
-
     /// <summary>
     /// The model's <c>camera_capture</c>, on the turn task: a photo declined earlier in the turn is not asked for again; under
     /// the <c>user</c> shutter the shutter pane, under <c>model</c> the allow pane (unless allowed for the session) and the app's
@@ -362,7 +358,7 @@ internal sealed partial class ChatScreen
                 return;
             case CameraVerb.View:
                 // /comfy view's twin (2026-10-09, the user's ask): the viewer on the Camera output folder; a window of its own.
-                OpenViewerOn(_effective().CameraOutputFolder, notice: true);
+                OpenViewerOn(_effective().CameraOutputFolder);
                 return;
             case CameraVerb.Thumbs:
                 OpenThumbsOn(_effective().CameraOutputFolder);
@@ -492,7 +488,7 @@ internal sealed partial class ChatScreen
         lease?.Dispose();
     }
 
-    /// <summary><c>/camera off</c> (and the strip glyph's click): the live view and watch mode let go, the watch folder cleared; how many holds were.</summary>
+    /// <summary><c>/camera off</c> (and the lower rule's 📷 double-click, the strip's until 2026-11-25): the live view and watch mode let go, the watch folder cleared; how many holds were.</summary>
     private int CameraOff()
     {
         int released = _liveLease is null ? 0 : 1;

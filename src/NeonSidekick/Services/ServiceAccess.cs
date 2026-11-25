@@ -351,7 +351,7 @@ public sealed class ServiceAccess
     public static void Audit(bool byUser, string action, string name, ServiceSource source, string outcome)
     {
         ArgumentNullException.ThrowIfNull(source);
-        DiagnosticLog.Info(ServiceText.Category, ComputerText.AuditLine(byUser ? ComputerText.ByYou : ComputerText.ByModel, ServiceText.AuditAct(action, name), source.Where, outcome));
+        DiagnosticLog.Audit(ServiceText.Category, ComputerText.AuditLine(byUser ? ComputerText.ByYou : ComputerText.ByModel, ServiceText.AuditAct(action, name), source.Where, outcome));
     }
 
     /// <summary>

@@ -70,7 +70,19 @@ public sealed class DiagnosticFileSink : IDisposable
         return evt.Exception is { } ex ? line + " (" + ex.GetType().Name + ": " + ex.Message + ")" : line;
     }
 
-    private void OnEmitted(DiagnosticEvent evt) => WriteLine(Format(evt));
+    /// <summary>
+    /// The file's own rule (2026-11-25, the private-conversations plan): while <see cref="PrivateMode.HideLog"/> is on, every line but an audit line keeps its
+    /// time, level and category and reads <see cref="PrivateMode.Placeholder"/>, an exception its type alone — fail-closed, whatever the line said. Here and not in
+    /// <see cref="Format"/>: the <c>/log</c> buffer formats with that too, and shows the lines live.
+    /// </summary>
+    private void OnEmitted(DiagnosticEvent evt) => WriteLine(PrivateMode.HideLog && !evt.Audit ? FormatHidden(evt) : Format(evt));
+
+    /// <summary>A hidden line: <c>yyyy-MM-dd HH:mm:ss.fff [Level] Category: [private]</c>, the exception's type alone. Pinned.</summary>
+    public static string FormatHidden(DiagnosticEvent evt)
+    {
+        string line = string.Create(CultureInfo.InvariantCulture, $"{evt.TimestampUtc:yyyy-MM-dd HH:mm:ss.fff} [{evt.Level}] {evt.Category}: {PrivateMode.Placeholder}");
+        return evt.Exception is { } ex ? line + " (" + ex.GetType().Name + ")" : line;
+    }
 
     private void WriteLine(string line)
     {

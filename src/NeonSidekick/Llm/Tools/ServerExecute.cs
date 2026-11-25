@@ -138,7 +138,7 @@ public static class ServerExecute
         catch (OperationCanceledException)
         {
             hooks.Changed?.Invoke();
-            DiagnosticLog.Info(family.Category, DatabaseAudit.Line(where, DatabaseAuditOutcome.Canceled, null, body));
+            DiagnosticLog.Audit(family.Category, DatabaseAudit.Line(where, DatabaseAuditOutcome.Canceled, null, body));
             throw;
         }
 
@@ -153,7 +153,7 @@ public static class ServerExecute
             run = run with { Changes = null };
         }
 
-        DiagnosticLog.Info(family.Category, DatabaseAudit.Line(run.Database.Length == 0 ? run.Connection.Length == 0 ? where : run.Connection : run.Connection + "/" + run.Database, DatabaseAudit.OutcomeOf(run), run.Changes, body));
+        DiagnosticLog.Audit(family.Category, DatabaseAudit.Line(run.Database.Length == 0 ? run.Connection.Length == 0 ? where : run.Connection : run.Connection + "/" + run.Database, DatabaseAudit.OutcomeOf(run), run.Changes, body));
         return run.Outcome != SqlOutcome.Ok ? hooks.Error(run) : ServerWriteText.Executed(run, maxRows, maxChars);
     }
 }

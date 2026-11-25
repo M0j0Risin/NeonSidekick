@@ -954,6 +954,38 @@ public sealed partial class SidekickApp
     /// <summary>Headless's launch sweep of the working folder's stale temps (2026-10-30, review F88); kept so a test can wait for it.</summary>
     internal Task? LaunchSweep { get; private set; }
 
+    /// <summary>
+    /// Whether this headless run is private (2026-11-25, the private-conversations plan): <c>--private</c>, <c>NEONSIDEKICK_PRIVATE</c> or <c>Private at start</c>,
+    /// for the whole run (there is no <c>/private</c> here). Nothing of it reaches the session store; a <c>--session</c> opens as a private copy.
+    /// </summary>
+    private bool HeadlessPrivate => EffectiveSettings.PrivateAtStart;
+
+    /// <summary>Whether this run writes the session store: <c>Session logging</c> on and not private.</summary>
+    private bool HeadlessSaves => EffectiveSettings.SessionLogging && !HeadlessPrivate;
+
+    /// <summary>Whether <c>save_memory</c> and <c>skill_editor</c> are offered: always outside a private run, inside it under <c>Private learning</c>.</summary>
+    private bool HeadlessLearns => !HeadlessPrivate || EffectiveSettings.PrivateLearning;
+
+    /// <summary>The turn's disabled set with the two learning tools added while <see cref="HeadlessLearns"/> is false.</summary>
+    private IReadOnlySet<string> HeadlessWithheld(IReadOnlySet<string> disabled) =>
+        HeadlessLearns ? disabled : new HashSet<string>(disabled, StringComparer.Ordinal) { Llm.Tools.SaveMemoryTool.ToolName, Llm.Tools.SkillEditorTool.ToolName };
+
+    /// <summary>A private run's process-wide switches (<see cref="PrivateMode"/>), on for the run and off as it ends.</summary>
+    private sealed class PrivateRunScope : IDisposable
+    {
+        public PrivateRunScope(bool hideLog)
+        {
+            PrivateMode.Active = true;
+            PrivateMode.HideLog = hideLog;
+        }
+
+        public void Dispose()
+        {
+            PrivateMode.Active = false;
+            PrivateMode.HideLog = false;
+        }
+    }
+
     private async Task<int> RunHeadlessAsync(CancellationToken cancellationToken)
     {
         StartHeadlessOutput();
@@ -986,6 +1018,8 @@ public sealed partial class SidekickApp
         }
 
         LogStartup();
+        // A private run (2026-11-25): the process-wide switches for the whole run, put back as it ends (the tests share one process).
+        using var privateRun = HeadlessPrivate ? new PrivateRunScope(Sessions.PrivateLogText.Resolve(EffectiveSettings)) : null;
         _headlessAllowances = new HeadlessAllowances(_options.AllowList);
         EncryptStoredSecrets();
         await using var embedded = _embeddedLlm?.Invoke();
@@ -1214,7 +1248,7 @@ public sealed partial class SidekickApp
                 ToolsEnabled = effective.LlmOfferTools,
                 Memory = memoryTools,
                 MemoryEnabled = MemoryMode.Enabled(effective),
-                MemorySave = MemoryMode.Saves(effective),
+                MemorySave = MemoryMode.Saves(effective) && HeadlessLearns,   // not in a private run without Private learning (2026-11-25)
                 Web = webTools,
                 WebEnabled = effective.WebTools,
                 Files = fileTools,
@@ -1275,7 +1309,7 @@ public sealed partial class SidekickApp
                 Directory = directoryTools,
                 DirectoryEnabled = ChatScreen.DirectoryOffered(effective, directory),
                 // A Ralph pass headless never asks (no checkpoint): the asking tools go as a tool switched off on /tools does.
-                Disabled = planState.Ralph is { Loop.InPass: true } ? Plans.PlanTools.WithoutAsking(disabled) : disabled,
+                Disabled = planState.Ralph is { Loop.InPass: true } ? Plans.PlanTools.WithoutAsking(HeadlessWithheld(disabled)) : HeadlessWithheld(disabled),
                 // A commit scope's gitlib_diff call is named only where the tool is offered (2026-11-25), as GitEnabled offers it.
                 Plan = plan.Turn(presentPlan, gapAsks: false) ?? audit.Turn(presentAudit, askUser: false, effective.CodeAuditPassToolCalls, effective.LlmMaxToolIterations,
                     effective.LlmOfferTools && effective.GitLibTools && !disabled.Contains(Llm.Tools.GitDiffTool.ToolName)),
@@ -1410,11 +1444,12 @@ public sealed partial class SidekickApp
                 session.History.Restore(resume.Messages);
                 mcp.ResetPictures(resume.Messages);   // its MCP pictures' numbers go on past its own (2026-11-22, the review's #60)
                 // With Session logging off the row is read, never written (2026-11-22, the review's #37): no turn, /rewind, /undo or plan save touches it.
-                sessionId = EffectiveSettings.SessionLogging ? resume.Id : null;
-                claudeSessionId = resume.Stored.ClaudeSessionId;
-                claudeServerSessionId = resume.Stored.ClaudeServerSessionId;
+                // A private run (2026-11-25) opens it as a private copy: no row, and none of Claude's or the advisors' saved ids.
+                sessionId = HeadlessSaves ? resume.Id : null;
+                claudeSessionId = HeadlessPrivate ? null : resume.Stored.ClaudeSessionId;
+                claudeServerSessionId = HeadlessPrivate ? null : resume.Stored.ClaudeServerSessionId;
                 advisorThreads.Restore(resume.Stored.AdvisorThreads);
-                advisorThreads.RestoreSessions(resume.Stored.AdvisorSessions);
+                advisorThreads.RestoreSessions(HeadlessPrivate ? null : resume.Stored.AdvisorSessions);
                 plan.Restore(resume.Stored.Plan);
                 planState.Executing = resume.Stored.Executing is { Path.Length: > 0 } executing ? executing : null;
                 if (planState.Executing is { Ralph: true } ralphPlan)
@@ -1548,7 +1583,7 @@ public sealed partial class SidekickApp
                 // keeps the loop's end (its last save was before the judge, with the plan still being carried out).
                 if (planState.TakeFreshNext())
                 {
-                    if (sessionId is { } endedRow && assistant is not null && EffectiveSettings.SessionLogging)
+                    if (sessionId is { } endedRow && assistant is not null && HeadlessSaves)
                     {
                         SaveHeadlessHistory(endedRow, assistant.History.Messages);
                     }
@@ -1609,6 +1644,13 @@ public sealed partial class SidekickApp
                     promptWord = text.Split(' ', 2)[0];
                 }
 
+                // /private (2026-11-25): the screen's command; a headless run is private from its start or not at all, never a message to the model.
+                if (LineParse(text) is (SlashCommand.Private, _))
+                {
+                    await HeadlessLineAsync("[error] " + PrivateText.HeadlessError).ConfigureAwait(false);
+                    continue;
+                }
+
                 // The picture folders' words (2026-10-18): their windows and the purge's question are the screen's.
                 if (LineParse(text) is (SlashCommand.Splash, { Length: > 0 }))
                 {
@@ -1645,7 +1687,7 @@ public sealed partial class SidekickApp
                 {
                     var claudeTurn = await HeadlessClaudeAsync(claude, session, claudeArgs, claudeSessionId, files.Root, cancellationToken).ConfigureAwait(false);
                     claudeSessionId = claudeTurn.SessionId;
-                    if (claudeTurn.Reply is { } claudeReply && EffectiveSettings.SessionLogging)
+                    if (claudeTurn.Reply is { } claudeReply && HeadlessSaves)
                     {
                         sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "", files.Root);
                         if (sessionId is { } claudeRow)
@@ -1666,7 +1708,7 @@ public sealed partial class SidekickApp
                 // /advisor (2026-10-10): ahead of the server check too — an advisor on its own URL needs none of this run's.
                 if (LineParse(text) is (SlashCommand.Advisor, var advisorArgs))
                 {
-                    if (await HeadlessAdvisorAsync(neonAdvisor, session, advisorArgs, cancellationToken).ConfigureAwait(false) is { } advisorReply && EffectiveSettings.SessionLogging)
+                    if (await HeadlessAdvisorAsync(neonAdvisor, session, advisorArgs, cancellationToken).ConfigureAwait(false) is { } advisorReply && HeadlessSaves)
                     {
                         sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "", files.Root);
                         if (sessionId is { } advisorRow)
@@ -2398,7 +2440,7 @@ public sealed partial class SidekickApp
 
                 // A Ralph pass (2026-10-18): its own row titled for the loop, its short line as the turn's text.
                 var inPass = planState.Ralph is { Loop.InPass: true } passing ? passing : null;
-                if (EffectiveSettings.SessionLogging)
+                if (HeadlessSaves)
                 {
                     bool firstRow = sessionId is null;
                     // A custom command's session is titled with the typed line (2026-10-30), as the screen's.
@@ -2420,7 +2462,7 @@ public sealed partial class SidekickApp
                 // The checkpoint after the row (2026-10-28): its session is known now.
                 if (sealedJournal is not null && _checkpoints is { } checkpointStore)
                 {
-                    string checkpointSession = EffectiveSettings.SessionLogging && sessionId is { } logged ? logged.ToString(CultureInfo.InvariantCulture) : Files.CheckpointStore.NoSession;
+                    string checkpointSession = HeadlessSaves && sessionId is { } logged ? logged.ToString(CultureInfo.InvariantCulture) : Files.CheckpointStore.NoSession;
                     CheckpointTurns.Commit(checkpointStore, assistant.History, sealedJournal, rowText, checkpointSession, EffectiveSettings, _time.GetUtcNow());
                 }
 
@@ -3490,13 +3532,13 @@ public sealed partial class SidekickApp
         }
 
         var effective = EffectiveSettings;
-        bool resume = claudeSessionId is not null;
-        string id = claudeSessionId ?? Guid.NewGuid().ToString("D");
+        bool resume = claudeSessionId is not null && !HeadlessPrivate;   // a private run never resumes Claude's thread (2026-11-25)
+        string id = (HeadlessPrivate ? null : claudeSessionId) ?? Guid.NewGuid().ToString("D");
         for (int attempt = 0; ; attempt++)
         {
             var level = Claude.ClaudePermission.Resolve(effective);
             var request = new Claude.ClaudeRequest(args, id, resume, root, level, effective.ClaudeCodeExecutable,
-                string.IsNullOrWhiteSpace(effective.ClaudeCodeModel) ? null : effective.ClaudeCodeModel.Trim(), Claude.ClaudeEffort.Resolve(effective.ClaudeCodeEffort));
+                string.IsNullOrWhiteSpace(effective.ClaudeCodeModel) ? null : effective.ClaudeCodeModel.Trim(), Claude.ClaudeEffort.Resolve(effective.ClaudeCodeEffort), HeadlessPrivate);
             var reply = new StringBuilder();
             Claude.ClaudeEvent.Result? result = null;
             bool prefixed = false;
@@ -4321,6 +4363,7 @@ public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
         SettingsField.WebSearxngUrl => _environment.WebSearxngUrl is not null ? EnvironmentOverrides.SearxngUrlVariable : null,
         SettingsField.ShellCommandPolicy => _options.Yolo ? SidekickOptions.YoloFlag : _environment.ShellCommandPolicy is not null ? EnvironmentOverrides.CommandPolicyVariable : null,
         SettingsField.ShellPolice => _options.NoPolice ? SidekickOptions.NoPoliceFlag : _environment.ShellPolice is not null ? EnvironmentOverrides.ShellPoliceVariable : null,
+        SettingsField.PrivateAtStart => _options.Private ? SidekickOptions.PrivateFlag : _environment.Private is not null ? EnvironmentOverrides.PrivateVariable : null,
         SettingsField.ShellPreferNative => _environment.ShellNative is not null ? EnvironmentOverrides.ShellNativeVariable : null,
         SettingsField.ObsidianVault => _environment.ObsidianVault is not null ? EnvironmentOverrides.ObsidianVaultVariable : null,
         SettingsField.ComfyUrl => _environment.ComfyUrl is not null ? EnvironmentOverrides.ComfyUrlVariable : null,

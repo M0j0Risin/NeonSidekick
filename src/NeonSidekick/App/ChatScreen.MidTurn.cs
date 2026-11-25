@@ -221,8 +221,8 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// <see cref="MidTurnPolicy(SlashCommand, bool)"/> with the argument read where the word decides the class
-    /// (2026-09-27, the user's ask): <c>/comfy view</c> is <see cref="MidTurnClass.Quick"/> — the twin of the picture
-    /// strip's button, which opens the viewer under a reply already; the window is its own thread and holds nothing
+    /// (2026-09-27, the user's ask): <c>/comfy view</c> is <see cref="MidTurnClass.Quick"/> — the twin of the
+    /// toolbar's 🎞️, which opens the viewer under a reply already; the window is its own thread and holds nothing
     /// the turn does. The bare <c>/comfy</c> (a spinner over the server check), <c>/comfy purge</c> (a confirmation,
     /// and it deletes what a running <c>generate_image</c> may be writing) and <c>/comfy edit</c> still wait. <c>/view</c> with a
     /// path and no <c>--chat</c> (later on 2026-09-27, when <c>/view</c> took to the viewer) is quick for the same reason;
@@ -247,6 +247,9 @@ internal sealed partial class ChatScreen
     /// </summary>
     public static MidTurnClass MidTurnPolicy(SlashCommand command, string args) => command switch
     {
+        // 2026-11-25 (the private-conversations plan): /private new stops the reply as /new does; the bare word and off wait for it, as does a word it can't read.
+        SlashCommand.Private when string.Equals(args.Trim(), PrivateText.NewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Cancel,
+        SlashCommand.Private => MidTurnClass.Deferred,
         SlashCommand.Usage when UsageText.IsSysprompt(args) => MidTurnClass.Deferred,
         // 2026-11-04, review P7-1: it hashes for seconds under a pane Esc can close, and a Quick command runs through Post, which isn't built to read a pane's keys.
         SlashCommand.Update when string.Equals(args.Trim(), Updates.UpdateText.RollbackWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Pane,
@@ -964,7 +967,7 @@ internal sealed partial class ChatScreen
                 break;
             case SlashCommand.Comfy:
                 // /comfy view alone reaches here (2026-09-27, MidTurnPolicy's string form); the notice lands in the reply.
-                OpenViewer(notice: true);
+                OpenViewer();
                 break;
             case SlashCommand.View:
             {
@@ -1215,7 +1218,7 @@ internal sealed partial class ChatScreen
             await ApplyMenuChangesAsync(changes, embedded, cancellationToken, run).ConfigureAwait(false);
         }
 
-        if (session is { } id && RestoreSession(id))
+        if (session is { } id && await RestoreFlowAsync(id, cancellationToken).ConfigureAwait(false))
         {
             reset = true;   // only when the conversation was replaced (2026-10-13, the code review): the one on screen picked again keeps the tail
             // Its folder offered before a queued line runs (2026-11-21, feature idea #4), so that line runs in the folder the answer left.

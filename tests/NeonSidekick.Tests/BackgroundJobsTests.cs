@@ -178,12 +178,10 @@ public sealed class BackgroundJobsTests
         Assert.Null(BackgroundJobs.Progress("verifying Gemma 4 E2B…"));
         Assert.Null(BackgroundJobs.Progress(null));
         Assert.Equal(("📥", "🔌", "🎙️", "🔈"), (BackgroundJobText.Glyph(BackgroundJobKind.EmbeddedDownload), BackgroundJobText.Glyph(BackgroundJobKind.Mcp), BackgroundJobText.Glyph(BackgroundJobKind.Voice), BackgroundJobText.Glyph(BackgroundJobKind.Speech)));
-        Assert.Equal(BackgroundJobKind.Speech, BackgroundJobs.KindOfGlyph("🔈"));
-        Assert.Null(BackgroundJobs.KindOfGlyph(ChatScreen.TtsGlyph));   // the switch's loud speaker is not the job's
-        Assert.Equal(BackgroundJobKind.Voice, BackgroundJobs.KindOfGlyph("🎙️"));
-        Assert.Null(BackgroundJobs.KindOfGlyph(ChatScreen.SttGlyph));   // nor the switch's hand-held microphone
+        Assert.NotEqual(ChatScreen.TtsGlyph, BackgroundJobText.Glyph(BackgroundJobKind.Speech));   // the switch's loud speaker is not the job's
+        Assert.NotEqual(ChatScreen.SttGlyph, BackgroundJobText.Glyph(BackgroundJobKind.Voice));    // nor the switch's hand-held microphone
         Assert.Equal("voice input is still setting up (🎙️ 42%)", BackgroundJobText.VoiceSettingUp("42%"));
         Assert.Equal("voice input is still setting up (🎙️)", BackgroundJobText.VoiceSettingUp(null));
-        Assert.Equal("🧠 🔌 1/3 🔊", ChatScreen.StripGlyphs(true, false, true, false, false, false, "🔌 1/3"));
+        Assert.Equal("🏷️ 🔊", ChatScreen.StripGlyphs(true, true, false, false, false));   // the brain and the jobs are the lower rule's (2026-11-25)
     }
 }

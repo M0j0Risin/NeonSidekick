@@ -49,5 +49,5 @@ public static class BackgroundJobText
         "voice input is still setting up (" + VoiceGlyph + (string.IsNullOrEmpty(progress) ? "" : " " + progress) + ")";
 
     /// <summary>A <c>/mcp</c> action that would wait for the wave to finish.</summary>
-    public const string McpStillConnecting = "the MCP servers are still connecting; try again once " + McpGlyph + " leaves the status bar";
+    public const string McpStillConnecting = "the MCP servers are still connecting; try again once " + McpGlyph + " leaves the lower rule";
 }

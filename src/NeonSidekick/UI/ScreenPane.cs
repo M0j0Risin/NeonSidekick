@@ -222,11 +222,13 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private bool _drawnFolds;
     private int _foldColumn = -1;
 
-    // The upper rule's 🎞️ (2026-10-03, StripReopen): the label the last draw put there (null = none), and the column it
-    // landed at (-1 = none drawn), for TryHitStripReopen and the tick.
-    private Func<string?> _stripReopen = static () => null;
-    private string? _drawnReopen;
-    private int _reopenColumn = -1;
+    // The upper rule's 🎞️ (2026-10-03; StripToggle, a toggle since 2026-11-25): the label the last draw put there (null = none),
+    // and the column it landed at (-1 = none drawn), for TryHitStripToggle and the tick.
+    private Func<string?> _stripToggle = static () => null;
+    private Func<bool> _privateMark = static () => false;
+    private bool _drawnPrivate;
+    private string? _drawnStripToggle;
+    private int _stripToggleColumn = -1;
 
     // The draft row's emoji button (2026-10-11, EmojiButton): whether the last layout made room for it (the wrap two cells
     // narrower) and so the draw put it at the first input row's end, for TryHitEmojiButton, the rewrites and the row moves.
@@ -431,12 +433,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private List<PictureSpan> _stripSpans = [];
     private (int Left, int Right) _stripArrows = (-1, -1);
 
-    // The button on the strip's rule (2026-09-27, the picture viewer): its label's provider, and the columns the last
-    // draw put the label at (-1 = none drawn), for TryHitStripButton; the close × at the rule's right (2026-09-28), for
-    // TryHitStripClose.
-    private Func<string?> _stripButton = static () => null;
-    private int _stripButtonColumn = -1;
-    private int _stripButtonCells;
+    // The close × at the right of the strip's rule (2026-09-28): its column (-1 = none drawn), for TryHitStripClose.
     private int _stripCloseColumn = -1;
 
     private sealed record Overlay(IRenderable Content, string Hint, bool Input, bool Close, OverlayAim? Aim);
@@ -1360,30 +1357,33 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The label of the button on the picture strip's own rule (2026-09-27, the user's ask: the ComfyUI picture viewer opened
-    /// from the strip): drawn at the rule's left edge since 2026-09-28 (the user's call, the close × took the right;
-    /// <see cref="StripRule"/>), in <see cref="Theme.AccentSecondary"/> so it reads as something to click; null or empty = no
-    /// button (the default), the × stays. Read at each draw; a click on it is <see cref="TryHitStripButton"/>.
+    /// The label of the upper rule's button that closes or opens the picture strip (2026-10-03, the user's ask: the strip's ×
+    /// left no way back short of another picture; a toggle since 2026-11-25, the user's ask: a click closes the strip as its ×
+    /// does, and the viewer's button that sat on the strip's own rule went): drawn right of ⤡, or in its place without it
+    /// (<see cref="UpperRule"/>), in <see cref="Theme.AccentSecondary"/> so it reads as something to click. Null or empty = no
+    /// button (the default); the screen answers one while its strip has pictures in it, open or closed. Not drawn under an
+    /// overlay, nor in a window with no room for the strip (it would bring back nothing to see). Read at each draw and on the
+    /// tick; a click on it is <see cref="TryHitStripToggle"/>.
     /// </summary>
-    public Func<string?> StripButton
+    public Func<string?> StripToggle
     {
-        get => _stripButton;
-        set => _stripButton = value ?? throw new ArgumentNullException(nameof(value));
+        get => _stripToggle;
+        set => _stripToggle = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
-    /// The label of the upper rule's button that brings a closed picture strip back (2026-10-03, the user's ask: the strip's ×
-    /// left no way back short of another picture): drawn right of ⤡, or in its place without it (<see cref="UpperRule"/>), in
-    /// <see cref="Theme.AccentSecondary"/> as the strip's own button. Null or empty = no button (the default); the screen
-    /// answers one only while its strip is closed with pictures in it. Not drawn under an overlay, nor in a window with no
-    /// room for the strip (it would bring back nothing to see). Read at each draw and on the tick; a click on it is
-    /// <see cref="TryHitStripReopen"/>.
+    /// Whether the conversation is private (2026-11-25, the private-conversations plan, the user's ask): <see cref="PrivateGlyph"/> on the upper rule after
+    /// ⤡ and 🎞️, in <see cref="Theme.AccentSecondary"/>. A mark, never a button: no click, and unlike the two buttons it stays under an overlay. Read at
+    /// each draw and on the tick.
     /// </summary>
-    public Func<string?> StripReopen
+    public Func<bool> PrivateMark
     {
-        get => _stripReopen;
-        set => _stripReopen = value ?? throw new ArgumentNullException(nameof(value));
+        get => _privateMark;
+        set => _privateMark = value ?? throw new ArgumentNullException(nameof(value));
     }
+
+    /// <summary>The upper rule's private mark. Two cells, as 🎞️ is.</summary>
+    public const string PrivateGlyph = "🕶️";
 
     /// <summary>
     /// The draft row's emoji button (2026-10-11, the user's ask; the screen answers its <c>Emoji picker</c> setting):
@@ -1446,22 +1446,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on <see cref="StripButton"/>'s
-    /// label on the drawn strip's rule, or the space either side of it (2026-09-28: the glyph alone is a small target).
-    /// False with no strip or no button drawn, the pane lifted or disabled, or no geometry.
-    /// </summary>
-    public bool TryHitStripButton(int x, int y) => HitStripRule(x, y, close: false);
-
-    /// <summary>
     /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the close × at the right of the
     /// drawn strip's rule (2026-09-28), or the cell either side — three cells, as <see cref="TryHitClose"/> gives an
-    /// overlay's. The screen puts the strip away until the 🎞️ brings it back (<see cref="UI.PictureStrip.Close"/>). False as
-    /// <see cref="TryHitStripButton"/> is.
+    /// overlay's. The screen puts the strip away until the 🎞️ brings it back (<see cref="UI.PictureStrip.Close"/>). False with no
+    /// strip or no × drawn, the pane lifted or disabled, or no geometry.
     /// </summary>
-    public bool TryHitStripClose(int x, int y) => HitStripRule(x, y, close: true);
-
-    /// <summary>Whether (<paramref name="x"/>, <paramref name="y"/>) is on the drawn strip rule's button or its ×, with the cell either side.</summary>
-    private bool HitStripRule(int x, int y, bool close)
+    public bool TryHitStripClose(int x, int y)
     {
         if (!Enabled)
         {
@@ -1470,7 +1460,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            int column = close ? _stripCloseColumn : _stripButtonColumn;
+            int column = _stripCloseColumn;
             if (!_drawn || _drawnOverlay || _stripRows == 0 || column < 0 || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
             {
                 return false;
@@ -1478,8 +1468,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
             // The strip's own rule is its first row, _stripRows over the upper rule.
             int rule = top - CursorDepth - 1;
-            int cells = close ? TextCells.Width(CloseGlyph) : _stripButtonCells;
-            return y == rule - _stripRows && x >= column - 1 && x <= column + cells;
+            return y == rule - _stripRows && x >= column - 1 && x <= column + TextCells.Width(CloseGlyph);
         }
     }
 
@@ -1514,11 +1503,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) landed on the upper rule's
-    /// <see cref="StripReopen"/> button (2026-10-03): its cells and the space after them, and the space before them too when
-    /// no ⤡ is drawn — beside ⤡ that space is ⤡'s (<see cref="TryHitFoldButton"/>). The caller opens the strip again
-    /// (<see cref="UI.PictureStrip.Open"/>). False as <see cref="TryHitFoldButton"/> is.
+    /// <see cref="StripToggle"/> button (2026-10-03): its cells and the space after them, and the space before them too when
+    /// no ⤡ is drawn — beside ⤡ that space is ⤡'s (<see cref="TryHitFoldButton"/>). The caller closes or opens the strip
+    /// (<see cref="UI.PictureStrip.Close"/>, <see cref="UI.PictureStrip.Open"/>). False as <see cref="TryHitFoldButton"/> is.
     /// </summary>
-    public bool TryHitStripReopen(int x, int y)
+    public bool TryHitStripToggle(int x, int y)
     {
         if (!Enabled)
         {
@@ -1527,7 +1516,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         lock (_gate)
         {
-            if (!_drawn || _drawnOverlay || _reopenColumn < 0 || _drawnReopen is not { } label || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
+            if (!_drawn || _drawnOverlay || _stripToggleColumn < 0 || _drawnStripToggle is not { } label || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
             {
                 return false;
             }
@@ -1537,8 +1526,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
-            int from = _foldColumn < 0 ? _reopenColumn - 1 : _reopenColumn;
-            return x >= from && x <= _reopenColumn + TextCells.Width(label);
+            int from = _foldColumn < 0 ? _stripToggleColumn - 1 : _stripToggleColumn;
+            return x >= from && x <= _stripToggleColumn + TextCells.Width(label);
         }
     }
 
@@ -6373,7 +6362,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             stripRows = 0;
             _stripSpans = [];
             _stripArrows = (-1, -1);
-            _stripButtonColumn = -1;
             _stripCloseColumn = -1;
         }
 
@@ -6730,7 +6718,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         if (stripLines is not null)
         {
-            // Its rule first (2026-09-25), the input rows' own, with the viewer's button at its edge (2026-09-27).
+            // Its rule first (2026-09-25), the input rows' own, with the close × at its edge (2026-09-28).
             WriteStripRule(w);
             foreach (var line in stripLines)
             {
@@ -7761,23 +7749,32 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         string.Join("\u001f", items.Where(i => i.Text.Length > 0).Select(i => ((int)i.Kind).ToString(System.Globalization.CultureInfo.InvariantCulture) + ":" + i.Text));
 
     /// <summary>
-    /// Which kinds a narrow lower rule drops first (2026-11-23, the user's ask): the update's marker, then the pictures, then the download,
-    /// then the loop; the processes' count never. Lower drops sooner; null is never dropped.
+    /// Which kinds a narrow lower rule drops first (2026-11-23, the user's ask; the status bar's jobs joined on 2026-11-25): the update's
+    /// marker, the pictures, the reflection, the speech and voice setups, the MCP wave, the download, the loop, the botchat's extras, and
+    /// last the processes' count — that one only beside the camera when the two don't fit (<see cref="LowerRuleFit"/>); the camera never.
+    /// Lower drops sooner; null is never dropped.
     /// </summary>
     public static int? LowerRuleDropRank(LowerRuleKind kind) => kind switch
     {
         LowerRuleKind.Update => 0,
         LowerRuleKind.Pictures => 1,
-        LowerRuleKind.Download => 2,
-        LowerRuleKind.Loop => 3,
+        LowerRuleKind.Learning => 2,
+        LowerRuleKind.Speech => 3,
+        LowerRuleKind.Voice => 4,
+        LowerRuleKind.Mcp => 5,
+        LowerRuleKind.Download => 6,
+        LowerRuleKind.Loop => 7,
+        LowerRuleKind.Extras => 8,
+        LowerRuleKind.Processes => 9,
         _ => null,
     };
 
     /// <summary>
     /// The lower rule's layout over <paramref name="width"/> cells (2026-11-23, the jobs group; <c>MarkerFit</c> until then): the items kept,
     /// in their order, and the rule glyphs at their left. Items are dropped whole by <see cref="LowerRuleDropRank"/> until
-    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>⚡n</c> left alone, which is
-    /// <see cref="RuleWithTitle"/>'s fit as before. Empty texts are skipped; nothing kept = the bare rule. Pure, pinned.
+    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>⚡n</c> or <c>📷</c> left alone, which is
+    /// <see cref="RuleWithTitle"/>'s fit as before. <c>⚡n</c> goes only with another item beside it (2026-11-25: the camera, which is
+    /// never dropped; else two that don't fit would leave the bare rule). Empty texts are skipped; nothing kept = the bare rule. Pure, pinned.
     /// </summary>
     public static (IReadOnlyList<LowerRuleItem> Kept, int Left) LowerRuleFit(IReadOnlyList<LowerRuleItem> items, int width)
     {
@@ -7795,7 +7792,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             int drop = -1;
             for (int i = 0; i < kept.Count; i++)
             {
-                if (LowerRuleDropRank(kept[i].Kind) is int rank && (drop < 0 || rank < LowerRuleDropRank(kept[drop].Kind)))
+                if (LowerRuleDropRank(kept[i].Kind) is int rank && (kept.Count > 1 || kept[i].Kind != LowerRuleKind.Processes) && (drop < 0 || rank < LowerRuleDropRank(kept[drop].Kind)))
                 {
                     drop = i;
                 }
@@ -7861,19 +7858,17 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The picture strip's rule (<see cref="StripRule"/>): <see cref="StripButton"/>'s label at its left in its own style,
-    /// the close × at its right in <see cref="Theme.DimText"/> as an overlay's; where each landed is kept for the hit tests.
+    /// The picture strip's rule (<see cref="StripRule"/>): the close × at its right in <see cref="Theme.DimText"/> as an
+    /// overlay's; where it landed is kept for the hit test.
     /// </summary>
     private void WriteStripRule(int width)
     {
-        var parts = StripRule(_stripButton(), width);
-        _stripButtonColumn = parts.ButtonColumn;
-        _stripButtonCells = TextCells.Width(parts.Button);
+        var parts = StripRule(width);
         _stripCloseColumn = parts.CloseColumn;
         // The rule's own pieces shade along the gradient (2026-11-01) unless a /mark is up: the strip ignores a mark's color and stays
         // flat in the pane rule's then, so a marked window shows no gradient anywhere around the input line.
         int column = 0;
-        foreach (var (text, style, rule) in new[] { (parts.Lead, Theme.PaneRule, true), (parts.Button, Theme.AccentSecondary, false), (parts.Fill, Theme.PaneRule, true), (parts.Close, Theme.DimText, false), (parts.Tail, Theme.PaneRule, true) })
+        foreach (var (text, style, rule) in new[] { (parts.Fill, Theme.PaneRule, true), (parts.Close, Theme.DimText, false), (parts.Tail, Theme.PaneRule, true) })
         {
             if (text.Length > 0)
             {
@@ -7895,68 +7890,53 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The picture strip's rule cut in the pieces <see cref="StripRule"/> draws in their own styles, left to right — the
-    /// rule's <see cref="Lead"/>, the <see cref="Button"/>, the rule's <see cref="Fill"/>, the <see cref="Close"/> glyph and
-    /// the rule's <see cref="Tail"/> — and the columns the button and the × start at (−1 = not drawn).
+    /// rule's <see cref="Fill"/>, the <see cref="Close"/> glyph and the rule's <see cref="Tail"/> — and the column the ×
+    /// starts at (−1 = not drawn).
     /// </summary>
-    public readonly record struct StripRuleParts(string Lead, string Button, string Fill, string Close, string Tail, int ButtonColumn, int CloseColumn)
+    public readonly record struct StripRuleParts(string Fill, string Close, string Tail, int CloseColumn)
     {
         /// <summary>The whole rule as one string.</summary>
-        public string Text => Lead + Button + Fill + Close + Tail;
+        public string Text => Fill + Close + Tail;
     }
 
     /// <summary>
-    /// The picture strip's rule of <paramref name="width"/> cells (2026-09-28, the user's layout): the viewer's
-    /// <paramref name="button"/> at the left, right after the rule's first glyph with a space at its right, and the close ×
-    /// (<see cref="CloseGlyph"/>) at the right with a space either side — <c>─ 🎞️ ────────── × ─</c>. The space left of
-    /// the button went later that day (a screenshot read the gap as two) and came back later still (the user's call: "I
-    /// was wrong about this"). With no button, <c>────── × ─</c>; a width that leaves no rule between them drops the
-    /// button, one that cannot hold even the × is the bare rule. Pure, pinned.
+    /// The picture strip's rule of <paramref name="width"/> cells (2026-09-28, the user's layout): the close ×
+    /// (<see cref="CloseGlyph"/>) at the right with a space either side — <c>────────── × ─</c>. The viewer's 🎞️ at its left
+    /// went on 2026-11-25 (the user's ask: one 🎞️, the upper rule's, which closes and opens the strip). A width that cannot hold
+    /// even the × is the bare rule. Pure, pinned.
     /// </summary>
-    public static StripRuleParts StripRule(string? button, int width)
+    public static StripRuleParts StripRule(int width)
     {
         width = Math.Max(0, width);
-        string rule = RuleGlyph.ToString();
-        string tail = " " + rule;
+        string tail = " " + RuleGlyph;
         int closeCells = TextCells.Width(CloseGlyph);
         int right = 1 + closeCells + TextCells.Width(tail);   // " × ─"
-        button ??= "";
-        int buttonCells = TextCells.Width(button);
-        if (button.Length > 0 && width - (2 + buttonCells + 1) - right >= 1)
-        {
-            // "─ " + button + " " + the rule + " × ─"
-            string lead = rule + " ";
-            int fill = width - TextCells.Width(lead) - buttonCells - 1 - right;
-            return new StripRuleParts(lead, button, " " + new string(RuleGlyph, fill) + " ", CloseGlyph, tail, TextCells.Width(lead), width - closeCells - TextCells.Width(tail));
-        }
-
-        if (width - right >= 1)
-        {
-            return new StripRuleParts("", "", new string(RuleGlyph, width - right) + " ", CloseGlyph, tail, -1, width - closeCells - TextCells.Width(tail));
-        }
-
-        return new StripRuleParts("", "", new string(RuleGlyph, width), "", "", -1, -1);
+        return width - right >= 1
+            ? new StripRuleParts(new string(RuleGlyph, width - right) + " ", CloseGlyph, tail, width - closeCells - TextCells.Width(tail))
+            : new StripRuleParts(new string(RuleGlyph, width), "", "", -1);
     }
 
     /// <summary>
     /// The upper rule with <see cref="RuleTitle"/> at its right edge and, while something in the transcript folds and no
-    /// overlay is up, ⤡ at its left (<see cref="UpperRule"/>) in the strip button's style; the title, whether the button
-    /// was wanted and where it landed are remembered for the tick and <see cref="TryHitFoldButton"/>. The closed strip's 🎞️
-    /// (<see cref="StripReopen"/>, 2026-10-03) the same, for <see cref="TryHitStripReopen"/>.
+    /// overlay is up, ⤡ at its left (<see cref="UpperRule"/>) in <see cref="Theme.AccentSecondary"/>; the title, whether the button
+    /// was wanted and where it landed are remembered for the tick and <see cref="TryHitFoldButton"/>. The strip's 🎞️
+    /// (<see cref="StripToggle"/>, 2026-10-03) the same, for <see cref="TryHitStripToggle"/>.
     /// </summary>
     private void WriteUpperRule(int width)
     {
         _drawnRuleTitle = _ruleTitle();
         _drawnFolds = FoldsWanted();
-        _drawnReopen = ReopenWanted();
+        _drawnStripToggle = StripToggleWanted();
+        _drawnPrivate = _privateMark();
         _drawnRuleMark = RuleMarks.StyleFor(_ruleMark, Theme.PageGround, Theme.PageInk);
         var rule = _drawnRuleMark ?? Theme.PaneRule;
-        var parts = UpperRule(_drawnRuleTitle, _drawnFolds, width, _drawnReopen);
+        var parts = UpperRule(_drawnRuleTitle, _drawnFolds, width, _drawnStripToggle, _drawnPrivate);
         _foldColumn = parts.FoldColumn;
-        _reopenColumn = parts.ReopenColumn;
+        _stripToggleColumn = parts.StripColumn;
         _ruleTitleColumn = parts.TitleColumn;
         _ruleTitleCells = parts.TitleCells;
         WriteRuleText(parts.Lead, 0, width, rule);
-        foreach (var text in new[] { parts.Button, parts.Reopen })
+        foreach (var text in new[] { parts.Button, parts.Strip, parts.Private })
         {
             if (text.Length > 0)
             {
@@ -7966,7 +7946,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         // The rest: the glyphs in the rule's style (a mark's, 2026-10-18; the gradient's, 2026-11-01), the session's name between them
         // in the theme's as ever.
-        int restColumn = TextCells.Width(parts.Lead + parts.Button + parts.Reopen);
+        int restColumn = TextCells.Width(parts.Lead + parts.Button + parts.Strip + parts.Private);
         int restWidth = width - restColumn;
         if (FitRuleTitle(_drawnRuleTitle, restWidth) is var (fitted, left))
         {
@@ -7985,15 +7965,15 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>The upper rule's ⤡ is wanted: something in the store folds (<see cref="Scrollback.AnyFolds"/>) and no overlay is up — under one they go, as the strip does.</summary>
     private bool FoldsWanted() => _overlay is null && _store.AnyFolds;
 
-    /// <summary>The upper rule's <see cref="StripReopen"/> label, or null: one answered, no overlay up and room in the window for the strip it brings back.</summary>
-    private string? ReopenWanted() =>
-        _overlay is null && _stripReopen() is { Length: > 0 } label && StripFits(Width, Height, ReservedBarRowsFor(Height)) ? label : null;
+    /// <summary>The upper rule's <see cref="StripToggle"/> label, or null: one answered, no overlay up and room in the window for the strip it closes or brings back.</summary>
+    private string? StripToggleWanted() =>
+        _overlay is null && _stripToggle() is { Length: > 0 } label && StripFits(Width, Height, ReservedBarRowsFor(Height)) ? label : null;
 
     /// <summary>
     /// Whether the upper rule's buttons wanted now are not what the drawn rule shows: a run came to fold, or the last fold
-    /// went; the strip was closed or opened again, the setting flipped, the window's room for the strip changed (2026-10-03).
+    /// went; the strip got its first picture or lost its last, the setting flipped, the window's room for the strip changed (2026-10-03).
     /// </summary>
-    private bool RuleButtonsChanged() => FoldsWanted() != _drawnFolds || !string.Equals(ReopenWanted(), _drawnReopen, StringComparison.Ordinal);
+    private bool RuleButtonsChanged() => FoldsWanted() != _drawnFolds || !string.Equals(StripToggleWanted(), _drawnStripToggle, StringComparison.Ordinal) || _privateMark() != _drawnPrivate;
 
     /// <summary>
     /// The upper rule cut in the pieces <see cref="UpperRule"/> draws in their own styles, left to right — the rule's
@@ -8002,13 +7982,13 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// drawn) and its cells (2026-09-28, for <see cref="TryHitRuleTitle"/>).
     /// </summary>
     /// <remarks>
-    /// <see cref="Reopen"/> is the strip's 🎞️ and the space after it (2026-10-03, <see cref="StripReopen"/>), drawn between
-    /// the <see cref="Button"/> and the <see cref="Rest"/>, at <see cref="ReopenColumn"/> (−1 = not drawn).
+    /// <see cref="Strip"/> is the picture strip's 🎞️ and the space after it (2026-10-03, <see cref="StripToggle"/>), drawn between
+    /// the <see cref="Button"/> and the <see cref="Rest"/>, at <see cref="StripColumn"/> (−1 = not drawn).
     /// </remarks>
-    public readonly record struct UpperRuleParts(string Lead, string Button, string Rest, int FoldColumn, int TitleColumn = -1, int TitleCells = 0, string Reopen = "", int ReopenColumn = -1)
+    public readonly record struct UpperRuleParts(string Lead, string Button, string Rest, int FoldColumn, int TitleColumn = -1, int TitleCells = 0, string Strip = "", int StripColumn = -1, string Private = "", int PrivateColumn = -1)
     {
         /// <summary>The whole rule as one string.</summary>
-        public string Text => Lead + Button + Reopen + Rest;
+        public string Text => Lead + Button + Strip + Private + Rest;
     }
 
     /// <summary>
@@ -8016,36 +7996,43 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <see cref="FoldGlyph"/> after the rule's first glyph with a space either side, then <see cref="RuleWithTitle"/> over the
     /// rest — <c>─ ⤡ ──────── title ─</c>. Until 2026-09-29 it was the ↘️ ↖️ pair with the space at their left alone (Windows
     /// Terminal drew each emoji with room of its own at its right); the one-cell ⤡ has no such room, so it is spaced as the
-    /// title is. With a <paramref name="reopen"/> label (2026-10-03, the user's ask: the closed picture strip's way back) it
+    /// title is. With a <paramref name="strip"/> label (2026-10-03, the user's ask: the picture strip's 🎞️) it
     /// follows ⤡ with a space after it, or takes ⤡'s place without folds — <c>─ ⤡ 🎞️ ──────── title ─</c>,
     /// <c>─ 🎞️ ──────── title ─</c>. A width that cannot keep <see cref="RuleTitleMinRule"/> glyphs after the buttons drops
-    /// the reopen first, then ⤡; with neither it is <see cref="RuleWithTitle"/> alone. Pure, pinned.
+    /// the 🎞️ first, then ⤡; with neither it is <see cref="RuleWithTitle"/> alone. Pure, pinned.
     /// </summary>
-    public static UpperRuleParts UpperRule(string title, bool folds, int width, string? reopen = null)
+    public static UpperRuleParts UpperRule(string title, bool folds, int width, string? strip = null, bool hidden = false)
     {
         ArgumentNullException.ThrowIfNull(title);
         width = Math.Max(0, width);
         string lead = RuleGlyph + " ";
         string button = folds ? FoldGlyph + " " : "";
-        string again = string.IsNullOrEmpty(reopen) ? "" : reopen + " ";
-        if (again.Length > 0 && width - TextCells.Width(lead + button + again) < RuleTitleMinRule)
+        string film = string.IsNullOrEmpty(strip) ? "" : strip + " ";
+        // The private mark (2026-11-25) after the two buttons: ─ ⤡ 🎞️ 🕶️ ────; a narrow rule drops 🎞️, then ⤡, then 🕶️.
+        string mark = hidden ? PrivateGlyph + " " : "";
+        if (film.Length > 0 && width - TextCells.Width(lead + button + film + mark) < RuleTitleMinRule)
         {
-            again = "";
+            film = "";
         }
 
-        if (button.Length > 0 && width - TextCells.Width(lead + button) < RuleTitleMinRule)
+        if (button.Length > 0 && width - TextCells.Width(lead + button + mark) < RuleTitleMinRule)
         {
             button = "";
         }
 
-        if (button.Length == 0 && again.Length == 0)
+        if (mark.Length > 0 && width - TextCells.Width(lead + mark) < RuleTitleMinRule)
+        {
+            mark = "";
+        }
+
+        if (button.Length == 0 && film.Length == 0 && mark.Length == 0)
         {
             var (plainColumn, plainCells) = TitleSpan(title, width, 0);
             return new UpperRuleParts("", "", RuleWithTitle(title, width), -1, plainColumn, plainCells);
         }
 
         int leadCells = TextCells.Width(lead);
-        int used = leadCells + TextCells.Width(button) + TextCells.Width(again);
+        int used = leadCells + TextCells.Width(button) + TextCells.Width(film) + TextCells.Width(mark);
         var (titleColumn, titleCells) = TitleSpan(title, width - used, used);
         return new UpperRuleParts(
             lead,
@@ -8054,8 +8041,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             button.Length > 0 ? leadCells : -1,
             titleColumn,
             titleCells,
-            again,
-            again.Length > 0 ? leadCells + TextCells.Width(button) : -1);
+            film,
+            film.Length > 0 ? leadCells + TextCells.Width(button) : -1,
+            mark,
+            mark.Length > 0 ? leadCells + TextCells.Width(button + film) : -1);
     }
 
     /// <summary>Where <see cref="RuleWithTitle"/> of <paramref name="width"/> cells, drawn from column <paramref name="offset"/>, puts its title: the column and the cells, (−1, 0) with none.</summary>

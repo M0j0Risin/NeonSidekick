@@ -70,9 +70,15 @@ public static class SkillsPrompt
     /// The block: the directive, then (with any skill) a blank line and the catalog. <paramref name="global"/> false (2026-10-13, the
     /// profile's <c>Global skills</c> off, the scan's own <see cref="SkillCatalog.GlobalEnabled"/>) takes the profile-only directives.
     /// </summary>
-    public static string Section(IReadOnlyList<Skill> skills, bool global = true)
+    public static string Section(IReadOnlyList<Skill> skills, bool global = true, bool editor = true)
     {
         ArgumentNullException.ThrowIfNull(skills);
+        // Without skill_editor (2026-11-25, a private conversation without Private learning): the load-only block, or none with no skills.
+        if (!editor)
+        {
+            return skills.Count == 0 ? "" : LoadOnlySection(skills);
+        }
+
         string directive = DirectiveFor(skills, global);
         return skills.Count == 0 ? directive : directive + "\n\n" + Catalog(skills);
     }

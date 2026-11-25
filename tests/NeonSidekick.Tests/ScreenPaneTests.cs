@@ -97,33 +97,22 @@ public partial class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The picture strip's rule (2026-09-28, the user's layout): the viewer's button at the left and the close × at the
-    /// right, a space cell either side of each (the space at the button's left went later that day and came back later
-    /// still, the user's call); no button, the × alone; too narrow, the button goes, then the ×.
+    /// The picture strip's rule (2026-09-28, the user's layout): the close × at the right with a space cell either side; too
+    /// narrow, the bare rule. The viewer's button at its left went on 2026-11-25 (one 🎞️, the upper rule's).
     /// </summary>
     [Fact]
     public void StripRule_IsPinned()
     {
-        const string film = "\U0001F39E️";
-        var parts = ScreenPane.StripRule(film, 40);
-        Assert.Equal("─ " + film + " " + Rule(31) + " × ─", parts.Text);
+        var parts = ScreenPane.StripRule(40);
+        Assert.Equal(Rule(36) + " × ─", parts.Text);
         Assert.Equal(40, TextCells.Width(parts.Text));
-        Assert.Equal((2, 37), (parts.ButtonColumn, parts.CloseColumn));
-        Assert.Equal((film, "×"), (parts.Button, parts.Close));
-        Assert.Equal("─ ", parts.Lead);          // a space cell left of the glyph…
-        Assert.StartsWith(" ", parts.Fill);      // …one right of it
+        Assert.Equal(("×", 37), (parts.Close, parts.CloseColumn));
         Assert.EndsWith(" ", parts.Fill);        // a space either side of the ×
         Assert.StartsWith(" ", parts.Tail);
 
-        Assert.Equal(Rule(36) + " × ─", ScreenPane.StripRule(null, 40).Text);
-        Assert.Equal(-1, ScreenPane.StripRule("", 40).ButtonColumn);
-        Assert.Equal(36 + 1, ScreenPane.StripRule("", 40).CloseColumn);
-
-        Assert.Equal("─ " + film + " ─ × ─", ScreenPane.StripRule(film, 10).Text);   // one rule glyph between: the least
-        Assert.Equal(Rule(5) + " × ─", ScreenPane.StripRule(film, 9).Text);         // none: the button goes
-        Assert.Equal("─ × ─", ScreenPane.StripRule(film, 5).Text);
-        var bare = ScreenPane.StripRule(film, 4);
-        Assert.Equal((Rule(4), -1, -1), (bare.Text, bare.ButtonColumn, bare.CloseColumn));
+        Assert.Equal("─ × ─", ScreenPane.StripRule(5).Text);
+        var bare = ScreenPane.StripRule(4);
+        Assert.Equal((Rule(4), -1), (bare.Text, bare.CloseColumn));
     }
 
     [Fact]
@@ -334,6 +323,47 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Empty(ScreenPane.LowerRuleFit([update, loop], Room(loop) - 1).Kept);
     }
 
+    /// <summary>
+    /// The status bar's jobs on the lower rule (2026-11-25, the user's ask): in the rule's order they drop the update, the pictures, the brain, the speech
+    /// and voice setups, the MCP wave, the download, the loop and the extras, each whole; ⚡n goes only once 📷 alone stays with it and the two don't
+    /// fit, 📷 never — either left alone is cut to fit.
+    /// </summary>
+    [Fact]
+    public void LowerRuleFit_DropsTheStatusBarsJobsInOrder_TheProcessesBesideTheCamera_TheCameraNever()
+    {
+        LowerRuleItem update = new(LowerRuleKind.Update, "📦 0.5.9 at quit");
+        LowerRuleItem loop = new(LowerRuleKind.Loop, "🔁 step 2/5 · pass 3");
+        LowerRuleItem download = new(LowerRuleKind.Download, "📥 ⠋ 42%");
+        LowerRuleItem mcp = new(LowerRuleKind.Mcp, "🔌 1/3");
+        LowerRuleItem voice = new(LowerRuleKind.Voice, "🎙️ 42%");
+        LowerRuleItem speech = new(LowerRuleKind.Speech, "🔈");
+        LowerRuleItem pictures = new(LowerRuleKind.Pictures, "🖼️ 2");
+        LowerRuleItem brain = new(LowerRuleKind.Learning, "🧠");
+        LowerRuleItem extras = new(LowerRuleKind.Extras, "🧟");
+        LowerRuleItem camera = new(LowerRuleKind.Camera, "📷");
+        LowerRuleItem processes = new(LowerRuleKind.Processes, "⚡1");
+        LowerRuleItem[] all = [update, loop, download, mcp, voice, speech, pictures, brain, extras, camera, processes];
+        static int Room(params LowerRuleItem[] kept) =>
+            kept.Sum(i => TextCells.Width(i.Text)) + ((kept.Length - 1) * (ScreenPane.LowerRuleGap + 2)) + 3 + ScreenPane.RuleTitleMinRule;
+
+        Assert.Equal(all, ScreenPane.LowerRuleFit(all, Room(all)).Kept);
+        var order = new[] { update, pictures, brain, speech, voice, mcp, download, loop, extras };
+        var kept = all.ToList();
+        foreach (var next in order)
+        {
+            int width = Room([.. kept]) - 1;
+            kept.Remove(next);
+            Assert.Equal(kept, ScreenPane.LowerRuleFit(all, width).Kept);
+        }
+
+        Assert.Equal(new[] { camera, processes }, kept);
+        Assert.Equal(new[] { camera }, ScreenPane.LowerRuleFit(all, Room(camera, processes) - 1).Kept);   // ⚡n goes, 📷 stays
+        Assert.Equal(ScreenPane.RuleWithTitle("📷", 12), new string('─', ScreenPane.LowerRuleFit([camera, processes], 12).Left) + " " + ScreenPane.LowerRuleFit([camera, processes], 12).Kept.Single().Text + " ─");
+        Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit([brain, processes], Room(brain, processes) - 1).Kept);   // ⚡n stays while anything else can go
+        Assert.Equal(LowerRuleKind.Processes, Assert.Single(ScreenPane.LowerRuleFit([processes], 11 + TextCells.Width(processes.Text)).Kept).Kind);   // ⚡n alone is cut, never dropped
+        Assert.Null(ScreenPane.LowerRuleDropRank(LowerRuleKind.Camera));
+    }
+
     /// <summary>Each item takes a click on its cells and the space either side (2026-11-23), never on the rule glyphs between two; the pair keys stay apart.</summary>
     [Fact]
     public void LowerRuleItems_EachHasItsOwnClickArea_NoneOnTheGlyphsBetween()
@@ -364,8 +394,8 @@ public partial class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Contains(" ⟳ 3/10 · ending ── ▶ 1 ─\n", Output[mark..]);
         Assert.Equal(
-            new[] { -600_001, -600_002, -600_003, -600_004, -600_005 },
-            new[] { LowerRuleKind.Processes, LowerRuleKind.Update, LowerRuleKind.Loop, LowerRuleKind.Download, LowerRuleKind.Pictures }.Select(InputLine.LowerRulePairKey));
+            new[] { -600_001, -600_002, -600_003, -600_004, -600_005, -600_006, -600_007, -600_008, -600_009, -600_010, -600_011 },
+            new[] { LowerRuleKind.Processes, LowerRuleKind.Update, LowerRuleKind.Loop, LowerRuleKind.Download, LowerRuleKind.Pictures, LowerRuleKind.Mcp, LowerRuleKind.Voice, LowerRuleKind.Speech, LowerRuleKind.Learning, LowerRuleKind.Extras, LowerRuleKind.Camera }.Select(InputLine.LowerRulePairKey));
     }
 
     /// <summary>
@@ -521,11 +551,11 @@ public partial class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The closed picture strip's 🎞️ on the upper rule (2026-10-03, the user's ask): right of ⤡ with a space after it, or in
+    /// The picture strip's 🎞️ on the upper rule (2026-10-03, the user's ask): right of ⤡ with a space after it, or in
     /// ⤡'s place without folds; the title keeps to the right edge; a narrow rule drops the 🎞️ first, then ⤡; an empty label is none.
     /// </summary>
     [Fact]
-    public void UpperRule_CarriesTheStripsReopen_RightOfTheFold()
+    public void UpperRule_CarriesTheStripsToggle_RightOfTheFold()
     {
         string film = NeonSidekick.Viewer.ViewerText.StripButton;
         Assert.Equal(2, TextCells.Width(film));
@@ -533,21 +563,21 @@ public partial class ScreenPaneTests : IDisposable
         var both = ScreenPane.UpperRule("", folds: true, 40, film);
         Assert.Equal("─ ⤡ " + film + " " + Rule(33), both.Text);
         Assert.Equal(40, TextCells.Width(both.Text));
-        Assert.Equal(("⤡ ", film + " ", 2, 4), (both.Button, both.Reopen, both.FoldColumn, both.ReopenColumn));
+        Assert.Equal(("⤡ ", film + " ", 2, 4), (both.Button, both.Strip, both.FoldColumn, both.StripColumn));
 
         var alone = ScreenPane.UpperRule("", folds: false, 40, film);
         Assert.Equal("─ " + film + " " + Rule(35), alone.Text);
-        Assert.Equal(("", -1, 2), (alone.Button, alone.FoldColumn, alone.ReopenColumn));
+        Assert.Equal(("", -1, 2), (alone.Button, alone.FoldColumn, alone.StripColumn));
 
         var titled = ScreenPane.UpperRule("notes", folds: true, 40, film);
         Assert.Equal("─ ⤡ " + film + " " + ScreenPane.RuleWithTitle("notes", 33), titled.Text);
         Assert.Equal((33, 5), (titled.TitleColumn, titled.TitleCells));
 
-        Assert.Equal(4, ScreenPane.UpperRule("", folds: true, 7 + ScreenPane.RuleTitleMinRule, film).ReopenColumn);
+        Assert.Equal(4, ScreenPane.UpperRule("", folds: true, 7 + ScreenPane.RuleTitleMinRule, film).StripColumn);
         var tight = ScreenPane.UpperRule("", folds: true, 6 + ScreenPane.RuleTitleMinRule, film);   // the 🎞️ goes, ⤡ stays
-        Assert.Equal(("─ ⤡ " + Rule(2 + ScreenPane.RuleTitleMinRule), 2, -1), (tight.Text, tight.FoldColumn, tight.ReopenColumn));
+        Assert.Equal(("─ ⤡ " + Rule(2 + ScreenPane.RuleTitleMinRule), 2, -1), (tight.Text, tight.FoldColumn, tight.StripColumn));
         var bare = ScreenPane.UpperRule("", folds: false, 4 + ScreenPane.RuleTitleMinRule, film);   // no room for the 🎞️ alone
-        Assert.Equal((Rule(4 + ScreenPane.RuleTitleMinRule), -1), (bare.Text, bare.ReopenColumn));
+        Assert.Equal((Rule(4 + ScreenPane.RuleTitleMinRule), -1), (bare.Text, bare.StripColumn));
 
         Assert.Equal(ScreenPane.UpperRule("notes", folds: false, 40), ScreenPane.UpperRule("notes", folds: false, 40, ""));
     }

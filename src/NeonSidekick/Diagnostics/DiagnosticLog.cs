@@ -16,12 +16,15 @@ public enum DiagnosticLevel
 /// <param name="Category">A display facet, not a type: "Startup", "Settings", "Llm", "Voice".</param>
 /// <param name="Message">The text, without the bracketed category.</param>
 /// <param name="Exception">The cause, when the line came from a catch block.</param>
+/// <param name="Audit">An audit line (<see cref="DiagnosticLog.Audit"/>: an admin or database change, an MCP call), kept whole in the <c>--log</c> file
+/// while a private conversation hides the rest (2026-11-25, the private-conversations plan).</param>
 public readonly record struct DiagnosticEvent(
     DateTime TimestampUtc,
     DiagnosticLevel Level,
     string Category,
     string Message,
-    Exception? Exception);
+    Exception? Exception,
+    bool Audit = false);
 
 /// <summary>
 /// The one place diagnostics leave this codebase. <c>Console.WriteLine</c> is not an option
@@ -47,17 +50,27 @@ public static class DiagnosticLog
     public static bool EchoToConsole { get; set; } = true;
 
     /// <summary>Emits a line whose console form is <c>[Category] Message</c>.</summary>
-    public static void Write(DiagnosticLevel level, string category, string message, Exception? exception = null)
+    public static void Write(DiagnosticLevel level, string category, string message, Exception? exception = null) =>
+        Write(level, category, message, exception, audit: false);
+
+    private static void Write(DiagnosticLevel level, string category, string message, Exception? exception, bool audit)
     {
         // A name in a message never sends the terminal a sequence or disguises itself (2026-10-22, review P5); its line breaks stay.
         message = Files.NameScrub.Display(message, keepLineBreaks: true);
         if (EchoToConsole)
         {
-            Console.WriteLine($"[{category}] {message}");
+            // The headless echo follows Private log text (2026-11-25): a hidden line reads [private], an audit line whole.
+            Console.WriteLine($"[{category}] {(PrivateMode.HideLog && !audit ? PrivateMode.Placeholder : message)}");
         }
 
-        Raise(new DiagnosticEvent(DateTime.UtcNow, level, category, message, exception));
+        Raise(new DiagnosticEvent(DateTime.UtcNow, level, category, message, exception, audit));
     }
+
+    /// <summary>
+    /// An audit line (2026-11-25, the private-conversations plan): an admin or database change, a Docker act, an MCP call — Info, and kept whole in the
+    /// <c>--log</c> file while a private conversation hides every other line.
+    /// </summary>
+    public static void Audit(string category, string message) => Write(DiagnosticLevel.Info, category, message, null, audit: true);
 
     public static void Trace(string category, string message) => Write(DiagnosticLevel.Trace, category, message);
 

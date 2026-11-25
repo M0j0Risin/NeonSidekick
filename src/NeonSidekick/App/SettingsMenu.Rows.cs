@@ -94,6 +94,7 @@ internal sealed partial class SettingsMenu
             [
                 (SettingsField.SessionLogging, "Saving"),
                 (SettingsField.SessionNamingMode, "Titles"),   // Search tool after it until 2026-11-21, when its rows went to /tools › Core › Sessions
+                (SettingsField.PrivateAtStart, "Private"),   // 2026-11-25, the private-conversations plan
             ],
             [SettingsTab.BotChat] =
             [

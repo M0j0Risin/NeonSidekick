@@ -25,8 +25,13 @@ public static class ClaudeArguments
             "--include-partial-messages",
             "--verbose",
             "--permission-prompts", "none",
-            request.Resume ? "--resume" : "--session-id", request.SessionId,
+            request.Resume && !request.Private ? "--resume" : "--session-id", request.SessionId,
         };
+        // A private conversation (2026-11-25): Claude Code keeps no transcript of it, and never resumes one (the CLI proof of that day).
+        if (request.Private)
+        {
+            arguments.Add("--no-session-persistence");
+        }
 
         switch (request.Permission)
         {
@@ -82,7 +87,7 @@ public static class ClaudeArguments
             "--output-format", "stream-json",
             "--include-partial-messages",
             "--verbose",
-            resume ? "--resume" : "--session-id", launch.SessionId,
+            resume && !launch.Private ? "--resume" : "--session-id", launch.SessionId,
             "--tools", "",
             "--strict-mcp-config",
             "--mcp-config", mcpConfig,
@@ -95,6 +100,11 @@ public static class ClaudeArguments
             "--model", launch.Model,
         };
         AddEffort(arguments, launch.Effort);
+        if (launch.Private)
+        {
+            arguments.Add("--no-session-persistence");   // 2026-11-25: a private conversation's server keeps no transcript
+        }
+
         return arguments;
     }
 
@@ -178,4 +188,4 @@ public static class ClaudeArguments
 /// <param name="WorkingDirectory">The folder the child starts in; the CLI keeps its per-folder state under it.</param>
 /// <param name="SystemPrompt">The app's system prompt, whole.</param>
 /// <param name="ToolNames">The offered tools' names, joined with commas in order: the MCP server lists them at the child's start.</param>
-public sealed record ClaudeServerLaunch(string Executable, string SessionId, string Model, string? Effort, string WorkingDirectory, string SystemPrompt, string ToolNames);
+public sealed record ClaudeServerLaunch(string Executable, string SessionId, string Model, string? Effort, string WorkingDirectory, string SystemPrompt, string ToolNames, bool Private = false);

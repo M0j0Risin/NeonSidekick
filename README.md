@@ -77,6 +77,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 ### Conversations, memory & skills
 * **Profiles:** each has its own settings, persona, emoji avatar (`/avatar`), memory, sessions and working directory; `/settings export` carries them to another computer.
 * **Sessions:** resume, search and learn from past conversations, or export one to Markdown or HTML.
+* **Private conversations:** `/private` or `--private` keeps a conversation out of the history ([how](docs/INTERFACE.md#private-conversations)).
 * **Memory:** facts you can edit, added to every conversation.
 * **Project notes:** reads the working directory's `NEON.md`, else `AGENTS.md`, else `CLAUDE.md`.
 * **Context control:** compaction keeps the conversation inside the model's window; `/compact` and `/rewind` do it by hand.
@@ -240,7 +241,7 @@ On a Mac, Ctrl+D picks the model (a Mac terminal sends Ctrl+M as Enter). `/help`
 
 ### The bars
 * **[Hints bar](docs/INTERFACE.md#the-hints-bar)** (under the input line): the keys that apply now.
-* **[Status bar](docs/INTERFACE.md#the-status-bar):** the model, the context used and what runs in the background; double-click the model to switch.
+* **[Status bar](docs/INTERFACE.md#the-status-bar):** the model and the context used; double-click the model to switch. What runs in the background shows on the lower rule.
 * **[Toolbar](docs/INTERFACE.md#the-toolbar):** an icon per pane and tool group; click to see what it is, double-click to open it; `/toolbar` hides it.
 * **[Performance bar](docs/INTERFACE.md#the-performance-bar):** CPU, RAM, GPU and VRAM once a second; `/perfbar` hides it.
 

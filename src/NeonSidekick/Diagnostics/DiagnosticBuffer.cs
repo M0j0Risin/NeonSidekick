@@ -3,7 +3,7 @@ namespace NeonSidekick.Diagnostics;
 /// <summary>One line the <see cref="DiagnosticBuffer"/> holds: its place in the run, its level and the text the <c>--log</c> file would hold.</summary>
 /// <param name="Seq">The line's number in the run, from 0, one more for every line: a reader asks for the lines after the last it has.</param>
 /// <param name="Level">Severity, for the log window's colours.</param>
-/// <param name="Text"><see cref="DiagnosticFileSink.Format"/>'s line, exactly as the file has it.</param>
+/// <param name="Text"><see cref="DiagnosticFileSink.Format"/>'s line, in the file's form (a private conversation's file hides what this shows live).</param>
 public readonly record struct LogLine(long Seq, DiagnosticLevel Level, string Text);
 
 /// <summary>
@@ -71,8 +71,12 @@ public sealed class DiagnosticBuffer : IDisposable
         var buffer = new DiagnosticBuffer(capacity);
         DiagnosticLog.Emitted += buffer.Add;
         buffer._attached = true;
+        Attached = buffer;
         return buffer;
     }
+
+    /// <summary>The buffer <see cref="Attach"/> made, until it is disposed (2026-11-25: a private conversation's end drops its lines).</summary>
+    public static DiagnosticBuffer? Attached { get; private set; }
 
     /// <summary>One line kept, the oldest dropped when the buffer is full, and <see cref="Appended"/> raised. Never throws.</summary>
     public void Add(DiagnosticEvent evt)
@@ -103,6 +107,22 @@ public sealed class DiagnosticBuffer : IDisposable
     }
 
     /// <summary>
+    /// Every line held so far dropped, earlier ones too, then <paramref name="notice"/> added (2026-11-25, a private conversation's end): its lines run on
+    /// without a hole, so an open log window drops its own from the front by the oldest one held, and the notice wakes it.
+    /// </summary>
+    public void DropAll(DiagnosticEvent notice)
+    {
+        lock (_gate)
+        {
+            _start = 0;
+            _count = 0;
+            Array.Clear(_ring);
+        }
+
+        Add(notice);
+    }
+
+    /// <summary>
     /// Every line held from <paramref name="from"/> on, oldest first, appended to <paramref name="into"/>; returns the
     /// <see cref="LogLine.Seq"/> of the oldest line held (<see cref="NextSeq"/> when none is), so a reader knows which of its
     /// lines have gone from the front.
@@ -129,6 +149,10 @@ public sealed class DiagnosticBuffer : IDisposable
         {
             DiagnosticLog.Emitted -= Add;
             _attached = false;
+            if (ReferenceEquals(Attached, this))
+            {
+                Attached = null;
+            }
         }
     }
 }

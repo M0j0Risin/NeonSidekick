@@ -74,6 +74,7 @@ Elsewhere:
 | `/sessions here` | Lists only this folder's sessions, marked `this folder` on the full list. A session saved without a folder isn't listed. |
 | `/sessions purge <id>\|all`, `/sessions purge older <age>` | Deletes one stored session, all, or those older than an age (`30` days, `12h`, `1d 6h`), with their file checkpoints: those turns can't be undone. |
 | `/sessions title [<text>]`, `/rename [<name>]` | Renames the current session; alone, opens a box with its name. |
+| `/private`, `/private new`, `/private off` | Makes this conversation [private](INTERFACE.md#private-conversations) (a saved one's session is deleted after a yes), starts a private one, or ends it. |
 | `/sessions export [<id>] [md\|html]` | Writes a session (this one without an id) into the working folder, never over a file: Markdown with Obsidian properties and a pictures folder, or one HTML page in your theme, with each turn's sources. |
 | `/memory` | Lists the memories, to edit, disable (kept, never offered to the model), keep to this folder or widen, forget or add one. A memory for one folder is marked; another folder's shows dim. |
 | `/memory read-write\|read-only\|off` | Sets *Memory mode*. |
@@ -494,7 +495,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * **Tools:** pictures ([Botchat pictures](SETTINGS.md#botchat-pictures)), tools, skills and memory, per the Botchat settings. Never advisors; bots on the Claude Code server get no tools.
 * **Joining in:** a typed line joins before the next reply; with *STT input* on, push-to-talk cuts in. Esc stops the voice, then the bot, then the chat; `/botchat --resume` carries on.
 * **From the Web UI:** the chat shows on the page; its voices play there while *Web UI voice controls* and its 🔊 are on ([Voice](INTERFACE.md#voice)), at the PC with *Web UI voice controls* off. [⏭️](INTERFACE.md#what-the-page-shows) does what Esc does, Stop ends it and 👥 resumes it; the camera stays off ([Botchat camera](SETTINGS.md#botchat)).
-* **Saved** as its own session under *Session logging*.
+* **Saved** as its own session under *Session logging*, except in a [private conversation](INTERFACE.md#private-conversations).
 
 ### Claude Code from the chat
 
@@ -598,7 +599,7 @@ Style: $style
 A USB or built-in webcam, nothing to install (macOS 14 or later on a Mac). The model's camera tool: [TOOLS.md](TOOLS.md#camera).
 
 * **The pane** takes, retakes, attaches (`[Image #N]`) or drops a photo ([keys](INTERFACE.md#pane-keys)). Under *Camera preview* `live`, a window shows the shot as you frame it.
-* **One stream:** the pane, live view, botchat and watch mode share the camera, which closes a few seconds after the last lets go; 📷 shows on the status bar while it's on.
+* **One stream:** the pane, live view, botchat and watch mode share the camera, which closes a few seconds after the last lets go; 📷 shows on the lower rule while it's on.
 * **Photos** are JPEGs in *Camera output folder* under the profile's `images` folder; a retaken or dropped one is deleted, and botchat and watch pictures aren't saved. Stored sessions keep a line instead of the picture unless *Camera keep in sessions* is on.
 * **Watching** compares each picture, on your machine, with the last one the model saw, and sends it only when enough changed.
 * **When it fails** the app says why: the camera privacy setting, another app holding it, unplugged, or a Windows N edition without the Media Feature Pack.

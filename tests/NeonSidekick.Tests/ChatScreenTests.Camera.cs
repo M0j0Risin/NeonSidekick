@@ -82,6 +82,69 @@ public partial class ChatScreenTests
         Assert.Contains(CameraText.Off(1), output);
     }
 
+    /// <summary>
+    /// 📷 on the lower rule (2026-11-25, the user's ask: on the status bar, unchecking Status hid it): drawn while the camera is live with Status
+    /// unchecked, and a double-click there is <c>/camera off</c> — the live view let go, the notice said.
+    /// </summary>
+    [Fact]
+    public async Task TheLowerRulesCamera_ShowsWithStatusUnchecked_AndADoubleClickLetsItGo()
+    {
+        _cameraSystem = new FakeCameraSystem();
+        _settings.Update(d => { d.TtsOutput = false; d.StatusBarItems = ["timers", "usage"]; });
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);   // the lower rule at 101
+        var view = new FakeLiveView();
+        _liveView = (_, _) => view;
+        StepsWhenIdle(
+            Key(Keys.CtrlAlt(ConsoleKey.V)),
+            input => { input.PushClick(238, 101); input.PushClick(238, 101); },   // 📷 alone on the lower rule: the space after it at the right edge
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(" " + CameraText.Glyph + " ─\n", output);
+        Assert.True(view.Disposed);
+        Assert.Contains(CameraText.Off(1), output);
+    }
+
+    /// <summary>The same 📷 under a reply (2026-11-25): the camera let go at once, its notice after the reply, which runs on.</summary>
+    [Fact]
+    public async Task TheLowerRulesCamera_UnderAReply_LetsItGoAtOnce_AndSaysSoAfter()
+    {
+        _cameraSystem = new FakeCameraSystem();
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 240;
+        _geometry = new ScreenGeometry(() => null, () => 100);
+        var view = new FakeLiveView();
+        _liveView = (_, _) => view;
+        bool goneUnderTheReply = false;
+        _chat.EnqueueText("Hello ", "there.");
+        _chat.BeforeUpdate = async (i, ct) =>
+        {
+            if (i == 1 && _chat.Requests.Count == 1)
+            {
+                _scripted!.PushClick(238, 101);
+                _scripted.PushClick(238, 101);
+                for (int tries = 0; tries < 500 && !view.Disposed; tries++)
+                {
+                    await Task.Delay(10, CancellationToken.None);
+                }
+
+                goneUnderTheReply = view.Disposed;
+                Assert.DoesNotContain(CameraText.Off(1), Output);   // not mid-reply
+            }
+        };
+        StepsWhenIdle(Key(Keys.CtrlAlt(ConsoleKey.V)), Line("hi"), Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.True(goneUnderTheReply);
+        Assert.True(output.IndexOf("there.", StringComparison.Ordinal) < output.IndexOf(CameraText.Off(1), StringComparison.Ordinal));
+        Assert.DoesNotContain(ChatScreen.CancelledNotice, output);   // the reply ran on
+    }
+
     private string CameraFolder => Path.Combine(_settings.ProfileImagesDirectory, _settings.Current.CameraOutputFolder);
 
     private string[] CameraFiles() => Directory.Exists(CameraFolder) ? Directory.GetFiles(CameraFolder) : [];

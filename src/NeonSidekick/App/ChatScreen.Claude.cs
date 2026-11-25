@@ -40,6 +40,12 @@ internal sealed partial class ChatScreen
     private string? _claudeServerSessionId;
 
     /// <summary>
+    /// A private conversation's <c>/claude</c> thread (2026-11-25): its pairs since it went private or since <c>/claude new</c>, replayed ahead of each
+    /// message (no session is kept by Claude Code). Emptied as the private conversation ends.
+    /// </summary>
+    private readonly List<Microsoft.Extensions.AI.ChatMessage> _privateClaudeThread = new();
+
+    /// <summary>
     /// The conversation id a turn over the Claude CLI names (<see cref="Assistant.ConversationId"/>), minted at the first;
     /// null for every other server, which is sent the whole history.
     /// </summary>
@@ -64,12 +70,22 @@ internal sealed partial class ChatScreen
         if (string.Equals(args, ClaudeText.NewWord, StringComparison.OrdinalIgnoreCase))
         {
             _claudeSessionId = null;
+            _privateClaudeThread.Clear();   // a dropped thread is never replayed (2026-11-25)
             SaveClaudeHistory();
             _transcript.Notice(ClaudeText.NewThreadNotice);
             return;
         }
 
         var effective = _effective();
+        if (_private.IsPrivate)
+        {
+            // A private conversation (2026-11-25): Claude Code keeps nothing, so each message is a fresh child that never resumes; the private
+            // thread's earlier pairs ride ahead of it as text, as the Claude Code server's preamble does (tool work isn't in it).
+            await RunClaudeAsync(args, NewClaudeSessionId(), resume: false, effective, cancellationToken).ConfigureAwait(false);
+            DrainDiagnostics();
+            return;
+        }
+
         bool resume = _claudeSessionId is not null;
         var run = await RunClaudeAsync(args, _claudeSessionId ?? NewClaudeSessionId(), resume, effective, cancellationToken).ConfigureAwait(false);
         if (run.ResumeLost)
@@ -99,8 +115,10 @@ internal sealed partial class ChatScreen
         var watcher = _keys.WatchAsync(claudeCts, stop.Token, null, null, LiveLineHook, spend: SpendScroll, onClick: _pane.Enabled ? HintClickLine : null, editor: LiveEditor);
         bool styled = StyledReply(effective.TranscriptMarkdown, _pane.Enabled);
         var level = ClaudePermission.Resolve(effective);
-        var request = new ClaudeRequest(prompt, sessionId, resume, _files.Root, level, effective.ClaudeCodeExecutable,
-            string.IsNullOrWhiteSpace(effective.ClaudeCodeModel) ? null : effective.ClaudeCodeModel.Trim(), ClaudeEffort.Resolve(effective.ClaudeCodeEffort));
+        bool hidden = _private.IsPrivate;
+        string sent = hidden && ClaudeServerInput.Preamble(_privateClaudeThread) is { Length: > 0 } preamble ? preamble + "\n\n" + prompt : prompt;
+        var request = new ClaudeRequest(sent, sessionId, resume && !hidden, _files.Root, level, effective.ClaudeCodeExecutable,
+            string.IsNullOrWhiteSpace(effective.ClaudeCodeModel) ? null : effective.ClaudeCodeModel.Trim(), ClaudeEffort.Resolve(effective.ClaudeCodeEffort), hidden);
         var reply = new StringBuilder();
         ClaudeEvent.Result? result = null;
         string? startError = null;
@@ -224,6 +242,11 @@ internal sealed partial class ChatScreen
             // The shared history (the user's pick): the local model reads the exchange as one put to someone else.
             _session.History.AddUser(ClaudeText.HistoryUser(prompt));
             _session.History.AddAssistant(ClaudeText.HistoryReply(reply.ToString()));
+            if (hidden)
+            {
+                _privateClaudeThread.Add(new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.User, prompt));
+                _privateClaudeThread.Add(new Microsoft.Extensions.AI.ChatMessage(Microsoft.Extensions.AI.ChatRole.Assistant, reply.ToString()));
+            }
             string line = SlashLine(prompt);
             _log.Add(line, reply.ToString());
             _lastReply = reply.ToString();
@@ -243,7 +266,7 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void LogSideTurn(string line, string reply, Llm.TokenUsage usage, bool cancelled, AppSettingsData effective, string model)
     {
-        if (!effective.SessionLogging)
+        if (!SavesSession(effective))
         {
             return;
         }

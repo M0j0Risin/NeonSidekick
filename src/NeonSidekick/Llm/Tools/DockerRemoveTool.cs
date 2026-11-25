@@ -96,7 +96,7 @@ public sealed class DockerRemoveTool : DockerTool
         }
 
         var reply = await Docker.Client().DeleteAsync(path, DockerSession.CleanupTimeout, cancellationToken).ConfigureAwait(false);
-        DiagnosticLog.Info(DockerText.Category, DockerText.AuditLine(DockerText.ByModel, "remove " + kind + " " + shown, reply.Ok ? "done" : reply.Error!));
+        DiagnosticLog.Audit(DockerText.Category, DockerText.AuditLine(DockerText.ByModel, "remove " + kind + " " + shown, reply.Ok ? "done" : reply.Error!));
         return reply.Ok ? DockerText.Removed(kind, shown) : reply.Error;
     }
 }

@@ -174,8 +174,8 @@ public sealed partial class BackgroundJobs
     /// user's ask: a multi-GB file's percentage stands still for long stretches, and the runtime's zip and the SHA check show
     /// none, so the row looked stuck). It goes after the glyph, not before, so the 📥 stays the strip's first cells and its
     /// double-click target does not move; the frame turns with the clock, so the pane's tick sees a changed row and redraws it.
-    /// <paramref name="which"/> (2026-11-23) keeps only the kinds it answers true for: the status bar takes all but the download, the
-    /// lower rule the download alone. Null keeps every kind.
+    /// <paramref name="which"/> (2026-11-23) keeps only the kinds it answers true for: the lower rule takes each kind as its own item
+    /// (the status bar took all but the download until 2026-11-25). Null keeps every kind.
     /// </summary>
     public string Strip(Func<BackgroundJobKind, bool>? which = null)
     {
@@ -203,20 +203,6 @@ public sealed partial class BackgroundJobs
     /// </summary>
     public static string SpinnerFrame(TimeSpan elapsed) =>
         Theme.SpinnerFrames[(int)(Math.Max(0, elapsed.Ticks) / ScreenPane.Tick.Ticks % Theme.SpinnerFrames.Length)];
-
-    /// <summary>The job whose strip glyph is <paramref name="glyph"/>, or null: the strip's double-click. Pinned.</summary>
-    public static BackgroundJobKind? KindOfGlyph(string glyph)
-    {
-        foreach (var kind in Kinds)
-        {
-            if (string.Equals(BackgroundJobText.Glyph(kind), glyph, StringComparison.Ordinal))
-            {
-                return kind;
-            }
-        }
-
-        return null;
-    }
 
     /// <summary>
     /// What a label says of the progress: its trailing percentage (a download's <c>downloading X (6.1 GB)… 42%</c>), or an

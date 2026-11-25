@@ -1179,8 +1179,8 @@ public static partial class BotChat
     public const string ResumeGlyph = "👥";
 
     /// <summary>
-    /// The hint strip's glyph while extra embedded servers a multi-server chat left are running with no chat (2026-10-11, the user's
-    /// pick: "zombie" servers holding the GPU). A double-click stops them, as Ctrl+Alt+K and <c>/botchat --kill</c> do. Pinned.
+    /// The lower rule's glyph (the hint strip's until 2026-11-25) while extra embedded servers a multi-server chat left are running with no
+    /// chat (2026-10-11, the user's pick: "zombie" servers holding the GPU). A double-click stops them, as Ctrl+Alt+K and <c>/botchat --kill</c> do. Pinned.
     /// </summary>
     public const string ExtrasGlyph = "🧟";
 
@@ -1190,31 +1190,21 @@ public static partial class BotChat
     /// <summary><c>/botchat --kill</c> as one line (2026-10-11): what Ctrl+Alt+K and a double-click on <see cref="ExtrasGlyph"/> run.</summary>
     public const string KillLine = "/botchat " + KillSwitch;
 
-    /// <summary>The line a double-click on <paramref name="glyph"/> runs: <see cref="ResumeLine"/>, <see cref="KillLine"/>, or null for any other glyph. Pure.</summary>
-    public static string? GlyphLine(string glyph) => glyph switch
-    {
-        ResumeGlyph => ResumeLine,
-        ExtrasGlyph => KillLine,
-        _ => null,
-    };
+    /// <summary>The line a double-click on the strip's <paramref name="glyph"/> runs: <see cref="ResumeLine"/>, or null for any other glyph (<see cref="ExtrasGlyph"/>'s is the lower rule's since 2026-11-25). Pure.</summary>
+    public static string? GlyphLine(string glyph) => glyph == ResumeGlyph ? ResumeLine : null;
 
     /// <summary>
-    /// The strip with the botchat glyphs ahead of the rest (2026-10-11): <see cref="ResumeGlyph"/> while <paramref name="resumable"/>, then
-    /// <see cref="ExtrasGlyph"/> while <paramref name="extras"/>, joined by <paramref name="separator"/>; the strip as it was with neither. Pure.
+    /// The strip with the botchat's <see cref="ResumeGlyph"/> ahead of the rest while <paramref name="resumable"/> (2026-10-11), joined by
+    /// <paramref name="separator"/>; the strip as it was without (<see cref="ExtrasGlyph"/> went to the lower rule on 2026-11-25). Pure.
     /// </summary>
-    public static string Strip(bool resumable, bool extras, string strip, string separator)
+    public static string Strip(bool resumable, string strip, string separator)
     {
         ArgumentNullException.ThrowIfNull(strip);
         ArgumentNullException.ThrowIfNull(separator);
-        var parts = new List<string>(3);
+        var parts = new List<string>(2);
         if (resumable)
         {
             parts.Add(ResumeGlyph);
-        }
-
-        if (extras)
-        {
-            parts.Add(ExtrasGlyph);
         }
 
         if (strip.Length != 0)
@@ -1405,7 +1395,7 @@ public sealed record BotChatLine(string Speaker, string Text, bool IsUser = fals
 /// was started from, the cast's names in order, the topic, the shared lines, who spoke last — a name, so it maps onto a cast
 /// rebuilt without one of them — the replies so far and its session row, if any.
 /// </summary>
-public sealed record BotChatState(string Starter, IReadOnlyList<string> Cast, string Topic, IReadOnlyList<BotChatLine> Lines, string? LastSpeaker, int Replies, long? SessionId);
+public sealed record BotChatState(string Starter, IReadOnlyList<string> Cast, string Topic, IReadOnlyList<BotChatLine> Lines, string? LastSpeaker, int Replies, long? SessionId, string Private = "");
 
 /// <summary>
 /// One bot of the chat: its profile's name, its persona (null = the default) and <c>vocalia.md</c> directive,

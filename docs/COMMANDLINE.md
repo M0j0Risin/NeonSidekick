@@ -21,6 +21,7 @@ Everything `NeonSidekick.exe` (`./NeonSidekick` on a Mac) takes on its command l
 | `--prompt-file <file>` | As `--prompt`, the whole file as one message, never a command; a relative path starts from where you launch. A missing or blank file is exit 2. |
 | `--quiet` | Headless only: stdout gets only the replies; everything else goes to stderr. Without `--headless` or `--prompt`, exit 2. |
 | `--session <id>\|last` | Headless only: carries on a stored session (`last`: the one updated most recently), in its folder for this run ([Carrying on a session](HEADLESS.md#carrying-on-a-session)). Without `--headless` or `--prompt`, or an unknown id, exit 2. |
+| `--private` | Every conversation of this run is [private](INTERFACE.md#private-conversations); headless, `--session` opens a private copy. |
 | `--log <path>` | Appends every diagnostic line to a file (making its folder); `/log file` opens it. `{ts}` becomes the start time (`logs/neon_{ts}.log` → `logs/neon_20261003-142530.log`). |
 | `--headless` | A plain text prompt over stdin/stdout, no TUI; it loads `neon` unless `--profile` or `NEONSIDEKICK_PROFILE` names another ([HEADLESS.md](HEADLESS.md)). |
 | `--smoke` | Checks that the native parts load, then exits. |

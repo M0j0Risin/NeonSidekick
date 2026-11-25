@@ -33,5 +33,9 @@ internal static class ModuleInit
 
         // No test reads this machine's adapters for the LAN's prefixes (2026-10-23, the admin review's DA3); a test sets its own.
         Web.OnLinkNetworks.Use([]);
+
+        // A private conversation's process-wide switches start off (2026-11-25); a test that goes private puts them back itself.
+        Diagnostics.PrivateMode.HideLog = false;
+        Diagnostics.PrivateMode.Active = false;
     }
 }

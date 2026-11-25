@@ -85,7 +85,7 @@ public sealed class PictureStrip
 
     /// <summary>
     /// Whether the × on the strip's rule put it away (2026-09-28): the screen shows no strip while it is, and only
-    /// <see cref="Open"/>, the 🎞️ on the upper rule (2026-10-03), or a <see cref="Clear"/> (a new chat, whose first picture
+    /// <see cref="Open"/>, the upper rule's 🎞️ (2026-10-03), or a <see cref="Clear"/> (a new chat, whose first picture
     /// shows it) brings it back. Until 2026-10-10 the next <see cref="Add"/> opened it too ("the X to close is just until the
     /// next generation"); since then a closed strip stays closed through later pictures and goes on gathering them, so it is
     /// current when opened (the user's ask: it popped up again at every generation). Not the <c>ComfyUI picture strip</c>
@@ -96,7 +96,7 @@ public sealed class PictureStrip
         get { lock (_gate) { return _closed; } }
     }
 
-    /// <summary>The strip put away until the 🎞️ or a clear (<see cref="Closed"/>), the highlight let go. Nothing with no pictures or already closed.</summary>
+    /// <summary>The strip put away (its ×, or the upper rule's 🎞️ since 2026-11-25) until the 🎞️ or a clear (<see cref="Closed"/>), the highlight let go. Nothing with no pictures or already closed.</summary>
     public void Close()
     {
         lock (_gate)
@@ -115,8 +115,8 @@ public sealed class PictureStrip
     }
 
     /// <summary>
-    /// A closed strip shown again (2026-10-03, the user's ask: the × had left no way back short of another picture; the 🎞️ the
-    /// upper rule carries while the strip is closed calls this), as it stood with nothing highlighted. Nothing unless <see cref="Closed"/>.
+    /// A closed strip shown again (2026-10-03, the user's ask: the × had left no way back short of another picture; the upper
+    /// rule's 🎞️ calls this while the strip is closed), as it stood with nothing highlighted. Nothing unless <see cref="Closed"/>.
     /// The highlight is let go here too (later on 2026-10-15): the Web UI's page may pick a picture while the strip is closed, and the strip
     /// still opens with nothing highlighted.
     /// </summary>

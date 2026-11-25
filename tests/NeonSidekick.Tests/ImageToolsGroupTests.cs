@@ -52,7 +52,7 @@ public sealed class ImageToolsGroupTests : IDisposable
         // and no status-bar handler claims it as one of theirs (the cancel answers the strip's zone alone).
         Assert.Equal(NeonSidekick.Comfy.ComfyText.TextToImageLabel, ChatScreen.ImageToolGlyph);
         Assert.Null(ChatScreen.SwitchForGlyph(ChatScreen.ImageToolGlyph));
-        Assert.Null(BackgroundJobs.KindOfGlyph(ChatScreen.ImageToolGlyph));
+        Assert.DoesNotContain(ChatScreen.ImageToolGlyph, Enum.GetValues<BackgroundJobKind>().Select(BackgroundJobText.Glyph));
     }
 
     [Fact]

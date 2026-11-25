@@ -187,6 +187,13 @@ public sealed partial class InputLine
         /// <summary>Whether a completion list is open over the row.</summary>
         public bool ListOpen => _list is not null;
 
+        /// <summary>The walk's held line forgotten (2026-11-25, a private conversation's end): the walk at the bottom again, the line it set aside gone.</summary>
+        internal void ForgetWalk()
+        {
+            _historyBack = 0;
+            _draft = "";
+        }
+
         /// <summary>A read starts: its options, the history walk at the bottom again; the draft, cursor and selection kept.</summary>
         internal void Begin(ReadOptions options)
         {
@@ -1180,13 +1187,6 @@ public sealed partial class InputLine
                     _line.ToolbarNote?.Invoke(tool);
                 }
             }
-            else if (pane.TryHitStripButton(click.X, click.Y))
-            {
-                // The picture strip's button (2026-09-27): one click opens the picture viewer, as a button does.
-                _anchor = -1;
-                hintClicks.Reset();
-                _line.OpenViewer?.Invoke();
-            }
             else if (pane.TryHitStripClose(click.X, click.Y))
             {
                 // The strip's close × (2026-09-28): one click puts the strip away until the 🎞️ brings it back.
@@ -1201,12 +1201,12 @@ public sealed partial class InputLine
                 hintClicks.Reset();
                 _line.StepStrip?.Invoke(stripStep);
             }
-            else if (pane.TryHitStripReopen(click.X, click.Y))
+            else if (pane.TryHitStripToggle(click.X, click.Y))
             {
-                // The upper rule's 🎞️ (2026-10-03): one click brings the closed strip back.
+                // The upper rule's 🎞️ (2026-10-03; a toggle since 2026-11-25): one click closes the strip, or brings the closed one back.
                 _anchor = -1;
                 hintClicks.Reset();
-                _line.ReopenStrip?.Invoke();
+                _line.ToggleStrip?.Invoke();
             }
             else if (pane.TryHitFoldButton(click.X, click.Y))
             {

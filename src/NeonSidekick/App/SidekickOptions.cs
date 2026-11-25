@@ -65,6 +65,7 @@ public sealed record SidekickOptions(
     public const string ImportSettingsFlag = "--import-settings";
     public const string YoloFlag = "--yolo";
     public const string NoPoliceFlag = "--no-police";
+    public const string PrivateFlag = "--private";
     public const string AllowFlag = "--allow";
     public const string PromptFlag = "--prompt";
     public const string PromptFileFlag = "--prompt-file";
@@ -109,6 +110,12 @@ public sealed record SidekickOptions(
     /// with), read at the start. Made full against the process's own folder at the parse, as a shell user expects, never <c>--cwd</c>'s.
     /// </summary>
     public string? PromptFile { get; init; }
+
+    /// <summary>
+    /// <c>--private</c> (2026-11-25, the private-conversations plan): every conversation of this run private, the screen's and headless alike. Sets
+    /// <c>Private at start</c> through <see cref="ApplyTo"/>, so it outranks <c>NEONSIDEKICK_PRIVATE</c> and is never saved; <c>/private off</c> is refused under it.
+    /// </summary>
+    public bool Private { get; init; }
 
     /// <summary><c>--quiet</c> (2026-11-21, feature idea #43): stdout carries only the replies, everything else going to stderr. Headless only.</summary>
     public bool Quiet { get; init; }
@@ -259,7 +266,7 @@ public sealed record SidekickOptions(
     public const string AdCheckMacLine = "prove the directory tools against that domain of ad.json (reads only)";
 
     private const string UsageText =
-        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--midi-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--import-settings <zip>] [--yolo] [--no-police] [--allow <list>] [--log <path>] [--version] [--help]\n" +
+        "Usage: NeonSidekick [--headless] [--smoke] [--audio-check] [--voice-check] [--sql-check <connection>] [--oracle-check <connection>] [--mysql-check <connection>] [--sqlite-check <database>] [--duckdb-check <database>] [--postgres-check <connection>] [--unc-check <share>] [--eventlog-check <computer>] [--network-check <host>] [--services-check <computer>] [--tasks-check <computer>] [--ad-check <domain>] [--docker-check] [--camera-check] [--monitor-check] [--midi-check] [--url <url>] [--model <id>] [--cwd <path>] [--profile <name>] [--import-settings <zip>] [--yolo] [--no-police] [--private] [--allow <list>] [--log <path>] [--version] [--help]\n" +
         "\n" +
         "  (no flags)     interactive TUI\n" +
         "  --headless     stdin/stdout REPL, no TUI (profile \"neon\" unless --profile or NEONSIDEKICK_PROFILE names one)\n" +
@@ -289,6 +296,7 @@ public sealed record SidekickOptions(
         "  --import-settings <zip>  add a /settings export zip's profiles and files before the start; a refused zip exits 2, one already imported is skipped\n" +
         "  --yolo         run every shell command without asking, this launch only (outranks NEONSIDEKICK_COMMAND_POLICY; the path police still applies unless --no-police)\n" +
         "  --no-police    let shell commands name paths outside the working directory, this launch only (outranks NEONSIDEKICK_SHELL_POLICE)\n" +
+        "  --private      every conversation of this run private: nothing of it saved (outranks NEONSIDEKICK_PRIVATE)\n" +
         "  --allow <list>  --headless or --prompt only: run the calls that would ask, this run only: docker, print, ha, advisor, mcp, code, mcp:<server> or code:<language>, comma-separated\n" +
         "  --prompt <text>  one input line, then exit; implies --headless; stdout carries the reply alone; piped stdin joins it as context\n" +
         "  --prompt-file <file>  as --prompt, the whole file one message (never a command)\n" +
@@ -621,6 +629,9 @@ public sealed record SidekickOptions(
                 case NoPoliceFlag:
                     result = result with { NoPolice = true };
                     break;
+                case PrivateFlag:
+                    result = result with { Private = true };
+                    break;
                 case QuietFlag:
                     result = result with { Quiet = true };
                     break;
@@ -691,6 +702,11 @@ public sealed record SidekickOptions(
         if (NoPolice)
         {
             flags.Add(NoPoliceFlag);
+        }
+
+        if (Private)
+        {
+            flags.Add(PrivateFlag);
         }
 
         return flags;
@@ -773,6 +789,11 @@ public sealed record SidekickOptions(
         if (NoPolice)
         {
             parts.Add(NoPoliceFlag);
+        }
+
+        if (Private)
+        {
+            parts.Add(PrivateFlag);
         }
 
         if (AllowList.Count > 0)
@@ -869,6 +890,11 @@ public sealed record SidekickOptions(
         if (NoPolice)
         {
             result.ShellPolice = false;
+        }
+
+        if (Private)
+        {
+            result.PrivateAtStart = true;
         }
 
         return result;

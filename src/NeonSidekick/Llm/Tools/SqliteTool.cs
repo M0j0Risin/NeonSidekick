@@ -590,7 +590,7 @@ public sealed partial class SqliteExecuteTool : SqliteTool
         }
         catch (OperationCanceledException)
         {
-            Diagnostics.DiagnosticLog.Info(SqliteConfigFile.Category, SqliteText.AuditLogLine(target.Name, target.FullPath, creating, DatabaseAudit.Word(DatabaseAuditOutcome.Canceled, null), DatabaseAudit.Statement(body)));
+            Diagnostics.DiagnosticLog.Audit(SqliteConfigFile.Category, SqliteText.AuditLogLine(target.Name, target.FullPath, creating, DatabaseAudit.Word(DatabaseAuditOutcome.Canceled, null), DatabaseAudit.Statement(body)));
             throw;
         }
 
@@ -601,7 +601,7 @@ public sealed partial class SqliteExecuteTool : SqliteTool
             run = run with { Changes = null };
         }
 
-        Diagnostics.DiagnosticLog.Info(SqliteConfigFile.Category, SqliteText.AuditLogLine(target.Name, target.FullPath, creating && run.Outcome == SqlOutcome.Ok, DatabaseAudit.Word(DatabaseAudit.OutcomeOf(run), run.Changes), DatabaseAudit.Statement(body)));
+        Diagnostics.DiagnosticLog.Audit(SqliteConfigFile.Category, SqliteText.AuditLogLine(target.Name, target.FullPath, creating && run.Outcome == SqlOutcome.Ok, DatabaseAudit.Word(DatabaseAudit.OutcomeOf(run), run.Changes), DatabaseAudit.Statement(body)));
         return run.Outcome != SqlOutcome.Ok ? SqliteText.Error(run) : SqliteText.Executed(run, creating, rows, SqlTool.ResultChars(effective));
     }
 

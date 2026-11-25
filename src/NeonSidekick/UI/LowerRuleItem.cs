@@ -20,6 +20,24 @@ public enum LowerRuleKind
 
     /// <summary>ComfyUI pictures still rendering, <c>🖼️ 2</c> / <c>🎨</c>: a double-click cancels them.</summary>
     Pictures = 5,
+
+    /// <summary>The MCP servers connecting behind the line, <c>🔌 1/3</c> (the status bar's until 2026-11-25): a double-click cancels the wave.</summary>
+    Mcp = 6,
+
+    /// <summary>Voice input setting up, <c>🎙️ 42%</c> (the status bar's until 2026-11-25): a double-click cancels it.</summary>
+    Voice = 7,
+
+    /// <summary>Speech output setting up, <c>🔈</c> (the status bar's until 2026-11-25): a double-click cancels it.</summary>
+    Speech = 8,
+
+    /// <summary>A reflection running, <c>🧠</c> (the status bar's until 2026-11-25): a double-click cancels it, as Ctrl+L does.</summary>
+    Learning = 9,
+
+    /// <summary>A botchat's extra embedded servers idle, <c>🧟</c> (the status bar's until 2026-11-25): a double-click is <c>/botchat --kill</c>.</summary>
+    Extras = 10,
+
+    /// <summary>The camera held open (live view or watch), <c>📷</c> (the status bar's until 2026-11-25): a double-click is <c>/camera off</c>. Never dropped.</summary>
+    Camera = 11,
 }
 
 /// <summary>One item on the lower rule (2026-11-23): its kind and its text, drawn whole or not at all (<see cref="ScreenPane.LowerRuleFit"/>).</summary>

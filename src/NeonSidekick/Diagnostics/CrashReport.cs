@@ -28,13 +28,19 @@ public static class CrashReport
     /// </summary>
     public static string? Write(string directory, Exception exception, DateTime utcNow)
     {
+        return Write(directory, exception, utcNow, PrivateMode.HideLog);
+    }
+
+    /// <summary><see cref="Write(string, Exception, DateTime)"/> with the hide switch given: under <paramref name="hide"/> the types and stacks alone, no message (2026-11-25).</summary>
+    public static string? Write(string directory, Exception exception, DateTime utcNow, bool hide)
+    {
         ArgumentNullException.ThrowIfNull(directory);
         ArgumentNullException.ThrowIfNull(exception);
         try
         {
             Directory.CreateDirectory(directory);
             string path = Path.Combine(directory, FileName);
-            File.AppendAllText(path, Entry(exception, utcNow), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.AppendAllText(path, Entry(exception, utcNow, hide), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             return path;
         }
         catch
@@ -44,18 +50,47 @@ public static class CrashReport
     }
 
     /// <summary>One entry of the file: <c>--- yyyy-MM-dd HH:mm:ss.fff crash ---</c>, the exception, a blank line. Invariant. Pinned.</summary>
-    public static string Entry(Exception exception, DateTime utcNow)
+    public static string Entry(Exception exception, DateTime utcNow, bool hide = false)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        return string.Create(CultureInfo.InvariantCulture, $"--- {utcNow:yyyy-MM-dd HH:mm:ss.fff} crash ---{Environment.NewLine}{exception}{Environment.NewLine}{Environment.NewLine}");
+        return string.Create(CultureInfo.InvariantCulture, $"--- {utcNow:yyyy-MM-dd HH:mm:ss.fff} crash ---{Environment.NewLine}{(hide ? Stacks(exception) : exception.ToString())}{Environment.NewLine}{Environment.NewLine}");
+    }
+
+    /// <summary>
+    /// The exception as <see cref="Exception.ToString"/> gives it without a message (2026-11-25, a private conversation under <c>hide</c>): each type, the
+    /// inner ones after <c> ---&gt; </c>, then the stacks. A message can quote what the conversation said; a type and a stack can't.
+    /// </summary>
+    public static string Stacks(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        var sb = new StringBuilder();
+        var chain = new List<Exception>();
+        for (Exception? e = exception; e is not null && chain.Count < 32; e = e.InnerException)
+        {
+            chain.Add(e);
+        }
+
+        sb.Append(string.Join(" ---> ", chain.Select(e => e.GetType().FullName)));
+        foreach (var e in chain.AsEnumerable().Reverse())
+        {
+            if (e.StackTrace is { Length: > 0 } stack)
+            {
+                sb.Append(Environment.NewLine).Append(stack);
+            }
+        }
+
+        return sb.ToString();
     }
 
     /// <summary>The line printed on the way out. Pinned.</summary>
-    public static string Notice(string? path, Exception exception)
+    public static string Notice(string? path, Exception exception) => Notice(path, exception, PrivateMode.HideLog);
+
+    /// <summary>The line printed on the way out, its message left out under <paramref name="hide"/> (2026-11-25). Pinned.</summary>
+    public static string Notice(string? path, Exception exception, bool hide)
     {
         ArgumentNullException.ThrowIfNull(exception);
         string where = path is null ? "Details could not be written." : $"Details in {path}.";
-        return $"NeonSidekick crashed: {exception.GetType().Name}: {exception.Message}. {where}";
+        return hide ? $"NeonSidekick crashed: {exception.GetType().Name}. {where}" : $"NeonSidekick crashed: {exception.GetType().Name}: {exception.Message}. {where}";
     }
 
     /// <summary>The <c>--log</c> line pointing at the file. Pinned.</summary>

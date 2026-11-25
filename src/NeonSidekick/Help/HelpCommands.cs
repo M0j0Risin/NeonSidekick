@@ -61,7 +61,7 @@ public static class HelpCommands
         [
             new("/botchat [<profile> ...] [--] [<topic>]", "Let profiles talk to each other, each in its own persona, until you stop them. Leading words that name profiles are the cast (every profile when none is named; the loaded one speaks first); the first other word starts the topic, and `--` makes everything after it the topic. Its settings are on `/settings` › Client › Botchat."),
             new("/botchat --resume [<line>]", "Carry on the last bot conversation, with an optional line of your own first. Ctrl+Alt+B, a double-click on the status bar's 👥, or the Web UI's 👥 resumes it without a line; during a bot conversation, Ctrl+Alt+B ends it at once."),
-            new("/botchat --kill", "Stop the extra embedded servers the bots started (Ctrl+Alt+K, or a double-click on the status bar's 🧟 while any run)."),
+            new("/botchat --kill", "Stop the extra embedded servers the bots started (Ctrl+Alt+K, or a double-click on the lower rule's 🧟 while any run)."),
         ]),
         new("/browse",
         [
@@ -360,6 +360,12 @@ public static class HelpCommands
             new("/print <file> [printer=<name>] [copies=<n>] [pages=<range>] [landscape]", "Print a file from the working directory: text and code as a listing, Markdown formatted, a picture fitted to one page, each page headed with the file's name, the time and *page N of M*. Anything else (a PDF, a Word or Excel file) goes to the program the system has for it, on the default printer, without the options. `printer=` matches a name or part of one (`printer=color`; quote a name with spaces); copies are 1–10; pages are `3`, `1-3`, `4-` or a list such as `1,3-5`. Options go anywhere. *Print action policy* never applies to this command."),
             new("/print reply [<options>]", "Print the last reply, formatted as Markdown."),
             new("/print printers", "List the installed printers in a pane, marking the system default and *Print default printer*. Alone, `/print` shows how to use it and lists them too."),
+        ]),
+        new("/private",
+        [
+            new("/private", "Make this conversation [private](INTERFACE.md#private-conversations): nothing of it is saved from here. A saved one's session and input lines are deleted after a yes. Waits for a running reply."),
+            new("/private new", "End this conversation as `/clear` does and start a private one; a saved one stays saved."),
+            new("/private off", "End the private conversation as `/clear` does; the next one is saved as usual. Refused under `--private` or `NEONSIDEKICK_PRIVATE`."),
         ]),
         new("/process",
         [

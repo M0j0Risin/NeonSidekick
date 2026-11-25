@@ -882,7 +882,7 @@ public sealed class Assistant
     /// the memory directive loses its save sentences (<see cref="MemoryPrompt.ReadOnlyDirective"/>). With <paramref name="globalSkills"/>
     /// false (2026-10-13, the profile's <c>Global skills</c> off) the skills block names no global scope (<see cref="Skills.SkillsPrompt.EditorSentenceProfileOnly"/>).
     /// </summary>
-    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true, bool duckDb = false, bool duckDbWrite = false, IReadOnlyList<Mcp.McpServerNote>? mcpNotes = null, bool memoryHere = false)
+    public static string SystemPrompt(bool speechOutput, IReadOnlyList<string>? memories, string? persona = null, string? operatingRules = null, string? voiceDirective = null, bool tools = true, bool web = false, bool files = true, AskLimits? ask = null, ProjectNotes? project = null, IReadOnlyList<Skills.Skill>? skills = null, bool markdown = false, bool sessions = false, bool download = true, bool recall = true, bool delete = true, bool mcp = false, bool timers = true, bool git = false, bool shell = false, bool police = true, bool obsidian = false, bool obsidianDelete = false, bool sql = false, bool native = false, string? plan = null, bool homeAssistant = false, bool oracle = false, bool mysql = false, bool unc = false, bool uncFetch = false, bool uncWrite = false, bool docker = false, bool dockerWrite = false, bool help = false, bool sqlite = false, bool postgres = false, bool save = true, bool sqliteWrite = false, ServerWrites serverWrites = ServerWrites.None, bool images = false, bool advisors = false, bool shopping = false, bool globalSkills = true, bool eventLog = false, AdminRules admin = AdminRules.None, bool clock = true, bool duckDb = false, bool duckDbWrite = false, IReadOnlyList<Mcp.McpServerNote>? mcpNotes = null, bool memoryHere = false, bool skillEditor = true)
     {
         bool customPersona = !string.IsNullOrWhiteSpace(persona);
         bool customRules = !string.IsNullOrWhiteSpace(operatingRules);
@@ -898,9 +898,9 @@ public sealed class Assistant
             sb.Append("\n\n").Append(MemoryPrompt.Section(memories, tools && recall, save, memoryHere));
         }
 
-        if (tools && skills is not null)
+        if (tools && skills is not null && Skills.SkillsPrompt.Section(skills, globalSkills, skillEditor) is { Length: > 0 } skillsBlock)
         {
-            sb.Append("\n\n").Append(Skills.SkillsPrompt.Section(skills, globalSkills));
+            sb.Append("\n\n").Append(skillsBlock);
         }
 
         // The MCP servers' own notes (2026-11-19, feature idea #59): after the skills, their own block apart from the rules, so a custom

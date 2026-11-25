@@ -39,7 +39,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 | Check for updates at start | Asks GitHub for a newer release at each start, sending nothing about you, and shows a line and the 📦 marker. Off, nothing is asked; [`/update`](COMMANDS.md#updating) still works. | on |
 | Queue mode | `automatic`: a message sent during a reply waits in `/queue` and goes when it ends. `manual`: each waits for `➤ send` (`s`) or `/queue send`. `off`: no list. | `automatic` |
 | Queue cancel mode | A canceled reply's queue: `hold` keeps it until your next message (a Web UI message too; the page's **Resume** sends it), `drain` sends the next at once, `empty` drops it. | `empty` |
-| Keep message history | Saves the ↑/↓ history (newest 100 lines, the Web UI's too) in `sessions.db`. Off deletes it at the next profile load; `/msgclear` empties it. | on |
+| Keep message history | Saves the ↑/↓ history (newest 100 lines, the Web UI's too) in `sessions.db`, except a private conversation's. Off deletes it at the next profile load; `/msgclear` empties it. | on |
 | Command typo intercept | A command typed without its slash (`clear`), or with extra ones, asks *Did you mean /clear?* first. | on |
 | Show /exit in autocomplete | Lists `/exit` in the `/` list; typed in full it works either way. | off |
 | Emoji picker | A dim ☺ at the input row's right end; a click opens the emoji picker. Ctrl+J opens it too, shown or not (not on a Mac). | on |
@@ -67,11 +67,15 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 
 | Setting | What it does | Default |
 |---|---|---|
-| Session logging | Saves every turn to the profile's `sessions.db`, for `/sessions` to list, search and restore. | on |
+| Session logging | Saves every turn to the profile's `sessions.db`, for `/sessions` to list, search and restore; never a [private conversation](INTERFACE.md#private-conversations)'s. | on |
 | Session save thinking | Saves each reply's thinking, so a resumed session can send it back under *LLM preserve thinking*. | off |
 | Session retention (days) | Deletes older sessions at startup (0–3650; 0 keeps them forever), with their file checkpoints, so those turns can't be undone. | 0 (forever) |
 | Session naming mode | `model-written` asks the model for a title after the first turn; `first-line` uses your first line. | `model-written` |
 | Session show name | Titles shown above the input row: `all`, `model-written` (written by the model or you) or `none`. | `all` |
+| Private at start | Every conversation starts [private](INTERFACE.md#private-conversations). `--private` and `NEONSIDEKICK_PRIVATE` set it for one run. | off |
+| Private pictures | At a private conversation's end: `ask` whether to keep or delete its pictures and phone PDFs, `keep` them, or `delete` them for good. | `ask` |
+| Private log text | `hide`: the `--log` file reads `[private]` for what a private conversation says. `keep` logs it as usual. | `hide` |
+| Private learning | Lets reflection learn skills and the model save memories in a private conversation. | off |
 
 #### Botchat
 
@@ -374,7 +378,7 @@ Speech out (TTS) and voice in (STT).
 
 #### TTS
 
-Speech output sets up in the background (🔈 on the status bar); replies are text only until it's ready.
+Speech output sets up in the background (🔈 on the lower rule); replies are text only until it's ready.
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -390,7 +394,7 @@ Speech output sets up in the background (🔈 on the status bar); replies are te
 
 #### STT
 
-Voice input sets up in the background (🎙️ on the status bar).
+Voice input sets up in the background (🎙️ on the lower rule).
 
 | Setting | What it does | Default |
 |---|---|---|
@@ -724,7 +728,7 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 | ComfyUI max images per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). | 5 |
 | ComfyUI reinforce negatives | When the model writes the prompt, adds a few negative tags where the image model tends to drift. | on |
 | ComfyUI show prompts | Shows the `prompt:`, `negative:` and `params:` lines under each picture. | on |
-| ComfyUI picture strip | The session's pictures as thumbnails above the input line: with the line empty, ←/→ highlight one, Enter opens it; **×** hides the strip until **🎞️**. Also rules the Web UI's picture drawer. | on |
+| ComfyUI picture strip | The session's pictures as thumbnails above the input line: with the line empty, ←/→ highlight one, Enter opens it; **×**, or **🎞️** on the rule under it, hides the strip until **🎞️**. Also rules the Web UI's picture drawer. | on |
 | ComfyUI output folder | Where pictures are saved, under the profile's `images` folder. | `comfy` |
 
 #### YouTube

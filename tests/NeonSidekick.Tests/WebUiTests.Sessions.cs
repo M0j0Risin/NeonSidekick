@@ -46,7 +46,7 @@ public sealed partial class WebUiTests
             true);
         using var json = JsonDocument.Parse(JsonSerializer.Serialize(view, WebUiJsonContext.Default.WebSessionsView));
         var root = json.RootElement;
-        Assert.Equal(["profile", "rows", "found", "resumeOffered", "note", "notSaved"], root.EnumerateObject().Select(p => p.Name));
+        Assert.Equal(["profile", "rows", "found", "resumeOffered", "note", "notSaved", "private", "privateForced", "empty", "newPrivateLabel", "privateLabel"], root.EnumerateObject().Select(p => p.Name));
         var row = root.GetProperty("rows")[0];
         Assert.Equal(["id", "title", "when", "turns", "model", "current", "snippet", "here"], row.EnumerateObject().Select(p => p.Name));   // here (2026-11-21): a flag, never the path
         Assert.DoesNotContain(row.EnumerateObject(), p => p.Name is "cwd" or "folder");

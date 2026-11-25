@@ -1148,7 +1148,8 @@ public static class WebUiText
         FilesNone, FilesTrimmed, FilesHint,
         AttachButton, AttachRemove, AttachWaiting, AttachTooBig, AttachRoom, AttachStopped, AttachLeftOut, AttachPdf, ManageReadFailed,
         MemoryHere, MemoryElsewhere, SessionsNoneHere,
-        AskRecommended, AskTyped, AskAnswered, AskDecline, AskDeclineNote, AskSend);
+        AskRecommended, AskTyped, AskAnswered, AskDecline, AskDeclineNote, AskSend,
+        App.PrivateText.PageTitle);   // the header's 🕶️ title (2026-11-25)
 
     // ── A bot check's card (2026-10-17): the Browser window on the page while a check runs in it ──
 
