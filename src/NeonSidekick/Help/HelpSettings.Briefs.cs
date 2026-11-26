@@ -328,8 +328,8 @@ public static partial class HelpSettings
         // /tools › Apps › ComfyUI
         SettingsField.ComfyTools => "Gives the model generate_image, once ComfyUI URL is set and a workflow is installed.",
         SettingsField.ComfyUrl => "The ComfyUI server's address, often another machine on your network (http://gpu-box:8188).",
-        SettingsField.ComfyWorkflowsOffered => "A checklist of the installed workflows the model is offered. Nothing is offered until you tick it.",
-        SettingsField.ComfyAddWorkflow => "A wizard that builds a standard workflow from your server's checkpoints, or imports one exported from ComfyUI.",
+        SettingsField.ComfyWorkflowsOffered => "Your installed workflows: Space offers one to the model, Enter edits, tests, renames, moves or deletes it.",
+        SettingsField.ComfyTest => "Checks the saved URL by asking the server for its version.",
         SettingsField.ComfyCaretMention => "Typing ^ and part of a name on the input line lists the offered workflows; a pick writes ^name to use that workflow.",
         SettingsField.ComfyTimeoutSeconds => "The time the tool waits for one picture, queue included (10–3600 s). The job may still finish in ComfyUI.",
         SettingsField.ComfyMaxPicturesPerCall => "The most pictures one generate_image call or /imagine --count makes (1–16).",

@@ -21,7 +21,7 @@ public sealed class ComfyWorkflowCatalog
 
     private readonly Func<IReadOnlyList<string>> _roots;
     private readonly object _gate = new();
-    private readonly Dictionary<string, (DateTime Json, DateTime Sidecar, ComfyWorkflow? Workflow, string? Problem)> _cache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, (DateTime Json, DateTime Sidecar, ComfyWorkflow? Workflow, string? Problem)> _cache = new(StringComparer.Ordinal);   // by exact path (2026-11-25): a rename that only changes case is read afresh
 
     /// <param name="roots">The folders to read, first wins: the profile's <c>comfy</c>, then the home's — asked afresh at each scan, so a profile switch needs no rebuild.</param>
     public ComfyWorkflowCatalog(Func<IReadOnlyList<string>> roots)
@@ -37,7 +37,7 @@ public sealed class ComfyWorkflowCatalog
     {
         var workflows = new Dictionary<string, ComfyWorkflow>(StringComparer.OrdinalIgnoreCase);
         var problems = new List<ComfyWorkflowProblem>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         lock (_gate)
         {
             foreach (string root in _roots())

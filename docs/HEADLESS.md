@@ -36,7 +36,7 @@ Get-Content error.log | NeonSidekick.exe --prompt "Why did this fail?"   # the l
 - **A fresh profile does little headless.** The model gets only the clock (*Clock tools*), help (*Help tools*), memory reading (*Memory mode* `read-only`), past-session and skill tools, and no server is looked for (*LLM server scan mode* `off`).
   - Set up a server (or `--url`) and the tool groups the job needs first, in the TUI (`/settings`, `/tools`) or `profile.json`.
 - **Project skills use saved trust only.** A repo's `.agents/skills` and `.claude/skills` are offered once trusted in the TUI ([Project skills and trust](SETTINGS.md#project-skills-and-trust)); a folder not trusted, or changed since, gets a `[notice]` at the start.
-- **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, DuckDB, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools`.
+- **Tick the "… offered" lists first.** The SQL, Oracle, MySQL, PostgreSQL, SQLite, DuckDB, UNC and ComfyUI tools offer nothing until entries are ticked on `/tools` (ComfyUI's in *ComfyUI workflows*).
   - SQLite and DuckDB files, and DuckDB's data files, in the working directory need no ticking.
 - **In `profile.json`** the lists are `SqlConnectionsOffered`, `OracleConnectionsOffered`, `MySqlConnectionsOffered`, `PostgresConnectionsOffered`, `SqliteDatabasesOffered`, `DuckDbDatabasesOffered`, `UncSharesOffered` and `ComfyWorkflowsOffered`.
 - **`delete` follows *File deletes to Recycle bin*** (on by default), moving files to the Recycle bin (the Trash on a Mac) as in the TUI.

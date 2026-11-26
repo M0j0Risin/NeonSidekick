@@ -169,6 +169,8 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/tools files` · `image` · `obsidian` · `advisors` · `print` | `b` *File browser/tree mode* · `e` *Image edit mode* · `v` *Obsidian vault* · `a` *Advisor list* · `p` *Print default printer* |
 | `/tools` › Files › Video | `p` *Video files play in* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
+| *ComfyUI workflows* | Space offers or hides · `a` all · `n` none · `c` checks against the server · Enter opens a workflow's actions · Delete deletes (asks) · the top row adds one |
+| A ComfyUI test or check under way | Esc cancels it |
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The question pane (`ask_user`) | ←/→ questions · Enter chooses, or toggles on a multi · Space marks or clears · 1–9 jump · Other… types your own · Submit (skipped ones go as skipped) · Decline with a note… · Esc declines |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies. A script has no `a`; a line with nothing readable to hold has only `d` and `o`. |

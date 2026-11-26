@@ -43,7 +43,8 @@ public sealed class ComfyClient : IDisposable
     private readonly HttpClient _http;
     private readonly HttpClient? _owned;
     private readonly TimeSpan _poll;
-    private readonly string _clientId = Guid.NewGuid().ToString("N");
+    // The app's runs carry its prefix (2026-11-25), so the import from a recent run can tell them from the user's own.
+    private readonly string _clientId = ComfyHistory.OwnClientPrefix + Guid.NewGuid().ToString("N");
 
     /// <param name="baseUrl">The server, <c>http://host:8188</c>; a trailing slash is dropped.</param>
     /// <param name="httpClient">Optional transport, the caller's to dispose. Null creates and owns one.</param>
@@ -150,39 +151,100 @@ public sealed class ComfyClient : IDisposable
         }
     }
 
-    /// <summary>A combo input's choices out of an <c>/object_info</c> answer, or null when the node or the input is not there. Pure.</summary>
-    public static IReadOnlyList<string>? ParseChoices(string json, string nodeClass, string input)
+    /// <summary>
+    /// A combo input's choices out of an <c>/object_info</c> answer, or null when the node or the input is not there, or the answer is no
+    /// object (it threw on one until 2026-11-25). Pure.
+    /// </summary>
+    public static IReadOnlyList<string>? ParseChoices(string json, string nodeClass, string input) =>
+        ComfyCheck.ParseNode(json, nodeClass) is { Missing: false } node && node.Inputs.GetValueOrDefault(input) is { Choices: { } choices } ? choices : null;
+
+    /// <summary>How long one <c>/object_info/&lt;class&gt;</c> read of the server check may take.</summary>
+    public static readonly TimeSpan ObjectInfoTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// <c>GET /object_info/&lt;class&gt;</c> for the server check (2026-11-25): what the server says of one node class
+    /// (<see cref="ComfyCheck.ParseNode"/>, read up to <see cref="ComfyCheck.MaxAnswerBytes"/>), or the failure as a sentence.
+    /// </summary>
+    public async Task<(ComfyNodeInfo? Info, string? Error)> ObjectInfoAsync(string nodeClass, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(nodeClass);
+        string endpoint = "/object_info/" + Uri.EscapeDataString(nodeClass);
         try
         {
-            using var document = JsonDocument.Parse(json);
-            if (!document.RootElement.TryGetProperty(nodeClass, out var node) || !node.TryGetProperty("input", out var inputs))
+            using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            budget.CancelAfter(ObjectInfoTimeout);
+            using var response = await _http.GetAsync(Url(endpoint), HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
+            await using var stream = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
+            // One byte past the cap tells an answer of exactly the cap from a larger one.
+            var (bytes, capped) = await Files.StreamCap.ReadAsync(stream, ComfyCheck.MaxAnswerBytes + 1, budget.Token).ConfigureAwait(false);
+            string body = Encoding.UTF8.GetString(bytes);
+            if (!response.IsSuccessStatusCode)
             {
-                return null;
+                return (null, ComfyText.HttpError((int)response.StatusCode, endpoint, body));
             }
 
-            foreach (string group in (string[])["required", "optional"])
+            return !capped && ComfyCheck.ParseNode(body, nodeClass) is { } info ? (info, null) : (null, ComfyText.BadAnswer(endpoint));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            return (null, ComfyText.NoAnswer(LlmTimeouts.Format(ObjectInfoTimeout)));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            return (null, ComfyText.Unreachable(BaseUrl, ex.Message));
+        }
+    }
+
+    /// <summary>How long one <c>/history</c> read for the import may take.</summary>
+    public static readonly TimeSpan HistoryTimeout = TimeSpan.FromSeconds(15);
+
+    /// <summary>
+    /// <c>GET /history?max_items=100</c> for the import from a recent run (2026-11-25): the answer's text, read up to
+    /// <see cref="ComfyHistory.MaxAnswerBytes"/>, asked again for <see cref="ComfyHistory.FewerItems"/> when it is larger (runs queued from ComfyUI
+    /// carry its whole UI graph), or the failure as a sentence.
+    /// </summary>
+    public async Task<(string? Body, string? Error)> HistoryAsync(CancellationToken cancellationToken)
+    {
+        foreach (int items in (int[])[ComfyHistory.MaxItems, ComfyHistory.FewerItems])
+        {
+            string endpoint = "/history?max_items=" + items.ToString(CultureInfo.InvariantCulture);
+            try
             {
-                if (inputs.TryGetProperty(group, out var set) && set.ValueKind == JsonValueKind.Object && set.TryGetProperty(input, out var spec)
-                    && spec.ValueKind == JsonValueKind.Array && spec.GetArrayLength() > 0)
+                using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                budget.CancelAfter(HistoryTimeout);
+                using var response = await _http.GetAsync(Url(endpoint), HttpCompletionOption.ResponseHeadersRead, budget.Token).ConfigureAwait(false);
+                await using var stream = await response.Content.ReadAsStreamAsync(budget.Token).ConfigureAwait(false);
+                // One byte past the cap tells an answer of exactly the cap from a larger one.
+                var (bytes, capped) = await Files.StreamCap.ReadAsync(stream, ComfyHistory.MaxAnswerBytes + 1, budget.Token).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
                 {
-                    var first = spec[0];
-                    var list = first.ValueKind == JsonValueKind.Array ? first
-                        : spec.GetArrayLength() > 1 && spec[1].ValueKind == JsonValueKind.Object && spec[1].TryGetProperty("options", out var options) && options.ValueKind == JsonValueKind.Array ? options
-                        : default;
-                    if (list.ValueKind == JsonValueKind.Array)
-                    {
-                        return list.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!).ToList();
-                    }
+                    return (null, ComfyText.HttpError((int)response.StatusCode, "/history", Encoding.UTF8.GetString(bytes)));
+                }
+
+                if (!capped)
+                {
+                    return (Encoding.UTF8.GetString(bytes), null);
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                return (null, ComfyText.NoAnswer(LlmTimeouts.Format(HistoryTimeout)));
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException)
+            {
+                return (null, ComfyText.Unreachable(BaseUrl, ex.Message));
+            }
+        }
 
-            return null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
+        return (null, ComfyText.HistoryTooLarge);
     }
 
     /// <summary>

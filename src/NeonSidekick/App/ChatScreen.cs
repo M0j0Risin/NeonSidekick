@@ -1875,6 +1875,10 @@ internal sealed partial class ChatScreen
             ThemeBin = () => _effective().FileDeletesToRecycleBin ? _recycleBin : null,
             // The Tool bar page's bar: reads what the row would draw (2026-11-08, the review): a lone model name before any model is known draws nothing.
             ToolbarDrawn = d => ToolbarParts(d) is not null,
+            // A ComfyUI workflow's test picture (2026-11-25): shown where the model's open shows one (never taking the keyboard), and tracked
+            // as a picture made in a private conversation, so its end asks about it too.
+            ShowPicture = OpenPictureForModel,
+            PictureMade = TrackCreatedPicture,
         };
         // The mode buttons (2026-10-13, the user's ask): after the settings menu, whose rows save them; the saved words, read without the turn's warning; set through the rows' own save.
         _queueMenu = new QueueMenu(_queue, _flow, _menuPane, () => SavedQueueMode(_settings.Current), mode => _menu.SetQueueMode(mode), () => SavedQueueCancel(_settings.Current), mode => _menu.SetQueueCancelMode(mode));
@@ -11596,7 +11600,7 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>/comfy purge</c> (later still on 2026-09-24, the user's ask): the output folder emptied, <c>.pasted</c> included. Pinned.</summary>
     public const string ComfyPurgeWord = "purge";
-    public const string ComfyPurgeNote = "delete every picture in the ComfyUI output folder, the pasted inputs too";
+    public const string ComfyPurgeNote = "delete every picture in the ComfyUI output folder";
 
     /// <summary><c>/comfy offered</c> (2026-10-04, the user's ask): the offered workflows as a bulleted list (<see cref="ComfyText.OfferedLines"/>). Pinned.</summary>
     public const string ComfyOfferedWord = "offered";
@@ -11667,10 +11671,17 @@ internal sealed partial class ChatScreen
         string path = json.Value ? workflow.FilePath : Path.ChangeExtension(workflow.FilePath, ".md");
         try
         {
-            bool created = !json.Value && !File.Exists(path);
-            if (created)
+            bool created = false;
+            if (!json.Value)
             {
-                File.WriteAllText(path, "---\nfamily: " + ComfyFamilies.Name(workflow.Family) + "\n---\n");
+                // The missing .md made with its family: one helper with the workflow manager's Open the Markdown (2026-11-25).
+                var (_, made, error) = ComfyWorkflowFile.EnsureSidecar(workflow.FilePath, workflow.Family);
+                if (error is not null)
+                {
+                    throw new IOException(error);
+                }
+
+                created = made;
             }
 
             _openFile(path);

@@ -2442,7 +2442,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  ·   Shell\n  ·     Shell command policy: ask\n", Output);
         Assert.Contains("  · Core\n  ·   Web\n  ·     Web tools: on\n", Output);   // Web first since 2026-10-16 (the user's order; Ask first until then)
         Assert.Contains("  ·     Shell code default timeout (s): 300\n  ·   Clock\n  ·     Clock tools: on\n  ·   Timers\n  ·     Timer tools: on\n  ·     Timer tone: silent\n  ·   Sessions\n  ·     Session tools: on\n  ·     Session search max results: 10 results\n  ·   Ask\n  ·     Ask user: on\n  ·     Ask repeat guard: off\n  ·     Ask max questions: 10 questions\n  ·     Ask max choices per question: 10 choices\n  ·   Help\n  ·     Help tools: on\n  ·   Options\n  ·     $-mention enabled: on\n", Output);   // Clock after Shell and Help after Ask since 2026-10-18 (the user's asks); Ask after Timers since 2026-10-16 (the user's order); Timers between Shell and Options since later on 2026-10-15   // Shopping between them on 2026-10-11 until it went to Home later that day
-        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   Video\n  ·     Video tools: off\n  ·     Video files play in: video-window\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib user email: (not set)\n  ·     GitLib user name: (not set)\n  · Apps\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     Docker engine pipe: \\\\.\\pipe\\docker_engine\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI workflows offered: none of 0\n  ·     ComfyUI add workflow: Enter to start workflow wizard\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max images per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube open links in: youtube-window\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n", Output);   // Admin (EventLog, Services, Tasks, Directory) after Apps later still on 2026-10-15 (the admin-tools plan); Obsidian after YouTube since 2026-10-17 (the user's order)
+        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   Video\n  ·     Video tools: off\n  ·     Video files play in: video-window\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib user email: (not set)\n  ·     GitLib user name: (not set)\n  · Apps\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     Docker engine pipe: \\\\.\\pipe\\docker_engine\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI test connection: Enter to ask the server for its version\n  ·     ComfyUI workflows: none of 0 offered\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max images per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube open links in: youtube-window\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n", Output);   // Admin (EventLog, Services, Tasks, Directory) after Apps later still on 2026-10-15 (the admin-tools plan); Obsidian after YouTube since 2026-10-17 (the user's order)
         Assert.Contains("  ·   EventLog\n  ·     Event log tools: off\n  ·     Event log computers offered: 1 of 1\n  ·     Event log set password: Enter to set password for a runas computer\n  ·     Event log add/edit computer: Enter to start computer wizard\n  ·     Event log max events: 20\n  ·     Event log scan limit: 20000\n  ·     Event log computers (profile): (none) · Enter edits eventlog.json\n  ·     Event log computers (global): (none) · Enter edits eventlog.json\n  ·   Services\n  ·     Service tools: off\n", Output);
         Assert.Contains("  · Databases\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: on\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   DuckDB\n  ·     DuckDB tools: off\n  ·     DuckDB mode: read-only\n  ·     DuckDB statements allowed: changing data, creating, reading (used under read-write)\n  ·     DuckDB databases offered: none of 0\n  ·     DuckDB sandbox files: on\n  ·     DuckDB add/edit database: Enter to start database wizard\n  ·     DuckDB %-mention enabled: on\n  ·     DuckDB max rows: 100 rows\n  ·     DuckDB query timeout (s): 30\n  ·     DuckDB databases (profile): (none) · Enter edits duckdb.json\n  ·     DuckDB databases (global): (none) · Enter edits duckdb.json\n  · Devices\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch unprompted: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen tools: off\n  ·     Screen policy: ask\n  ·     Screen preview: on\n  ·     Screen output folder: screen\n  ·     Screen keep in sessions: off\n" + (OperatingSystem.IsWindows() ? "  ·   Monitors\n  ·     Monitor tools: off\n" : "") + "  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: (Windows default)\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  · Home\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   Shopping\n  ·     Shopping tools: off\n  ·     Shopping list: Enter to manage the list\n  ·     Shopping stores: Enter to manage stores\n", Output);
         Assert.False(pane.OverlayOpen);
@@ -2480,7 +2480,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  ·   Shell\n  ·     Shell command policy: ask\n", Output);
         Assert.Contains("  · Core\n  ·   Web\n  ·     Web tools: on\n", Output);   // Web first since 2026-10-16 (the user's order; Ask first until then)
         Assert.Contains("  ·     Shell code default timeout (s): 300\n  ·   Clock\n  ·     Clock tools: on\n  ·   Timers\n  ·     Timer tools: on\n  ·     Timer tone: silent\n  ·   Sessions\n  ·     Session tools: on\n  ·     Session search max results: 10 results\n  ·   Ask\n  ·     Ask user: on\n  ·     Ask repeat guard: off\n  ·     Ask max questions: 10 questions\n  ·     Ask max choices per question: 10 choices\n  ·   Help\n  ·     Help tools: on\n  ·   Options\n  ·     $-mention enabled: on\n", Output);   // Clock after Shell and Help after Ask since 2026-10-18 (the user's asks); Ask after Timers since 2026-10-16 (the user's order); Timers between Shell and Options since later on 2026-10-15   // Shopping between them on 2026-10-11 until it went to Home later that day
-        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   Video\n  ·     Video tools: off\n  ·     Video files play in: video-window\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib user email: (not set)\n  ·     GitLib user name: (not set)\n  · Apps\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     " + SettingsMenu.FieldName(SettingsField.DockerEnginePipe) + ": " + SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, new AppSettingsData(), "") + "\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI workflows offered: none of 0\n  ·     ComfyUI add workflow: Enter to start workflow wizard\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max images per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube open links in: youtube-window\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n  · Admin\n  ·   Network\n  ·     Network tools: off\n", Output);   // Admin after Apps later still on 2026-10-15 (the admin-tools plan); Obsidian after YouTube since 2026-10-17 (the user's order)
+        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   Video\n  ·     Video tools: off\n  ·     Video files play in: video-window\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib user email: (not set)\n  ·     GitLib user name: (not set)\n  · Apps\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     " + SettingsMenu.FieldName(SettingsField.DockerEnginePipe) + ": " + SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, new AppSettingsData(), "") + "\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI test connection: Enter to ask the server for its version\n  ·     ComfyUI workflows: none of 0 offered\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max images per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube open links in: youtube-window\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n  · Admin\n  ·   Network\n  ·     Network tools: off\n", Output);   // Admin after Apps later still on 2026-10-15 (the admin-tools plan); Obsidian after YouTube since 2026-10-17 (the user's order)
         Assert.Contains("  · Databases\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: on\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   DuckDB\n  ·     DuckDB tools: off\n  ·     DuckDB mode: read-only\n  ·     DuckDB statements allowed: changing data, creating, reading (used under read-write)\n  ·     DuckDB databases offered: none of 0\n  ·     DuckDB sandbox files: on\n  ·     DuckDB add/edit database: Enter to start database wizard\n  ·     DuckDB %-mention enabled: on\n  ·     DuckDB max rows: 100 rows\n  ·     DuckDB query timeout (s): 30\n  ·     DuckDB databases (profile): (none) · Enter edits duckdb.json\n  ·     DuckDB databases (global): (none) · Enter edits duckdb.json\n  · Devices\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch unprompted: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen tools: off\n  ·     Screen policy: ask\n  ·     Screen preview: on\n  ·     Screen output folder: screen\n  ·     Screen keep in sessions: off\n" + (OperatingSystem.IsWindows() ? "  ·   Monitors\n  ·     Monitor tools: off\n" : "") + "  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: " + SettingsMenu.WindowsDefaultPrinterLabel + "\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  · Home\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   Shopping\n  ·     Shopping tools: off\n  ·     Shopping list: Enter to manage the list\n  ·     Shopping stores: Enter to manage stores\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
@@ -3065,7 +3065,7 @@ public partial class ToolsMenuTests : IDisposable
         pane.Dispose();
     }
 
-    // ── The ComfyUI tab (Images until later on 2026-09-24): workflows offered and the add-workflow wizard (later on 2026-09-24) ─
+    // ── The ComfyUI tab (Images until later on 2026-09-24): the workflows list (ToolsMenuTests.ComfyManager.cs since 2026-11-25) ─
 
     private const string ComfyServer = "http://comfy.lan:8188";
 
@@ -3075,19 +3075,6 @@ public partial class ToolsMenuTests : IDisposable
         File.WriteAllText(Path.Combine(folder, name + ".json"), "{\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}}}");
     }
 
-    /// <summary>A ComfyUI stand-in: two checkpoints, three samplers, two schedulers, and a job that finishes at once.</summary>
-    private (NeonSidekick.Comfy.ComfyClient Client, StubHttpMessageHandler Stub) ComfyStub()
-    {
-        var stub = new StubHttpMessageHandler()
-            .Map(ComfyServer + "/object_info/CheckpointLoaderSimple", System.Net.HttpStatusCode.OK, "{\"CheckpointLoaderSimple\":{\"input\":{\"required\":{\"ckpt_name\":[[\"juggernautXL_ragnarok.safetensors\",\"ponyDiffusionV6XL.safetensors\"]]}}}}")
-            .Map(ComfyServer + "/object_info/KSampler", System.Net.HttpStatusCode.OK, "{\"KSampler\":{\"input\":{\"required\":{\"sampler_name\":[[\"euler\",\"euler_ancestral\",\"dpmpp_2m_sde\"]],\"scheduler\":[[\"normal\",\"karras\"]]}}}}")
-            .Map(ComfyServer + "/prompt", System.Net.HttpStatusCode.OK, "{\"prompt_id\":\"t-1\"}")
-            .Map(ComfyServer + "/history/", System.Net.HttpStatusCode.OK, "{\"t-1\":{\"outputs\":{\"9\":{\"images\":[{\"filename\":\"neon_00001_.png\",\"subfolder\":\"neon\",\"type\":\"output\"}]}}}}")
-            .Map(ComfyServer + "/view", (_, _) => Task.FromResult(StubHttpMessageHandler.Bytes(System.Net.HttpStatusCode.OK, [1, 2, 3], "image/png")));
-        return (new NeonSidekick.Comfy.ComfyClient(new Uri(ComfyServer), new HttpClient(stub), TimeSpan.FromMilliseconds(1)), stub);
-    }
-
-    /// <summary>The ComfyUI tab, then the row: 2 the offered checklist, 3 the add-workflow wizard.</summary>
     /// <summary>The code-languages list's buttons (2026-09-29, the user's ask): N is refused — one stays — and A ticks every language.</summary>
     [Fact]
     public async Task OnThePane_TheCodeLanguagesRow_SelectNone_IsRefused_SelectAll_TicksEvery()
@@ -3136,32 +3123,6 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([], _settings.Current.SqlConnectionsOffered);
     }
 
-    /// <summary>ComfyUI workflows offered's buttons (2026-09-29, the user's ask): A the workflows installed now, N none.</summary>
-    [Fact]
-    public async Task OnThePane_TheComfyOffered_SelectAll_SavesTodaysList_SelectNone_AnEmptyOne()
-    {
-        ComfyWorkflowFile(_settings.ProfileComfyDirectory, "pony-txt2img");
-        ComfyWorkflowFile(_settings.GlobalComfyDirectory, "juggernaut-xl");
-        var (menu, _, _) = PaneMenu();
-        OpenImagesRow(2);
-        Push(Keys.Char('a'));
-        Push(Keys.Escape, Keys.Escape);
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        Assert.Equal(2, _settings.Current.ComfyWorkflowsOffered!.Count);
-        Assert.Contains("pony-txt2img", _settings.Current.ComfyWorkflowsOffered);
-
-        (menu, _, _) = PaneMenu();
-        OpenImagesRow(2);
-        Push(Keys.Char('n'));
-        Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        Assert.Equal([], _settings.Current.ComfyWorkflowsOffered);
-    }
-
     private void OpenImagesRow(int row) => Push([.. ToTab(ToolsText.ComfyTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     [Fact]
@@ -3170,15 +3131,15 @@ public partial class ToolsMenuTests : IDisposable
         ComfyWorkflowFile(_settings.ProfileComfyDirectory, "pony-txt2img");
         ComfyWorkflowFile(_settings.GlobalComfyDirectory, "juggernaut-xl");
         var (menu, _, _) = PaneMenu();
-        OpenImagesRow(2);
-        Push(Keys.Down, Keys.Enter);                         // pony-txt2img on (the list is by name; none ticked at first)
+        OpenImagesRow(3);
+        Push(Keys.Down, Keys.Char(' '));                     // pony-txt2img on (the list is by name and opens on the first; none ticked at first)
         Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["pony-txt2img"], _settings.Current.ComfyWorkflowsOffered);
-        Assert.Matches(@"ComfyUI workflows offered +none of 2", Output);   // the column is the tab's widest label
-        Assert.Matches(@"ComfyUI workflows offered +1 of 2", Output);
+        Assert.Matches(@"ComfyUI workflows +none of 2 offered", Output);   // the column is the tab's widest label
+        Assert.Matches(@"ComfyUI workflows +1 of 2 offered", Output);
         Assert.Contains("[ ] juggernaut-xl  ", Output);
 
         ComfyWorkflowFile(_settings.ProfileComfyDirectory, "new-one");
@@ -3186,102 +3147,5 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("1 of 3", SettingsMenu.ComfyOfferedValue(_settings.Current.ComfyWorkflowsOffered, installed));   // the new one hidden until ticked
         Assert.Equal("none of 3", SettingsMenu.ComfyOfferedValue(null, installed));   // null offers none (2026-10-01)
         Assert.Equal("none of 3", SettingsMenu.ComfyOfferedValue([], installed));
-    }
-
-    /// <summary>The wizard's build path: the server's checkpoints, the family guessed from the pick, Pony's CLIP skip and sampler as the defaults, a small test run, then both files saved.</summary>
-    [Fact]
-    public async Task OnThePane_TheComfyWizard_BuildsFromTheServer_TestsIt_AndSavesIt()
-    {
-        var (client, stub) = ComfyStub();
-        var (menu, _, _) = PaneMenu(comfy: () => client);
-        OpenImagesRow(3);
-        Push(Keys.Enter);                     // build
-        Push(Keys.Enter);                     // text → image
-        Push(Keys.Down, Keys.Enter);          // ponyDiffusionV6XL: family pony, name ponydiffusionv6xl
-        Push(Keys.Enter);                     // pony (the guess)
-        Push(Keys.Enter);                     // this profile
-        Push(Keys.Enter);                     // the suggested name
-        Push(Keys.Enter);                     // CLIP skip 2 (pony's)
-        Push(Keys.Enter);                     // euler_ancestral (pony's)
-        Push(Keys.Enter);                     // normal
-        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // 1024, 1024, 25, 7
-        Push(Keys.Enter);                     // pony's negative
-        Type("anime portraits");
-        Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows)
-        Push(Keys.Up, Keys.Up, Keys.Enter);       // Save, and offer it
-        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        string json = Path.Combine(_settings.ProfileComfyDirectory, "ponydiffusionv6xl.json");
-        Assert.True(NeonSidekick.Comfy.ComfyWorkflow.TryLoad(json, out var workflow, out string? problem), problem);
-        Assert.Equal(NeonSidekick.Comfy.ComfyFamily.Pony, workflow!.Family);
-        Assert.Equal("anime portraits", workflow.Description);
-        Assert.Equal(NeonSidekick.Comfy.ComfyFamilies.PonyNegative, workflow.Defaults.Negative);
-        string text = File.ReadAllText(json);
-        Assert.Contains("\"CLIPSetLastLayer\"", text);
-        Assert.Contains("\"euler_ancestral\"", text);
-        Assert.Contains("\"ponyDiffusionV6XL.safetensors\"", text);
-        string queued = stub.Requests.Single(r => r.Uri.AbsolutePath == "/prompt").Body!;
-        Assert.Contains("\"width\":512", queued);   // the test is small
-        Assert.Contains("\"steps\":8", queued);
-        Assert.Contains("Tested 'ponydiffusionv6xl' in ", Output);
-        Assert.Contains("Added workflow 'ponydiffusionv6xl' to ", Output);
-        Assert.Equal(["ponydiffusionv6xl"], _settings.Current.ComfyWorkflowsOffered);
-    }
-
-    /// <summary>The import path: an exported graph placeholdered, its own values the defaults, saved on a narrowed profile and offered to the model.</summary>
-    [Fact]
-    public async Task OnThePane_TheComfyWizard_ImportsAnExport_AndOffersIt()
-    {
-        _settings.Update(d => d.ComfyWorkflowsOffered = ["other"]);
-        string export = Path.Combine(_dir, "My Export.json");
-        File.WriteAllText(export, ComfyTests.Export);
-        var (menu, _, _) = PaneMenu();
-        OpenImagesRow(3);
-        Push(Keys.Down, Keys.Enter);          // import
-        Type(export);
-        Push(Keys.Enter);                     // pony (guessed from the checkpoint)
-        Push(Keys.Down, Keys.Enter);          // the home's folder
-        Push(Keys.Enter);                     // my-export
-        Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // 832, 1216, 20, 6.5 from the export
-        Push(Keys.Enter);                     // its own negative
-        Push(Keys.Enter);                     // no description
-        Push(Keys.Enter);                     // Save, and offer it
-        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        string json = Path.Combine(_settings.GlobalComfyDirectory, "my-export.json");
-        Assert.True(NeonSidekick.Comfy.ComfyWorkflow.TryLoad(json, out var workflow, out string? problem), problem);
-        Assert.Equal(new NeonSidekick.Comfy.ComfyDefaults(832, 1216, 20, 6.5, "score_4, blurry"), workflow!.Defaults);
-        Assert.Contains("Found {{prompt}} → node 6 CLIPTextEncode.text", Output);
-        Assert.Equal(["other", "my-export"], _settings.Current.ComfyWorkflowsOffered);
-        Assert.Contains(SettingsMenu.ComfyWizardSaveHiddenRow[..40], Output);
-    }
-
-    /// <summary>ESC out of the first page writes nothing; a name already in a comfy folder is refused.</summary>
-    [Fact]
-    public async Task OnThePane_TheComfyWizard_EscWritesNothing_AndATakenNameIsRefused()
-    {
-        ComfyWorkflowFile(_settings.GlobalComfyDirectory, "juggernautxl_ragnarok");
-        var (client, _) = ComfyStub();
-        var (menu, _, _) = PaneMenu(comfy: () => client);
-        OpenImagesRow(3);
-        Push(Keys.Escape);                    // out of the first page: cancelled
-        Push(Keys.Enter);                     // the wizard again
-        Push(Keys.Enter, Keys.Enter);         // build, text → image
-        Push(Keys.Enter);                     // juggernautXL_ragnarok: its name is taken
-        Push(Keys.Enter, Keys.Enter);         // sdxl, this profile
-        Push(Keys.Enter);                     // the suggested name: refused, asked again
-        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);   // back out page by page
-        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        Assert.Contains(SettingsMenu.ComfyWizardCancelledNotice, Output);
-        Assert.Contains("a workflow named 'juggernautxl_ragnarok' is already in", Output);
-        Assert.Equal(["juggernautxl_ragnarok.json"], Directory.GetFiles(_settings.GlobalComfyDirectory).Select(Path.GetFileName));
-        Assert.Empty(Directory.GetFiles(_settings.ProfileComfyDirectory));
     }
 }

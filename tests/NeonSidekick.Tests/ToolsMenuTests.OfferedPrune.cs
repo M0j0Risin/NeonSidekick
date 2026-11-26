@@ -82,7 +82,7 @@ public partial class ToolsMenuTests
     public async Task TheComfyOffered_DropsAGoneName_AsItOpens()
     {
         ComfyWorkflowFile(_settings.ProfileComfyDirectory, "pony-txt2img");
-        await AssertDroppedAsItOpensAsync(SettingsField.ComfyWorkflowsOffered, (d, v) => d.ComfyWorkflowsOffered = v, d => d.ComfyWorkflowsOffered, () => OpenImagesRow(2), "pony-txt2img");
+        await AssertDroppedAsItOpensAsync(SettingsField.ComfyWorkflowsOffered, (d, v) => d.ComfyWorkflowsOffered = v, d => d.ComfyWorkflowsOffered, () => OpenImagesRow(3), "pony-txt2img");
     }
 
     /// <summary>A broken entry's name keeps its tick through the opening and through a save; the gone one goes.</summary>
@@ -127,7 +127,7 @@ public partial class ToolsMenuTests
         File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "broken.json"), "{ not json");
         _settings.Update(d => d.ComfyWorkflowsOffered = ["gone", "broken", "pony-txt2img"]);
         var (menu, _, _) = PaneMenu();
-        OpenImagesRow(2);
+        OpenImagesRow(3);
         Push(Keys.Escape, Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);
@@ -138,25 +138,34 @@ public partial class ToolsMenuTests
 
     [Fact]
     public void StaleDroppedNotice_NamesTheFieldTheCountAndTheNames() =>
-        Assert.Equal("ComfyUI workflows offered: dropped 2 no longer listed: a, b", SettingsMenu.StaleDroppedNotice(SettingsField.ComfyWorkflowsOffered, ["a", "b"]));
+        Assert.Equal("ComfyUI workflows: dropped 2 no longer listed: a, b", SettingsMenu.StaleDroppedNotice(SettingsField.ComfyWorkflowsOffered, ["a", "b"]));
 
-    /// <summary>The ComfyUI checklist's rows line up (2026-10-04, the user's ask): family, shape and size each start in one column, the size's <c>×</c> too.</summary>
+    /// <summary>
+    /// The ComfyUI list's rows line up (2026-10-04, the user's ask): family, shape and size each start in one column, the size's <c>×</c> too.
+    /// Since 2026-11-25 the size is blank where the graph takes none, and the scope column after it still lines up.
+    /// </summary>
     [Fact]
     public void TheComfyOfferedRows_LineUpTheirColumns()
     {
-        ComfyWorkflowFile(_settings.ProfileComfyDirectory, "a");
+        const string Sized = "{\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}},\"5\":{\"class_type\":\"EmptyLatentImage\",\"inputs\":{\"width\":\"{{width}}\",\"height\":\"{{height}}\"}}}";
+        Directory.CreateDirectory(_settings.ProfileComfyDirectory);
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "a.json"), Sized);
         File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "image-to-image-long.json"),
-            "{\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}},\"7\":{\"class_type\":\"LoadImage\",\"inputs\":{\"image\":\"{{image}}\"}}}");
+            "{\"6\":{\"class_type\":\"CLIPTextEncode\",\"inputs\":{\"text\":\"{{prompt}}\"}},\"7\":{\"class_type\":\"LoadImage\",\"inputs\":{\"image\":\"{{image}}\"}},\"5\":{\"class_type\":\"EmptyLatentImage\",\"inputs\":{\"width\":\"{{width}}\",\"height\":\"{{height}}\"}}}");
+        ComfyWorkflowFile(_settings.ProfileComfyDirectory, "no-size");
         var installed = new NeonSidekick.Comfy.ComfyWorkflowCatalog(() => [_settings.ProfileComfyDirectory]).Workflows;
         var columns = SettingsMenu.ComfyOfferedColumns.Of(installed);
         var rows = installed.Select(w => Markup.Remove(SettingsMenu.ComfyOfferedRow(w, false, columns))).ToList();
+        var scoped = installed.Select(w => Markup.Remove(SettingsMenu.ComfyOfferedRow(w, false, columns, scope: "global"))).ToList();
 
-        Assert.Equal(["a", "image-to-image-long"], installed.Select(w => w.Name));
+        Assert.Equal(["a", "image-to-image-long", "no-size"], installed.Select(w => w.Name));
         Assert.Equal("image-to-image-long".Length + 2, columns.Name);
         Assert.StartsWith("[ ] a" + new string(' ', columns.Name - 1), rows[0]);
         Assert.Equal(rows[0].IndexOf("text → image", StringComparison.Ordinal), rows[1].IndexOf("image → image", StringComparison.Ordinal));   // the shapes in one column
         Assert.Contains("text → image   ", rows[0]);                                                                                          // padded to image → image, two apart
         Assert.Equal(rows[0].IndexOf('×'), rows[1].IndexOf('×'));                                                                             // the sizes too
+        Assert.DoesNotContain('×', rows[2]);                                                                                                  // no size where the graph takes none
+        Assert.Equal(scoped[0].IndexOf("global", StringComparison.Ordinal), scoped[2].IndexOf("global", StringComparison.Ordinal));          // the scope in one column
         Assert.DoesNotContain(" · ", rows[0]);
     }
 }

@@ -1,6 +1,8 @@
-using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Nodes;
 using NeonSidekick.Comfy;
+using NeonSidekick.Diagnostics;
+using NeonSidekick.Llm.Tools;
 using NeonSidekick.Settings;
 using NeonSidekick.UI;
 using Spectre.Console;
@@ -8,28 +10,34 @@ using Spectre.Console;
 namespace NeonSidekick.App;
 
 /// <summary>
-/// <c>ComfyUI add workflow</c> and <c>ComfyUI workflows offered</c> (later on 2026-09-24, the user's ask: "a multiselect
-/// setting to select which comfyui workflows to offer the model … and a wizard function to add new comfy workflows
-/// similar to how we did it for SQL connections"). The wizard is <c>SQL add connection</c>'s shape — one page per
-/// choice, every row of the draft on each page, ESC one back, a summary that tests the unsaved draft and saves it — over
-/// two sources (the user's pick, "Both"): <b>build</b> a standard workflow from what the server has (its checkpoints,
-/// samplers and schedulers, <see cref="ComfyGraphs"/>), or <b>import</b> one exported from ComfyUI with Export (API), the
-/// placeholders put in for you (<see cref="ComfyImport"/>). The save writes <c>&lt;name&gt;.md</c> and
-/// <c>&lt;name&gt;.json</c> into the chosen <c>comfy</c> folder (<see cref="ComfyWorkflowFile.Add"/>).
+/// The new-workflow wizard (later on 2026-09-24, the user's ask: "a wizard function to add new comfy workflows similar to how we did it for
+/// SQL connections"), shortened on 2026-11-25 (the workflow manager): it asks only Source → Kind → Checkpoint → Name to <b>build</b> a
+/// standard workflow from the server's models (<see cref="ComfyGraphs"/>), or Source → File → Name to <b>import</b> one exported from ComfyUI
+/// (<see cref="ComfyImport"/>), then shows the summary (<c>SettingsMenu.ComfyEdit.cs</c>) with everything else at its default, where Enter on a
+/// row changes it, Test runs it and Save writes <c>&lt;name&gt;.md</c> and <c>&lt;name&gt;.json</c> into a <c>comfy</c> folder
+/// (<see cref="ComfyWorkflowFile.Add"/>). Kind <c>both</c> saves a text and an image workflow together.
 /// </summary>
 internal sealed partial class SettingsMenu
 {
     // ── Pinned statics ──────────────────────────────────────────────────────
 
-    /// <summary>The value column of the <c>ComfyUI add workflow</c> action row. Pinned.</summary>
-    public const string ComfyAddWorkflowLabel = "Enter to start workflow wizard";
+    /// <summary>The asked pages' rows, one per <see cref="ComfyWizardStep"/> before the summary, in its order. Pinned.</summary>
+    public static readonly IReadOnlyList<string> ComfyWizardLabels = ["Source", "File", "Kind", "Checkpoint", "Name", "Run"];
 
-    /// <summary>The wizard's rows, one per <see cref="ComfyWizardStep"/> before the summary, in its order. Pinned.</summary>
-    public static readonly IReadOnlyList<string> ComfyWizardLabels =
-        ["Source", "File", "Kind", "Checkpoint", "Family", "Scope", "Name", "CLIP skip", "Sampler", "Scheduler", "Width", "Height", "Steps", "CFG", "Denoise", "Negative", "Description"];
+    /// <summary>The wizard's crumb under the list.</summary>
+    public const string ComfyNewWorkflowCrumb = "New workflow";
 
-    public const string ComfyWizardSourceQuestion = "Build a standard workflow from the server's models, or import one you exported from ComfyUI?";
-    public const string ComfyWizardFileQuestion = "The exported file's full path (in ComfyUI: Workflow → Export (API)).";
+    public const string ComfyWizardSourceQuestion = "Build a standard workflow from the server's models, or import one ComfyUI ran?";
+    public const string ComfyWizardFileQuestion = "The full path of a ComfyUI export (Workflow → Export (API)) or of a PNG or WebP picture ComfyUI saved.";
+    public const string ComfyWizardRunQuestion = "The run to import: the server's recent runs, newest first.";
+    public const string ComfyRunsLabel = "Reading the server's recent runs…";
+    public const string ComfyPickRunFirst = "Pick a run first.";
+
+    /// <summary>The run list's row that shows or hides the app's own runs.</summary>
+    public static string ComfyOwnRunsRow(int count, bool shown) => shown ? "Hide the app's own runs" : $"Show the app's own runs ({Invariant(count)})";
+
+    /// <summary>A picked run the import refuses.</summary>
+    public static string ComfyRunRefused(string problem) => "Error: that run's graph " + problem;
     public const string ComfyWizardKindQuestion = "What it makes.";
     public const string ComfyWizardCheckpointQuestion = "The checkpoint (the model) it loads, from the server's list.";
     public const string ComfyWizardFamilyQuestion = "The model family: it picks the prompt style the model writes in and the defaults below.";
@@ -38,6 +46,8 @@ internal sealed partial class SettingsMenu
     public const string ComfyWizardClipSkipQuestion = "CLIP skip: Pony Diffusion XL is trained for 2; most other checkpoints want none.";
     public const string ComfyWizardSamplerQuestion = "The sampler.";
     public const string ComfyWizardSchedulerQuestion = "The scheduler.";
+    public const string ComfyWizardVaeQuestion = "The VAE: the checkpoint's own, or one from the server's list.";
+    public const string ComfyWizardLoraQuestion = "The LoRA to add, from the server's list.";
     public static readonly string ComfyWizardWidthQuestion = "The default width in pixels, " + Invariant(ComfyStudio.MinSide) + " to " + Invariant(ComfyStudio.MaxSide) + ".";
     public static readonly string ComfyWizardHeightQuestion = "The default height in pixels, " + Invariant(ComfyStudio.MinSide) + " to " + Invariant(ComfyStudio.MaxSide) + ".";
     public static readonly string ComfyWizardStepsQuestion = "The default sampling steps, 1 to " + Invariant(ComfyStudio.MaxSteps) + ".";
@@ -45,14 +55,23 @@ internal sealed partial class SettingsMenu
     public const string ComfyWizardDenoiseQuestion = "How much of the input picture to repaint by default, 0 to 1 (0.3 keeps it close, 0.8 changes it a lot).";
     public const string ComfyWizardNegativeQuestion = "The default negative prompt (empty for none).";
     public const string ComfyWizardDescriptionQuestion = "What it is for, in your words (optional): the model reads it to pick a workflow.";
-    public const string ComfyWizardSummaryCaption = "Check the workflow: Test runs it once, small, without saving; Enter on a row below changes it.";
+    public const string ComfyWizardSummaryCaption = "Check the workflow: Test runs it once without saving; Enter on a row below changes it.";
 
     /// <summary>The source picks. Pinned.</summary>
     public static readonly IReadOnlyList<string> ComfyWizardSourceRows =
-        ["build   a standard workflow from the server's checkpoints, samplers and schedulers", "import  a workflow exported from ComfyUI (Export (API)), the placeholders put in for you"];
+    [
+        "build   a standard workflow from the server's models",
+        "run     one of the server's recent runs",
+        "file    a ComfyUI export, or a picture ComfyUI saved",
+    ];
 
     /// <summary>The kind picks. Pinned.</summary>
-    public static readonly IReadOnlyList<string> ComfyWizardKindRows = ["text → image", "image → image (restyle an input picture)"];
+    public static readonly IReadOnlyList<string> ComfyWizardKindRows =
+        ["text → image", "image → image (restyle an input picture)", "both (two workflows: <name>" + ComfyTextSuffix + " and <name>" + ComfyImageSuffix + ")"];
+
+    /// <summary>The names <c>both</c> saves under: the base name and these.</summary>
+    public const string ComfyTextSuffix = "_txt2img";
+    public const string ComfyImageSuffix = "_img2img";
 
     /// <summary>The family picks, in <see cref="ComfyFamily"/> order. Pinned.</summary>
     public static readonly IReadOnlyList<string> ComfyWizardFamilyRows =
@@ -80,15 +99,21 @@ internal sealed partial class SettingsMenu
     /// <summary>The CLIP skip picks: none, then 2. Pinned.</summary>
     public static readonly IReadOnlyList<string> ComfyWizardClipSkipRows = ["none", "2"];
 
+    /// <summary>The VAE list's first row: the checkpoint's own.</summary>
+    public const string ComfyCheckpointVaeRow = "(from the checkpoint)";
+
+    /// <summary>The mark after a graph's value the server doesn't list.</summary>
+    public const string ComfyNotOnServerMark = "  (not on the server's list)";
+
     public const string ComfyWizardSaveOfferedRow = "Save, and offer it to the model";
-    public const string ComfyWizardSaveHiddenRow = "Save, hidden from the model until you tick it in ComfyUI workflows offered";
+    public const string ComfyWizardSaveHiddenRow = "Save, hidden from the model until you tick it in ComfyUI workflows";
     public const string ComfyWizardTestRow = "Test the workflow";
     public const string ComfyWizardCancelRow = "Cancel";
     public const string ComfyWizardCancelledNotice = "No workflow added.";
     public const string ComfyWizardNotNeeded = "(not needed)";
     public const string ComfyWizardUnset = "—";
 
-    /// <summary>The prompt the Test runs, at most <see cref="ComfyWizardTestSide"/> square and <see cref="ComfyWizardTestSteps"/> steps.</summary>
+    /// <summary>The prompt a test runs by default, at most <see cref="ComfyWizardTestSide"/> square and <see cref="ComfyWizardTestSteps"/> steps when small.</summary>
     public const string ComfyWizardTestPrompt = "a test picture";
     public const int ComfyWizardTestSide = 512;
     public const int ComfyWizardTestSteps = 8;
@@ -101,62 +126,95 @@ internal sealed partial class SettingsMenu
 
     public static string ComfyWizardNumberError(string typed, string range) => $"'{typed}' is not {range}.";
 
-    public static string ComfyWizardFoundNotice(string found) => "Found " + found;
-
-    public static string ComfyWizardTestOkNotice(string name, double seconds, IReadOnlyList<string> files) =>
-        $"Tested '{name}' in {seconds.ToString("0.0", CultureInfo.InvariantCulture)} s: ComfyUI saved " + string.Join(", ", files) + ".";
-
     public static string ComfyWorkflowAdded(string name, string folder) => $"Added workflow '{name}' to {folder}.";
 
     public static string ComfyWorkflowAddFailed(string name, string why) => $"Could not add workflow '{name}': {why}";
 
-    /// <summary>The step a wizard page asks; the summary last. The rows of <see cref="ComfyWizardLabels"/> by index.</summary>
+    /// <summary>A name too long for <c>both</c>'s suffixes.</summary>
+    public static readonly string ComfyBothNameTooLong = "The name must leave room for " + ComfyTextSuffix + " (" + ComfyWorkflowFile.NameRule + ").";
+
+    /// <summary>The page a wizard step asks; the summary last. The rows of <see cref="ComfyWizardLabels"/> by index.</summary>
     internal enum ComfyWizardStep
     {
         Source,
         File,
         Kind,
         Checkpoint,
-        Family,
-        Scope,
         Name,
-        ClipSkip,
-        Sampler,
-        Scheduler,
-        Width,
-        Height,
-        Steps,
-        Cfg,
-        Denoise,
-        Negative,
-        Description,
+        Run,
         Summary,
     }
 
-    /// <summary>What the wizard has so far. A null number or text is "the default": the import's value, or the family's.</summary>
+    /// <summary>What the wizard makes: a text workflow, an image one, or both.</summary>
+    internal enum ComfyKind
+    {
+        Text,
+        Image,
+        Both,
+    }
+
+    /// <summary>A LoRA a build adds, in order.</summary>
+    private sealed class ComfyDraftLora(string name, double strength)
+    {
+        public string Name { get; } = name;
+
+        public double Strength { get; set; } = strength;
+    }
+
+    /// <summary>
+    /// What the wizard or an Edit has so far. A null number or text is "the default": for a new workflow the import's value or the family's,
+    /// written into the sidecar at the save; for an installed one, a key the sidecar leaves to the family.
+    /// </summary>
     private sealed class ComfyDraft
     {
+        /// <summary>An installed workflow's Edit (no source, kind, name or scope).</summary>
+        public bool Editing { get; init; }
+
         public bool Import { get; set; }
+
+        /// <summary>An import from a recent run (Source's second row), not a file.</summary>
+        public bool FromRun { get; set; }
+
+        /// <summary>The picked run's row text, for the asked pages; the runs read once a wizard.</summary>
+        public string RunLabel { get; set; } = "";
+
+        public IReadOnlyList<ComfyRun>? Runs { get; set; }
 
         public string File { get; set; } = "";
 
         public ComfyImportResult? Imported { get; set; }
 
-        public bool FromImage { get; set; }
+        public ComfyKind Kind { get; set; }
 
+        public bool FromImage => Kind == ComfyKind.Image;
+
+        // A build's own parts; the graph is made from them (ComfyBuildGraph).
         public string Checkpoint { get; set; } = "";
 
-        public ComfyFamily Family { get; set; }
+        public string? Vae { get; set; }
 
-        public bool Global { get; set; }
-
-        public string Name { get; set; } = "";
+        public List<ComfyDraftLora> Loras { get; } = [];
 
         public int? ClipSkip { get; set; }
 
         public string? Sampler { get; set; }
 
         public string? Scheduler { get; set; }
+
+        /// <summary>An import's or an Edit's working graph; null for a build, or with <see cref="GraphWhy"/> when it can't be changed here.</summary>
+        public JsonObject? Graph { get; set; }
+
+        public string? GraphWhy { get; set; }
+
+        public ComfyFamily Family { get; set; }
+
+        public bool FamilyTouched { get; set; }
+
+        public bool Global { get; set; }
+
+        public string Name { get; set; } = "";
+
+        public bool NameTouched { get; set; }
 
         public int? Width { get; set; }
 
@@ -172,14 +230,29 @@ internal sealed partial class SettingsMenu
 
         public string Description { get; set; } = "";
 
-        // The server's lists, read once a visit.
-        public IReadOnlyList<string>? Checkpoints { get; set; }
+        public string Tips { get; set; } = "";
 
-        public IReadOnlyList<string>? Samplers { get; set; }
+        public bool Reinforce { get; set; } = true;
 
-        public IReadOnlyList<string>? Schedulers { get; set; }
+        public string[] ImageRoles { get; } = ["", "", ""];
 
-        public bool TakesImage => Import ? Imported?.TakesImage == true : FromImage;
+        // An Edit's files as read, and the workflow they made.
+        public ComfyFileText? JsonFile { get; init; }
+
+        public ComfyFileText? MdFile { get; init; }
+
+        public ComfyWorkflow? Original { get; init; }
+
+        public JsonObject? OriginalGraph { get; init; }
+
+        /// <summary>The server's lists, read once a visit, by <c>class.input</c>.</summary>
+        public Dictionary<string, IReadOnlyList<string>> Lists { get; } = new(StringComparer.Ordinal);
+
+        private ComfyDefaults FamilyDefaults => ComfyFamilies.Defaults(Family);
+
+        private ComfyImportResult? Own => Import && !Editing ? Imported : null;
+
+        public bool TakesImage => Import ? Imported?.TakesImage == true : Kind != ComfyKind.Text;
 
         public int EffClipSkip => ClipSkip ?? ComfyGraphs.DefaultClipSkip(Family);
 
@@ -187,349 +260,484 @@ internal sealed partial class SettingsMenu
 
         public string EffScheduler => Scheduler ?? ComfyGraphs.DefaultScheduler(Family);
 
-        public int EffWidth => Width ?? Imported?.Width ?? ComfyFamilies.Defaults(Family).Width;
+        public int EffWidth => Width ?? Own?.Width ?? FamilyDefaults.Width;
 
-        public int EffHeight => Height ?? Imported?.Height ?? ComfyFamilies.Defaults(Family).Height;
+        public int EffHeight => Height ?? Own?.Height ?? FamilyDefaults.Height;
 
-        public int EffSteps => Steps ?? Imported?.Steps ?? ComfyFamilies.Defaults(Family).Steps;
+        public int EffSteps => Steps ?? Own?.Steps ?? FamilyDefaults.Steps;
 
-        public double EffCfg => Cfg ?? Imported?.Cfg ?? ComfyFamilies.Defaults(Family).Cfg;
+        public double EffCfg => Cfg ?? Own?.Cfg ?? FamilyDefaults.Cfg;
 
-        public double EffDenoise => Denoise ?? Imported?.Denoise ?? ComfyWorkflow.DefaultImageDenoise;
+        public double EffDenoise => Denoise ?? Own?.Denoise ?? ComfyWorkflow.DefaultImageDenoise;
 
-        public string EffNegative => Negative ?? (Import ? Imported?.Negative ?? "" : ComfyFamilies.Defaults(Family).Negative);
+        public string EffNegative => Negative ?? (Import && !Editing ? Imported?.Negative ?? "" : FamilyDefaults.Negative);
     }
 
-    private string ComfyWizardTitle => Crumb(FieldName(SettingsField.ComfyAddWorkflow));
+    private string ComfyWizardTitle => Crumb(FieldName(SettingsField.ComfyWorkflowsOffered) + " › " + ComfyNewWorkflowCrumb);
 
     private string ComfyFolder(bool global) => global ? _settings.GlobalComfyDirectory : _settings.ProfileComfyDirectory;
 
     private IReadOnlyList<string> ComfyRoots => [_settings.ProfileComfyDirectory, _settings.GlobalComfyDirectory];
 
-    /// <summary>Whether <paramref name="step"/> is asked: the file for an import only; the kind, checkpoint and sampler rows for a build only; the size for a text workflow; the denoise for an image one.</summary>
-    private static bool ComfyWizardAsks(ComfyWizardStep step, ComfyDraft draft) => step switch
+    /// <summary>Where a new workflow starts: global when the profile's folder holds none and the global one some, else the profile's.</summary>
+    private bool ComfyStartsGlobal()
     {
-        ComfyWizardStep.File => draft.Import,
-        ComfyWizardStep.Kind or ComfyWizardStep.Checkpoint or ComfyWizardStep.ClipSkip or ComfyWizardStep.Sampler or ComfyWizardStep.Scheduler => !draft.Import,
-        ComfyWizardStep.Width or ComfyWizardStep.Height => draft.Import ? draft.Imported?.Width is not null : !draft.FromImage,
-        ComfyWizardStep.Steps => !draft.Import || draft.Imported?.Steps is not null,
-        ComfyWizardStep.Cfg => !draft.Import || draft.Imported?.Cfg is not null,
-        // An import asks it only where it found a denoise (later still on 2026-09-24: a face swap has no sampler).
-        ComfyWizardStep.Denoise => draft.Import ? draft.Imported?.Denoise is not null : draft.FromImage,
-        _ => true,
-    };
-
-    /// <summary>The first step the draft still lacks (the file, the checkpoint, the name), or null.</summary>
-    private static ComfyWizardStep? ComfyWizardMissing(ComfyDraft draft) =>
-        draft.Import && draft.Imported is null ? ComfyWizardStep.File
-        : !draft.Import && draft.Checkpoint.Length == 0 ? ComfyWizardStep.Checkpoint
-        : draft.Name.Length == 0 ? ComfyWizardStep.Name
-        : null;
-
-    /// <summary>The value column of the draft's row for <paramref name="step"/>.</summary>
-    private string ComfyWizardValue(ComfyWizardStep step, ComfyDraft draft)
-    {
-        if (!ComfyWizardAsks(step, draft))
+        static bool Any(string folder)
         {
-            return ComfyWizardNotNeeded;
+            try
+            {
+                return Directory.Exists(folder) && Directory.EnumerateFiles(folder, "*.json").Any();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
 
+        return !Any(_settings.ProfileComfyDirectory) && Any(_settings.GlobalComfyDirectory);
+    }
+
+    /// <summary>The pages a draft asks, in order, the summary last.</summary>
+    private static List<ComfyWizardStep> ComfyWizardSteps(ComfyDraft draft) =>
+        draft.FromRun ? [ComfyWizardStep.Source, ComfyWizardStep.Run, ComfyWizardStep.Name, ComfyWizardStep.Summary]
+        : draft.Import ? [ComfyWizardStep.Source, ComfyWizardStep.File, ComfyWizardStep.Name, ComfyWizardStep.Summary]
+        : [ComfyWizardStep.Source, ComfyWizardStep.Kind, ComfyWizardStep.Checkpoint, ComfyWizardStep.Name, ComfyWizardStep.Summary];
+
+    /// <summary>The asked pages' rows with their values, for the typed pages (the file, the name).</summary>
+    private List<string> ComfyWizardRows(ComfyDraft draft)
+    {
+        var steps = ComfyWizardSteps(draft).Where(s => s != ComfyWizardStep.Summary).ToList();
+        int width = steps.Max(s => ComfyWizardLabels[(int)s].Length) + 2;
+        return steps.Select(s => Markup.Escape(ComfyWizardLabels[(int)s].PadRight(width) + ComfyWizardStepValue(s, draft))).ToList();
+    }
+
+    private static string ComfyWizardStepValue(ComfyWizardStep step, ComfyDraft draft)
+    {
         static string OrUnset(string? text) => string.IsNullOrWhiteSpace(text) ? ComfyWizardUnset : text.Trim();
         return step switch
         {
-            ComfyWizardStep.Source => draft.Import ? "import" : "build",
+            ComfyWizardStep.Source => draft.FromRun ? "run" : draft.Import ? "file" : "build",
             ComfyWizardStep.File => OrUnset(draft.File),
-            ComfyWizardStep.Kind => ComfyWizardKindRows[draft.FromImage ? 1 : 0],
+            ComfyWizardStep.Run => OrUnset(draft.RunLabel),
+            ComfyWizardStep.Kind => ComfyWizardKindRows[(int)draft.Kind],
             ComfyWizardStep.Checkpoint => OrUnset(draft.Checkpoint),
-            ComfyWizardStep.Family => ComfyFamilies.Name(draft.Family),
-            ComfyWizardStep.Scope => (draft.Global ? "global  " : "profile ") + ComfyFolder(draft.Global),
-            ComfyWizardStep.Name => OrUnset(draft.Name),
-            ComfyWizardStep.ClipSkip => draft.EffClipSkip >= 2 ? Invariant(draft.EffClipSkip) : "none",
-            ComfyWizardStep.Sampler => draft.EffSampler,
-            ComfyWizardStep.Scheduler => draft.EffScheduler,
-            ComfyWizardStep.Width => Invariant(draft.EffWidth),
-            ComfyWizardStep.Height => Invariant(draft.EffHeight),
-            ComfyWizardStep.Steps => Invariant(draft.EffSteps),
-            ComfyWizardStep.Cfg => draft.EffCfg.ToString(CultureInfo.InvariantCulture),
-            ComfyWizardStep.Denoise => draft.EffDenoise.ToString(CultureInfo.InvariantCulture),
-            ComfyWizardStep.Negative => draft.EffNegative.Length == 0 ? "(none)" : draft.EffNegative,
-            _ => OrUnset(draft.Description),
+            _ => OrUnset(draft.Name),
         };
     }
 
-    private List<string> ComfyWizardRows(ComfyDraft draft)
+    /// <summary>
+    /// The wizard: the asked pages, then the summary; Esc one page back (the draft kept), off the first page cancelled. (Changed, the name
+    /// added for the list's cursor.)
+    /// </summary>
+    private async Task<(bool Changed, string? Added)> AddComfyWorkflowAsync(CancellationToken cancellationToken)
     {
-        int width = ComfyWizardLabels.Max(l => l.Length) + 2;
-        return ComfyWizardLabels.Select((label, i) => Markup.Escape(label.PadRight(width) + ComfyWizardValue((ComfyWizardStep)i, draft))).ToList();
-    }
-
-    /// <summary>The wizard: <c>SQL add connection</c>'s loop over <see cref="ComfyWizardStep"/>. True when a setting changed (the offered list).</summary>
-    private async Task<bool> AddComfyWorkflowAsync(CancellationToken cancellationToken)
-    {
-        var draft = new ComfyDraft();
-        var step = ComfyWizardStep.Source;
-        bool fromSummary = false;
+        var draft = new ComfyDraft { Global = ComfyStartsGlobal() };
+        int at = 0;
         while (true)
         {
+            var steps = ComfyWizardSteps(draft);
+            at = Math.Clamp(at, 0, steps.Count - 1);
+            var step = steps[at];
             if (step == ComfyWizardStep.Summary)
             {
-                var (done, changed, edit) = await ComfyWizardSummaryAsync(draft, cancellationToken).ConfigureAwait(false);
+                var (done, changed, added) = await ComfySummaryAsync(draft, cancellationToken).ConfigureAwait(false);
                 if (done)
                 {
-                    return changed;
+                    return (changed, added);
                 }
 
-                if (edit is { } target)
-                {
-                    step = target;
-                    fromSummary = true;
-                    continue;
-                }
-
-                step = ComfyWizardStep.Description;
-                continue;
-            }
-
-            if (!ComfyWizardAsks(step, draft))
-            {
-                step++;
+                at--;   // Esc on the summary: back to the name, the draft kept
                 continue;
             }
 
             if (await ComfyWizardStepAsync(step, draft, cancellationToken).ConfigureAwait(false))
             {
-                step = fromSummary ? ComfyWizardMissing(draft) ?? ComfyWizardStep.Summary : step + 1;
-                fromSummary = fromSummary && step != ComfyWizardStep.Summary;
+                at++;
                 continue;
             }
 
-            if (fromSummary)
-            {
-                step = ComfyWizardStep.Summary;
-                fromSummary = false;
-                continue;
-            }
-
-            do
-            {
-                step--;
-            }
-            while (step >= ComfyWizardStep.Source && !ComfyWizardAsks(step, draft));
-
-            if (step < ComfyWizardStep.Source)
+            if (--at < 0)
             {
                 Sink.Notice(ComfyWizardCancelledNotice);
-                return false;
+                return (false, null);
             }
         }
     }
 
-    /// <summary>One step's page; true when answered, false for ESC (or a server list that could not be read, said on the status line).</summary>
+    /// <summary>One asked page; true when answered, false for Esc (or a server list that could not be read, said on the status line).</summary>
     private async Task<bool> ComfyWizardStepAsync(ComfyWizardStep step, ComfyDraft draft, CancellationToken cancellationToken)
     {
         switch (step)
         {
             case ComfyWizardStep.Source:
             {
-                if (await ComfyWizardPickAsync(ComfyWizardSourceQuestion, ComfyWizardSourceRows, draft.Import ? 1 : 0, cancellationToken).ConfigureAwait(false) is not { } picked)
+                if (await ComfyWizardPickAsync(ComfyWizardSourceQuestion, ComfyWizardSourceRows, draft.FromRun ? 1 : draft.Import ? 2 : 0, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;
                 }
 
-                draft.Import = picked == 1;
+                bool import = picked > 0, fromRun = picked == 1;
+                if (import != draft.Import || fromRun != draft.FromRun)
+                {
+                    ComfyDropImport(draft);
+                }
+
+                draft.Import = import;
+                draft.FromRun = fromRun;
                 return true;
             }
 
+            case ComfyWizardStep.Run:
+                return await ComfyPickRunAsync(draft, cancellationToken).ConfigureAwait(false);
+
             case ComfyWizardStep.File:
-                return await ComfyWizardTypeAsync(step, draft, ComfyWizardFileQuestion, draft.File, allowEmpty: false, text =>
+            {
+                var page = new MenuPage(ComfyWizardTitle, ComfyWizardRows(draft), EditKeys);
+                int row = ComfyWizardSteps(draft).IndexOf(ComfyWizardStep.File);
+                string initial = draft.File;
+                while (true)
                 {
-                    string path = text.Trim().Trim('"');
-                    if (path.Length == 0 || !File.Exists(path))
+                    if (await ComfyAskTextAsync(page, row, ComfyWizardFileQuestion, initial, allowEmpty: false, cancellationToken).ConfigureAwait(false) is not { } typed)
                     {
-                        return ComfyWizardFileError(path, "is not a file");
+                        return false;
                     }
 
-                    string json;
-                    try
+                    if (ComfyImportFile(draft, typed) is not { } error)
                     {
-                        json = File.ReadAllText(path);
-                    }
-                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                    {
-                        return ComfyWizardFileError(path, ex.Message);
+                        return true;
                     }
 
-                    var (result, problem) = ComfyImport.Placehold(json);
-                    if (result is null)
-                    {
-                        return ComfyWizardFileError(path, problem!);
-                    }
-
-                    draft.File = path;
-                    draft.Imported = result;
-                    draft.Checkpoint = result.Checkpoint;
-                    draft.Family = ComfyFamilies.Guess(result.Checkpoint.Length > 0 ? result.Checkpoint : path);
-                    draft.Name = draft.Name.Length > 0 ? draft.Name : ComfyWorkflowFile.Suggest(path);
-                    foreach (string found in result.Found)
-                    {
-                        Sink.Notice(ComfyWizardFoundNotice(found));
-                    }
-
-                    return null;
-                }, cancellationToken).ConfigureAwait(false);
+                    Sink.Error(error);
+                    initial = typed;
+                }
+            }
 
             case ComfyWizardStep.Kind:
             {
-                if (await ComfyWizardPickAsync(ComfyWizardKindQuestion, ComfyWizardKindRows, draft.FromImage ? 1 : 0, cancellationToken).ConfigureAwait(false) is not { } picked)
+                if (await ComfyWizardPickAsync(ComfyWizardKindQuestion, ComfyWizardKindRows, (int)draft.Kind, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;
                 }
 
-                draft.FromImage = picked == 1;
+                draft.Kind = (ComfyKind)picked;
                 return true;
             }
 
             case ComfyWizardStep.Checkpoint:
             {
-                if (await ComfyChoicesAsync("CheckpointLoaderSimple", "ckpt_name", cancellationToken).ConfigureAwait(false) is not { } list)
+                if (await ComfyChoicesAsync(draft, "CheckpointLoaderSimple", "ckpt_name", cancellationToken).ConfigureAwait(false) is not { } list)
                 {
                     return false;
                 }
 
-                draft.Checkpoints = list;
-                if (await ComfyWizardPickAsync(ComfyWizardCheckpointQuestion, list, Math.Max(0, IndexOf(list, draft.Checkpoint)), cancellationToken).ConfigureAwait(false) is not { } picked)
+                if (await ComfyPickValueAsync(ComfyWizardTitle, ComfyWizardCheckpointQuestion, list, draft.Checkpoint, null, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;
                 }
 
-                if (!string.Equals(draft.Checkpoint, list[picked], StringComparison.Ordinal))
-                {
-                    draft.Checkpoint = list[picked];
-                    draft.Family = ComfyFamilies.Guess(draft.Checkpoint);
-                    draft.Name = ComfyWorkflowFile.Suggest(draft.Checkpoint);
-                }
-
+                ComfySetCheckpoint(draft, picked.Value!);
                 return true;
             }
 
-            case ComfyWizardStep.Family:
+            default:   // Name
             {
-                if (await ComfyWizardPickAsync(ComfyWizardFamilyQuestion, ComfyWizardFamilyRows, (int)draft.Family, cancellationToken).ConfigureAwait(false) is not { } picked)
+                if (!draft.NameTouched && draft.Name.Length == 0)
                 {
-                    return false;
+                    draft.Name = ComfySuggestName(draft, draft.Import ? ComfyImportNameFrom(draft.Imported?.Checkpoint ?? "", draft.File) : draft.Checkpoint);
                 }
 
-                draft.Family = (ComfyFamily)picked;
-                if (!draft.Import && ComfyGraphs.UsuallySplit(draft.Family))
-                {
-                    // Build wires one checkpoint; these families mostly ship as a diffusion model, a text encoder and a VAE (later still on 2026-09-24).
-                    Sink.Warning(ComfyWizardSplitWarning(ComfyFamilies.Name(draft.Family)));
-                }
-                return true;
+                var page = new MenuPage(ComfyWizardTitle, ComfyWizardRows(draft), EditKeys);
+                int row = ComfyWizardSteps(draft).IndexOf(ComfyWizardStep.Name);
+                return await ComfyAskNameAsync(page, row, ComfyWizardNameQuestion, draft.Name, typed => ComfySetName(draft, typed), cancellationToken).ConfigureAwait(false) is not null;
             }
-
-            case ComfyWizardStep.Scope:
-            {
-                string[] rows = ["profile " + ComfyFolder(false), "global  " + ComfyFolder(true)];
-                if (await ComfyWizardPickAsync(ComfyWizardScopeQuestion, rows, draft.Global ? 1 : 0, cancellationToken).ConfigureAwait(false) is not { } picked)
-                {
-                    return false;
-                }
-
-                draft.Global = picked == 1;
-                return true;
-            }
-
-            case ComfyWizardStep.Name:
-                return await ComfyWizardTypeAsync(step, draft, ComfyWizardNameQuestion, draft.Name, allowEmpty: false, text =>
-                {
-                    string name = text.Trim();
-                    if (!ComfyWorkflowFile.IsValidName(name))
-                    {
-                        return "The name must be " + ComfyWorkflowFile.NameRule + ".";
-                    }
-
-                    if (ComfyWorkflowFile.Taken(ComfyRoots, name) is { } where)
-                    {
-                        return ComfyText.NameTaken(name, where) + "; pick another name.";
-                    }
-
-                    draft.Name = name;
-                    return null;
-                }, cancellationToken).ConfigureAwait(false);
-
-            case ComfyWizardStep.ClipSkip:
-            {
-                if (await ComfyWizardPickAsync(ComfyWizardClipSkipQuestion, ComfyWizardClipSkipRows, draft.EffClipSkip >= 2 ? 1 : 0, cancellationToken).ConfigureAwait(false) is not { } picked)
-                {
-                    return false;
-                }
-
-                draft.ClipSkip = picked == 1 ? 2 : 0;
-                return true;
-            }
-
-            case ComfyWizardStep.Sampler:
-            {
-                if ((draft.Samplers ??= await ComfyChoicesAsync("KSampler", "sampler_name", cancellationToken).ConfigureAwait(false)) is not { } list)
-                {
-                    return false;
-                }
-
-                if (await ComfyWizardPickAsync(ComfyWizardSamplerQuestion, list, Math.Max(0, IndexOf(list, draft.EffSampler)), cancellationToken).ConfigureAwait(false) is not { } picked)
-                {
-                    return false;
-                }
-
-                draft.Sampler = list[picked];
-                return true;
-            }
-
-            case ComfyWizardStep.Scheduler:
-            {
-                if ((draft.Schedulers ??= await ComfyChoicesAsync("KSampler", "scheduler", cancellationToken).ConfigureAwait(false)) is not { } list)
-                {
-                    return false;
-                }
-
-                if (await ComfyWizardPickAsync(ComfyWizardSchedulerQuestion, list, Math.Max(0, IndexOf(list, draft.EffScheduler)), cancellationToken).ConfigureAwait(false) is not { } picked)
-                {
-                    return false;
-                }
-
-                draft.Scheduler = list[picked];
-                return true;
-            }
-
-            case ComfyWizardStep.Width:
-                return await ComfyWizardIntAsync(step, draft, ComfyWizardWidthQuestion, draft.EffWidth, ComfyStudio.MinSide, ComfyStudio.MaxSide, v => draft.Width = v, cancellationToken).ConfigureAwait(false);
-
-            case ComfyWizardStep.Height:
-                return await ComfyWizardIntAsync(step, draft, ComfyWizardHeightQuestion, draft.EffHeight, ComfyStudio.MinSide, ComfyStudio.MaxSide, v => draft.Height = v, cancellationToken).ConfigureAwait(false);
-
-            case ComfyWizardStep.Steps:
-                return await ComfyWizardIntAsync(step, draft, ComfyWizardStepsQuestion, draft.EffSteps, 1, ComfyStudio.MaxSteps, v => draft.Steps = v, cancellationToken).ConfigureAwait(false);
-
-            case ComfyWizardStep.Cfg:
-                return await ComfyWizardNumberAsync(step, draft, ComfyWizardCfgQuestion, draft.EffCfg, ComfyStudio.MaxCfg, v => draft.Cfg = v, cancellationToken).ConfigureAwait(false);
-
-            case ComfyWizardStep.Denoise:
-                return await ComfyWizardNumberAsync(step, draft, ComfyWizardDenoiseQuestion, draft.EffDenoise, 1, v => draft.Denoise = v, cancellationToken).ConfigureAwait(false);
-
-            case ComfyWizardStep.Negative:
-                return await ComfyWizardTypeAsync(step, draft, ComfyWizardNegativeQuestion, draft.EffNegative, allowEmpty: true, text =>
-                {
-                    draft.Negative = text.Trim();
-                    return null;
-                }, cancellationToken).ConfigureAwait(false);
-
-            default:
-                return await ComfyWizardTypeAsync(step, draft, ComfyWizardDescriptionQuestion, draft.Description, allowEmpty: true, text =>
-                {
-                    draft.Description = text.Trim();
-                    return null;
-                }, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>The draft's import read from <paramref name="typed"/> (a path), or why not. Another file drops the old import's values and edits.</summary>
+    private string? ComfyImportFile(ComfyDraft draft, string typed)
+    {
+        string path = UnquotePath(typed.Trim());
+        if (path.Length == 0 || Unc.KnownUncHosts.IsUnknown(path))
+        {
+            return ComfyWizardFileError(path, "is not a file");
+        }
+
+        byte[]? bytes;
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return ComfyWizardFileError(path, "is not a file");
+            }
+
+            bytes = Files.RegularFiles.ReadAtMost(path, ComfyImportMaxBytes);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return ComfyWizardFileError(path, ex.Message);
+        }
+
+        if (bytes is null)
+        {
+            return ComfyWizardFileError(path, "is too large for a workflow");
+        }
+
+        // By the bytes, never the extension (2026-11-25): a PNG or WebP ComfyUI saved carries the graph it ran.
+        string json;
+        if (ComfyEmbeddedGraph.IsPicture(bytes))
+        {
+            var (embedded, missing) = ComfyEmbeddedGraph.Read(bytes);
+            if (embedded is null)
+            {
+                return ComfyWizardFileError(path, missing!);
+            }
+
+            json = embedded;
+        }
+        else
+        {
+            json = Files.TextFile.Decode(bytes, out _);
+            if (!json.TrimStart('\uFEFF', ' ', '\t', '\r', '\n').StartsWith('{'))
+            {
+                return ComfyWizardFileError(path, ComfyText.NotWorkflowOrPicture);
+            }
+        }
+
+        var (result, problem) = ComfyImport.Placehold(json);
+        if (result is null)
+        {
+            return ComfyWizardFileError(path, problem!);
+        }
+
+        ComfyDropImport(draft);
+        draft.File = path;
+        ComfyTakeImport(draft, result, ComfyImportNameFrom(result.Checkpoint, path));
+        DiagnosticLog.Info(ComfyWorkflowFile.Category, ComfyText.LogImported(Path.GetFileName(path), "taken"));
+        return null;
+    }
+
+    /// <summary>What an import's name is suggested from: its model's file name, else an export's file name; a picture's (<c>ComfyUI_00012_</c>) never.</summary>
+    private static string ComfyImportNameFrom(string checkpoint, string path) =>
+        checkpoint.Length > 0 ? checkpoint
+        : path.Length > 0 && !Files.ImageFile.IsImagePath(path) ? path
+        : ComfyRunNameFallback;
+
+    /// <summary>The suggestion when an import names no model and no export file.</summary>
+    public const string ComfyRunNameFallback = "workflow";
+
+    /// <summary>
+    /// The Run page (2026-11-25): the server's recent runs (<see cref="ComfyHistory"/>, read once a wizard under the busy page), newest first, the
+    /// app's own hidden behind a row that shows them; a row's band gives the prompt's start and the output file. A run the import refuses says why
+    /// and the page stays. True once a run is taken.
+    /// </summary>
+    private async Task<bool> ComfyPickRunAsync(ComfyDraft draft, CancellationToken cancellationToken)
+    {
+        if (draft.Runs is null)
+        {
+            if (_comfyClient() is not { } client)
+            {
+                Sink.Error(ComfyText.NoServer);
+                return false;
+            }
+
+            var (done, read) = await ComfyBusyAsync(ComfyRunsLabel, token => client.HistoryAsync(token), cancellationToken).ConfigureAwait(false);
+            if (!done)
+            {
+                return false;
+            }
+
+            if (read.Error is { } error)
+            {
+                Sink.Error(error);
+                return false;
+            }
+
+            draft.Runs = ComfyHistory.Parse(read.Body ?? "");
+        }
+
+        if (draft.Runs.Count == 0)
+        {
+            Sink.Notice(ComfyText.NoRuns);
+            return false;
+        }
+
+        bool showOwn = draft.Runs.All(r => r.Own);
+        int cursor = 0;
+        while (true)
+        {
+            var shown = draft.Runs.Where(r => showOwn || !r.Own).ToList();
+            int own = draft.Runs.Count(r => r.Own);
+            var rows = shown.Select(r => Markup.Escape(ComfyRunRow(r))).ToList();
+            if (own > 0 && own < draft.Runs.Count)
+            {
+                rows.Add(Markup.Escape(ComfyOwnRunsRow(own, showOwn)));
+            }
+
+            var page = new MenuPage(ComfyWizardTitle, rows, PickKeys)
+            {
+                Caption = ComfyWizardRunQuestion,
+                Footer = (_, row) => row >= 0 && row < shown.Count ? ComfyRunBand(shown[row]) : null,
+            };
+            if (!_pane.Enabled)
+            {
+                Flow.Notice(ComfyWizardRunQuestion);
+            }
+
+            if (await PickAsync(page, Math.Clamp(cursor, 0, rows.Count - 1), cancellationToken).ConfigureAwait(false) is not { } picked)
+            {
+                return false;
+            }
+
+            cursor = picked;
+            if (picked >= shown.Count)
+            {
+                showOwn = !showOwn;
+                continue;
+            }
+
+            var run = shown[picked];
+            if (run.Import is not { } import)
+            {
+                Sink.Error(ComfyRunRefused(run.Problem ?? ComfyWorkflow.NotApiFormatProblem));
+                continue;
+            }
+
+            ComfyDropImport(draft);
+            draft.RunLabel = ComfyRunRow(run);
+            ComfyTakeImport(draft, import, ComfyImportNameFrom(import.Checkpoint, ""));
+            DiagnosticLog.Info(ComfyWorkflowFile.Category, ComfyText.LogImported("a recent run", "taken"));
+            return true;
+        }
+    }
+
+    /// <summary>A run's row: its age, model, size and steps, and how many runs of it there were.</summary>
+    private string ComfyRunRow(ComfyRun run)
+    {
+        string age = run.StartedMs is { } ms ? Docker.DockerText.Age(ms / 1000, ComfyClock.GetUtcNow()) : "—";
+        var import = run.Import;
+        string model = run.Model.Length > 0 ? Path.GetFileNameWithoutExtension(run.Model.Replace('\\', '/').Split('/')[^1]) : import is null ? "(not importable)" : "(no model)";
+        string size = import is { Width: { } w, Height: { } h } ? Invariant(w) + "×" + Invariant(h) : "";
+        string steps = import?.Steps is { } st ? Invariant(st) + " steps" : "";
+        string repeats = run.Repeats > 1 ? "×" + Invariant(run.Repeats) : "";
+        return UntrustedText.OneLine(string.Join("  ", new[] { age.PadRight(8), TextCells.Cut(model, 40), size, steps, repeats }.Where(p => p.Length > 0)));
+    }
+
+    /// <summary>A run's band: the start of its prompt (shown here only, never saved) and its first output file.</summary>
+    private static MenuFooter ComfyRunBand(ComfyRun run)
+    {
+        var lines = new List<string>();
+        if (run.Import?.Prompt is { Length: > 0 } prompt)
+        {
+            lines.Add(Markup.Escape(TextCells.Cut(UntrustedText.OneLine(prompt), 200)));
+        }
+
+        if (run.OutputFile is { } output)
+        {
+            lines.Add(Markup.Escape(UntrustedText.OneLine(output)));
+        }
+
+        if (run.Import is null && run.Problem is { } problem)
+        {
+            lines.Add(Markup.Escape(problem));
+        }
+
+        return new MenuFooter(string.Join("\n", lines)) { KeepLines = true };
+    }
+
+    /// <summary>The clock the run list's ages are read against (a test sets its own).</summary>
+    public TimeProvider ComfyClock { get; set; } = TimeProvider.System;
+
+    /// <summary>The largest file the import reads (a ComfyUI picture carries its graph; an export is far smaller).</summary>
+    public const long ComfyImportMaxBytes = 64L * 1024 * 1024;
+
+    /// <summary>An import's result taken into the draft: its working graph, its checkpoint and the family guessed from it, a suggested name.</summary>
+    private void ComfyTakeImport(ComfyDraft draft, ComfyImportResult result, string from)
+    {
+        draft.Imported = result;
+        (draft.Graph, draft.GraphWhy) = ComfyGraphEdit.Load(result.GraphJson);
+        draft.Checkpoint = result.Checkpoint;
+        if (!draft.FamilyTouched)
+        {
+            draft.Family = ComfyFamilies.Guess(result.Checkpoint.Length > 0 ? result.Checkpoint : from);
+        }
+
+        if (!draft.NameTouched)
+        {
+            draft.Name = ComfySuggestName(draft, result.Checkpoint.Length > 0 ? result.Checkpoint : from);
+        }
+    }
+
+    /// <summary>Another source, file or run: the import's values and the graph edits made on it go; a build's own LoRAs and VAE stay.</summary>
+    private static void ComfyDropImport(ComfyDraft draft)
+    {
+        draft.Imported = null;
+        draft.Graph = null;
+        draft.GraphWhy = null;
+        draft.File = "";
+        if (!draft.NameTouched)
+        {
+            draft.Name = "";
+        }
+    }
+
+    /// <summary>A build's checkpoint: the family guessed again while untouched, and the suggested name follows while untouched.</summary>
+    private void ComfySetCheckpoint(ComfyDraft draft, string checkpoint)
+    {
+        if (string.Equals(draft.Checkpoint, checkpoint, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        draft.Checkpoint = checkpoint;
+        if (!draft.FamilyTouched)
+        {
+            draft.Family = ComfyFamilies.Guess(checkpoint);
+        }
+
+        if (!draft.NameTouched)
+        {
+            draft.Name = ComfySuggestName(draft, checkpoint);
+        }
+    }
+
+    /// <summary>A free name suggested from <paramref name="from"/> (a model's file name, a path): never one taken in either folder.</summary>
+    private string ComfySuggestName(ComfyDraft draft, string from)
+    {
+        string suggested = ComfyWorkflowFile.Suggest(Path.GetFileNameWithoutExtension(from.Replace('\\', '/').Split('/')[^1]));
+        if (draft.Kind == ComfyKind.Both && suggested.Length > 64 - ComfyTextSuffix.Length)
+        {
+            suggested = suggested[..(64 - ComfyTextSuffix.Length)].TrimEnd('-', '_', '.');
+        }
+
+        return ComfyWorkflowFile.FreeName(suggested, ComfyRoots, ComfyFolder(draft.Global));
+    }
+
+    /// <summary>The names a draft saves under: its name, or for <c>both</c> the text and image names.</summary>
+    private static List<string> ComfyWizardNames(ComfyDraft draft) =>
+        draft.Kind == ComfyKind.Both && !draft.Import ? [draft.Name + ComfyTextSuffix, draft.Name + ComfyImageSuffix] : [draft.Name];
+
+    /// <summary>A typed name taken (null), or why not: each name it saves under must be free in both folders.</summary>
+    private string? ComfySetName(ComfyDraft draft, string typed)
+    {
+        string name = typed.Trim();
+        if (draft.Kind == ComfyKind.Both && !draft.Import && ComfyWorkflowFile.IsValidName(name) && !ComfyWorkflowFile.IsValidName(name + ComfyTextSuffix))
+        {
+            return ComfyBothNameTooLong;
+        }
+
+        string folder = ComfyFolder(draft.Global);
+        var candidate = new ComfyDraft { Kind = draft.Kind, Import = draft.Import, Name = name };
+        foreach (string each in ComfyWizardNames(candidate))
+        {
+            if (ComfyWorkflowFile.NameProblem(each, ComfyRoots, folder, null) is { } problem)
+            {
+                return problem;
+            }
+        }
+
+        draft.NameTouched |= !string.Equals(draft.Name, name, StringComparison.Ordinal);
+        draft.Name = name;
+        return null;
     }
 
     private static int IndexOf(IReadOnlyList<string> list, string value)
@@ -545,24 +753,43 @@ internal sealed partial class SettingsMenu
         return -1;
     }
 
-    /// <summary>One of the server's combo lists, or null with the reason on the status line (no server, unreachable, an empty list).</summary>
-    private async Task<IReadOnlyList<string>?> ComfyChoicesAsync(string nodeClass, string input, CancellationToken cancellationToken)
+    /// <summary>
+    /// One of the server's combo lists (read once a visit into the draft), or null with the reason on the status line (no server, unreachable,
+    /// an empty list: <paramref name="empty"/> when given). The read runs as a task beside the pane, so Esc cancels a slow server.
+    /// </summary>
+    private async Task<IReadOnlyList<string>?> ComfyChoicesAsync(ComfyDraft draft, string nodeClass, string input, CancellationToken cancellationToken, string? empty = null)
     {
+        string key = nodeClass + "." + input;
+        if (draft.Lists.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
         if (_comfyClient() is not { } client)
         {
             Sink.Error(ComfyText.NoServer);
             return null;
         }
 
-        var (choices, error) = await client.ChoicesAsync(nodeClass, input, cancellationToken).ConfigureAwait(false);
-        if (error is not null || choices.Count == 0)
+        var (done, read) = await ComfyBusyAsync(ComfyReadingLabel, token => client.ChoicesAsync(nodeClass, input, token), cancellationToken).ConfigureAwait(false);
+        if (!done)
         {
-            Sink.Error(error ?? ComfyText.BadAnswer("/object_info/" + nodeClass));
             return null;
         }
 
+        var (choices, error) = read;
+        if (error is not null || choices.Count == 0)
+        {
+            Sink.Error(error ?? empty ?? ComfyText.BadAnswer("/object_info/" + nodeClass));
+            return null;
+        }
+
+        draft.Lists[key] = choices;
         return choices;
     }
+
+    /// <summary>The busy line while a list is read.</summary>
+    public const string ComfyReadingLabel = "Reading the server's list…";
 
     private Task<int?> ComfyWizardPickAsync(string question, IReadOnlyList<string> choices, int cursor, CancellationToken cancellationToken)
     {
@@ -575,221 +802,95 @@ internal sealed partial class SettingsMenu
         return PickAsync(page, cursor, cancellationToken);
     }
 
-    /// <summary>A typed step, <c>SqlWizardTypeAsync</c>'s shape: the rows with the step marked, the question as the caption, a wrong answer asked again.</summary>
-    private async Task<bool> ComfyWizardTypeAsync(ComfyWizardStep step, ComfyDraft draft, string question, string initial, bool allowEmpty, Func<string, string?> accept, CancellationToken cancellationToken)
-    {
-        while (true)
-        {
-            InputResult result;
-            if (_pane.Enabled)
-            {
-                var page = new MenuPage(ComfyWizardTitle, ComfyWizardRows(draft), EditKeys) { Caption = question };
-                result = await _pane.EditAsync(page, (int)step, _input, initial, allowEmpty, cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                Flow.Notice(PromptTitle(ComfyWizardLabels[(int)step] + " · " + question, EditKeys));
-                result = await _input.ReadAsync(initial, remember: false, allowEmpty: allowEmpty, cancellationToken: cancellationToken, escapeCancels: true).ConfigureAwait(false);
-            }
-
-            if (result is not InputResult.Submitted submitted)
-            {
-                return false;
-            }
-
-            if (accept(submitted.Text) is not { } error)
-            {
-                return true;
-            }
-
-            Sink.Error(error);
-            initial = submitted.Text;
-        }
-    }
-
-    private Task<bool> ComfyWizardIntAsync(ComfyWizardStep step, ComfyDraft draft, string question, int current, int min, int max, Action<int> set, CancellationToken cancellationToken) =>
-        ComfyWizardTypeAsync(step, draft, question, Invariant(current), allowEmpty: false, text =>
-        {
-            string typed = text.Trim();
-            if (!int.TryParse(typed, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) || value < min || value > max)
-            {
-                return ComfyWizardNumberError(typed, Invariant(min) + " to " + Invariant(max));
-            }
-
-            set(value);
-            return null;
-        }, cancellationToken);
-
-    private Task<bool> ComfyWizardNumberAsync(ComfyWizardStep step, ComfyDraft draft, string question, double current, double max, Action<double> set, CancellationToken cancellationToken) =>
-        ComfyWizardTypeAsync(step, draft, question, current.ToString(CultureInfo.InvariantCulture), allowEmpty: false, text =>
-        {
-            string typed = text.Trim();
-            if (!double.TryParse(typed, NumberStyles.Float, CultureInfo.InvariantCulture, out double value) || !double.IsFinite(value) || value < 0 || value > max)
-            {
-                return ComfyWizardNumberError(typed, "0 to " + max.ToString(CultureInfo.InvariantCulture));
-            }
-
-            set(value);
-            return null;
-        }, cancellationToken);
-
-    /// <summary>The summary: save (offered or hidden), test, cancel, then every row; <c>SqlWizardSummaryAsync</c>'s contract.</summary>
-    private async Task<(bool Done, bool Changed, ComfyWizardStep? Edit)> ComfyWizardSummaryAsync(ComfyDraft draft, CancellationToken cancellationToken)
-    {
-        int cursor = 0;
-        while (true)
-        {
-            // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
-            var actions = new List<string> { ComfyWizardSaveOfferedRow, ComfyWizardSaveHiddenRow };
-            int test = actions.Count;
-            actions.Add(ComfyWizardTestRow);
-            actions.Add(ComfyWizardCancelRow);
-            var ruled = ConnectionWizardSummaryRows(actions, ComfyWizardRows(draft));
-            var rows = ruled.Rows;
-            var page = new MenuPage(ComfyWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = ComfyWizardSummaryCaption };
-            if (!_pane.Enabled)
-            {
-                Flow.Notice(ComfyWizardSummaryCaption);
-            }
-
-            if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
-            {
-                return (false, false, null);
-            }
-
-            int picked = ruled.ItemOf(pickedRow);
-            if (picked < 0)
-            {
-                continue;
-            }
-
-            cursor = picked;
-            if (picked >= actions.Count)
-            {
-                var edit = (ComfyWizardStep)(picked - actions.Count);
-                if (ComfyWizardAsks(edit, draft))
-                {
-                    return (false, false, edit);
-                }
-
-                continue;
-            }
-
-            if (picked == test)
-            {
-                await ComfyWizardTestAsync(draft, cancellationToken).ConfigureAwait(false);
-                continue;
-            }
-
-            if (picked == test + 1)
-            {
-                Sink.Notice(ComfyWizardCancelledNotice);
-                return (true, false, null);
-            }
-
-            if (ComfyWizardSave(draft, offer: picked == 0) is { } changed)
-            {
-                return (true, changed, null);
-            }
-        }
-    }
-
-    /// <summary>The draft's graph as it will be saved.</summary>
-    private static string ComfyWizardGraph(ComfyDraft draft) =>
-        draft.Import ? draft.Imported!.GraphJson : ComfyGraphs.Build(draft.Name, draft.Checkpoint, draft.EffSampler, draft.EffScheduler, draft.EffClipSkip, draft.FromImage);
-
-    /// <summary>The draft's sidecar as it will be saved: every default the workflow uses.</summary>
-    private static string ComfyWizardSidecar(ComfyDraft draft) => ComfyWorkflowFile.Sidecar(new ComfySidecar(
-        draft.Description,
-        draft.Family,
-        ComfyWizardAsks(ComfyWizardStep.Width, draft) ? draft.EffWidth : null,
-        ComfyWizardAsks(ComfyWizardStep.Height, draft) ? draft.EffHeight : null,
-        ComfyWizardAsks(ComfyWizardStep.Steps, draft) ? draft.EffSteps : null,
-        ComfyWizardAsks(ComfyWizardStep.Cfg, draft) ? draft.EffCfg : null,
-        ComfyWizardAsks(ComfyWizardStep.Denoise, draft) ? draft.EffDenoise : null,
-        draft.EffNegative));
-
     /// <summary>
-    /// The draft run once on the server, small (at most <see cref="ComfyWizardTestSide"/> square and <see cref="ComfyWizardTestSteps"/>
-    /// steps) and nothing written here: an image workflow gets a grey input picture uploaded. What ComfyUI saved, or why it refused, on the status line.
+    /// A value picked from a server list that filters as it is typed: <paramref name="noneRow"/> first when given (it picks null), the
+    /// current value marked when the server doesn't list it (so Enter never swaps it for the first row), then the list. Null on Esc.
     /// </summary>
-    private async Task ComfyWizardTestAsync(ComfyDraft draft, CancellationToken cancellationToken)
+    private async Task<(string? Value, bool Ok)?> ComfyPickValueAsync(string title, string question, IReadOnlyList<string> list, string? current, string? noneRow, CancellationToken cancellationToken)
     {
-        if (ComfyWizardMissing(draft) is { } missing)
+        var values = new List<string?>();
+        var rows = new List<string>();
+        if (noneRow is not null)
         {
-            Sink.Error("Set " + ComfyWizardLabels[(int)missing] + " first.");
-            return;
+            values.Add(null);
+            rows.Add(noneRow);
         }
 
-        if (_comfyClient() is not { } client)
+        if (current is { Length: > 0 } && IndexOf(list, current) < 0)
         {
-            Sink.Error(ComfyText.NoServer);
-            return;
+            values.Add(current);
+            rows.Add(UntrustedText.Name(current) + ComfyNotOnServerMark);
         }
 
-        if (!ComfyWorkflow.TryParse(draft.Name, "", ComfyWizardGraph(draft), ComfyWizardSidecar(draft), out var workflow, out string? problem))
+        foreach (string value in list)
         {
-            Sink.Error(ComfyWorkflowAddFailed(draft.Name, problem!));
-            return;
+            values.Add(value);
+            rows.Add(UntrustedText.Name(value));
         }
 
-        var timeout = TimeSpan.FromSeconds(Math.Clamp(_settings.Current.ComfyTimeoutSeconds, AppSettingsData.MinComfyTimeoutSeconds, AppSettingsData.MaxComfyTimeoutSeconds));
-        IReadOnlyList<string>? images = null;
-        if (workflow!.TakesImage)
+        int cursor = current is { Length: > 0 } ? values.FindIndex(v => v is not null && string.Equals(v, current, StringComparison.OrdinalIgnoreCase)) : 0;
+        if (await PickFilteredAsync(rows, Math.Max(0, cursor), title, PickKeys, question, null, close: false, cancellationToken).ConfigureAwait(false) is not { } picked)
         {
-            var (name, error) = await client.UploadAsync(SmokeChecks.SolidBmp(ComfyWizardTestSide, ComfyWizardTestSide), "neon-test.bmp", timeout, cancellationToken).ConfigureAwait(false);
-            if (name is null)
-            {
-                Sink.Error(error!);
-                return;
-            }
-
-            // The one test picture in every input slot (later still on 2026-09-24: a face swap takes two).
-            images = Enumerable.Repeat(name, workflow.ImageCount).ToList();
+            return null;
         }
 
-        var d = workflow.Defaults;
-        var values = new ComfyValues(ComfyWizardTestPrompt, d.Negative, 1, Math.Min(d.Width, ComfyWizardTestSide), Math.Min(d.Height, ComfyWizardTestSide), Math.Min(d.Steps, ComfyWizardTestSteps), null, null, images);
-        var clock = Stopwatch.StartNew();
-        var run = await client.RunAsync(workflow.Fill(values), timeout, cancellationToken).ConfigureAwait(false);
-        if (run.Ok)
-        {
-            Sink.Notice(ComfyWizardTestOkNotice(draft.Name, clock.Elapsed.TotalSeconds, run.Images.Select(i => i.FileName).ToList()));
-        }
-        else
-        {
-            Sink.Error(run.Error!);
-        }
+        return (values[picked], true);
     }
 
-    /// <summary>Writes the draft (<see cref="ComfyWorkflowFile.Add"/>), then — offered — its name into the list. Whether a setting changed; null when nothing was written.</summary>
-    private bool? ComfyWizardSave(ComfyDraft draft, bool offer)
+    /// <summary>Writes the draft (<see cref="ComfyWorkflowFile.Add"/>; both of <c>both</c>, rolled back together), then, offered, its names into the list. (Changed, the first name); null when nothing was written.</summary>
+    private (bool Changed, string Added)? ComfyWizardSave(ComfyDraft draft, bool offer)
     {
         if (ComfyWizardMissing(draft) is { } missing)
         {
-            Sink.Error("Set " + ComfyWizardLabels[(int)missing] + " first.");
+            Sink.Error(missing);
             return null;
         }
 
         string folder = ComfyFolder(draft.Global);
-        if (ComfyWorkflowFile.Add(folder, ComfyRoots, draft.Name, ComfyWizardGraph(draft), ComfyWizardSidecar(draft)) is { } error)
+        var names = ComfyWizardNames(draft);
+        var written = new List<string>();
+        foreach (var (name, i) in names.Select((n, i) => (n, i)))
         {
-            Sink.Error(ComfyWorkflowAddFailed(draft.Name, error));
-            return null;
+            string json = ComfyDraftGraphJson(draft, name, draft.Kind == ComfyKind.Both ? i == 1 : draft.FromImage);
+            if (ComfyWorkflowFile.Add(folder, ComfyRoots, name, json, ComfyDraftSidecar(draft, json)) is { } error)
+            {
+                foreach (string made in written)
+                {
+                    ComfyWorkflowFile.Delete(folder, made, bin: null);
+                }
+
+                Sink.Error(ComfyWorkflowAddFailed(name, error));
+                return null;
+            }
+
+            written.Add(name);
         }
 
-        Sink.Notice(ComfyWorkflowAdded(draft.Name, folder));
+        foreach (string name in written)
+        {
+            Sink.Notice(ComfyWorkflowAdded(name, folder));
+        }
+
         if (!offer)
         {
-            return false;
+            return (true, written[0]);
         }
 
         var offered = _settings.Current.ComfyWorkflowsOffered ?? [];   // null offers none (2026-10-01)
-        Apply(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered = [.. offered, draft.Name]);
-        return true;
+        Apply(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered = [.. offered, .. written]);
+        return (true, written[0]);
     }
 
-    // ── ComfyUI workflows offered ───────────────────────────────────────────
+    /// <summary>What the draft still lacks before a save or a test, said as a sentence, or null.</summary>
+    private static string? ComfyWizardMissing(ComfyDraft draft) =>
+        draft.Editing ? null
+        : draft.FromRun && draft.Imported is null ? ComfyPickRunFirst
+        : draft.Import && draft.Imported is null ? "Set File first."
+        : !draft.Import && draft.Checkpoint.Length == 0 ? "Set Checkpoint first."
+        : draft.Name.Length == 0 ? "Set Name first."
+        : null;
+
+    // ── The list's rows (the manager's and the Botchat checklist's) ──────────
 
     /// <summary>The workflows the two comfy folders hold, for the checklist and its value (the profile's then the home's).</summary>
     private static IReadOnlyList<ComfyWorkflow> InstalledComfyWorkflows(string profileDirectory) => ScanComfyWorkflows(profileDirectory).Workflows;
@@ -798,7 +899,7 @@ internal sealed partial class SettingsMenu
     private static (IReadOnlyList<ComfyWorkflow> Workflows, IReadOnlyList<ComfyWorkflowProblem> Problems) ScanComfyWorkflows(string profileDirectory) =>
         new ComfyWorkflowCatalog(() => [AppSettings.ProfileComfyDirectoryOf(profileDirectory), AppSettings.GlobalComfyDirectoryOf(Profiles.HomeOf(profileDirectory))]).Scan();
 
-    /// <summary>The <c>ComfyUI workflows offered</c> value: <c>K of N</c>, or <c>none of N</c> — before any is ticked too (2026-10-01: null offers none). Pinned.</summary>
+    /// <summary>The offered count: <c>K of N</c>, or <c>none of N</c> — before any is ticked too (2026-10-01: null offers none). Pinned.</summary>
     public static string ComfyOfferedValue(IReadOnlyList<string>? offered, IReadOnlyList<ComfyWorkflow> installed)
     {
         ArgumentNullException.ThrowIfNull(installed);
@@ -807,11 +908,11 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The widths a ComfyUI checklist lines its columns up to (2026-10-04, the user's ask: the family · shape · size run wandered row
-    /// to row): the name's (with its two-space gap), the family's, the shape's, and the default width's digits, so the <c>×</c> of
-    /// every size falls in one column.
+    /// The widths a ComfyUI list lines its columns up to (2026-10-04, the user's ask: the family · shape · size run wandered row to row): the
+    /// name's (with its two-space gap, capped at <see cref="ComfyNameCap"/> since 2026-11-25), the family's, the shape's, and the default size's
+    /// width and height digits, so the <c>×</c> of every size falls in one column.
     /// </summary>
-    public sealed record ComfyOfferedColumns(int Name, int Family, int Shape, int SizeWidth)
+    public sealed record ComfyOfferedColumns(int Name, int Family, int Shape, int SizeWidth, int SizeHeight = 0)
     {
         /// <summary>The columns over every workflow listed. Pure.</summary>
         public static ComfyOfferedColumns Of(IReadOnlyList<ComfyWorkflow> workflows)
@@ -820,40 +921,47 @@ internal sealed partial class SettingsMenu
             return workflows.Count == 0
                 ? new(2, 0, 0, 0)
                 : new(
-                    workflows.Max(w => w.Name.Length) + 2,
+                    Math.Min(workflows.Max(w => TextCells.Width(w.Name)), ComfyNameCap) + 2,
                     workflows.Max(w => ComfyFamilies.Name(w.Family).Length),
                     workflows.Max(w => ComfyText.InputShape(w).Length),
-                    workflows.Max(w => Invariant(w.Defaults.Width).Length));
+                    workflows.Max(w => Invariant(w.Defaults.Width).Length),
+                    workflows.Max(w => Invariant(w.Defaults.Height).Length));
         }
     }
 
     /// <summary>
-    /// One checklist row: the mark, the name, then dim in columns (<see cref="ComfyOfferedColumns"/>, two spaces apart) the family,
-    /// the shape and the default size, its width right-aligned. Pinned.
+    /// One list row: the mark, then <paramref name="flag"/> (the check's <c>!</c> or a blank) when given, the name (cut to the column), then dim
+    /// in columns (<see cref="ComfyOfferedColumns"/>, two spaces apart) the family, the shape, the default size (blank where the graph takes
+    /// none, left out with <paramref name="size"/> false) and <paramref name="scope"/> when given. Pinned.
     /// </summary>
-    public static string ComfyOfferedRow(ComfyWorkflow workflow, bool offered, ComfyOfferedColumns columns)
+    public static string ComfyOfferedRow(ComfyWorkflow workflow, bool offered, ComfyOfferedColumns columns, string? scope = null, bool size = true, char? flag = null)
     {
         ArgumentNullException.ThrowIfNull(workflow);
         ArgumentNullException.ThrowIfNull(columns);
         var d = workflow.Defaults;
-        string note = ComfyFamilies.Name(workflow.Family).PadRight(columns.Family) + "  " + ComfyText.InputShape(workflow).PadRight(columns.Shape) + "  "
-            + Invariant(d.Width).PadLeft(columns.SizeWidth) + "×" + Invariant(d.Height);
-        return Markup.Escape((offered ? "[x] " : "[ ] ") + workflow.Name.PadRight(columns.Name)) + Theme.DimMarkup(note);
+        string note = ComfyFamilies.Name(workflow.Family).PadRight(columns.Family) + "  " + ComfyText.InputShape(workflow).PadRight(columns.Shape);
+        if (size)
+        {
+            int cells = columns.SizeWidth + 1 + Math.Max(columns.SizeHeight, 1);
+            string drawn = workflow.Placeholders.Contains(ComfyWorkflow.WidthKey) ? Invariant(d.Width).PadLeft(columns.SizeWidth) + "×" + Invariant(d.Height) : "";
+            note += "  " + (scope is null ? drawn : drawn.PadRight(cells));
+        }
+
+        if (scope is not null)
+        {
+            note += "  " + scope;
+        }
+
+        string head = (offered ? "[x] " : "[ ] ") + (flag is { } f ? f + " " : "") + TextCells.Cell(workflow.Name, columns.Name - 2).PadRight(columns.Name);
+        return Markup.Escape(head) + Theme.DimMarkup(note.TrimEnd());
     }
 
-    /// <summary><c>EditSqlOfferedAsync</c>'s loop over the installed workflows: Enter or Space flips one, saved at once; nothing is ticked until the user ticks it (2026-10-01).</summary>
-    private Task<bool> EditComfyOfferedAsync(CancellationToken cancellationToken) =>
-        EditWorkflowChecklistAsync(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered, (d, next) => d.ComfyWorkflowsOffered = next, cancellationToken);
-
     /// <summary>
-    /// A checklist of every installed workflow saved to a list of names (<c>ComfyUI workflows offered</c>, and since 2026-10-04
-    /// <c>Botchat limited workflows</c>; one loop for both since that day's second code review): each row with its kind,
-    /// family and size (<see cref="ComfyOfferedRow"/>), the names <paramref name="read"/> gives ticked. Enter or Space flips one,
-    /// A every one installed now (one added later still starts unticked, 2026-09-29, the user's call), N none, each saved at once
-    /// through <paramref name="write"/>; a button that changes nothing saves nothing. A ticked name no longer installed is dropped as
-    /// the list opens (2026-10-04, the user's call: until then it stayed, unseen, "to count again if the workflow came back", and
-    /// even N kept it), unless a file of that name failed to load. No caption since 2026-10-27, when the botchat list's
-    /// "not used while Botchat ComfyUI enabled is on" went with that switch.
+    /// A checklist of every installed workflow saved to a list of names (<c>Botchat limited workflows</c>; <c>ComfyUI workflows offered</c>'s too
+    /// until 2026-11-25, when the workflow manager took that one): each row with its kind, family and size (<see cref="ComfyOfferedRow"/>), the
+    /// names <paramref name="read"/> gives ticked. Enter or Space flips one, A every one installed now, N none, each saved at once through
+    /// <paramref name="write"/>; a button that changes nothing saves nothing. A ticked name no longer installed is dropped as the list opens
+    /// (2026-10-04), unless a file of that name failed to load.
     /// </summary>
     private async Task<bool> EditWorkflowChecklistAsync(SettingsField field, Func<AppSettingsData, List<string>?> read, Action<AppSettingsData, List<string>> write, CancellationToken cancellationToken)
     {
@@ -905,4 +1013,6 @@ internal sealed partial class SettingsMenu
             changed = true;
         }
     }
+
+    private static string Fmt(double value) => value.ToString(CultureInfo.InvariantCulture);
 }

@@ -26,13 +26,13 @@ public static class ComfyText
 
     /// <summary>The sentence when no workflow is in either <c>comfy</c> folder. Pinned.</summary>
     public static string NoWorkflows(IReadOnlyList<string> roots) =>
-        "Error: no ComfyUI workflow found; export one from ComfyUI with Save (API) into " + string.Join(" or ", roots) + " (see /comfy)";
+        "Error: no ComfyUI workflow found; add one under ComfyUI workflows on /tools › Apps › ComfyUI, or export one from ComfyUI with Export (API) into " + string.Join(" or ", roots);
 
     /// <summary>A new workflow's name already used in a <c>comfy</c> folder (the add-workflow wizard, later on 2026-09-24). Pinned.</summary>
     public static string NameTaken(string name, string folder) => $"a workflow named '{name}' is already in {folder}";
 
-    /// <summary>Workflows are installed but <c>ComfyUI workflows offered</c> ticks none (later on 2026-09-24). Pinned.</summary>
-    public const string NoneOffered = "Error: no ComfyUI workflow is offered; tick one in ComfyUI workflows offered on /tools › Apps › ComfyUI";
+    /// <summary>Workflows are installed but <c>ComfyUI workflows</c> (<c>… offered</c> until 2026-11-25) ticks none (later on 2026-09-24). Pinned.</summary>
+    public const string NoneOffered = "Error: no ComfyUI workflow is offered; tick one in ComfyUI workflows on /tools › Apps › ComfyUI";
 
     /// <summary>A workflow name that is not in the catalog. Pinned.</summary>
     public static string UnknownWorkflow(string name, IReadOnlyList<ComfyWorkflow> workflows) =>
@@ -543,7 +543,7 @@ public static class ComfyText
             lines.Add("  skipped " + Path.GetFileName(problem.FilePath) + ": it " + problem.Problem);
         }
 
-        lines.Add("workflows go in " + string.Join(" or ", roots) + " — export them from ComfyUI with Save (API) and put {{prompt}} (and {{negative}}, {{seed}}, {{width}}, {{height}}, {{steps}}, {{cfg}}, {{image}}, {{image2}}, {{image3}}, {{denoise}}) where the values go");
+        lines.Add("workflows go in " + string.Join(" or ", roots) + " — add one under ComfyUI workflows on /tools › Apps › ComfyUI, or export one from ComfyUI with Export (API) and put {{prompt}} (and {{negative}}, {{seed}}, {{width}}, {{height}}, {{steps}}, {{cfg}}, {{image}}, {{image2}}, {{image3}}, {{denoise}}) where the values go");
         return lines;
     }
 
@@ -551,10 +551,10 @@ public static class ComfyText
     public const string ToolsOffLine = "ComfyUI tools is off on /tools › Apps › ComfyUI: the model is offered no image tool (/imagine still works)";
 
     /// <summary><c>/comfy offered</c> with no workflow installed at all (2026-10-04). Pinned.</summary>
-    public const string NoWorkflowInstalled = "no ComfyUI workflow is installed yet: /comfy says where they go";
+    public const string NoWorkflowInstalled = "no ComfyUI workflow is installed yet: add one under ComfyUI workflows on /tools › Apps › ComfyUI";
 
     /// <summary><c>/comfy offered</c> with workflows installed and none ticked (2026-10-04). Pinned.</summary>
-    public const string NoneOfferedLine = "no ComfyUI workflow is offered to the model: tick them in ComfyUI workflows offered on /tools › Apps › ComfyUI";
+    public const string NoneOfferedLine = "no ComfyUI workflow is offered to the model: tick them in ComfyUI workflows on /tools › Apps › ComfyUI";
 
     /// <summary>
     /// <c>/comfy offered</c>'s lines (2026-10-04, the user's ask: the offered workflows as a bulleted list, without the server's
@@ -600,5 +600,105 @@ public static class ComfyText
         "Never repeat a tag of your prompt, and leave negative_extra out for the user's own verbatim prompts; it is appended to the workflow's negative, which stays.";
 
     /// <summary>The description while no workflow is installed (the tool is not offered then; this is what <c>/tools</c> shows). Pinned.</summary>
-    public const string DescribeEmpty = "Generates pictures on the user's ComfyUI server from one of their workflows (none is installed yet: see /comfy).";
+    public const string DescribeEmpty = "Generates pictures on the user's ComfyUI server from one of their workflows (none is installed yet: see ComfyUI workflows on /tools).";
+
+    // ── The workflow manager's Edit (2026-11-25): why a part of a graph can't be changed here, shown dim in its row ──
+
+    public const string EditNotPlainJson = "the file has comments, trailing commas or a repeated key: edit it in Open the JSON";
+    public const string EditNotApiGraph = "the file holds no API-format graph";
+    public const string EditNotInGraph = "not in this workflow";
+    public const string EditCustomSampler = "set by a custom sampler";
+    public const string EditNoCheckpointVae = "the workflow loads no checkpoint, so it needs a VAE file";
+    public const string EditNoCheckpointClip = "only on a checkpoint's own CLIP";
+    public const string EditSeveralVaes = "the VAE comes from several nodes";
+    public const string EditNoSampler = "no sampler";
+    public const string EditSamplersDiffer = "the samplers load different models or LoRAs";
+    public const string EditLoop = "the model's links run in a loop";
+    public const string EditBehindSwitch = "behind a switch: only a strength changes here";
+    public const string EditSwitchedOff = "switched off";
+    public const string EditStrengthNotLiteral = "its strength is set by another node";
+
+    /// <summary>More than one node could hold the part ("3 samplers").</summary>
+    public static string EditSeveral(int count, string what) => count.ToString(CultureInfo.InvariantCulture) + " " + what;
+
+    /// <summary>The part is a link from another node.</summary>
+    public static string EditSetBy(string id, string type) => $"set by node {id} {type}";
+
+    /// <summary>The model comes from a loader other than a checkpoint or a diffusion model's.</summary>
+    public static string EditOtherLoader(string type) => $"loaded by {type}";
+
+    /// <summary>A switch on the model's path whose choice isn't a plain true or false.</summary>
+    public static string EditSwitchUnknown(string id) => $"the switch at node {id} is set by another node";
+
+    /// <summary>A node with a LoRA that isn't one of ComfyUI's two plain loaders.</summary>
+    public static string EditOtherLoraNode(string type) => $"loaded by {type}";
+
+    /// <summary>The model's path runs through a node that is no loader, LoRA or model patch.</summary>
+    public static string EditPathEnds(string id, string type) => $"the model passes through node {id} {type}";
+
+    // ── The workflow files (2026-11-25, the workflow manager) ──
+
+    /// <summary>A name Windows keeps for a device (<c>con</c>, <c>nul</c> …): no file can carry it.</summary>
+    public static string DeviceName(string name) => $"'{name}' is a name Windows keeps for a device";
+
+    /// <summary>A <c>.md</c> left behind under the new name, which the new workflow would take over.</summary>
+    public static string LeftoverSidecar(string path) => $"{path} is already there without its workflow: delete or rename it first";
+
+    /// <summary>A workflow file changed on disk since it was read for the edit.</summary>
+    public static string ChangedOnDisk(string path) => $"{path} changed on disk since it was read: nothing was saved, so open the workflow again";
+
+    /// <summary>A save that would leave no workflow the catalog can load.</summary>
+    public static string SaveRefused(string problem) => $"the result {problem}, so nothing was saved";
+
+    /// <summary>A file whose encoding can't hold the new text.</summary>
+    public static string CannotEncode(string path) => $"{path}'s encoding can't hold every character of the new text, so nothing was saved";
+
+    /// <summary>A workflow gone meanwhile (another instance, a hand edit).</summary>
+    public static string WorkflowGone(string name) => $"workflow '{name}' is no longer there: nothing was done";
+
+    /// <summary>The <c>.json</c> deleted but its <c>.md</c> refused.</summary>
+    public static string SidecarStays(string path, string why) => $"{path} stays: {why}";
+
+    public static string LogAdded(string name, string folder) => $"Added workflow {name} to {folder}.";
+
+    public static string LogSaved(string name, string folder) => $"Saved workflow {name} in {folder}.";
+
+    public static string LogRenamed(string from, string to) => $"Renamed workflow {from} to {to}.";
+
+    public static string LogDuplicated(string from, string to) => $"Copied workflow {from} as {to}.";
+
+    public static string LogMoved(string name, string to) => $"Moved workflow {name} to {to}.";
+
+    public static string LogDeleted(string name, string folder) => $"Deleted workflow {name} from {folder}.";
+
+    // ── The test and the server check (2026-11-25, the workflow manager) ──
+
+    /// <summary>A check finding: the server has no node of the class.</summary>
+    public static string CheckNoNode(string id, string classType) => $"node {id}: the server has no {classType} node";
+
+    /// <summary>A check finding: a literal value not on the server's list (a custom node may take more, so not "missing").</summary>
+    public static string CheckNotListed(string id, string classType, string input, string value) => $"node {id} {classType}.{input}: '{value}' is not on the server's list";
+
+    /// <summary>A picture with ComfyUI's UI graph alone (2026-11-25, the import from a picture): the end of a sentence about the file.</summary>
+    public const string EmbeddedUiOnly = "holds only ComfyUI's UI-format workflow, not the graph it ran; in ComfyUI use Workflow → Export (API)";
+
+    /// <summary>A picture with no ComfyUI graph in it: the end of a sentence about the file.</summary>
+    public const string EmbeddedNone = "holds no ComfyUI workflow (the server may run with its metadata off)";
+
+    /// <summary>A file that is neither JSON nor a PNG or WebP: the end of a sentence about the file.</summary>
+    public const string NotWorkflowOrPicture = "is not a ComfyUI export or a PNG or WebP picture";
+
+    /// <summary><c>/history</c> still over its cap when asked for fewer runs.</summary>
+    public const string HistoryTooLarge = "Error: the server's run history is too large to read";
+
+    /// <summary>The import's run list with nothing in it.</summary>
+    public const string NoRuns = "ComfyUI remembers no run since it started.";
+
+    public static string LogImported(string from, string outcome) => $"Imported a workflow from {from}: {outcome}.";
+
+    public static string LogTested(string name, string outcome) => $"Tested workflow {name}: {outcome}.";
+
+    public static string LogChecked(int workflows, int findings) => $"Checked {workflows} workflow(s) against the server: {findings} finding(s).";
+
+    public static string LogConnection(string outcome) => $"Connection test: {outcome}.";
 }

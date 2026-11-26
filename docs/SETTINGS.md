@@ -649,7 +649,7 @@ The file tools and the places beyond the working directory they reach.
 | Setting | What it does | Default |
 |---|---|---|
 | File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, read_office, convert_to_docx, convert_to_xlsx, convert_to_pdf, pdf_edit…), which reach only the working directory. A query's `to` needs it, with `convert_to_xlsx` on. | off |
-| File deletes to Recycle bin | Sends deletes to the Recycle bin (*File deletes to Trash* on a Mac): `delete`, `/undo`, `/rewind … files`, the picture windows, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`). Gone for good: a file on a share or removable drive (a purge there asks first), one too big for the bin, and a command's or script's deletes. | on |
+| File deletes to Recycle bin | Sends deletes to the Recycle bin (*File deletes to Trash* on a Mac): `delete`, `/undo`, `/rewind … files`, the picture windows, *ComfyUI workflows*, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`). Gone for good: a file on a share or removable drive (a purge there asks first), one too big for the bin, and a command's or script's deletes. | on |
 | File checkpoints | Keeps what the file tools change each turn, so `/undo` and `/rewind … files` can put it back ([what's covered](TOOLS.md#undoing-file-changes)). Turned off, kept ones can still be undone. | on |
 | File checkpoints keep (days) | Checkpoints older than this are cleared when the profile loads (startup or a switch; 0–3650; 0 clears none by age). A gone working folder's are kept as long. | 90 |
 | File checkpoints max (MB) | The most one working folder's checkpoints may hold (100–102400); the oldest go first, the newest always stays. | 2,048 |
@@ -721,8 +721,8 @@ The apps and services the tools reach. `/claude`'s settings are on `/settings` �
 |---|---|---|
 | ComfyUI tools | Offers `generate_image` once *ComfyUI URL* is set and a workflow is installed. | off |
 | ComfyUI URL | The ComfyUI server, often on your LAN (`http://gpu-box:8188`). | empty |
-| ComfyUI workflows offered | A checklist of the workflows offered to the model; none until you tick one. `/imagine <name>` can still use a hidden one. | none |
-| ComfyUI add workflow | A wizard that **builds** a workflow from your server's checkpoints or **imports** a ComfyUI export ([Adding a workflow](TOOLS.md#adding-a-workflow)). | — |
+| ComfyUI test connection | Asks the server for its version with the saved URL. | — |
+| ComfyUI workflows | Your installed workflows; the ticked ones are offered to the model, and `/imagine <name>` can still use a hidden one. **+ New workflow** adds one ([Managing workflows](TOOLS.md#managing-workflows)). | none offered |
 | ComfyUI ^-mention enabled | `^` and part of a name lists the offered workflows; a pick writes `^name`. | on |
 | ComfyUI timeout (s) | How long to wait for one generation, queue included (10–3600). | 300 |
 | ComfyUI max images per call | The most pictures one `generate_image` call or `/imagine --count` makes (1–16). | 5 |

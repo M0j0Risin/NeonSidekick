@@ -4,7 +4,10 @@ using System.Text.Json.Nodes;
 
 namespace NeonSidekick.Comfy;
 
-/// <summary>What an import found: the placeholdered graph, where each placeholder went, and the values it replaced — the new workflow's defaults.</summary>
+/// <summary>
+/// What an import found: the placeholdered graph, where each placeholder went, and the values it replaced — the new workflow's defaults.
+/// <see cref="Prompt"/> is the prompt text the graph held (2026-11-25, a recent run's band shows an excerpt); it is never saved.
+/// </summary>
 public sealed record ComfyImportResult(
     string GraphJson,
     IReadOnlyList<string> Found,
@@ -15,7 +18,8 @@ public sealed record ComfyImportResult(
     double? Cfg,
     double? Denoise,
     string Checkpoint,
-    int ImageCount)
+    int ImageCount,
+    string Prompt = "")
 {
     /// <summary>Whether the graph loads a picture.</summary>
     public bool TakesImage => ImageCount > 0;
@@ -45,7 +49,7 @@ public static class ComfyImport
     public const string NoSamplerProblem = "has no KSampler, KSamplerAdvanced or SamplerCustomAdvanced node to take the prompt, seed and steps";
     public const string NoPromptNodeProblem = "has no CLIPTextEncode feeding the sampler's positive input, so there is nowhere for the prompt to go";
 
-    private static readonly JsonDocumentOptions Tolerant = new() { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip };
+    private static JsonDocumentOptions Tolerant => ComfyWorkflow.Tolerant;
 
     /// <summary>The template, or the problem (<see cref="ComfyWorkflow.UiFormatProblem"/> for a UI save, …).</summary>
     public static (ComfyImportResult? Result, string? Problem) Placehold(string json)
@@ -54,9 +58,9 @@ public static class ComfyImport
         JsonObject? graph;
         try
         {
-            graph = JsonNode.Parse(json, documentOptions: Tolerant) as JsonObject;
+            graph = JsonNode.Parse(NumbersAsNull(json), documentOptions: Tolerant) as JsonObject;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
             return (null, ComfyWorkflow.NotJsonProblem);
         }
@@ -74,6 +78,12 @@ public static class ComfyImport
         if (graph.Any(p => p.Value is not JsonObject n || TypeOf(n) is null))
         {
             return (null, ComfyWorkflow.NotApiFormatProblem);
+        }
+
+        // Older ComfyUI keeps a node's is_changed in what it saves and runs (2026-11-25): the server's cache key, no input.
+        foreach (var (_, node) in graph)
+        {
+            ((JsonObject)node!).Remove("is_changed");
         }
 
         // The workflow's own {{…}} texts first (later still on 2026-09-24: Ideogram 4's StringReplace searches for a literal
@@ -139,7 +149,7 @@ public static class ComfyImport
             return (null, NoPromptNodeProblem);
         }
 
-        TakeText(graph, positive.Value, "prompt", found, out _);
+        TakeText(graph, positive.Value, "prompt", found, out string promptText);
         string negativeText = "";
         if (TextNode(graph, negativeLink) is { } negative && negative.Id != positive.Value.Id)
         {
@@ -180,7 +190,62 @@ public static class ComfyImport
         AddKept(found, escaped);
         string checkpoint = nodes.Select(n => Inputs(n.Node)["ckpt_name"] ?? Inputs(n.Node)["unet_name"])
             .OfType<JsonValue>().Where(v => v.GetValueKind() == JsonValueKind.String).Select(v => v.GetValue<string>()).FirstOrDefault() ?? "";
-        return (new ComfyImportResult(graph.ToJsonString(ComfyGraphs.Indented), found, negativeText, width, height, steps, cfg, denoise, checkpoint, images), null);
+        return (new ComfyImportResult(graph.ToJsonString(ComfyGraphs.Indented), found, negativeText, width, height, steps, cfg, denoise, checkpoint, images, promptText), null);
+    }
+
+    /// <summary>
+    /// <paramref name="json"/> with the bare <c>NaN</c>, <c>Infinity</c> and <c>-Infinity</c> outside strings read as <c>null</c> (2026-11-25: Python's
+    /// <c>json.dumps</c> writes them, so older ComfyUI saves and runs can hold them; no JSON reader takes them). Text in strings stays as it is.
+    /// </summary>
+    public static string NumbersAsNull(string json)
+    {
+        ArgumentNullException.ThrowIfNull(json);
+        if (!json.Contains("NaN", StringComparison.Ordinal) && !json.Contains("Infinity", StringComparison.Ordinal))
+        {
+            return json;
+        }
+
+        var text = new System.Text.StringBuilder(json.Length);
+        bool inString = false;
+        for (int i = 0; i < json.Length; i++)
+        {
+            char c = json[i];
+            if (inString)
+            {
+                text.Append(c);
+                if (c == '\\' && i + 1 < json.Length)
+                {
+                    text.Append(json[++i]);
+                }
+                else if (c == '"')
+                {
+                    inString = false;
+                }
+
+                continue;
+            }
+
+            if (c == '"')
+            {
+                inString = true;
+            }
+            else if (Word(json, i, "-Infinity") || Word(json, i, "Infinity") || Word(json, i, "NaN"))
+            {
+                int length = json[i] == '-' ? 9 : json[i] == 'I' ? 8 : 3;
+                text.Append("null");
+                i += length - 1;
+                continue;
+            }
+
+            text.Append(c);
+        }
+
+        return text.ToString();
+
+        static bool Word(string json, int at, string word) =>
+            string.CompareOrdinal(json, at, word, 0, word.Length) == 0
+            && (at + word.Length == json.Length || !char.IsLetterOrDigit(json[at + word.Length]))
+            && (at == 0 || !char.IsLetterOrDigit(json[at - 1]));
     }
 
     /// <summary>

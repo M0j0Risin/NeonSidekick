@@ -76,4 +76,20 @@ public sealed class RuledRowsTests
         Assert.Equal(4, ruled.ItemOf(6));   // the draft's first row
         Assert.Equal(6, ruled.Items);
     }
+
+    /// <summary>A named group gets its heading in place of the bare rule, at the top too (2026-11-25, the ComfyUI list's Skipped); an empty named group leaves nothing.</summary>
+    [Fact]
+    public void AHeading_TakesTheRulesPlace_AtTheTopToo()
+    {
+        var ruled = RuledRows.Of([["+ New"], ["a", "b"], [], ["x.json"]], [null, null, "Gone", "Skipped"]);
+
+        Assert.Equal(["+ New", SectionRule.Bare, "a", "b", SectionRule.Markup("Skipped"), "x.json"], ruled.Rows);
+        Assert.Equal([1, 4], ruled.Headings!.Order());
+        Assert.Equal(3, ruled.ItemOf(5));
+        Assert.Equal(-1, ruled.ItemOf(4));
+
+        var top = RuledRows.Of([["a"]], ["Model"]);
+        Assert.Equal([SectionRule.Markup("Model"), "a"], top.Rows);
+        Assert.Equal(1, top.RowOf(0));
+    }
 }

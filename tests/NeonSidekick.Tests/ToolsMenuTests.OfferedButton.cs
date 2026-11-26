@@ -24,7 +24,6 @@ public partial class ToolsMenuTests
 
     /// <summary>Every offered switch's page carries the button with its row's value; with nothing defined, O says so and the page comes back.</summary>
     [Theory]
-    [InlineData(SettingsField.ComfyTools, SettingsField.ComfyWorkflowsOffered)]
     [InlineData(SettingsField.SqlTools, SettingsField.SqlConnectionsOffered)]
     [InlineData(SettingsField.OracleTools, SettingsField.OracleConnectionsOffered)]
     [InlineData(SettingsField.MySqlTools, SettingsField.MySqlConnectionsOffered)]
@@ -47,6 +46,28 @@ public partial class ToolsMenuTests
         Assert.True(Output.IndexOf(page, first + 1, StringComparison.Ordinal) > first, Output);   // back on the page after the error
         Assert.Contains(SettingsMenu.OfferedToggleKeys, Output);
         Assert.Equal(was, SettingsMenu.FieldValue(toolSwitch, _settings.Current, _settings.ProfileDirectory) == "on");
+        Assert.False(pane.OverlayOpen);
+        pane.Dispose();
+    }
+
+    /// <summary>
+    /// ComfyUI's button (2026-11-25, the workflow manager): O opens the workflow list, which with nothing installed is its add row alone (no
+    /// error), and Esc comes back to the page; the button reads the count without the row's "offered".
+    /// </summary>
+    [Fact]
+    public async Task ShowSwitch_Comfy_TheOfferedButton_OpensTheWorkflowList_AndComesBack()
+    {
+        var (menu, pane, _) = PaneMenu();
+        Push(Keys.Char('o'), Keys.Escape, Keys.Escape);
+
+        await menu.ShowSwitchAsync(SettingsField.ComfyTools, CancellationToken.None);
+
+        string page = "\n" + Titled(ToolsText.Label + " › " + SettingsMenu.FieldName(SettingsField.ComfyTools) + " │ " + SettingsMenu.OfferedTitle("none of 0") + " ") + "\n";
+        int first = Output.IndexOf(page, StringComparison.Ordinal);
+        Assert.True(first >= 0, Output);
+        Assert.True(Output.IndexOf(page, first + 1, StringComparison.Ordinal) > first, Output);
+        Assert.Contains(SettingsMenu.ComfyNewWorkflowRow, Output);
+        Assert.DoesNotContain(NeonSidekick.Comfy.ComfyText.NoWorkflows([_settings.ProfileComfyDirectory, _settings.GlobalComfyDirectory]), Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

@@ -389,8 +389,12 @@ public enum SettingsField
     /// <summary>A checklist: which installed ComfyUI workflows the model is offered (<see cref="Settings.AppSettingsData.ComfyWorkflowsOffered"/>). The ComfyUI tab's third row (later on 2026-09-24); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     ComfyWorkflowsOffered,
 
-    /// <summary>An action row, no setting behind it (later on 2026-09-24, the user's ask): Enter walks a new workflow — built from the server's models, or imported from a ComfyUI export — through every choice, tests it and saves it into a comfy folder (<c>SettingsMenu.ComfyWizard.cs</c>). The ComfyUI tab's fourth row. Last in the enum, as every newcomer.</summary>
-    ComfyAddWorkflow,
+    /// <summary>
+    /// An action row, no setting behind it (2026-11-25, the workflow manager; <c>ComfyAddWorkflow</c>'s place in the enum, the wizard having moved
+    /// into the <c>ComfyUI workflows</c> list): Enter asks the server for its version with the saved URL, the answer or the error on the status line.
+    /// The ComfyUI tab, under the URL, as Home Assistant's test row.
+    /// </summary>
+    ComfyTest,
 
     /// <summary>Typed (the <c>Image viewer</c> row, <c>Image editor</c> until later still on 2026-09-24): where a double-clicked picture opens: empty for the built-in viewer (later on 2026-09-27; the app Windows registers before), <c>system</c> for that app, else a command line (<see cref="Settings.AppSettingsData.ImageEditor"/>). The Chat tab, under <see cref="DraftEditor"/> (later on 2026-09-24); no reconnect (read at each double-click). Last in the enum, as every newcomer.</summary>
     ImageEditor,
@@ -2045,7 +2049,7 @@ internal sealed partial class SettingsMenu
         [SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
-        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyAddWorkflow, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
+        [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTest, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
         [SettingsField.YouTubeTools, SettingsField.YouTubeApiKey, SettingsField.YouTubeSearchMaxResults, SettingsField.YouTubeSearchOrder, SettingsField.YouTubeSafeSearch, SettingsField.YouTubeRegion, SettingsField.YouTubeLanguage, SettingsField.YouTubeOpenLinksIn, SettingsField.YouTubeAutoplay, SettingsField.YouTubeVoice],
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
@@ -2735,8 +2739,8 @@ internal sealed partial class SettingsMenu
         SettingsField.BotChatMemory => "Botchat memory enabled",
         SettingsField.BotChatMemoryMode => "Botchat memory mode",
         SettingsField.ComfyOutputFolder => "ComfyUI output folder",
-        SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows offered",
-        SettingsField.ComfyAddWorkflow => "ComfyUI add workflow",
+        SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows",   // "ComfyUI workflows offered" until 2026-11-25 (the workflow manager)
+        SettingsField.ComfyTest => "ComfyUI test connection",
         SettingsField.SqlConnectionsOffered => "SQL connections offered",
         SettingsField.SqlSetPassword => "SQL set password",
         SettingsField.SqlAddConnection => "SQL add/edit connection",   // "add" alone until 2026-10-05, when the wizards took to editing
@@ -3198,8 +3202,8 @@ internal sealed partial class SettingsMenu
             SettingsField.BotChatMemory => OnOff(data.BotChatMemory),
             SettingsField.BotChatMemoryMode => data.BotChatMemoryMode,
             SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
-            SettingsField.ComfyWorkflowsOffered => ComfyOfferedValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
-            SettingsField.ComfyAddWorkflow => ComfyAddWorkflowLabel,
+            SettingsField.ComfyWorkflowsOffered => ComfyWorkflowsValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
+            SettingsField.ComfyTest => ComfyTestConnectionLabel,
             SettingsField.SqlSetPassword => SqlSetPasswordLabel,
             SettingsField.SqlAddConnection => SqlAddConnectionLabel,
             SettingsField.SqlConnectionsOffered => SqlOfferedValue(data.SqlConnectionsOffered, Sql.SqlConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
@@ -5324,19 +5328,42 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private async Task<string?> PickFilteredModelAsync(IReadOnlyList<string> ids, int cursor, CancellationToken cancellationToken, string title, bool close)
     {
-        string filter = "";
         int inUse = cursor;
+        return await PickFilteredAsync(ids, cursor, title, ModelKeys, null, i => ModelFooter(ids[i], i == inUse), close, cancellationToken).ConfigureAwait(false) is { } picked
+            ? ids[picked]
+            : null;
+    }
+
+    /// <summary>
+    /// A list that filters as it is typed (the model picker's, 2026-10-07; made generic 2026-11-25 for the ComfyUI wizard's checkpoint, LoRA, VAE,
+    /// sampler and scheduler lists): <paramref name="rows"/> (plain text, escaped here) narrowed by the typed text, <paramref name="question"/> as the
+    /// caption until a filter is typed, <paramref name="footer"/> by the row's index in <paramref name="rows"/>. The picked index, or null on Esc.
+    /// Without the pane, the plain prompt over every row.
+    /// </summary>
+    private async Task<int?> PickFilteredAsync(IReadOnlyList<string> rows, int cursor, string title, string hint, string? question, Func<int, MenuFooter?>? footer, bool close, CancellationToken cancellationToken)
+    {
+        if (!_pane.Enabled)
+        {
+            if (question is not null)
+            {
+                Flow.Notice(question);
+            }
+
+            return await PickAsync(new MenuPage(title, rows.Select(Markup.Escape).ToList(), PickKeys), cursor, cancellationToken).ConfigureAwait(false);
+        }
+
+        string filter = "";
         try
         {
             while (true)
             {
-                var shown = Enumerable.Range(0, ids.Count).Where(i => MenuFilter.Matches(filter, ids[i], null)).ToList();
-                List<string> rows = shown.Count > 0 ? shown.Select(i => Markup.Escape(ids[i])).ToList() : [MenuFilter.NoMatchNameRow(filter)];
-                var page = new MenuPage(title, rows, MenuFilter.Hint(ModelKeys, filter))
+                var shown = Enumerable.Range(0, rows.Count).Where(i => MenuFilter.Matches(filter, rows[i], null)).ToList();
+                List<string> drawn = shown.Count > 0 ? shown.Select(i => Markup.Escape(rows[i])).ToList() : [MenuFilter.NoMatchNameRow(filter)];
+                var page = new MenuPage(title, drawn, MenuFilter.Hint(hint, filter))
                 {
                     Filter = filter,
-                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, ids.Count),
-                    Footer = (_, row) => row < shown.Count ? ModelFooter(ids[shown[row]], shown[row] == inUse) : null,   // the whole id (2026-10-07)
+                    Caption = MenuFilter.CaptionOrNull(filter, shown.Count, rows.Count) ?? question,
+                    Footer = footer is null ? null : (_, row) => row < shown.Count ? footer(shown[row]) : null,
                 };
                 if (await _pane.PickAsync(page, Math.Max(0, shown.IndexOf(cursor)), cancellationToken).ConfigureAwait(false) is not { } pick)
                 {
@@ -5352,7 +5379,7 @@ internal sealed partial class SettingsMenu
 
                 if (pick.Row >= 0 && pick.Row < shown.Count)
                 {
-                    return ids[shown[pick.Row]];
+                    return shown[pick.Row];
                 }
             }
         }
@@ -6381,9 +6408,9 @@ internal sealed partial class SettingsMenu
             return await EditComfyOfferedAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.ComfyAddWorkflow)
+        if (field == SettingsField.ComfyTest)
         {
-            return await AddComfyWorkflowAsync(cancellationToken).ConfigureAwait(false);
+            return await TestComfyConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
 
 
@@ -8756,7 +8783,10 @@ internal sealed partial class SettingsMenu
             int cursor = was ? 0 : 1;
             while (true)
             {
-                string value = FieldValue(offered.Offered, _settings.Current, _settings.ProfileDirectory);
+                // ComfyUI's row reads "5 of 18 offered" (2026-11-25): the button, which says offered already, takes the count alone.
+                string value = offered.Offered == SettingsField.ComfyWorkflowsOffered
+                    ? ComfyOfferedValue(_settings.Current.ComfyWorkflowsOffered, InstalledComfyWorkflows(_settings.ProfileDirectory))
+                    : FieldValue(offered.Offered, _settings.Current, _settings.ProfileDirectory);
                 var pressed = await PickChecklistAsync(page, cursor, cancellationToken, OfferedButtons(value)).ConfigureAwait(false);
                 if (pressed is { Button: >= 0 } button)
                 {

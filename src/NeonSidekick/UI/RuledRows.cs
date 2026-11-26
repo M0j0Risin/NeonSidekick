@@ -35,22 +35,31 @@ internal sealed class RuledRows
     public int Items => _itemRows.Count;
 
     /// <summary><paramref name="groups"/>' rows, a <see cref="SectionRule.Bare"/> between each two non-empty groups.</summary>
-    public static RuledRows Of(IReadOnlyList<IReadOnlyList<string>> groups)
+    public static RuledRows Of(IReadOnlyList<IReadOnlyList<string>> groups) => Of(groups, null);
+
+    /// <summary>
+    /// <see cref="Of(IReadOnlyList{IReadOnlyList{string}})"/> with a heading (<see cref="SectionRule.Markup(string, string?, string?)"/>) in place of
+    /// the bare rule before each group <paramref name="headings"/> names (2026-11-25, the ComfyUI workflows list's <c>Skipped</c>); a named first
+    /// group gets its heading at the top. A null or missing heading is a bare rule, as before; an empty group still leaves nothing.
+    /// </summary>
+    public static RuledRows Of(IReadOnlyList<IReadOnlyList<string>> groups, IReadOnlyList<string?>? headings)
     {
         ArgumentNullException.ThrowIfNull(groups);
         var rows = new List<string>();
         var rules = new HashSet<int>();
-        foreach (var group in groups)
+        for (int g = 0; g < groups.Count; g++)
         {
+            var group = groups[g];
             if (group is null || group.Count == 0)
             {
                 continue;
             }
 
-            if (rows.Count > 0)
+            string? heading = headings is not null && g < headings.Count ? headings[g] : null;
+            if (rows.Count > 0 || heading is not null)
             {
                 rules.Add(rows.Count);
-                rows.Add(SectionRule.Bare);
+                rows.Add(heading is null ? SectionRule.Bare : SectionRule.Markup(heading));
             }
 
             rows.AddRange(group);

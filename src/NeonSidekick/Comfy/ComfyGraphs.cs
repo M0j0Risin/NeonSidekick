@@ -12,6 +12,9 @@ namespace NeonSidekick.Comfy;
 /// </summary>
 public static class ComfyGraphs
 {
+    /// <summary>The output folder the app's own graphs save into, before the workflow's name (<c>neon/portrait</c>).</summary>
+    public const string PrefixFolder = "neon/";
+
     /// <summary>The samplers each family is usually run with: the wizard's cursor starts there.</summary>
     public static string DefaultSampler(ComfyFamily family) => family switch
     {
@@ -91,7 +94,7 @@ public static class ComfyGraphs
         graph["6"] = Node("CLIPTextEncode", new JsonObject { ["text"] = "{{prompt}}", ["clip"] = Clip() });
         graph["7"] = Node("CLIPTextEncode", new JsonObject { ["text"] = "{{negative}}", ["clip"] = Clip() });
         graph["8"] = Node("VAEDecode", new JsonObject { ["samples"] = Link("3", 0), ["vae"] = Link("4", 2) });
-        graph["9"] = Node("SaveImage", new JsonObject { ["filename_prefix"] = "neon/" + name, ["images"] = Link("8", 0) });
+        graph["9"] = Node("SaveImage", new JsonObject { ["filename_prefix"] = PrefixFolder + name, ["images"] = Link("8", 0) });
         return graph.ToJsonString(Indented);
     }
 

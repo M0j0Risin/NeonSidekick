@@ -408,11 +408,12 @@ Under *ComfyUI tools*. `generate_image` runs **your own ComfyUI workflows** on y
 
 #### Adding a workflow
 
-**With the wizard** (*ComfyUI add workflow* on `/tools` › Apps › ComfyUI):
+**With the wizard** (**+ New workflow** in *ComfyUI workflows* on `/tools` › Apps › ComfyUI):
 
-* **Build** makes a text → image or image → image workflow from your server's checkpoints and samplers.
-* **Import** takes an API export (*Workflow → Export (API)*) and puts the placeholders in. For FLUX.2, Krea 2, Z-Image, Qwen Image, Ernie Image, Boogu, LongCat Image, HiDream I1 and Ideogram 4, import ComfyUI's own template.
-* The summary can **test** the draft with one small run, then saves `<name>.json` and `<name>.md`.
+* **Build** makes a text → image workflow, an image → image one, or both, from your server's checkpoints and samplers.
+* **Run** imports one of the server's recent runs; the app's own runs stay hidden until you show them.
+* **File** imports an API export (*Workflow → Export (API)*) or a PNG or WebP picture ComfyUI saved, and puts the placeholders in. For FLUX.2, Krea 2, Z-Image, Qwen Image, Ernie Image, Boogu, LongCat Image, HiDream I1 and Ideogram 4, import ComfyUI's own template.
+* The summary changes the model, VAE, LoRAs, CLIP skip, sampler and defaults. **Test** runs it once at a small size and opens the picture; saving writes `<name>.json` and `<name>.md`.
 
 **By hand:**
 
@@ -444,6 +445,16 @@ image: the picture to restyle   # optional, per input picture: its role, shown t
 ---
 Prefer source_anime; keep rating_safe unless asked.
 ```
+
+#### Managing workflows
+
+*ComfyUI workflows* lists every installed workflow with its family, shape, size and folder. Files it can't read are listed under **Skipped** with the reason.
+
+* **Space** offers or hides one, `a` / `n` all or none, **Del** deletes one (to the Recycle bin under *File deletes to Recycle bin*), `c` checks them all against the server.
+* **Enter** opens one: **Edit** (the wizard's summary, over the installed files), **Test**, **Check against the server**, **Duplicate**, **Rename**, **Move** to the other folder, **Open** the JSON or the Markdown.
+* **Edit** changes only what it can change safely: a part it can't (two samplers, a value another node sets) shows why. Only the keys you change are written.
+* **Rename and delete** update the offered and Botchat lists of the loaded profile only. Other profiles lose the tick of a renamed global workflow.
+* **The check** marks a workflow `!` when it uses a node or a model the server doesn't list. A custom node may take more, so nothing is unticked.
 
 #### Prompts
 

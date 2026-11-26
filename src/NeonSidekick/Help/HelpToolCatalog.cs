@@ -248,7 +248,7 @@ internal static class HelpToolCatalog
         T(AdOuTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Lists Active Directory's OUs as a tree, or one OU's owner, linked GPOs and the objects in it.", setup: DirectorySetup),
         T(AdDomainTool.ToolName, ToolsText.DirectoryMenuTitle, SettingsField.DirectoryTools, "Reads an Active Directory domain: its controllers, levels, password and lockout policy, and its role holders.", setup: DirectorySetup),
         // ComfyUI
-        T(GenerateImageTool.ToolName, ToolsText.ComfyTabTitle, SettingsField.ComfyTools, "Makes pictures on the user's ComfyUI server from one of their workflows.", setup: "needs *ComfyUI URL* and a workflow installed (`/comfy`)"),
+        T(GenerateImageTool.ToolName, ToolsText.ComfyTabTitle, SettingsField.ComfyTools, "Makes pictures on the user's ComfyUI server from one of their workflows.", setup: "needs *ComfyUI URL* and a workflow ticked in *ComfyUI workflows*"),
         // Home Assistant
         T(HaOverviewTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Gives Home Assistant at a glance: lights on by room, media players, temperatures, motion, batteries and lists.", setup: HaSetup),
         T(HaStatesTool.ToolName, ToolsText.HomeAssistantGroupTitle, SettingsField.HomeAssistantTools, "Lists Home Assistant entities with their ids and states, narrowed by name, domain or room.", setup: HaSetup),

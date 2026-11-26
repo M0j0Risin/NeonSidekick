@@ -200,13 +200,19 @@ public sealed record ComfyWorkflow(
         return true;
     }
 
+    /// <summary>
+    /// How every graph is parsed: comments and trailing commas allowed, a repeated key refused (2026-11-25): <see cref="JsonNode"/> would
+    /// throw an <see cref="ArgumentException"/> on one only when the object is first read, past every <see cref="JsonException"/> catch.
+    /// </summary>
+    internal static readonly JsonDocumentOptions Tolerant = new() { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip, AllowDuplicateProperties = false };
+
     /// <summary>Null when <paramref name="json"/> is an API-format graph, else the problem.</summary>
     private static string? CheckGraph(string json)
     {
         JsonNode? root;
         try
         {
-            root = JsonNode.Parse(json, documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            root = JsonNode.Parse(json, documentOptions: Tolerant);
         }
         catch (JsonException)
         {
@@ -269,7 +275,7 @@ public sealed record ComfyWorkflow(
     public JsonObject Fill(ComfyValues values)
     {
         ArgumentNullException.ThrowIfNull(values);
-        var graph = (JsonObject)JsonNode.Parse(GraphJson, documentOptions: new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip })!;
+        var graph = (JsonObject)JsonNode.Parse(GraphJson, documentOptions: Tolerant)!;
         var defaults = Defaults;
         var numbers = new Dictionary<string, JsonNode>(StringComparer.Ordinal)
         {
