@@ -244,8 +244,19 @@ internal sealed partial class SettingsMenu
         /// <summary>An edit's entry name in its file; null for a new database.</summary>
         public string? Original { get; init; }
 
+        /// <summary>An edit's stamp as it opened (2026-11-26, <see cref="ConnectionStamp"/>): what the unsaved-changes question compares.</summary>
+        public string? Opened { get; set; }
+
         public DuckDbDatabaseConfig Config { get; init; } = new();
     }
+
+    /// <summary>An edit's draft as it would be written, no password in it (<see cref="ConnectionStamp"/>, 2026-11-26).</summary>
+    private static string DuckDbWizardStamp(DuckDbDraft draft) =>
+        ConnectionStamp(draft.Name, draft.Global, draft.Config, DuckDbJsonContext.Default.DuckDbDatabaseConfig, _ => { });
+
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question). A new entry never is.</summary>
+    private static bool DuckDbWizardDirty(DuckDbDraft draft) =>
+        draft.Original is not null && (!string.Equals(DuckDbWizardStamp(draft), draft.Opened, StringComparison.Ordinal));
 
     private string DuckDbWizardPath(bool global) =>
         global ? DuckDbConfigFile.GlobalPath(_settings.StorageDirectory) : DuckDbConfigFile.ProfilePath(_settings.ProfileDirectory);
@@ -288,6 +299,7 @@ internal sealed partial class SettingsMenu
                 {
                     var (named, global) = entries[picked];
                     draft = new DuckDbDraft { Global = global, Name = named.Name, Original = named.Name, Config = CloneEntry(named.Config, DuckDbJsonContext.Default.DuckDbDatabaseConfig, _ => { }) };
+                    draft.Opened = DuckDbWizardStamp(draft);
                 }
             }
 
@@ -309,11 +321,13 @@ internal sealed partial class SettingsMenu
     {
         var step = draft.Original is null ? DuckDbWizardStep.File : DuckDbWizardStep.Summary;   // an edit opens on its summary
         bool fromSummary = draft.Original is not null;
+        DuckDbWizardStep? back = null;   // the summary row just changed, for its cursor (2026-11-26, the user's report)
         while (true)
         {
             if (step == DuckDbWizardStep.Summary)
             {
-                var (done, changed, edit) = await DuckDbWizardSummaryAsync(draft, cancellationToken).ConfigureAwait(false);
+                var (done, changed, edit) = await DuckDbWizardSummaryAsync(draft, back, cancellationToken).ConfigureAwait(false);
+                back = edit;
                 if (done)
                 {
                     return changed;
@@ -449,13 +463,21 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    private async Task<(bool Done, bool Changed, DuckDbWizardStep? Edit)> DuckDbWizardSummaryAsync(DuckDbDraft draft, CancellationToken cancellationToken)
+    private async Task<(bool Done, bool Changed, DuckDbWizardStep? Edit)> DuckDbWizardSummaryAsync(DuckDbDraft draft, DuckDbWizardStep? back, CancellationToken cancellationToken)
     {
-        int cursor = ConnectionWizardStartCursor(draft.Original, _settings.Current.DuckDbDatabasesOffered);
+        // Whether the entry is offered now (2026-11-26): the unsaved-changes question's Save keeps it so.
+        bool offered = ConnectionWizardStartCursor(draft.Original, _settings.Current.DuckDbDatabasesOffered) == 0;
+        int cursor = offered ? 0 : 1;
         while (true)
         {
             string[] actions = [SqlWizardSaveOfferedRow, DuckDbWizardSaveHiddenRow, DuckDbWizardTestRow, SqlWizardCancelRow];
             var ruled = ConnectionWizardSummaryRows(actions, DuckDbWizardRows(draft));
+            if (back is { } row)
+            {
+                cursor = actions.Length + (int)row;   // back on the row just changed (2026-11-26, the user's report: it jumped to a save row)
+                back = null;
+            }
+
             var rows = ruled.Rows;
             var page = new MenuPage(DuckDbWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = DuckDbWizardSummaryCaption };
             if (!_pane.Enabled)
@@ -465,7 +487,13 @@ internal sealed partial class SettingsMenu
 
             if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
-                return (false, false, null);
+                var escLeave = await ConnectionWizardLeaveAsync(false, draft.Original, DuckDbWizardDirty(draft), "database", DuckDbWizardCancelledNotice, () => DuckDbWizardSave(draft, offer: offered), cancellationToken).ConfigureAwait(false);
+                if (escLeave.Stay)
+                {
+                    continue;
+                }
+
+                return escLeave.Saved is { } escSaved ? (true, escSaved, null) : (false, false, null);
             }
 
             int picked = ruled.ItemOf(pickedRow);
@@ -494,8 +522,13 @@ internal sealed partial class SettingsMenu
 
             if (picked == 3)
             {
-                Sink.Notice(draft.Original is null ? DuckDbWizardCancelledNotice : ConnectionWizardUnchangedNotice);
-                return (true, false, null);
+                var cancelLeave = await ConnectionWizardLeaveAsync(true, draft.Original, DuckDbWizardDirty(draft), "database", DuckDbWizardCancelledNotice, () => DuckDbWizardSave(draft, offer: offered), cancellationToken).ConfigureAwait(false);
+                if (cancelLeave.Stay)
+                {
+                    continue;
+                }
+
+                return (true, cancelLeave.Saved ?? false, null);
             }
 
             if (DuckDbWizardSave(draft, offer: picked == 0) is { } changed)

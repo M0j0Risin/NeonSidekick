@@ -295,9 +295,6 @@ public static class ThemeText
     /// <summary>A built-in named whose copy already exists: edit that one.</summary>
     public static string EditCopyQuestion(string name, string copy) => $"Built-in themes can't be changed. Edit your copy of {name}, {copy}?";
 
-    /// <summary>Esc with changes not saved.</summary>
-    public const string EditDiscardQuestion = "Close the editor and lose the changes?";
-
     /// <summary>The file changed on disk since the editor opened.</summary>
     public static string EditChangedQuestion(string path) => $"{path} changed since the editor opened. Save over it?";
 

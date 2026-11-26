@@ -82,6 +82,9 @@ internal sealed partial class SettingsMenu
         /// <summary>An edit's entry name in its file; null for a new computer (or <c>local</c> no file holds yet).</summary>
         public string? Original { get; init; }
 
+        /// <summary>An edit's stamp as it opened (2026-11-26, <see cref="ConnectionStamp"/>): what the unsaved-changes question compares.</summary>
+        public string? Opened { get; set; }
+
         public string? OriginalTarget { get; init; }
 
         public bool PasswordKept { get; set; }
@@ -90,6 +93,14 @@ internal sealed partial class SettingsMenu
 
         public EventLogComputerConfig Config { get; init; } = new();
     }
+
+    /// <summary>An edit's draft as it would be written, no password in it (<see cref="ConnectionStamp"/>, 2026-11-26).</summary>
+    private static string EventLogWizardStamp(EventLogDraft draft) =>
+        ConnectionStamp(draft.Name, draft.Global, draft.Config, EventLogJsonContext.Default.EventLogComputerConfig, x => x.Password = null);
+
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    private static bool EventLogWizardDirty(EventLogDraft draft) =>
+        draft.Original is not null && (!string.Equals(EventLogWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
     private string EventLogWizardPath(bool global) =>
         global ? EventLogConfigFile.GlobalPath(_settings.StorageDirectory) : EventLogConfigFile.ProfilePath(_settings.ProfileDirectory);
@@ -220,6 +231,7 @@ internal sealed partial class SettingsMenu
             draft.PasswordKept = draft.Password.Length > 0;
         }
 
+        draft.Opened = EventLogWizardStamp(draft);
         return draft;
     }
 
@@ -228,11 +240,13 @@ internal sealed partial class SettingsMenu
     {
         var step = draft.Original is null ? EventLogWizardStep.File : EventLogWizardMissing(draft) ?? EventLogWizardStep.Summary;
         bool fromSummary = draft.Original is not null;
+        EventLogWizardStep? back = null;   // the summary row just changed, for its cursor (2026-11-26, the user's report)
         while (true)
         {
             if (step == EventLogWizardStep.Summary)
             {
-                var (done, changed, edit) = await EventLogWizardSummaryAsync(draft, cancellationToken).ConfigureAwait(false);
+                var (done, changed, edit) = await EventLogWizardSummaryAsync(draft, back, cancellationToken).ConfigureAwait(false);
+                back = edit;
                 if (done)
                 {
                     return changed;
@@ -495,9 +509,11 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    private async Task<(bool Done, bool Changed, EventLogWizardStep? Edit)> EventLogWizardSummaryAsync(EventLogDraft draft, CancellationToken cancellationToken)
+    private async Task<(bool Done, bool Changed, EventLogWizardStep? Edit)> EventLogWizardSummaryAsync(EventLogDraft draft, EventLogWizardStep? back, CancellationToken cancellationToken)
     {
-        int cursor = ConnectionWizardStartCursor(draft.Original, EventLogCatalog.OfferedNames(_settings.Current.EventLogComputersOffered));
+        // Whether the entry is offered now (2026-11-26): the unsaved-changes question's Save keeps it so.
+        bool offered = ConnectionWizardStartCursor(draft.Original, EventLogCatalog.OfferedNames(_settings.Current.EventLogComputersOffered)) == 0;
+        int cursor = offered ? 0 : 1;
         while (true)
         {
             var actions = new List<string> { SqlWizardSaveOfferedRow, EventLogWizardSaveHiddenRow };
@@ -505,6 +521,12 @@ internal sealed partial class SettingsMenu
             actions.Add(EventLogWizardTestRow);
             actions.Add(SqlWizardCancelRow);
             var ruled = ConnectionWizardSummaryRows(actions, EventLogWizardRows(draft));
+            if (back is { } row)
+            {
+                cursor = actions.Count + (int)row;   // back on the row just changed (2026-11-26, the user's report: it jumped to a save row)
+                back = null;
+            }
+
             var rows = ruled.Rows;
             var page = new MenuPage(EventLogWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = EventLogWizardSummaryCaption };
             if (!_pane.Enabled)
@@ -514,7 +536,13 @@ internal sealed partial class SettingsMenu
 
             if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
-                return (false, false, null);
+                var escLeave = await ConnectionWizardLeaveAsync(false, draft.Original, EventLogWizardDirty(draft), "computer", EventLogWizardCancelledNotice, () => EventLogWizardSave(draft, offer: offered), cancellationToken).ConfigureAwait(false);
+                if (escLeave.Stay)
+                {
+                    continue;
+                }
+
+                return escLeave.Saved is { } escSaved ? (true, escSaved, null) : (false, false, null);
             }
 
             int picked = ruled.ItemOf(pickedRow);
@@ -543,8 +571,13 @@ internal sealed partial class SettingsMenu
 
             if (picked == test + 1)
             {
-                Sink.Notice(draft.Original is null ? EventLogWizardCancelledNotice : ConnectionWizardUnchangedNotice);
-                return (true, false, null);
+                var cancelLeave = await ConnectionWizardLeaveAsync(true, draft.Original, EventLogWizardDirty(draft), "computer", EventLogWizardCancelledNotice, () => EventLogWizardSave(draft, offer: offered), cancellationToken).ConfigureAwait(false);
+                if (cancelLeave.Stay)
+                {
+                    continue;
+                }
+
+                return (true, cancelLeave.Saved ?? false, null);
             }
 
             if (EventLogWizardSave(draft, offer: picked == 0) is { } changed)

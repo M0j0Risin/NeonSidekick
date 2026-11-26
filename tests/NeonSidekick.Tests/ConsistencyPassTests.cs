@@ -54,6 +54,7 @@ public class ConsistencyPassTests
         SettingsMenu.WizardSchemaKeys,   // the Oracle and PostgreSQL wizards' Schemas page, with its move keys (2026-11-15)
         SettingsMenu.AdvisorListKeys, SettingsMenu.AdvisorTemplateKeys,   // the advisor list and its template pages (2026-11-22)
         SettingsMenu.AdvisorListCloseKeys,   // the advisor list under /advisor list (2026-11-23)
+        SettingsMenu.LeaveKeys,   // the unsaved-changes question (2026-11-26)
         SkillsText.ProjectKeys, SkillsText.TrustKeys,   // the /skills project sub-tab and its trust question (2026-11-23)
         NeonSidekick.ProjectInit.ProjectInitText.QuestionKeys, NeonSidekick.ProjectInit.ProjectInitText.NotesKeys, NeonSidekick.ProjectInit.ProjectInitText.FeedbackKeys,   // /project-init's questions, Write pane and Revise slot (2026-11-23)
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }

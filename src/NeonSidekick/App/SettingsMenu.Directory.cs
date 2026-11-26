@@ -161,12 +161,23 @@ internal sealed partial class SettingsMenu
 
         public string? Original { get; init; }
 
+        /// <summary>An edit's stamp as it opened (2026-11-26, <see cref="ConnectionStamp"/>): what the unsaved-changes question compares.</summary>
+        public string? Opened { get; set; }
+
         public string? OriginalTarget { get; init; }
 
         public bool PasswordKept { get; set; }
 
         public DirectoryDomainConfig Config { get; init; } = new();
     }
+
+    /// <summary>An edit's draft as it would be written, no password in it (<see cref="ConnectionStamp"/>, 2026-11-26).</summary>
+    private static string DirectoryWizardStamp(DirectoryDraft draft) =>
+        ConnectionStamp(draft.Name, draft.Global, draft.Config, DirectoryJsonContext.Default.DirectoryDomainConfig, x => x.Password = null);
+
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    private static bool DirectoryWizardDirty(DirectoryDraft draft) =>
+        draft.Original is not null && (!string.Equals(DirectoryWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
     private string DirectoryWizardPath(bool global) => global ? DirectoryConfigFile.GlobalPath(_settings.StorageDirectory) : DirectoryConfigFile.ProfilePath(_settings.ProfileDirectory);
 
@@ -244,6 +255,8 @@ internal sealed partial class SettingsMenu
                     draft.Password = StoredPassword(DirectoryConfigFile.ResolvePassword(named));
                     draft.PasswordKept = draft.Password.Length > 0;
                 }
+
+                draft.Opened = DirectoryWizardStamp(draft);
             }
 
             if (await RunDirectoryWizardAsync(draft, title, cancellationToken).ConfigureAwait(false) is { } changed)
@@ -264,11 +277,13 @@ internal sealed partial class SettingsMenu
         const int summary = 12;
         int step = draft.Original is null ? 0 : summary;
         bool fromSummary = draft.Original is not null;
+        int? back = null;   // the summary row just changed, for its cursor (2026-11-26, the user's report)
         while (true)
         {
             if (step == summary)
             {
-                var (done, changed, edit) = await DirectoryWizardSummaryAsync(draft, title, cancellationToken).ConfigureAwait(false);
+                var (done, changed, edit) = await DirectoryWizardSummaryAsync(draft, title, back, cancellationToken).ConfigureAwait(false);
+                back = edit;
                 if (done)
                 {
                     return changed;
@@ -543,18 +558,33 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    private async Task<(bool Done, bool Changed, int? Edit)> DirectoryWizardSummaryAsync(DirectoryDraft draft, string title, CancellationToken cancellationToken)
+    private async Task<(bool Done, bool Changed, int? Edit)> DirectoryWizardSummaryAsync(DirectoryDraft draft, string title, int? back, CancellationToken cancellationToken)
     {
-        int cursor = 0;
+        // Whether the entry is offered now (2026-11-26): the unsaved-changes question's Save keeps it so. The summary opens on the
+        // save that keeps it so too, as the other nine wizards' do (an edit of a hidden domain on "Save, hidden").
+        bool offered = ConnectionWizardStartCursor(draft.Original, DirectoryCatalog.OfferedNames(_settings.Current.DirectoryDomainsOffered, JoinedDomain() is not null)) == 0;
+        int cursor = offered ? 0 : 1;
         while (true)
         {
             var actions = new List<string> { SqlWizardSaveOfferedRow, ComputerWizardSaveHiddenRow, DirectoryWizardTestRow, SqlWizardCancelRow };
             var ruled = ConnectionWizardSummaryRows(actions, DirectoryWizardRows(draft));
+            if (back is { } row)
+            {
+                cursor = actions.Count + row;   // back on the row just changed (2026-11-26, the user's report: it jumped to a save row)
+                back = null;
+            }
+
             var rows = ruled.Rows;
             var page = new MenuPage(title, rows, PickKeys) { Headings = ruled.Headings, Caption = DirectoryWizardSummaryCaption };
             if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
-                return (false, false, null);
+                var escLeave = await ConnectionWizardLeaveAsync(false, draft.Original, DirectoryWizardDirty(draft), "domain", DirectoryWizardCancelledNotice, () => DirectoryWizardSave(draft, offer: offered), cancellationToken).ConfigureAwait(false);
+                if (escLeave.Stay)
+                {
+                    continue;
+                }
+
+                return escLeave.Saved is { } escSaved ? (true, escSaved, null) : (false, false, null);
             }
 
             int picked = ruled.ItemOf(pickedRow);
@@ -583,8 +613,13 @@ internal sealed partial class SettingsMenu
 
             if (picked == 3)
             {
-                Sink.Notice(draft.Original is null ? DirectoryWizardCancelledNotice : ConnectionWizardUnchangedNotice);
-                return (true, false, null);
+                var cancelLeave = await ConnectionWizardLeaveAsync(true, draft.Original, DirectoryWizardDirty(draft), "domain", DirectoryWizardCancelledNotice, () => DirectoryWizardSave(draft, offer: offered), cancellationToken).ConfigureAwait(false);
+                if (cancelLeave.Stay)
+                {
+                    continue;
+                }
+
+                return (true, cancelLeave.Saved ?? false, null);
             }
 
             if (DirectoryWizardSave(draft, offer: picked == 0) is { } changed)

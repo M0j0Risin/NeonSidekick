@@ -14,7 +14,7 @@ namespace NeonSidekick.App;
 /// hand in its JSON): the theme's fifteen colors as a list, each with its swatch and hex and what it colors, the theme drawn live beside it
 /// (<see cref="ThemePreview"/>, never put in force), and the contrast bars it misses under it (<see cref="ThemeChecks"/>, warnings that never
 /// block a save). ←/→ step the cursor's color lighter or darker; Enter opens the color picker (hue, saturation and lightness bars, and a typed
-/// hex value: the user's pick after the mockup); <c>s</c> saves, <c>r</c> puts the row back, <c>d</c> and Esc with changes ask. A built-in
+/// hex value: the user's pick after the mockup); <c>s</c> saves, <c>r</c> puts the row back, <c>d</c> and Esc with changes ask Keep editing, Save or Discard (2026-11-26, the user's ask). A built-in
 /// can't be changed: its <c>&lt;name&gt;-custom</c> copy is offered, made by <c>/theme export</c>'s path, or the one already made. A save
 /// changes only the roles changed, in the file's own bytes (<see cref="ThemeFileSplice"/>, 2026-11-17, the admin-themes-render review's #25,
 /// #26, #156, #163: its comments, layout, key spelling and line endings stay), atomically, asking first when the file changed on disk since the
@@ -230,6 +230,7 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The editor's list until a save, a discard or Esc: whether the save was of the theme in force, and the line to say (the save's, or
     /// <see cref="UnchangedNotice"/>, #195). A pane dismissed by a double-click off it, or the token, leaves at once with the edits dropped (#75).
+    /// Esc and <c>d</c> with changes ask <see cref="AskLeaveAsync"/> (2026-11-26, the user's ask, in place of the yes/no): Save is <c>s</c>'s own.
     /// </summary>
     private async Task<(bool InForce, string Notice)> EditLoopAsync(OpenedTheme opened, CancellationToken cancellationToken)
     {
@@ -241,6 +242,36 @@ internal sealed partial class SettingsMenu
         var data = ThemeFile.Parse(opened.Text, out _);
         bool Gone() => _pane.Dismissed || cancellationToken.IsCancellationRequested;
         bool Changed() => !working.SequenceEqual(original);
+        // Leaving by Esc or d (2026-11-26): at once without changes or with the pane gone; else the question. Null keeps the editor.
+        async Task<(bool InForce, string Notice)?> LeaveAsync()
+        {
+            if (Gone() || !Changed())
+            {
+                return (false, UnchangedNotice);
+            }
+
+            var choice = await AskLeaveAsync(palette.Name, cancellationToken).ConfigureAwait(false);
+            if (Gone() || choice == LeaveChoice.Discard)
+            {
+                return (false, UnchangedNotice);
+            }
+
+            if (choice == LeaveChoice.Save)
+            {
+                if (await SaveEditAsync(opened, working, original, cancellationToken).ConfigureAwait(false) is { } saved)
+                {
+                    return saved;
+                }
+
+                if (Gone())
+                {
+                    return (false, UnchangedNotice);
+                }
+            }
+
+            return null;   // Keep editing, or a save refused (said): the editor stays
+        }
+
         int cursor = 0;
         while (true)
         {
@@ -262,13 +293,12 @@ internal sealed partial class SettingsMenu
             };
             if (await _pane.PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is not { } pick)
             {
-                if (Gone() || !Changed()
-                    || await ConfirmAsync(ThemeText.EditDiscardQuestion, cancellationToken, close: false).ConfigureAwait(false) || Gone())
+                if (await LeaveAsync().ConfigureAwait(false) is { } left)
                 {
-                    return (false, UnchangedNotice);
+                    return left;
                 }
 
-                continue;   // a real "No": the editor stays
+                continue;
             }
 
             cursor = pick.Row;
@@ -304,9 +334,9 @@ internal sealed partial class SettingsMenu
                     continue;
                 case 2:
                     // d asks when there are changes (#45), as Esc does.
-                    if (!Changed() || await ConfirmAsync(ThemeText.EditDiscardQuestion, cancellationToken, close: false).ConfigureAwait(false) || Gone())
+                    if (await LeaveAsync().ConfigureAwait(false) is { } discarded)
                     {
-                        return (false, UnchangedNotice);
+                        return discarded;
                     }
 
                     continue;

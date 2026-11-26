@@ -339,6 +339,30 @@ public partial class ToolsMenuTests
         Assert.False(Directory.Exists(_settings.ProfileComfyDirectory) && Directory.GetFiles(_settings.ProfileComfyDirectory).Length > 0);
     }
 
+    /// <summary>A new workflow's Cancel asks a yes/no (2026-11-26, the user's ask): No keeps the summary, Yes writes nothing.</summary>
+    [Fact]
+    public async Task OnThePane_TheComfyWizard_CancelAsks()
+    {
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter);                     // + New workflow (the only row)
+        Push(Keys.Enter, Keys.Enter, Keys.Enter);   // build, text to image, model-a
+        Push([.. Enumerable.Repeat(Keys.Backspace, 20)]);
+        Type("fresh");                        // the summary
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // Cancel: asks
+        Push(Keys.Enter);                     // No: the summary again, on Cancel
+        Push(Keys.Enter, Keys.Char('y'), Keys.Enter);        // Yes
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.NewDiscardQuestion("workflow"), Output);
+        Assert.Contains(SettingsMenu.ComfyWizardCancelledNotice, Output);
+        Assert.False(Directory.Exists(_settings.GlobalComfyDirectory) && Directory.GetFiles(_settings.GlobalComfyDirectory).Length > 0);
+        Assert.False(Directory.Exists(_settings.ProfileComfyDirectory) && Directory.GetFiles(_settings.ProfileComfyDirectory).Length > 0);
+    }
+
     /// <summary>Edit opens an installed workflow's summary: a number set writes only its key; the graph, untouched, is not rewritten.</summary>
     [Fact]
     public async Task OnThePane_TheComfyEdit_WritesOnlyWhatChanged()
@@ -438,12 +462,120 @@ public partial class ToolsMenuTests
         Push([.. Enumerable.Repeat(Keys.Backspace, 9)]);
         Type(typed);
         Push(Keys.Escape, Keys.Escape);                              // the LoRAs page, then the summary unsaved
+        if (changed)
+        {
+            Push(Keys.Down, Keys.Down, Keys.Enter);                  // the unsaved-changes question (2026-11-26): Discard
+        }
+
         Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(sidecar, File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
         Assert.Equal(changed, Output.Contains(SettingsMenu.ComfyEditDiscardedNotice, StringComparison.Ordinal));
+        Assert.Equal(changed, Output.Contains(SettingsMenu.LeaveQuestion("portrait"), StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Esc with a change asks (2026-11-26, the user's ask): Keep editing goes back to the summary with the change kept, Esc there asks again,
+    /// and Discard leaves the files as they were.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheComfyEdit_EscWithChanges_AsksKeepSaveOrDiscard()
+    {
+        const string sidecar = "---\nfamily: sdxl\n---\n";
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", sidecar);
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);                                // portrait's actions, Edit
+        Push([.. Enumerable.Repeat(Keys.Down, 11), Keys.Enter]);    // Steps
+        Type("30");
+        Push(Keys.Escape, Keys.Enter);                               // asks; Keep editing
+        Push(Keys.Escape, Keys.Escape);                              // asks; Esc keeps editing too
+        Push(Keys.Escape, Keys.Down, Keys.Down, Keys.Enter);         // asks; Discard
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(sidecar, File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+        Assert.Contains(SettingsMenu.LeaveQuestion("portrait"), Output);
+        Assert.Contains(SettingsMenu.ComfyEditDiscardedNotice, Output);
+        Assert.DoesNotContain(SettingsMenu.ComfyEditSavedNotice, Output);
+    }
+
+    /// <summary>Save on the unsaved-changes question writes as the Save row does (2026-11-26).</summary>
+    [Fact]
+    public async Task OnThePane_TheComfyEdit_EscWithChanges_SaveWrites()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait");
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);
+        Push([.. Enumerable.Repeat(Keys.Down, 11), Keys.Enter]);    // Steps
+        Type("30");
+        Push(Keys.Escape, Keys.Down, Keys.Enter);                    // asks; Save
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("---\nfamily: sdxl\nsteps: 30\n---\n", File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+        Assert.Contains(SettingsMenu.ComfyEditSavedNotice, Output);
+    }
+
+    /// <summary>The Cancel row asks only with a change (2026-11-26): without one it leaves saying nothing changed.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnThePane_TheComfyEdit_TheCancelRow_AsksOnlyWithChanges(bool changed)
+    {
+        const string sidecar = "---\nfamily: sdxl\n---\n";
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", sidecar);
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);
+        if (changed)
+        {
+            Push([.. Enumerable.Repeat(Keys.Down, 11), Keys.Enter]);    // Steps
+            Type("30");
+            Push([.. Enumerable.Repeat(Keys.Up, 9), Keys.Enter]);       // Cancel (height, width, six model rows, then it)
+            Push(Keys.Down, Keys.Down, Keys.Enter);                     // Discard
+        }
+        else
+        {
+            Push(Keys.Down, Keys.Down, Keys.Enter);                     // Cancel
+        }
+
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(sidecar, File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+        Assert.Equal(changed, Output.Contains(SettingsMenu.LeaveQuestion("portrait"), StringComparison.Ordinal));
+        Assert.Contains(changed ? SettingsMenu.ComfyEditDiscardedNotice : SettingsMenu.ConnectionWizardUnchangedNotice, Output);
+    }
+
+    /// <summary>A change put back before leaving is no change (2026-11-26): Esc leaves without asking.</summary>
+    [Fact]
+    public async Task OnThePane_TheComfyEdit_AChangeUndone_LeavesWithoutAsking()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait");
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);
+        Push([.. Enumerable.Repeat(Keys.Down, 11), Keys.Enter]);    // Steps
+        Type("30");
+        Push(Keys.Enter, Keys.Backspace, Keys.Backspace, Keys.Enter);   // Steps again, emptied: none, as it was
+        Push(Keys.Escape);                                           // no question
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.DoesNotContain(SettingsMenu.LeaveQuestion("portrait"), Output);
+        Assert.Contains(SettingsMenu.ConnectionWizardUnchangedNotice, Output);
     }
 
     /// <summary>Removing a LoRA in Edit takes its trigger words out of the sidecar with it (2026-11-26).</summary>

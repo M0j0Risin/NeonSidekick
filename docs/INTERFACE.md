@@ -173,6 +173,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
 | *ComfyUI workflows* | Space offers or hides · `a` all · `n` none · `c` checks against the server · Enter opens a workflow's actions · Del deletes (asks) · the top row adds one |
 | A ComfyUI test or check under way | Esc cancels it |
+| A wizard's summary, a ComfyUI workflow's Edit | Enter on a row changes it, the cursor coming back to it · Esc or Cancel with unsaved changes asks: Save (offered or hidden as it was), Discard or Keep editing · Cancel on a new one asks first |
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The question pane (`ask_user`) | ←/→ questions · Enter chooses, or toggles on a multi · Space marks or clears · 1–9 jump · Other… types your own · Submit (skipped ones go as skipped) · Decline with a note… · Esc declines |
 | The shell approval | `d` deny · `o` once · `s` session · `a` always · `v` the whole command · Esc denies. A script has no `a`; a line with nothing readable to hold has only `d` and `o`. |
@@ -201,7 +202,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/settings changed` | Enter edits · `r` back to default |
 | `/profile` | `+` goes to **+ Add a profile…** · a letter jumps to a profile |
 | `/theme` | a letter jumps to the next theme with it · → edit (as `/theme edit`), then back to the list · Del deletes one of yours (asks) |
-| `/theme edit` | ←/→ lighter or darker (Shift ×5) · Enter opens the color picker · `s` save · `r` the row back · `d` discard · Esc closes, asking when there are changes |
+| `/theme edit` | ←/→ lighter or darker (Shift ×5) · Enter opens the color picker · `s` save · `r` the row back · `d` discard · Esc close; with changes, both offer Save, Discard or Keep editing |
 | `/theme edit`'s color picker | ↑/↓ a bar · ←/→ move it (Shift ×5) · Enter uses the color, or on *Hex value* types one · Esc back, unchanged |
 | The Oracle and PostgreSQL wizards' *Schemas* page | Enter or Space ticks · `a` all · `n` none · Shift+↑/↓, Shift+Home/End move: the first ticked is current (Oracle) or first on the search path · Continue goes on · Esc back |
 | `/toolbar edit`, `/perfbar edit`, *Status bar* | [Bar checklists](#bar-checklists) |

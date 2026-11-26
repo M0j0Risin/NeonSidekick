@@ -24,7 +24,7 @@ public partial class ToolsMenuTests
         Push(Keys.Enter);                                             // sales ✓, gone ✓ (missing), public, Continue (the saved first, #31): sales off
         Push(Keys.Down, Keys.Char(' '));                              // gone off
         Push(Keys.Down, Keys.Down, Keys.Enter);                       // Continue: none ticked, every schema
-        Push(Keys.Enter);                                             // Save, hidden
+        Push(Keys.Home, Keys.Down, Keys.Enter);                       // Save, hidden: Home, then one down (the cursor stayed on the row changed)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -50,7 +50,7 @@ public partial class ToolsMenuTests
         Type("hr, oe, hr");                                           // refused: the same schema twice
         Push([.. Enumerable.Repeat(Keys.Backspace, 4)]);
         Push(Keys.Enter);                                             // hr, oe
-        Push(Keys.Enter);                                             // Save, hidden
+        Push(Keys.Home, Keys.Down, Keys.Enter);                       // Save, hidden: Home, then one down (the cursor stayed on the row changed)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -90,7 +90,7 @@ public partial class ToolsMenuTests
         Push(Keys.Shift(ConsoleKey.UpArrow));                         // above OE
         Push(Keys.Shift(ConsoleKey.Home));                            // to the top: SH, HR, GONE, SYSTEM, OE
         Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);       // Continue
-        Push(Keys.Enter);                                             // Save, hidden
+        Push(Keys.Home, Keys.Down, Keys.Enter);                       // Save, hidden: Home, then one down (the cursor stayed on the row changed)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -121,7 +121,7 @@ public partial class ToolsMenuTests
         Push([.. Enumerable.Repeat(Keys.Down, 13), Keys.Enter]);      // from Save hidden to the Schemas row
         Push(Keys.Down, Keys.Enter);                                  // far ✓, sales ✓, public: sales off
         Push(Keys.Down, Keys.Down, Keys.Enter);                       // Continue: far alone
-        Push(Keys.Enter);                                             // Save, hidden
+        Push(Keys.Home, Keys.Down, Keys.Enter);                       // Save, hidden: Home, then one down (the cursor stayed on the row changed)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -153,7 +153,7 @@ public partial class ToolsMenuTests
         Push([.. Enumerable.Repeat(Keys.Backspace, 4)]);
         Type("reader");                                               // on to Schemas: sales ✓, public
         Push(Keys.Down, Keys.Down, Keys.Enter);                       // Continue
-        Push(Keys.Enter);                                             // Save, hidden
+        Push(Keys.Home, Keys.Down, Keys.Enter);                       // Save, hidden: Home, then one down (the cursor stayed on the row changed)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -219,7 +219,7 @@ public partial class ToolsMenuTests
         Push(Keys.Down, Keys.Enter);                                  // Continue
         Push(Keys.Down, Keys.Down, Keys.Enter);                       // which comes first: archive
         Push(Keys.Down, Keys.Enter);                                  // which comes next: public (sales last)
-        Push(Keys.Enter);                                             // Save, hidden
+        Push([.. Enumerable.Repeat(Keys.Up, 13), Keys.Enter]);        // Save, hidden: thirteen up (the cursor stayed on Schemas, 2026-11-26)
 
         await settings.EditAsync(SettingsField.PostgresAddConnection, _settings.Current, new MenuPage("Tools", [], ""), 0, CancellationToken.None);
 

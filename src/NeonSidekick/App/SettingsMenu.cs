@@ -1635,6 +1635,30 @@ internal sealed partial class SettingsMenu
     /// <summary>The yes/no pane's <see cref="MenuPage.Hotkeys"/>: <c>n</c> moves the cursor to <c>No</c>, <c>y</c> to <c>Yes</c> (Enter still picks). Pinned.</summary>
     public static readonly IReadOnlyDictionary<char, int> ConfirmHotkeys = new Dictionary<char, int> { ['n'] = 0, ['y'] = 1 };
 
+    /// <summary>
+    /// The unsaved-changes question's title (2026-11-26, the user's ask: leaving the ComfyUI workflow Edit, the theme editor or a
+    /// connection wizard's edit dropped the changes with no question, or with only a yes/no): the saved name, quoted.
+    /// </summary>
+    public static string LeaveQuestion(string name) => $"Unsaved changes to '{name}'.";
+
+    /// <summary>
+    /// The unsaved-changes question's rows (2026-11-26, the user's picks: the usual Save / Don't Save / Cancel, worded Keep editing,
+    /// Save, Discard): Keep editing first, the row the cursor opens on and Esc's answer, so Esc, Esc never loses anything.
+    /// </summary>
+    public static readonly IReadOnlyList<string> LeaveRows = ["Keep editing", "Save", "Discard"];
+
+    /// <summary>The unsaved-changes question's hint (2026-11-26): no hotkeys, the user's pick, so a stray letter answers nothing.</summary>
+    public const string LeaveKeys = "Enter = choose · Esc = keep editing";
+
+    /// <summary>
+    /// A new entry's Cancel (2026-11-26, the user's ask): a yes/no, since there's nothing saved to keep. <paramref name="noun"/> is the
+    /// word the wizard already names its entry by (connection, database, share, computer, domain, workflow).
+    /// </summary>
+    public static string NewDiscardQuestion(string noun) => $"Cancel the new {noun} and lose it?";
+
+    /// <summary>The unsaved-changes question's answers (<see cref="AskLeaveAsync"/>).</summary>
+    internal enum LeaveChoice { KeepEditing, Save, Discard }
+
     /// <summary>The status line for a settings row that cannot change while a reply runs (a reconnect, the profile, the sandbox, the tools flip). Pinned.</summary>
     public const string NotWhileReplyRunsNotice = "(not while a reply runs)";
 
@@ -4849,6 +4873,23 @@ internal sealed partial class SettingsMenu
             ? await PickOnceAsync(page, 0, cancellationToken).ConfigureAwait(false)
             : await PickAsync(page, 0, cancellationToken).ConfigureAwait(false);
         return picked == 1;
+    }
+
+    /// <summary>
+    /// The unsaved-changes question (2026-11-26, the user's ask): <see cref="LeaveQuestion"/> over <see cref="LeaveRows"/>, asked from
+    /// inside a visit as <see cref="ConfirmAsync"/> with <c>close: false</c> is, so the pane stays at the visit's height (no pane: the
+    /// Spectre prompt, opening on Keep editing). Esc, the token and no keyboard are Keep editing; the caller checks
+    /// <see cref="MenuPane.Dismissed"/> and the token after it, since a dismissed pane leaves at once.
+    /// </summary>
+    private async Task<LeaveChoice> AskLeaveAsync(string name, CancellationToken cancellationToken)
+    {
+        var page = new MenuPage(LeaveQuestion(name), LeaveRows, LeaveKeys);
+        return await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) switch
+        {
+            1 => LeaveChoice.Save,
+            2 => LeaveChoice.Discard,
+            _ => LeaveChoice.KeepEditing,
+        };
     }
 
     /// <summary>

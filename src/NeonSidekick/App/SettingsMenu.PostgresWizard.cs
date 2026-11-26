@@ -91,6 +91,9 @@ internal sealed partial class SettingsMenu
         /// <summary>An edit's entry name in its file (2026-10-05); null for a new connection.</summary>
         public string? Original { get; init; }
 
+        /// <summary>An edit's stamp as it opened (2026-11-26, <see cref="ConnectionStamp"/>): what the unsaved-changes question compares.</summary>
+        public string? Opened { get; set; }
+
         /// <summary>An edit's Credential Manager target under its old name's default, removed when the save moves the password.</summary>
         public string? OriginalTarget { get; init; }
 
@@ -105,6 +108,14 @@ internal sealed partial class SettingsMenu
         /// <summary>The Schemas step's last listing (#99).</summary>
         public SchemaListCache Schemas { get; } = new();
     }
+
+    /// <summary>An edit's draft as it would be written, no password in it (<see cref="ConnectionStamp"/>, 2026-11-26).</summary>
+    private static string PostgresWizardStamp(PostgresDraft draft) =>
+        ConnectionStamp(draft.Name, draft.Global, draft.Config, PostgresJsonContext.Default.PostgresConnectionConfig, x => x.Password = null);
+
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    private static bool PostgresWizardDirty(PostgresDraft draft) =>
+        draft.Original is not null && (!string.Equals(PostgresWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
     private string PostgresWizardPath(bool global) =>
         global ? PostgresConfigFile.GlobalPath(_settings.StorageDirectory) : PostgresConfigFile.ProfilePath(_settings.ProfileDirectory);
@@ -199,6 +210,7 @@ internal sealed partial class SettingsMenu
         };
         draft.Password = StoredPassword(PostgresSecrets.Resolve(named));
         draft.PasswordKept = draft.Password.Length > 0;
+        draft.Opened = PostgresWizardStamp(draft);
         return draft;
     }
 
@@ -209,11 +221,13 @@ internal sealed partial class SettingsMenu
         // read asks first.
         var step = draft.Original is null ? PostgresWizardStep.File : PostgresWizardMissing(draft) ?? PostgresWizardStep.Summary;
         bool fromSummary = draft.Original is not null;
+        PostgresWizardStep? back = null;   // the summary row just changed, for its cursor (2026-11-26, the user's report)
         while (true)
         {
             if (step == PostgresWizardStep.Summary)
             {
-                var (done, changed, edit) = await PostgresWizardSummaryAsync(draft, cancellationToken).ConfigureAwait(false);
+                var (done, changed, edit) = await PostgresWizardSummaryAsync(draft, back, cancellationToken).ConfigureAwait(false);
+                back = edit;
                 if (done)
                 {
                     return changed;
@@ -570,9 +584,11 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>The summary: the save rows, the test, the cancel, then every row of the draft. Done with whether a setting changed; or the step a row picked; or neither for ESC (back).</summary>
-    private async Task<(bool Done, bool Changed, PostgresWizardStep? Edit)> PostgresWizardSummaryAsync(PostgresDraft draft, CancellationToken cancellationToken)
+    private async Task<(bool Done, bool Changed, PostgresWizardStep? Edit)> PostgresWizardSummaryAsync(PostgresDraft draft, PostgresWizardStep? back, CancellationToken cancellationToken)
     {
-        int cursor = ConnectionWizardStartCursor(draft.Original, _settings.Current.PostgresConnectionsOffered);
+        // Whether the entry is offered now (2026-11-26): the unsaved-changes question's Save keeps it so.
+        bool offered = ConnectionWizardStartCursor(draft.Original, _settings.Current.PostgresConnectionsOffered) == 0;
+        int cursor = offered ? 0 : 1;
         while (true)
         {
             // Always offer-or-hide (2026-10-01): nothing is offered until ticked, so the wizard is where a new one is.
@@ -581,6 +597,12 @@ internal sealed partial class SettingsMenu
             actions.Add(SqlWizardTestRow);
             actions.Add(SqlWizardCancelRow);
             var ruled = ConnectionWizardSummaryRows(actions, PostgresWizardRows(draft));
+            if (back is { } row)
+            {
+                cursor = actions.Count + (int)row;   // back on the row just changed (2026-11-26, the user's report: it jumped to a save row)
+                back = null;
+            }
+
             var rows = ruled.Rows;
             var page = new MenuPage(PostgresWizardTitle, rows, PickKeys) { Headings = ruled.Headings, Caption = SqlWizardSummaryCaption };
             if (!_pane.Enabled)
@@ -590,7 +612,13 @@ internal sealed partial class SettingsMenu
 
             if (await PickAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pickedRow)
             {
-                return (false, false, null);
+                var escLeave = await ConnectionWizardLeaveAsync(false, draft.Original, PostgresWizardDirty(draft), "connection", SqlWizardCancelledNotice, () => PostgresWizardSave(draft, offer: offered), cancellationToken).ConfigureAwait(false);
+                if (escLeave.Stay)
+                {
+                    continue;
+                }
+
+                return escLeave.Saved is { } escSaved ? (true, escSaved, null) : (false, false, null);
             }
 
             int picked = ruled.ItemOf(pickedRow);
@@ -619,8 +647,13 @@ internal sealed partial class SettingsMenu
 
             if (picked == test + 1)
             {
-                Sink.Notice(draft.Original is null ? SqlWizardCancelledNotice : ConnectionWizardUnchangedNotice);
-                return (true, false, null);
+                var cancelLeave = await ConnectionWizardLeaveAsync(true, draft.Original, PostgresWizardDirty(draft), "connection", SqlWizardCancelledNotice, () => PostgresWizardSave(draft, offer: offered), cancellationToken).ConfigureAwait(false);
+                if (cancelLeave.Stay)
+                {
+                    continue;
+                }
+
+                return (true, cancelLeave.Saved ?? false, null);
             }
 
             if (PostgresWizardSave(draft, offer: picked == 0) is { } changed)

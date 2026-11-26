@@ -1207,6 +1207,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, read, no description
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test: two others
         Push(Keys.Down, Keys.Enter);              // Cancel
+        Push(Keys.Char('y'), Keys.Enter);         // the new connection's yes/no (2026-11-26): lose it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -1370,12 +1371,15 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, read, no description
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows): refused
         Push(Keys.Down, Keys.Enter);              // Cancel
+        Push(Keys.Enter);                         // the new connection's yes/no (2026-11-26): No keeps the summary, on Cancel
+        Push(Keys.Enter, Keys.Char('y'), Keys.Enter);   // Cancel again: yes, lose it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Contains("'AW' is already in ", Output);
         Assert.Contains(NeonSidekick.Sql.SqlText.RunAsNeedsDomain("svc"), Output);
+        Assert.Contains(SettingsMenu.NewDiscardQuestion("connection"), Output);
         Assert.Contains("Error: could not connect to rep: Login failed for user.", Output);
         Assert.Contains(SettingsMenu.SqlWizardCancelledNotice, Output);
         Assert.Equal(Before, File.ReadAllText(path));
@@ -1416,6 +1420,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter, Keys.Enter);   // mandatory, no, the default timeout, read, no description
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows): refused
         Push(Keys.Down, Keys.Enter);              // Cancel
+        Push(Keys.Char('y'), Keys.Enter);         // the new connection's yes/no (2026-11-26): lose it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -1450,6 +1455,7 @@ public partial class ToolsMenuTests : IDisposable
         Push(Keys.Enter, Keys.Enter, Keys.Enter); // the default timeout, read, no description
         Push(Keys.Down, Keys.Down, Keys.Enter);   // Test (under the two save rows since 2026-10-01; this live test had not followed)
         Push(Keys.Down, Keys.Enter);              // Cancel
+        Push(Keys.Char('y'), Keys.Enter);         // the new connection's yes/no (2026-11-26): lose it
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);

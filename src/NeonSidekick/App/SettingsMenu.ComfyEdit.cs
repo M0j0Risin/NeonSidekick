@@ -333,12 +333,13 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The summary over <paramref name="draft"/>: its actions (a new one's two saves, or an Edit's one; Test; Cancel), then the sections. Enter on a
-    /// row changes it here. (Done, Changed, Added): not Done on Esc (the wizard goes back to the name; an Edit back to the actions, nothing saved).
+    /// row changes it here. (Done, Changed, Added): not Done on Esc (the wizard goes back to the name; an Edit back to the actions). An Edit with
+    /// unsaved changes asks first at Esc and Cancel (2026-11-26, the user's ask: <see cref="ComfyEditLeaveAsync"/>), and a new one's Cancel asks a
+    /// yes/no, since everything typed would go.
     /// </summary>
     private async Task<(bool Done, bool Changed, string? Added)> ComfySummaryAsync(ComfyDraft draft, CancellationToken cancellationToken)
     {
         object at = 0;
-        bool touched = false;
         string title = draft.Editing ? Crumb(FieldName(SettingsField.ComfyWorkflowsOffered) + " › " + draft.Name + " › " + ComfyEditAction) : ComfyWizardTitle;
         while (true)
         {
@@ -376,7 +377,13 @@ internal sealed partial class SettingsMenu
             {
                 if (draft.Editing)
                 {
-                    Sink.Notice(touched ? ComfyEditDiscardedNotice : ConnectionWizardUnchangedNotice);
+                    var (leave, saved) = await ComfyEditLeaveAsync(draft, cancellationToken).ConfigureAwait(false);
+                    if (!leave)
+                    {
+                        continue;
+                    }
+
+                    return (saved, saved, null);
                 }
 
                 return (false, false, null);
@@ -397,7 +404,7 @@ internal sealed partial class SettingsMenu
                     continue;
                 }
 
-                touched |= await ComfyEditFieldAsync(field, draft, page, pickedRow, parts, cancellationToken).ConfigureAwait(false);
+                await ComfyEditFieldAsync(field, draft, page, pickedRow, parts, cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
@@ -414,7 +421,25 @@ internal sealed partial class SettingsMenu
 
             if (picked == actions.Count + 1)
             {
-                Sink.Notice(draft.Editing ? (touched ? ComfyEditDiscardedNotice : ConnectionWizardUnchangedNotice) : ComfyWizardCancelledNotice);
+                if (draft.Editing)
+                {
+                    var (leave, saved) = await ComfyEditLeaveAsync(draft, cancellationToken).ConfigureAwait(false);
+                    if (!leave)
+                    {
+                        continue;
+                    }
+
+                    return (true, saved, null);
+                }
+
+                // A new workflow's Cancel asks (2026-11-26, the user's ask): everything typed would go. No keeps the summary.
+                if (!await ConfirmAsync(NewDiscardQuestion(ComfyWorkflowNoun), cancellationToken, close: false).ConfigureAwait(false)
+                    && !_pane.Dismissed && !cancellationToken.IsCancellationRequested)
+                {
+                    continue;
+                }
+
+                Sink.Notice(ComfyWizardCancelledNotice);
                 return (true, false, null);
             }
 
@@ -975,6 +1000,48 @@ internal sealed partial class SettingsMenu
 
         var (_, saved, _) = await ComfySummaryAsync(draft, cancellationToken).ConfigureAwait(false);
         return saved;
+    }
+
+    /// <summary>The noun a new workflow's Cancel names (<see cref="NewDiscardQuestion"/>).</summary>
+    private const string ComfyWorkflowNoun = "workflow";
+
+    /// <summary>
+    /// Leaving an Edit, by Esc or Cancel (2026-11-26, the user's ask): with nothing to write it leaves, saying so; with unsaved changes it asks
+    /// <see cref="AskLeaveAsync"/>. Save is the Save row's own (a refused save is said and stays in the Edit), Discard leaves. A pane dismissed
+    /// by a click off it, or the token, leaves at once without asking. (Leave, Saved).
+    /// </summary>
+    private async Task<(bool Leave, bool Saved)> ComfyEditLeaveAsync(ComfyDraft draft, CancellationToken cancellationToken)
+    {
+        bool Gone() => _pane.Dismissed || cancellationToken.IsCancellationRequested;
+        if (!ComfyEditDirty(draft))
+        {
+            Sink.Notice(ConnectionWizardUnchangedNotice);
+            return (true, false);
+        }
+
+        var choice = Gone() ? LeaveChoice.Discard : await AskLeaveAsync(draft.Name, cancellationToken).ConfigureAwait(false);
+        if (Gone() || choice == LeaveChoice.Discard)
+        {
+            Sink.Notice(ComfyEditDiscardedNotice);
+            return (true, false);
+        }
+
+        if (choice == LeaveChoice.Save && ComfyEditSave(draft) is { } saved)
+        {
+            return (true, saved);
+        }
+
+        return (false, false);
+    }
+
+    /// <summary>
+    /// Whether an Edit has anything Save would write, or refuse (2026-11-26): <see cref="ComfyEditTexts"/>' graph, sidecar or reason. Safe on
+    /// every Esc: the sidecar setters return null rather than throw, and a refusal arises only for a value that differs.
+    /// </summary>
+    private static bool ComfyEditDirty(ComfyDraft draft)
+    {
+        var (json, md, error) = ComfyEditTexts(draft);
+        return json is not null || md is not null || error is not null;
     }
 
     /// <summary>An Edit's new texts: the graph when it changed, the sidecar with each changed key set in place; or why it can't be written.</summary>

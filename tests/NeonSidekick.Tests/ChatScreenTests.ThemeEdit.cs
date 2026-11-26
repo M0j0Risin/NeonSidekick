@@ -152,7 +152,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task ThemeEdit_Reset_PutsTheRowBack_SaveSaysNoChanges_EscWithChangesAsks_YesDiscards()
+    public async Task ThemeEdit_Reset_PutsTheRowBack_SaveSaysNoChanges_EscWithChangesAsks_DiscardDiscards()
     {
         using var theme = new ThemeScope();
         EditorPane();
@@ -165,18 +165,19 @@ public partial class ChatScreenTests
         PushKeys(Keys.Char('s'));                // nothing to save
         PushKeys(Keys.Right);
         PushKeys(Keys.Escape);                   // a change: asks
-        PushKeys(Keys.Char('n'));
-        PushKeys(Keys.Enter);                    // no: the editor again
+        PushKeys(Keys.Enter);                    // Keep editing: the editor again
         PushKeys(Keys.Escape);
-        PushKeys(Keys.Char('y'));
-        PushKeys(Keys.Enter);                    // yes: lost
+        PushKeys(Keys.Escape);                   // Esc on the question keeps editing too
+        PushKeys(Keys.Escape);
+        PushKeys(Keys.Down, 2);
+        PushKeys(Keys.Enter);                    // Discard: lost
         PushLine("/exit");
 
         string output = await RunAsync();
 
         Assert.Equal(json, File.ReadAllText(MineTheme()));
         Assert.Contains(ThemeText.EditUnchanged, output);
-        Assert.Contains(ThemeText.EditDiscardQuestion, output);
+        Assert.Contains(SettingsMenu.LeaveQuestion("mine"), output);
     }
 
     [Fact]
@@ -199,7 +200,7 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains("⚠  dimmer on bg 1.0:1 (wants 2.5)", output);
-        Assert.DoesNotContain(ThemeText.EditDiscardQuestion, output);
+        Assert.DoesNotContain(SettingsMenu.LeaveQuestion("dull"), output);
         Assert.Contains("  ✗ " + SettingsMenu.ThemeNameError("synthwave-custom", ThemeCatalog.Scan(_settings.ThemesDirectory).Names)[..40], output);
     }
 
@@ -239,11 +240,10 @@ public partial class ChatScreenTests
         PushKeys(Keys.Enter);                    // yes: bauhaus-custom made
         PushKeys(Keys.Right);                    // primary lighter
         PushKeys(Keys.Char('d'));                // a change: asks
-        PushKeys(Keys.Char('n'));
-        PushKeys(Keys.Enter);                    // no: the editor again
+        PushKeys(Keys.Enter);                    // Keep editing: the editor again
         PushKeys(Keys.Char('d'));
-        PushKeys(Keys.Char('y'));
-        PushKeys(Keys.Enter);                    // yes: dropped
+        PushKeys(Keys.Down, 2);
+        PushKeys(Keys.Enter);                    // Discard: dropped
         PushLine("/theme edit noir");
         PushKeys(Keys.Char('n'));
         PushKeys(Keys.Enter);                    // no copy
@@ -255,10 +255,57 @@ public partial class ChatScreenTests
         Assert.Contains("\"bg\": \"secondary\"", File.ReadAllText(copy), StringComparison.Ordinal);
         Assert.Contains("Copied bauhaus to bauhaus-custom", output);   // its path wraps to a line of its own
         Assert.DoesNotContain(ThemeText.ExportDone("bauhaus-custom", copy)[..30], output);
-        Assert.Contains(ThemeText.EditDiscardQuestion, output);
+        Assert.Contains(SettingsMenu.LeaveQuestion(ThemeText.CopyName("bauhaus")), output);
         Assert.Equal(Theme.ToHex(ThemeLibrary.Get("bauhaus").Primary), ColorIn(copy, "primary"));
         Assert.False(File.Exists(Path.Combine(_settings.ThemesDirectory, "noir-custom.json")));
         Assert.Contains("  · " + SettingsMenu.UnchangedNotice, output);
+    }
+
+    /// <summary>Esc with changes, then Save on the question (2026-11-26, the user's ask): written as <c>s</c> writes it.</summary>
+    [Fact]
+    public async Task ThemeEdit_EscWithChanges_SaveWrites()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        WriteMine();
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "synthwave"; });
+        PushLine("/theme edit mine");
+        PushKeys(Keys.Down, DimRow);
+        PushKeys(Keys.Right);                    // dim 4% lighter
+        PushKeys(Keys.Escape);                   // asks
+        PushKeys(Keys.Down);
+        PushKeys(Keys.Enter);                    // Save
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var lighter = HslColor.From(ShippedThemes.Synthwave.Dim).WithLightness(SettingsMenu.EditLightnessStep).ToColor();
+        Assert.Equal(Theme.ToHex(lighter), ColorIn(MineTheme(), "dim"));
+        Assert.Contains(SettingsMenu.LeaveQuestion("mine"), output);
+        Assert.Contains("  · " + BeforePath(ThemeText.EditSavedNotInForce("mine", MineTheme()), MineTheme()), output);
+    }
+
+    /// <summary><c>d</c> with changes, Keep editing, then <c>s</c> (2026-11-26): the editor kept the changes through the question.</summary>
+    [Fact]
+    public async Task ThemeEdit_DWithChanges_KeepEditing_ThenSSaves()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        WriteMine();
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "synthwave"; });
+        PushLine("/theme edit mine");
+        PushKeys(Keys.Down, DimRow);
+        PushKeys(Keys.Left);                     // dim 4% darker
+        PushKeys(Keys.Char('d'));                // asks
+        PushKeys(Keys.Enter);                    // Keep editing
+        PushKeys(Keys.Char('s'));
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var darker = HslColor.From(ShippedThemes.Synthwave.Dim).WithLightness(-SettingsMenu.EditLightnessStep).ToColor();
+        Assert.Equal(Theme.ToHex(darker), ColorIn(MineTheme(), "dim"));
+        Assert.Contains(SettingsMenu.LeaveQuestion("mine"), output);
     }
 
     /// <summary>A name not found is the one tried: the theme in force when none is given (#93).</summary>

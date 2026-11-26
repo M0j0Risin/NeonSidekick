@@ -65,11 +65,11 @@ public partial class ToolsMenuTests
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the Name row (four actions, File, Name)
         Push(Keys.Backspace, Keys.Backspace);
         Type("adventure");
-        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter);   // the Server row
+        Push(Keys.Down, Keys.Enter);                                  // the Server row, under Name (the cursor stayed on Name, 2026-11-26)
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace);
         Type("new");
         Type("n3w-secret");                                           // the Password page: the server moved (E9)
-        Push(Keys.Enter);                                             // Save, and offer it (the cursor's start: it was offered)
+        Push(Keys.Home, Keys.Enter);                                  // Save, and offer it (the cursor came back on Server)
         Push(Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
@@ -200,7 +200,7 @@ public partial class ToolsMenuTests
         Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // from Save hidden (not offered) to the Name row
         Push(Keys.Backspace, Keys.Backspace, Keys.Backspace);
         Type("renamed");
-        Push(Keys.Enter);                                             // Save, hidden
+        Push(Keys.Home, Keys.Down, Keys.Enter);                       // Save, hidden: Home, then one down (the cursor stayed on Name)
         Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
 
         await menu.ShowAsync(CancellationToken.None);

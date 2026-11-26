@@ -15,7 +15,9 @@ namespace NeonSidekick.App;
 /// on a row changes that one), its file fixed (the File row does nothing) and its stored password read into the draft, so a
 /// save writes the entry back in its place (<see cref="ConnectionsFileEdit.ReplaceConnection"/>) and the password through the
 /// family's store as an add does — a renamed entry or a changed store included. A password that cannot be read is asked
-/// first. ESC on an edit's summary, or on a new one's File page, comes back to this list; ESC here ends the visit.
+/// first. ESC on an edit's summary, or on a new one's File page, comes back to this list; ESC here ends the visit. An edit with unsaved
+/// changes asks first at ESC and Cancel (2026-11-26, the user's ask: <see cref="ConnectionWizardLeaveAsync"/>), and a new one's Cancel asks a
+/// yes/no. Enter on a summary row comes back to that row (2026-11-26, the user's report: it jumped to a save row).
 /// An entry the loader refuses (a problem in it) is not listed: it is fixed in its file. The offered list follows a rename
 /// in its place (<see cref="ConnectionOfferedAfterSave"/>), and a Credential Manager entry under the old name's default
 /// target goes once the new one is written (<see cref="ForgetOldCredential"/>). Keys of an entry the wizard never asks
@@ -29,6 +31,9 @@ internal sealed partial class SettingsMenu
 
     /// <summary>The notice when an edit is cancelled from its summary. Pinned.</summary>
     public const string ConnectionWizardUnchangedNotice = "Nothing changed.";
+
+    /// <summary>The notice when an edit's changes are discarded at the unsaved-changes question (2026-11-26).</summary>
+    public const string ConnectionWizardDiscardedNotice = "Nothing saved.";
 
     /// <summary>The masked password of an edit that kept the stored one. Pinned.</summary>
     public const string SqlWizardMaskedKept = SqlWizardMasked + " (stored)";
@@ -197,6 +202,70 @@ internal sealed partial class SettingsMenu
 
     /// <summary>What an edit says when its host moved and the kept password was let go (E9). Pinned.</summary>
     public const string SqlWizardHostMovedNotice = "The connection points at another server now, so its stored password is not sent there; type the password for it.";
+
+    /// <summary>
+    /// An edit's draft as it would be written (2026-11-26, the unsaved-changes question): its name, its file and the entry through its
+    /// serialiser with the password dropped (<see cref="CloneEntry"/>), so no secret ever sits in it. Taken when the edit opens and again at
+    /// ESC or Cancel: a difference is a change Save would write (a step's same value picked can make an implicit default explicit, and reads
+    /// as one). A typed password is checked beside it.
+    /// </summary>
+    internal static string ConnectionStamp<T>(string name, bool global, T config, JsonTypeInfo<T> info, Action<T> dropPassword)
+        where T : class =>
+        string.Join('\n', name, global ? "global" : "profile", JsonSerializer.Serialize(CloneEntry(config, info, dropPassword), info));
+
+    /// <summary>What a summary's ESC or Cancel came to (<see cref="ConnectionWizardLeaveAsync"/>): stay, saved (whether a setting changed), or left.</summary>
+    private readonly record struct WizardLeave(bool Stay, bool? Saved)
+    {
+        public static WizardLeave Kept => new(true, null);
+
+        public static WizardLeave Left => new(false, null);
+    }
+
+    /// <summary>
+    /// ESC (<paramref name="cancelRow"/> false) or Cancel on a wizard's summary (2026-11-26, the user's ask). A new entry: ESC goes back a page as
+    /// before, Cancel asks <see cref="NewDiscardQuestion"/> (No stays). An edit: without changes it leaves (Cancel saying so); with them it asks
+    /// <see cref="AskLeaveAsync"/>, named by the saved entry's name (<paramref name="original"/>: a rename has already moved the draft's).
+    /// Save is <paramref name="save"/>, the family's save with the entry offered or hidden as it is now; a refused one (said) stays. A pane
+    /// dismissed by a click off it, or the token, leaves without asking.
+    /// </summary>
+    private async Task<WizardLeave> ConnectionWizardLeaveAsync(bool cancelRow, string? original, bool dirty, string noun, string cancelledNotice, Func<bool?> save, CancellationToken cancellationToken)
+    {
+        bool Gone() => _pane.Dismissed || cancellationToken.IsCancellationRequested;
+        if (original is null)
+        {
+            if (!cancelRow)
+            {
+                return WizardLeave.Left;   // a new entry's ESC: back a page, nothing lost
+            }
+
+            if (!Gone() && !await ConfirmAsync(NewDiscardQuestion(noun), cancellationToken, close: false).ConfigureAwait(false) && !Gone())
+            {
+                return WizardLeave.Kept;
+            }
+
+            Sink.Notice(cancelledNotice);
+            return WizardLeave.Left;
+        }
+
+        if (!dirty)
+        {
+            if (cancelRow)
+            {
+                Sink.Notice(ConnectionWizardUnchangedNotice);
+            }
+
+            return WizardLeave.Left;
+        }
+
+        var choice = Gone() ? LeaveChoice.Discard : await AskLeaveAsync(original, cancellationToken).ConfigureAwait(false);
+        if (Gone() || choice == LeaveChoice.Discard)
+        {
+            Sink.Notice(ConnectionWizardDiscardedNotice);
+            return WizardLeave.Left;
+        }
+
+        return choice == LeaveChoice.Save && save() is { } changed ? new WizardLeave(false, changed) : WizardLeave.Kept;
+    }
 
     /// <summary>A copy of an entry through its serialiser, its <c>password</c> dropped (the draft holds the plain one).</summary>
     private static T CloneEntry<T>(T config, JsonTypeInfo<T> info, Action<T> dropPassword)
