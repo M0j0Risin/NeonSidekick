@@ -19,6 +19,18 @@ public static class PasteboardPick
     public const string TextType = "public.utf8-plain-text";
 
     /// <summary>
+    /// The markers a private conversation's copy carries on a Mac (2026-11-26, the review's #61, the user's call; nspasteboard.org's convention):
+    /// clipboard managers skip a concealed copy and keep no transient one. Set empty, after <c>clearContents</c> and before the text.
+    /// </summary>
+    public const string ConcealedType = "org.nspasteboard.ConcealedType";
+
+    /// <summary>See <see cref="ConcealedType"/>.</summary>
+    public const string TransientType = "org.nspasteboard.TransientType";
+
+    /// <summary>The marker types a copy carries: both while <paramref name="isPrivate"/>, none otherwise. Pure.</summary>
+    public static IReadOnlyList<string> PrivateMarkers(bool isPrivate) => isPrivate ? [ConcealedType, TransientType] : [];
+
+    /// <summary>
     /// The files a Finder copy put on the pasteboard, one POSIX path a line — what a drop of them pastes, so a picture among them
     /// is attached by its path as a dropped one is (<see cref="Files.ImageFile.TryPastedPaths"/>), with its name; null when there is
     /// no file. Finder adds a TIFF of each file's icon beside the URLs, which is why a file wins over the picture: pasted, the

@@ -76,14 +76,6 @@ public static class PrivateText
     /// <summary>The page's and the Sessions tab's word for it.</summary>
     public const string PageTitle = "Private conversation";
 
-    /// <summary>The Sessions tab's buttons.</summary>
-    public const string NewPrivateButton = Glyph + " New private";
-
-    /// <summary>The Sessions tab's toggle.</summary>
-    public const string PrivateButton = Glyph + " Private";
-
-    /// <summary>A page's line or tap naming a private conversation that has ended. Pinned.</summary>
-    public const string EndedConflict = "That private conversation has ended. Nothing was sent.";
 
     /// <summary>A restore while private: asks first. Pinned.</summary>
     public static string RestoreQuestion(long id) => string.Create(CultureInfo.InvariantCulture, $"Open session #{id}? This private conversation ends first.");
@@ -98,7 +90,7 @@ public static class PrivateText
     /// <summary>The headless error: <c>/private</c> isn't a headless command.</summary>
     public const string HeadlessError = "/private is for the screen; start a private run with --private.";
 
-    /// <summary><c>/tools</c>' and <c>/sysprompt</c>'s reason for the two tools left out.</summary>
+    /// <summary><c>/tools</c>' reason for the two tools left out (its rows' note, and Enter on one, which doesn't flip it).</summary>
     public const string ToolsNote = "not offered in a private conversation (Private learning is off)";
 
     /// <summary><c>/usage</c> › Models while private.</summary>
@@ -109,6 +101,18 @@ public static class PrivateText
 
     /// <summary>The <c>/log</c> buffer's line after its drop. Pinned.</summary>
     public const string LogDroppedLine = "The private conversation's lines were dropped from this window.";
+
+    /// <summary>The Info line when a conversation goes private: <c>The conversation went private (command).</c></summary>
+    public static string WentPrivateLogLine(PrivateReason reason) => "The conversation went private (" + reason.ToString().ToLowerInvariant() + ").";
+
+    /// <summary>The Info line when a private conversation ends.</summary>
+    public const string EndedLogLine = "The private conversation ended.";
+
+    /// <summary>The Info line when a picture the end cancelled is still being made past its wait (a file it saves later is deleted).</summary>
+    public const string PictureStillRunningLogLine = "A picture the private conversation's end cancelled was still being made; a file it saves is deleted.";
+
+    /// <summary>The Warn line when one of the end's steps throws (the rest go on).</summary>
+    public static string EndStepFailedLogLine(string kind) => "A step of the private conversation's end failed: " + kind;
 
     /// <summary>A file the end couldn't delete. Pinned.</summary>
     public static string DeleteFailedLogLine(string kind) => $"A private conversation's file couldn't be deleted ({kind}); it is tried again at exit.";
@@ -127,7 +131,10 @@ public static class PrivateText
     /// <summary>The question's hint. Pinned by the hint tests.</summary>
     public const string PicturesHint = "k / d = pick · Enter = choose · Esc = keep";
 
-    /// <summary>"the picture", "the 3 pictures", "the PDF", "the picture and the PDF", "the 3 pictures and 1 PDF". Pinned.</summary>
+    /// <summary>
+    /// With <paramref name="the"/>, each kind in its own form: "the picture", "the 3 pictures", "the picture and the PDF", "the picture and the 2 PDFs",
+    /// "the 3 pictures and the PDF" (2026-11-26, the review's #79: one "the" over a mixed pair read wrong). Without it: "1 picture and 2 PDFs". Pinned.
+    /// </summary>
     public static string Count(int pictures, int pdfs, bool the = true)
     {
         string p = pictures == 1 ? (the ? "the picture" : "1 picture") : (the ? "the " : "") + pictures.ToString(CultureInfo.InvariantCulture) + " pictures";
@@ -137,28 +144,15 @@ public static class PrivateText
             return d;
         }
 
-        if (pdfs == 0)
-        {
-            return p;
-        }
-
-        if (the && pictures == 1 && pdfs == 1)
-        {
-            return "the picture and the PDF";
-        }
-
-        // Mixed counts: the first "the" covers both ("the 3 pictures and 1 PDF").
-        string second = pdfs.ToString(CultureInfo.InvariantCulture) + (pdfs == 1 ? " PDF" : " PDFs");
-        string first = (the ? "the " : "") + pictures.ToString(CultureInfo.InvariantCulture) + (pictures == 1 ? " picture" : " pictures");
-        return first + " and " + second;
+        return pdfs == 0 ? p : p + " and " + d;
     }
 
-    /// <summary>The question. Pinned.</summary>
-    public static string PicturesQuestion(int pictures, int pdfs) => $"{Glyph} Keep {Count(pictures, pdfs)} from this private conversation?";
+    /// <summary>The question: the conversation's pictures, those from before it went private too (2026-11-26, the review's #75). Pinned.</summary>
+    public static string PicturesQuestion(int pictures, int pdfs) => $"{Glyph} Keep {Count(pictures, pdfs)} this conversation made (before it went private too)?";
 
-    /// <summary>The dim line under it: Delete is for good. Pinned.</summary>
-    public static string PicturesCaption(int total, bool mac) =>
-        $"Delete is permanent; {(total == 1 ? "it doesn't" : "they don't")} go to the {(mac ? "Trash" : "Recycle Bin")}.";
+    /// <summary>The dim line under it: Delete is for good, never to the Recycle bin (the Trash on a Mac, <see cref="Files.FileText.RecycleBinName"/>). Pinned.</summary>
+    public static string PicturesCaption(int total) =>
+        $"Delete is permanent; {(total == 1 ? "it doesn't" : "they don't")} go to the {Files.FileText.RecycleBinName}.";
 
     /// <summary>The line afterwards. Pinned.</summary>
     public static string KeptLine(int pictures, int pdfs) => $"({Glyph} kept {ResultCount(pictures, pdfs)})";
@@ -166,36 +160,61 @@ public static class PrivateText
     /// <summary>A result's count: "the picture and the PDF" for one of each kind at most, else "2 pictures and 1 PDF".</summary>
     public static string ResultCount(int pictures, int pdfs) => Count(pictures, pdfs, the: pictures <= 1 && pdfs <= 1);
 
-    /// <summary>The line after a delete: what went, and the open files left. Pinned.</summary>
-    public static string DeletedLine(int pictures, int pdfs, IReadOnlyList<string> open)
+    /// <summary>
+    /// The line after the end's deletes: what went, the open files kept, and the files a delete failed on (a spill log or a temp copy, 2026-11-26, the
+    /// review's #98: said apart from the open ones, and tried again at the exit). With no picture deleted or kept open, the failed part alone. Pinned.
+    /// </summary>
+    public static string DeletedLine(int pictures, int pdfs, IReadOnlyList<string> open, IReadOnlyList<string> failed)
     {
-        string what = pictures + pdfs == 0 ? "nothing" : ResultCount(pictures, pdfs);
-        if (open.Count == 0)
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(failed);
+        string failedPart = failed.Count == 0 ? "" : $"couldn't delete {Names(failed)}, tried again at the exit";
+        if (pictures + pdfs == 0 && open.Count == 0 && failed.Count > 0)
         {
-            return $"({Glyph} deleted {what})";
+            return $"({Glyph} {failedPart})";
         }
 
-        var names = open.Take(3).Select(Path.GetFileName).ToList();
-        string list = names.Count switch
+        string what = pictures + pdfs == 0 ? "nothing" : ResultCount(pictures, pdfs);
+        string openPart = open.Count == 0 ? "" : $"; kept {Names(open)}, {(open.Count == 1 ? "which is" : "which are")} open";
+        return $"({Glyph} deleted {what}{openPart}{(failedPart.Length == 0 ? "" : "; " + failedPart)})";
+    }
+
+    /// <summary>"a.png", "a.png and b.png", "a.png, b.png and c.png", "a.png, b.png, c.png and 2 more": file names only.</summary>
+    private static string Names(IReadOnlyList<string> paths)
+    {
+        var names = paths.Take(3).Select(Path.GetFileName).ToList();
+        if (paths.Count > 3)
+        {
+            return string.Join(", ", names) + " and " + (paths.Count - 3).ToString(CultureInfo.InvariantCulture) + " more";
+        }
+
+        return names.Count switch
         {
             1 => names[0]!,
             2 => names[0] + " and " + names[1],
             _ => string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1],
         };
-        if (open.Count > 3)
-        {
-            list = string.Join(", ", names) + " and " + (open.Count - 3).ToString(CultureInfo.InvariantCulture) + " more";
-        }
-
-        return $"({Glyph} deleted {what}; kept {list}, {(open.Count == 1 ? "which is" : "which are")} open)";
     }
 
-    /// <summary>At the app's exit, after the alternate buffer: a file left. Pinned.</summary>
-    public static string LeftAtExitLine(IReadOnlyList<string> left)
+    /// <summary>
+    /// At the app's exit, after the alternate buffer: the files left, the open ones apart from the ones a delete failed on (2026-11-26). Null with
+    /// neither. Pinned.
+    /// </summary>
+    public static string? LeftAtExitLine(IReadOnlyList<string> open, IReadOnlyList<string> failed)
     {
-        ArgumentNullException.ThrowIfNull(left);
-        var names = left.Take(3).Select(Path.GetFileName).ToList();
-        string more = left.Count > 3 ? string.Create(CultureInfo.InvariantCulture, $" and {left.Count - 3} more") : "";
-        return $"{Glyph} Left from the private conversation (open elsewhere): {string.Join(", ", names)}{more}";
+        ArgumentNullException.ThrowIfNull(open);
+        ArgumentNullException.ThrowIfNull(failed);
+        var parts = new List<string>();
+        if (open.Count > 0)
+        {
+            parts.Add(Names(open) + " (open elsewhere)");
+        }
+
+        if (failed.Count > 0)
+        {
+            parts.Add(Names(failed) + " (couldn't be deleted)");
+        }
+
+        return parts.Count == 0 ? null : $"{Glyph} Left from the private conversation: {string.Join("; ", parts)}";
     }
 }

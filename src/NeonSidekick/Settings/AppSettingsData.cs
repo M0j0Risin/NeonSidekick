@@ -738,8 +738,8 @@ public sealed class AppSettingsData
 
     /// <summary>
     /// What a private conversation's pictures do when it ends (2026-11-25): one of <see cref="Sessions.PrivatePictures.Names"/> —
-    /// <c>ask</c> (the default: the end asks Keep or Delete), <c>keep</c>, <c>delete</c> (saved under <c>images\private\&lt;run&gt;</c>
-    /// and deleted at the end, with those saved before the switch). Fixed when the conversation goes private. No variable.
+    /// <c>ask</c> (the default: the end asks Keep or Delete), <c>keep</c>, <c>delete</c> (deleted at the end, with those saved before the
+    /// switch). Fixed when the conversation goes private. No variable.
     /// </summary>
     public string PrivatePictures { get; set; } = Sessions.PrivatePictures.Default;
 

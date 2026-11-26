@@ -50,7 +50,7 @@ public abstract class MonitorTool : AIFunction
         string what = change.Describe(words);
         if (Hooks.Confirm is not { } confirm)
         {
-            DiagnosticLog.Info("Monitors", Name + ": " + what + " — refused, nobody to ask");
+            DiagnosticLog.Audit("Monitors", Name + ": " + what + " — refused, nobody to ask");
             return MonitorText.NoPaneToAsk;
         }
 
@@ -58,19 +58,19 @@ public abstract class MonitorTool : AIFunction
         bool? yes = await confirm(MonitorText.ToolQuestion(what, warning), cancellationToken).ConfigureAwait(false);
         if (yes is null)
         {
-            DiagnosticLog.Info("Monitors", Name + ": " + what + " — refused, nobody to ask");
+            DiagnosticLog.Audit("Monitors", Name + ": " + what + " — refused, nobody to ask");
             return MonitorText.NoPaneToAsk;
         }
 
         if (yes == false)
         {
-            DiagnosticLog.Info("Monitors", Name + ": " + what + " — declined");
+            DiagnosticLog.Audit("Monitors", Name + ": " + what + " — declined");
             return MonitorText.ToolDeclined;
         }
 
         var outcome = await Hooks.Board.Actions.ApplyAsync(change, words, cancellationToken).ConfigureAwait(false);
         Hooks.Board.NoteAway();
-        DiagnosticLog.Info("Monitors", Name + ": " + what + " — yes, " + (outcome.Failed ? "failed: " : "") + outcome.Text);
+        DiagnosticLog.Audit("Monitors", Name + ": " + what + " — yes, " + (outcome.Failed ? "failed: " : "") + outcome.Text);
         return outcome.Failed ? "Error: " + outcome.Text : outcome.Text;
     }
 }

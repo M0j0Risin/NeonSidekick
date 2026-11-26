@@ -215,29 +215,37 @@ public sealed partial class InputLine
     }
 
     /// <summary>
-    /// Whether a line added now belongs to a private conversation (2026-11-25): set by the screen while one runs, read under the history's lock, so a
-    /// Web UI line joining on a Kestrel thread is tagged by the state its add sees.
+    /// Whether the conversation is private right now (2026-11-25; one read since 2026-11-26, the review's fix): read once per line inside the history's
+    /// lock, and that one read both tags the line and keeps it from <see cref="Remembered"/>, so no line is ever unstored and untagged, or stored and
+    /// tagged, whichever thread adds it and whenever the switch flips. The screen's <c>() => _private.IsPrivate</c>; lock order: the history's
+    /// lock, then <see cref="App.PrivateConversation"/>'s, which never calls in here under its own. Null = never private.
     /// </summary>
-    public bool TagPrivate
-    {
-        get
-        {
-            lock (_historyGate)
-            {
-                return _tagPrivate;
-            }
-        }
+    public Func<bool>? IsPrivateNow { get; set; }
 
-        set
+    /// <summary>
+    /// The lines a switch to private deleted from the store tagged as the private conversation's (2026-11-26), so its end takes them out of Up too:
+    /// one entry per deleted row, matched by text, the newest untagged entry that isn't a draft first, so an older conversation's line with the
+    /// same words stays.
+    /// </summary>
+    public void TagAsPrivate(IEnumerable<string> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+        lock (_historyGate)
         {
-            lock (_historyGate)
+            foreach (string line in lines)
             {
-                _tagPrivate = value;
+                for (int i = _history.Count - 1; i >= 0; i--)
+                {
+                    var entry = _history[i];
+                    if (entry.Private == PrivateMark.None && !entry.Draft && string.Equals(entry.Text, line, StringComparison.Ordinal))
+                    {
+                        _history[i] = entry with { Private = PrivateMark.Added };
+                        break;
+                    }
+                }
             }
         }
     }
-
-    private bool _tagPrivate;
 
     /// <summary>
     /// A private conversation's lines dropped from Up (2026-11-25): those it added go, a draft set aside before it and sent during it is a draft again,
@@ -413,31 +421,52 @@ public sealed partial class InputLine
         bool tell;
         lock (_historyGate)
         {
+            bool isPrivate = IsPrivateNow?.Invoke() == true;
             if (_history.Count > 0 && string.Equals(_history[^1].Text, text, StringComparison.Ordinal))
             {
                 // The same line again: a held draft now sent is stored now, the de-duplication having kept it from being added twice.
                 tell = keep && _history[^1].Draft;
                 if (tell)
                 {
-                    _history[^1] = new HistoryEntry(text, false, _tagPrivate ? PrivateMark.SentDraft : PrivateMark.None);
+                    // A draft set aside while private stays the private conversation's (2026-11-26): its end takes it out, not back to a draft.
+                    var mark = !isPrivate ? PrivateMark.None : _history[^1].Private == PrivateMark.Added ? PrivateMark.Added : PrivateMark.SentDraft;
+                    _history[^1] = new HistoryEntry(text, false, mark);
                 }
             }
             else
             {
-                _history.Add(new HistoryEntry(text, !keep, _tagPrivate ? PrivateMark.Added : PrivateMark.None));
-                if (_history.Count > HistoryCap)
-                {
-                    _history.RemoveRange(0, _history.Count - HistoryCap);
-                }
-
+                _history.Add(new HistoryEntry(text, !keep, isPrivate ? PrivateMark.Added : PrivateMark.None));
+                TrimToCap(isPrivate);
                 tell = keep;
             }
+
+            // A private line is never stored (the same read that tagged it).
+            tell &= !isPrivate;
         }
 
         // Told outside the lock (2026-10-16): the listener writes SQLite, and may read the history itself.
         if (tell)
         {
             Remembered?.Invoke(text);
+        }
+    }
+
+    /// <summary>
+    /// The oldest entries dropped past <see cref="HistoryCap"/>; while private the private conversation's own first (2026-11-26), so its end, which
+    /// takes them out, never leaves Up shorter than the earlier lines it pushed out.
+    /// </summary>
+    private void TrimToCap(bool isPrivate)
+    {
+        while (_history.Count > HistoryCap)
+        {
+            int at = isPrivate ? _history.FindIndex(e => e.Private == PrivateMark.Added) : -1;
+            if (at < 0)
+            {
+                _history.RemoveRange(0, _history.Count - HistoryCap);
+                return;
+            }
+
+            _history.RemoveAt(at);
         }
     }
 

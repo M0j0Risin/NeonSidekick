@@ -48,6 +48,9 @@ public static class FileText
     public const string EditSame = "Error: old_text and new_text are the same; nothing to change";
     public static string RootItself => "Error: that is " + RootName + " itself";
 
+    /// <summary>The Warn line when a created-file listener throws (the write itself stands).</summary>
+    public static string CreatedListenerFailedLogLine(string kind) => "A created-file listener failed: " + kind;
+
     /// <summary>
     /// The bin's name on this system (later on 2026-10-15, <c>File deletes to Recycle bin</c>): "Recycle bin", or "Trash" on a Mac — the one
     /// place the word is chosen (the setting's own name, its help, the delete sentences). Pinned.

@@ -222,6 +222,52 @@ public sealed class ComfyEditTests : IDisposable
         Assert.False(lora.Editable);
     }
 
+    /// <summary>A switch linked to itself, or two linked to each other, read as a loop (2026-11-26, the review's #91): never a stack overflow.</summary>
+    [Theory]
+    [InlineData("""{"4":{"class_type":"CheckpointLoaderSimple","inputs":{"ckpt_name":"m"}},"21":{"class_type":"PrimitiveBoolean","inputs":{"value":true}},"22":{"class_type":"ComfySwitchNode","inputs":{"switch":["21",0],"on_true":["4",0],"on_false":["22",0]}},"3":{"class_type":"KSampler","inputs":{"model":["22",0]}}}""")]
+    [InlineData("""{"4":{"class_type":"CheckpointLoaderSimple","inputs":{"ckpt_name":"m"}},"21":{"class_type":"PrimitiveBoolean","inputs":{"value":true}},"22":{"class_type":"ComfySwitchNode","inputs":{"switch":["21",0],"on_true":["4",0],"on_false":["23",0]}},"23":{"class_type":"ComfySwitchNode","inputs":{"switch":["21",0],"on_true":["4",0],"on_false":["22",0]}},"3":{"class_type":"KSampler","inputs":{"model":["22",0]}}}""")]
+    public void ALinkedSwitch_IsALoop(string json) => Assert.Equal(ComfyText.EditLoop, ComfyGraphEdit.Read(Graph(json)).Loras.Why);
+
+    /// <summary>A long chain of switches whose branches both go on ends as a loop at once, rather than doubling the walk per switch.</summary>
+    [Fact]
+    public void AChainOfSwitches_EndsAsALoop_Quickly()
+    {
+        var graph = new JsonObject
+        {
+            ["4"] = new JsonObject { ["class_type"] = "CheckpointLoaderSimple", ["inputs"] = new JsonObject { ["ckpt_name"] = "m" } },
+            ["21"] = new JsonObject { ["class_type"] = "PrimitiveBoolean", ["inputs"] = new JsonObject { ["value"] = true } },
+            ["3"] = new JsonObject { ["class_type"] = "KSampler", ["inputs"] = new JsonObject { ["model"] = new JsonArray("100", 0) } },
+        };
+        for (int i = 100; i < 160; i++)
+        {
+            string next = i == 159 ? "4" : (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            graph[i.ToString(System.Globalization.CultureInfo.InvariantCulture)] = new JsonObject
+            {
+                ["class_type"] = "ComfySwitchNode",
+                ["inputs"] = new JsonObject { ["switch"] = new JsonArray("21", 0), ["on_true"] = new JsonArray(next, 0), ["on_false"] = new JsonArray(next, 0) },
+            };
+        }
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(ComfyText.EditLoop, ComfyGraphEdit.Read(graph).Loras.Why);
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>A base and a refiner, each its own loader: the Model row names no one of them (2026-11-26, the review's #37).</summary>
+    [Fact]
+    public void TwoSamplersOnTwoLoaders_LeaveTheModelUnedited()
+    {
+        var graph = Graph("""
+            {
+              "4": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "base.safetensors" } },
+              "5": { "class_type": "CheckpointLoaderSimple", "inputs": { "ckpt_name": "refiner.safetensors" } },
+              "3": { "class_type": "KSampler", "inputs": { "model": ["4", 0] } },
+              "30": { "class_type": "KSampler", "inputs": { "model": ["5", 0] } }
+            }
+            """);
+        Assert.Equal(ComfyText.EditSeveral(2, "model loaders"), ComfyGraphEdit.Read(graph).Model.Why);
+    }
+
     [Fact]
     public void ABypassLoader_IsListedReadOnly_NeverHidden()
     {
@@ -323,6 +369,27 @@ public sealed class ComfyEditTests : IDisposable
         Assert.Null(ComfyWorkflowFile.Rename(_profile, Roots, "portrait_txt2img", "portrait_v2"));
         Assert.False(File.Exists(Path.Combine(_profile, "portrait_txt2img.json")));
         Assert.Equal("---\nfamily: sdxl\n---\n", File.ReadAllText(Path.Combine(_profile, "portrait_v2.md")));
+        Assert.Equal("neon/portrait_v2", Prefix(Path.Combine(_profile, "portrait_v2.json")));
+    }
+
+    /// <summary>A rename writes only the output name's string, the rest of the file as it was (2026-11-26, the review's #80).</summary>
+    [Fact]
+    public void Rename_KeepsTheFilesOtherBytes()
+    {
+        Install(_profile, "portrait_txt2img");
+        string path = Path.Combine(_profile, "portrait_txt2img.json");
+        string odd = File.ReadAllText(path).Replace("\"euler\"", "\"euler\"   ", StringComparison.Ordinal);
+        File.WriteAllText(path, odd);
+        Assert.Null(ComfyWorkflowFile.Rename(_profile, Roots, "portrait_txt2img", "portrait_v2"));
+        Assert.Equal(odd.Replace("\"neon/portrait_txt2img\"", "\"neon/portrait_v2\"", StringComparison.Ordinal), File.ReadAllText(Path.Combine(_profile, "portrait_v2.json")));
+    }
+
+    /// <summary>A prefix written with JSON escapes still follows, by the rewrite.</summary>
+    [Fact]
+    public void Rename_AnEscapedPrefix_StillFollows()
+    {
+        Install(_profile, "portrait_txt2img", prefix: "neon\\/portrait_txt2img");
+        Assert.Null(ComfyWorkflowFile.Rename(_profile, Roots, "portrait_txt2img", "portrait_v2"));
         Assert.Equal("neon/portrait_v2", Prefix(Path.Combine(_profile, "portrait_v2.json")));
     }
 
@@ -459,6 +526,10 @@ public sealed class ComfyEditTests : IDisposable
         Install(_profile, "portrait");
         Install(_global, "portrait-2");
         Assert.Equal("portrait-3", ComfyWorkflowFile.FreeName("portrait", Roots, _profile));
+        // Kind both (2026-11-26, the review's #3): each suffixed name free, and the stem cut so the longest still fits 64.
+        Install(_profile, "dream_img2img");
+        Assert.Equal("dream-2", ComfyWorkflowFile.FreeName("dream", Roots, _profile, ["_txt2img", "_img2img"]));
+        Assert.True(ComfyWorkflowFile.FreeName(new string('a', 70), Roots, _profile, ["_txt2img", "_img2img"]).Length <= 64 - "_txt2img".Length);
         Assert.Equal("hidden", ComfyWorkflowFile.Suggest("_hidden.safetensors"));
     }
 
@@ -512,6 +583,10 @@ public sealed class ComfyEditTests : IDisposable
         Assert.True(upload.Inputs["image"].Skip);
         var dynamic = ComfyCheck.ParseNode("""{"X":{"input":{"required":{"mode":["COMFY_DYNAMICCOMBO_V3",{"options":[{"key":"a"}]}]}}}}""", "X")!;
         Assert.True(dynamic.Inputs["mode"].Skip);
+        // Objects among strings (2026-11-26, the review's #8): every string kept, the check off.
+        var mixed = ComfyCheck.ParseNode("""{"X":{"input":{"required":{"mode":[["a",{"key":"k"},"b"]]}}}}""", "X")!;
+        Assert.Equal(["a", "b"], mixed.Inputs["mode"].Choices);
+        Assert.True(mixed.Inputs["mode"].Skip);
         var empty = ComfyCheck.ParseNode("""{"LoraLoader":{"input":{"required":{"lora_name":[[]]}}}}""", "LoraLoader")!;
         Assert.Equal([], empty.Inputs["lora_name"].Choices);
         Assert.False(empty.Inputs["lora_name"].Skip);

@@ -166,8 +166,9 @@ internal sealed partial class ChatScreen
         }
 
         bool fresh = _session.History.Messages.Count > 0;
-        if (fresh && !effective.SessionLogging
-            && await ProjectInitAskAsync(ProjectInitText.LoggingTitle, ProjectInitText.LoggingCaption, [ProjectInitText.ContinueRow, ProjectInitText.CancelRow], ["continue", "cancel"], 1, cancellationToken).ConfigureAwait(false) != 0)
+        // Not saved for either reason (2026-11-26, the review's #25): logging off, or a private conversation, each in its own words.
+        if (fresh && !SavesSession(effective)
+            && await ProjectInitAskAsync(ProjectInitText.LoggingTitle, _private.IsPrivate ? ProjectInitText.PrivateCaption : ProjectInitText.LoggingCaption, [ProjectInitText.ContinueRow, ProjectInitText.CancelRow], ["continue", "cancel"], 1, cancellationToken).ConfigureAwait(false) != 0)
         {
             _transcript.Notice(ProjectInitText.CanceledBeforeNotice);
             return false;

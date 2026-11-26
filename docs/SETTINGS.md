@@ -649,7 +649,7 @@ The file tools and the places beyond the working directory they reach.
 | Setting | What it does | Default |
 |---|---|---|
 | File tools | Offers the sandboxed file tools (read, write, patch, search, move, copy, zip, read_pdf, read_office, convert_to_docx, convert_to_xlsx, convert_to_pdf, pdf_edit…), which reach only the working directory. A query's `to` needs it, with `convert_to_xlsx` on. | off |
-| File deletes to Recycle bin | Sends deletes to the Recycle bin (*File deletes to Trash* on a Mac): `delete`, `/undo`, `/rewind … files`, the picture windows, *ComfyUI workflows*, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`). Gone for good: a file on a share or removable drive (a purge there asks first), one too big for the bin, and a command's or script's deletes. | on |
+| File deletes to Recycle bin | Sends deletes to the Recycle bin (*File deletes to Trash* on a Mac): `delete`, `/undo`, `/rewind … files`, the picture windows, *ComfyUI workflows*, the Web UI and the purges (`/comfy`, `/camera`, `/screen`, `/splash`, `/pasted`, `/ha stills purge`). | on |
 | File checkpoints | Keeps what the file tools change each turn, so `/undo` and `/rewind … files` can put it back ([what's covered](TOOLS.md#undoing-file-changes)). Turned off, kept ones can still be undone. | on |
 | File checkpoints keep (days) | Checkpoints older than this are cleared when the profile loads (startup or a switch; 0–3650; 0 clears none by age). A gone working folder's are kept as long. | 90 |
 | File checkpoints max (MB) | The most one working folder's checkpoints may hold (100–102400); the oldest go first, the newest always stays. | 2,048 |
@@ -660,6 +660,9 @@ The file tools and the places beyond the working directory they reach.
 | File browser/tree mode | `hide-hidden` leaves hidden, system and dot entries out of the folder browsers, `/tree` and `/browse`; `show-hidden` lists them. | `hide-hidden` |
 | File view image max images | Pictures one `view_image` call loads, and pages one `read_pdf` call with pictures draws (1–100). | 10 |
 | File search max results | The most rows one `search_files` or `unc_search` call returns (1–5000). | 200 |
+
+What *File deletes to Recycle bin* can't send to the bin is gone for good: a file on a share or removable drive (a purge there asks first), one too big for the bin, and a command's or script's deletes.
+
 #### Image
 
 | Setting | What it does | Default |

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
+using NeonSidekick.Diagnostics;
 using static NeonSidekick.UI.ConsoleInputNative;
 
 namespace NeonSidekick.UI;
@@ -23,6 +24,41 @@ public static unsafe class WindowsClipboard
 
     // Registered once per process; 0 when the registration failed, which never matches a format.
     private static readonly uint PngFormat = OperatingSystem.IsWindows() ? RegisterClipboardFormatW(ClipboardPngFormatName) : 0;
+
+    /// <summary>
+    /// The formats a private conversation's copy carries (2026-11-26, the review's #61, the user's call; Microsoft's Clipboard Formats page): kept out of
+    /// Win+V's history, out of the cloud clipboard, and away from clipboard monitors.
+    /// </summary>
+    public const string HistoryFormatName = "CanIncludeInClipboardHistory";
+
+    /// <summary>See <see cref="HistoryFormatName"/>.</summary>
+    public const string CloudFormatName = "CanUploadToCloudClipboard";
+
+    /// <summary>See <see cref="HistoryFormatName"/>.</summary>
+    public const string MonitorFormatName = "ExcludeClipboardContentFromMonitorProcessing";
+
+    private static readonly uint HistoryFormat = OperatingSystem.IsWindows() ? RegisterClipboardFormatW(HistoryFormatName) : 0;
+    private static readonly uint CloudFormat = OperatingSystem.IsWindows() ? RegisterClipboardFormatW(CloudFormatName) : 0;
+    private static readonly uint MonitorFormat = OperatingSystem.IsWindows() ? RegisterClipboardFormatW(MonitorFormatName) : 0;
+
+    /// <summary>
+    /// The markers a copy carries, each a format and its data (a DWORD 0 for each: "don't" for the two switches, any data for the third): none when
+    /// not <paramref name="isPrivate"/>; null when private and a format couldn't be registered (its id 0), so the text is never put unmarked. Pure.
+    /// </summary>
+    public static IReadOnlyList<(uint Format, byte[] Data)>? PrivateMarkers(bool isPrivate, uint history, uint cloud, uint monitor)
+    {
+        if (!isPrivate)
+        {
+            return [];
+        }
+
+        if (history == 0 || cloud == 0 || monitor == 0)
+        {
+            return null;
+        }
+
+        return [(history, new byte[4]), (cloud, new byte[4]), (monitor, new byte[4])];
+    }
 
     public static string? TryReadText()
     {
@@ -192,6 +228,21 @@ public static unsafe class WindowsClipboard
                 return false;
             }
 
+            // A private conversation's copy is marked first (2026-11-26): a marker that won't go means no text, so a private line never lands unmarked.
+            if (PrivateMarkers(PrivateMode.Active, HistoryFormat, CloudFormat, MonitorFormat) is not { } markers)
+            {
+                return false;
+            }
+
+            foreach (var (format, data) in markers)
+            {
+                if (!SetBlock(format, data))
+                {
+                    EmptyClipboard();
+                    return false;
+                }
+            }
+
             // The characters and the terminating NUL, in UTF-16 as CF_UNICODETEXT expects.
             nuint bytes = (nuint)(text.Length + 1) * sizeof(char);
             IntPtr block = GlobalAlloc(GlobalMoveable, bytes);
@@ -224,5 +275,32 @@ public static unsafe class WindowsClipboard
         {
             CloseClipboard();
         }
+    }
+
+    /// <summary>One block of <paramref name="data"/> under <paramref name="format"/>, the clipboard open; false (the block freed) when it wouldn't go.</summary>
+    private static bool SetBlock(uint format, byte[] data)
+    {
+        IntPtr block = GlobalAlloc(GlobalMoveable, (nuint)data.Length);
+        if (block == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        IntPtr target = GlobalLock(block);
+        if (target == IntPtr.Zero)
+        {
+            GlobalFree(block);
+            return false;
+        }
+
+        data.AsSpan().CopyTo(new Span<byte>((void*)target, data.Length));
+        GlobalUnlock(block);
+        if (SetClipboardData(format, block) == IntPtr.Zero)
+        {
+            GlobalFree(block);
+            return false;
+        }
+
+        return true;
     }
 }

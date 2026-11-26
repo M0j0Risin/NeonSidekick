@@ -459,7 +459,7 @@ Prefer source_anime; keep rating_safe unless asked.
 #### Prompts
 
 - **Describe what you want** and the model writes the prompt in the family's style (below), with its default negative; **give your own** ("use this prompt: …") and it passes it unchanged (`verbatim: true`).
-- **Skip the model:** `/imagine score_9, score_8_up, source_anime, 1girl -- score_4, blurry --seed 42` ([Imagine options](COMMANDS.md#imagine-options)). *ComfyUI workflows offered* limits the choice.
+- **Skip the model:** `/imagine score_9, score_8_up, source_anime, 1girl -- score_4, blurry --seed 42` ([Imagine options](COMMANDS.md#imagine-options)). *ComfyUI workflows* limits the choice.
 
 | Family | Prompt style the model writes |
 |---|---|

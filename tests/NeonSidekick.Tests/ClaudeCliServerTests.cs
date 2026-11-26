@@ -485,6 +485,39 @@ public class ClaudeCliServerTests
         Assert.Equal("hello there", Reply(events));
     }
 
+    /// <summary>
+    /// A private conversation never resumes, so a child started for it opens with the conversation so far (2026-11-26, the review's #23): what was said
+    /// before reaches the new process.
+    /// </summary>
+    [Fact]
+    public async Task Client_APrivateStart_OpensWithTheConversationSoFar()
+    {
+        await using var host = new FakeClaudeServerHost();
+        host.OnWrite = _ =>
+        {
+            host.Feed(Fixture("text-reply.jsonl"));
+            return Task.CompletedTask;
+        };
+        using var client = Client(host);
+        var history = new ConversationHistory("be brief");
+        history.AddUser("what is 2+2");
+        history.AddAssistant("four");
+        var assistant = new Assistant(client, history, LlmTimeouts.Default) { ConversationId = SessionId };
+        try
+        {
+            NeonSidekick.Diagnostics.PrivateMode.Active = true;
+            await RunAsync(assistant, "and 3+3?");
+        }
+        finally
+        {
+            NeonSidekick.Diagnostics.PrivateMode.Active = false;
+        }
+
+        Assert.False(Assert.Single(host.Starts).Resume);
+        var texts = UserContent(host.Written[0]).AsArray().Select(b => b!["text"]!.GetValue<string>()).ToList();
+        Assert.Equal([ClaudeCliText.PreambleHeader + "\n\nUser: what is 2+2\n\nAssistant: four", "and 3+3?"], texts);
+    }
+
     [Fact]
     public async Task Client_ACancel_InterruptsTheCli_AndTheNextTurnRunsOnTheSameProcess()
     {

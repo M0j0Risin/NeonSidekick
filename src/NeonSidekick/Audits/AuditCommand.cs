@@ -123,6 +123,14 @@ public static partial class AuditCommand
                 continue;
             }
 
+            // One scope beside commit (2026-11-26, the review's #52/#57): commit after another scope word (or a second commit), or a scope word after
+            // commit <rev>, is refused rather than read as the brief. diff then branch, older than commit, stays as it was.
+            if ((kind is not AuditScopeKind.Tree && lower == AuditText.CommitWord)
+                || (kind is AuditScopeKind.Commits && lower is AuditText.DiffWord or AuditText.StagedWord or AuditText.BranchWord))
+            {
+                return Refused(AuditText.OneScope);
+            }
+
             if (kind is AuditScopeKind.Tree && lower is AuditText.DiffWord or AuditText.StagedWord)
             {
                 kind = lower == AuditText.DiffWord ? AuditScopeKind.Diff : AuditScopeKind.Staged;
@@ -341,10 +349,15 @@ public static partial class AuditCommand
         items.AddRange(Reviewers);
         if (first != AuditText.ResumeWord)
         {
-            items.Add(new(AuditText.DiffWord, AuditText.DiffNote));
-            items.Add(new(AuditText.StagedWord, AuditText.StagedNote));
-            items.Add(new(AuditText.BranchWord, AuditText.BranchNote));
-            items.Add(new(AuditText.CommitWord, AuditText.CommitNote));
+            // The scope words until one is typed (2026-11-26): the parser refuses a second beside commit.
+            if (!typed.Any(w => w is AuditText.DiffWord or AuditText.StagedWord or AuditText.BranchWord or AuditText.CommitWord))
+            {
+                items.Add(new(AuditText.DiffWord, AuditText.DiffNote));
+                items.Add(new(AuditText.StagedWord, AuditText.StagedNote));
+                items.Add(new(AuditText.BranchWord, AuditText.BranchNote));
+                items.Add(new(AuditText.CommitWord, AuditText.CommitNote));
+            }
+
             items.AddRange(AuditFocus.Dimensions.Select(d => new CompletionItem(d, AuditText.FocusNote)));
             items.Add(new(AuditFocus.AllWord, AuditText.AllFocusNote));
             items.AddRange(folders(last.TrimStart('"')).Select(f => new CompletionItem(f.Any(char.IsWhiteSpace) ? "\"" + f + "\"" : f, "")));

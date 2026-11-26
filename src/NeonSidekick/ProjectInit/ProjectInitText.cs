@@ -71,6 +71,9 @@ public static class ProjectInitText
     public const string LoggingTitle = "/project-init › a new conversation";
     public const string LoggingCaption = "This starts a new conversation, and the current one isn't saved (Session logging is off).";
 
+    /// <summary>The same ask's caption while the conversation is private (2026-11-26, the review's #25).</summary>
+    public const string PrivateCaption = "This starts a new conversation, and the current one is private, so it isn't saved.";
+
     public const string SurveyingSpinner = "surveying the folder";
     public const string SurveyStoppedNotice = "(📝 /project-init stopped; nothing was sent)";
     public const string CanceledBeforeNotice = "(📝 /project-init canceled; nothing was sent)";

@@ -89,7 +89,7 @@ internal static class CheckpointTurns
     }
 
     /// <summary>One record per root that changed, committed (in the background in the app) under <paramref name="session"/>.</summary>
-    public static void Commit(ICheckpointStore store, ConversationHistory history, SealedJournal turn, string text, string session, AppSettingsData effective, DateTimeOffset now)
+    public static void Commit(ICheckpointStore store, ConversationHistory history, SealedJournal turn, string text, string session, AppSettingsData effective, DateTimeOffset now, bool isPrivate = false)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(history);
@@ -116,7 +116,8 @@ internal static class CheckpointTurns
                 Root = log.Root,
                 Session = session,
                 Turn = ordinal,
-                Message = UndoText.Excerpt(PasteBlocks.WithoutSavedPaths(text)),
+                // A private turn's words never reach the store (2026-11-26, the review's #15): its excerpt is the fixed one.
+                Message = isPrivate ? PrivateText.CheckpointExcerpt : UndoText.Excerpt(PasteBlocks.WithoutSavedPaths(text)),
                 Time = now,
                 Tools = journal.Tools.ToList(),
                 Entries = log.Entries,

@@ -762,6 +762,12 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(["Clock (3)", "Files (16)", "Memory (2)", "Questions (1)", "Skills (2)", "Timers (3)", "Web (4)"], withSkills.Select(g => g.Title));
         Assert.Equal([LoadSkillTool.ToolName, SkillEditorTool.ToolName], G(withSkills, "Skills").Tools.Select(t => t.Name));
         Assert.All(withSkills, g => Assert.True(g.Offered));
+        // A private conversation's withheld tool (2026-11-26, the review's #48/#49): noted with the private note, never "switched off in /tools".
+        var withheld = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: true,
+            withheld: new HashSet<string>(StringComparer.Ordinal) { SkillEditorTool.ToolName });
+        Assert.False(G(withheld, "Skills").Offers(SkillEditorTool.ToolName));
+        Assert.True(G(withheld, "Skills").Offers(LoadSkillTool.ToolName));
+        Assert.Equal(PrivateText.ToolsNote, G(withheld, "Skills").ToolNotes[SkillEditorTool.ToolName]);
         var skillsOff = SystemPromptSummary.ToolGroups(clock, timers, files, memory, memoryEnabled: true, toolsEnabled: true, web, webEnabled: true, filesEnabled: true, questions, askEnabled: true, paneOn: true, skills, skillsEnabled: false);
         Assert.Equal("Skills (2) — not offered: agent skills is off", G(skillsOff, "Skills").Title);
         Assert.False(G(skillsOff, "Skills").Offered);

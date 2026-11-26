@@ -332,6 +332,7 @@ public sealed partial class SidekickApp
             return;
         }
 
-        HeadlessSyncLine($"[{evt.Category}] {evt.Message}");
+        // Under Private log text hide its words read [private], an audit line whole (2026-11-26, the review's #55), as the echo's.
+        HeadlessSyncLine($"[{evt.Category}] {PrivateMode.Shown(evt)}");
     }
 }

@@ -65,8 +65,9 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        // The clean slate (2026-09-30): the screen, the conversation, the session and the hint row's figures, as /clear leaves them.
-        ClearAndRefresh();
+        // The clean slate (2026-09-30): the screen, the conversation, the session and the hint row's figures, as /clear leaves them; a private
+        // conversation ends first, as /clear ends it (2026-11-26, the review's #103).
+        await EndPrivateForResetAsync(cancellationToken, ClearAndRefresh).ConfigureAwait(false);
         var context = new BenchContext(_session.ContextLength?.Tokens);
         bool claudeApi = ClaudeApi.IsClaudeApi(endpoint.BaseUrl);
         if (tests.Any(t => t.Category == BenchCategory.LongContext))

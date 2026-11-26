@@ -315,7 +315,7 @@ internal sealed partial class SettingsMenu
         var lines = new List<string>();
         if (_comfyFindings.TryGetValue(workflow.Name, out var findings) && findings.Count > 0)
         {
-            lines.Add("! " + findings[0]);
+            lines.Add("! " + UntrustedText.OneLine(findings[0]));   // a finding names the server's text (2026-11-26, #27); the footer escapes it
         }
 
         if (workflow.Description.Length > 0)
@@ -454,7 +454,7 @@ internal sealed partial class SettingsMenu
                 case ComfyDuplicateAction:
                 {
                     string folder = Path.GetDirectoryName(workflow!.FilePath)!;
-                    string? copy = await ComfyAskNameAsync(page, index, ComfyDuplicateQuestion, ComfyWorkflowFile.FreeName(ComfyWorkflowFile.Suggest(name), ComfyRoots, folder),
+                    string? copy = await ComfyAskNameAsync(page, pick.Row, ComfyDuplicateQuestion, ComfyWorkflowFile.FreeName(ComfyWorkflowFile.Suggest(name), ComfyRoots, folder),
                         typed => ComfyWorkflowFile.Duplicate(folder, ComfyRoots, name, typed), cancellationToken).ConfigureAwait(false);
                     if (copy is null)
                     {
@@ -469,7 +469,7 @@ internal sealed partial class SettingsMenu
                 {
                     string folder = Path.GetDirectoryName(workflow!.FilePath)!;
                     bool uncovers = !global && File.Exists(Path.Combine(_settings.GlobalComfyDirectory, name + ".json"));
-                    string? renamed = await ComfyAskNameAsync(page, index, ComfyRenameQuestion, name,
+                    string? renamed = await ComfyAskNameAsync(page, pick.Row, ComfyRenameQuestion, name,
                         typed => string.Equals(typed, name, StringComparison.Ordinal) ? "" : ComfyWorkflowFile.Rename(folder, ComfyRoots, name, typed), cancellationToken).ConfigureAwait(false);
                     if (renamed is null || string.Equals(renamed, name, StringComparison.Ordinal))
                     {
@@ -564,7 +564,7 @@ internal sealed partial class SettingsMenu
     {
         if (_openFile is null)
         {
-            Sink.Error(ComfyOpenFailed(path, "no editor to open it in"));
+            Sink.Error(ComfyOpenFailed(path, ComfyText.NoEditor));
             return;
         }
 
@@ -605,7 +605,7 @@ internal sealed partial class SettingsMenu
         {
             if (probe.Outcome == RecycleOutcome.Failed)
             {
-                Sink.Error(ComfyOpenFailed(json, probe.Message));
+                Sink.Error(ComfyText.DeleteFailed(name, probe.Message));   // its own words (2026-11-26, the review's #63), not the open's
                 return (false, false);
             }
 
@@ -665,7 +665,10 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    /// <summary>A deleted name out of the loaded profile's lists; Botchat's back to null (every offered one) when it empties.</summary>
+    /// <summary>
+    /// A deleted name out of the loaded profile's lists. Botchat's goes back to null when it empties: null is no workflows for the bots, never every
+    /// offered one (the bots draw only with the workflows this list names).
+    /// </summary>
     private void ComfyDropFromLists(string name)
     {
         var current = _settings.Current;

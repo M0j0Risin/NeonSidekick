@@ -214,15 +214,25 @@ public sealed partial class SessionStore
         }
     }
 
-    /// <summary>The owed <c>VACUUM</c> then <c>wal_checkpoint(TRUNCATE)</c>, each under a <see cref="TidyBusyMs"/> busy wait. Caller holds the lock.</summary>
+    /// <summary>
+    /// The owed <c>VACUUM</c> then <c>wal_checkpoint(TRUNCATE)</c>, each bounded by its own command timeout of <see cref="TidyBusyMs"/> (2026-11-26, the
+    /// review's #22: the driver retries a busy statement until the command's timeout, so nothing on the shared connection changes). Caller holds the lock.
+    /// </summary>
     private void Tidy(SqliteConnection connection)
     {
+        int seconds = Math.Max(1, TidyBusyMs / 1000);
         try
         {
-            Exec(connection, null, "PRAGMA busy_timeout = " + TidyBusyMs.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            Exec(connection, null, "VACUUM");
+            using (var vacuum = connection.CreateCommand())
+            {
+                vacuum.CommandText = "VACUUM";
+                vacuum.CommandTimeout = seconds;
+                vacuum.ExecuteNonQuery();
+            }
+
             using var checkpoint = connection.CreateCommand();
             checkpoint.CommandText = "PRAGMA wal_checkpoint(TRUNCATE)";
+            checkpoint.CommandTimeout = seconds;
             using var reader = checkpoint.ExecuteReader();
             // The first column is 1 when the checkpoint couldn't finish (another reader or writer held it).
             bool busy = reader.Read() && reader.GetInt64(0) != 0;
@@ -235,10 +245,6 @@ public sealed partial class SessionStore
         catch (SqliteException ex)
         {
             DiagnosticLog.Warn(Category, TidyFailedWarning(ex.Message));
-        }
-        finally
-        {
-            TryExec(connection, "PRAGMA busy_timeout = 0");
         }
     }
 

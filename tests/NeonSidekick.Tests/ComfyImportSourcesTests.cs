@@ -140,6 +140,8 @@ public sealed class ComfyImportSourcesTests
     {
         Assert.Equal("""{"a":null,"b":[null,-1],"c":"NaN and Infinity","d":null,"e":"a\"NaN"}""", ComfyImport.NumbersAsNull("""{"a":NaN,"b":[Infinity,-1],"c":"NaN and Infinity","d":-Infinity,"e":"a\"NaN"}"""));
         Assert.Equal("{\"x\":1}", ComfyImport.NumbersAsNull("{\"x\":1}"));
+        // A comment passes through untouched (2026-11-26, the review's #11): its quote never starts a string.
+        Assert.Equal("{ // don't \"quote\n \"a\": null, /* \" */ \"b\": null }", ComfyImport.NumbersAsNull("{ // don't \"quote\n \"a\": NaN, /* \" */ \"b\": NaN }"));
     }
 
     [Fact]
@@ -153,6 +155,22 @@ public sealed class ComfyImportSourcesTests
         Assert.DoesNotContain("is_changed", result!.GraphJson);
         Assert.Equal("a lighthouse at dusk", result.Prompt);
         Assert.Equal("blurry", result.Negative);
+        // The input left null is named (2026-11-26, the review's #106).
+        Assert.Contains(ComfyImport.InputsLeftNull(["3 extra"]), result.Found);
+    }
+
+    /// <summary>A /history of odd shapes (a status that's a list, a file entry that's a number) parses without a throw (2026-11-26, the review's #17).</summary>
+    [Fact]
+    public void History_OddShapes_NeverThrow()
+    {
+        var root = new JsonObject
+        {
+            ["a"] = new JsonObject { ["prompt"] = new JsonArray(1, "a", JsonNode.Parse(Graph)), ["status"] = new JsonArray(1, 2), ["outputs"] = new JsonObject { ["9"] = new JsonObject { ["images"] = new JsonArray(5) } } },
+            ["b"] = new JsonObject { ["prompt"] = new JsonArray(2, "b", JsonNode.Parse(Graph)), ["status"] = new JsonObject { ["messages"] = new JsonArray(new JsonArray("execution_start", 7)) } },
+        };
+        var runs = ComfyHistory.Parse(root.ToJsonString());
+        Assert.NotEmpty(runs);
+        Assert.All(runs, r => Assert.Null(r.OutputFile));
     }
 
     // ── /history ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────

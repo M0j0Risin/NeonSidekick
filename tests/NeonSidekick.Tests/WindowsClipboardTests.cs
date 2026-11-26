@@ -29,6 +29,23 @@ public class WindowsClipboardTests
 
     private static int PixelOffset(byte[] bmp) => BinaryPrimitives.ReadInt32LittleEndian(bmp.AsSpan(10));
 
+    /// <summary>
+    /// A private conversation's copy carries the three markers (2026-11-26, the review's #61), each a DWORD 0; none when not private; and a marker
+    /// that couldn't be registered means no plan at all, so the text is never put unmarked.
+    /// </summary>
+    [Fact]
+    public void PrivateMarkers_AreTheThreeFormats_OrNoneOrNoCopy()
+    {
+        Assert.Empty(WindowsClipboard.PrivateMarkers(false, 0, 0, 0)!);
+        var markers = WindowsClipboard.PrivateMarkers(true, 11, 12, 13)!;
+        Assert.Equal([11u, 12u, 13u], markers.Select(m => m.Format));
+        Assert.All(markers, m => Assert.Equal(new byte[4], m.Data));
+        Assert.Null(WindowsClipboard.PrivateMarkers(true, 11, 0, 13));
+        Assert.Equal("CanIncludeInClipboardHistory", WindowsClipboard.HistoryFormatName);
+        Assert.Equal("CanUploadToCloudClipboard", WindowsClipboard.CloudFormatName);
+        Assert.Equal("ExcludeClipboardContentFromMonitorProcessing", WindowsClipboard.MonitorFormatName);
+    }
+
     [Fact]
     public void BmpFromDib_PutsTheFileHeaderInFront_AndTheCodecsReadIt()
     {

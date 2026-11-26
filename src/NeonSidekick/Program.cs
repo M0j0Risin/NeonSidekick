@@ -343,7 +343,7 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 {
     if (e.ExceptionObject is Exception ex)
     {
-        DiagnosticLog.Error(CrashReport.Category, CrashReport.LogLine(CrashReport.Write(home, ex, DateTime.UtcNow)), ex);
+        CrashReport.LogCrash(CrashReport.Write(home, ex, DateTime.UtcNow), ex);
     }
 };
 TaskScheduler.UnobservedTaskException += (_, e) => DiagnosticLog.Error(CrashReport.Category, "Unobserved task exception", e.Exception);
@@ -559,6 +559,7 @@ NeonSidekick.Viewer.PictureMenu.Settings = () => NeonSidekick.Images.PictureEdit
 NeonSidekick.Viewer.PictureMenu.Attach = app.AttachPicture;
 NeonSidekick.Viewer.PictureMenu.Print = app.PrintPicture;
 NeonSidekick.Viewer.PictureMenu.Reported = app.PictureReported;
+NeonSidekick.Viewer.PictureMenu.Created = app.PictureCreated;
 NeonSidekick.Viewer.PictureMenu.SplashFolder = () => app.PictureSplashFolder;   // Add to the splash images (2026-11-23), both systems
 NeonSidekick.Viewer.PictureMenu.RobotSplash = () => app.PictureRobotSplash;
 // The Browser window's address box searches words with the Web search method in force, and its home button and a bare /browser
@@ -767,7 +768,7 @@ catch (Exception ex) when (ex is not OperationCanceledException)
     // The --log line without its console echo: the notice below is the one line the user sees.
     bool echo = DiagnosticLog.EchoToConsole;
     DiagnosticLog.EchoToConsole = false;
-    DiagnosticLog.Error(CrashReport.Category, CrashReport.LogLine(crashPath), ex);
+    CrashReport.LogCrash(crashPath, ex);
     DiagnosticLog.EchoToConsole = echo;
     console.WriteLine(CrashReport.Notice(crashPath, ex));
     exitCode = 1;
@@ -778,6 +779,9 @@ if (!checkpoints.FlushPending(TimeSpan.FromSeconds(2)))
 {
     DiagnosticLog.Warn(NeonSidekick.Files.CheckpointStore.Category, "A file checkpoint was still being kept at the exit; that turn can't be undone.");
 }
+
+// A private conversation's checkpoints whose store was busy at its end are pruned now (2026-11-26, the review's #31).
+checkpoints.PruneOwed();
 
 // The picture viewer (2026-09-27) and the log window (2026-10-02) close with the app; their threads are background ones,
 // this is the tidy way (and the log window remembers its place).

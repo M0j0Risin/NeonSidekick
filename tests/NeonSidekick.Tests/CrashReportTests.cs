@@ -76,6 +76,53 @@ public class CrashReportTests : IDisposable
     }
 
     [Fact]
+    public void Entry_Hidden_KeepsEveryInnerOfAnAggregate_AndNoMessage()
+    {
+        // 2026-11-26, the review's #33: the second inner's type and stack were dropped.
+        Exception first, second;
+        try
+        {
+            throw new InvalidOperationException("ZebraFirst");
+        }
+        catch (InvalidOperationException ex)
+        {
+            first = ex;
+        }
+
+        try
+        {
+            throw new FormatException("ZebraSecond");
+        }
+        catch (FormatException ex)
+        {
+            second = ex;
+        }
+
+        string hidden = CrashReport.Entry(new AggregateException("ZebraOuter", first, second), Stamp, hide: true);
+        Assert.Contains(nameof(InvalidOperationException), hidden, StringComparison.Ordinal);
+        Assert.Contains(nameof(FormatException), hidden, StringComparison.Ordinal);
+        Assert.Contains(" ---> (Inner Exception #1) ", hidden, StringComparison.Ordinal);
+        Assert.DoesNotContain("Zebra", hidden, StringComparison.Ordinal);
+    }
+
+    /// <summary>After the exit ended a private conversation under hide, a crash entry still keeps no message (2026-11-26, the review's #34/#72).</summary>
+    [Fact]
+    public void Write_AfterAPrivateExit_KeepsNoMessage()
+    {
+        try
+        {
+            PrivateMode.HidAtExit = true;
+            Assert.True(PrivateMode.HideCrash);
+            string path = CrashReport.Write(_dir, new InvalidOperationException("ZebraLate"), Stamp)!;
+            Assert.DoesNotContain("ZebraLate", File.ReadAllText(path), StringComparison.Ordinal);
+        }
+        finally
+        {
+            PrivateMode.HidAtExit = false;
+        }
+    }
+
+    [Fact]
     public void Entry_IsInvariant_AndPinned()
     {
         var ex = new InvalidOperationException("boom");

@@ -83,7 +83,13 @@ internal sealed partial class ChatScreen
         }
 
         string session = SavesSession(effective) && _sessionId is { } id ? id.ToString(CultureInfo.InvariantCulture) : CheckpointStore.NoSession;
-        CheckpointTurns.Commit(store, assistant.History, turn, text, session, effective, _time.GetUtcNow());
+        bool isPrivate = _private.IsPrivate;
+        if (isPrivate)
+        {
+            _private.TrackCheckpoint(turn.Journal.Id);   // before the commit is queued, so the end's removal queues behind it
+        }
+
+        CheckpointTurns.Commit(store, assistant.History, turn, text, session, effective, _time.GetUtcNow(), isPrivate);
     }
 
     /// <summary>
@@ -416,6 +422,13 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void OnSessionsPurged(IReadOnlyList<long> ids)
     {
+        // A bot chat whose row went is let go first (2026-11-26, the review's #104): its number comes back with the next Begin, and --resume would
+        // write the chat into that new conversation's row. Every delete raises this, /private's switch, the purges and the pane's delete alike.
+        if (ids.Count > 0 && Volatile.Read(ref _lastBotChat) is { SessionId: { } chatRow } chat && ids.Contains(chatRow))
+        {
+            Interlocked.CompareExchange(ref _lastBotChat, null, chat);
+        }
+
         if (_checkpoints is not { } store || ids.Count == 0)
         {
             return;

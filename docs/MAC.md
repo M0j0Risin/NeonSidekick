@@ -174,6 +174,7 @@ Not yet tried on a Mac:
 * **`/update` from a real release:** the install, a second copy waiting, and whether the Web UI's firewall question comes back.
 * **A bot check with the screen locked** (covered or minimized works, [above](#the-browser-window-on-a-mac)).
 * **Event logs under a standard account, or from a terminal without Full Disk Access.**
+* **A private conversation's copies** skipped by a clipboard manager (they're marked concealed and transient).
 * **Whether the unified log would follow links inside a `.logarchive`** (the app refuses one), and skipping install.log's lines from a reset clock on a real log.
 * **The Web UI's Tailscale tab** (a `utun` address; another VPN's may show too) and **the chat page's picture strip.**
 * **Deleting on a volume with no Trash** (a network or FAT volume).

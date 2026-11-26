@@ -37,6 +37,7 @@ public partial class ChatScreenTests
         {
             PrivateMode.Active = false;
             PrivateMode.HideLog = false;
+            PrivateMode.HidAtExit = false;
         }
     }
 
@@ -72,6 +73,7 @@ public partial class ChatScreenTests
         {
             PrivateMode.Active = false;
             PrivateMode.HideLog = false;
+            PrivateMode.HidAtExit = false;
         }
     }
 
@@ -101,6 +103,7 @@ public partial class ChatScreenTests
         {
             PrivateMode.Active = false;
             PrivateMode.HideLog = false;
+            PrivateMode.HidAtExit = false;
         }
     }
 
@@ -131,6 +134,40 @@ public partial class ChatScreenTests
         {
             PrivateMode.Active = false;
             PrivateMode.HideLog = false;
+            PrivateMode.HidAtExit = false;
+        }
+    }
+
+    /// <summary>
+    /// A file checkpoint made while private is kept under the private excerpt and removed at the end (2026-11-26, the review's #15/#31, the user's
+    /// call): /undo of a private turn works only until then.
+    /// </summary>
+    [Fact]
+    public async Task Private_ACheckpointMadeWhilePrivate_GoesAtTheEnd()
+    {
+        CheckpointsOn();
+        _chat.Enqueue(FakeChatClient.Call("c1", NeonSidekick.Llm.Tools.WriteFileTool.ToolName, WriteArgs("note.txt", "hello")))
+            .EnqueueText("Written.");
+        string? id = null;
+        StepsWhenIdle(
+            Line("/private"),
+            Line("write a ZebraQuartz note"),
+            input => { id = Assert.Single(_checkpoints!.Records).Id; PushLine(input, "/private off"); },
+            Line("/exit"));
+
+        try
+        {
+            await RunAsync();
+
+            Assert.NotNull(id);
+            Assert.Equal([id!], _checkpoints!.RemovedNow);
+            Assert.Empty(_checkpoints.Records);
+        }
+        finally
+        {
+            PrivateMode.Active = false;
+            PrivateMode.HideLog = false;
+            PrivateMode.HidAtExit = false;
         }
     }
 
@@ -155,6 +192,7 @@ public partial class ChatScreenTests
         {
             PrivateMode.Active = false;
             PrivateMode.HideLog = false;
+            PrivateMode.HidAtExit = false;
         }
 
         Assert.True(_chat.Options.Count >= 2, output);

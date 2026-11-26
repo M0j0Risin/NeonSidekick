@@ -183,13 +183,25 @@ public static class ComfyWorkflowFile
     private static bool SamePath(string a, string? b) =>
         b is not null && string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>A name free everywhere: <paramref name="name"/> itself, else <c>&lt;name&gt;-2</c>, <c>-3</c> … within 64 characters.</summary>
-    public static string FreeName(string name, IReadOnlyList<string> roots, string folder)
+    /// <summary>
+    /// A name free everywhere: <paramref name="name"/> itself, else <c>&lt;name&gt;-2</c>, <c>-3</c> … within 64 characters. With
+    /// <paramref name="suffixes"/> (2026-11-26, the review's #3: Kind both saves a <c>_txt2img</c> and an <c>_img2img</c>), each suffixed name must
+    /// be free, and the stem is capped so the longest suffixed one still fits.
+    /// </summary>
+    public static string FreeName(string name, IReadOnlyList<string> roots, string folder, IReadOnlyList<string>? suffixes = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(roots);
+        IReadOnlyList<string> tails = suffixes is { Count: > 0 } ? suffixes : [""];
+        int room = 64 - tails.Max(t => t.Length);
         string stem = name.Length == 0 ? "workflow" : name;
-        if (NameProblem(stem, roots, folder, null) is null)
+        if (stem.Length > room)
+        {
+            stem = stem[..room].TrimEnd('-', '_', '.');
+        }
+
+        bool Free(string candidate) => tails.All(t => NameProblem(candidate + t, roots, folder, null) is null);
+        if (Free(stem))
         {
             return stem;
         }
@@ -197,8 +209,8 @@ public static class ComfyWorkflowFile
         for (int n = 2; n < 1000; n++)
         {
             string tail = "-" + n.ToString(CultureInfo.InvariantCulture);
-            string candidate = (stem.Length + tail.Length > 64 ? stem[..(64 - tail.Length)].TrimEnd('-') : stem) + tail;
-            if (NameProblem(candidate, roots, folder, null) is null)
+            string candidate = (stem.Length + tail.Length > room ? stem[..(room - tail.Length)].TrimEnd('-') : stem) + tail;
+            if (Free(candidate))
             {
                 return candidate;
             }
@@ -400,7 +412,20 @@ public static class ComfyWorkflowFile
             && string.Equals(prefix, ComfyGraphs.PrefixFolder + oldName, StringComparison.Ordinal)
             && ComfyGraphEdit.SetText(graph, part, ComfyGraphs.PrefixFolder + newName) is null)
         {
-            jsonAfter = InEndings(graph.ToJsonString(ComfyGraphs.Indented), json.Text);
+            // The one "neon/<old>" string replaced in the file's own text (2026-11-26, the review's #80), so its layout and characters stay; taken only
+            // when it reads back as the same graph with the new name (an escaped prefix elsewhere would put the match in another node's text).
+            string token = "\"" + ComfyGraphs.PrefixFolder + oldName + "\"";
+            int at = json.Text.IndexOf(token, StringComparison.Ordinal);
+            if (at >= 0 && json.Text.IndexOf(token, at + token.Length, StringComparison.Ordinal) < 0)
+            {
+                string raw = string.Concat(json.Text.AsSpan(0, at), "\"" + ComfyGraphs.PrefixFolder + newName + "\"", json.Text.AsSpan(at + token.Length));
+                if (ComfyGraphEdit.Load(raw) is { Graph: { } again } && System.Text.Json.Nodes.JsonNode.DeepEquals(again, graph))
+                {
+                    jsonAfter = raw;
+                }
+            }
+
+            jsonAfter ??= InEndings(graph.ToJsonString(ComfyGraphs.Indented), json.Text);
         }
 
         string? mdAfter = null;

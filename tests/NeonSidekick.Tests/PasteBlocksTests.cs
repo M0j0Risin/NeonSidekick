@@ -30,6 +30,31 @@ public class PasteBlocksTests
         Assert.Equal("[Pasted text #12 · 900 chars]", PasteBlocks.Label(12, new string('x', 900)));
     }
 
+    /// <summary>
+    /// A private conversation's pastes blanked at its end (2026-11-26, the review's #94): a text and a picture after the mark expand to nothing and
+    /// the picture's saved name goes; one before the mark still expands, and a literal glyph still stands for itself.
+    /// </summary>
+    [Fact]
+    public void BlankFrom_EmptiesThePastesAfterTheMark_AndKeepsTheRest()
+    {
+        var blocks = new PasteBlocks();
+        char before = blocks.Add(Lines(5));
+        int mark = blocks.Count;
+        char text = blocks.Add(Lines(6));
+        char picture = blocks.AddImage(Image("secret.png"));
+        char glyph = blocks.Literal('\uE0B0');
+        int number = blocks.NumberOf(blocks.ImageOf(picture)!)!.Value;
+        blocks.MarkSaved(number, "secret.png");
+
+        Assert.Equal(2, blocks.BlankFrom(mark));
+        Assert.Equal(Lines(5), blocks.Expand(before.ToString()));
+        Assert.Equal("", blocks.Expand(text.ToString()));
+        Assert.Null(blocks.ImageOf(picture));
+        Assert.Null(blocks.SavedPath(number));
+        Assert.Equal("\uE0B0", blocks.Expand(glyph.ToString()));
+        Assert.Equal(0, blocks.BlankFrom(mark));
+    }
+
     [Fact]
     public void Tokens_ArePrivateUseCharacters_InOrder()
     {

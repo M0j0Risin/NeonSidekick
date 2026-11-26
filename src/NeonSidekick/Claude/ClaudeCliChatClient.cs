@@ -173,6 +173,12 @@ public sealed class ClaudeCliChatClient : IChatClient
         if (await _host.EnsureRunningAsync(turn.Launch, turn.Resume, turn.Tools, cancellationToken).ConfigureAwait(false))
         {
             _spent = 0m;
+            // A new child that neither resumes nor starts over (2026-11-26, the review's #23: a private conversation never resumes, so a restarted
+            // server had lost what was said): the conversation so far goes first, as StartOverAsync sends it.
+            if (!turn.Resume && !turn.StartedOver && ClaudeServerInput.Preamble(turn.Input.Earlier) is { Length: > 0 } preamble)
+            {
+                content = [new TextContent(preamble), .. content];
+            }
         }
 
         _started.Add(turn.SessionId);

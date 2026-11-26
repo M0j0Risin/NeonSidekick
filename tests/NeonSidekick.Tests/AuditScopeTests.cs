@@ -394,6 +394,30 @@ public sealed class AuditScopeTests : IDisposable
         Assert.Contains(AuditText.RangeFromMergeBase("feature", "main", fork) + ".", AuditText.CommitsNotice(scope));
     }
 
+    /// <summary>
+    /// The header keeps the typed start's sha (2026-11-26, the review's #50/#88): a resume works the merge base out again and says it as the start
+    /// did, its sides by their short shas, with no "X is Y" sentence; the title stays the same.
+    /// </summary>
+    [Fact]
+    public void Commit_AMergeBaseRange_ResumesSayingTheMergeBase()
+    {
+        GitAccessTests.Init(_box.Root);
+        string fork = GitAccessTests.CommitFile(_box.Root, "base.cs", "b", "first");
+        Assert.Equal(GitOutcome.Ok, _box.Git.CreateBranch("", "feature", "", switchTo: true).Outcome);
+        string feature = GitAccessTests.CommitFile(_box.Root, "feature.cs", "f", "on the branch");
+        Checkout("main");
+        string main = GitAccessTests.CommitFile(_box.Root, "main.cs", "m", "on main");
+        var started = ResolveCommits("feature..main").Scope!;
+        Assert.Equal($"{AuditText.CommitWord} {feature}..{main}", started.Words);
+
+        var (request, error) = AuditCommand.ScopeFromHeader(started.Words, _box.Existing);
+        Assert.Null(error);
+        var resumed = AuditScopes.Resolve(_box.Files, _box.Git, request!, CancellationToken.None).Scope!;
+        Assert.Equal(fork, resumed.From);
+        Assert.Equal(started.Label, resumed.Label);
+        Assert.Equal($"{AuditText.Glyph} {AuditText.RangeFromMergeBase(S(feature), S(main), fork)}.", AuditText.CommitsNotice(resumed));
+    }
+
     [Fact]
     public void Commit_TheRefusals_EachSayTheirOwnCase()
     {

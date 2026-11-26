@@ -190,7 +190,7 @@ public sealed class HaSession : IDisposable
             return HaReply.Failed(error ?? HaText.BadData);
         }
 
-        DiagnosticLog.Info(HaText.Category, HaText.CallLog(domain, service, ids));
+        DiagnosticLog.Audit(HaText.Category, HaText.CallLog(domain, service, ids));   // an audit line, kept whole while private (2026-11-26, the review's #44)
         try
         {
             return await client.CallServiceAsync(domain, service, body, returnResponse, Timeout, cancellationToken).ConfigureAwait(false);

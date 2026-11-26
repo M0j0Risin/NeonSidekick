@@ -387,6 +387,15 @@ public partial class ToolsMenuTests
         Assert.Equal(0.5, lora.StrengthClip);
     }
 
+    /// <summary>The small test keeps the workflow's shape, the longer side at most 512, each a multiple of 8 and at least 64 (2026-11-26, the review's #82).</summary>
+    [Theory]
+    [InlineData(1024, 1024, 512, 512)]
+    [InlineData(1024, 1536, 344, 512)]
+    [InlineData(512, 384, 512, 384)]
+    [InlineData(4000, 100, 512, 64)]
+    public void TheSmallTest_ScalesBothSides(int width, int height, int smallWidth, int smallHeight) =>
+        Assert.Equal((smallWidth, smallHeight), SettingsMenu.ComfyTestSize(width, height));
+
     /// <summary>Esc on the busy page cancels a test that hasn't answered; the run is told to stop.</summary>
     [Fact]
     public async Task OnThePane_TheComfyTest_EscCancelsARun()

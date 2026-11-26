@@ -261,6 +261,55 @@ public sealed class CheckpointStoreTests : IDisposable
         Assert.Equal(_rig.Root, File.ReadAllText(Path.Combine(store, CheckpointStore.FolderFile)));
     }
 
+    /// <summary>The blob of the store's only checkpoint (the file as it stood before the turn).</summary>
+    private string OnlyBlob()
+    {
+        using var repo = new Repository(StorePath);
+        var commit = repo.Lookup<Commit>(repo.Refs.FromGlob(CheckpointStore.RefPrefix + "*").Single().TargetIdentifier);
+        return commit.Tree["0001"].Target.Sha;
+    }
+
+    private bool HasObject(string sha)
+    {
+        using var repo = new Repository(StorePath);
+        return repo.ObjectDatabase.Contains(new ObjectId(sha));
+    }
+
+    /// <summary>A private conversation's end (2026-11-26, the review's #31): the ref goes and its blob is pruned at once, no hour's floor.</summary>
+    [Fact]
+    public async Task RemoveNow_DropsTheRef_AndPrunesItsBlobAtOnce()
+    {
+        File.WriteAllText(_rig.PathOf("a.txt"), "private words");
+        string id = _rig.Turn(files => files.WriteText("a.txt", "b", overwrite: true));
+        string blob = OnlyBlob();
+
+        _rig.Store.RemoveNow(_rig.Profile, [id]);
+        await _rig.Store.FlushAsync();
+
+        Assert.Empty(Refs());
+        Assert.False(HasObject(blob));
+    }
+
+    /// <summary>A writer begun meanwhile keeps the store: the ref goes, the prune is owed and runs once the store is free (PruneOwed, the exit's).</summary>
+    [Fact]
+    public async Task RemoveNow_WithAWriterBegun_OwesThePrune()
+    {
+        File.WriteAllText(_rig.PathOf("a.txt"), "private words");
+        string id = _rig.Turn(files => files.WriteText("a.txt", "b", overwrite: true));
+        string blob = OnlyBlob();
+        var writer = _rig.Store.Begin(_rig.Profile, _rig.Root, "later")!;
+
+        _rig.Store.RemoveNow(_rig.Profile, [id]);
+        await _rig.Store.FlushAsync();
+        Assert.Empty(Refs());
+        Assert.True(HasObject(blob));
+
+        _rig.Store.Abandon(writer);
+        _rig.Store.PruneOwed();
+        await _rig.Store.FlushAsync();
+        Assert.False(HasObject(blob));
+    }
+
     [Fact]
     public void ALaterCommit_PrunesTheRemovedCheckpointsBlob_PastALeftoverPruneLock()
     {

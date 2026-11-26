@@ -57,13 +57,14 @@ public static class DiagnosticLog
     {
         // A name in a message never sends the terminal a sequence or disguises itself (2026-10-22, review P5); its line breaks stay.
         message = Files.NameScrub.Display(message, keepLineBreaks: true);
+        var evt = new DiagnosticEvent(DateTime.UtcNow, level, category, message, exception, audit);
         if (EchoToConsole)
         {
             // The headless echo follows Private log text (2026-11-25): a hidden line reads [private], an audit line whole.
-            Console.WriteLine($"[{category}] {(PrivateMode.HideLog && !audit ? PrivateMode.Placeholder : message)}");
+            Console.WriteLine($"[{category}] {PrivateMode.Shown(evt)}");
         }
 
-        Raise(new DiagnosticEvent(DateTime.UtcNow, level, category, message, exception, audit));
+        Raise(evt);
     }
 
     /// <summary>

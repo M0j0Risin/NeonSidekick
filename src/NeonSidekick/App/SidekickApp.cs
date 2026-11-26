@@ -459,7 +459,7 @@ public sealed partial class SidekickApp
             records.Reconcile(catalog.All.Concat(catalog.Shadowed));   // a disabled skill is still known (2026-10-09)
         }
 
-        return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, new Llm.Tools.SkillFileAccess(_time), records), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile, HeadlessProjectSource());
+        return new ChatScreen.SkillsForTurn(catalog, ChatScreen.SkillTools(catalog, roots, () => EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, new Llm.Tools.SkillFileAccess(_time), records, () => HeadlessLearns), new ProjectFile(() => files.Root), EffectiveSettings.AgentSkills, EffectiveSettings.AgentSkills && EffectiveSettings.ExternalSkills, EffectiveSettings.ProjectFile, HeadlessProjectSource());
     }
 
     /// <summary>A headless run's project skills source (2026-11-23): set by <see cref="BuildSkills"/>; null outside a run.</summary>
@@ -957,8 +957,11 @@ public sealed partial class SidekickApp
     /// <summary>
     /// Whether this headless run is private (2026-11-25, the private-conversations plan): <c>--private</c>, <c>NEONSIDEKICK_PRIVATE</c> or <c>Private at start</c>,
     /// for the whole run (there is no <c>/private</c> here). Nothing of it reaches the session store; a <c>--session</c> opens as a private copy.
+    /// Read once (2026-11-26, the review's #72): every check of the run, from its start's log lines to its end, sees the same answer.
     /// </summary>
-    private bool HeadlessPrivate => EffectiveSettings.PrivateAtStart;
+    private bool HeadlessPrivate => _headlessPrivate ??= EffectiveSettings.PrivateAtStart;
+
+    private bool? _headlessPrivate;
 
     /// <summary>Whether this run writes the session store: <c>Session logging</c> on and not private.</summary>
     private bool HeadlessSaves => EffectiveSettings.SessionLogging && !HeadlessPrivate;
@@ -970,21 +973,67 @@ public sealed partial class SidekickApp
     private IReadOnlySet<string> HeadlessWithheld(IReadOnlySet<string> disabled) =>
         HeadlessLearns ? disabled : new HashSet<string>(disabled, StringComparer.Ordinal) { Llm.Tools.SaveMemoryTool.ToolName, Llm.Tools.SkillEditorTool.ToolName };
 
-    /// <summary>A private run's process-wide switches (<see cref="PrivateMode"/>), on for the run and off as it ends.</summary>
+    /// <summary>
+    /// A private run (2026-11-25; one owner since 2026-11-26, the review's #42 and #31, the user's call): its <see cref="PrivateConversation"/>, entered
+    /// for the run (the flag, the variable or the setting), which sets the process-wide switches; the pictures it made, its file checkpoints and its
+    /// spill logs listed there. Its end, in order: the pictures deleted under <c>delete</c> (<c>ask</c> keeps them: nobody to ask), the spill logs, the
+    /// checkpoints removed with their saved files, then the crash entry's hide latched, the stretch left and the log's hide let go.
+    /// </summary>
     private sealed class PrivateRunScope : IDisposable
     {
-        public PrivateRunScope(bool hideLog)
+        private readonly Files.ICheckpointStore? _checkpoints;
+        private readonly string _profileDirectory;
+
+        public PrivateRunScope(PrivateReason reason, AppSettingsData effective, Files.ICheckpointStore? checkpoints, string profileDirectory)
         {
-            PrivateMode.Active = true;
-            PrivateMode.HideLog = hideLog;
+            _checkpoints = checkpoints;
+            _profileDirectory = profileDirectory;
+            Conversation.Enter(reason, effective);
         }
+
+        /// <summary>The run's private conversation.</summary>
+        public PrivateConversation Conversation { get; } = new();
 
         public void Dispose()
         {
-            PrivateMode.Active = false;
+            try
+            {
+                Conversation.DeleteFiles(Conversation.Pictures == Sessions.PrivatePicturesMode.Delete);
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                DiagnosticLog.Warn(PrivateText.Category, PrivateText.EndStepFailedLogLine(ex.GetType().Name), ex);
+            }
+
+            try
+            {
+                if (_checkpoints is { } store && Conversation.TakeCheckpoints() is { Count: > 0 } ids)
+                {
+                    store.RemoveNow(_profileDirectory, ids);
+                }
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                DiagnosticLog.Warn(PrivateText.Category, PrivateText.EndStepFailedLogLine(ex.GetType().Name), ex);
+            }
+
+            if (PrivateMode.HideLog)
+            {
+                PrivateMode.HidAtExit = true;
+            }
+
+            Conversation.Leave();
             PrivateMode.HideLog = false;
         }
     }
+
+    /// <summary>Why a private run is private: the flag, the variable, or the setting, as <see cref="OverriddenBy"/> names the source.</summary>
+    private PrivateReason HeadlessPrivateReason() => OverriddenBy(SettingsField.PrivateAtStart) switch
+    {
+        SidekickOptions.PrivateFlag => PrivateReason.Flag,
+        Settings.EnvironmentOverrides.PrivateVariable => PrivateReason.Variable,
+        _ => PrivateReason.Setting,
+    };
 
     private async Task<int> RunHeadlessAsync(CancellationToken cancellationToken)
     {
@@ -1017,9 +1066,10 @@ public sealed partial class SidekickApp
             return startExit;
         }
 
+        // A private run (2026-11-25): opened before the start's log lines (2026-11-26, the review's #72), the process-wide switches for the whole run, put
+        // back as it ends (the tests share one process).
+        using var privateRun = HeadlessPrivate ? new PrivateRunScope(HeadlessPrivateReason(), EffectiveSettings, _checkpoints, _settings.ProfileDirectory) : null;
         LogStartup();
-        // A private run (2026-11-25): the process-wide switches for the whole run, put back as it ends (the tests share one process).
-        using var privateRun = HeadlessPrivate ? new PrivateRunScope(Sessions.PrivateLogText.Resolve(EffectiveSettings)) : null;
         _headlessAllowances = new HeadlessAllowances(_options.AllowList);
         EncryptStoredSecrets();
         await using var embedded = _embeddedLlm?.Invoke();
@@ -1063,6 +1113,10 @@ public sealed partial class SidekickApp
         // The profile's images folder (2026-10-09): ComfyUI's pictures go there, and the picture tools reach it by full path.
         var images = BuildImagesDirectory();
         files.ImagesFolder = () => images.Root;
+        if (privateRun is not null)
+        {
+            images.Created = privateRun.Conversation.TrackPicture;   // the pictures it made, deleted at its end under delete (2026-11-26)
+        }
         // /ha camera (2026-11-13, the user's pick): the still saved in home-cameras and its path printed; a chip's alias names it too, read
         // from the settings at each call. Built once for the loop (the review: not on every /ha line).
         var haCamera = new HomeAssistant.HaCameraOptions(images, target => HomeBarItems.AliasedCamera(target, EffectiveSettings.HomeBarAliases));
@@ -1175,7 +1229,7 @@ public sealed partial class SidekickApp
         using var processes = new Shell.ProcessRegistry(runner, Random.Shared, () => { });
         // Kept (2026-09-26): what it refused is the run's summary notice and exit code 3 at the end.
         var gate = new Shell.CommandGate(() => EffectiveSettings, allowList, null, _headlessAllowances.ScriptRefused);
-        var shellTools = ChatScreen.ShellTools(runner, processes, files, gate, interpreters, () => EffectiveSettings, Random.Shared);
+        var shellTools = ChatScreen.ShellTools(runner, processes, files, gate, interpreters, () => EffectiveSettings, Random.Shared, spilled: privateRun is null ? null : privateRun.Conversation.TrackSpill);
         var persona = BuildPersonaFile();
         var operata = BuildOperataFile();
         var vocalia = BuildVocaliaFile();
@@ -2463,7 +2517,8 @@ public sealed partial class SidekickApp
                 if (sealedJournal is not null && _checkpoints is { } checkpointStore)
                 {
                     string checkpointSession = HeadlessSaves && sessionId is { } logged ? logged.ToString(CultureInfo.InvariantCulture) : Files.CheckpointStore.NoSession;
-                    CheckpointTurns.Commit(checkpointStore, assistant.History, sealedJournal, rowText, checkpointSession, EffectiveSettings, _time.GetUtcNow());
+                    privateRun?.Conversation.TrackCheckpoint(sealedJournal.Journal.Id);   // a private run's are removed at its end (2026-11-26)
+                    CheckpointTurns.Commit(checkpointStore, assistant.History, sealedJournal, rowText, checkpointSession, EffectiveSettings, _time.GetUtcNow(), privateRun is not null);
                 }
 
                 // A Ralph pass judged after its row is written (2026-10-18), then the next pass in the slot (or the loop ended).
@@ -3527,6 +3582,7 @@ public sealed partial class SidekickApp
 
         if (string.Equals(args, Claude.ClaudeText.NewWord, StringComparison.OrdinalIgnoreCase))
         {
+            _headlessClaudeThread.Clear();   // a dropped thread is never replayed (2026-11-26), as the screen's
             await HeadlessNoticeLineAsync("[notice] " + Claude.ClaudeText.NewThreadNotice).ConfigureAwait(false);
             return new HeadlessClaudeTurn(null, null, default, false);
         }
@@ -3534,10 +3590,12 @@ public sealed partial class SidekickApp
         var effective = EffectiveSettings;
         bool resume = claudeSessionId is not null && !HeadlessPrivate;   // a private run never resumes Claude's thread (2026-11-25)
         string id = (HeadlessPrivate ? null : claudeSessionId) ?? Guid.NewGuid().ToString("D");
+        // A private run's thread goes first instead (2026-11-26, the review's #29), as the screen's: Claude Code keeps nothing of it between calls.
+        string sent = HeadlessPrivate && Claude.ClaudeServerInput.Preamble(_headlessClaudeThread) is { Length: > 0 } preamble ? preamble + "\n\n" + args : args;
         for (int attempt = 0; ; attempt++)
         {
             var level = Claude.ClaudePermission.Resolve(effective);
-            var request = new Claude.ClaudeRequest(args, id, resume, root, level, effective.ClaudeCodeExecutable,
+            var request = new Claude.ClaudeRequest(sent, id, resume, root, level, effective.ClaudeCodeExecutable,
                 string.IsNullOrWhiteSpace(effective.ClaudeCodeModel) ? null : effective.ClaudeCodeModel.Trim(), Claude.ClaudeEffort.Resolve(effective.ClaudeCodeEffort), HeadlessPrivate);
             var reply = new StringBuilder();
             Claude.ClaudeEvent.Result? result = null;
@@ -3618,9 +3676,19 @@ public sealed partial class SidekickApp
 
             await HeadlessNoticeLineAsync("[notice] " + Claude.ClaudeText.Footer(result.CostUsd, result.Usage)).ConfigureAwait(false);
             AddClaudeExchange(session, args, reply);
+            if (HeadlessPrivate && reply.Length > 0)
+            {
+                // Only after a reply, as the screen adds its pair.
+                _headlessClaudeThread.Add(new ChatMessage(ChatRole.User, args));
+                _headlessClaudeThread.Add(new ChatMessage(ChatRole.Assistant, reply.ToString()));
+            }
+
             return new HeadlessClaudeTurn(result.SessionId ?? id, reply.Length > 0 ? reply.ToString() : null, result.Usage, false);
         }
     }
+
+    /// <summary>A private run's <c>/claude</c> exchanges, replayed ahead of the next one (2026-11-26); never saved, emptied at <c>/claude new</c>.</summary>
+    private readonly List<ChatMessage> _headlessClaudeThread = new();
 
     /// <summary>The pair into the session's history, tagged as the screen tags it; nothing for an empty reply.</summary>
     private static void AddClaudeExchange(LlmSession session, string prompt, StringBuilder reply)
@@ -4184,6 +4252,9 @@ public void ViewerBrowsed(string path) => _screen?.ViewerBrowsed(path);
 
     /// <summary>What a picture menu row did (2026-10-04, <see cref="Viewer.PictureMenu.Reported"/>), as a line in the running screen's chat. Any thread.</summary>
     public void PictureReported(string line, bool error) => _screen?.PictureReported(line, error);
+
+    /// <summary>A new file the picture menu's edit wrote (2026-11-26, <see cref="Viewer.PictureMenu.Created"/>): the running screen lists it. Any thread.</summary>
+    public void PictureCreated(string source, string written) => _screen?.PictureCreated(source, written);
 
     /// <summary>
     /// The flag or variable that outranks the saved value of <paramref name="field"/> this launch,

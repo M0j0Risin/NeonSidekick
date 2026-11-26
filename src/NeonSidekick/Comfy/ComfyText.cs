@@ -11,6 +11,32 @@ namespace NeonSidekick.Comfy;
 /// </summary>
 public static class ComfyText
 {
+    // ── A path typed in the workflow pane (2026-11-26, the review's #40/#70/#99): the import's file and the test's pictures ──
+
+    /// <summary>A typed path that isn't fully qualified: it would be read against the app's own folder, not the working one.</summary>
+    public const string PathNotFull = "is not a full path (start it with a drive or a folder at the root)";
+
+    /// <summary>A path on a computer the app hasn't been told of (the UNC rules).</summary>
+    public const string PathUnknownComputer = "is on a computer the app doesn't know";
+
+    public const string PathNotAFile = "is not a file";
+
+    public const string PathNotAPicture = "is not a png, jpg, gif, webp or bmp file";
+
+    /// <summary>A file over the caller's cap: 64 MB for an import, 20 MB for a test picture.</summary>
+    public static string PathTooLarge(long cap) => "is over " + Files.FileText.Size(cap);
+
+    /// <summary>Opening a workflow's file with no editor set or found.</summary>
+    public const string NoEditor = "no editor to open it in";
+
+    // ── What the wizard still lacks before a save or a test ──
+    public const string SetFileFirst = "Set File first.";
+    public const string SetCheckpointFirst = "Set Checkpoint first.";
+    public const string SetNameFirst = "Set Name first.";
+
+    /// <summary>A workflow delete that couldn't start (the Recycle bin's probe failed), as ThemeText.DeleteFailed says a theme's. Pinned.</summary>
+    public static string DeleteFailed(string name, string why) => $"Could not delete workflow '{name}': {why}";
+
     /// <summary>The glyph the image lines open with.</summary>
     public const string Glyph = "🎨 ";
 

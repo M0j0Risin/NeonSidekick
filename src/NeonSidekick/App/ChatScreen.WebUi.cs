@@ -987,14 +987,15 @@ internal sealed partial class ChatScreen
             return new WebReply(WebOutcome.Conflict, BotChat.NothingToResumeError);
         }
 
-        if (saved.Private.Length == 0 && _private.IsPrivate)
-        {
-            return new WebReply(WebOutcome.Conflict, PrivateText.BotResumeRefused);   // 2026-11-25
-        }
-
+        // The profile first, then private, as the PC checks them (2026-11-26, the review's #87).
         if (!Profiles.NameEquals(saved.Starter, _settings.ProfileName))
         {
             return new WebReply(WebOutcome.Conflict, BotChat.ResumeOtherProfileError(saved.Starter));
+        }
+
+        if (saved.Private.Length == 0 && _private.IsPrivate)
+        {
+            return new WebReply(WebOutcome.Conflict, PrivateText.BotResumeRefused);   // 2026-11-25
         }
 
         var verdict = WebCommands.Check(SlashCommand.BotChat, BotChat.ResumeSwitch, BotChat.ResumeLine, WebCommandSettingsNow());

@@ -1128,6 +1128,42 @@ public class InputLineTests : IDisposable
         Assert.Equal(new[] { "spoken", "typed" }, heard);
     }
 
+    /// <summary>
+    /// One read of IsPrivateNow both tags a line and keeps it from Remembered (2026-11-26, the review's #1/#10/#26): a private line is never stored
+    /// and goes at ForgetPrivate; a line after the switch flips back is stored and stays.
+    /// </summary>
+    [Fact]
+    public void IsPrivateNow_TagsTheLine_AndKeepsItFromRemembered()
+    {
+        var heard = new List<string>();
+        bool isPrivate = true;
+        _line.Remembered = heard.Add;
+        _line.IsPrivateNow = () => isPrivate;
+        _line.Remember("secret");
+        isPrivate = false;
+        _line.Remember("open");
+
+        Assert.Equal(new[] { "open" }, heard);
+        Assert.Equal(1, _line.ForgetPrivate());
+        Assert.Equal(new[] { "open" }, _line.History);
+    }
+
+    /// <summary>
+    /// The lines a switch deleted from the store are tagged one entry each, newest first (2026-11-26, the review's #14): an older entry with the same
+    /// words stays in Up after the end.
+    /// </summary>
+    [Fact]
+    public void TagAsPrivate_TakesTheNewestMatch_AndLeavesAnOlderOne()
+    {
+        _line.Remember("same");
+        _line.Remember("between");
+        _line.Remember("same");
+        _line.TagAsPrivate(["same"]);
+
+        Assert.Equal(1, _line.ForgetPrivate());
+        Assert.Equal(new[] { "same", "between" }, _line.History);
+    }
+
     [Fact]
     public async Task ReplaceHistory_LoadsTheLines_DeDuplicated_AndUpRecallsThem_WithoutTellingRemembered()
     {

@@ -1327,6 +1327,20 @@ public sealed partial class SessionStore : IDisposable
     {
         lock (_gate)
         {
+            // A private delete's tidy still owed is tried once more first (2026-11-26, the review's #74): Open() refuses a disposed store, and the
+            // connection is about to close. A failure is logged and the close goes on.
+            try
+            {
+                if (_tidyOwed && Open() is { } owed)
+                {
+                    Tidy(owed);
+                }
+            }
+            catch (Exception ex) when (ex is SqliteException or InvalidOperationException or IOException)
+            {
+                DiagnosticLog.Warn(Category, TidyFailedWarning(ex.Message));
+            }
+
             _disposed = true;
             _connection?.Dispose();
             _connection = null;

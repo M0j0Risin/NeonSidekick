@@ -57,7 +57,7 @@ public static class ComfyHistory
         foreach (var (id, value) in root)
         {
             if (value is not JsonObject entry || entry["prompt"] is not JsonArray tuple || tuple.Count < 3 || tuple[2] is not JsonObject graph
-                || Text(entry["status"]?["status_str"]) == "error")
+                || Text((entry["status"] as JsonObject)?["status_str"]) == "error")   // an entry of another shape is skipped, never a throw (2026-11-26, #17)
             {
                 continue;
             }
@@ -99,7 +99,7 @@ public static class ComfyHistory
     /// <summary>The <c>execution_start</c> message's timestamp (milliseconds), or null.</summary>
     private static long? StartMessage(JsonNode? status)
     {
-        if (status?["messages"] is not JsonArray messages)
+        if ((status as JsonObject)?["messages"] is not JsonArray messages)
         {
             return null;
         }
@@ -108,7 +108,7 @@ public static class ComfyHistory
         {
             if (message is JsonArray { Count: >= 2 } pair && Text(pair[0]) == "execution_start")
             {
-                return Number(pair[1]?["timestamp"]);
+                return Number((pair[1] as JsonObject)?["timestamp"]);
             }
         }
 
@@ -160,9 +160,9 @@ public static class ComfyHistory
 
             foreach (var (_, list) in lists)
             {
-                if (list is JsonArray files && files.Count > 0 && Text(files[0]?["filename"]) is { Length: > 0 } name)
+                if (list is JsonArray files && files.Count > 0 && files[0] is JsonObject file && Text(file["filename"]) is { Length: > 0 } name)
                 {
-                    string folder = Text(files[0]?["subfolder"]);
+                    string folder = Text(file["subfolder"]);
                     return folder.Length > 0 ? folder + "/" + name : name;
                 }
             }

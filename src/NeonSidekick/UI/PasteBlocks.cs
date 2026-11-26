@@ -62,6 +62,39 @@ public sealed partial class PasteBlocks
     /// <summary>Blocks held so far this session, text and images together.</summary>
     public int Count => _blocks.Count;
 
+    /// <summary>
+    /// Every text, picture and PDF block from <paramref name="mark"/> (a <see cref="Count"/> taken earlier) on blanked (2026-11-26, the review's #94: a
+    /// private conversation's pastes, at its end): each replaced in place by one holding its number and an empty text, nothing else, since a token is
+    /// an index; a picture's saved file name forgotten too. Under the writers' lock; a reader that indexes without it sees the old block or the new
+    /// one, never a mix. The private-use characters (<see cref="IsLiteral"/>) stay: one character each, not pasted content, and reused by a later
+    /// paste of it. How many were blanked.
+    /// </summary>
+    public int BlankFrom(int mark)
+    {
+        int blanked = 0;
+        lock (_blocks)
+        {
+            for (int i = Math.Max(0, mark); i < _blocks.Count; i++)
+            {
+                var block = _blocks[i];
+                if (block.Glyph is not null || (block.Text is { Length: 0 } && block.Image is null))
+                {
+                    continue;
+                }
+
+                if (IsPicture(block))
+                {
+                    _saved.Remove(block.Number);
+                }
+
+                _blocks[i] = new Block(block.Number, "", null);
+                blanked++;
+            }
+        }
+
+        return blanked;
+    }
+
     /// <summary>Images held so far this session (an attached PDF is not one: <see cref="DocumentCount"/>).</summary>
     public int ImageCount => _images;
 

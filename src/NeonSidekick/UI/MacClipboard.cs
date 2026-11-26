@@ -62,6 +62,16 @@ public static unsafe partial class MacClipboard
         {
             nint pasteboard = General();
             SendLong(pasteboard, Sel("clearContents"));
+            // A private conversation's copy is marked first (2026-11-26, the review's #61): a marker that won't go means no text either.
+            foreach (string marker in PasteboardPick.PrivateMarkers(PrivateMode.Active))
+            {
+                if (SendBoolPair(pasteboard, Sel("setString:forType:"), NSString(""), NSString(marker)) == 0)
+                {
+                    SendLong(pasteboard, Sel("clearContents"));
+                    return false;
+                }
+            }
+
             return SendBoolPair(pasteboard, Sel("setString:forType:"), NSString(text), NSString(PasteboardPick.TextType)) != 0;
         }, false, "set the text");
     }

@@ -99,6 +99,17 @@ public interface ICheckpointStore
     /// </summary>
     void RemoveSessions(string profileDirectory, IReadOnlyCollection<string> sessions);
 
+    /// <summary>
+    /// Removes these checkpoints' refs in every store and then prunes each store with no age floor, so their saved files leave the disk at once
+    /// (2026-11-26, the review's #31, the user's call: a private conversation's checkpoints go at its end). Queued behind the commits still running,
+    /// as <see cref="RemoveSessions"/> is; a store a writer holds (any lease here, or another process's turn) is skipped and owed a floorless prune,
+    /// tried again at the store's next queued job and by <see cref="PruneOwed"/>.
+    /// </summary>
+    void RemoveNow(string profileDirectory, IReadOnlyCollection<string> ids);
+
+    /// <summary>The floorless prunes <see cref="RemoveNow"/> owes, tried now (the app's exit, beside <see cref="FlushPending"/>); a store still busy stays owed.</summary>
+    void PruneOwed();
+
     /// <summary>The profile's stores, only those of <paramref name="roots"/> when given (sized after the filter, 2026-10-28, review P3-13).</summary>
     IReadOnlyList<CheckpointStoreInfo> Stores(string profileDirectory, IReadOnlyCollection<string>? roots = null);
 
@@ -192,6 +203,9 @@ public sealed class CheckpointStore : ICheckpointStore
     private readonly object _gate = new();
     private readonly List<Task> _pending = new();
     private readonly Dictionary<string, List<string>> _leases = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The stores owed a floorless prune (<see cref="RemoveNow"/> found them busy), under <see cref="_gate"/>.</summary>
+    private readonly HashSet<string> _owedPrunes = new(StringComparer.OrdinalIgnoreCase);
 
     /// <param name="time">The clock for commit times and the prune's and markers' ages (<c>ManualTimeProvider</c> in the tests).</param>
     public CheckpointStore(TimeProvider time)
@@ -299,6 +313,7 @@ public sealed class CheckpointStore : ICheckpointStore
                 finally
                 {
                     Release(ours);
+                    RetryOwedPrunes();
                     lock (_gate)
                     {
                         _pending.Remove(task);
@@ -647,6 +662,7 @@ public sealed class CheckpointStore : ICheckpointStore
                 }
                 finally
                 {
+                    RetryOwedPrunes();
                     lock (_gate)
                     {
                         _pending.Remove(task);
@@ -654,6 +670,89 @@ public sealed class CheckpointStore : ICheckpointStore
                 }
             }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
             _pending.Add(task);
+        }
+    }
+
+    public void RemoveNow(string profileDirectory, IReadOnlyCollection<string> ids)
+    {
+        ArgumentNullException.ThrowIfNull(profileDirectory);
+        ArgumentNullException.ThrowIfNull(ids);
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        var wanted = new HashSet<string>(ids, StringComparer.Ordinal);
+        lock (_gate)
+        {
+            // Behind every commit in flight, as RemoveSessions: a commit landing after the removal would put its ref back.
+            var before = Task.WhenAll(_pending.ToList());
+            Task task = null!;
+            task = before.ContinueWith(_ =>
+            {
+                try
+                {
+                    RemoveWhere(profileDirectory, name => wanted.Contains(name[(name.LastIndexOf('/') + 1)..]));
+                    foreach (string store in StorePaths(profileDirectory))
+                    {
+                        // No lease of ours is held here (own: 0): a turn begun meanwhile stores blobs before its ref lands, and keeps them.
+                        if (!Prune(store, own: 0, force: true, floorless: true))
+                        {
+                            lock (_gate)
+                            {
+                                _owedPrunes.Add(store);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DiagnosticLog.Warn(Category, $"Could not remove a private conversation's file checkpoints: {ex.Message}");
+                }
+                finally
+                {
+                    lock (_gate)
+                    {
+                        _pending.Remove(task);
+                    }
+                }
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+            _pending.Add(task);
+        }
+    }
+
+    public void PruneOwed() => RetryOwedPrunes();
+
+    /// <summary>Each owed floorless prune tried again; one that ran is no longer owed. Never throws.</summary>
+    private void RetryOwedPrunes()
+    {
+        List<string> owed;
+        lock (_gate)
+        {
+            if (_owedPrunes.Count == 0)
+            {
+                return;
+            }
+
+            owed = [.. _owedPrunes];
+        }
+
+        foreach (string store in owed)
+        {
+            try
+            {
+                if (!Directory.Exists(store) || Prune(store, own: 0, force: true, floorless: true))
+                {
+                    lock (_gate)
+                    {
+                        _owedPrunes.Remove(store);
+                    }
+                }
+            }
+            catch (Exception ex) when (Failure(ex))
+            {
+                DiagnosticLog.Debug(Category, $"Could not prune {store}: {ex.Message}");
+            }
         }
     }
 
@@ -765,16 +864,17 @@ public sealed class CheckpointStore : ICheckpointStore
     }
 
     /// <summary>
-    /// Deletes the loose objects no kept ref reaches, older than an hour, while nothing but <paramref name="own"/> of this process's leases and no
-    /// other process's live turn holds the store; at most once an hour unless <paramref name="force"/> (retention just removed refs). Under
-    /// <see cref="PruneLock"/> held open exclusively, never deleted on close: a crash's handle goes with the process on every system (review
-    /// P8-03), so a leftover file never blocks a prune. A write time in the future counts as fresh.
+    /// Deletes the loose objects no kept ref reaches, older than an hour (any age when <paramref name="floorless"/>, <see cref="RemoveNow"/>'s), while
+    /// nothing but <paramref name="own"/> of this process's leases and no other process's live turn holds the store; at most once an hour unless
+    /// <paramref name="force"/> (retention just removed refs). Under <see cref="PruneLock"/> held open exclusively, never deleted on close: a crash's
+    /// handle goes with the process on every system (review P8-03), so a leftover file never blocks a prune. A write time in the future counts as
+    /// fresh. False when it couldn't run (busy, or another prune holds the lock).
     /// </summary>
-    private void Prune(string store, int own, bool force)
+    private bool Prune(string store, int own, bool force, bool floorless = false)
     {
         if (IsBusy(store, own))
         {
-            return;
+            return false;
         }
 
         string lockFile = Path.Combine(store, PruneLock);
@@ -785,7 +885,7 @@ public sealed class CheckpointStore : ICheckpointStore
         }
         catch (IOException)
         {
-            return;
+            return false;
         }
 
         using (held)
@@ -793,7 +893,7 @@ public sealed class CheckpointStore : ICheckpointStore
             var now = _time.GetUtcNow();
             if (!force && LastPrune(held) is { } last && now.UtcTicks - last < PruneAge.Ticks && now.UtcTicks >= last)
             {
-                return;
+                return true;
             }
 
             var reachable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -837,7 +937,7 @@ public sealed class CheckpointStore : ICheckpointStore
 
                         try
                         {
-                            if (new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero) >= cutoff)
+                            if (!floorless && new DateTimeOffset(File.GetLastWriteTimeUtc(file), TimeSpan.Zero) >= cutoff)
                             {
                                 continue;
                             }
@@ -856,6 +956,8 @@ public sealed class CheckpointStore : ICheckpointStore
             held.SetLength(0);
             held.Write(Encoding.ASCII.GetBytes(now.UtcTicks.ToString(CultureInfo.InvariantCulture)));
         }
+
+        return true;
     }
 
     /// <summary>The last prune's time from the held lock file, or null for none.</summary>

@@ -713,29 +713,7 @@ public sealed record WebQueueModeRequest(string? Mode = null, string? Cancel = n
 /// sessions, or with a filter the title and model matches across every session; past three letters <see cref="Found"/>, the full-text hits not
 /// among them. <see cref="ResumeOffered"/> and its <see cref="Note"/> follow the page's command rule; <see cref="NotSaved"/>: Session logging off.
 /// </summary>
-public sealed record WebSessionsView(string Profile, IReadOnlyList<WebSessionRow> Rows, IReadOnlyList<WebSessionRow> Found, bool ResumeOffered, string? Note = null, bool NotSaved = false)
-{
-    /// <summary>The private stretch's id (2026-11-25, the private-conversations plan), <c>""</c> when the conversation isn't private: the buttons' POST names it back.</summary>
-    public string Private { get; init; } = "";
-
-    /// <summary>Whether the run is private (<c>--private</c> or the variable): the Private button is off, New private still works.</summary>
-    public bool PrivateForced { get; init; }
-
-    /// <summary>Whether the conversation on screen is empty: a button that would end one that isn't arms first.</summary>
-    public bool Empty { get; init; }
-
-    /// <summary>The buttons' words and the private note, the app's.</summary>
-    public string NewPrivateLabel { get; init; } = "";
-
-    /// <summary>The Private button's word.</summary>
-    public string PrivateLabel { get; init; } = "";
-
-    /// <summary>The note while private (its own words, not <see cref="NotSaved"/>'s).</summary>
-    public string? PrivateNote { get; init; }
-}
-
-/// <summary>The Sessions tab's private buttons (2026-11-25): the act (<c>on</c>, <c>off</c>, <c>new</c>), the profile and the private stretch's id the tab showed.</summary>
-public sealed record WebPrivateRequest(string? Act = null, string? Profile = null, string? Private = null);
+public sealed record WebSessionsView(string Profile, IReadOnlyList<WebSessionRow> Rows, IReadOnlyList<WebSessionRow> Found, bool ResumeOffered, string? Note = null, bool NotSaved = false);
 
 /// <summary>A session's row: its id, title (no saved paths), when it last moved and its turns as the PC's pane reads them, its model's label; the current one marked; a hit's snippet.</summary>
 public sealed record WebSessionRow(long Id, string Title, string When, string Turns, string Model, bool Current, IReadOnlyList<WebSnippetPart>? Snippet = null, bool Here = false);

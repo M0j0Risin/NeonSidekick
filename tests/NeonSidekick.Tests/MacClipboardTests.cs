@@ -10,6 +10,14 @@ namespace NeonSidekick.Tests;
 /// </summary>
 public class MacClipboardTests
 {
+    /// <summary>A private conversation's copy on a Mac is marked concealed and transient (2026-11-26, the review's #61); none otherwise.</summary>
+    [Fact]
+    public void PrivateMarkers_AreConcealedAndTransient()
+    {
+        Assert.Equal(["org.nspasteboard.ConcealedType", "org.nspasteboard.TransientType"], PasteboardPick.PrivateMarkers(true));
+        Assert.Empty(PasteboardPick.PrivateMarkers(false));
+    }
+
     /// <summary>Finder's file URLs as a drop's paste: one POSIX path a line, decoded, a folder's slash dropped; nothing else is a file.</summary>
     [Fact]
     public void FilePaths_AreADropsPaste_OneALine()

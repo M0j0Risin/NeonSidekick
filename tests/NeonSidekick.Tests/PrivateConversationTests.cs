@@ -2,6 +2,7 @@ using System.Text;
 using NeonSidekick.App;
 using NeonSidekick.Claude;
 using NeonSidekick.Diagnostics;
+using NeonSidekick.Files;
 using NeonSidekick.Sessions;
 using NeonSidekick.Settings;
 using NeonSidekick.Tests.Fakes;
@@ -21,6 +22,7 @@ public sealed class PrivateConversationTests : IDisposable
     public void Dispose()
     {
         PrivateMode.HideLog = false;
+        PrivateMode.HidAtExit = false;
         PrivateMode.Active = false;
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
@@ -79,6 +81,33 @@ public sealed class PrivateConversationTests : IDisposable
         Assert.False(FileHolds(db, Marker), "the database file still holds the marker");
         Assert.False(FileHolds(db + "-wal", Marker), "the WAL still holds the marker");
         Assert.True(FileHolds(db, "kept session"));
+    }
+
+    /// <summary>
+    /// Another window reading the file makes the tidy busy: the delete still returns within the tidy's bound and the tidy is owed (2026-11-26, the
+    /// review's #22), and a store's close tries it once more (#74).
+    /// </summary>
+    [Fact]
+    public void DeleteForPrivate_WithAReaderHoldingTheFile_IsBounded_AndOwesTheTidy()
+    {
+        using var store = new SessionStore(_dir, _time);
+        long id = store.Begin("private words", "llama")!.Value;
+        store.AppendTurn(id, "say it", "said", 0, [], [], 0, 1, 1, false);
+        string db = Path.Combine(_dir, SessionStore.FolderName, SessionStore.FileName);
+        using var reader = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + db + ";Pooling=False");
+        reader.Open();
+        using var transaction = reader.BeginTransaction(deferred: true);
+        using (var read = reader.CreateCommand())
+        {
+            read.Transaction = transaction;
+            read.CommandText = "SELECT COUNT(*) FROM sessions";
+            read.ExecuteScalar();
+        }
+
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(PrivateDeleteOutcome.Deleted, store.DeleteForPrivate(id, []));
+        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(10), clock.Elapsed.ToString());
+        Assert.True(store.PrivateTidyOwed);
     }
 
     /// <summary>A row another window already deleted is gone, not a failure: the switch goes on.</summary>
@@ -165,6 +194,7 @@ public sealed class PrivateConversationTests : IDisposable
                 DiagnosticLog.Warn(category, "failed ZebraQuartz", new InvalidOperationException("ZebraQuartz inside"));
                 DiagnosticLog.Audit(category, "audit: deleted table t");
                 PrivateMode.HideLog = false;
+                PrivateMode.HidAtExit = false;
                 DiagnosticLog.Info(category, "after");
             }
 
@@ -179,6 +209,7 @@ public sealed class PrivateConversationTests : IDisposable
         finally
         {
             PrivateMode.HideLog = false;
+            PrivateMode.HidAtExit = false;
             DiagnosticLog.EchoToConsole = echo;
         }
     }
@@ -212,12 +243,32 @@ public sealed class PrivateConversationTests : IDisposable
         Assert.Equal("(🕶️ kept the picture and the PDF)", PrivateText.KeptLine(1, 1));
         Assert.Equal("(🕶️ kept 3 pictures and 2 PDFs)", PrivateText.KeptLine(3, 2));
         Assert.Equal("(🕶️ kept 2 PDFs)", PrivateText.KeptLine(0, 2));
-        Assert.Equal("(🕶️ deleted the picture and the PDF)", PrivateText.DeletedLine(1, 1, []));
-        Assert.StartsWith("(🕶️ deleted nothing; kept photo-2.png", PrivateText.DeletedLine(0, 0, [Path.Combine(_dir, "photo-2.png")]), StringComparison.Ordinal);
-        Assert.Contains("Keep the 3 pictures and 2 PDFs", PrivateText.PicturesQuestion(3, 2), StringComparison.Ordinal);
-        Assert.Contains("the Recycle Bin", PrivateText.PicturesCaption(2, mac: false), StringComparison.Ordinal);
-        Assert.Contains("the Trash", PrivateText.PicturesCaption(1, mac: true), StringComparison.Ordinal);
-        Assert.Contains("and 2 more", PrivateText.LeftAtExitLine(["a.png", "b.png", "c.png", "d.png", "e.png"]), StringComparison.Ordinal);
+        Assert.Equal("(🕶️ deleted the picture and the PDF)", PrivateText.DeletedLine(1, 1, [], []));
+        Assert.StartsWith("(🕶️ deleted nothing; kept photo-2.png", PrivateText.DeletedLine(0, 0, [Path.Combine(_dir, "photo-2.png")], []), StringComparison.Ordinal);
+        Assert.Contains("Keep the 3 pictures and the 2 PDFs this conversation made (before it went private too)", PrivateText.PicturesQuestion(3, 2), StringComparison.Ordinal);
+        Assert.Contains("the " + FileText.RecycleBinName, PrivateText.PicturesCaption(2), StringComparison.Ordinal);
+        Assert.Contains("and 2 more (open elsewhere)", PrivateText.LeftAtExitLine(["a.png", "b.png", "c.png", "d.png", "e.png"], [])!, StringComparison.Ordinal);
+        Assert.Null(PrivateText.LeftAtExitLine([], []));
+    }
+
+    /// <summary>Count names each kind by its own form (2026-11-26, the review's #79); without "the" it counts both.</summary>
+    [Fact]
+    public void Count_NamesEachSideByItsOwnForm()
+    {
+        Assert.Equal("the picture and the 2 PDFs", PrivateText.Count(1, 2));
+        Assert.Equal("the 3 pictures and the PDF", PrivateText.Count(3, 1));
+        Assert.Equal("1 picture and 2 PDFs", PrivateText.Count(1, 2, the: false));
+        Assert.Equal("the PDF", PrivateText.Count(0, 1));
+    }
+
+    /// <summary>A failed delete (a spill log, a temp copy) is said apart from an open picture, on screen and at the exit (2026-11-26, the review's #98).</summary>
+    [Fact]
+    public void FailedDeletes_AreSaidApartFromOpenOnes()
+    {
+        Assert.Equal("(🕶️ couldn't delete 1.log, tried again at the exit)", PrivateText.DeletedLine(0, 0, [], [Path.Combine(_dir, "1.log")]));
+        Assert.Equal("(🕶️ deleted the picture; kept a.png, which is open; couldn't delete 1.log, tried again at the exit)",
+            PrivateText.DeletedLine(1, 0, [Path.Combine(_dir, "a.png")], [Path.Combine(_dir, "1.log")]));
+        Assert.Equal("🕶️ Left from the private conversation: a.png (open elsewhere); 1.log (couldn't be deleted)", PrivateText.LeftAtExitLine(["a.png"], ["1.log"]));
     }
 
     /// <summary>The conversation's lists: a picture tracked once, deleted for good under Delete, kept (and still listed) under Keep; spill logs always go.</summary>
@@ -257,5 +308,47 @@ public sealed class PrivateConversationTests : IDisposable
             conversation.Leave();
             conversation.ReleaseLog();
         }
+    }
+
+    /// <summary>An owed file survives a reset and is deleted by the next try; a missing one is no failure (2026-11-26, the review's #98, #5).</summary>
+    [Fact]
+    public void OwedFiles_SurviveAReset_AndGoAtTheNextTry()
+    {
+        Directory.CreateDirectory(_dir);
+        string late = Path.Combine(_dir, "late.png");
+        File.WriteAllText(late, "x");
+        var conversation = new PrivateConversation();
+        conversation.Owe(late);
+        conversation.Owe(late);
+        conversation.Owe(Path.Combine(_dir, "gone.log"));
+        conversation.Reset();
+        Assert.Empty(conversation.DeleteOwed());
+        Assert.False(File.Exists(late));
+        Assert.Empty(conversation.DeleteOwed());
+    }
+
+    /// <summary>A picture-menu edit of a tracked picture is tracked (Tracks, 2026-11-26, the review's #24); an untracked one isn't.</summary>
+    [Fact]
+    public void Tracks_KnowsTheConversationsPictures_WhateverTheCase()
+    {
+        var conversation = new PrivateConversation();
+        string picture = Path.Combine(_dir, "Photo.png");
+        conversation.TrackPicture(picture);
+        Assert.True(conversation.Tracks(picture.ToUpperInvariant()));
+        Assert.False(conversation.Tracks(Path.Combine(_dir, "other.png")));
+    }
+
+    /// <summary>The checkpoint ids made while private are taken once, and a reset drops them (2026-11-26, the review's #31).</summary>
+    [Fact]
+    public void Checkpoints_AreTakenOnce()
+    {
+        var conversation = new PrivateConversation();
+        conversation.TrackCheckpoint("a");
+        conversation.TrackCheckpoint("b");
+        Assert.Equal(["a", "b"], conversation.TakeCheckpoints());
+        Assert.Empty(conversation.TakeCheckpoints());
+        conversation.TrackCheckpoint("c");
+        conversation.Reset();
+        Assert.Empty(conversation.TakeCheckpoints());
     }
 }

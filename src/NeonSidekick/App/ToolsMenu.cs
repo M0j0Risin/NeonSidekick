@@ -265,6 +265,13 @@ internal sealed class ToolsMenu
                         continue;   // the off line (a heading or a gap is no stop since 2026-10-03)
                     }
 
+                    // Withheld while private (2026-11-26, the review's #59): the row's own switch is the user's list, which a flip wouldn't reach.
+                    if (facts.Withheld?.Contains(tool) == true)
+                    {
+                        Sink.Notice(ToolsText.WithheldNotice(tool));
+                        continue;
+                    }
+
                     bool on = facts.Disabled.Contains(tool);   // off now → on
                     _settings.Update(d => d.ToolsDisabled = ToolsText.Flip(d.ToolsDisabled, tool));
                     Sink.Notice(ToolsText.FlippedNotice(tool, on));

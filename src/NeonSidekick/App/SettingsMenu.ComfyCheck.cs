@@ -20,6 +20,16 @@ internal sealed partial class SettingsMenu
     public const string ComfyCheckOneCleanNotice = "It holds only what the server lists.";
     public const string ComfyCheckCancelledNotice = "Check stopped; what it found so far is marked.";
 
+    /// <summary>
+    /// Some classes went unread (2026-11-26, the review's #4/#96: a read that failed, or a cancel): the workflows using them keep their earlier marks,
+    /// never read as clean. Pinned.
+    /// </summary>
+    public static string ComfyCheckPartialNotice(int classes) =>
+        (classes == 1 ? "1 node type" : $"{Invariant(classes)} node types") + " couldn't be read from the server; the workflows that use them keep their earlier marks.";
+
+    /// <summary>How a class read ended: <see cref="Esc"/> the pane's own cancel, <see cref="Stopped"/> the app's or the server unreachable (said), and the classes left unread.</summary>
+    private readonly record struct ComfyClassRead(bool Esc, bool Stopped, int Unread);
+
     public static string ComfyCheckFoundNotice(int workflows) => workflows == 1 ? "1 workflow holds what the server doesn't list: marked !." : $"{Invariant(workflows)} workflows hold what the server doesn't list: marked !.";
 
     /// <summary>The findings by workflow name, kept for the menu's life (forgotten by name on a change, all on another URL).</summary>
@@ -45,15 +55,15 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The server's answer for each class (4 at a time, each read once a check), filled into <see cref="_comfyInfo"/>; false when cancelled or the
-    /// server can't be reached (said), with what was read kept.
+    /// The server's answer for each class (4 at a time, each read once a check), filled into <see cref="_comfyInfo"/>, with what was read kept: Esc
+    /// (the pane's), stopped (the app's cancel, or the server unreachable, said here), and how many classes went unread.
     /// </summary>
-    private async Task<bool> ComfyReadClassesAsync(ComfyClient client, IReadOnlyList<string> classes, CancellationToken cancellationToken)
+    private async Task<ComfyClassRead> ComfyReadClassesAsync(ComfyClient client, IReadOnlyList<string> classes, CancellationToken cancellationToken)
     {
         var wanted = classes.Where(c => !_comfyInfo.ContainsKey(c)).ToList();
         if (wanted.Count == 0)
         {
-            return true;
+            return default;
         }
 
         string? failure = null;
@@ -87,13 +97,24 @@ internal sealed partial class SettingsMenu
             return true;
         }, cancellationToken).ConfigureAwait(false);
 
+        int unread;
+        lock (_comfyInfo)
+        {
+            unread = wanted.Count(c => !_comfyInfo.ContainsKey(c));
+        }
+
+        if (!done && cancellationToken.IsCancellationRequested)
+        {
+            return new ComfyClassRead(false, true, unread);   // the app's cancel: nothing said
+        }
+
         if (failure is not null && !_comfyInfo.Values.Any(v => v is not null))
         {
             Sink.Error(failure);   // unreachable: nothing marked
-            return false;
+            return new ComfyClassRead(false, true, unread);
         }
 
-        return done;
+        return new ComfyClassRead(!done, false, unread);
     }
 
     /// <summary>A workflow's graph as an object (comments and trailing commas allowed, as the catalog reads it), or null.</summary>
@@ -122,30 +143,56 @@ internal sealed partial class SettingsMenu
         _comfyInfo.Clear();
         var graphs = workflows.Select(w => (Workflow: w, Graph: ComfyGraphOf(w))).Where(p => p.Graph is not null).ToList();
         var classes = graphs.SelectMany(p => ComfyCheck.Classes(p.Graph!)).Distinct(StringComparer.Ordinal).ToList();
-        bool done = await ComfyReadClassesAsync(client, classes, cancellationToken).ConfigureAwait(false);
-        if (!done && !_comfyInfo.Values.Any(v => v is not null))
+        var read = await ComfyReadClassesAsync(client, classes, cancellationToken).ConfigureAwait(false);
+        if (read.Stopped)
         {
-            if (cancellationToken.IsCancellationRequested || _comfyInfo.Count == 0)
-            {
-                Sink.Notice(ComfyCheckCancelledNotice);
-            }
+            return;
+        }
 
+        if (!_comfyInfo.Values.Any(v => v is not null) && read.Unread > 0)
+        {
+            Sink.Notice(read.Esc ? ComfyCheckCancelledNotice : ComfyCheckPartialNotice(read.Unread));
             return;
         }
 
         int marked = 0;
         int findings = 0;
+        int checkedCount = 0;
         foreach (var (workflow, graph) in graphs)
         {
-            // A workflow only part of whose classes were read (a cancel) is held to those.
+            // A workflow only part of whose classes were read keeps its earlier mark (2026-11-26): its findings would read clean for what went unread.
+            if (!ComfyCheck.Classes(graph!).All(_comfyInfo.ContainsKey))
+            {
+                continue;
+            }
+
             var found = ComfyCheck.Findings(graph!, _comfyInfo);
             _comfyFindings[workflow.Name] = found;
             marked += found.Count > 0 ? 1 : 0;
             findings += found.Count;
+            checkedCount++;
         }
 
-        DiagnosticLog.Info(ComfyWorkflowFile.Category, ComfyText.LogChecked(graphs.Count, findings));
-        Sink.Notice(!done ? ComfyCheckCancelledNotice : marked == 0 ? ComfyCheckCleanNotice : ComfyCheckFoundNotice(marked));
+        DiagnosticLog.Info(ComfyWorkflowFile.Category, ComfyText.LogChecked(checkedCount, findings));
+        if (read.Esc)
+        {
+            Sink.Notice(ComfyCheckCancelledNotice);
+            return;
+        }
+
+        if (marked > 0)
+        {
+            Sink.Notice(ComfyCheckFoundNotice(marked));
+        }
+
+        if (read.Unread > 0)
+        {
+            Sink.Notice(ComfyCheckPartialNotice(read.Unread));
+        }
+        else if (marked == 0)
+        {
+            Sink.Notice(ComfyCheckCleanNotice);
+        }
     }
 
     /// <summary>The actions page's Check: one workflow checked, every finding a row of a plain page.</summary>
@@ -165,9 +212,16 @@ internal sealed partial class SettingsMenu
 
         ComfyFindingsForUrl();
         _comfyInfo.Clear();
-        if (!await ComfyReadClassesAsync(client, ComfyCheck.Classes(graph), cancellationToken).ConfigureAwait(false))
+        var read = await ComfyReadClassesAsync(client, ComfyCheck.Classes(graph), cancellationToken).ConfigureAwait(false);
+        if (read.Stopped)
         {
-            Sink.Notice(ComfyCheckCancelledNotice);
+            return;
+        }
+
+        if (read.Esc || read.Unread > 0)
+        {
+            // The earlier mark stands (2026-11-26): a part-read workflow is never called clean.
+            Sink.Notice(read.Esc ? ComfyCheckCancelledNotice : ComfyCheckPartialNotice(read.Unread));
             return;
         }
 

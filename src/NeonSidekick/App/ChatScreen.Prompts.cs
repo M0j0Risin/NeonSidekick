@@ -217,7 +217,7 @@ internal sealed partial class ChatScreen
         }
         finally
         {
-            DraftFile.TryDelete(path);
+            DropDraft(path);
         }
     }
 

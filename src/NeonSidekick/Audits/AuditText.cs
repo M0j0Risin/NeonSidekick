@@ -121,6 +121,7 @@ public static class AuditText
 
     public const string TwoReviewers = "Name one reviewer: /code-audit takes model, advisor, any or confirm once";
     public const string TwoCounts = "Give one pass count: /code-audit takes a number once";
+    public const string OneScope = "Name one scope: commit goes alone, without diff, staged, branch or a second commit";
     public const string AppFolderPath = "The app's own folder isn't audited: name a path outside .neon/";
     public static string NoSuchPath(string word) => $"No file or folder '{word}' in the working directory; put -- before a brief that holds a path-like word";
 
@@ -194,14 +195,14 @@ public static class AuditText
 
         var sentences = new List<string>(4);
         string shas = scope.From is { } from ? ShortSha(from) + RangeDots + ShortSha(to) : ShortSha(to);
-        if (scope.Revision is { } typed && !TypedIsShas(typed, scope.From, to))
+        if (scope.Revision is { } typed && !TypedIsShas(typed, scope.PinnedFrom ?? scope.From, to))
         {
             sentences.Add($"{typed} is {shas}.");
         }
 
         if (scope.FromMergeBase && scope.Revision is { } range && SplitRange(range) is ({ } left, { } right))
         {
-            sentences.Add(RangeFromMergeBase(left, right.Length == 0 ? GitAccess.Head : right, scope.From!) + ".");
+            sentences.Add(RangeFromMergeBase(SideName(left), right.Length == 0 ? GitAccess.Head : SideName(right), scope.From!) + ".");
         }
 
         if (scope.ChangedSinceCut)
@@ -262,6 +263,10 @@ public static class AuditText
         return sha.Length > GitAccess.ShortShaLength ? sha[..GitAccess.ShortShaLength] : sha;
     }
 
+    /// <summary>A typed side as the notices name it: a full sha (a resume's header) by its short form, anything else as typed.</summary>
+    private static string SideName(string side) =>
+        side.Length >= 40 && side.All(char.IsAsciiHexDigit) ? ShortSha(side) : side;
+
     /// <summary>A range's two sides as typed, or null when <paramref name="revision"/> holds no <see cref="RangeDots"/>.</summary>
     public static (string Left, string Right)? SplitRange(string revision)
     {
@@ -270,13 +275,16 @@ public static class AuditText
         return dots < 0 ? null : (revision[..dots], revision[(dots + RangeDots.Length)..]);
     }
 
-    /// <summary>Whether each typed side is its sha's prefix (ignoring case; an empty right side counts), so the notice needn't repeat it.</summary>
+    /// <summary>
+    /// Whether each typed side is its sha's prefix (ignoring case), so the notice needn't repeat it; <paramref name="from"/> is the typed start's sha,
+    /// not the merge base. An empty side is never a sha (2026-11-26, the review's #88: a bare <c>a..</c> is HEAD, said).
+    /// </summary>
     private static bool TypedIsShas(string typed, string? from, string to)
     {
         static bool Prefix(string side, string sha) => side.Length > 0 && sha.StartsWith(side, StringComparison.OrdinalIgnoreCase);
         if (SplitRange(typed) is ({ } left, { } right))
         {
-            return from is not null && Prefix(left, from) && (right.Length == 0 || Prefix(right, to));
+            return from is not null && Prefix(left, from) && Prefix(right, to);
         }
 
         return from is null && Prefix(typed, to);

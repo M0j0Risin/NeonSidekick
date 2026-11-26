@@ -114,6 +114,23 @@ public sealed class FakeCheckpointStore : ICheckpointStore
         }
     }
 
+    /// <summary>The ids handed to <see cref="RemoveNow"/> (a private conversation's end), in order.</summary>
+    public List<string> RemovedNow { get; } = [];
+
+    /// <summary>How often <see cref="PruneOwed"/> was called.</summary>
+    public int OwedPrunes { get; private set; }
+
+    public void RemoveNow(string profileDirectory, IReadOnlyCollection<string> ids)
+    {
+        lock (Records)
+        {
+            RemovedNow.AddRange(ids);
+            Records.RemoveAll(r => ids.Contains(r.Id));
+        }
+    }
+
+    public void PruneOwed() => OwedPrunes++;
+
     public IReadOnlyList<CheckpointStoreInfo> Stores(string profileDirectory, IReadOnlyCollection<string>? roots = null)
     {
         lock (Records)

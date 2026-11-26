@@ -139,7 +139,7 @@ public sealed class HaLive : IHaLive
         if (Volatile.Read(ref _live) is { Closed.IsCompleted: false } live)
         {
             IReadOnlyList<string> logged = call.AreaId is { } area ? [.. call.EntityIds, "area " + area] : call.EntityIds;
-            DiagnosticLog.Info(HaText.Category, HaText.CallLog(call.Domain, call.Service, logged));
+            DiagnosticLog.Audit(HaText.Category, HaText.CallLog(call.Domain, call.Service, logged));   // an audit line, as the HTTP call's (2026-11-26)
             try
             {
                 using var result = await live.RequestAsync(id => HaProtocol.CallService(id, call, out _)!, _session.Timeout, cancellationToken).ConfigureAwait(false);

@@ -749,6 +749,8 @@ function privateSeen(id) {
       msgHistory.saved = '';
       historyReset();
     } catch { /* not built yet */ }
+    // Read again without the ETag (2026-11-26, the review's #53): a 304 would leave the list empty until the app's lines next change.
+    Neon.get('/api/history', false).then(r => { if (r.ok && r.json) takeLines(r.json.lines || []); }).catch(() => { /* the next read fills it */ });
   }
 
   try {

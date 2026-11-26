@@ -29,6 +29,12 @@ public static class PictureMenu
     public static Action<string, bool>? Reported { get; set; }
 
     /// <summary>
+    /// A new file an edit wrote (2026-11-26, the review's #24): the source's full path and the new file's, never an overwrite. The chat lists it with
+    /// the conversation's pictures when its source is one, so a private end deletes it with them. A pool thread; must not block.
+    /// </summary>
+    public static Action<string, string>? Created { get; set; }
+
+    /// <summary>
     /// The loaded profile's splash folder, read at each press (2026-11-23, the user's ask: Add to the splash images), so a profile switch is
     /// followed; null greys the row.
     /// </summary>
@@ -145,6 +151,18 @@ public static class PictureMenu
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
                 outcome = PictureEditOutcome.Failure(ImageText.Failed(ex.Message));
+            }
+
+            if (!outcome.Failed && !outcome.Replaced && outcome.Written is { Length: > 0 } written)
+            {
+                try
+                {
+                    Created?.Invoke(path, written);
+                }
+                catch (Exception ex) when (ex is not OutOfMemoryException)
+                {
+                    DiagnosticLog.Warn("Viewer", Files.FileText.CreatedListenerFailedLogLine(ex.GetType().Name), ex);
+                }
             }
 
             Report(outcome.Failed ? PictureMenuText.Failed(Path.GetFileName(path), outcome.Line) : PictureMenuText.Edited(outcome.Line), outcome.Failed);

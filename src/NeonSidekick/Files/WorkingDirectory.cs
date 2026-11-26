@@ -921,6 +921,13 @@ public sealed class WorkingDirectory
     /// <param name="root">The resolved root, read on every call (<see cref="Resolve(string, string)"/> over the effective settings).</param>
     /// <param name="time">The clock behind the dates shown.</param>
     /// <param name="options">How the root is treated: <see cref="WorkingDirectoryOptions.Sandbox"/> (the default) for the working directory, <see cref="WorkingDirectoryOptions.Share"/> for a UNC share (2026-09-30).</param>
+    public WorkingDirectory(Func<string> root, TimeProvider time, WorkingDirectoryOptions? options = null)
+    {
+        _root = root ?? throw new ArgumentNullException(nameof(root));
+        _time = time ?? throw new ArgumentNullException(nameof(time));
+        _options = options ?? WorkingDirectoryOptions.Sandbox;
+    }
+
     /// <summary>
     /// Told the full path of each file a write here created, never one it replaced (2026-11-25, the private-conversations plan: the images folder's
     /// writers — pasted, phone, camera, screen, Home Assistant, ComfyUI, the image tools — are known to a private conversation by it). Any thread.
@@ -941,17 +948,10 @@ public sealed class WorkingDirectory
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            Diagnostics.DiagnosticLog.Warn("Files", "A created-file listener failed: " + ex.GetType().Name, ex);
+            Diagnostics.DiagnosticLog.Warn("Files", FileText.CreatedListenerFailedLogLine(ex.GetType().Name), ex);
         }
 
         return true;
-    }
-
-    public WorkingDirectory(Func<string> root, TimeProvider time, WorkingDirectoryOptions? options = null)
-    {
-        _root = root ?? throw new ArgumentNullException(nameof(root));
-        _time = time ?? throw new ArgumentNullException(nameof(time));
-        _options = options ?? WorkingDirectoryOptions.Sandbox;
     }
 
     /// <summary>

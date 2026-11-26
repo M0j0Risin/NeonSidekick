@@ -122,13 +122,13 @@ A list opens over the input line as you type `/` at the start, a command's argum
 ### Pane keys
 
 * **In every list** ↑/↓ move, Enter or a double-click picks, Esc closes; key letters act at once.
-* **Where rows can be removed**, Delete removes the highlighted one, asking where that list asks. So do the settings' lists: the Docker server match words, the Network host lists, the *Advisor list*, your own advisor templates.
+* **Where rows can be removed**, Del removes the highlighted one, asking where that list asks. So do the settings' lists: the Docker server match words, the Network host lists, the *Advisor list*, your own advisor templates.
 
 | Pane | Keys |
 |---|---|
 | **Conversation** | |
-| `/memory` | Enter: edit, disable/enable, folder / everywhere, forget (asks) · Delete forgets (asks) · `r` remember · `m` *Memory mode* |
-| `/queue` | Enter or Delete removes (asks) · `x` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `c` *Queue cancel mode* |
+| `/memory` | Enter: edit, disable/enable, folder / everywhere, forget (asks) · Del forgets (asks) · `r` remember · `m` *Memory mode* |
+| `/queue` | Enter or Del removes (asks) · `x` clear all · `s` send (while held, or under *Queue mode* `manual`) · `m` *Queue mode* · `c` *Queue cancel mode* |
 | `/rewind` | Enter rewinds to before the message |
 | `/rewind`'s files question | `f` conversation and files · `c` conversation only · Enter chooses · Esc cancels |
 | Files changed since (`/undo`, `/rewind … files`) | `r` restore over them (yours to the Recycle bin first) · `s` skip them · Esc cancels |
@@ -158,18 +158,18 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/youtube`, `/youtube list` | Enter plays (a playlist, marked ▤, at its entry) |
 | `/youtube <words>` | Enter plays · `s` saves the hit (a video, a playlist, or a channel's uploads) |
 | `/youtube playlist` | Enter plays from that entry · `s` saves the video · `l` saves the playlist |
-| `/prompts` | Enter sends (queued during a reply) · `d` to the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) · `m` save as a [custom command](COMMANDS.md#custom-commands) · `r` or Delete removes, `c` clears all (both ask) · Shift+↑/↓, Shift+Home/End move · type to filter |
+| `/prompts` | Enter sends (queued during a reply) · `d` to the draft line · `a` add · `s` save the draft · `e` edit (a long one in the draft editor) · `m` save as a [custom command](COMMANDS.md#custom-commands) · `r` or Del removes, `c` clears all (both ask) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | `/browser list` | Enter opens in the [Browser window](#the-browser-window) · `a` add · `n` name · `e` address |
-| `/youtube`, `/youtube list`, `/browser list` | `d` or Delete removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
+| `/youtube`, `/youtube list`, `/browser list` | `d` or Del removes (asks) · `c` clears all (asks) · Shift+↑/↓, Shift+Home/End move · type to filter |
 | **Tools and safety** | |
-| `/tools shell allowed` | Enter or Delete removes (asks; a *This session* row is forgotten for the session) · `o` / `a` / `y` set *Shell command policy* off / ask / yolo (yolo asks; before typing a filter) · type to filter |
+| `/tools shell allowed` | Enter or Del removes (asks; a *This session* row is forgotten for the session) · `o` / `a` / `y` set *Shell command policy* off / ask / yolo (yolo asks; before typing a filter) · type to filter |
 | `/tools shell police` | `s` the forbidden strings |
-| *Shell police forbidden strings* | top row adds · Enter or Delete removes (asks) · `r` restore defaults (asks) |
+| *Shell police forbidden strings* | top row adds · Enter or Del removes (asks) · `r` restore defaults (asks) |
 | `/tools web` | `m` *Web browser mode* · `o` opens the Browser window (Windows, macOS 14+) |
 | `/tools files` · `image` · `obsidian` · `advisors` · `print` | `b` *File browser/tree mode* · `e` *Image edit mode* · `v` *Obsidian vault* · `a` *Advisor list* · `p` *Print default printer* |
 | `/tools` › Files › Video | `p` *Video files play in* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
-| *ComfyUI workflows* | Space offers or hides · `a` all · `n` none · `c` checks against the server · Enter opens a workflow's actions · Delete deletes (asks) · the top row adds one |
+| *ComfyUI workflows* | Space offers or hides · `a` all · `n` none · `c` checks against the server · Enter opens a workflow's actions · Del deletes (asks) · the top row adds one |
 | A ComfyUI test or check under way | Esc cancels it |
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
 | The question pane (`ask_user`) | ←/→ questions · Enter chooses, or toggles on a multi · Space marks or clears · 1–9 jump · Other… types your own · Submit (skipped ones go as skipped) · Decline with a note… · Esc declines |
@@ -185,20 +185,20 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/docker` | Enter opens · `r` refresh · `l` LLM servers only · type to filter |
 | **Skills** | |
 | `/skills` › a skill | Enter on a row: move (asks), copy (asks), rename, edit, revert, lock/unlock, disable/enable, delete (asks) |
-| `/skills` › a skill › `revert` | Enter puts the version back · `d` or Delete removes it (asks) · `c` clear all (asks) |
+| `/skills` › a skill › `revert` | Enter puts the version back · `d` or Del removes it (asks) · `c` clear all (asks) |
 | `/skills` › `project` | Enter on a folder's `trust` row reviews its skills · `untrust` (asks) · on a trusted skill: edit, copy to profile or global (asks), disable/enable, delete (asks) |
 | Its trust question | Enter on `trust` trusts what is shown · Enter on a skill views its `SKILL.md`, or the change since its trust · Esc cancels |
 | `/commands` | ←/→ all, profile, global · **new command…** asks a name and where, then opens the template · type to filter |
 | `/commands` › a command | Enter on a row: use (to the draft line), move (asks), copy, rename, edit, delete (asks) · a Shadowed file: rename, edit, delete, and for a hidden global one move to another profile · a Skipped file: edit, delete |
 | **Shopping** | |
-| `/shopping` | Enter or Space ticks · `i` add · `p` place at an aisle or section · `n` rename · `r` or Delete remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |
-| Its add page (`i`) | Enter on the first row types new items · Enter on a past item adds it · `x` or Delete forgets it · type to filter |
-| *Shopping stores* (`s`) | Enter shops there (the first row adds one) · `l` layout · `n` rename · `r` or Delete remove (asks) · `f` its folder · `i` reindex |
-| A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes · Delete removes · on **Aisles**, Shift+↑/↓ move an aisle along the walk, Shift+Home/End to either end |
+| `/shopping` | Enter or Space ticks · `i` add · `p` place at an aisle or section · `n` rename · `r` or Del remove · `a` tick all · `c` clear ticked · `s` stores · `+` / `-` quantity |
+| Its add page (`i`) | Enter on the first row types new items · Enter on a past item adds it · `x` or Del forgets it · type to filter |
+| *Shopping stores* (`s`) | Enter shops there (the first row adds one) · `l` layout · `n` rename · `r` or Del remove (asks) · `f` its folder · `i` reindex |
+| A store's layout (`l`) | tabs **Aisles**, **Sections**, **Facts**, **Guesses** · Enter renames, moves or removes · Del removes · on **Aisles**, Shift+↑/↓ move an aisle along the walk, Shift+Home/End to either end |
 | **Settings and bars** | |
 | `/settings changed` | Enter edits · `r` back to default |
 | `/profile` | `+` goes to **+ Add a profile…** · a letter jumps to a profile |
-| `/theme` | a letter jumps to the next theme with it · → edit (as `/theme edit`), then back to the list · Delete deletes one of yours (asks) |
+| `/theme` | a letter jumps to the next theme with it · → edit (as `/theme edit`), then back to the list · Del deletes one of yours (asks) |
 | `/theme edit` | ←/→ lighter or darker (Shift ×5) · Enter opens the color picker · `s` save · `r` the row back · `d` discard · Esc closes, asking when there are changes |
 | `/theme edit`'s color picker | ↑/↓ a bar · ←/→ move it (Shift ×5) · Enter uses the color, or on *Hex value* types one · Esc back, unchanged |
 | The Oracle and PostgreSQL wizards' *Schemas* page | Enter or Space ticks · `a` all · `n` none · Shift+↑/↓, Shift+Home/End move: the first ticked is current (Oracle) or first on the search path · Continue goes on · Esc back |
@@ -207,7 +207,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A room's pane on the home bar | Space switches a device · Enter its actions |
 | **Monitors** | |
 | The monitors pane (`/monitor`, the 🖥️ chip) | ←/→ a monitor's tab · Enter switches an input or applies a layout row · Esc closes |
-| A monitor's *Input names…* | Enter renames · `h` hides or shows · Delete clears the name · Esc back to the monitor's tab |
+| A monitor's *Input names…* | Enter renames · `h` hides or shows · Del clears the name · Esc back to the monitor's tab |
 | A monitor's *This PC's input…* | Enter picks · Esc back to the monitor's tab |
 | **MIDI** | |
 | The MIDI pane (`/midi`) | Enter edits a binding's command · `l` learns · `r` relearns the button · `o` turns *MIDI input* on or off · Del removes (asks) · Esc closes |
@@ -344,7 +344,7 @@ In a pane over a reply, rows that would disturb it (a reconnect, the profile, th
 The keys that apply right now, on a row of their own over the status bar (*Hints bar*). It shows one hint at a time, the first of:
 
 1. The kill switch's warning (Ctrl+Alt+X, press again to unload).
-2. A waiting second press: Ctrl+C to exit, Esc to rewind, Delete for a splash picture.
+2. A waiting second press: Ctrl+C to exit, Esc to rewind, Del for a splash picture.
 3. An open pane's keys.
 4. The link or path under the pointer.
 5. What the arrows do right now: the splash's pictures, the picture strip, `/read`'s keys.
@@ -374,7 +374,6 @@ The row under the hints bar (*Status bar*); [Bar checklists](#bar-checklists) mo
 | the reasoning icon | `/reasoning` |
 | the working directory | `/cwd browse` |
 | the tokens or spinner | `/usage` |
-| 🖼️/🎨 (beside the spinner, ComfyUI rendering) | cancels the pictures; the reply goes on |
 | the queued count | `/queue` |
 | the timers | asks, then cancels them all |
 | 👥 (after a botchat) | `/botchat --resume` |
@@ -454,7 +453,7 @@ Chips for Home Assistant rooms and devices, the shopping list and this PC's moni
 
 The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar edit`) checklists, and the home bar's **On the bar**, share these keys:
 
-* Space or Enter checks or unchecks; Delete unchecks (on the home bar, takes off). None checked hides the toolbar or the performance bar.
+* Space or Enter checks or unchecks; Del unchecks (on the home bar, takes off). None checked hides the toolbar or the performance bar.
 * **bar:** on the title row hides the bar and keeps its items, as `/toolbar`, `/perfbar` and `/homebar` do; again brings them back. While hidden, the page still lists them, dim, and changes keep it hidden. Its key is `h` on the Tool bar and Performance bar pages.
 * On the home bar picker, **bar:** is at the end of the tab strip and has no key, because the tabs filter as you type.
 * The Tool bar's **bar:** reads hidden whenever nothing checked is drawn: 🔒 and 👮 with *Shell command policy* off, or 🧩 and 📅 on a Mac.
@@ -463,7 +462,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 * Shift+↑/↓ (or Alt+↑/↓) moves it a place, crossing into the next group at the edge; Shift+Home/End to its group's top or bottom.
 * **Performance bar:** **look:** on the title row (`l`) steps text, gauge, led.
 * **Status bar:** the Spinner can only be moved, not unchecked. The row reads `default`, `all`, `none`, or the left group's sections, `|`, then the right group's.
-* **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor; it moves like an item, and Delete takes it out. The default draws five: `⚙️ 🛠️ 💬 │ 🪪 🧮 📊 │ 💾 🎓 🦉 │ 🪄 📣 ⏳ │ 📁 🌐 📱 │ 🔒 👮 🐚`.
+* **Tool bar dividers:** `+` (*+ divider* on the title row) puts a dim `│` after the item under the cursor; it moves like an item, and Del takes it out. The default draws five: `⚙️ 🛠️ 💬 │ 🪪 🧮 📊 │ 💾 🎓 🦉 │ 🪄 📣 ⏳ │ 📁 🌐 📱 │ 🔒 👮 🐚`.
 
 *Toolbar order* orders the five bars: Shift+↑/↓ (or Alt+↑/↓) moves the bar under the cursor, Shift+Home/End to the top or bottom, `d` the default. A bar that is off keeps its place.
 
@@ -477,7 +476,7 @@ The *Status bar*, *Tool bar* (`/toolbar edit`) and *Performance bar* (`/perfbar 
 
 ## The welcome splash
 
-* *Welcome splash* `image`: one picture; ←/→ step through them. Delete twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
+* *Welcome splash* `image`: one picture; ←/→ step through them. Del twice on an empty line moves one of the profile's pictures to the folder's `.trash`.
 * *Welcome splash* `robot`: a robot above the draft line follows the mouse (where the terminal reports it) and your typing; your first line takes it away. Short of room it shows just its head, or nothing.
 * **Your own pictures** in the profile's `images\splash\` replace the built-in ones; the [picture menu](#the-picture-menu) adds one, `/splash view` or `/splash thumbs` opens the folder, `/splash purge` empties it.
 * `/splash` shows the splash whatever *Welcome splash* says (the picture when it's `off`).
@@ -610,10 +609,11 @@ A browser window of the app's own (Windows; macOS 14+ on a Mac, where it is WebK
 
 A private conversation leaves nothing in the session history. `/private` makes the one on screen private, `/private new` starts a fresh one, and `/private off` ends it. 🕶️ on the upper rule marks it.
 
-* **Going private:** a saved conversation asks first, then its session and its input lines are deleted from `sessions.db`, with its file checkpoints.
+* **Going private:** a saved conversation asks first, then its session and its input lines are deleted from `sessions.db`, with its file checkpoints. An unsaved one with file checkpoints asks too.
 * **Every conversation:** `--private`, `NEONSIDEKICK_PRIVATE` or [Private at start](SETTINGS.md#sessions). Under the flag or variable `/private off` is refused; `/new` starts a fresh private one.
-* **It ends** with `/private off`, `/new`, `/clear`, a profile switch, restoring a session (it asks first) or the exit. Its screen, ↑ lines and `/log` lines go with it.
-* **Pictures:** under *Private pictures* `ask` (the default), the end asks whether to keep or delete the pictures and phone PDFs saved meanwhile. A delete is permanent.
+* **It ends** with `/private off`, `/new`, `/clear`, `/splash`, `/test`, a profile switch, restoring a session (it asks first) or the exit.
+* **What goes at the end:** its screen, ↑ lines, pastes, `/log` lines, the shell's cut-output logs in `.neon/shell`, and its file checkpoints (`/undo` of a private turn works only until then).
+* **Pictures:** under *Private pictures* `ask` (the default), the end asks whether to keep or delete this conversation's pictures and phone PDFs, from before the switch too. A delete is permanent.
 * **Under the flag,** restoring a session opens a private copy: the stored session isn't changed.
 * **Headless,** `--private` covers the whole run ([HEADLESS.md](HEADLESS.md#carrying-on-a-session)).
 
@@ -621,20 +621,22 @@ Not kept:
 
 * Turns, titles and typed lines in `sessions.db`, and the session's Claude Code threads.
 * Reflections, skill uses and the model's own memories, unless *Private learning* is on.
-* The words in the `--log` file under *Private log text* `hide`: each line reads `[private]`, and `crash.log` keeps no messages. Database, Docker and admin audit lines stay whole.
+* The words in the `--log` file under *Private log text* `hide`: each line reads `[private]`, and `crash.log` keeps no messages. Database, Docker, admin, monitor and Home Assistant audit lines stay whole.
+* Its copies in the clipboard history: `/copy` and the windows' copies are marked to stay out of it (Win+V, cloud sync, clipboard managers).
 * The pictures you choose to delete.
 
 Kept on purpose:
 
-* What the tools change (files, commits, databases, the home) and their file checkpoints.
-* What you save yourself: `/memory remember`, prompts, commands, exports, prints, plans, audits and saved links.
+* What the tools change (files, commits, databases, the home).
+* What you save yourself: `/memory remember`, `/learn`, prompts, commands, exports, prints, plans, audits and saved links.
 
 Out of its reach:
 
 * What servers it talks to keep: the LLM, speech and MCP servers, Home Assistant, ComfyUI and the sites it reads.
 * What the system keeps: the search index, Recall, the page file, a crash dump, backups and sync, and a deleted file's bytes on the disk.
-* Windows left open, the same session open in another copy of the app, and the Browser and video windows' own history and cookies.
+* Windows left open, the same session open in another copy of the app, and the Browser and video windows' own history and cookies (the Browser window's in `browser-history.json` under *Web browser privacy* `keep-history`).
 * Without the screen (a redirected console), the terminal keeps what was printed.
+* A copy made with the terminal's own selection, or from the Web UI page: the app can't mark those.
 
 ## Web UI
 

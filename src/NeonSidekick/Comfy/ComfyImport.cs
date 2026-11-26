@@ -90,6 +90,8 @@ public static class ComfyImport
         // {{width}}): escaped to {{!…}}, which Fill writes back as they were, so no placeholder of ours ever lands in them.
         int escaped = Escape(graph);
         var nodes = graph.OrderBy(p => Order(p.Key)).Select(p => (Id: p.Key, Node: (JsonObject)p.Value!)).ToList();
+        // The inputs left null (2026-11-26, the review's #106): a NaN or Infinity read as null (here or in a recent run's /history parse), or a null as saved.
+        var nulls = nodes.SelectMany(n => n.Node["inputs"] is JsonObject ins ? ins.Where(p => p.Value is null).Select(p => n.Id + " " + p.Key) : []).ToList();
         var sampler = nodes.FirstOrDefault(n => TypeOf(n.Node) is "KSampler" or "KSamplerAdvanced" or "SamplerCustomAdvanced");
         var found = new List<string>();
         bool loadsImage = nodes.Any(n => TypeOf(n.Node) == "LoadImage");
@@ -103,7 +105,7 @@ public static class ComfyImport
             // No sampler but pictures in (later still on 2026-09-24, the user's ask: a ReActor face swap, a plain upscale):
             // only the pictures become placeholders; there is no prompt, seed or size to take.
             int only = TakeImages(nodes, found);
-            AddKept(found, escaped);
+            AddKept(found, escaped, nulls);
             return (new ComfyImportResult(graph.ToJsonString(ComfyGraphs.Indented), found, "", null, null, null, null, null, "", only), null);
         }
 
@@ -187,7 +189,7 @@ public static class ComfyImport
         }
 
         int images = TakeImages(nodes, found);
-        AddKept(found, escaped);
+        AddKept(found, escaped, nulls);
         string checkpoint = nodes.Select(n => Inputs(n.Node)["ckpt_name"] ?? Inputs(n.Node)["unet_name"])
             .OfType<JsonValue>().Where(v => v.GetValueKind() == JsonValueKind.String).Select(v => v.GetValue<string>()).FirstOrDefault() ?? "";
         return (new ComfyImportResult(graph.ToJsonString(ComfyGraphs.Indented), found, negativeText, width, height, steps, cfg, denoise, checkpoint, images, promptText), null);
@@ -195,7 +197,8 @@ public static class ComfyImport
 
     /// <summary>
     /// <paramref name="json"/> with the bare <c>NaN</c>, <c>Infinity</c> and <c>-Infinity</c> outside strings read as <c>null</c> (2026-11-25: Python's
-    /// <c>json.dumps</c> writes them, so older ComfyUI saves and runs can hold them; no JSON reader takes them). Text in strings stays as it is.
+    /// <c>json.dumps</c> writes them, so older ComfyUI saves and runs can hold them; no JSON reader takes them). Text in strings stays as it is, and so
+    /// do <c>//</c> and <c>/*…*/</c> comments (2026-11-26, the review's #11: a quote in one no longer flips the string state).
     /// </summary>
     public static string NumbersAsNull(string json)
     {
@@ -222,6 +225,16 @@ public static class ComfyImport
                     inString = false;
                 }
 
+                continue;
+            }
+
+            if (c == '/' && i + 1 < json.Length && json[i + 1] is '/' or '*')
+            {
+                bool line = json[i + 1] == '/';
+                int end = line ? json.IndexOf('\n', i + 2) : json.IndexOf("*/", i + 2, StringComparison.Ordinal);
+                int stop = end < 0 ? json.Length : line ? end : end + 2;
+                text.Append(json, i, stop - i);
+                i = stop - 1;
                 continue;
             }
 
@@ -273,13 +286,23 @@ public static class ComfyImport
         return count;
     }
 
-    private static void AddKept(List<string> found, int escaped)
+    private static void AddKept(List<string> found, int escaped, IReadOnlyList<string> nulls)
     {
         if (escaped > 0)
         {
             found.Add(KeptOwnTexts(escaped));
         }
+
+        if (nulls.Count > 0)
+        {
+            found.Add(InputsLeftNull(nulls));
+        }
     }
+
+    /// <summary>The found-list's line for node inputs with no value (a NaN, an Infinity or a null as saved), each <c>&lt;id&gt; &lt;input&gt;</c>. Pinned.</summary>
+    public static string InputsLeftNull(IReadOnlyList<string> inputs) =>
+        (inputs.Count == 1 ? "1 input has no value (a NaN or null as saved): " : inputs.Count.ToString(CultureInfo.InvariantCulture) + " inputs have no value (a NaN or null as saved): ")
+        + string.Join(", ", inputs);
 
     /// <summary>The found-list's line for a <c>LoadImage</c> past the third. Pinned.</summary>
     public static string ImageLeftAsExported(string id) =>

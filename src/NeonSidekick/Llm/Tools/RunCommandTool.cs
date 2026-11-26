@@ -69,6 +69,9 @@ public sealed class RunCommandTool : AIFunction
     private string _schemaKey = "";
     private JsonElement _schema;
 
+    /// <summary>Told each cut-output log's full path (2026-11-26: the conversation's, which a private end deletes); null = nobody.</summary>
+    public Action<string>? Spilled { get; init; }
+
     public RunCommandTool(ShellRunner runner, ProcessRegistry registry, WorkingDirectory files, CommandGate gate, Interpreters interpreters, Func<AppSettingsData> effective, Random random)
     {
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
@@ -342,7 +345,7 @@ public sealed class RunCommandTool : AIFunction
             int maxChars = Math.Clamp(effective.ShellOutputMaxChars, AppSettingsData.MinShellOutputMaxChars, AppSettingsData.MaxShellOutputMaxChars);
             var lines = session.Output.Snapshot(out long dropped);
             string body = ShellText.Body(lines, dropped);
-            string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, session.Id, body) : null;
+            string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, session.Id, body, Spilled) : null;
             DiagnosticLog.Info(ShellKinds.Category, ShellText.RunLogLine(request.Kind, command, exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed) : "timed out after " + ShellText.Elapsed(timeout), body.Length));
             return ShellText.Result(header, lines, maxChars, spill, dropped);
         }

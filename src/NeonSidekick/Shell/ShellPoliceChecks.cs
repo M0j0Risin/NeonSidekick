@@ -255,6 +255,29 @@ public static partial class ShellPoliceChecks
     }
 
     /// <summary>
+    /// <see cref="Spill(string, string, string)"/> that tells <paramref name="spilled"/> the written log's full path (2026-11-26, the review's #5: a private
+    /// conversation deletes its spill logs at its end), joined with the same <paramref name="root"/> it was written under, so a later <c>/cd</c> can't
+    /// move it. A listener's throw never fails the run.
+    /// </summary>
+    public static string? Spill(string root, string id, string body, Action<string>? spilled)
+    {
+        string? relative = Spill(root, id, body);
+        if (relative is not null && spilled is not null)
+        {
+            try
+            {
+                spilled(Path.Combine(root, relative));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                DiagnosticLog.Warn(ShellKinds.Category, Files.FileText.CreatedListenerFailedLogLine(ex.GetType().Name), ex);
+            }
+        }
+
+        return relative;
+    }
+
+    /// <summary>
     /// Whether <paramref name="fileName"/> is a spill this app writes: <c>run_</c>, <c>proc_</c>, <c>code_</c> or <c>cmd_</c> and six hex
     /// digits (<see cref="ShellRunner.NewId"/>), then <c>.log</c>. Pinned against each prefix.
     /// </summary>

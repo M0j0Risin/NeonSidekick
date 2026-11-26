@@ -200,11 +200,37 @@ public sealed class AuditCommandTests : IDisposable
         Assert.Equal(["src/Web"], parsed.Scope.Paths);
         Assert.Equal(["security"], parsed.Focus);
         Assert.Equal("check the parser", parsed.Brief);
-        // Another scope word first keeps today's rule: commit then starts the brief.
-        var diff = Parse("diff commit x");
-        Assert.Equal(AuditScopeKind.Diff, diff.Scope!.Kind);
-        Assert.Equal("commit x", diff.Brief);
         Assert.Equal("./commit", AuditCommand.PathWord("commit"));
+    }
+
+    /// <summary>One scope beside commit, in either order (2026-11-26, the review's #52/#57): refused, never read as the brief; a brief after -- still may say it.</summary>
+    [Theory]
+    [InlineData("diff commit x")]
+    [InlineData("commit abc diff")]
+    [InlineData("commit abc staged")]
+    [InlineData("commit abc branch")]
+    [InlineData("commit abc commit def")]
+    [InlineData("branch commit abc")]
+    public void Commit_BesideAnotherScope_IsRefused(string line) => Assert.Equal(AuditText.OneScope, Parse(line).Error);
+
+    [Fact]
+    public void Commit_InABriefAfterDashes_IsTheBrief()
+    {
+        var parsed = Parse("diff -- commit messages");
+        Assert.Null(parsed.Error);
+        Assert.Equal("commit messages", parsed.Brief);
+    }
+
+    /// <summary>Once a scope word is typed the completer offers no other (2026-11-26): the parser would refuse it.</summary>
+    [Fact]
+    public void Complete_OffersNoScopeWord_AfterOne()
+    {
+        IReadOnlyList<CompletionItem> Reports() => [];
+        IReadOnlyList<string> Folders(string prefix) => [];
+        string[] scopes = [AuditText.DiffWord, AuditText.StagedWord, AuditText.BranchWord, AuditText.CommitWord];
+        Assert.Contains(AuditCommand.Complete("", Reports, Folders), i => i.Text == AuditText.DiffWord);
+        Assert.DoesNotContain(AuditCommand.Complete("commit abc ", Reports, Folders), i => scopes.Contains(i.Text.Split(' ')[^1]));
+        Assert.DoesNotContain(AuditCommand.Complete("diff ", Reports, Folders), i => scopes.Contains(i.Text.Split(' ')[^1]));
     }
 
     [Fact]

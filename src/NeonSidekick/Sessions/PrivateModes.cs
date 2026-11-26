@@ -12,7 +12,7 @@ public enum PrivatePicturesMode
     /// <summary>Saved in their usual folders and kept.</summary>
     Keep,
 
-    /// <summary>Saved in the profile's <c>images\private\&lt;run&gt;</c> folder and deleted at the end, with those saved before the switch.</summary>
+    /// <summary>Deleted at the end, with those saved before the switch.</summary>
     Delete,
 }
 

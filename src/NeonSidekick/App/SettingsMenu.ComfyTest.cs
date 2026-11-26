@@ -28,7 +28,18 @@ internal sealed partial class SettingsMenu
     public const string ComfyTestPictureQuestion = "A picture's full path for this slot (empty for a blank gray one).";
     public const string ComfyTestCaption = "Runs once on the server with seed 1, so two tests compare; nothing is saved to the workflow.";
     public const string ComfyBusyKeys = "Esc = cancel";
-    public const string ComfyTestCancelledNotice = "Test cancelled.";
+    public const string ComfyTestCancelledNotice = "Test canceled.";
+
+    /// <summary>
+    /// The small test's size (2026-11-26, the review's #82): both sides scaled by the same factor so the longer is at most
+    /// <see cref="ComfyWizardTestSide"/>, the shape kept, each rounded to 8 and at least <see cref="ComfyStudio.MinSide"/>. Pure.
+    /// </summary>
+    public static (int Width, int Height) ComfyTestSize(int width, int height)
+    {
+        double scale = Math.Min(1.0, (double)ComfyWizardTestSide / Math.Max(1, Math.Max(width, height)));
+        int Side(int side) => Math.Max(ComfyStudio.MinSide, (int)Math.Round(side * scale / 8.0, MidpointRounding.AwayFromZero) * 8);
+        return (Side(width), Side(height));
+    }
     public const string ComfyTestConnectionLabel = "Enter to ask the server for its version";
     public const string ComfyAskingLabel = "Asking the server…";
 
@@ -175,31 +186,8 @@ internal sealed partial class SettingsMenu
             return (SmokeChecks.SolidBmp(ComfyWizardTestSide, ComfyWizardTestSide), ".bmp", null);
         }
 
-        if (Unc.KnownUncHosts.IsUnknown(path))
-        {
-            return (null, "", ComfyTestPictureError(path, "is on a computer the app doesn't know"));
-        }
-
-        try
-        {
-            if (!File.Exists(path))
-            {
-                return (null, "", ComfyTestPictureError(path, "is not a file"));
-            }
-
-            if (!ImageFile.IsImagePath(path))
-            {
-                return (null, "", ComfyTestPictureError(path, "is not a png, jpg, gif, webp or bmp file"));
-            }
-
-            return RegularFiles.ReadAtMost(path, ImageFile.MaxFileBytes) is { } bytes
-                ? (bytes, Path.GetExtension(path).ToLowerInvariant(), null)
-                : (null, "", ComfyTestPictureError(path, "is over 20 MB"));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return (null, "", ComfyTestPictureError(path, ex.Message));
-        }
+        var (bytes, why) = ComfyReadTypedFile(path, ImageFile.MaxFileBytes, p => ImageFile.IsImagePath(p) ? null : ComfyText.PathNotAPicture);
+        return bytes is null ? (null, "", ComfyTestPictureError(path, why!)) : (bytes, Path.GetExtension(path).ToLowerInvariant(), null);
     }
 
     /// <summary>One workflow run with the setup's values; its picture kept and shown. True when it ran.</summary>
@@ -235,9 +223,10 @@ internal sealed partial class SettingsMenu
 
             var d = workflow.Defaults;
             bool small = setup.Small;
+            var (smallWidth, smallHeight) = ComfyTestSize(d.Width, d.Height);
             var values = new ComfyValues(setup.Prompt, d.Negative, 1,
-                small ? Math.Min(d.Width, ComfyWizardTestSide) : d.Width,
-                small ? Math.Min(d.Height, ComfyWizardTestSide) : d.Height,
+                small ? smallWidth : d.Width,
+                small ? smallHeight : d.Height,
                 small ? Math.Min(d.Steps, ComfyWizardTestSteps) : d.Steps,
                 null, null, images);
             return await client.RunAsync(workflow.Fill(values), timeout, token).ConfigureAwait(false);
@@ -245,8 +234,12 @@ internal sealed partial class SettingsMenu
 
         if (!done)
         {
-            DiagnosticLog.Info(ComfyWorkflowFile.Category, ComfyText.LogTested(workflow.Name, "cancelled"));
-            Sink.Notice(ComfyTestCancelledNotice);
+            DiagnosticLog.Info(ComfyWorkflowFile.Category, ComfyText.LogTested(workflow.Name, "canceled"));
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                Sink.Notice(ComfyTestCancelledNotice);   // the pane's own Esc only (2026-11-26, the review's #81), never the app's cancel
+            }
+
             return false;
         }
 

@@ -117,7 +117,9 @@ internal sealed partial class SettingsMenu
 
         var graph = (JsonObject)working.DeepClone();
         var output = ComfyGraphEdit.Read(graph).OutputName;
-        if (output is { Editable: true, Value: { } prefix } && prefix.StartsWith(ComfyGraphs.PrefixFolder, StringComparison.Ordinal))
+        // Only a plain name after neon/ follows the workflow's (2026-11-26, the review's #84): neon/portraits/x keeps its subfolder.
+        if (output is { Editable: true, Value: { } prefix } && prefix.StartsWith(ComfyGraphs.PrefixFolder, StringComparison.Ordinal)
+            && ComfyWorkflowFile.IsValidName(prefix[ComfyGraphs.PrefixFolder.Length..]))
         {
             ComfyGraphEdit.SetText(graph, output, ComfyGraphs.PrefixFolder + name);
         }
@@ -391,7 +393,7 @@ internal sealed partial class SettingsMenu
         switch (field)
         {
             case ComfyField.Found:
-                await PickAsync(new MenuPage(title + " › " + ComfyFieldLabels[(int)field], (draft.Imported?.Found ?? []).Select(Markup.Escape).ToList(), PickKeys), 0, cancellationToken).ConfigureAwait(false);
+                await PickAsync(new MenuPage(title + " › " + ComfyFieldLabels[(int)field], (draft.Imported?.Found ?? []).Select(f => Markup.Escape(UntrustedText.OneLine(f))).ToList(), PickKeys), 0, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case ComfyField.Model:
@@ -463,7 +465,8 @@ internal sealed partial class SettingsMenu
                 var part = field == ComfyField.Sampler ? parts!.Sampler : parts!.Scheduler;
                 string input = field == ComfyField.Sampler ? "sampler_name" : "scheduler";
                 string question = field == ComfyField.Sampler ? ComfyWizardSamplerQuestion : ComfyWizardSchedulerQuestion;
-                if (await ComfyServerPickAsync(draft, title, question, "KSampler", input, part.Value, null, cancellationToken).ConfigureAwait(false) is not { } picked)
+                // The sampler node's own class (2026-11-26, the review's #54): a KSamplerAdvanced's lists, as the Model row reads its loader's.
+                if (await ComfyServerPickAsync(draft, title, question, part.ClassType ?? "KSampler", input, part.Value, null, cancellationToken).ConfigureAwait(false) is not { } picked)
                 {
                     return false;
                 }
@@ -707,7 +710,9 @@ internal sealed partial class SettingsMenu
 
             var lora = loras[item - lead];
             int index = item - lead;
-            if (!lora.Editable)
+            // Del still removes a LoRA whose strength another node sets (2026-11-26, #20); only its strength can't change.
+            bool removable = !lora.SwitchedOff && lora.Why == ComfyText.EditStrengthNotLiteral;
+            if (!lora.Editable && !(removable && pick.Remove))
             {
                 if (lora.Why is { } why && !lora.SwitchedOff)
                 {

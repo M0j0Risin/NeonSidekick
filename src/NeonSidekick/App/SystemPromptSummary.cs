@@ -719,7 +719,8 @@ public static class SystemPromptSummary
             clock: facts.Clock,
             duckDb: facts.DuckDb,
             duckDbWrite: facts.DuckDbWriting,
-            mcpNotes: facts.McpNotes);
+            mcpNotes: facts.McpNotes,
+            skillEditor: facts.SkillEditor);
     }
 
     /// <summary>The label of the MCP servers' notes section (2026-11-19).</summary>
@@ -825,8 +826,10 @@ public static class SystemPromptSummary
     private static IReadOnlyList<Skill> SkillsShown(SystemPromptFacts facts) =>
         SkillsSent(facts) ? facts.Skills ?? [] : [];
 
-    /// <summary>The block's directive as the next turn sends it (2026-11-08, the review), when it sends the block.</summary>
-    private static string SkillsDirective(SystemPromptFacts facts) => SkillsPrompt.DirectiveFor(facts.Skills ?? [], facts.GlobalSkills);
+    /// <summary>The block's directive as the next turn sends it (2026-11-08, the review), when it sends the block; without <c>skill_editor</c> the load-only one, or none with no skills (2026-11-26, the review's #38).</summary>
+    private static string SkillsDirective(SystemPromptFacts facts) =>
+        facts.SkillEditor ? SkillsPrompt.DirectiveFor(facts.Skills ?? [], facts.GlobalSkills)
+        : (facts.Skills ?? []).Count == 0 ? "" : SkillsPrompt.LoadOnlyDirective;
 
     /// <summary>
     /// The Skills tab (2026-11-07, the user's ask: the catalog out of the Prompt tab, with more to say): the section's own heading and status
@@ -977,7 +980,8 @@ public static class SystemPromptSummary
         AdminGroupSpec? monitors = null,
         IReadOnlyList<AIFunction>? duckDb = null,
         bool duckDbEnabled = true,
-        IReadOnlyDictionary<string, string>? homeNotes = null)
+        IReadOnlyDictionary<string, string>? homeNotes = null,
+        IReadOnlySet<string>? withheld = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
         ArgumentNullException.ThrowIfNull(timers);
@@ -1230,7 +1234,27 @@ public static class SystemPromptSummary
             groups.Add(Group("Questions", questions, questionsNote, askEnabled && paneOn && toolsEnabled, SettingsField.AskUser, disabled));
         }
 
-        return SortedGroups(groups);
+        return SortedGroups(withheld is { Count: > 0 } ? groups.Select(g => Withheld(g, withheld)) : groups);
+    }
+
+    /// <summary>
+    /// A private conversation's withheld tools noted as such (2026-11-26, the review's #48/#49): <see cref="PrivateText.ToolsNote"/>, never "switched
+    /// off in /tools" or the memory switch's reason, since the user's own list and setting are untouched.
+    /// </summary>
+    private static ToolGroup Withheld(ToolGroup group, IReadOnlySet<string> withheld)
+    {
+        if (!group.Tools.Any(t => withheld.Contains(t.Name)))
+        {
+            return group;
+        }
+
+        var notes = new Dictionary<string, string>(group.ToolNotes, StringComparer.Ordinal);
+        foreach (var tool in group.Tools.Where(t => withheld.Contains(t.Name)))
+        {
+            notes[tool.Name] = PrivateText.ToolsNote;
+        }
+
+        return group with { ToolNotes = notes };
     }
 
     /// <summary>

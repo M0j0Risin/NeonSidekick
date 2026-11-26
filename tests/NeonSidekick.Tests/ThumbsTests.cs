@@ -596,6 +596,44 @@ public sealed class ThumbsTests
         }
     }
 
+    /// <summary>
+    /// An edit that writes a new file beside the original tells Created the source and the new file (2026-11-26, the review's #24: a private
+    /// conversation's picture's edit is its picture too); an overwrite tells nothing.
+    /// </summary>
+    [Fact]
+    public void AnEditBesideTheOriginal_CallsCreated_AndAnOverwriteDoesNot()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "NeonSidekick.Tests", Guid.NewGuid().ToString("N"));
+        string picture = Path.Combine(dir, "Sunset.png");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(picture, Fakes.FakeHeadlessBrowser.TinyPng);
+        var created = new List<(string Source, string Written)>();
+        using var done = new SemaphoreSlim(0);
+        var (oldCreated, oldSettings, oldReported) = (PictureMenu.Created, PictureMenu.Settings, PictureMenu.Reported);
+        try
+        {
+            PictureMenu.Created = (source, written) => { lock (created) { created.Add((source, written)); } };
+            PictureMenu.Reported = (_, _) => { };
+            PictureMenu.Settings = () => PictureEditSettings.Default;
+            PictureMenu.Edit(picture, PictureCommand.RotateRight, _ => done.Release());
+            Assert.True(done.Wait(TimeSpan.FromSeconds(10)), "the edit");
+            var (from, written) = Assert.Single(created);
+            Assert.Equal(picture, from);
+            Assert.NotEqual(picture, written);
+            Assert.True(File.Exists(written));
+
+            PictureMenu.Settings = () => PictureEditSettings.Default with { Mode = ImageEditMode.OverwriteOriginal };
+            PictureMenu.Edit(picture, PictureCommand.RotateRight, _ => done.Release());
+            Assert.True(done.Wait(TimeSpan.FromSeconds(10)), "the overwrite");
+            Assert.Single(created);
+        }
+        finally
+        {
+            (PictureMenu.Created, PictureMenu.Settings, PictureMenu.Reported) = (oldCreated, oldSettings, oldReported);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
     [Fact]
     public void Styles_FollowTheTheme_OrTheBlackLook()
     {

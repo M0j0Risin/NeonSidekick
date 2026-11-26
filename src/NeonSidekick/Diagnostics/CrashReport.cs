@@ -28,7 +28,33 @@ public static class CrashReport
     /// </summary>
     public static string? Write(string directory, Exception exception, DateTime utcNow)
     {
-        return Write(directory, exception, utcNow, PrivateMode.HideLog);
+        // The hide now, or the exit's end of a private conversation that hid (2026-11-26, the review's #34): a crash after that end keeps no message either.
+        return Write(directory, exception, utcNow, PrivateMode.HideCrash);
+    }
+
+    /// <summary>
+    /// The crash's <c>--log</c> line (<see cref="LogLine"/>, the exception attached), with the log's hide held on around it while
+    /// <see cref="PrivateMode.HidAtExit"/> is set (2026-11-26): the exit let the hide go, and the exception's message can quote the conversation.
+    /// </summary>
+    public static void LogCrash(string? path, Exception exception)
+    {
+        bool hold = PrivateMode.HidAtExit && !PrivateMode.HideLog;
+        if (hold)
+        {
+            PrivateMode.HideLog = true;
+        }
+
+        try
+        {
+            DiagnosticLog.Error(Category, LogLine(path), exception);
+        }
+        finally
+        {
+            if (hold)
+            {
+                PrivateMode.HideLog = false;
+            }
+        }
     }
 
     /// <summary><see cref="Write(string, Exception, DateTime)"/> with the hide switch given: under <paramref name="hide"/> the types and stacks alone, no message (2026-11-25).</summary>
@@ -58,22 +84,24 @@ public static class CrashReport
 
     /// <summary>
     /// The exception as <see cref="Exception.ToString"/> gives it without a message (2026-11-25, a private conversation under <c>hide</c>): each type, the
-    /// inner ones after <c> ---&gt; </c>, then the stacks. A message can quote what the conversation said; a type and a stack can't.
+    /// inner ones after <c> ---&gt; </c>, then the stacks. A message can quote what the conversation said; a type and a stack can't. An
+    /// <see cref="AggregateException"/>'s every inner exception is walked, depth first, each after <c> ---&gt; (Inner Exception #n) </c> as
+    /// <see cref="Exception.ToString"/> marks them (2026-11-26, the review's #33: only the first was kept), 32 at most.
     /// </summary>
     public static string Stacks(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        var chain = new List<(string Mark, Exception Error)>();
+        Walk(exception, "", chain);
         var sb = new StringBuilder();
-        var chain = new List<Exception>();
-        for (Exception? e = exception; e is not null && chain.Count < 32; e = e.InnerException)
+        foreach (var (mark, error) in chain)
         {
-            chain.Add(e);
+            sb.Append(mark).Append(error.GetType().FullName);
         }
 
-        sb.Append(string.Join(" ---> ", chain.Select(e => e.GetType().FullName)));
-        foreach (var e in chain.AsEnumerable().Reverse())
+        foreach (var (_, error) in chain.AsEnumerable().Reverse())
         {
-            if (e.StackTrace is { Length: > 0 } stack)
+            if (error.StackTrace is { Length: > 0 } stack)
             {
                 sb.Append(Environment.NewLine).Append(stack);
             }
@@ -82,8 +110,29 @@ public static class CrashReport
         return sb.ToString();
     }
 
+    private static void Walk(Exception error, string mark, List<(string Mark, Exception Error)> chain)
+    {
+        if (chain.Count >= 32)
+        {
+            return;
+        }
+
+        chain.Add((mark, error));
+        if (error is AggregateException aggregate)
+        {
+            for (int i = 0; i < aggregate.InnerExceptions.Count; i++)
+            {
+                Walk(aggregate.InnerExceptions[i], string.Create(CultureInfo.InvariantCulture, $" ---> (Inner Exception #{i}) "), chain);
+            }
+        }
+        else if (error.InnerException is { } inner)
+        {
+            Walk(inner, " ---> ", chain);
+        }
+    }
+
     /// <summary>The line printed on the way out. Pinned.</summary>
-    public static string Notice(string? path, Exception exception) => Notice(path, exception, PrivateMode.HideLog);
+    public static string Notice(string? path, Exception exception) => Notice(path, exception, PrivateMode.HideCrash);
 
     /// <summary>The line printed on the way out, its message left out under <paramref name="hide"/> (2026-11-25). Pinned.</summary>
     public static string Notice(string? path, Exception exception, bool hide)

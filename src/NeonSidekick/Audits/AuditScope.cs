@@ -38,7 +38,8 @@ public sealed record AuditScopeRequest(AuditScopeKind Kind, IReadOnlyList<string
 /// exclusions left out (secret-looking, binary, vendored or generated), and whether the walk was cut by its budget. A commit scope's
 /// (2026-11-25): its pinned full shas (<paramref name="From"/> null for one commit, the merge base when <paramref name="FromMergeBase"/>), the
 /// scoped files changed after <paramref name="To"/> (<paramref name="ChangedSinceCut"/> when that diff was cut), the files it changed that are
-/// gone since, and the revision as typed, for <see cref="AuditText.CommitsNotice"/>.
+/// gone since, and the revision as typed, for <see cref="AuditText.CommitsNotice"/>. <paramref name="PinnedFrom"/> (2026-11-26, the review's #50/#88):
+/// the typed start's full sha, which the header keeps, so a resume works the merge base out again and says it as the start did.
 /// </summary>
 public sealed record AuditScope(
     AuditScopeKind Kind,
@@ -57,7 +58,8 @@ public sealed record AuditScope(
     IReadOnlyList<string>? ChangedSince = null,
     bool ChangedSinceCut = false,
     int GoneSince = 0,
-    string? Revision = null)
+    string? Revision = null,
+    string? PinnedFrom = null)
 {
     /// <summary>The scoped files changed after the commits; empty for every other scope.</summary>
     public IReadOnlyList<string> ChangedSince { get; init; } = ChangedSince ?? [];
@@ -103,7 +105,7 @@ public sealed record AuditScope(
         AuditScopeKind.Paths => Paths.Select(AuditCommand.PathWord),
         AuditScopeKind.Diff => [AuditText.DiffWord, .. Paths.Select(AuditCommand.PathWord)],
         AuditScopeKind.Staged => [AuditText.StagedWord, .. Paths.Select(AuditCommand.PathWord)],
-        AuditScopeKind.Commits => [AuditText.CommitWord, From is { } from ? from + AuditText.RangeDots + To : To ?? "", .. Paths.Select(AuditCommand.PathWord)],
+        AuditScopeKind.Commits => [AuditText.CommitWord, From is { } from ? (PinnedFrom ?? from) + AuditText.RangeDots + To : To ?? "", .. Paths.Select(AuditCommand.PathWord)],
         _ => [AuditText.BranchWord, Base ?? "", .. Paths.Select(AuditCommand.PathWord)],
     });
 
@@ -381,7 +383,7 @@ public static class AuditScopes
         var scope = Filter(files, request with { Base = @base }, changed, gone, cut, cancellationToken);
         if (pinned is not null)
         {
-            scope = scope with { From = pinned.From, To = pinned.To, FromMergeBase = pinned.FromMergeBase };
+            scope = scope with { From = pinned.From, To = pinned.To, FromMergeBase = pinned.FromMergeBase, PinnedFrom = pinned.PinnedFrom };
         }
 
         if (scope.Files.Count == 0 && scope.Deleted.Count == 0)
@@ -415,8 +417,8 @@ public static class AuditScopes
         return new AuditScopeResult(scope, null);
     }
 
-    /// <summary>A commit scope's pinned shas: <see cref="From"/> null for one commit, the merge base when <see cref="FromMergeBase"/>.</summary>
-    private sealed record Pinned(string? From, string To, bool FromMergeBase);
+    /// <summary>A commit scope's pinned shas: <see cref="From"/> null for one commit, the merge base when <see cref="FromMergeBase"/>; <see cref="PinnedFrom"/> the typed start's.</summary>
+    private sealed record Pinned(string? From, string To, bool FromMergeBase, string? PinnedFrom);
 
     /// <summary>
     /// A commit scope's revision pinned to full shas (2026-11-25), or the one sentence that refuses it. The checks run in this order, so each
@@ -488,7 +490,7 @@ public static class AuditScopes
 
         if (from is null)
         {
-            return (new Pinned(null, to, false), null);
+            return (new Pinned(null, to, false, null), null);
         }
 
         var merge = git.MergeBase(at, from, to);
@@ -508,7 +510,7 @@ public static class AuditScopes
         }
 
         bool swapped = !string.Equals(merge.Sha, from, StringComparison.Ordinal);
-        return (new Pinned(merge.Sha, to, swapped), null);
+        return (new Pinned(merge.Sha, to, swapped, from), null);
     }
 
     /// <summary>
@@ -583,13 +585,32 @@ public static class AuditScopes
                 continue;
             }
 
+            // A commit scope (2026-11-26, the review's #45/#77) resolves before the cut, so gone counts every changed file that is missing (a failed
+            // resolve is no file of the folder's, skipped, never gone) and the cut counts only files still there. The other kinds keep the cut first,
+            // so a whole tree past the cap never resolves what it won't read.
+            bool commits = request.Kind == AuditScopeKind.Commits;
+            string full = "";
+            if (commits)
+            {
+                if (files.Resolve(path, forWrite: false, out full) != FileOutcome.Ok)
+                {
+                    continue;
+                }
+
+                if (!File.Exists(full))
+                {
+                    gone++;
+                    continue;
+                }
+            }
+
             if (kept.Count >= AuditText.MaxScopeFiles)
             {
                 more++;
                 continue;
             }
 
-            if (files.Resolve(path, forWrite: false, out string full) != FileOutcome.Ok || !File.Exists(full))
+            if (!commits && (files.Resolve(path, forWrite: false, out full) != FileOutcome.Ok || !File.Exists(full)))
             {
                 gone++;
                 continue;

@@ -120,7 +120,10 @@ public static class ComfyCheck
         {
             if (item.ValueKind != JsonValueKind.String)
             {
-                return new ComfyInputSpec(choices, true);   // options that are objects (a dynamic combo): no plain list to hold a value to
+                // Options that are objects (a dynamic combo): no plain list to hold a value to, but the strings beside them are still choices
+                // (2026-11-26, the review's #8).
+                skip = true;
+                continue;
             }
 
             choices.Add(item.GetString()!);

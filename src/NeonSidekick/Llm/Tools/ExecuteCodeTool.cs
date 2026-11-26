@@ -54,6 +54,9 @@ public sealed class ExecuteCodeTool : AIFunction
     public static readonly TimeSpan LeftoverAge = TimeSpan.FromDays(1);
 
     /// <param name="runsFolder">Where run folders are made; the temp directory's <see cref="RunsFolderName"/> by default, a temp folder in tests.</param>
+    /// <summary>Told each cut-output log's full path (2026-11-26: the conversation's, which a private end deletes); null = nobody.</summary>
+    public Action<string>? Spilled { get; init; }
+
     public ExecuteCodeTool(ShellRunner runner, WorkingDirectory files, CommandGate gate, Interpreters interpreters, Func<AppSettingsData> effective, Random random, string? runsFolder = null)
     {
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
@@ -301,7 +304,7 @@ public sealed class ExecuteCodeTool : AIFunction
                     : ShellText.ScriptTimedOutHeader(name, timeout, firstLine);
                 var lines = session.Output.Snapshot(out long dropped);
                 string body = ShellText.Body(lines, dropped);
-                string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, id, body) : null;
+                string? spill = body.Length > maxChars ? ShellPoliceChecks.Spill(_files.Root, id, body, Spilled) : null;
                 DiagnosticLog.Info(ShellKinds.Category, ShellText.ScriptLogLine(name, firstLine, exited ? "exit " + (session.ExitCode ?? -1).ToString(CultureInfo.InvariantCulture) + " in " + ShellText.Elapsed(session.Elapsed) : "timed out after " + ShellText.Elapsed(timeout), body.Length));
                 return ShellText.Result(header, lines, maxChars, spill, dropped);
             }

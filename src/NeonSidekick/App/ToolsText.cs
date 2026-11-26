@@ -10,7 +10,8 @@ namespace NeonSidekick.App;
 /// list and with <c>load_skill</c> noted when no skill is installed), the setting <c>LLM offer tools</c>,
 /// and the names switched off on the tab (<c>ToolsDisabled</c>, as a set).
 /// </summary>
-public sealed record ToolsFacts(IReadOnlyList<ToolGroup> Groups, bool ToolsEnabled, IReadOnlySet<string> Disabled);
+/// <param name="Withheld">The tools a private conversation withholds (2026-11-26): noted on their rows, and a flip of one refused in words.</param>
+public sealed record ToolsFacts(IReadOnlyList<ToolGroup> Groups, bool ToolsEnabled, IReadOnlySet<string> Disabled, IReadOnlySet<string>? Withheld = null);
 
 /// <summary>
 /// The words for <c>/tools</c> (2026-09-19, the user's ask): the pane's first tab — every tool the app
@@ -503,6 +504,9 @@ public static class ToolsText
 
     /// <summary>The status line after a flip: <c>read_file: off</c>, the <see cref="SettingsMenu.SavedNotice"/> shape. Pinned.</summary>
     public static string FlippedNotice(string tool, bool on) => $"{tool}: {State(on)}";
+
+    /// <summary>A flip of a tool a private conversation withholds (2026-11-26): <c>save_memory: not offered in a private conversation (…)</c>, nothing changed.</summary>
+    public static string WithheldNotice(string tool) => $"{tool}: {PrivateText.ToolsNote}";
 
     /// <summary>The saved word for a tool's state.</summary>
     public static string State(bool on) => on ? "on" : "off";

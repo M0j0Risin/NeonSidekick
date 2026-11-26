@@ -457,29 +457,15 @@ internal sealed partial class SettingsMenu
     private string? ComfyImportFile(ComfyDraft draft, string typed)
     {
         string path = UnquotePath(typed.Trim());
-        if (path.Length == 0 || Unc.KnownUncHosts.IsUnknown(path))
+        if (path.Length == 0)
         {
-            return ComfyWizardFileError(path, "is not a file");
+            return ComfyWizardFileError(path, ComfyText.PathNotAFile);
         }
 
-        byte[]? bytes;
-        try
+        var (read, why) = ComfyReadTypedFile(path, ComfyImportMaxBytes);
+        if (read is not { } bytes)
         {
-            if (!File.Exists(path))
-            {
-                return ComfyWizardFileError(path, "is not a file");
-            }
-
-            bytes = Files.RegularFiles.ReadAtMost(path, ComfyImportMaxBytes);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return ComfyWizardFileError(path, ex.Message);
-        }
-
-        if (bytes is null)
-        {
-            return ComfyWizardFileError(path, "is too large for a workflow");
+            return ComfyWizardFileError(path, why!);
         }
 
         // By the bytes, never the extension (2026-11-25): a PNG or WebP ComfyUI saved carries the graph it ran.
@@ -615,30 +601,34 @@ internal sealed partial class SettingsMenu
     {
         string age = run.StartedMs is { } ms ? Docker.DockerText.Age(ms / 1000, ComfyClock.GetUtcNow()) : "—";
         var import = run.Import;
-        string model = run.Model.Length > 0 ? Path.GetFileNameWithoutExtension(run.Model.Replace('\\', '/').Split('/')[^1]) : import is null ? "(not importable)" : "(no model)";
+        // Only the model is the server's text (2026-11-26, the review's #100): scrubbed alone, so the age's padding stays.
+        string model = run.Model.Length > 0 ? UntrustedText.Name(Path.GetFileNameWithoutExtension(run.Model.Replace('\\', '/').Split('/')[^1])) : import is null ? "(not importable)" : "(no model)";
         string size = import is { Width: { } w, Height: { } h } ? Invariant(w) + "×" + Invariant(h) : "";
         string steps = import?.Steps is { } st ? Invariant(st) + " steps" : "";
         string repeats = run.Repeats > 1 ? "×" + Invariant(run.Repeats) : "";
-        return UntrustedText.OneLine(string.Join("  ", new[] { age.PadRight(8), TextCells.Cut(model, 40), size, steps, repeats }.Where(p => p.Length > 0)));
+        return string.Join("  ", new[] { age.PadRight(8), TextCells.Cut(model, 40), size, steps, repeats }.Where(p => p.Length > 0));
     }
 
-    /// <summary>A run's band: the start of its prompt (shown here only, never saved) and its first output file.</summary>
+    /// <summary>
+    /// A run's band: the start of its prompt (shown here only, never saved) and its first output file. Plain text: the pane's footer escapes it once
+    /// (2026-11-26, the review's #73; escaped here too, a [ read as [[).
+    /// </summary>
     private static MenuFooter ComfyRunBand(ComfyRun run)
     {
         var lines = new List<string>();
         if (run.Import?.Prompt is { Length: > 0 } prompt)
         {
-            lines.Add(Markup.Escape(TextCells.Cut(UntrustedText.OneLine(prompt), 200)));
+            lines.Add(TextCells.Cut(UntrustedText.OneLine(prompt), 200));
         }
 
         if (run.OutputFile is { } output)
         {
-            lines.Add(Markup.Escape(UntrustedText.OneLine(output)));
+            lines.Add(UntrustedText.OneLine(output));
         }
 
         if (run.Import is null && run.Problem is { } problem)
         {
-            lines.Add(Markup.Escape(problem));
+            lines.Add(problem);
         }
 
         return new MenuFooter(string.Join("\n", lines)) { KeepLines = true };
@@ -704,12 +694,7 @@ internal sealed partial class SettingsMenu
     private string ComfySuggestName(ComfyDraft draft, string from)
     {
         string suggested = ComfyWorkflowFile.Suggest(Path.GetFileNameWithoutExtension(from.Replace('\\', '/').Split('/')[^1]));
-        if (draft.Kind == ComfyKind.Both && suggested.Length > 64 - ComfyTextSuffix.Length)
-        {
-            suggested = suggested[..(64 - ComfyTextSuffix.Length)].TrimEnd('-', '_', '.');
-        }
-
-        return ComfyWorkflowFile.FreeName(suggested, ComfyRoots, ComfyFolder(draft.Global));
+        return ComfyWorkflowFile.FreeName(suggested, ComfyRoots, ComfyFolder(draft.Global), draft.Kind == ComfyKind.Both ? [ComfyTextSuffix, ComfyImageSuffix] : null);
     }
 
     /// <summary>The names a draft saves under: its name, or for <c>both</c> the text and image names.</summary>
@@ -876,18 +861,56 @@ internal sealed partial class SettingsMenu
             return (true, written[0]);
         }
 
-        var offered = _settings.Current.ComfyWorkflowsOffered ?? [];   // null offers none (2026-10-01)
-        Apply(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered = [.. offered, .. written]);
+        // Each new name folded in once (2026-11-26, the review's #28), read inside the update so a change made meanwhile stands; null offers none (2026-10-01).
+        Apply(SettingsField.ComfyWorkflowsOffered, d => d.ComfyWorkflowsOffered = written.Aggregate(
+            d.ComfyWorkflowsOffered ?? [], (list, name) => ConnectionOfferedAfterSave(list, null, name, offer: true)));
         return (true, written[0]);
+    }
+
+    /// <summary>
+    /// A file typed in the pane, read (2026-11-26, the review's #70/#99, one check for the import and the test pictures): refused when not a full path
+    /// (never read against the app's own folder), on an unknown computer, not a file, failing <paramref name="judge"/>, or over <paramref name="cap"/>
+    /// (the caller's: the two differ); the bytes, or why not as the words after the quoted path.
+    /// </summary>
+    internal static (byte[]? Bytes, string? Why) ComfyReadTypedFile(string path, long cap, Func<string, string?>? judge = null)
+    {
+        if (!Path.IsPathFullyQualified(path))
+        {
+            return (null, ComfyText.PathNotFull);
+        }
+
+        if (Unc.KnownUncHosts.IsUnknown(path))
+        {
+            return (null, ComfyText.PathUnknownComputer);
+        }
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return (null, ComfyText.PathNotAFile);
+            }
+
+            if (judge?.Invoke(path) is { } refused)
+            {
+                return (null, refused);
+            }
+
+            return Files.RegularFiles.ReadAtMost(path, cap) is { } bytes ? (bytes, null) : (null, ComfyText.PathTooLarge(cap));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (null, ex.Message);
+        }
     }
 
     /// <summary>What the draft still lacks before a save or a test, said as a sentence, or null.</summary>
     private static string? ComfyWizardMissing(ComfyDraft draft) =>
         draft.Editing ? null
         : draft.FromRun && draft.Imported is null ? ComfyPickRunFirst
-        : draft.Import && draft.Imported is null ? "Set File first."
-        : !draft.Import && draft.Checkpoint.Length == 0 ? "Set Checkpoint first."
-        : draft.Name.Length == 0 ? "Set Name first."
+        : draft.Import && draft.Imported is null ? ComfyText.SetFileFirst
+        : !draft.Import && draft.Checkpoint.Length == 0 ? ComfyText.SetCheckpointFirst
+        : draft.Name.Length == 0 ? ComfyText.SetNameFirst
         : null;
 
     // ── The list's rows (the manager's and the Botchat checklist's) ──────────

@@ -281,7 +281,8 @@ public static class ComfyGraphEdit
             return why;
         }
 
-        if (chain.Loras.FirstOrDefault(l => l.Node == node && !l.SwitchedOff) is not { Why: null } || graph[node] is not JsonObject self || InputsOf(self) is not { } own)
+        // A LoRA whose strength another node sets can still go (2026-11-26, the review's #20): only its strength is out of reach.
+        if (chain.Loras.FirstOrDefault(l => l.Node == node && !l.SwitchedOff) is not { Why: null or ComfyText.EditStrengthNotLiteral } || graph[node] is not JsonObject self || InputsOf(self) is not { } own)
         {
             return ComfyText.EditNotInGraph;
         }
@@ -424,7 +425,7 @@ public static class ComfyGraphEdit
 
         return TypeOf(source) switch
         {
-            CheckpointLoader when link.Slot == 2 => (new ComfyGraphPart("", null, link.Id, VaeLoader, "vae_name"), true),
+            CheckpointLoader when link.Slot == 2 => (new ComfyGraphPart("", null, link.Id, VaeLoader), true),   // no input of its own to set (2026-11-26, #68)
             VaeLoader => (Literal(graph, (link.Id, source), "vae_name"), checkpoint),
             _ => (new ComfyGraphPart(null, ComfyText.EditSetBy(link.Id, TypeOf(source) ?? "?")), checkpoint),
         };
@@ -447,8 +448,9 @@ public static class ComfyGraphEdit
                 return new ComfyGraphPart(null, ComfyText.EditNoCheckpointClip, skips[0].Id);
             }
 
-            return inputs?["stop_at_clip_layer"] is JsonValue v && v.GetValueKind() == JsonValueKind.Number && int.TryParse(v.ToJsonString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int layer)
-                ? new ComfyGraphPart(layer <= -2 ? (-layer).ToString(CultureInfo.InvariantCulture) : "", null, skips[0].Id)
+            // Read as a number (2026-11-26, the review's #69): a whole -2.0 is layer -2, as ComfyUI reads it.
+            return Number(inputs?["stop_at_clip_layer"]) is { } d && d == Math.Floor(d) && d >= int.MinValue && d <= int.MaxValue
+                ? new ComfyGraphPart((int)d <= -2 ? (-(int)d).ToString(CultureInfo.InvariantCulture) : "", null, skips[0].Id)
                 : new ComfyGraphPart(null, ComfyText.EditNotInGraph, skips[0].Id);
         }
 
@@ -534,9 +536,10 @@ public static class ComfyGraphEdit
         }
 
         Walk? first = null;
+        var budget = new int[] { (4 * graph.Count) + 16 };   // shared by every walk, the switches' off branches too
         foreach (var start in starts)
         {
-            var walk = WalkOne(graph, start);
+            var walk = WalkOne(graph, start, null, budget);
             if (first is null)
             {
                 first = walk;
@@ -546,7 +549,8 @@ public static class ComfyGraphEdit
             bool same = walk.End == first.End && walk.Loras.Select(l => l.Node).SequenceEqual(first.Loras.Select(l => l.Node), StringComparer.Ordinal);
             if (!same)
             {
-                return first with { Why = first.Why ?? ComfyText.EditSamplersDiffer, Loras = first.Loras.Select(l => l with { Why = l.Why ?? ComfyText.EditSamplersDiffer }).ToList() };
+                // Ends that differ name no one loader (2026-11-26, the review's #37: a base and a refiner), so the Model row says the loaders' count.
+                return first with { End = walk.End == first.End ? first.End : null, Why = first.Why ?? ComfyText.EditSamplersDiffer, Loras = first.Loras.Select(l => l with { Why = l.Why ?? ComfyText.EditSamplersDiffer }).ToList() };
             }
 
             first = first with { Why = first.Why ?? walk.Why };
@@ -555,15 +559,20 @@ public static class ComfyGraphEdit
         return first!;
     }
 
-    private static Walk WalkOne(JsonObject graph, JsonNode? link)
+    /// <summary>
+    /// One sampler's model path back to its loader. A switch's off branch is walked with a copy of <paramref name="seenBefore"/> (2026-11-26, the
+    /// review's #91: a shared set would call the two branches meeting at the loader a loop, and none let a self- or cross-linked switch recurse
+    /// for ever); <paramref name="budget"/>, shared by the whole walk, ends a long chain of switches as a loop rather than doubling per switch.
+    /// </summary>
+    private static Walk WalkOne(JsonObject graph, JsonNode? link, HashSet<string>? seenBefore, int[] budget)
     {
         var loras = new List<ComfyLora>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var seen = seenBefore is null ? new HashSet<string>(StringComparer.Ordinal) : new HashSet<string>(seenBefore, StringComparer.Ordinal);
         string? why = null;
         bool switched = false;
         while (LinkOf(link) is { } at)
         {
-            if (!seen.Add(at.Id))
+            if (--budget[0] < 0 || !seen.Add(at.Id))
             {
                 why ??= ComfyText.EditLoop;
                 break;
@@ -592,9 +601,15 @@ public static class ComfyGraphEdit
 
                 switched = true;
                 // The branch left unused: its LoRAs shown, switched off.
-                foreach (var off in WalkOne(graph, inputs?[on ? "on_false" : "on_true"]).Loras.Where(l => !l.SwitchedOff))
+                var offWalk = WalkOne(graph, inputs?[on ? "on_false" : "on_true"], seen, budget);
+                foreach (var off in offWalk.Loras.Where(l => !l.SwitchedOff))
                 {
                     loras.Add(off with { SwitchedOff = true, Why = ComfyText.EditSwitchedOff });
+                }
+
+                if (offWalk.Why == ComfyText.EditLoop)
+                {
+                    why ??= ComfyText.EditLoop;
                 }
 
                 link = inputs?[on ? "on_true" : "on_false"];

@@ -290,7 +290,8 @@ internal sealed partial class ChatScreen
     /// <summary>The history as it stands, with the plan and the Claude id, into the current session's row; nothing without a row.</summary>
     private void SaveClaudeHistory()
     {
-        if (_sessionId is { } id)
+        // Written only while this conversation is saved (2026-11-26, the review's #32), as SaveSessionHistory.
+        if (_sessionId is { } id && SavesSession(_effective()))
         {
             _sessions.SaveHistory(id, SessionHistory.ToJson(_session.History.Messages, _plan.ToStored(), _executingPlan, _claudeSessionId, _effective().SessionSaveThinking, _claudeServerSessionId, _effective().CameraKeepInSessions, _effective().ScreenKeepInSessions, _advisorThreads.Snapshot(), _advisorThreads.Sessions(), _markName, _madeFiles.Saved(_session.History.Messages), keepMcp: _effective().McpKeepInSessions));
         }

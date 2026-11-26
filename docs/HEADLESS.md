@@ -207,7 +207,7 @@ Each flag lasts one run and outranks its variable and the saved setting. Each ex
 | `--prompt-file <file>` | As `--prompt`, the file one message; a relative path starts from where you launch. A missing or blank file is exit 2. | `--prompt-file D:\Jobs\ask.md` |
 | `--quiet` | Only the replies on stdout; everything else on stderr. | `--quiet 2> run.log` |
 | `--session <id>\|last` | Carries on a stored session ([below](#carrying-on-a-session)). An unknown id is exit 2. | `--session last` |
-| `--private` | Nothing of the run reaches the session store or the log's words ([Private conversations](INTERFACE.md#private-conversations)). | `--private --prompt "…"` |
+| `--private` | Nothing of the run reaches the session store, nor the log's words under *Private log text* `hide`. Its file checkpoints go at the end, and its pictures under *Private pictures* `delete` ([more](INTERFACE.md#private-conversations)). | `--private --prompt "…"` |
 
 `mcp:<server>` names a server as `mcp.json` spells it; another case matches only when one server fits. A name that matches no server, or several, is exit 2 before anything starts. An entry that changes nothing under the run's settings gets a `[notice]`.
 

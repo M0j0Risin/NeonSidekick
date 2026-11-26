@@ -37,5 +37,6 @@ internal static class ModuleInit
         // A private conversation's process-wide switches start off (2026-11-25); a test that goes private puts them back itself.
         Diagnostics.PrivateMode.HideLog = false;
         Diagnostics.PrivateMode.Active = false;
+        Diagnostics.PrivateMode.HidAtExit = false;
     }
 }
