@@ -387,6 +387,86 @@ public partial class ToolsMenuTests
         Assert.Equal(0.5, lora.StrengthClip);
     }
 
+    /// <summary>
+    /// <c>t</c> on Edit's LoRAs page sets a LoRA's trigger words (2026-11-26, the user's ask): only that key is written, the graph untouched, and
+    /// the row shows hand-written words with markup characters as typed.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheComfyEdit_SetsALorasTriggerWords_WritingOnlyThatKey()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", "---\n# my note\nfamily: sdxl\n---\nTips stay.\n", edit: graph => ComfyGraphEdit.AddLora(graph, "style.safetensors", 1));
+        string json = Path.Combine(_settings.ProfileComfyDirectory, "portrait.json");
+        byte[] before = File.ReadAllBytes(json);
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);                                // actions, Edit
+        Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);     // LoRAs
+        Push(Keys.Char(SettingsMenu.ComfyTriggerWordsKey));         // t on the add row does nothing
+        Push(Keys.Down, Keys.Char(SettingsMenu.ComfyTriggerWordsKey));
+        Type("xyz_style, [glow]");
+        Push(Keys.Escape);
+        Push([.. Enumerable.Repeat(Keys.Up, 5), Keys.Enter]);       // Save
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string md = File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md"));
+        Assert.Equal("xyz_style, [glow]", ComfySidecarEdit.Get(md, "lora.style.safetensors"));
+        Assert.StartsWith("---\n# my note\nfamily: sdxl\nlora.style.safetensors: ", md, StringComparison.Ordinal);
+        Assert.EndsWith("\n---\nTips stay.\n", md, StringComparison.Ordinal);
+        Assert.Equal(before, File.ReadAllBytes(json));
+        Assert.Contains("xyz_style, [glow]", Output);
+        Assert.Contains(SettingsMenu.ComfyTriggerWordsButton, Output);
+        Assert.Contains(SettingsMenu.ComfyEditSavedNotice, Output);
+    }
+
+    /// <summary>Leaving Edit after only a words change says nothing was saved; the same words typed again change nothing (2026-11-26).</summary>
+    [Theory]
+    [InlineData("xyz_style", false)]
+    [InlineData("other_style", true)]
+    public async Task OnThePane_LeavingTheComfyEdit_AfterAWordsChange_SaysNothingSaved(string typed, bool changed)
+    {
+        const string sidecar = "---\nfamily: sdxl\nlora.style.safetensors: xyz_style\n---\n";
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", sidecar, edit: graph => ComfyGraphEdit.AddLora(graph, "style.safetensors", 1));
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);
+        Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);     // LoRAs
+        Push(Keys.Down, Keys.Char(SettingsMenu.ComfyTriggerWordsKey));
+        Push([.. Enumerable.Repeat(Keys.Backspace, 9)]);
+        Type(typed);
+        Push(Keys.Escape, Keys.Escape);                              // the LoRAs page, then the summary unsaved
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(sidecar, File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+        Assert.Equal(changed, Output.Contains(SettingsMenu.ComfyEditDiscardedNotice, StringComparison.Ordinal));
+    }
+
+    /// <summary>Removing a LoRA in Edit takes its trigger words out of the sidecar with it (2026-11-26).</summary>
+    [Fact]
+    public async Task OnThePane_RemovingALora_DropsItsTriggerWords()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", "---\nfamily: sdxl\nlora.style.safetensors: xyz_style\n---\n", edit: graph => ComfyGraphEdit.AddLora(graph, "style.safetensors", 1));
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);
+        Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);     // LoRAs
+        Push(Keys.Down, Keys.Delete);
+        Push(Keys.Escape);
+        Push([.. Enumerable.Repeat(Keys.Up, 5), Keys.Enter]);       // Save
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("---\nfamily: sdxl\n---\n", File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+        Assert.Empty(ComfyGraphEdit.Read(ComfyGraphEdit.Load(File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.json"))).Graph!).Loras.Loras);
+    }
+
     /// <summary>The small test keeps the workflow's shape, the longer side at most 512, each a multiple of 8 and at least 64 (2026-11-26, the review's #82).</summary>
     [Theory]
     [InlineData(1024, 1024, 512, 512)]

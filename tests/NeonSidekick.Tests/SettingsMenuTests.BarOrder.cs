@@ -269,8 +269,8 @@ public partial class SettingsMenuTests
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["spinner", "queued", "timers", "reading", "usage", "status", "model", "cwd"], _settings.Current.StatusBarOrder);   // the left group's bottom (2026-10-13)
-        Assert.Equal(["spinner", "queued", "timers", "reading", "usage", "model"], _settings.Current.StatusBarItems);
+        Assert.Equal(["spinner", "timers", "reading", "usage", "status", "model", "cwd"], _settings.Current.StatusBarOrder);   // the left group's bottom (2026-10-13)
+        Assert.Equal(["spinner", "timers", "reading", "usage", "model"], _settings.Current.StatusBarItems);
         Assert.Null(_settings.Current.StatusBarRight);
         Assert.Contains("[x] Status    ", Output);
         Assert.Contains("[ ] Status    ", Output);
@@ -278,7 +278,7 @@ public partial class SettingsMenuTests
         Assert.Contains(SettingsMenu.PinnedRightHeading, Output);
         Assert.Contains(SettingsMenu.StatusBarToggleKeys, Output);
         Assert.Contains(GroupBreadcrumb(SettingsTab.Toolbars, "Status bar") + " ", Output);
-        Assert.Contains("  · Status bar: Queued, Timers, Reading, Usage | Model", Output);
+        Assert.Contains("  · Status bar: Timers, Reading, Usage | Model", Output);
         pane.Dispose();
 
         // Shift+→ pins the cursor's section right, at the right group's start; Shift+← back to the left group's end (2026-10-13).
@@ -286,29 +286,29 @@ public partial class SettingsMenuTests
         GoTo(SettingsTab.Toolbars);
         Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);                       // on Spinner
-        Push(Keys.Down);                        // Queued
+        Push(Keys.Down);                        // Timers (Queued until 2026-11-26, when it went to the lower rule)
         Push(ShiftRight);
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["queued", "model", "cwd"], _settings.Current.StatusBarRight);
-        Assert.Equal(["spinner", "timers", "reading", "usage", "status", "queued", "model", "cwd"], _settings.Current.StatusBarOrder);
-        Assert.Contains("  · Status bar: Timers, Reading, Usage | Queued, Model", Output);
+        Assert.Equal(["timers", "model", "cwd"], _settings.Current.StatusBarRight);
+        Assert.Equal(["spinner", "reading", "usage", "status", "timers", "model", "cwd"], _settings.Current.StatusBarOrder);
+        Assert.Contains("  · Status bar: Reading, Usage | Timers, Model", Output);
         pane.Dispose();
 
         (menu, pane) = PaneMenu();
         GoTo(SettingsTab.Toolbars);
         Down(SettingsMenu.TabFields[(int)SettingsTab.Toolbars].ToList().IndexOf(SettingsField.StatusBarItems));
         Push(Keys.Enter);                       // on Spinner
-        Push(Keys.Down);                        // Timers
+        Push(Keys.Down);                        // Reading
         Push(ShiftEnd, ShiftDown);              // the left group's bottom, then over the gap: the right group's first
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        Assert.Equal(["queued", "timers", "model", "cwd"], _settings.Current.StatusBarRight);   // saved in the sections' own order
-        Assert.Equal(["spinner", "reading", "usage", "status", "timers", "queued", "model", "cwd"], _settings.Current.StatusBarOrder);
+        Assert.Equal(["timers", "reading", "model", "cwd"], _settings.Current.StatusBarRight);   // saved in the sections' own order
+        Assert.Equal(["spinner", "usage", "status", "reading", "timers", "model", "cwd"], _settings.Current.StatusBarOrder);
         pane.Dispose();
 
         (menu, pane) = PaneMenu();

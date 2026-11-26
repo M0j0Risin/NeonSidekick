@@ -47,7 +47,7 @@ public class ConsistencyPassTests
         NeonSidekick.Audits.AuditText.DoneKeys(hasFix: true), NeonSidekick.Audits.AuditText.DoneKeys(hasFix: false), SettingsMenu.CodeAuditFocusKeys,   // the code audit's pane and focus checklist (2026-10-18)
         .. new[] { PlanPickMode.Open, PlanPickMode.Talk, PlanPickMode.Ralph, PlanPickMode.Edit }.SelectMany(mode => new[] { PlanText.PickerKeys(mode, false), PlanText.PickerKeys(mode, true) }),   // the plans picker (2026-10-18)
         Shell.ShellText.ApprovalKeys, Shell.ShellText.ApprovalKeysSession, Shell.ShellText.ApprovalKeysOnce,   // the shell approval's three hints (2026-11-24)
-        SettingsMenu.ComfyManagerKeys, SettingsMenu.ComfyActionKeys, SettingsMenu.ComfyLoraKeys, SettingsMenu.ComfyBusyKeys,   // the ComfyUI workflow manager (2026-11-25)
+        SettingsMenu.ComfyManagerKeys, SettingsMenu.ComfyActionKeys, SettingsMenu.ComfyLoraKeys, SettingsMenu.ComfyLoraKeysNoWords, SettingsMenu.ComfyBusyKeys,   // the ComfyUI workflow manager (2026-11-25)
         PlanText.ApprovalKeys, RalphText.CheckpointKeys, RalphText.ByHandKeys, RalphText.Hint,   // the approval pane with its Ralph row, the loop's checkpoint and its hint (later on 2026-10-18)
         NeonSidekick.Monitors.MonitorText.Keys, NeonSidekick.Monitors.MonitorText.NamesKeys, NeonSidekick.Monitors.MonitorText.EditKeys,   // the monitors pane (2026-10-23)
         NeonSidekick.Monitors.MonitorText.PcKeys,   // its This PC's input… list (later on 2026-10-23)

@@ -253,7 +253,7 @@ Which commands the Web UI's page may send, and how each shows there: [Commands f
 | `/ha states [<filter>]` | Lists entities and their states; an entity id shows all its attributes. |
 | `/ha say <sentence>` | Hands a sentence to *Home Assistant Assist agent*. |
 | `/ha camera [<name>]` | Shows a camera's still as a 📹 chip's double-click does, for any camera. `<name>` is its name, entity id, room or chip name; bare, the only camera. |
-| `/imagine [<workflow>] <prompt> [-- <negative>\|--no-negative]` | Makes a picture on ComfyUI from your prompt as typed. See [Imagine options](#imagine-options). |
+| `/imagine [<workflow>] <prompt> [-- <negative>\|--no-negative]` | Makes a picture on ComfyUI from your prompt as typed, the workflow's LoRA trigger words in front. See [Imagine options](#imagine-options). |
 | `/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]`, `/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]` | Sets the seed, size, steps, count, guidance, denoise strength and up to three input pictures. |
 | `/comfy` | Opens the ComfyUI tools' page, as `/tools comfy` does. |
 | `/comfy status`, `/comfy offered` | The ComfyUI server's status and workflows, or the workflows offered to the model. See [ComfyUI](TOOLS.md#comfyui). |

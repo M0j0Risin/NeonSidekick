@@ -13,7 +13,7 @@ public sealed class StatusBarItemsTests
     [Fact]
     public void TheSections_AreTheRowsOwnOrder_TheWorkingDirectoryOffByDefault()
     {
-        Assert.Equal(["status", "spinner", "queued", "timers", "reading", "usage", "model", "cwd"], StatusBarItems.Names);   // the working directory after the model (later on 2026-10-12); the spinner after Status (2026-10-13, the user's order)
+        Assert.Equal(["status", "spinner", "timers", "reading", "usage", "model", "cwd"], StatusBarItems.Names);   // queued went to the lower rule (2026-11-26)   // the working directory after the model (later on 2026-10-12); the spinner after Status (2026-10-13, the user's order)
         Assert.Equal(StatusBarItems.Names.SkipLast(1), StatusBarItems.Defaults);
         Assert.True(StatusBarItems.Resolve(null).SetEquals(StatusBarItems.Defaults));
         Assert.True(StatusBarItems.Resolve([" Usage ", "MODEL", "spark", null!]).SetEquals(["spinner", "usage", "model"]));
@@ -42,9 +42,9 @@ public sealed class StatusBarItemsTests
         Assert.Equal(StatusBarItems.Names, StatusBarItems.Order(null));
         Assert.Null(StatusBarItems.SaveOrder(StatusBarItems.Order(null)));
         var order = StatusBarItems.Order(["model", "usage"]);
-        Assert.Equal(["status", "spinner", "queued", "timers", "reading", "model", "cwd", "usage"], order);   // the rest after their neighbours, as the bars' are; the spinner, missing, after Status
-        Assert.Equal(["model", "status", "spinner", "queued"], StatusBarItems.Order(["model", "status", "queued", "keys", "timers", "reading", "usage", "cwd"]).Take(4));   // an order from before the spinner: it lands after Status
-        Assert.Equal(["model", "cwd", "spinner", "queued"], StatusBarItems.Order(["model", "spinner", "status"]).Take(4));   // a saved spinner keeps its place (cwd after the model, its neighbour)
+        Assert.Equal(["status", "spinner", "timers", "reading", "model", "cwd", "usage"], order);   // the rest after their neighbours, as the bars' are; the spinner, missing, after Status
+        Assert.Equal(["model", "status", "spinner", "timers"], StatusBarItems.Order(["model", "status", "queued", "keys", "timers", "reading", "usage", "cwd"]).Take(4));   // an order from before the spinner: it lands after Status
+        Assert.Equal(["model", "cwd", "spinner", "timers"], StatusBarItems.Order(["model", "spinner", "status"]).Take(4));   // a saved spinner keeps its place (cwd after the model, its neighbour)
     }
 
     /// <summary>The sides (2026-10-13, the user's ask): the model and the working directory pinned right by default, any section either side, each in the order's order.</summary>
@@ -52,12 +52,12 @@ public sealed class StatusBarItemsTests
     public void TheSides_AreTheModelAndTheWorkingDirectoryRight_ByDefault_AnySectionEitherSide()
     {
         var sides = StatusBarItems.Sides(null, null);
-        Assert.Equal(["status", "spinner", "queued", "timers", "reading", "usage"], sides.Left);
+        Assert.Equal(["status", "spinner", "timers", "reading", "usage"], sides.Left);
         Assert.Equal(["model", "cwd"], sides.Right);
         Assert.Null(StatusBarItems.SaveRight(sides.Right));
         var moved = StatusBarItems.Sides(["model", "status", "usage"], ["usage", "status"]);
         Assert.Equal(["status", "usage"], moved.Right);   // the order's order, not the saved list's
-        Assert.Equal(["model", "cwd", "spinner", "queued", "timers", "reading"], moved.Left);   // cwd after the model, its neighbour
+        Assert.Equal(["model", "cwd", "spinner", "timers", "reading"], moved.Left);   // cwd after the model, its neighbour
         Assert.Equal(["status", "usage"], StatusBarItems.SaveRight(moved.Right));
     }
 
@@ -69,15 +69,31 @@ public sealed class StatusBarItemsTests
         Assert.Equal("none", StatusBarItems.Value([], null));   // the spinner alone, always on, is none
         Assert.Equal("none", StatusBarItems.Value(["spinner"], null));
         Assert.Equal("Status", StatusBarItems.Value(["status"], ["status", "spinner"]));   // after Status, its own place: unnamed
-        Assert.Equal("Spinner, Status", StatusBarItems.Value(["status"], ["queued", "spinner", "status"]));   // named away from it (2026-10-13)
+        Assert.Equal("Spinner, Status", StatusBarItems.Value(["status"], ["timers", "spinner", "status"]));   // named away from it (2026-10-13; behind queued until 2026-11-26)
         Assert.Equal("Status | Spinner", StatusBarItems.Value(["status"], null, ["spinner"]));
         Assert.Equal("Status, Usage", StatusBarItems.Value(["usage", "status"], null));
-        Assert.Equal("Status, Queued, Timers, Reading, Usage | Model", StatusBarItems.Value(null, ["model", "status", "queued", "timers", "reading", "usage", "cwd"]));   // the defaults, moved: named, each side (2026-10-13)
-        Assert.Equal("Status, Queued, Timers, Reading, Model | Usage", StatusBarItems.Value(null, null, ["usage"]));
+        Assert.Equal("Status, Timers, Reading, Usage | Model", StatusBarItems.Value(null, ["model", "status", "timers", "reading", "usage", "cwd"]));   // the defaults, moved: named, each side (2026-10-13)
+        Assert.Equal("Status, Timers, Reading, Model | Usage", StatusBarItems.Value(null, null, ["usage"]));
         Assert.Equal("| Status, Usage", StatusBarItems.Value(["usage", "status"], null, ["usage", "status"]));
         Assert.Equal("[[x]] Status             " + Theme.DimMarkup("status icons: 🔊 🎤 👂 ✋, 🏷️, 📝, 👥"), StatusBarItems.Label("status", true));
         Assert.Equal("[[ ]] Model              " + Theme.DimMarkup("the model's name and its reasoning mark, or 💤 while unloaded"), StatusBarItems.Label("model", false));
         Assert.Equal("[[ ]] Working directory  " + Theme.DimMarkup("the working directory, as the tool bar shows it (/cwd browse)"), StatusBarItems.Label("cwd", false));
-        Assert.Equal(["Status", "Spinner", "Queued", "Timers", "Reading", "Usage", "Model", "Working directory"], StatusBarItems.Names.Select(StatusBarItems.Title));
+        Assert.Equal(["Status", "Spinner", "Timers", "Reading", "Usage", "Model", "Working directory"], StatusBarItems.Names.Select(StatusBarItems.Title));
+    }
+
+    /// <summary>
+    /// The queued count left the Status bar for the lower rule (2026-11-26, the user's ask): a saved <c>queued</c> is dropped silently from the
+    /// sections, the order and the right side, as any unknown word, and a profile that saved the old defaults outright resolves to the new ones.
+    /// </summary>
+    [Fact]
+    public void ASavedQueued_IsDropped_FromEveryList()
+    {
+        Assert.True(StatusBarItems.Resolve(["status", "queued"]).SetEquals(["status", "spinner"]));
+        Assert.True(StatusBarItems.Resolve(["status", "spinner", "queued", "timers", "reading", "usage", "model"]).SetEquals(StatusBarItems.Defaults));
+        Assert.DoesNotContain("queued", StatusBarItems.Order(["queued", "model", "status"]));
+        Assert.Equal(StatusBarItems.Names, StatusBarItems.Order(["status", "spinner", "queued", "timers", "reading", "usage", "model", "cwd"]));
+        Assert.Equal(["model"], StatusBarItems.Sides(null, ["queued", "model"]).Right);
+        Assert.DoesNotContain("queued", StatusBarItems.Sides(null, ["queued", "model"]).Left);
+        Assert.Equal("Status", StatusBarItems.Value(["status", "queued"], null));
     }
 }

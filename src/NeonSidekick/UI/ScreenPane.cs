@@ -300,7 +300,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private Func<string> _userLineStyle = () => UI.UserLineStyle.Default;
     private Func<string> _userGlyph = () => InputLine.PromptGlyph;
     private long _alertUntil;
-    private Func<string> _queued = () => "";
     private Func<string> _usage = () => "";
     private Func<string> _busyUsage = () => "";
     private Func<string, bool> _labelAfterUsage = _ => false;
@@ -350,12 +349,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private int _hintPathCells;
     private int _hintTimersColumn = -1;   // 2026-10-13: the standing row's timers, the double-click's zone
     private int _hintTimersCells;
-
-    // The queued part (Queued) as last drawn, in either row: its first column and its width in
-    // cells, −1 / 0 when none was drawn (nothing queued, cut by a narrow window, or under an
-    // overlay's hint — the scroll's too until 2026-10-01). TryHitQueued reads them; TryHitHint the standing row's alone.
-    private int _queuedColumn = -1;
-    private int _queuedCells;
 
     // The usage zone (HintZone.Usage, 2026-09-21) as last drawn, in either row: the token tally
     // (Usage) on the standing row, the spinner and its label on the busy row — its first column
@@ -483,7 +476,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         /// <summary>The model name at the right edge, and the separator ahead of its reasoning mark (the mark itself is <see cref="Mark"/> since 2026-09-21).</summary>
         Trailer,
 
-        /// <summary>The queued-messages count after the strip (<see cref="Queued"/>, 2026-09-18).</summary>
+        /// <summary>
+        /// The queued-messages count after the strip (2026-09-18). Never drawn on the hint row since 2026-11-26 (the user's ask: the count is
+        /// the lower rule's, <see cref="LowerRuleKind.Queued"/>); kept so the zones' pinned numbers and <see cref="HintHitAt(string, int, int, int, int)"/>'s
+        /// overloads stand.
+        /// </summary>
         Queued,
 
         /// <summary>
@@ -935,11 +932,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         set => _hint = value ?? throw new ArgumentNullException(nameof(value));
     }
 
-    /// <summary>What a <see cref="HintSlot"/> stands for (2026-10-12): the pane's strip, its queued part, the model's name with its mark, or the slot's own text.</summary>
+    /// <summary>What a <see cref="HintSlot"/> stands for (2026-10-12): the pane's strip, the model's name with its mark, or the slot's own text (the queued part until 2026-11-26, now the lower rule's).</summary>
     public enum HintSlotKind
     {
         Strip,
-        Queued,
         Model,
         Text,
         Path,   // later on 2026-10-12: the working directory, its text the slot's
@@ -955,7 +951,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     public readonly record struct HintSlot(HintSlotKind Kind, string Text = "", bool Right = false)
     {
         public static HintSlot Strip { get; } = new(HintSlotKind.Strip);
-        public static HintSlot Queued { get; } = new(HintSlotKind.Queued);
         public static HintSlot Model { get; } = new(HintSlotKind.Model);
         public static HintSlot Of(string text) => new(HintSlotKind.Text, text);
         public static HintSlot Path(string text) => new(HintSlotKind.Path, text);
@@ -978,12 +973,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The standing hint row's parts in order (2026-10-12, the user's ask: the Hint bar setting, its sections in any order), each
-    /// non-empty one behind <see cref="HintSeparator"/>: <see cref="HintSlot.Strip"/> is <see cref="Strip"/>, <see cref="HintSlot.Queued"/>
-    /// <see cref="Queued"/>, a text slot its text; <see cref="HintSlot.Model"/> puts <see cref="Trailer"/> and its mark in the flow there
+    /// non-empty one behind <see cref="HintSeparator"/>: <see cref="HintSlot.Strip"/> is <see cref="Strip"/>, a text slot its text;
+    /// <see cref="HintSlot.Model"/> puts <see cref="Trailer"/> and its mark in the flow there
     /// in place of the right edge, which keeps them while no slot names the model. Slots marked <see cref="HintSlot.AtRight"/> (later
     /// that day: the model and the working directory while they end the row) stand at the right edge in their order, the model's text
     /// cut as ever, a path from the front, <see cref="ToolbarModelSeparator"/> between. Null (the default) is the row as it always was:
-    /// the strip, the queued part and <see cref="Hint"/>. Under an overlay the row is the strip and the overlay's hint either way, and
+    /// the strip and <see cref="Hint"/> (the queued part between them until 2026-11-26). Under an overlay the row is the strip and the overlay's hint either way, and
     /// the busy row keeps its own order. Read on every draw and on the tick.
     /// </summary>
     public Func<IReadOnlyList<HintSlot>>? HintLayout
@@ -1053,20 +1048,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     {
         get => _trailer;
         set => _trailer = value ?? throw new ArgumentNullException(nameof(value));
-    }
-
-    /// <summary>
-    /// The queued-messages part after the row's lead in both states (2026-09-18): behind the strip
-    /// on the standing row, behind the spinner's label on the busy row, <see cref="HintSeparator"/>
-    /// between, read like <see cref="Strip"/>; empty = nothing drawn. Hidden under an overlay's
-    /// hint and the scroll's, like the screen's own hint; ahead of that hint so a long usage part
-    /// is what a narrow row cuts. The screen puts <c>📤 2 queued</c> there; the pane records where
-    /// (<see cref="TryHitQueued"/>, <see cref="HintZone.Queued"/>) for the double-click that opens <c>/queue</c>.
-    /// </summary>
-    public Func<string> Queued
-    {
-        get => _queued;
-        set => _queued = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
@@ -5786,7 +5767,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 return false;
             }
 
-            hit = HintHitAt(_hintStrip, _hintStripColumn, _trailerColumn, _trailerEnd, _markColumn, _markEnd, _hintPathColumn, _hintPathCells, _busyLabel is null ? _queuedColumn : -1, _queuedCells, _usageColumn, _usageCells, _labelColumn, _labelCells, x);
+            hit = HintHitAt(_hintStrip, _hintStripColumn, _trailerColumn, _trailerEnd, _markColumn, _markEnd, _hintPathColumn, _hintPathCells, -1, 0, _usageColumn, _usageCells, _labelColumn, _labelCells, x);
             if (hit.Zone == HintZone.Row && _tallyColumn >= 0 && x >= _tallyColumn && x < _tallyColumn + _tallyCells)
             {
                 hit = new HintHit(HintZone.Usage, "", _tallyColumn);   // the busy row's tally apart from the spinner (2026-10-13)
@@ -5798,30 +5779,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             }
 
             return true;
-        }
-    }
-
-    /// <summary>
-    /// Whether a click at buffer cell (<paramref name="x"/>, <paramref name="y"/>) lands on the
-    /// queued part of the drawn hint row (<see cref="Queued"/>, 2026-09-18) — the standing row's or
-    /// the busy row's, the one hit test that answers under a turn, so the watcher can open
-    /// <c>/queue</c> from a double-click there. <see cref="TryHitHint(int, int)"/>'s guards otherwise.
-    /// </summary>
-    public bool TryHitQueued(int x, int y)
-    {
-        if (!Enabled)
-        {
-            return false;
-        }
-
-        lock (_gate)
-        {
-            if (!_drawn || _drawnOverlay || _batch > 0 || _modal > 0 || _geometry?.CursorTop() is not int top)
-            {
-                return false;
-            }
-
-            return y == top + HintRowBelowCursor && _queuedColumn >= 0 && x >= _queuedColumn && x < _queuedColumn + _queuedCells;
         }
     }
 
@@ -7701,7 +7658,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// The lower rule with <see cref="LowerRuleItems"/> at its right edge (2026-11-23, the jobs group; the processes' count since 2026-10-12,
     /// the bare rule until then and while none is answered): the items remembered for the tick and where each landed for
     /// <see cref="LowerRuleItemAt"/>. The items are in the upper rule's ⤡ style, <see cref="Theme.AccentSecondary"/> (2026-10-12, the user's
-    /// ask), the rule around them in <see cref="Theme.PaneRule"/>, two rule glyphs (<see cref="LowerRuleGap"/>) between each two.
+    /// ask), the rule around them in <see cref="Theme.PaneRule"/>, two rule glyphs (<see cref="LowerRuleGap"/>) between each two. The queued
+    /// count (<see cref="LowerRuleKind.Queued"/>, 2026-11-26, the user's ask) is pinned at the left end instead, <c>─ 📤 2 queued </c>, the
+    /// fill after it, in the same styles.
     /// </summary>
     private void WriteLowerRule(int width)
     {
@@ -7718,10 +7677,33 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             return;
         }
 
-        var spans = new (LowerRuleKind, int, int)[kept.Count];
-        WriteRuleText(new string(RuleGlyph, left) + " ", 0, width, rule);
-        int at = left + 1;
-        for (int i = 0; i < kept.Count; i++)
+        var spans = new List<(LowerRuleKind, int, int)>(kept.Count);
+        int at = 0;
+        var right = kept;
+        if (kept[0].Kind == LowerRuleKind.Queued)
+        {
+            // The queued count at the left end (2026-11-26): a glyph and a space, the count, a space, then the fill.
+            WriteRuleText(RuleGlyph + " ", 0, width, rule);
+            int queuedCells = TextCells.Width(kept[0].Text);
+            spans.Add((LowerRuleKind.Queued, 2, queuedCells));
+            _inner.Write(new RawText(kept[0].Text, Theme.AccentSecondary));
+            at = 2 + queuedCells;
+            right = kept.Skip(1).ToList();
+            if (right.Count == 0)
+            {
+                WriteRuleText(" " + new string(RuleGlyph, left), at, width, rule);
+                _lowerItemSpans = [.. spans];
+                _inner.WriteLine();
+                return;
+            }
+
+            WriteRuleText(" ", at, width, rule);
+            at++;
+        }
+
+        WriteRuleText(new string(RuleGlyph, left) + " ", at, width, rule);
+        at += left + 1;
+        for (int i = 0; i < right.Count; i++)
         {
             if (i > 0)
             {
@@ -7730,13 +7712,13 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 at += between.Length;
             }
 
-            int cells = TextCells.Width(kept[i].Text);
-            spans[i] = (kept[i].Kind, at, cells);
-            _inner.Write(new RawText(kept[i].Text, Theme.AccentSecondary));
+            int cells = TextCells.Width(right[i].Text);
+            spans.Add((right[i].Kind, at, cells));
+            _inner.Write(new RawText(right[i].Text, Theme.AccentSecondary));
             at += cells;
         }
 
-        _lowerItemSpans = spans;
+        _lowerItemSpans = [.. spans];
         WriteRuleText(" " + RuleGlyph, at, width, rule);
         _inner.WriteLine();
     }
@@ -7750,9 +7732,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// Which kinds a narrow lower rule drops first (2026-11-23, the user's ask; the status bar's jobs joined on 2026-11-25): the update's
-    /// marker, the pictures, the reflection, the speech and voice setups, the MCP wave, the download, the loop, the botchat's extras, and
-    /// last the processes' count — that one only beside the camera when the two don't fit (<see cref="LowerRuleFit"/>); the camera never.
-    /// Lower drops sooner; null is never dropped.
+    /// marker, the pictures, the reflection, the speech and voice setups, the MCP wave, the download, the loop, the botchat's extras, the
+    /// queued count (2026-11-26), and last the processes' count — that one only beside the camera when the two don't fit
+    /// (<see cref="LowerRuleFit"/>); the camera never. Lower drops sooner; null is never dropped.
     /// </summary>
     public static int? LowerRuleDropRank(LowerRuleKind kind) => kind switch
     {
@@ -7765,16 +7747,19 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         LowerRuleKind.Download => 6,
         LowerRuleKind.Loop => 7,
         LowerRuleKind.Extras => 8,
-        LowerRuleKind.Processes => 9,
+        LowerRuleKind.Queued => 9,
+        LowerRuleKind.Processes => 10,
         _ => null,
     };
 
     /// <summary>
     /// The lower rule's layout over <paramref name="width"/> cells (2026-11-23, the jobs group; <c>MarkerFit</c> until then): the items kept,
     /// in their order, and the rule glyphs at their left. Items are dropped whole by <see cref="LowerRuleDropRank"/> until
-    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>⚡n</c> or <c>📷</c> left alone, which is
+    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>⚡n</c>, <c>📷</c> or <c>📤</c> left alone, which is
     /// <see cref="RuleWithTitle"/>'s fit as before. <c>⚡n</c> goes only with another item beside it (2026-11-25: the camera, which is
-    /// never dropped; else two that don't fit would leave the bare rule). Empty texts are skipped; nothing kept = the bare rule. Pure, pinned.
+    /// never dropped; else two that don't fit would leave the bare rule). Empty texts are skipped; nothing kept = the bare rule. The queued
+    /// count (2026-11-26) is weighed with the rest, then drawn at the left end: <c>─ </c>, its text and a space, the fill (the returned
+    /// <c>Left</c>) between it and the others, and the fill at least <see cref="RuleTitleMinRule"/> either way. Pure, pinned.
     /// </summary>
     public static (IReadOnlyList<LowerRuleItem> Kept, int Left) LowerRuleFit(IReadOnlyList<LowerRuleItem> items, int width)
     {
@@ -7782,8 +7767,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         var kept = items.Where(i => !string.IsNullOrEmpty(i.Text)).ToList();
         while (kept.Count > 0)
         {
-            int used = kept.Sum(i => TextCells.Width(i.Text)) + ((kept.Count - 1) * (LowerRuleGap + 2)) + 3;   // a space either side, the last glyph
-            int left = width - used;
+            int left = width - LowerRuleUsed(kept);
             if (left >= RuleTitleMinRule)
             {
                 return (kept, left);
@@ -7792,7 +7776,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             int drop = -1;
             for (int i = 0; i < kept.Count; i++)
             {
-                if (LowerRuleDropRank(kept[i].Kind) is int rank && (kept.Count > 1 || kept[i].Kind != LowerRuleKind.Processes) && (drop < 0 || rank < LowerRuleDropRank(kept[drop].Kind)))
+                if (LowerRuleDropRank(kept[i].Kind) is int rank && (kept.Count > 1 || kept[i].Kind is not (LowerRuleKind.Processes or LowerRuleKind.Queued)) && (drop < 0 || rank < LowerRuleDropRank(kept[drop].Kind)))
                 {
                     drop = i;
                 }
@@ -7809,6 +7793,31 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         return kept.Count == 1 && FitRuleTitle(kept[0].Text, width) is var (fitted, cut)
             ? ([kept[0] with { Text = fitted }], cut)
             : ([], Math.Max(0, width));
+    }
+
+    /// <summary>
+    /// The cells the lower rule's <paramref name="kept"/> items take beside the fill: the queued count at the left end (2026-11-26) its text
+    /// and three (<c>─ </c> before, a space after); the others their texts, the gaps between them, a space either side and the last glyph.
+    /// </summary>
+    private static int LowerRuleUsed(List<LowerRuleItem> kept)
+    {
+        int used = 0;
+        int rest = 0;
+        int restCells = 0;
+        foreach (var item in kept)
+        {
+            if (item.Kind == LowerRuleKind.Queued)
+            {
+                used += TextCells.Width(item.Text) + 3;
+            }
+            else
+            {
+                rest++;
+                restCells += TextCells.Width(item.Text);
+            }
+        }
+
+        return rest == 0 ? used : used + restCells + ((rest - 1) * (LowerRuleGap + 2)) + 3;   // a space either side, the last glyph
     }
 
     /// <summary>
@@ -8113,8 +8122,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             _hintPathCells = 0;
             _hintTimersColumn = -1;
             _hintTimersCells = 0;
-            _queuedColumn = -1;
-            _queuedCells = 0;
             _usageColumn = -1;
             _usageCells = 0;
             _labelColumn = -1;
@@ -8137,7 +8144,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             // left ahead of the trailer — the same cut PinRight makes, in four styles; the trailer
             // gives way to the uncut left as PinRight's does (2026-09-28).
             string frame = Theme.SpinnerFrames[_frame % Theme.SpinnerFrames.Length];
-            string queued = StandingQueued();
             // The tally beside the label (2026-09-25), where the standing row would have it: not under an overlay's hint (nor
             // under the scroll's until 2026-10-01, when it went to a row of its own).
             string usage = !OverlayOnStatus ? _busyUsage() : "";
@@ -8148,7 +8154,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             // The way out named at the row's end (2026-10-04) while the screen's turn runs and no pane's keys stand there instead
             // (a pane's keys are the Hints bar's while it has a row, 2026-10-14).
             string hint = Spaced((OverlayOnStatus ? _overlay!.Hint : null) ?? (_stopHintShown() ? StopHint : ""));
-            string unfitted = " " + HintRow(HintRow(Labelled(BusyText(label, elapsed, step), usage, after), queued), hint);
+            string unfitted = " " + HintRow(Labelled(BusyText(label, elapsed, step), usage, after), hint);
             string labelled = " " + Labelled(BusyText(label, elapsed, step), usage, after);
             // Read once (2026-10-01): an embedded download's strip turns with the clock, and two reads astride a frame
             // would leave _hintStrip blank below — its 📥 dead to a click for the draw.
@@ -8172,8 +8178,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             _hintPathCells = 0;
             _hintTimersColumn = -1;
             _hintTimersCells = 0;
-            // The queued part's place: after the prefix, the frame, the blank, the label, the tally and a separator — when the fit left it whole.
-            RecordQueued(queued, TextCells.Width(prefix) + TextCells.Width(frame), TextCells.Width(labelled + HintSeparator), unfitted, restMax);
             // The usage zone: the frame, the label and the tally after the prefix — when the fit kept them
             // whole. A tally the fit cut leaves the frame and whichever comes first — the label, or the tally
             // ahead of a trailing one.
@@ -8224,20 +8228,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// Remembers where the queued part landed for the hit tests: <paramref name="ahead"/> cells into
-    /// the row after <paramref name="offset"/> (what was written before the fitted text), or nowhere
-    /// when there is none or <see cref="Fit"/> cut <paramref name="text"/> (of which it is a part) at
-    /// <paramref name="cells"/> before its end — a cut part is no button.
+    /// Remembers where the usage zone landed for the hit tests (2026-09-21): <paramref name="usage"/>, the tally or the spinner with its label,
+    /// <paramref name="ahead"/> cells into the row after <paramref name="offset"/> (what was written before the fitted text), or nowhere when
+    /// there is none or <see cref="Fit"/> cut <paramref name="text"/> (of which it is a part) at <paramref name="cells"/> before its end — a
+    /// cut part is no button. The queued part's twin until 2026-11-26, when the count went to the lower rule.
     /// </summary>
-    private void RecordQueued(string queued, int offset, int ahead, string text, int cells)
-    {
-        int width = TextCells.Width(queued);
-        bool whole = width > 0 && (TextCells.Width(text) <= cells || ahead + width < cells);
-        _queuedColumn = whole ? offset + ahead : -1;
-        _queuedCells = whole ? width : 0;
-    }
-
-    /// <summary><see cref="RecordQueued"/> for the usage zone (2026-09-21): <paramref name="usage"/> is the tally or the spinner with its label.</summary>
     private void RecordUsage(string usage, int offset, int ahead, string text, int cells)
     {
         int width = TextCells.Width(usage);
@@ -8426,9 +8421,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         return list;
     }
 
-    /// <summary>The queued part while the row is the screen's own — nothing under an overlay's hint (2026-09-18; under the scroll's until 2026-10-01).</summary>
-    private string StandingQueued() => !OverlayOnStatus ? _queued() : "";
-
     /// <summary>The scroll's row (2026-10-01) on the cursor's row: <see cref="ScrolledRow"/> in the hint's style, the rest of the row erased; the text remembered for the tick.</summary>
     private void WriteScrollRow(int width)
     {
@@ -8476,7 +8468,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private enum HintPartKind
     {
         Strip,
-        Queued,
         Usage,
         Model,
         Path,
@@ -8512,7 +8503,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The standing row's parts in their two groups (2026-10-12, Hint bar's order; the sides since 2026-10-13, the user's ask): each slot of
     /// <see cref="HintLayout"/> in its order, on the side it is pinned to (<see cref="HintSlot.Right"/>); the model at the right edge,
-    /// ahead of anything else there, while no slot names it. Under an overlay or with no layout the strip, the queued part and the hint,
+    /// ahead of anything else there, while no slot names it. Under an overlay or with no layout the strip and the hint,
     /// the model at the right, as the row always was.
     /// </summary>
     private (List<HintPart> Left, List<HintPart> Right) StandingParts()
@@ -8521,7 +8512,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         var model = new HintPart(HintPartKind.Model, _trailer(), _trailerMark());
         if (OverlayOnStatus || _hintLayout is not { } layout)
         {
-            return ([new(HintPartKind.Strip, strip), new(HintPartKind.Queued, StandingQueued()), new(HintPartKind.Text, StandingHint())], [model]);
+            return ([new(HintPartKind.Strip, strip), new(HintPartKind.Text, StandingHint())], [model]);
         }
 
         var left = new List<HintPart>();
@@ -8538,7 +8529,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             var part = slot.Kind switch
             {
                 HintSlotKind.Strip => new HintPart(HintPartKind.Strip, strip),
-                HintSlotKind.Queued => new HintPart(HintPartKind.Queued, _queued()),
                 HintSlotKind.Model => model,
                 HintSlotKind.Path => new HintPart(HintPartKind.Path, slot.Text ?? ""),
                 HintSlotKind.Usage => new HintPart(HintPartKind.Usage, Spaced(slot.Text ?? "")),
@@ -8565,7 +8555,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The busy row's parts in their two groups (2026-10-13, the user's pick: the busy row follows the sides): each slot of
-    /// <paramref name="layout"/> the busy row draws (the strip, the queued part, the tally, the model, the working directory) on its side
+    /// <paramref name="layout"/> the busy row draws (the strip, the tally, the model, the working directory) on its side
     /// in its order. The spinner's frame and its label — the tally with them, the label after it, while the label trails the tally
     /// (<see cref="LabelAfterUsage"/>) — stand where the <see cref="HintSlotKind.Spinner"/> slot does (later that day, the user's ask: the
     /// spinner a section of its own, movable), the way out (the overlay's keys or the stop hint) right after them (the user's pick); a
@@ -8600,7 +8590,6 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             HintPart? part = slot.Kind switch
             {
                 HintSlotKind.Strip => new HintPart(HintPartKind.Strip, _strip()),
-                HintSlotKind.Queued => new HintPart(HintPartKind.Queued, StandingQueued()),
                 HintSlotKind.Usage when !after => new HintPart(HintPartKind.Usage, usage),
                 HintSlotKind.Model => model,
                 HintSlotKind.Path => new HintPart(HintPartKind.Path, slot.Text ?? ""),
@@ -8627,7 +8616,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The busy row with a layout (2026-10-13, the user's pick: it follows the sides): <see cref="BusyParts"/> laid as the standing row is,
-    /// the frame in the spinner's style; the strip and the queued part answer where they were drawn whole, the spinner and its label are
+    /// the frame in the spinner's style; the strip answers where it was drawn whole (the queued part too until 2026-11-26), the spinner and its label are
     /// the usage zone (or the label's, <see cref="HintZone.Label"/>), the tally apart from them a usage zone of its own; the model and the
     /// working directory are no buttons under a reply.
     /// </summary>
@@ -8673,15 +8662,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         }
     }
 
-    /// <summary>The strip, the queued part, the model and its mark and the working directory's zones where <paramref name="laid"/> drew them whole (2026-10-13: on either side).</summary>
+    /// <summary>The strip, the model and its mark and the working directory's zones where <paramref name="laid"/> drew them whole (2026-10-13: on either side).</summary>
     private void ApplyHintZones(HintRowLaid laid, int max)
     {
         var strip = laid.Find(HintPartKind.Strip);
         _hintStrip = strip is { Whole: true } s ? s.Text : "";
         _hintStripColumn = strip?.Column ?? 0;
-        var queued = laid.Find(HintPartKind.Queued);
-        _queuedColumn = queued is { Whole: true } q ? q.Column : -1;
-        _queuedCells = queued is { Whole: true } ? queued.Value.Cells : 0;
         var tally = laid.Find(HintPartKind.Usage);
         _usageColumn = tally is { Whole: true } u ? u.Column : -1;
         _usageCells = tally is { Whole: true } ? tally.Value.Cells : 0;
@@ -8951,7 +8937,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         return name.Length == 0 ? "" : TrailerText(name, mark);
     }
 
-    /// <summary>Whether <paramref name="text"/>, <paramref name="ahead"/> cells into <paramref name="row"/>, is whole once the row is cut to <paramref name="cells"/> (<see cref="RecordQueued"/>'s rule).</summary>
+    /// <summary>Whether <paramref name="text"/>, <paramref name="ahead"/> cells into <paramref name="row"/>, is whole once the row is cut to <paramref name="cells"/> (<see cref="RecordUsage"/>'s rule).</summary>
     private static bool Whole(int ahead, string text, string row, int cells) =>
         ahead >= 0 && (TextCells.Width(row) <= cells || ahead + TextCells.Width(text) < cells);
 

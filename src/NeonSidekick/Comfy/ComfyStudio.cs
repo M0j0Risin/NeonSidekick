@@ -140,6 +140,34 @@ public sealed class ComfyStudio : IDisposable
         return head.Length == 0 ? tail : tail.Length == 0 ? head : head + ", " + tail;
     }
 
+    /// <summary>
+    /// <paramref name="words"/> (a workflow's <see cref="ComfyWorkflow.TriggerWords"/>) in front of <paramref name="prompt"/>, one <c>, </c>
+    /// between (2026-11-26, the user's ask). A phrase the prompt already holds as a whole phrase, in any case, is left out
+    /// (<see cref="ComfyWorkflow.HasPhrase"/>), and so is a repeat. With nothing to add the prompt comes back exactly as given, so a verbatim
+    /// prompt goes byte for byte; otherwise only the join's side of it loses its spaces and commas. An empty prompt gets the words alone. Pure.
+    /// </summary>
+    public static string JoinPositive(IReadOnlyList<string>? words, string prompt)
+    {
+        ArgumentNullException.ThrowIfNull(prompt);
+        var add = new List<string>();
+        foreach (string phrase in (words ?? []).SelectMany(w => ComfyWorkflow.SplitWords(w)))
+        {
+            if (!ComfyWorkflow.HasPhrase(prompt, phrase) && !add.Any(a => ComfyWorkflow.HasPhrase(a, phrase)))
+            {
+                add.Add(phrase);
+            }
+        }
+
+        if (add.Count == 0)
+        {
+            return prompt;
+        }
+
+        string head = string.Join(", ", add);
+        string tail = prompt.TrimStart().TrimStart(',').TrimStart();
+        return tail.Trim().Length == 0 ? head : head + ", " + tail;
+    }
+
     /// <summary>The pictures-per-call cap as the settings stand now (<see cref="MaxCountOf"/>).</summary>
     public int MaxCount => MaxCountOf(_effective());
 
@@ -355,6 +383,10 @@ public sealed class ComfyStudio : IDisposable
             // The model's reinforcing tags after the workflow's own negative (later still on 2026-09-24).
             negative = JoinNegative(negative, request.NegativeExtra!);
         }
+        // The LoRAs' trigger words in front (2026-11-26, the user's ask: every run, /imagine and verbatim too), after the blank-prompt check
+        // above, which stays on what was asked. The reports say the prompt as sent.
+        string positive = JoinPositive(workflow.TriggerWords, request.Prompt);
+        var asSent = request with { Prompt = positive };
         long seed = request.Seed ?? NextSeed();
         int count = Math.Clamp(request.Count, 1, maxCount);
         var saved = new List<string>();
@@ -363,7 +395,7 @@ public sealed class ComfyStudio : IDisposable
         for (int i = 0; i < count; i++)
         {
             long thisSeed = seed + i;
-            var values = new ComfyValues(request.Prompt, negative, thisSeed, request.Width, request.Height, request.Steps, request.Cfg, request.Denoise, uploaded.Count == 0 ? null : uploaded);
+            var values = new ComfyValues(positive, negative, thisSeed, request.Width, request.Height, request.Steps, request.Cfg, request.Denoise, uploaded.Count == 0 ? null : uploaded);
             var graph = workflow.Fill(values);
             // The first run's parameters as sent (2026-09-25): the report's seed is the first one too.
             parameters ??= ComfyWorkflow.ReadParameters(graph);
@@ -371,7 +403,7 @@ public sealed class ComfyStudio : IDisposable
             if (!run.Ok)
             {
                 // What was saved before the failure stays saved, and is said.
-                return saved.Count == 0 ? Fail(run.Error!) : new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote, parameters) + "\n" + run.Error, images);
+                return saved.Count == 0 ? Fail(run.Error!) : new ComfyGeneration(Report(workflow, seed, asSent, saved, negative, images.Count > 0, inputNote, parameters) + "\n" + run.Error, images);
             }
 
             for (int j = 0; j < run.Images.Count; j++)
@@ -382,7 +414,7 @@ public sealed class ComfyStudio : IDisposable
                 var (relative, saveError) = Save(effective.ComfyOutputFolder, stem, extension, picture.Bytes);
                 if (relative is null)
                 {
-                    return saved.Count == 0 ? Fail(saveError!) : new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote, parameters) + "\n" + saveError, images);
+                    return saved.Count == 0 ? Fail(saveError!) : new ComfyGeneration(Report(workflow, seed, asSent, saved, negative, images.Count > 0, inputNote, parameters) + "\n" + saveError, images);
                 }
 
                 saved.Add(relative);
@@ -395,7 +427,7 @@ public sealed class ComfyStudio : IDisposable
         }
 
         DiagnosticLog.Info(Category, $"Generated {saved.Count.ToString(CultureInfo.InvariantCulture)} picture(s) with {workflow.Name}, seed {seed.ToString(CultureInfo.InvariantCulture)}.");
-        return new ComfyGeneration(Report(workflow, seed, request, saved, negative, images.Count > 0, inputNote, parameters), images);
+        return new ComfyGeneration(Report(workflow, seed, asSent, saved, negative, images.Count > 0, inputNote, parameters), images);
     }
 
     private static string Report(ComfyWorkflow workflow, long seed, ComfyRequest request, IReadOnlyList<string> saved, string negative, bool attached, string? input, ComfyParameters? parameters)

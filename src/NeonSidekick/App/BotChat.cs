@@ -547,6 +547,22 @@ public static partial class BotChat
         {
             text.Append("\n\n").Append(tipsLabel).Append(workflow.Tips.Trim());
         }
+
+        AppendTriggerWords(text, workflow, "\n\n");
+    }
+
+    /// <summary>
+    /// What the prompt writer is told the app adds in front (2026-11-26, the LoRAs' trigger words): so it leaves them out. Pinned: it is
+    /// prompt text.
+    /// </summary>
+    public const string TriggerWordsLabel = "Trigger words added for you: ";
+
+    private static void AppendTriggerWords(StringBuilder text, ComfyWorkflow workflow, string gap)
+    {
+        if (workflow.TakesPrompt && workflow.TriggerWords is { Count: > 0 } words)
+        {
+            text.Append(gap).Append(TriggerWordsLabel).Append(string.Join(", ", words)).Append('.');
+        }
     }
 
     /// <summary>The first line of an image-prompt answer that names its workflow, when a kind has several (2026-10-04). Pinned: it is prompt text.</summary>
@@ -569,6 +585,8 @@ public static partial class BotChat
             {
                 text.Append("\nTips for ").Append(workflow.Name).Append(": ").Append(workflow.Tips.Trim());
             }
+
+            AppendTriggerWords(text, workflow, "\n");
         }
     }
 
@@ -930,6 +948,7 @@ public static partial class BotChat
             text.Append("\n\nTips for this workflow: ").Append(workflow.Tips.Trim());
         }
 
+        AppendTriggerWords(text, workflow, "\n\n");
         text.Append("\n\nAnswer with the prompt alone: no preamble, no explanation, no quotes.");
         return text.ToString();
     }

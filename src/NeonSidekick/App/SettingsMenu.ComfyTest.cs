@@ -224,7 +224,7 @@ internal sealed partial class SettingsMenu
             var d = workflow.Defaults;
             bool small = setup.Small;
             var (smallWidth, smallHeight) = ComfyTestSize(d.Width, d.Height);
-            var values = new ComfyValues(setup.Prompt, d.Negative, 1,
+            var values = new ComfyValues(ComfyStudio.JoinPositive(workflow.TriggerWords, setup.Prompt), d.Negative, 1,   // the trigger words, as every run (2026-11-26)
                 small ? smallWidth : d.Width,
                 small ? smallHeight : d.Height,
                 small ? Math.Min(d.Steps, ComfyWizardTestSteps) : d.Steps,

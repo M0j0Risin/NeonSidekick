@@ -228,7 +228,7 @@ public static class HelpCommands
         ]),
         new("/imagine",
         [
-            new("/imagine [<workflow>] <prompt> [-- <negative>|--no-negative]", "Generate a picture on ComfyUI from your own prompt, sent exactly as typed, with no model in between. The first word is the workflow when it names one; a workflow that takes no prompt runs without one. It renders behind the input line and is drawn when done; double-click 🖼️ on the lower rule to cancel."),
+            new("/imagine [<workflow>] <prompt> [-- <negative>|--no-negative]", "Generate a picture on ComfyUI from your own prompt, sent as typed with no model in between, the workflow's LoRA trigger words in front. The first word is the workflow when it names one; a workflow that takes no prompt runs without one. It renders behind the input line and is drawn when done; double-click 🖼️ on the lower rule to cancel."),
             new("/imagine <prompt> [--seed <n>] [--size <w>x<h>] [--steps <n>] [--count <n>]", "Set the seed, size, steps and picture count (at most *ComfyUI max images per call*). The size's `x` may be `X` or `*`. Flags go anywhere on the line, in any case; a value with spaces goes in double quotes."),
             new("/imagine <prompt> [--cfg <x>] [--denoise <x>] [--image <path>] [--image2 <path>] [--image3 <path>]", "Set the guidance and denoise strength, and up to three input pictures (a path, or a pasted picture's label such as `\"[Image #1]\"`); `--image2` needs `--image`, and `--image3` needs `--image2`."),
         ]),

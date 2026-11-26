@@ -413,7 +413,7 @@ Under *ComfyUI tools*. `generate_image` runs **your own ComfyUI workflows** on y
 * **Build** makes a text → image workflow, an image → image one, or both, from your server's checkpoints and samplers.
 * **Run** imports one of the server's recent runs; the app's own runs stay hidden until you show them.
 * **File** imports an API export (*Workflow → Export (API)*) or a PNG or WebP picture ComfyUI saved, and puts the placeholders in. For FLUX.2, Krea 2, Z-Image, Qwen Image, Ernie Image, Boogu, LongCat Image, HiDream I1 and Ideogram 4, import ComfyUI's own template.
-* The summary changes the model, VAE, LoRAs, CLIP skip, sampler and defaults. **Test** runs it once at a small size and opens the picture; saving writes `<name>.json` and `<name>.md`.
+* The summary changes the model, VAE, LoRAs and their trigger words, CLIP skip, sampler and defaults. **Test** runs it once at a small size and opens the picture; saving writes `<name>.json` and `<name>.md`.
 
 **By hand:**
 
@@ -442,6 +442,7 @@ cfg: 7
 negative: score_6, score_5, score_4, blurry
 reinforce: false      # optional: send this negative as written, nothing appended
 image: the picture to restyle   # optional, per input picture: its role, shown to the model (image, image2, image3)
+lora.style.safetensors: xyz_style   # optional, per LoRA: put in front of every prompt
 ---
 Prefer source_anime; keep rating_safe unless asked.
 ```
@@ -453,12 +454,13 @@ Prefer source_anime; keep rating_safe unless asked.
 * **Space** offers or hides one, `a` / `n` all or none, **Del** deletes one (to the Recycle bin under *File deletes to Recycle bin*), `c` checks them all against the server.
 * **Enter** opens one: **Edit** (the wizard's summary, over the installed files), **Test**, **Check against the server**, **Duplicate**, **Rename**, **Move** to the other folder, **Open** the JSON or the Markdown.
 * **Edit** changes only what it can change safely: a part it can't (two samplers, a value another node sets) shows why. Only the keys you change are written.
+* **Trigger words:** on the LoRAs page, `t` sets a LoRA's words. They go in front of every prompt for that workflow, `/imagine` and your own prompts too, never twice, and only while the LoRA is in play.
 * **Rename and delete** update the offered and Botchat lists of the loaded profile only. Other profiles lose the tick of a renamed global workflow.
 * **The check** marks a workflow `!` when it uses a node or a model the server doesn't list. A custom node may take more, so nothing is unticked.
 
 #### Prompts
 
-- **Describe what you want** and the model writes the prompt in the family's style (below), with its default negative; **give your own** ("use this prompt: …") and it passes it unchanged (`verbatim: true`).
+- **Describe what you want** and the model writes the prompt in the family's style (below), with its default negative; **give your own** ("use this prompt: …") and it passes it unchanged (`verbatim: true`). Either way, the workflow's LoRA trigger words go in front.
 - **Skip the model:** `/imagine score_9, score_8_up, source_anime, 1girl -- score_4, blurry --seed 42` ([Imagine options](COMMANDS.md#imagine-options)). *ComfyUI workflows* limits the choice.
 
 | Family | Prompt style the model writes |

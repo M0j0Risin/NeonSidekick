@@ -327,7 +327,9 @@ internal sealed partial class SettingsMenu
         string model = parts?.Model.Value is { Length: > 0 } m ? m : "";
         string loras = parts is null ? "" : string.Join(", ", parts.Loras.Loras.Where(l => !l.SwitchedOff).Select(l => l.Name));
         string size = workflow.Placeholders.Contains(ComfyWorkflow.WidthKey) ? Invariant(workflow.Defaults.Width) + "×" + Invariant(workflow.Defaults.Height) : "";
-        string facts = string.Join(" · ", new[] { model, loras.Length > 0 ? "LoRAs: " + loras : "", size }.Where(s => s.Length > 0));
+        // The words a run puts in front (2026-11-26): the ones in play, as /comfy says them.
+        string words = ComfyText.TriggerWordsPart(workflow, "trigger words") is { Length: > 0 } part ? part[" · ".Length..] : "";
+        string facts = string.Join(" · ", new[] { model, loras.Length > 0 ? "LoRAs: " + loras : "", words, size }.Where(s => s.Length > 0));
         if (facts.Length > 0)
         {
             lines.Add(UntrustedText.OneLine(facts));

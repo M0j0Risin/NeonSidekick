@@ -159,7 +159,7 @@ public sealed partial class ChatScreenTests
 
         string output = await RunAsync();
 
-        Assert.Contains(ChatScreen.QueuedHintPart(1), output);
+        Assert.Contains(ChatScreen.QueuedRulePart(1), output);
         Assert.Empty(_chat.Requests);
     }
 
@@ -605,7 +605,7 @@ public sealed partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Equal([block], SavedPromptsHere().List().Select(p => p.Text));
-        Assert.DoesNotContain(ChatScreen.QueuedHintPart(1), output);
+        Assert.DoesNotContain(ChatScreen.QueuedRulePart(1), output);
         Assert.Empty(_chat.Requests);
     }
 

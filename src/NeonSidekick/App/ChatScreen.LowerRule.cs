@@ -70,10 +70,19 @@ internal sealed partial class ChatScreen
         return _loopRule is { } loop ? loop + (_loopEnd is { Asked: true } ? LoopText.EndingTail : "") : null;
     }
 
-    /// <summary>The lower rule's items now, left to right, each only while it has something to say. Any thread (the pane's draw and tick).</summary>
+    /// <summary>
+    /// The lower rule's items now, left to right, each only while it has something to say. Any thread (the pane's draw and tick). The queued
+    /// count first (2026-11-26, the user's ask: off the status bar, pinned at the rule's left): the queue, the Web UI's waiting lines and a PC line
+    /// sent now that waits, as the status bar's count read them.
+    /// </summary>
     private IReadOnlyList<LowerRuleItem> LowerRuleItemsNow()
     {
-        var items = new List<LowerRuleItem>(11);
+        var items = new List<LowerRuleItem>(12);
+        if (_queue.Count + _webUi.WaitingCount + PendedPcLines().Count is > 0 and var queued)
+        {
+            items.Add(new(LowerRuleKind.Queued, QueuedRulePart(queued)));
+        }
+
         if (UpdateMarkerNow() is { Length: > 0 } update)
         {
             items.Add(new(LowerRuleKind.Update, update));
@@ -135,7 +144,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// A double-click on the lower rule's <paramref name="kind"/>, under a reply or at the idle line: the word to run for the update's marker
-    /// (<c>/update</c>) and the processes' count (<c>/process</c>); otherwise it acts here and answers null — the loop ends after the pass in
+    /// (<c>/update</c>), the processes' count (<c>/process</c>) and the queued count (<c>/queue</c>, 2026-11-26); otherwise it acts here and answers null — the loop ends after the pass in
     /// progress, the download, a setup or the reflection is canceled (their ends said by the drains), the pictures are canceled while the
     /// reply goes on, the camera is let go at once (2026-11-25), its notice queued as the reflection's is so it waits for a running reply.
     /// The extras' 🧟 is <c>/botchat --kill</c>: the word at idle; on the watcher (<paramref name="watched"/>) the line held for the idle line
@@ -149,6 +158,8 @@ internal sealed partial class ChatScreen
                 return Updates.UpdateText.Word;
             case LowerRuleKind.Processes:
                 return ProcessWindowText.Word;
+            case LowerRuleKind.Queued:
+                return SlashCommands.QueueWord;
             case LowerRuleKind.Loop:
                 AskLoopEnd();
                 return null;

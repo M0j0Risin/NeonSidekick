@@ -1115,7 +1115,10 @@ internal sealed partial class ChatScreen
     /// <summary>Set beside <see cref="_lastTurnFailed"/> (2026-11-17): whether the turn asked an advisor, whatever its ending.</summary>
     private bool _lastTurnAdvisor;
 
-    /// <summary>The pair of clicks on the busy row's queued count or the scroll's hint (<see cref="HintClickLine"/>), on the watcher task alone; reset at each watcher's start.</summary>
+    /// <summary>
+    /// The pair of clicks on the watcher (<see cref="HintClickLine"/>): the scroll's hint, the rule title, the lower rule's items (the queued count
+    /// among them since 2026-11-26; the busy row's count until then), on the watcher task alone; reset at each watcher's start.
+    /// </summary>
     private readonly DoubleClick _queuedClicks;
     private readonly Action<IAnsiConsole> _renderScreen;
     private readonly ConcurrentQueue<DiagnosticEvent> _pending = new();
@@ -1686,7 +1689,7 @@ internal sealed partial class ChatScreen
         {
             Frames = frames,
             Hint = HintText,
-            // The Hint bar's sections in the user's order (2026-10-12, the user's ask), the strip and the queued part where it puts them.
+            // The Hint bar's sections in the user's order (2026-10-12, the user's ask), the strip where it puts it.
             HintLayout = HintSlots,
             // The theme's bg as the terminal's page (2026-10-03, the user's ask), per frame so /theme and the switch show at once.
             PageBackground = () => _effective().ThemedBackground ? Theme.Bg : null,
@@ -1707,14 +1710,12 @@ internal sealed partial class ChatScreen
             RuleTitle = () => UpperRuleTitle(_botChatCast, _sessionTitle, ShowNameDisplay(_effective())),
             // The lower rule's jobs group (2026-11-23, the user's ask): 📦 the update, 🔁/🔎/⟳ the loop, 📥 the download, 🔌 🎙️ 🔈 the setups,
             // 🖼️ the pictures, 🧠 the reflection, 🧟 the extras, 📷 the camera (those five since 2026-11-25), ⚡n the running processes (since
-            // 2026-10-12; ▶ n until 2026-11-24), each only while it has something to say.
+            // 2026-10-12; ▶ n until 2026-11-24), each only while it has something to say; 📤 the queued count at its left (2026-11-26, off the
+            // status bar, where it rode the hint row from 2026-09-18).
             LowerRuleItems = LowerRuleItemsNow,
             // The model and its mark while the Hint bar's Model is checked (2026-10-12).
             Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.ShownModelId) : "",
             TrailerMark = () => HintOn(StatusBarItems.Model) ? ModelMark(_session.ShownModelId, _effective().LlmReasoning, _session.ShownUnloaded) : "",
-            // The queued count after the row's lead in both states (2026-09-18): the pane draws it
-            // and records where, so a double-click on it can open /queue mid-turn and at idle.
-            Queued = () => _queue.Count + _webUi.WaitingCount + PendedPcLines().Count is > 0 and var queued && HintOn(StatusBarItems.Queued) ? QueuedHintPart(queued) : "",   // a PC line sent now counts while it waits (the review's #114)
             // The tally as HintText carries it (2026-09-21): the pane finds it in the drawn row and
             // records where, so a double-click on it (or on the spinner under a turn) opens /usage.
             Usage = () => HintOn(StatusBarItems.Usage) ? UsageText.HintPart(_session.Usage, _session.ContextLength) ?? "" : "",
@@ -2736,7 +2737,7 @@ internal sealed partial class ChatScreen
     /// toolbar glyph's word, the path's <see cref="CwdBrowseLine"/>, the toolbar's blanks
     /// <c>/settings</c>; on the hint row the model name <c>/server</c> (2026-09-22), its reasoning mark
     /// <c>/reasoning</c>, the blanks <c>/settings</c> (scrolled or not). A strip glyph names
-    /// nothing (the switches are the idle line's), nor do the queued count and the tally (never
+    /// nothing (the switches are the idle line's), nor does the tally (never
     /// drawn under a pane). The screen closes the pane the word owns, or switches to the one it
     /// names (<see cref="HandleAsync"/>, <see cref="RunPaneAsync"/>). Pinned.
     /// </summary>
@@ -3017,11 +3018,11 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The standing hint row's parts in the Hint bar's order (2026-10-12, the user's ask: its sections on or off and in any order;
-    /// <see cref="ScreenPane.HintLayout"/>): the strip, the queued part, the keys' lead, the timers, the reading, the tally — which stood
+    /// <see cref="ScreenPane.HintLayout"/>): the strip, the keys' lead, the timers, the reading, the tally (the queued part until 2026-11-26) — which stood
     /// aside while a timer or a reading showed until 2026-10-13 (the user's ask: shown whatever stands) — the model and (later that day) the working directory. Since 2026-10-13
     /// (the user's ask) each on the side it is pinned to (<see cref="StatusBarItems.Sides"/>; <see cref="ScreenPane.HintSlot.AtRight"/>), in
-    /// that side's order. An armed exit, rewind or splash delete takes every text section's place at the left group's end, after the strip
-    /// and the queued part; the model and the working directory pinned right keep their places meanwhile. The tally is its own slot
+    /// that side's order. An armed exit, rewind or splash delete takes every text section's place at the left group's end, after the strip;
+    /// the model and the working directory pinned right keep their places meanwhile. The tally is its own slot
     /// (<see cref="ScreenPane.HintSlot.UsageOf"/>, empty under an armed hint), so the busy row puts its own there. Each section unchecked is left out.
     /// </summary>
     private IReadOnlyList<ScreenPane.HintSlot> HintSlots()
@@ -3067,7 +3068,6 @@ internal sealed partial class ChatScreen
             {
                 StatusBarItems.Spinner => ScreenPane.HintSlot.Spinner,   // later on 2026-10-13: where the busy row puts its spinner; nothing at rest
                 StatusBarItems.Status => ScreenPane.HintSlot.Strip,
-                StatusBarItems.Queued => ScreenPane.HintSlot.Queued,
                 // An armed hint takes the text sections' place; the model and the working directory pinned right keep theirs (2026-10-13).
                 StatusBarItems.Model when armed is null || right => ScreenPane.HintSlot.Model,
                 StatusBarItems.WorkingDirectory when armed is null || right => ScreenPane.HintSlot.Path(WorkingDirectoryLabel(_effective())),   // --cwd may override it
@@ -3643,19 +3643,22 @@ internal sealed partial class ChatScreen
     /// <summary>What every reflection line opens with, inside its parentheses (2026-09-18): the brain (<see cref="LearnStripGlyph"/>, the strip's) and a space. U+1F9E0 is two cells wide, so no trailing-space fix as the gear needs. Pinned.</summary>
     public const string LearnGlyph = LearnStripGlyph + " ";
 
-    /// <summary>What the hint row's queued part opens with (2026-09-18): the outbox tray (the incoming envelope 📨 until 2026-09-28, the user's call). U+1F4E4 is two cells wide, a surrogate pair with no variation selector. Pinned.</summary>
+    /// <summary>What the queued count opens with (2026-09-18; on the lower rule since 2026-11-26): the outbox tray (the incoming envelope 📨 until 2026-09-28, the user's call). U+1F4E4 is two cells wide, a surrogate pair with no variation selector. Pinned.</summary>
     public const string QueueGlyph = "📤";
 
-    /// <summary>The hint row's queued part, after the speech strip at idle and after the spinner's label under a turn: <c>📤 2 queued</c>. Pinned.</summary>
-    public static string QueuedHintPart(int count) => $"{QueueGlyph} {count.ToString(CultureInfo.InvariantCulture)} queued";
+    /// <summary>
+    /// The queued count, <c>📤 2 queued</c>: pinned at the lower rule's left end while anything waits (2026-11-26, the user's ask; the hint row's
+    /// part after the speech strip and the spinner's label from 2026-09-18). Pinned.
+    /// </summary>
+    public static string QueuedRulePart(int count) => $"{QueueGlyph} {count.ToString(CultureInfo.InvariantCulture)} queued";
 
     /// <summary>The transcript's notice when the queue is dropped — a cancelled reply under <c>Queue cancel mode</c> <c>empty</c>, or a conversation forgotten. Pinned.</summary>
     public static string QueueDroppedNotice(int count) =>
         count == 1 ? "(" + NoticeGlyphs.Queue + "1 queued message dropped)" : $"({NoticeGlyphs.Queue}{count.ToString(CultureInfo.InvariantCulture)} queued messages dropped)";
 
     /// <summary>
-    /// The watcher's click hook (2026-09-18), on the watcher task: two left clicks on the busy row's
-    /// queued count within <see cref="DoubleClick.Interval"/> (like the idle row's) answer <see cref="SlashCommands.QueueWord"/>, which the line hook runs as the
+    /// The watcher's click hook (2026-09-18), on the watcher task: two left clicks on the lower rule's
+    /// queued count within <see cref="DoubleClick.Interval"/> (the busy row's until 2026-11-26) answer <see cref="SlashCommands.QueueWord"/>, which the line hook runs as the
     /// typed command — the Queue pane; two on the scroll's hint (<see cref="ScreenPane.HintZone.Scrolled"/>,
     /// later that day) are the bottom again, as Ctrl+End through <see cref="ScrollInput"/> — spent
     /// here, nothing answered; two on the spinner and its label (<see cref="ScreenPane.HintZone.Usage"/>,
@@ -3749,8 +3752,8 @@ internal sealed partial class ChatScreen
             if (_pane.LowerRuleItemAt(click.X, click.Y) is { } ruleItem)
             {
                 // The lower rule's jobs group (2026-11-23, the user's ask; the processes' count since 2026-10-12, the update's marker since
-                // 2026-11-04): two clicks answer /process or /update, under the reply as at idle, or end the loop after its pass, cancel the
-                // download or the pictures (the reply goes on).
+                // 2026-11-04): two clicks answer /process or /update, or /queue on the queued count (2026-11-26, the status bar's until then), under
+                // the reply as at idle, or end the loop after its pass, cancel the download or the pictures (the reply goes on).
                 return _queuedClicks.Second(InputLine.LowerRulePairKey(ruleItem)) ? LowerRuleClick(ruleItem, watched: true) : null;
             }
 
@@ -3769,11 +3772,6 @@ internal sealed partial class ChatScreen
                 }
 
                 return null;
-            }
-
-            if (_pane.TryHitQueued(click.X, click.Y))
-            {
-                return _queuedClicks.Second(0) ? SlashCommands.QueueWord : null;
             }
 
             if (_pane.TryHitToolbar(click.X, click.Y, out var tool))
@@ -12947,7 +12945,6 @@ internal sealed partial class ChatScreen
                                 ScreenPane.HintZone.Trailer => SlashCommands.ServerWord,
                                 ScreenPane.HintZone.Mark => SlashCommands.ReasoningWord,
                                 ScreenPane.HintZone.Path => CwdBrowseLine,   // the working directory (later on 2026-10-12), as the tool bar's path
-                                ScreenPane.HintZone.Queued => SlashCommands.QueueWord,   // the held count (2026-09-18): /queue, as the typed command
                                 ScreenPane.HintZone.Usage => SlashCommands.UsageWord,
                                 _ => SlashCommands.SettingsWord,
                             };
@@ -19178,7 +19175,7 @@ internal sealed partial class ChatScreen
             return true;
         }
 
-        // The queued count's double-click (2026-09-18): the pair is timed here on the pane's
+        // The watcher's double-clicks (2026-09-18, the queued count's; the lower rule's since 2026-11-26): the pair is timed here on the pane's
         // clock and a key or a notch between the two ends it — the spend hook sees every one.
         _queuedClicks.Reset();
         // A /botchat turn (2026-10-02): the push-to-talk key (and the chat's wake phrase) cut it short to listen (ChatScreen.BotVoice).

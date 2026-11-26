@@ -59,7 +59,7 @@ public sealed class GenerateImageTool : AIFunction, IWrittenCallAliases
             "workflow": { "type": "string", "description": "Which workflow to run, by name from the list; a ^name in the user's message is that workflow (pass it without the ^). May be left out when only one fits (one taking an image when image is given, one not taking an image otherwise)." },
             "negative": { "type": "string", "description": "The negative prompt. Left out, the workflow's default is used (none with verbatim true unless the workflow names one)." },
             "negative_extra": { "type": "string", "description": "A few tags appended to the workflow's own negative to reinforce your prompt: the opposites of what it asks, where the model tends to drift. Only for your own prompts, and only for workflows marked 'negative reinforced'." },
-            "verbatim": { "type": "boolean", "description": "True when prompt (and negative) are the user's own text passed through unchanged; nothing is added to them." },
+            "verbatim": { "type": "boolean", "description": "True when prompt (and negative) are the user's own text passed through unchanged; nothing is added to them but the workflow's LoRA trigger words, in front." },
             "width": { "type": "integer", "description": "Width in pixels (64 to 4096); left out, the workflow's size. Only where the workflow has a width placeholder." },
             "height": { "type": "integer", "description": "Height in pixels (64 to 4096); left out, the workflow's size." },
             "seed": { "type": "integer", "description": "The noise seed; left out, a random one (the result reports it, to reproduce or vary a picture)." },

@@ -236,7 +236,7 @@ public partial class ChatScreenTests
                 PushLine("/botchat ada the best pizza");
                 PushLine("/profile work");
                 // Both queued before the reply ends: a line still being typed then is typed under the chat, a path that was right.
-                for (int wait = 0; wait < 1000 && !Output.Contains(ChatScreen.QueuedHintPart(2), StringComparison.Ordinal); wait++)
+                for (int wait = 0; wait < 1000 && !Output.Contains(ChatScreen.QueuedRulePart(2), StringComparison.Ordinal); wait++)
                 {
                     await Task.Delay(10, CancellationToken.None);
                 }
@@ -466,7 +466,7 @@ public partial class ChatScreenTests
             {
                 PushLine("hi bots");
                 // Queued before the reply ends, so the pause starts with the line already waiting.
-                for (int wait = 0; wait < 1000 && !Output.Contains(ChatScreen.QueuedHintPart(1), StringComparison.Ordinal); wait++)
+                for (int wait = 0; wait < 1000 && !Output.Contains(ChatScreen.QueuedRulePart(1), StringComparison.Ordinal); wait++)
                 {
                     await Task.Delay(10, CancellationToken.None);
                 }

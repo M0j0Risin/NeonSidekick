@@ -394,8 +394,8 @@ public partial class ScreenPaneTests : IDisposable
         _time.Advance(ScreenPane.Tick);
         Assert.Contains(" ⟳ 3/10 · ending ── ▶ 1 ─\n", Output[mark..]);
         Assert.Equal(
-            new[] { -600_001, -600_002, -600_003, -600_004, -600_005, -600_006, -600_007, -600_008, -600_009, -600_010, -600_011 },
-            new[] { LowerRuleKind.Processes, LowerRuleKind.Update, LowerRuleKind.Loop, LowerRuleKind.Download, LowerRuleKind.Pictures, LowerRuleKind.Mcp, LowerRuleKind.Voice, LowerRuleKind.Speech, LowerRuleKind.Learning, LowerRuleKind.Extras, LowerRuleKind.Camera }.Select(InputLine.LowerRulePairKey));
+            new[] { -600_001, -600_002, -600_003, -600_004, -600_005, -600_006, -600_007, -600_008, -600_009, -600_010, -600_011, -600_012 },
+            new[] { LowerRuleKind.Processes, LowerRuleKind.Update, LowerRuleKind.Loop, LowerRuleKind.Download, LowerRuleKind.Pictures, LowerRuleKind.Mcp, LowerRuleKind.Voice, LowerRuleKind.Speech, LowerRuleKind.Learning, LowerRuleKind.Extras, LowerRuleKind.Camera, LowerRuleKind.Queued }.Select(InputLine.LowerRulePairKey));
     }
 
     /// <summary>
@@ -1760,101 +1760,95 @@ public partial class ScreenPaneTests : IDisposable
         Assert.False(pane.TryToggleToolGroupAt(0, 0));
     }
 
-    /// <summary>The queued part (2026-09-18): after the strip on the standing row and after the spinner's label on the busy row, its place recorded for TryHitQueued in both; hidden with its zone under an overlay's hint and the scroll's; gone when nothing is queued.</summary>
+    /// <summary>
+    /// The queued count on the lower rule (2026-11-26, the user's ask; the hint row's from 2026-09-18): pinned at the left end, <c>─ 📤 2 queued </c>,
+    /// the fill after it and the jobs at the right; its click area its cells and the space either side; never on the standing or the busy hint row.
+    /// Alone, the fill runs to the end.
+    /// </summary>
     [Fact]
-    public void Queued_LeadsBothRows_AndTryHitQueued_AnswersInBoth_NotUnderAnOverlay()
+    public void Queued_IsPinnedAtTheLowerRulesLeft_TheJobsAtItsRight_NeverOnTheHintRow()
     {
         _cursorTop = 100;
         string queued = "📤 2 queued";
+        bool processes = true;
         using var pane = Pane();
         pane.Hint = () => "idle";
         pane.Strip = () => "🔊";
-        pane.Queued = () => queued;
+        pane.LowerRuleItems = () => processes ? [new(LowerRuleKind.Queued, queued), new(LowerRuleKind.Processes, "▶ 1")] : [new(LowerRuleKind.Queued, queued)];
         pane.Show();
         pane.ShowInput("abc", 3);   // rule 99, row 100, rule 101, hint 102
 
-        // Standing: "🔊 · 📤 2 queued · idle" — the part at columns 5..15 (the strip's two cells and the separator ahead).
-        Assert.Contains("\n🔊 · 📤 2 queued · idle", Output);
-        Assert.False(pane.TryHitQueued(4, 102));
-        Assert.True(pane.TryHitQueued(5, 102));
-        Assert.True(pane.TryHitQueued(15, 102));
-        Assert.False(pane.TryHitQueued(16, 102));
-        Assert.False(pane.TryHitQueued(5, 101));
-        Assert.True(pane.TryHitHint(6, 102, out var hit));
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Queued, "", 5), hit);
-        Assert.True(pane.TryHitHint(2, 102, out hit));
-        Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
-        Assert.True(pane.TryHitHint(0, 102, out hit));
-        Assert.Equal(ScreenPane.HintZone.Strip, hit.Zone);
-
-        // Busy: "🔊 · ⠋ thinking 00:00 · 📤 2 queued" — the part after the strip (3), the frame (1), the blank, the label and a separator.
-        using (pane.BeginBusy("thinking"))
+        // 40 cells: "─ " (2), the count (11), " ", 20 glyphs of fill, " ▶ 1 ─" (6).
+        Assert.Contains("\n" + Rule(1) + " 📤 2 queued " + Rule(20) + " ▶ 1 ─\n", Output);
+        Assert.Contains("\n🔊 · idle", Output);
+        Assert.Null(pane.LowerRuleItemAt(0, 101));
+        foreach (int x in new[] { 1, 2, 12, 13 })
         {
-            Assert.Contains("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00 · 📤 2 queued", Output);
-            int column = TextCells.Width("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00 · ");
-            Assert.False(pane.TryHitQueued(column - 1, 102));
-            Assert.True(pane.TryHitQueued(column, 102));
-            Assert.True(pane.TryHitQueued(column + 10, 102));
-            Assert.False(pane.TryHitQueued(column + 11, 102));
-            // The standing row's zones are not the busy row's: TryHitHint says the row there.
-            Assert.True(pane.TryHitHint(column, 102, out hit));
-            Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
-
-            // Under an overlay's hint the part is hidden and its zone with it; closed, back.
-            int mark = Output.Length;
-            pane.ShowOverlay(new Markup("a"), "Esc closes");
-            Assert.Contains("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00 · Esc closes", Output[mark..]);
-            Assert.DoesNotContain("queued", Output[mark..]);
-            Assert.False(pane.TryHitQueued(column, 102));
-            pane.CloseOverlay();
-            Assert.True(pane.TryHitQueued(column, 102));
+            Assert.Equal(LowerRuleKind.Queued, pane.LowerRuleItemAt(x, 101));
         }
 
-        // Nothing queued: the row as before, no zone.
-        queued = "";
-        int after = Output.Length;
-        pane.RefreshHint();
-        Assert.Contains("🔊 · idle", Output[after..]);
-        Assert.DoesNotContain("queued", Output[after..]);
-        Assert.False(pane.TryHitQueued(5, 102));
-        Assert.True(pane.TryHitHint(6, 102, out hit));
+        Assert.Null(pane.LowerRuleItemAt(14, 101));
+        Assert.Equal(LowerRuleKind.Processes, pane.LowerRuleItemAt(35, 101));
+        Assert.True(pane.TryHitHint(6, 102, out var hit));
         Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
 
-        // No strip: the part leads the row from column 0.
-        pane.Strip = () => "";
+        // Busy: the row is the spinner's alone, the count stays on the rule.
+        using (pane.BeginBusy("thinking"))
+        {
+            int mark = Output.Length;
+            _time.Advance(ScreenPane.Tick);
+            pane.RefreshHint();
+            Assert.Contains("🔊 · " + Theme.SpinnerFrames[0] + " thinking 00:00", Output);
+            Assert.DoesNotContain("00:00 · 📤", Output);
+            Assert.Equal(LowerRuleKind.Queued, pane.LowerRuleItemAt(2, 101));
+        }
+
+        // Alone: the fill runs to the end, 26 glyphs after "─ 📤 1 queued ".
+        processes = false;
         queued = "📤 1 queued";
-        after = Output.Length;
-        pane.RefreshHint();
-        Assert.Contains("📤 1 queued · idle", Output[after..]);
-        Assert.True(pane.TryHitQueued(0, 102));
-        Assert.True(pane.TryHitQueued(10, 102));
-        Assert.False(pane.TryHitQueued(11, 102));
+        int after = Output.Length;
+        _time.Advance(ScreenPane.Tick);
+        Assert.Contains(Rule(1) + " 📤 1 queued " + Rule(26) + "\n", Output[after..]);
+        Assert.Equal(LowerRuleKind.Queued, pane.LowerRuleItemAt(13, 101));
+        Assert.Null(pane.LowerRuleItemAt(14, 101));
     }
 
-    /// <summary>A part the width cut is no button (2026-09-18): the fit cuts the left from the right — the count leads, so it survives a long hint but not a row too narrow for it; the trailer collapses for it (later on 2026-10-12).</summary>
+    /// <summary>
+    /// The queued count in the lower rule's fit (2026-11-26): it drops after the botchat's extras and before ⚡n, which still goes only beside 📷;
+    /// alone it is cut to fit, never dropped (as ⚡n and 📷 are). Its width is the left end's, <c>─ </c> before and a space after.
+    /// </summary>
     [Fact]
-    public void Queued_CutByANarrowRow_HasNoZone()
+    public void LowerRuleFit_TheQueuedCount_DropsAfterTheExtras_BeforeTheProcesses_AloneIsCut()
     {
-        _cursorTop = 100;
-        _console.Profile.Width = 20;
-        using var pane = Pane();
-        pane.Hint = () => "a rather long standing hint";
-        pane.Queued = () => "📤 12 queued";
-        pane.Trailer = () => "llama";
-        pane.Show();
-        pane.ShowInput("abc", 3);
+        LowerRuleItem queued = new(LowerRuleKind.Queued, "📤 2 queued");
+        LowerRuleItem extras = new(LowerRuleKind.Extras, "🧟");
+        LowerRuleItem camera = new(LowerRuleKind.Camera, "📷");
+        LowerRuleItem processes = new(LowerRuleKind.Processes, "⚡1");
+        static int RoomWithCount(LowerRuleItem count, params LowerRuleItem[] rest) =>
+            TextCells.Width(count.Text) + 3
+            + (rest.Length == 0 ? 0 : rest.Sum(i => TextCells.Width(i.Text)) + ((rest.Length - 1) * (ScreenPane.LowerRuleGap + 2)) + 3)
+            + ScreenPane.RuleTitleMinRule;
 
-        // 19 cells: "llama" collapses for the left, and the 19 cells hold the count whole ahead of the cut hint.
-        Assert.True(pane.TryHitQueued(0, 102));
-        Assert.True(pane.TryHitQueued(11, 102));
-        Assert.False(pane.TryHitQueued(12, 102));
+        LowerRuleItem[] all = [queued, extras, camera, processes];
+        Assert.Equal(all, ScreenPane.LowerRuleFit(all, RoomWithCount(queued, extras, camera, processes)).Kept);
+        Assert.Equal(ScreenPane.RuleTitleMinRule, ScreenPane.LowerRuleFit(all, RoomWithCount(queued, extras, camera, processes)).Left);
+        Assert.Equal(new[] { queued, camera, processes }, ScreenPane.LowerRuleFit(all, RoomWithCount(queued, extras, camera, processes) - 1).Kept);
+        Assert.Equal(new[] { queued, camera, processes }, ScreenPane.LowerRuleFit(all, RoomWithCount(queued, camera, processes)).Kept);
+        Assert.Equal(new[] { camera, processes }, ScreenPane.LowerRuleFit(all, RoomWithCount(queued, camera, processes) - 1).Kept);
+        Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit([queued, processes], RoomWithCount(queued, processes) - 1).Kept);   // ⚡n stays beside the count
 
-        // 11 cells: "📤 12 queued" is 12 — cut to 10 + the ellipsis, no button.
-        _console.Profile.Width = 12;
-        pane.RefreshHint();
-        Assert.False(pane.TryHitQueued(0, 102));
-        Assert.True(pane.TryHitHint(0, 102, out var hit));
-        Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
+        // Alone: kept whole with room, cut by one cell less, the bare rule once not even a cut count fits.
+        Assert.Equal(new[] { queued }, ScreenPane.LowerRuleFit([queued], RoomWithCount(queued)).Kept);
+        Assert.Equal(ScreenPane.RuleTitleMinRule, ScreenPane.LowerRuleFit([queued], RoomWithCount(queued)).Left);
+        var cut = Assert.Single(ScreenPane.LowerRuleFit([queued], RoomWithCount(queued) - 1).Kept);
+        Assert.Equal(LowerRuleKind.Queued, cut.Kind);
+        Assert.NotEqual(queued.Text, cut.Text);
+        Assert.Empty(ScreenPane.LowerRuleFit([queued], 11).Kept);
+
+        // Its rank lies between the extras' and the processes', so a missed arm (never dropped) can't slip by.
+        Assert.True(ScreenPane.LowerRuleDropRank(LowerRuleKind.Extras) < ScreenPane.LowerRuleDropRank(LowerRuleKind.Queued));
+        Assert.True(ScreenPane.LowerRuleDropRank(LowerRuleKind.Queued) < ScreenPane.LowerRuleDropRank(LowerRuleKind.Processes));
+        Assert.Equal(-600_012, InputLine.LowerRulePairKey(LowerRuleKind.Queued));
     }
 
     [Fact]
@@ -6664,7 +6658,7 @@ public partial class ScreenPaneTests : IDisposable
 
     /// <summary>
     /// <see cref="ScreenPane.HintLayout"/> (2026-10-12, the user's ask: the Hint bar's sections in any order): the row is its parts in
-    /// order behind the separator, the screen's own hint left out; the strip, the queued part, the tally and a model in the flow each
+    /// order behind the separator, the screen's own hint left out; the strip, the tally and a model in the flow each
     /// a zone where they landed, the mark its own; nothing at the right edge.
     /// </summary>
     [Fact]
@@ -6674,16 +6668,15 @@ public partial class ScreenPaneTests : IDisposable
         using var pane = Pane();
         pane.Hint = () => "idle";
         pane.Strip = () => "🔊";
-        pane.Queued = () => "📤 2 queued";
         pane.Usage = () => "1k";
         pane.Trailer = () => "llama";
         pane.TrailerMark = () => "◕";
-        pane.HintLayout = () => [ScreenPane.HintSlot.Of("1k"), ScreenPane.HintSlot.Strip, ScreenPane.HintSlot.Model, ScreenPane.HintSlot.Queued];
+        pane.HintLayout = () => [ScreenPane.HintSlot.Of("1k"), ScreenPane.HintSlot.Strip, ScreenPane.HintSlot.Model, ScreenPane.HintSlot.Of("tail")];
         pane.Show();
         pane.ShowInput("abc", 3);
 
-        // "1k" 0–1, " · ", 🔊 5–6, " · ", "llama ◕" 10–16 (the mark at 16), " · ", "📤 2 queued" from 20.
-        Assert.Contains("\n1k · 🔊 · llama ◕ · 📤 2 queued", Output);
+        // "1k" 0–1, " · ", 🔊 5–6, " · ", "llama ◕" 10–16 (the mark at 16), " · ", "tail" from 20 (the queued part there until 2026-11-26).
+        Assert.Contains("\n1k · 🔊 · llama ◕ · tail", Output);
         Assert.DoesNotContain("idle", Output);
         Assert.True(pane.TryHitHint(0, 102, out var hit));
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", 0), hit);
@@ -6696,7 +6689,7 @@ public partial class ScreenPaneTests : IDisposable
         Assert.True(pane.TryHitHint(18, 102, out hit));   // the separator after the mark
         Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
         Assert.True(pane.TryHitHint(21, 102, out hit));
-        Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Queued, "", 20), hit);
+        Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
         Assert.True(pane.TryHitHint(38, 102, out hit));   // the right edge: blank, no model there
         Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
 

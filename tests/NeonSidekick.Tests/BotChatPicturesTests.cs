@@ -279,6 +279,16 @@ public class BotChatPicturesTests
         Assert.DoesNotContain("Tips for this workflow", BotChat.ImagePromptInstruction(Workflow("pony")));
     }
 
+    /// <summary>The LoRAs' trigger words go after the tips, so the prompt writer leaves them out (2026-11-26); a workflow with none says nothing.</summary>
+    [Fact]
+    public void ImagePromptInstruction_SaysTheTriggerWordsTheAppAdds()
+    {
+        string text = BotChat.ImagePromptInstruction(Workflow("pony", tips: "Keep it bright.") with { TriggerWords = ["xyz_style", "glowing eyes"] });
+
+        Assert.Contains("Tips for this workflow: Keep it bright.\n\n" + BotChat.TriggerWordsLabel + "xyz_style, glowing eyes.", text);
+        Assert.DoesNotContain(BotChat.TriggerWordsLabel, BotChat.ImagePromptInstruction(Workflow("pony")));
+    }
+
     [Fact]
     public void ImagePromptSkills_IsTheLoadOnlyCatalog_ThenTheDirective()
     {

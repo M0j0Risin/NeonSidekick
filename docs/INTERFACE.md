@@ -45,12 +45,13 @@ From top to bottom:
 * **The picture strip**, while there are ComfyUI pictures: × closes it. The [picture viewer](#the-picture-viewer) opens from the toolbar's 🎞️.
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), 🎞️ (a click closes or opens the picture strip), and 🕶️ while the conversation is [private](#private-conversations).
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
-* **The lower rule** shows the running jobs at its right, whatever the Status section shows: `── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🔌 1/3 ── 🎙️ 42% ── 🔈 ── 🖼️ 2 ── 🧠 ── 🧟 ── 📷 ── ⚡1 ─`.
+* **The lower rule** shows the queued count at its left and the running jobs at its right, whatever the Status section shows: `─ 📤 2 queued ── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🔌 1/3 ── 🎙️ 42% ── 🔈 ── 🖼️ 2 ── 🧠 ── 🧟 ── 📷 ── ⚡1 ─`.
+  * **📤** your messages waiting to be sent (`📤 2 queued`), shown while any wait.
   * **📦** a new version and how its [update](COMMANDS.md#updating) stands (`📦 0.5.7`, `42%`, `checking`, `at quit`, `back to 0.5.6 at quit`); *Check for updates at start* off hides the plain `📦 0.5.7`.
   * **The loop:** 🔁 a [Ralph loop](COMMANDS.md#ralph-loop) (`🔁 step 2/5 · pass 3`), 🔎 a [code audit](COMMANDS.md#code-audit) (`🔎 2/5`), ⟳ a [`/loop`](COMMANDS.md#loops) (`⟳ 3/10`). A double-click ends it after the pass in progress (`· ending`).
   * **📥** an embedded model's download; **🔌**, **🎙️**, **🔈** the MCP servers, voice input and speech output setting up; **🖼️** (🎨 for a rework) ComfyUI pictures still rendering.
   * **🧠** background learning, **🧟** a botchat's extra embedded servers left running, **📷** the camera on, **⚡n** the background processes running.
-  * **A narrow window** drops 📦, 🖼️, 🧠, 🔈, 🎙️, 🔌, 📥, the loop, then 🧟; ⚡n goes only to make room for 📷, which always stays. Each is shown whole or not at all.
+  * **A narrow window** drops 📦, 🖼️, 🧠, 🔈, 🎙️, 🔌, 📥, the loop, 🧟, then 📤; ⚡n goes only to make room for 📷, which always stays. Each is shown whole, except one left alone, which is cut to fit.
 
 | Double-click on the lower rule | Does |
 |---|---|
@@ -65,6 +66,7 @@ From top to bottom:
 | 🧟 | `/botchat --kill` (after a reply, if one is running) |
 | 📷 | `/camera off` |
 | ⚡n | `/process` |
+| 📤 n queued | `/queue` |
 * **A mark:** `/mark <color>` colors both rules for the conversation, kept with its session; `/mark default` takes it off.
 * **Five bars**, in *Toolbar order*: [hints](#the-hints-bar) (while there is a hint), [status](#the-status-bar), [toolbar](#the-toolbar), [performance](#the-performance-bar), [home](#the-home-bar).
 * **A short window** drops the home bar, then the performance bar, then the toolbar; the hints bar goes last.
@@ -358,14 +360,14 @@ The keys that apply right now, on a row of their own over the status bar (*Hints
 
 The row under the hints bar (*Status bar*); [Bar checklists](#bar-checklists) moves and pins its sections.
 
-* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🏷️, 📝, 👥), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Queued**, **Timers** (⏰ countdowns, ⏱️ stopwatches), **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
+* **Left by default:** **Status** (🔊 🎤 👂 ✋, 🏷️, 📝, 👥), **Spinner** (during a reply, with its clock and **Esc to stop**; always on), **Timers** (⏰ countdowns, ⏱️ stopwatches), **Reading** (`/read`, `/echo`) and **Usage** (context and tokens).
 * **Right by default:** **Model** (name and reasoning icon, 💤 while [unloaded when idle](SETTINGS.md#embedded)) and **Working directory** (off by default). The busy row keeps the same sides.
 * **The spinner's word:** `thinking`, `writing` for the text, `writing present_audit` while the model writes a tool call, then the tool's name while it runs.
 * **A call's size**, `(41.0k chars)`, shows past 1,000 characters where the server sends the call as it's written; elsewhere nothing shows until it's done.
 * **A runaway `present_audit` call** (the model repeating itself) is stopped, and the reply ends on an error.
 * **Narrow window:** the model's name and the path shrink, then go; then the right group gives way, then the left. The spinner goes last.
 * **Background setups** (MCP servers connecting, the voice models' first load) show 🔌, 🎙️ or 🔈 on [the lower rule](#the-screen); the input line stays yours.
-* **Leading the Status section:** 📝 in plan mode. Jobs (loops, downloads, setups, learning, the camera) show on [the lower rule](#the-screen).
+* **Leading the Status section:** 📝 in plan mode. Jobs (loops, downloads, setups, learning, the camera) and the queued count show on [the lower rule](#the-screen).
 * **An audit that ends on its own** prints its open findings as a table (most severe first, at most 40) and opens its done pane on **Keep report** ([Pane keys](#pane-keys), [Code audit](COMMANDS.md#code-audit)).
 
 | Double-click | Does |
@@ -374,7 +376,6 @@ The row under the hints bar (*Status bar*); [Bar checklists](#bar-checklists) mo
 | the reasoning icon | `/reasoning` |
 | the working directory | `/cwd browse` |
 | the tokens or spinner | `/usage` |
-| the queued count | `/queue` |
 | the timers | asks, then cancels them all |
 | 👥 (after a botchat) | `/botchat --resume` |
 | blank space (a right-click too) | `/settings` |

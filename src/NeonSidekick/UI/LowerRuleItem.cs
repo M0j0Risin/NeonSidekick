@@ -38,6 +38,12 @@ public enum LowerRuleKind
 
     /// <summary>The camera held open (live view or watch), <c>📷</c> (the status bar's until 2026-11-25): a double-click is <c>/camera off</c>. Never dropped.</summary>
     Camera = 11,
+
+    /// <summary>
+    /// The messages waiting to be sent, <c>📤 2 queued</c> (the status bar's until 2026-11-26, the user's ask): pinned at the rule's left end, the
+    /// jobs at its right. A double-click is <c>/queue</c>.
+    /// </summary>
+    Queued = 12,
 }
 
 /// <summary>One item on the lower rule (2026-11-23): its kind and its text, drawn whole or not at all (<see cref="ScreenPane.LowerRuleFit"/>).</summary>

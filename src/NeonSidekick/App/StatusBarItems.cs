@@ -18,7 +18,8 @@ namespace NeonSidekick.App;
 /// row's spinner, its label and clock and the stop hint after them are the <see cref="Spinner"/> section: after Status by default (first until later that day, the user's ask), always
 /// on (<see cref="Fixed"/>), on either side in any place, drawn under a reply alone. The whole-row prompts (the drag, an alert, the
 /// armed exit, rewind and splash delete) are no sections: they show whatever is checked. Under a reply the checks hold (no strip,
-/// queued count, tally or model while off). The Keys section (the arrows' and the <c>/read</c> keys' lead) went to the Hints bar on
+/// tally or model while off). The queued count went to the lower rule's left end on 2026-11-26 (the user's ask); a saved <c>queued</c> is
+/// dropped as any unknown word. The Keys section (the arrows' and the <c>/read</c> keys' lead) went to the Hints bar on
 /// 2026-10-14, with the armed prompts; a saved <c>keys</c> is dropped as any unknown word. A display setting, so an unknown word is
 /// dropped without a warning. Pure.
 /// </summary>
@@ -26,7 +27,6 @@ public static class StatusBarItems
 {
     public const string Spinner = "spinner";   // 2026-10-13, the user's ask: always on, movable
     public const string Status = "status";
-    public const string Queued = "queued";
     public const string Timers = "timers";
     public const string Reading = "reading";
     public const string Usage = "usage";
@@ -37,10 +37,10 @@ public static class StatusBarItems
     /// Every section in the row's own order, the one it always had, the working directory after the model; the spinner second
     /// (2026-10-13; first until later that day, the user's ask: Status first by default, the spinner after it). Pinned.
     /// </summary>
-    public static readonly string[] Names = [Status, Spinner, Queued, Timers, Reading, Usage, Model, WorkingDirectory];
+    public static readonly string[] Names = [Status, Spinner, Timers, Reading, Usage, Model, WorkingDirectory];
 
     /// <summary>What a profile that never chose shows: every section but the working directory (the user's pick), the row as it was. Pinned.</summary>
-    public static readonly string[] Defaults = [Status, Spinner, Queued, Timers, Reading, Usage, Model];
+    public static readonly string[] Defaults = [Status, Spinner, Timers, Reading, Usage, Model];
 
     /// <summary>The sections that are always on (2026-10-13, the user's ask): the spinner, which moves but never goes. Pinned.</summary>
     public static readonly IReadOnlySet<string> Fixed = new HashSet<string>(StringComparer.Ordinal) { Spinner };
@@ -56,7 +56,6 @@ public static class StatusBarItems
     {
         Spinner => "Spinner",
         Status => "Status",
-        Queued => "Queued",
         Timers => "Timers",
         Reading => "Reading",
         Usage => "Usage",
@@ -70,7 +69,6 @@ public static class StatusBarItems
     {
         Spinner => "turn activity spinner, info and stop hint: always on",
         Status => "status icons: 🔊 🎤 👂 ✋, 🏷️, 📝, 👥",
-        Queued => "queue status when messages are queued",
         Timers => "timer info while timer(s) active",
         Reading => "reading info while reading is active (/read or /echo)",
         Usage => "context and usage info",

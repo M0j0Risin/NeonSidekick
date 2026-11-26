@@ -55,7 +55,8 @@ public sealed record ComfyWorkflow(
     string? Negative = null,
     string Tips = "",
     bool Reinforce = true,
-    IReadOnlyList<string>? ImageRoles = null)
+    IReadOnlyList<string>? ImageRoles = null,
+    IReadOnlyList<string>? TriggerWords = null)
 {
     public const string PromptKey = "prompt";
     public const string NegativeKey = "negative";
@@ -66,6 +67,12 @@ public sealed record ComfyWorkflow(
     public const string StepsKey = "steps";
     public const string CfgKey = "cfg";
     public const string DenoiseKey = "denoise";
+
+    /// <summary>
+    /// The sidecar keys holding a LoRA's trigger words (2026-11-26, the user's ask): <c>lora.&lt;lora_name&gt;: words, more words</c>, one per
+    /// LoRA, the name as the graph's <c>lora_name</c> spells it (case aside). <see cref="TriggerWords"/> is what of them is in play.
+    /// </summary>
+    public const string LoraWordsPrefix = "lora.";
 
     /// <summary>The most input pictures a workflow takes (Qwen-Image-Edit-2509's three).</summary>
     public const int MaxInputImages = 3;
@@ -97,6 +104,70 @@ public sealed record ComfyWorkflow(
 
     /// <summary>Whether the workflow has a <c>{{prompt}}</c> — a face swap or an upscale may not.</summary>
     public bool TakesPrompt => Placeholders.Contains(PromptKey);
+
+    /// <summary>
+    /// The sidecar key for <paramref name="lora"/>'s trigger words (<see cref="LoraWordsPrefix"/> + the name), or null for a name no key can
+    /// hold (2026-11-26): empty, holding a <c>:</c> (the reader splits at the first), a control character (a line break would split the head)
+    /// or spaces at either end (the reader trims them). Pure.
+    /// </summary>
+    public static string? LoraWordsKey(string lora)
+    {
+        ArgumentNullException.ThrowIfNull(lora);
+        return lora.Length == 0 || lora.Contains(':', StringComparison.Ordinal) || lora.Any(char.IsControl) || lora.Trim() != lora ? null : LoraWordsPrefix + lora;
+    }
+
+    /// <summary>A sidecar value's phrases: split at commas, trimmed, the empty ones dropped (2026-11-26). Pure.</summary>
+    public static IReadOnlyList<string> SplitWords(string? words) =>
+        words is null ? [] : [.. words.Split(',').Select(w => w.Trim()).Where(w => w.Length > 0)];
+
+    /// <summary>
+    /// Whether <paramref name="text"/> holds <paramref name="phrase"/> as a whole phrase, ignoring case (2026-11-26, the trigger words): no
+    /// letter, digit or <c>_</c> touches it on a side where the phrase itself starts or ends with one, so <c>(xyz_style:1.2)</c> holds
+    /// <c>xyz_style</c> while <c>smart</c> doesn't hold <c>art</c> and <c>xyz_style2</c> doesn't hold <c>xyz_style</c>. Pure.
+    /// </summary>
+    public static bool HasPhrase(string text, string phrase)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(phrase);
+        if (phrase.Length == 0)
+        {
+            return false;
+        }
+
+        static bool Word(char c) => char.IsLetterOrDigit(c) || c == '_';
+        bool front = Word(phrase[0]);
+        bool back = Word(phrase[^1]);
+        int at = 0;
+        while ((at = text.IndexOf(phrase, at, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            int end = at + phrase.Length;
+            if ((!front || at == 0 || !Word(text[at - 1])) && (!back || end == text.Length || !Word(text[end])))
+            {
+                return true;
+            }
+
+            at++;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether a LoRA's trigger words apply (2026-11-26): on the branch that runs, a literal name, and some strength on. A linked strength
+    /// (null) counts as on. A <c>LoraLoader</c> (and any other class with a <c>lora_name</c>) is off only with both strengths 0, since the
+    /// words act through the text encoder; a <c>LoraLoaderModelOnly</c> has no CLIP input, so its model strength alone decides. Pure.
+    /// </summary>
+    public static bool LoraInPlay(ComfyLora lora)
+    {
+        ArgumentNullException.ThrowIfNull(lora);
+        if (lora.SwitchedOff || lora.Name.Length == 0)
+        {
+            return false;
+        }
+
+        bool modelOff = lora.StrengthModel == 0;
+        return lora.ClassType == ComfyGraphEdit.LoraLoaderModelOnly ? !modelOff : !(modelOff && lora.StrengthClip == 0);
+    }
 
     /// <summary>The role the sidecar gave input picture <paramref name="slot"/> (0-based), or "".</summary>
     public string ImageRole(int slot) => ImageRoles is { } roles && slot >= 0 && slot < roles.Count ? roles[slot] : "";
@@ -196,8 +267,85 @@ public sealed record ComfyWorkflow(
             body,
             // reinforce: false (later still on 2026-09-24): this workflow's negative is sent as written, nothing appended.
             !(head.TryGetValue("reinforce", out string? reinforce) && reinforce.Trim().Equals("false", StringComparison.OrdinalIgnoreCase)),
-            ImageKeys.Take(images).Select(key => head.TryGetValue(key, out string? role) ? role.Trim() : "").ToList());
+            ImageKeys.Take(images).Select(key => head.TryGetValue(key, out string? role) ? role.Trim() : "").ToList(),
+            placeholders.Contains(PromptKey) ? FindTriggerWords(json, head) : null);
         return true;
+    }
+
+    /// <summary>
+    /// The trigger words a run puts in front of the prompt (2026-11-26, the user's ask): for each LoRA in play (<see cref="LoraInPlay"/>), in
+    /// the graph's order and each name once, its <see cref="LoraWordsPrefix"/> key's phrases. A phrase an earlier LoRA gave goes once, and
+    /// one every string holding <c>{{prompt}}</c> already has (a template's own <c>"{{prompt}}, xyz_style"</c>) is left out: every
+    /// <c>{{prompt}}</c> gets the same text, so a word some string lacks still goes in. Null for none, or for a graph the walk can't read.
+    /// </summary>
+    private static IReadOnlyList<string>? FindTriggerWords(string json, Dictionary<string, string> head)
+    {
+        if (!head.Keys.Any(k => k.StartsWith(LoraWordsPrefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        JsonObject? graph;
+        try
+        {
+            graph = JsonNode.Parse(json, documentOptions: Tolerant) as JsonObject;
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+
+        if (graph is null)
+        {
+            return null;
+        }
+
+        var prompts = new List<string>();
+        PromptStrings(graph, prompts);
+        var words = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var lora in ComfyGraphEdit.Read(graph).Loras.Loras)
+        {
+            if (!LoraInPlay(lora) || !seen.Add(lora.Name) || LoraWordsKey(lora.Name) is not { } key || !head.TryGetValue(key, out string? value))
+            {
+                continue;
+            }
+
+            foreach (string phrase in SplitWords(value))
+            {
+                if (!words.Any(w => HasPhrase(w, phrase)) && !(prompts.Count > 0 && prompts.All(p => HasPhrase(p, phrase))))
+                {
+                    words.Add(phrase);
+                }
+            }
+        }
+
+        return words.Count == 0 ? null : words;
+    }
+
+    /// <summary>Every string in <paramref name="node"/> holding a <c>{{prompt}}</c> placeholder, added to <paramref name="into"/>.</summary>
+    private static void PromptStrings(JsonNode? node, List<string> into)
+    {
+        switch (node)
+        {
+            case JsonObject obj:
+                foreach (var (_, child) in obj)
+                {
+                    PromptStrings(child, into);
+                }
+
+                break;
+            case JsonArray array:
+                foreach (var child in array)
+                {
+                    PromptStrings(child, into);
+                }
+
+                break;
+            case JsonValue value when value.GetValueKind() == JsonValueKind.String && FindPlaceholders(value.GetValue<string>()).Contains(PromptKey):
+                into.Add(value.GetValue<string>());
+                break;
+        }
     }
 
     /// <summary>

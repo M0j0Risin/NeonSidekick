@@ -15199,7 +15199,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("and then?", _chat.Requests[1][^1].Text);
-        Assert.Contains(ChatScreen.QueuedHintPart(2), output);   // the command counted in the queue with the message
+        Assert.Contains(ChatScreen.QueuedRulePart(2), output);   // the command counted in the queue with the message
         Assert.True(output.IndexOf("Second.", StringComparison.Ordinal) < output.IndexOf(SettingsMenu.SwitchedNotice("work"), StringComparison.Ordinal));
         Assert.Equal("work", _settings.ProfileName);
     }
@@ -15221,7 +15221,7 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + ChatScreen.MidTurnDeferredNotice("/profile"), output);
-        Assert.DoesNotContain(ChatScreen.QueuedHintPart(1), output);
+        Assert.DoesNotContain(ChatScreen.QueuedRulePart(1), output);
         Assert.Equal("work", _settings.ProfileName);
     }
 
@@ -15887,7 +15887,9 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("and then?", _chat.Requests[1][^1].Text);
-        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint) + ScreenPane.HintSeparator + ChatScreen.QueuedHintPart(1), output);   // the stop hint after the spinner (2026-10-13)
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint), output);   // the stop hint after the spinner (2026-10-13)
+        Assert.DoesNotContain(ScreenPane.StopHint + ScreenPane.HintSeparator + ChatScreen.QueuedRulePart(1), output);   // the count off the busy row (2026-11-26)
+        Assert.Contains("\n" + ScreenPane.RuleGlyph + " " + ChatScreen.QueuedRulePart(1) + " ", output);   // on the lower rule's left end
         int firstReplyEnd = output.IndexOf("three.", StringComparison.Ordinal);
         int sentRow = output.LastIndexOf("› and then?", StringComparison.Ordinal);
         Assert.True(firstReplyEnd >= 0 && sentRow > firstReplyEnd, "the queued message's row is written when it is sent, after the first reply");
@@ -15915,7 +15917,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("and then?", _chat.Requests[1][^1].Text);
         Assert.Contains("Second.", output);
-        Assert.DoesNotContain(ChatScreen.QueuedHintPart(1), output);
+        Assert.DoesNotContain(ChatScreen.QueuedRulePart(1), output);
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
     }
 
@@ -15938,7 +15940,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal("second", _chat.Requests[1][^1].Text);
         Assert.Equal("third", _chat.Requests[2][^1].Text);
-        Assert.Contains(ChatScreen.QueuedHintPart(2), output);
+        Assert.Contains(ChatScreen.QueuedRulePart(2), output);
         Assert.True(output.IndexOf("Two.", StringComparison.Ordinal) < output.LastIndexOf("› third", StringComparison.Ordinal));
         Assert.Contains("Three.", output);
     }
@@ -16103,7 +16105,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(3, _chat.Requests.Count);
         Assert.Equal("again", _chat.Requests[1][^1].Text);   // the typed message first
         Assert.Equal("later", _chat.Requests[2][^1].Text);   // then the drain, after its normal end
-        Assert.Contains("\n" + ChatScreen.QueuedHintPart(1), output);   // the held count on the idle row (no strip, no spinner)
+        Assert.Contains("\n" + ScreenPane.RuleGlyph + " " + ChatScreen.QueuedRulePart(1), output);   // the held count on the idle row (no strip, no spinner)
         Assert.Contains("Again.", output);
         Assert.Contains("Later.", output);
         Assert.DoesNotContain(ChatScreen.QueueDroppedNotice(1), output);
@@ -16137,7 +16139,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal("first", UserText(_chat.Requests[0]));
         Assert.Equal("second", _chat.Requests[1][^1].Text);
         Assert.Equal(1, _running!.QueuedCount);   // third waits for a third press
-        Assert.Contains("\n" + ChatScreen.QueuedHintPart(3), output);   // the count on the idle row before any send
+        Assert.Contains("\n" + ScreenPane.RuleGlyph + " " + ChatScreen.QueuedRulePart(3), output);   // the count on the idle row before any send
         Assert.Contains(Titled(QueueStripNow(send: true)), output);
         Assert.Contains("› first", output);
         Assert.Contains("Second.", output);
@@ -16272,7 +16274,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Contains(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
-        Assert.Contains("\n" + ChatScreen.QueuedHintPart(1), output);
+        Assert.Contains("\n" + ScreenPane.RuleGlyph + " " + ChatScreen.QueuedRulePart(1), output);
         Assert.Equal(1, _running!.QueuedCount);
     }
 
@@ -16332,7 +16334,6 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("later", _chat.Requests[1][^1].Text);
         Assert.Contains("Later.", output);
-        Assert.DoesNotContain("\n" + ChatScreen.QueuedHintPart(1), output);   // never held at an idle row
     }
 
     [Fact]
@@ -16399,7 +16400,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · " + ChatScreen.QueueDroppedNotice(1), output);
     }
 
-    /// <summary>At the idle line a double-click on the held count opens the Queue pane as /queue would (2026-09-18): no › row, the entry listed, ESC closes it.</summary>
+    /// <summary>At the idle line a double-click on the held count opens the Queue pane as /queue would (2026-09-18; on the lower rule since 2026-11-26): no › row, the entry listed, ESC closes it.</summary>
     [Fact]
     public async Task ADoubleClickOnTheQueuedCount_AtIdle_OpensTheQueuePane()
     {
@@ -16409,9 +16410,9 @@ public partial class ChatScreenTests : IDisposable
             Line("hi"),
             input =>
             {
-                // No strip (speech off): "📤 1 queued" leads the row from column 0.
-                input.PushClick(3, 102);
-                input.PushClick(4, 102);
+                // "─ 📤 1 queued " leads the lower rule (2026-11-26; the hint row's until then): the count's cells from column 2.
+                input.PushClick(3, 101);
+                input.PushClick(4, 101);
             },
             Key(Keys.Escape),
             Line("/exit"));
@@ -16422,12 +16423,12 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("\n" + Titled(QueueStripNow(send: true)) + "\n \n▸ 1  later\n", output);
         Assert.DoesNotContain("› /queue", output);
         Assert.Single(_chat.Requests);
-        Assert.Contains("\n" + ChatScreen.QueuedHintPart(1), output);
+        Assert.Contains("\n" + ScreenPane.RuleGlyph + " " + ChatScreen.QueuedRulePart(1), output);
     }
 
-    /// <summary>Mid-turn a double-click on the busy row's count opens the Queue pane on the watcher, like a typed /queue (2026-09-18): the pane's keys after the spinner's count, ESC closes it, the reply runs on and the queue drains after it.</summary>
+    /// <summary>Mid-turn a double-click on the lower rule's count (the busy row's until 2026-11-26) opens the Queue pane on the watcher, like a typed /queue (2026-09-18): ESC closes it, the reply runs on and the queue drains after it.</summary>
     [Fact]
-    public async Task MidTurn_ADoubleClickOnTheBusyRowsQueuedCount_OpensTheQueuePane()
+    public async Task MidTurn_ADoubleClickOnTheLowerRulesQueuedCount_OpensTheQueuePane()
     {
         // last-known (2026-09-25): a first turn has no tally then, so the count stays where the column below says;
         // under estimate the streamed chunks' figures would sit between the label and the count.
@@ -16440,8 +16441,8 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
         _chat.EnqueueText("One ", "two ", "three.");
         _chat.EnqueueText("Later.");
-        // No strip: the frame at 0, " writing 00:00 · Esc to stop · " after it (the stop hint after the spinner since 2026-10-13), then the count.
-        int column = 1 + TextCells.Width(" " + ScreenPane.BusyText(TurnStages.WritingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator + ScreenPane.StopHint + ScreenPane.HintSeparator);
+        // The count's cells from column 2 of the lower rule (row 101), "─ " ahead of it (2026-11-26).
+        int column = 2;
         _chat.BeforeUpdate = async (i, _) =>
         {
             if (_chat.Requests.Count != 1)
@@ -16455,9 +16456,9 @@ public partial class ChatScreenTests : IDisposable
                 // Queued, and below the pane read before the reply goes on, not after fixed delays (the v0.5.0 release run,
                 // 2026-10-07: a loaded runner's reply ended first and the script ran dry at the idle line).
                 Assert.True(SpinWait.SpinUntil(() => _running!.QueuedCount == 1, TimeSpan.FromSeconds(5)), "never queued");
-                _time.Advance(ScreenPane.Tick);                  // the tick redraws the busy row with the count (the clock is manual here)
-                _scripted!.PushClick(column + 1, 102);
-                _scripted.PushClick(column + 2, 102);
+                _time.Advance(ScreenPane.Tick);                  // the tick redraws the lower rule with the count (the clock is manual here)
+                _scripted!.PushClick(column + 1, 101);
+                _scripted.PushClick(column + 2, 101);
             }
             else if (i == 2)
             {
@@ -16492,7 +16493,7 @@ public partial class ChatScreenTests : IDisposable
         _geometry = new ScreenGeometry(() => null, () => 100);
         _chat.EnqueueText("One ", "two ", "three.");
         _chat.EnqueueText("Later.");
-        int column = 1 + TextCells.Width(" " + ScreenPane.BusyText(TurnStages.WritingLabel, TimeSpan.Zero) + ScreenPane.HintSeparator);
+        int column = 2;   // the lower rule's count (2026-11-26)
         _chat.BeforeUpdate = async (i, _) =>
         {
             if (_chat.Requests.Count == 1 && i == 1)
@@ -16500,10 +16501,10 @@ public partial class ChatScreenTests : IDisposable
                 PushLine("later");
                 await Task.Delay(60, CancellationToken.None);
                 _time.Advance(ScreenPane.Tick);
-                _scripted!.PushClick(column + 1, 102);
+                _scripted!.PushClick(column + 1, 101);
                 await Task.Delay(60, CancellationToken.None);   // the first click taken
                 _time.Advance(DoubleClick.Interval + TimeSpan.FromMilliseconds(1));
-                _scripted.PushClick(column + 1, 102);
+                _scripted.PushClick(column + 1, 101);
                 await Task.Delay(60, CancellationToken.None);
             }
         };
@@ -16549,7 +16550,9 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("summarize " + block.Replace("\r\n", "\n"), _chat.Requests[1][^1].Text);
-        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint) + ScreenPane.HintSeparator + ChatScreen.QueuedHintPart(1), output);   // the stop hint after the spinner (2026-10-13)
+        Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint), output);   // the stop hint after the spinner (2026-10-13)
+        Assert.DoesNotContain(ScreenPane.StopHint + ScreenPane.HintSeparator + ChatScreen.QueuedRulePart(1), output);   // the count off the busy row (2026-11-26)
+        Assert.Contains("\n" + ScreenPane.RuleGlyph + " " + ChatScreen.QueuedRulePart(1) + " ", output);   // on the lower rule's left end
         int firstReplyEnd = output.IndexOf("three.", StringComparison.Ordinal);
         int sentRow = output.LastIndexOf("› summarize [Pasted text #1 +8 lines]\n  row 1\n  row 2\n", StringComparison.Ordinal);
         Assert.True(firstReplyEnd >= 0 && sentRow > firstReplyEnd, "the pasted line's row, with its preview, is written when it is sent");
@@ -16583,7 +16586,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Equal(2, _chat.Requests.Count);
         Assert.Equal("first line\nsecond line", _chat.Requests[1][^1].Text);   // an inline paste keeps its break
         Assert.Contains("Second.", output);
-        Assert.Contains(ChatScreen.QueuedHintPart(1), output);
+        Assert.Contains(ChatScreen.QueuedRulePart(1), output);
     }
 
     [Fact]
@@ -16619,8 +16622,8 @@ public partial class ChatScreenTests : IDisposable
     {
         Assert.Equal("📤", ChatScreen.QueueGlyph);
         Assert.Equal(2, TextCells.Width(ChatScreen.QueueGlyph));
-        Assert.Equal("📤 1 queued", ChatScreen.QueuedHintPart(1));
-        Assert.Equal("📤 12 queued", ChatScreen.QueuedHintPart(12));
+        Assert.Equal("📤 1 queued", ChatScreen.QueuedRulePart(1));
+        Assert.Equal("📤 12 queued", ChatScreen.QueuedRulePart(12));
         Assert.Equal("(⏳ 1 queued message dropped)", ChatScreen.QueueDroppedNotice(1));
         Assert.Equal("(⏳ 3 queued messages dropped)", ChatScreen.QueueDroppedNotice(3));
     }

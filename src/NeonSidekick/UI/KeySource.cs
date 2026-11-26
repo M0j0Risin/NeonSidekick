@@ -879,7 +879,7 @@ public sealed class KeySource : IAnsiConsoleInput
     /// (2026-09-18): a line text it answers is offered to <paramref name="onLine"/> exactly as a
     /// typed line would be — the same phase, nothing to hand back — so the pane that hook opens
     /// runs here under the pane's lock (the screen answers <c>/queue</c> to a double-click on the
-    /// hint row's queued count, pairing the clicks itself on the pane's clock); null, or no
+    /// lower rule's queued count, the hint row's until 2026-11-26, pairing the clicks itself on the pane's clock); null, or no
     /// <paramref name="onLine"/>, and the click is nobody's as before. The hook is asked with or
     /// without <paramref name="onLine"/> (later on 2026-09-18): a pair on the scroll's hint is
     /// spent inside it — the bottom again, a pane repaint on this task, <paramref name="spend"/>'s

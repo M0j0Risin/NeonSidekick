@@ -470,6 +470,12 @@ public static class ComfyText
             sb.Append(' ').Append(ReinforceGuide);
         }
 
+        // The LoRAs' trigger words (2026-11-26): said only when some workflow has them, as the reinforce guide is.
+        if (workflows.Any(w => w.TakesPrompt && w.TriggerWords is { Count: > 0 }))
+        {
+            sb.Append(' ').Append(TriggerWordsGuide);
+        }
+
         sb.Append("\nWorkflows (name · family · input · size):");
         foreach (var workflow in workflows)
         {
@@ -478,6 +484,7 @@ public static class ComfyText
             {
                 sb.Append(" · negative reinforced");
             }
+            sb.Append(TriggerWordsPart(workflow, "trigger words added"));
             if (workflow.Tips.Length > 0)
             {
                 sb.Append("\n  tips:\n").Append(IndentTips(workflow.Tips));
@@ -561,7 +568,7 @@ public static class ComfyText
         lines.Add(workflows.Count == 0 ? count : count + ", " + shown.Count.ToString(CultureInfo.InvariantCulture) + " offered to the model:");
         foreach (var workflow in workflows)
         {
-            lines.Add("  " + WorkflowLine(workflow) + " · {{" + string.Join("}} {{", workflow.Placeholders.Order(StringComparer.Ordinal)) + "}}" + (shown.Contains(workflow) ? "" : " · hidden"));
+            lines.Add("  " + WorkflowLine(workflow) + " · {{" + string.Join("}} {{", workflow.Placeholders.Order(StringComparer.Ordinal)) + "}}" + TriggerWordsPart(workflow, "trigger words") + (shown.Contains(workflow) ? "" : " · hidden"));
         }
 
         foreach (var problem in problems)
@@ -624,6 +631,26 @@ public static class ComfyText
         "naming the opposite of what your prompt asks, where the model tends to drift — solo → multiple girls, 2girls; night → daylight, sunlight; short hair → long hair; " +
         "black hair → blonde hair, brown hair; a photo → illustration, anime, 3d render; an empty background → crowd, people in background. " +
         "Never repeat a tag of your prompt, and leave negative_extra out for the user's own verbatim prompts; it is appended to the workflow's negative, which stays.";
+
+    /// <summary>
+    /// What <c>generate_image</c>'s description tells the model while some workflow has LoRA trigger words (2026-11-26, the user's ask: the app
+    /// adds them to every prompt, verbatim ones too). Pinned.
+    /// </summary>
+    public const string TriggerWordsGuide =
+        "A workflow marked 'trigger words added' gets those words put in front of every prompt by the app, the user's verbatim prompts too; leave them out of the prompt you write.";
+
+    /// <summary>
+    /// A workflow's trigger words after its line (2026-11-26): <c> · &lt;label&gt;: a, b</c>, or "" for none or a workflow without a prompt.
+    /// One helper for the model's line (<c>trigger words added</c>) and <c>/comfy</c>'s (<c>trigger words</c>). Pure.
+    /// </summary>
+    public static string TriggerWordsPart(ComfyWorkflow workflow, string label)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        return workflow.TakesPrompt && workflow.TriggerWords is { Count: > 0 } words ? " · " + label + ": " + string.Join(", ", words) : "";
+    }
+
+    /// <summary>A LoRA row whose name no sidecar key can hold (<see cref="ComfyWorkflow.LoraWordsKey"/>, 2026-11-26). Pinned.</summary>
+    public const string TriggerWordsBadName = "A LoRA name with a colon, a line break or spaces at its ends can't hold trigger words.";
 
     /// <summary>The description while no workflow is installed (the tool is not offered then; this is what <c>/tools</c> shows). Pinned.</summary>
     public const string DescribeEmpty = "Generates pictures on the user's ComfyUI server from one of their workflows (none is installed yet: see ComfyUI workflows on /tools).";

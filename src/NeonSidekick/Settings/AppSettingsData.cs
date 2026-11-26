@@ -452,7 +452,8 @@ public sealed class AppSettingsData
     /// <summary>
     /// The Status bar's sections (2026-10-12, the user's ask: the other bars' checklist for the hint bar; the hint bar's
     /// <c>HintBarItems</c> until 2026-10-14, when it became the Status bar and its keys went to the Hints bar, no migration): the ids
-    /// of <see cref="App.StatusBarItems.Names"/> — status, queued, timers, reading, usage and model — that the standing row draws.
+    /// of <see cref="App.StatusBarItems.Names"/> — status, timers, reading, usage and model (queued too until 2026-11-26, when the count went to
+    /// the lower rule; a saved <c>queued</c> is dropped) — that the standing row draws.
     /// Null (the default) is every one; an empty list leaves the row to the alerts and the busy row's spinner. Read on every pane
     /// draw and on its tick. No variable.
     /// </summary>

@@ -60,7 +60,21 @@ internal sealed partial class SettingsMenu
     public const string ComfyNone = "(none)";
     public const string ComfyLorasTitle = "LoRAs";
     public const string ComfyAddLoraRow = "+ Add LoRA";
-    public const string ComfyLoraKeys = "Enter = strength · Del = remove · Esc = back";
+    public const string ComfyLoraKeys = "Enter = strength · t = trigger words · Del = remove · Esc = back";
+
+    /// <summary>The LoRAs page's keys for a workflow that takes no prompt, so no trigger words (2026-11-26).</summary>
+    public const string ComfyLoraKeysNoWords = "Enter = strength · Del = remove · Esc = back";
+
+    /// <summary>The LoRAs page's title-row button for the cursor's LoRA's trigger words (2026-11-26, the user's ask). Pinned.</summary>
+    public const string ComfyTriggerWordsButton = "✎ trigger words";
+
+    /// <summary>The key that is <see cref="ComfyTriggerWordsButton"/>.</summary>
+    public const char ComfyTriggerWordsKey = 't';
+
+    /// <summary>The LoRAs page's buttons, <see cref="ComfyTriggerWordsButton"/> at index 0.</summary>
+    public static IReadOnlyList<MenuButton> ComfyLoraButtons => [new(ComfyTriggerWordsButton, ComfyTriggerWordsKey)];
+
+    public const string ComfyTriggerWordsQuestion = "Trigger words, commas between them (put in front of every prompt); empty for none.";
     public const string ComfyNoLoras = "The server lists no LoRAs.";
     public const string ComfySwitchedOffMark = "(switched off)";
     public const string ComfyStrengthQuestion = "The strength, -100 to 100 (1 is full); empty removes the LoRA.";
@@ -143,8 +157,44 @@ internal sealed partial class SettingsMenu
             draft.EffNegative,
             images > 0 ? draft.ImageRoles.Take(images).ToList() : null,
             draft.Reinforce,
-            draft.Tips));
+            draft.Tips,
+            holes.Contains(ComfyWorkflow.PromptKey) ? ComfyGraphLoraWords(draft, graphJson) : null));
     }
+
+    /// <summary>The trigger words of the LoRAs <paramref name="graphJson"/> holds, in its order, each name once (2026-11-26): <c>both</c>'s two graphs each their own.</summary>
+    private static List<(string Lora, string Words)> ComfyGraphLoraWords(ComfyDraft draft, string graphJson)
+    {
+        var words = new List<(string, string)>();
+        if (draft.LoraWords.Count == 0 || JsonNode.Parse(graphJson, documentOptions: ComfyWorkflow.Tolerant) is not JsonObject graph)
+        {
+            return words;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var lora in ComfyGraphEdit.Read(graph).Loras.Loras)
+        {
+            if (lora.Name.Length > 0 && seen.Add(lora.Name) && ComfyLoraWords(draft, lora.Name) is { Length: > 0 } said)
+            {
+                words.Add((lora.Name, said));
+            }
+        }
+
+        return words;
+    }
+
+    /// <summary>A LoRA's trigger words as the draft has them: what the LoRAs page set, else (an Edit) the sidecar's, else "".</summary>
+    private static string ComfyLoraWords(ComfyDraft draft, string lora)
+    {
+        if (draft.LoraWords.TryGetValue(lora, out string? set))
+        {
+            return set;
+        }
+
+        return draft.Editing && draft.MdFile is { } md && ComfyWorkflow.LoraWordsKey(lora) is { } key ? ComfySidecarEdit.Get(md.Text, key) ?? "" : "";
+    }
+
+    /// <summary>Whether the draft's graphs take a prompt, so its LoRAs can hold trigger words (2026-11-26).</summary>
+    private static bool ComfyTakesWords(ComfyDraft draft) => ComfyPlaceholders(draft).Contains(ComfyWorkflow.PromptKey);
 
     /// <summary>The placeholders the draft's graphs hold (both of <c>both</c>'s).</summary>
     private static IReadOnlySet<string> ComfyPlaceholders(ComfyDraft draft)
@@ -642,6 +692,9 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// The LoRAs page: <c>+ Add LoRA</c>, then one row each with its strength. Enter edits the strength (−100 to 100), Del or a cleared strength
     /// removes; a LoRA behind a switch keeps its strength editable, a switched-off one or a read-only chain shows why. True when anything changed.
+    /// Since 2026-11-26 (the user's ask) each row shows its trigger words, and <c>t</c> (<see cref="ComfyTriggerWordsButton"/>) sets them, on any
+    /// row with a literal name, the words being the sidecar's; without the pane Enter asks the strength and then the words. A removed LoRA's
+    /// words go with it, unless another loader still has that name.
     /// </summary>
     private async Task<bool> ComfyLorasAsync(ComfyDraft draft, string title, CancellationToken cancellationToken)
     {
@@ -654,23 +707,28 @@ internal sealed partial class SettingsMenu
             var view = ComfyGraphView(draft);
             var chain = view is null ? new ComfyLoraChain([], draft.GraphWhy) : ComfyGraphEdit.Read(view).Loras;
             var loras = chain.Loras;
+            bool takesWords = ComfyTakesWords(draft);
             int width = loras.Count == 0 ? 0 : Math.Min(loras.Max(l => TextCells.Width(UntrustedText.Name(l.Name))), 48) + 2;
+            int strengths = loras.Count == 0 ? 0 : loras.Max(l => l.StrengthModel is { } s ? TextCells.Width(Fmt(s)) : 0);
             var rows = loras.Select(l =>
             {
                 string head = TextCells.Cell(UntrustedText.Name(l.Name), width - 2).PadRight(width) + (l.StrengthModel is { } s ? Fmt(s) : "");
                 string note = l.SwitchedOff ? ComfySwitchedOffMark : l.Why ?? "";
-                return Markup.Escape(head) + (note.Length > 0 ? Theme.DimMarkup("  " + note) : "");
+                // The words a hand-edited sidecar holds, on one line, cut, and escaped once by DimMarkup (2026-11-26).
+                string said = takesWords && l.Name.Length > 0 ? UntrustedText.OneLine(ComfyLoraWords(draft, l.Name)) : "";
+                string words = said.Length == 0 ? "" : Theme.DimMarkup(new string(' ', strengths - (l.StrengthModel is { } t ? TextCells.Width(Fmt(t)) : 0) + 2) + TextCells.Cell(said, 40));
+                return Markup.Escape(head) + words + (note.Length > 0 ? Theme.DimMarkup("  " + note) : "");
             }).ToList();
             bool canAdd = build || chain.Editable;
             var ruled = RuledRows.Of([canAdd ? new List<string> { Markup.Escape(ComfyAddLoraRow) } : new List<string>(), rows]);
             int lead = canAdd ? 1 : 0;
-            var page = new MenuPage(crumb, ruled.Rows.Count == 0 ? [Theme.DimMarkup(ComfyNone)] : ruled.Rows, ComfyLoraKeys)
+            var page = new MenuPage(crumb, ruled.Rows.Count == 0 ? [Theme.DimMarkup(ComfyNone)] : ruled.Rows, takesWords ? ComfyLoraKeys : ComfyLoraKeysNoWords)
             {
                 Headings = ruled.Headings,
                 Caption = canAdd ? null : chain.Why,
                 Placeholder = ruled.Rows.Count == 0,
             };
-            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { } pick)
+            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken, takesWords ? ComfyLoraButtons : null).ConfigureAwait(false) is not { } pick)
             {
                 return changed;
             }
@@ -682,6 +740,17 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = item;
+            if (pick.Button == 0)
+            {
+                // t on the add row does nothing; on a LoRA it asks the words, whatever its strength's why.
+                if (item >= lead)
+                {
+                    changed |= await ComfyTriggerWordsAsync(draft, page, pick.Row, loras[item - lead], cancellationToken).ConfigureAwait(false);
+                }
+
+                continue;
+            }
+
             if (item < lead)
             {
                 if (pick.Remove)
@@ -719,6 +788,12 @@ internal sealed partial class SettingsMenu
                     Sink.Error(why);
                 }
 
+                // Without the pane there is no t: Enter asks the words alone here (2026-11-26).
+                if (!_pane.Enabled && takesWords && !pick.Remove)
+                {
+                    changed |= await ComfyTriggerWordsAsync(draft, page, pick.Row, lora, cancellationToken).ConfigureAwait(false);
+                }
+
                 continue;
             }
 
@@ -750,11 +825,82 @@ internal sealed partial class SettingsMenu
                 }
 
                 changed = true;
-                continue;
+            }
+            else
+            {
+                changed |= ComfyGraphChange(strength is { } value ? ComfyGraphEdit.SetLoraStrength(draft.Graph!, lora.Node, value) : ComfyGraphEdit.RemoveLora(draft.Graph!, lora.Node));
             }
 
-            changed |= ComfyGraphChange(strength is { } value ? ComfyGraphEdit.SetLoraStrength(draft.Graph!, lora.Node, value) : ComfyGraphEdit.RemoveLora(draft.Graph!, lora.Node));
+            if (strength is null)
+            {
+                changed |= ComfyDropLoraWords(draft, lora.Name);
+            }
+            else if (!_pane.Enabled && takesWords)
+            {
+                // Without the pane there is no t: the strength, then the words (2026-11-26).
+                changed |= await ComfyTriggerWordsAsync(draft, page, pick.Row, lora, cancellationToken).ConfigureAwait(false);
+            }
         }
+    }
+
+    /// <summary>
+    /// Asks <paramref name="lora"/>'s trigger words on <paramref name="page"/>'s row (2026-11-26): a name no key can hold says why instead. True
+    /// when they changed; the same words again change nothing.
+    /// </summary>
+    private async Task<bool> ComfyTriggerWordsAsync(ComfyDraft draft, MenuPage page, int row, ComfyLora lora, CancellationToken cancellationToken)
+    {
+        if (lora.Name.Length == 0)
+        {
+            Sink.Error(lora.Why ?? ComfyText.EditNotInGraph);
+            return false;
+        }
+
+        if (ComfyWorkflow.LoraWordsKey(lora.Name) is null)
+        {
+            Sink.Error(ComfyText.TriggerWordsBadName);
+            return false;
+        }
+
+        string current = ComfyLoraWords(draft, lora.Name);
+        if (await ComfyAskTextAsync(page, row, ComfyTriggerWordsQuestion, current, allowEmpty: true, cancellationToken).ConfigureAwait(false) is not { } typed)
+        {
+            return false;
+        }
+
+        string next = ComfySidecarEdit.Fold(typed).Trim();
+        if (string.Equals(next, current, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        draft.LoraWords[lora.Name] = next;
+        return true;
+    }
+
+    /// <summary>A removed LoRA's trigger words go with it, unless another loader in the draft still has that name (2026-11-26). True when that changed the draft.</summary>
+    private static bool ComfyDropLoraWords(ComfyDraft draft, string lora)
+    {
+        if (lora.Length == 0 || ComfyGraphView(draft) is { } view && ComfyGraphEdit.Read(view).Loras.Loras.Any(l => string.Equals(l.Name, lora, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        if (ComfyLoraWords(draft, lora).Length == 0)
+        {
+            draft.LoraWords.Remove(lora);
+            return false;
+        }
+
+        if (draft.Editing)
+        {
+            draft.LoraWords[lora] = "";
+        }
+        else
+        {
+            draft.LoraWords.Remove(lora);
+        }
+
+        return true;
     }
 
     /// <summary>A LoRA's strength typed (−100 to 100), asked again while wrong; (null) when cleared, null on Esc.</summary>
@@ -889,6 +1035,15 @@ internal sealed partial class SettingsMenu
             if (!string.Equals(draft.ImageRoles[i], original.ImageRole(i), StringComparison.Ordinal))
             {
                 Put(ComfyFieldLabels[(int)ComfyField.Image1 + i], ComfySidecarEdit.Set(md, ComfyWorkflow.ImageKeys[i], draft.ImageRoles[i].Length == 0 ? null : draft.ImageRoles[i]));
+            }
+        }
+
+        // The LoRAs' trigger words (2026-11-26): only the keys whose words changed, an empty one removed.
+        foreach (var (lora, words) in draft.LoraWords)
+        {
+            if (ComfyWorkflow.LoraWordsKey(lora) is { } key && !string.Equals(words, ComfySidecarEdit.Get(start, key) ?? "", StringComparison.Ordinal))
+            {
+                Put(ComfyFieldLabels[(int)ComfyField.Loras], ComfySidecarEdit.Set(md, key, words.Length == 0 ? null : words));
             }
         }
 

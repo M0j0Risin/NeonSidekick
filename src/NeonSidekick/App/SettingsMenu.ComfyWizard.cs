@@ -236,6 +236,12 @@ internal sealed partial class SettingsMenu
 
         public string[] ImageRoles { get; } = ["", "", ""];
 
+        /// <summary>
+        /// The LoRAs' trigger words set on the LoRAs page (2026-11-26), by name, any case: for an Edit only what changed over the sidecar's, which
+        /// <see cref="ComfyLoraWords"/> reads for the rest; "" removes a key.
+        /// </summary>
+        public Dictionary<string, string> LoraWords { get; } = new(StringComparer.OrdinalIgnoreCase);
+
         // An Edit's files as read, and the workflow they made.
         public ComfyFileText? JsonFile { get; init; }
 
