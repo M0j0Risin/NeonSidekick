@@ -87,6 +87,19 @@ public sealed class CustomCommandCatalogTests : IDisposable
         Assert.False(scan.Knows("triage"));   // a word without its slash is no command line
     }
 
+    /// <summary><c>/test</c> became <c>/bench</c> (2026-11-26): a <c>test.md</c> runs now, and a <c>bench.md</c> is the one shadowed.</summary>
+    [Fact]
+    public void TestIsFree_BenchIsShadowed()
+    {
+        Write(_profile, "test.md", "Test it.");
+        Write(_profile, "bench.md", "Bench it.");
+
+        var scan = Catalog().Scan();
+
+        Assert.Equal(["test"], scan.Commands.Select(c => c.Name));
+        Assert.Equal("/bench", Assert.Single(scan.Shadowed).BuiltIn);
+    }
+
     [Fact]
     public void ABuiltInsName_IsShadowed_AndNamedOnceARun()
     {

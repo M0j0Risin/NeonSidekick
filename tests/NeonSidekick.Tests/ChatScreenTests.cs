@@ -4168,7 +4168,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("── Operating rules ── default (file tools is off) ─", output);
+        Assert.Contains("── " + SystemPromptSummary.OperataLabel + " ── default (file tools is off) ─", output);
         Assert.DoesNotContain("Opening working-directory call", output);   // the opening calls left the Prompt tab (2026-09-26)
         Assert.DoesNotMatch(GroupHeading("Files"), output);   // a group not offered is left out of /sys' Tools tab (2026-09-26)
         Assert.Matches(ToolsHeading("Web (5)", null, "web_search"), output);
@@ -4193,7 +4193,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("GitLib (13)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
-        Assert.Contains("── Operating rules ── default ─", output);
+        Assert.Contains("── " + SystemPromptSummary.OperataLabel + " ── default ─", output);
     }
 
     /// <summary>The Unix twin of <see cref="WithGeometry_SysPromptWithAskOff_SaysSo_OnTheToolsTab"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
@@ -4215,7 +4215,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Matches(ToolsHeading("GitLib (13)", null, "gitlib_status"), output);   // between Files and Web (2026-09-20; the fixture opts every tool on; the tab's word since 2026-09-21)
         Assert.Matches(ToolsHeading("Web (6)", null, "web_search"), output);
         Assert.Matches(ToolsHeading("Sessions (1)", null, "session_manager"), output);   // 2026-09-18, ahead of the questions
-        Assert.Contains("── Operating rules ── default ─", output);
+        Assert.Contains("── " + SystemPromptSummary.OperataLabel + " ── default ─", output);
     }
 
     [Fact]
@@ -4379,7 +4379,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
         Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; 13 with read_pdf, 2026-10-14; 14 with pdf_edit later that day; 16 with zip and unzip on, 2026-10-26; 17 with read_office, 2026-10-28; the Office converters, 2026-10-29
-        Assert.Contains("── Operating rules ── default ─", output);
+        Assert.Contains("── " + SystemPromptSummary.OperataLabel + " ── default ─", output);
     }
 
     /// <summary>The Unix twin of <see cref="Turn_FreshProfile_DeleteGitDiscardAndZipOn_GitDeleteOff_AndSysPromptCountsSixteen"/> (2026-10-06, the macOS build): three file tools fewer where there are no picture codecs (`Pictures`; a Mac has them since 2026-10-07); zsh the default shell.</summary>
@@ -4415,7 +4415,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.DoesNotContain(Assistant.FileRuleWithoutDelete, prompt, StringComparison.Ordinal);
         Assert.Contains(_chat.Requests[0], m => m.Contents.OfType<FunctionCallContent>().Any(c => c.CallId == Assistant.OpeningCwdCallId));   // the group stands: the cwd call rides
         Assert.Matches(ToolsHeading("Files (19)", null, "get_working_directory"), output);   // the tab counts what is sent (2026-09-26); 13 until restore went, 2026-10-01; 13 again with convert_to_pdf, 2026-10-03; one more with pdf_edit, as on Windows (2026-10-17, the Mac pass); 16 with zip and unzip on, 2026-10-26; 17 with read_office, 2026-10-28; the Office converters, 2026-10-29
-        Assert.Contains("── Operating rules ── default ─", output);
+        Assert.Contains("── " + SystemPromptSummary.OperataLabel + " ── default ─", output);
     }
 
     [Fact]
@@ -4567,7 +4567,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotContain("Opening working-directory call", output);   // the opening calls left the Prompt tab (2026-09-26)
         Assert.Contains("── Memory ── read-write, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
-        Assert.Contains("── Operating rules ── default ─", output);   // the group stands
+        Assert.Contains("── " + SystemPromptSummary.OperataLabel + " ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
         Assert.Matches(ToolsHeading("Files (17)", null, "search_files"), output);   // the Office converters, 2026-10-29
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
@@ -4592,7 +4592,7 @@ public partial class ChatScreenTests : IDisposable
 
         Assert.DoesNotContain("Opening working-directory call", output);   // the opening calls left the Prompt tab (2026-09-26)
         Assert.Contains("── Memory ── read-write, 0 facts remembered (in the prompt: recall_memory is off in /tools) ─", output);
-        Assert.Contains("── Operating rules ── default ─", output);   // the group stands
+        Assert.Contains("── " + SystemPromptSummary.OperataLabel + " ── default ─", output);   // the group stands
         // The Tools tab leaves a disabled tool out (2026-09-26): the group counts what is left, the first row is the next tool, no note anywhere.
         Assert.Matches(ToolsHeading("Files (17)", null, "search_files"), output);   // pdf_edit's, as on Windows (2026-10-17, the Mac pass); read_office's, 2026-10-28; the Office converters, 2026-10-29
         Assert.Equal(0, CountOf(output, "not offered: switched off in /tools"));
@@ -6861,7 +6861,7 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("\n" + HeadingRow("── Operating rules ── default (LLM offer tools is off)") + "\n" + Indent(Assistant.MarkdownRule) + "\n \n", output);
+        Assert.Contains("\n" + HeadingRow("── " + SystemPromptSummary.OperataLabel + " ── default (LLM offer tools is off)") + "\n" + Indent(Assistant.MarkdownRule) + "\n \n", output);
         Assert.Contains("\n" + HeadingRow("── Memory ── read-write, 0 facts remembered") + "\n" + Indent(MemoryPrompt.DirectiveWithoutTool) + "\n", output);
         Assert.DoesNotContain("Reply format", output);   // 2026-09-26: the rules say it
         Assert.DoesNotContain("Opening clock call", output);
@@ -11671,7 +11671,7 @@ public partial class ChatScreenTests : IDisposable
     public async Task WithGeometry_HelpOpensTheInfoPane_AndEscClosesIt()
     {
         _settings.Update(d => { d.TtsOutput = false; d.MenuMaxHeight = "full"; });   // the whole tab
-        _console.Profile.Height = 196;   // /project-init's form 2026-11-23; /advisor templates, /advisor new and /sys persona template's forms 2026-11-22 (the advisor templates); /theme edit's form 2026-11-16 (#54); /net http's form 2026-11-16 (plan sharded-hugging-puppy #15); /midi's five forms and /profile push|pull midi's 2026-11-12 (the MIDI plan); /ad memberof's form 2026-11-12 (the memberof plan); /docker logs --pane's form 2026-10-23 (the Docker log window); /monitor pc's form later on 2026-10-23; /monitor's eight forms 2026-10-23; /plan edit's two forms and /plan template's 2026-10-20; the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
+        _console.Profile.Height = 197;   // /sampling off|on's form 2026-11-27; /project-init's form 2026-11-23; /advisor templates, /advisor new and /sys persona template's forms 2026-11-22 (the advisor templates); /theme edit's form 2026-11-16 (#54); /net http's form 2026-11-16 (plan sharded-hugging-puppy #15); /midi's five forms and /profile push|pull midi's 2026-11-12 (the MIDI plan); /ad memberof's form 2026-11-12 (the memberof plan); /docker logs --pane's form 2026-10-23 (the Docker log window); /monitor pc's form later on 2026-10-23; /monitor's eight forms 2026-10-23; /plan edit's two forms and /plan template's 2026-10-20; the picture folders' nine forms (/camera, /screen, /pasted, /splash, /comfy status) later still on 2026-10-18; /plan ralph's form later still on 2026-10-18; /plan open <name> --chat's form and /mark's three later still on 2026-10-18; /code-audit's four forms later on 2026-10-18; /timer stopwatch's form 2026-10-18; /plan chat's and /plan ready's forms 2026-10-17; /ad ou's form later still on 2026-10-15 (the AD gaps plan); /ad's six, /net's six, /services' and /tasks' forms later still on 2026-10-15; /eventlog's two forms 2026-10-15; /pdf's three edit forms later on 2026-10-14; the Hints bar's row 2026-10-14 (the pane's keys on a row of their own); /plan gaps' line later still on 2026-10-13; the saved links' five lines later still on 2026-10-13; /browser clear's line later on 2026-10-13; /browser's line 2026-10-13; /homebar's four lines 2026-10-12; /advisor's three lines 2026-10-10; the advanced tab's 99 lines since 2026-10-05 (each form a line of its own) and the pane's own; 58 until then (the basic tab's 29 rows)
         _geometry = new ScreenGeometry(() => null);
         PushLine("/help");
         _console.Input.PushKey(Keys.Right);   // Advanced, since later on 2026-09-27
@@ -11789,7 +11789,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The /usage Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the memory (2026-09-26; the skills on their own tab since 2026-11-07): no voice heading on a silent turn, no Also sent part.
         Assert.Contains(rule + "\n" + Titled(UsagePaneTitle) + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
-        Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
+        Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── " + SystemPromptSummary.OperataLabel + " ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
         Assert.Contains("\n" + HeadingRow("── Memory ── read-write, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
         // The skills catalog on a tab of its own since 2026-11-07: never on the Prompt tab, so its heading is first drawn after the Tools tab.
         int toolsTab = output.IndexOf(HeadingRow("── Clock · 3"), StringComparison.Ordinal);
@@ -11836,7 +11836,7 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         // The /usage Prompt tab: the default persona, the rules, memory on with nothing stored — and nothing after the memory (2026-09-26; the skills on their own tab since 2026-11-07): no voice heading on a silent turn, no Also sent part.
         Assert.Contains(rule + "\n" + Titled(UsagePaneTitle) + "\n \n" + HeadingRow("── Persona ── default") + "\n" + Indent(Assistant.DefaultPersona.Split('\n')[0]) + "\n", output);
-        Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
+        Assert.Contains("\n" + Indent(Assistant.DefaultPersona.Split('\n')[^1]) + "\n \n" + HeadingRow("── " + SystemPromptSummary.OperataLabel + " ── default") + "\n", output);   // the persona is lines since 2026-10-03; the headings rules, the text two cells in, since later that day
         Assert.Contains("\n" + HeadingRow("── Memory ── read-write, directive (the list rides the opening recall_memory call)") + "\n" + Indent(MemoryPrompt.Directive[..120]), output);
         // The skills catalog on a tab of its own since 2026-11-07: never on the Prompt tab, so its heading is first drawn after the Tools tab.
         int toolsTab = output.IndexOf(HeadingRow("── Clock · 3"), StringComparison.Ordinal);
@@ -11915,7 +11915,7 @@ public partial class ChatScreenTests : IDisposable
 
         string rule = new(ScreenPane.RuleGlyph, 240);
         // 12 rows: 8 overlay rows, 6 of content, one of them the more row: the first page is five lines.
-        Assert.Contains(rule + "\n" + Titled(UsagePaneTitle) + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── Operating rules ── default") + "\n", output);
+        Assert.Contains(rule + "\n" + Titled(UsagePaneTitle) + "\n \n" + HeadingRow("── Persona ── persona.md (24 chars)") + "\n  You are Rex, a [pirate].\n \n" + HeadingRow("── " + SystemPromptSummary.OperataLabel + " ── default") + "\n", output);
         Assert.Matches("\n[ ▲][ ▼] \\d+–\\d+ of \\d+\n" + System.Text.RegularExpressions.Regex.Escape(rule + "\n" + InfoPane.HintText + "\n" + Row(ChatScreen.HintLine(null), strip: ChatScreen.TtsGlyph)) + PaneEndPattern, output);   // speech on here: the strip stays under the pane's hint
         Assert.DoesNotContain("── Memory ── read-write", output[..output.IndexOf("\n ▼ 1–", StringComparison.Ordinal)]);
         // Paged to the end: the memory on the way, the voice directive last (speech on); the list rides the opening call, never the Prompt tab (2026-09-26).
@@ -11959,7 +11959,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Persona — default", output);
         Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[0] + "\n", output);   // a line per notice: the persona is lines since 2026-10-03
         Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[^1] + "\n", output);
-        Assert.Contains("  · Operating rules — default", output);
+        Assert.Contains("  · " + SystemPromptSummary.OperataLabel + " — default", output);
         Assert.Contains("  · Memory — read-write, directive (the list rides the opening recall_memory call)", output);
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
         Assert.DoesNotContain("Opening clock call", output);
@@ -11983,7 +11983,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.Contains("  · Persona — default", output);
         Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[0] + "\n", output);   // a line per notice: the persona is lines since 2026-10-03
         Assert.Contains("  ·   " + Assistant.DefaultPersona.Split('\n')[^1] + "\n", output);
-        Assert.Contains("  · Operating rules — default", output);
+        Assert.Contains("  · " + SystemPromptSummary.OperataLabel + " — default", output);
         Assert.Contains("  · Memory — read-write, directive (the list rides the opening recall_memory call)", output);
         Assert.DoesNotContain("Also sent", output);   // the system message alone since 2026-09-26
         Assert.DoesNotContain("Opening clock call", output);
@@ -13643,12 +13643,17 @@ public partial class ChatScreenTests : IDisposable
         string output = await RunAsync();
 
         Assert.Contains("  · " + UsageText.NothingCounted, output);
-        // The stub's server publishes no window: the context line names what is in use and nothing else.
-        Assert.Contains("  · Context: 25 tokens; window unknown\n  · Tokens — last reply: 25 (10 in, 15 out, 1 request) · 0.5 s to first token · 3.0 tok/s", output);
+        // The stub's server publishes no window: the headline is the estimate in use (2026-11-27: ContextLines' own, the old context line gone
+        // from above the scopes), the scopes after the breakdown.
+        var headlines = output.Split('\n').Where(l => l.StartsWith("  · Context: " + UsageText.EstimateMark, StringComparison.Ordinal)).ToList();
+        Assert.Equal(3, headlines.Count);
+        Assert.All(headlines, l => Assert.EndsWith(UsageText.WindowUnknown, l, StringComparison.Ordinal));
+        Assert.Contains("  · Tokens — last reply: 25 (10 in, 15 out, 1 request) · 0.5 s to first token · 3.0 tok/s", output);
+        Assert.True(output.IndexOf(headlines[1], StringComparison.Ordinal) < output.IndexOf("  · Tokens — last reply: 25", StringComparison.Ordinal));
         Assert.Contains("  · Tokens — this conversation (every request summed): 25 (10 in, 15 out, 1 request) · 0.5 s to first token · 3.0 tok/s", output);
         Assert.Contains("  · Tokens — since launch (every request summed): 25 (10 in, 15 out, 1 request) · 0.5 s to first token · 3.0 tok/s", output);
         // After /clear or /new: the conversation and the context in use start over, the launch total and the last reply stay.
-        Assert.Contains("  · Context: window unknown\n", output);
+        Assert.DoesNotContain("  · Context: window unknown\n", output);   // the old empty form is gone: the prompt and tools still count
         Assert.Contains("  · Tokens — this conversation (every request summed): 0 (0 in, 0 out, 0 requests)\n", output);
         Assert.Equal(2, output.Split("  · Tokens — since launch (every request summed): 25 (10 in, 15 out, 1 request) · 0.5 s to first token · 3.0 tok/s").Length - 1);
         Assert.Equal(2, output.Split("  · Tokens — last reply: 25").Length - 1);
@@ -13720,7 +13725,7 @@ public partial class ChatScreenTests : IDisposable
     }
 
     [Fact]
-    public async Task WithGeometry_UsageOpensTheInfoPane_Statistics_AndEscClosesIt()
+    public async Task WithGeometry_UsageOpensTheInfoPane_Context_AndEscClosesIt()
     {
         _settings.Update(d => d.TtsOutput = false);
         _console.Profile.Height = 60;
@@ -13735,13 +13740,19 @@ public partial class ChatScreenTests : IDisposable
         string strip = rule + "\n" + Titled(UsagePaneTitle) + "\n\n";
         // The grid pads its cells to the widest value: compare with the row ends trimmed.
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        Assert.Contains(strip + UsageText.NothingCounted + "\n", output);
-        // After the reply the upper rule names the session (2026-09-18), the pane's title row under it.
+        // The merged Context tab (2026-11-27): no window from the stub's server, so the headline alone on the first line, no meter; nothing
+        // counted yet under the Tokens rule.
+        Assert.Matches(Regex.Escape(strip) + "  ~[\\d,]+ tokens; window unknown\n", output);
+        Assert.Contains("\n" + HeadingRow("── " + UsageText.TokensHeading) + "\n  " + UsageText.NothingCounted + "\n", output);
+        // After the reply the upper rule names the session (2026-09-18), the pane's title row under it; the scopes as one table.
         strip = TitledRule("hi") + "\n" + Titled(UsagePaneTitle) + "\n\n";
-        // The Statistics tab after the reply: the Context section (no window from the stub's server), then the three scopes, the last reply's with its timings.
-        Assert.Contains(strip + HeadingRow("── Context ── unknown") + "\n  Window               unknown\n  In use               25\n\n" + HeadingRow("── Last reply") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n\n" + HeadingRow("── This conversation") + "\n  Total                25\n", output);
-        Assert.Contains("\n" + HeadingRow("── Since launch") + "\n  Total                25\n  Prompt               10\n  Completion           15\n  Reasoning            —\n  Requests             1\n  Time to first token  0.5 s\n  Speed                3.0 tok/s\n", output);
-        Assert.Contains(rule + "\n" + InfoPane.HintText + "\n", output);   // on the Hints bar (2026-10-14)
+        Assert.Contains(strip + "  ~", output);
+        int table = output.LastIndexOf("\n" + HeadingRow("── " + UsageText.TokensHeading) + "\n", StringComparison.Ordinal);
+        string[] rows = output[table..].Split('\n');
+        Assert.Contains(UsageText.SinceLaunchColumn, rows[2], StringComparison.Ordinal);
+        Assert.Matches("^  Total +25 +25 +25$", rows[3]);
+        Assert.Matches("^  Speed +3\\.0 tok/s +3\\.0 tok/s +3\\.0 tok/s$", rows.First(r => r.StartsWith("  Speed", StringComparison.Ordinal)));
+        Assert.Contains(rule + "\n" + InfoPane.StopsHintText + "\n", output);   // on the Hints bar (2026-10-14), the cursor's keys while a row shows (2026-11-27)
         // Nothing went to the transcript: the pane held it all.
         Assert.DoesNotContain("  · Tokens —", output);
         Assert.DoesNotContain("  · " + UsageText.NothingCounted, output);
@@ -13845,13 +13856,15 @@ public partial class ChatScreenTests : IDisposable
         string rule = new(ScreenPane.RuleGlyph, 240);
         string strip = rule + "\n" + Titled(UsagePaneTitle) + "\n\n";
         output = string.Join("\n", output.Split('\n').Select(l => l.TrimEnd()));
-        // Before the reply: the Context section over the empty note.
-        Assert.Contains(strip + HeadingRow("── Context ── loaded_context_length on /api/v0/models") + "\n  Window  100\n\n  " + UsageText.NothingCounted + "\n", output);   // the source on the rule since 2026-10-10, the label column the rows' own
+        // Before the reply: the meter over the known window (the prompt and tools alone fill it past the toy 100), the headline at its right.
+        Assert.Matches(Regex.Escape(strip + "  ") + "\\S+ +~[\\d,]+ of 100 · \\d+%\n", output);   // the cells (▰, or a shade with no color), then the headline
+        Assert.Contains("\n  " + UsageText.NothingCounted + "\n", output);
         // The hint row after the reply: the share between the size and the speed.
         Assert.Contains(rule + "\n" + Row(ChatScreen.HintLine(null, "25 / 100 · 25% · 3 tok/s")), output);
-        // After /clear: the window stays, the context in use went with the history; the hint row's share with it.
-        Assert.Contains(strip + HeadingRow("── Context ── loaded_context_length on /api/v0/models") + "\n  Window               100\n\n" + HeadingRow("── Last reply") + "\n  Total                25\n", output);
-        Assert.Contains(rule + "\n" + InfoPane.HintText + "\n", output);   // on the Hints bar (2026-10-14)
+        // After /clear: the meter still, the last reply's 25 kept in the table; the hint row's share went with the history.
+        int table = output.LastIndexOf("\n" + HeadingRow("── " + UsageText.TokensHeading) + "\n", StringComparison.Ordinal);
+        Assert.Matches("^  Total +25 +25$", output[table..].Split('\n')[3]);   // the cleared conversation's cell blank
+        Assert.Contains(rule + "\n" + InfoPane.StopsHintText + "\n", output);   // on the Hints bar (2026-10-14), the cursor's keys (2026-11-27)
     }
 
     [Fact]
@@ -13866,7 +13879,8 @@ public partial class ChatScreenTests : IDisposable
 
         string output = await RunAsync();
 
-        Assert.Contains("  · Context: 25 of 50 tokens (50%, configured)\n", output);
+        // ContextLines' headline (2026-11-27, the old context line gone): the estimate over the configured window, its source named.
+        Assert.Matches("\n  · Context: ~[\\d,]+ of 50 tokens \\(\\d+%, configured\\)\n", output);
         Assert.DoesNotContain(_http.Requests, r => r.Uri.AbsolutePath.StartsWith("/api/", StringComparison.Ordinal));
     }
 
@@ -14524,9 +14538,10 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(bare > 0 && measured > bare);
         Assert.DoesNotContain(idle("15 / 100 · 15% · 1 tok/s"), output[compacted..]);
         // /usage: c's reply alone in use; the summariser's request in the conversation and launch totals (25 + 15 + 34 + 24).
-        Assert.Contains(HeadingRow("── Context ── loaded_context_length on /api/v0/models") + "\n  Window               100\n  In use               24\n  Used                 24%\n\n" + HeadingRow("── Last reply") + "\n  Total                24\n", output);
-        Assert.Contains(HeadingRow("── This conversation") + "\n  Total                98\n", output);
-        Assert.Contains(HeadingRow("── Since launch") + "\n  Total                98\n", output);
+        // The scopes as one table since the merge (2026-11-27): the last reply, the conversation, the launch.
+        int table = output.LastIndexOf("\n" + HeadingRow("── " + UsageText.TokensHeading) + "\n", StringComparison.Ordinal);
+        Assert.True(table > 0);
+        Assert.Matches("^  Total +24 +98 +98$", output[table..].Split('\n')[3]);
     }
 
     // ── Commands during a reply ─────────────────────────────────────────────
@@ -14734,7 +14749,7 @@ public partial class ChatScreenTests : IDisposable
         Assert.True(pane > 0);
         // The first delta has streamed by then: the row reads the writing stage.
         Assert.Contains(" " + ScreenPane.BusyRow(TurnStages.WritingLabel, TimeSpan.Zero, ScreenPane.StopHint), output);
-        Assert.Contains("\n" + InfoPane.HintText + "\n", output);   // the pane's keys on the Hints bar over it (2026-10-14)
+        Assert.Contains("\n" + InfoPane.StopsHintText + "\n", output);   // the pane's keys on the Hints bar over it (2026-10-14), the cursor's since 2026-11-27
         Assert.True(pane < output.LastIndexOf("three.", StringComparison.Ordinal));
         Assert.DoesNotContain(ChatScreen.CancelledNotice, output);
         Assert.Single(_chat.Requests);
@@ -18466,9 +18481,10 @@ public partial class ChatScreenTests : IDisposable
     }
 
     /// <summary>
-    /// The ComfyUI generation's label on the busy row (2026-09-28, the user's ask): a double-click on 🖼️ and its time cancels
-    /// the picture alone — its prompt deleted from ComfyUI's queue and interrupted, the model told the user cancelled it, the
-    /// reply going on to its end, and the notice after it. A single click does nothing.
+    /// The ComfyUI generation's timer (2026-09-28, the user's ask; the lower rule's left since 2026-11-27, the busy row's until then): a
+    /// double-click on 🖼️ and its time cancels the picture alone — its prompt deleted from ComfyUI's queue and interrupted, the model told
+    /// the user cancelled it, the reply going on to its end, and the notice after it. A single click does nothing. The model's
+    /// <c>generate_image</c> is on the timer through its track seam; the hint row keeps only the spinner and the tally.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -18502,13 +18518,12 @@ public partial class ChatScreenTests : IDisposable
         };
         var clicked = polled.Task.ContinueWith(_ =>
         {
-            // The generation is running: the busy row redrawn on the tick, then the label clicked.
+            // The generation is running: the lower rule redrawn on the tick, then its left item clicked (row 101).
             _time.Advance(ScreenPane.Tick);
-            int x = BusyColumnOf(NeonSidekick.Comfy.ComfyText.TextToImageLabel + " 00:");
-            input.PushClick(x + 1, 102);
+            input.PushClick(3, 101);
             if (twice)
             {
-                input.PushClick(x + 3, 102);   // the time: the same zone, so the pair
+                input.PushClick(5, 101);   // the time: the same item, so the pair
             }
             else
             {

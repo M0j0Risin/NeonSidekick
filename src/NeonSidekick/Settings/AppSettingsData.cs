@@ -2387,7 +2387,7 @@ public sealed class AppSettingsData
     /// offered until a user manually picks one or more"; the add wizard's offer row ticks the new one; until then null was
     /// "not narrowed", every connection, and a profile saved so offers none now until ticked). A hidden connection is out of
     /// every tool, the rules, the <c>%</c>-mention and the default; <c>sql_connections</c> says how many are hidden,
-    /// never which. Still encrypted at startup and settable with <c>SQL set password</c>. The SQL tab of <c>/tools</c>,
+    /// never which. Still encrypted at startup and settable in <c>SQL add/edit connection</c>'s Password row. The SQL tab of <c>/tools</c>,
     /// second row. No variable.
     /// </summary>
     public List<string>? SqlConnectionsOffered { get; set; }

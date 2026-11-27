@@ -4,13 +4,13 @@ using NeonSidekick.Llm.Anthropic;
 
 namespace NeonSidekick.App;
 
-// ── /test (2026-09-28) ────────────────────────────────────────────────────
+// ── /bench (2026-09-28) ────────────────────────────────────────────────────
 
 internal sealed partial class ChatScreen
 {
     /// <summary>
-    /// <c>/test</c> (2026-09-28, the user's ask: LLMTester's tests run from here): a bare <c>/test</c> lists the tests with
-    /// each one's latest verdict against the connected model; <c>/test history</c> the saved runs; anything else names the
+    /// <c>/bench</c> (2026-09-28, the user's ask: LLMTester's tests run from here): a bare <c>/bench</c> lists the tests with
+    /// each one's latest verdict against the connected model; <c>/bench history</c> the saved runs; anything else names the
     /// tests to run (<see cref="BenchCatalog.Resolve"/>). A run goes test by test under a spinner whose label counts them,
     /// ESC stopping it the way it stops a compact; with the pane each test's line lands as it finishes, without it (the
     /// spinner owning the screen) they are written after. Then the table, and the run is saved in the profile's
@@ -22,13 +22,17 @@ internal sealed partial class ChatScreen
     /// (<c>/settings</c>, <c>/usage</c>, a toolbar glyph) opens over the run, a quick act runs at its end
     /// (<see cref="EndTurnAsync"/>), <c>/clear</c>, <c>/new</c> or <c>/exit</c> stops it as ESC does, and a message is queued.</para>
     /// </summary>
-    private async Task HandleTestAsync(string args, CancellationToken cancellationToken)
+    private async Task HandleBenchAsync(string args, CancellationToken cancellationToken)
     {
         var history = new BenchHistory(_settings.ProfileDirectory);
         if (args.Length == 0)
         {
+            // At the level the next run would use (2026-11-27); with no assistant (an idle-unloaded model still shown) every level, as before.
             string? model = _session.ShownModelId;
-            WriteMarkdownReply(BenchText.Listing(model is null ? new Dictionary<string, (BenchResult, DateTimeOffset)>() : history.Latest(model), model));
+            string? level = _session.Assistant is { } shown ? BenchText.ReasoningWord(shown.Reasoning) : null;
+            var latest = model is null ? new Dictionary<string, (BenchResult, DateTimeOffset)>()
+                : level is null ? history.Latest(model) : history.Latest(model, level);
+            WriteMarkdownReply(BenchText.Listing(latest, model, level));
             return;
         }
 
@@ -38,6 +42,11 @@ internal sealed partial class ChatScreen
             if (runs.Count == 0)
             {
                 _transcript.Notice(BenchText.NoRuns);
+            }
+            else if (_pane.Enabled && !FromWebNow)
+            {
+                // The Bench tab at its recent runs (2026-11-27, the user's pick); from the page a pane at the PC would answer no one.
+                await ShowUsageAsync(UsageText.BenchTabIndex, cancellationToken, BenchRecentLine(runs)).ConfigureAwait(false);
             }
             else
             {
@@ -70,9 +79,9 @@ internal sealed partial class ChatScreen
         await EndPrivateForResetAsync(cancellationToken, ClearAndRefresh).ConfigureAwait(false);
         var context = new BenchContext(_session.ContextLength?.Tokens);
         bool claudeApi = ClaudeApi.IsClaudeApi(endpoint.BaseUrl);
-        if (tests.Any(t => t.Category == BenchCategory.LongContext))
+        if (tests.Any(t => t.SizedToWindow))
         {
-            _transcript.Notice(BenchText.ContextLine(context));
+            _transcript.Notice(BenchText.ContextLine(context, tests));
         }
 
         var run = BenchRunner.NewRun(assistant, endpoint, context, _time);
@@ -123,19 +132,30 @@ internal sealed partial class ChatScreen
 
         if (run.Results.Count > 0)
         {
-            WriteMarkdownReply(BenchText.Summary(run));
+            WriteMarkdownReply(BenchText.Summary(run, history.Previous(run)));   // read before the append, so never this run
             if (!history.Append(run))
             {
                 _transcript.Warning(BenchText.NotSaved);
             }
         }
 
-        DiagnosticLog.Info("Test", $"/test {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", canceled" : "")}.");
+        DiagnosticLog.Info(BenchText.LogCategory, $"/bench {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", canceled" : "")}.");
         DrainDiagnostics();
     }
 
-    /// <summary><c>/test</c>'s argument list: each test by id (its name the note), the three group words, <c>all</c> and <c>history</c>.</summary>
-    internal static IReadOnlyList<UI.CompletionItem> TestChoices() =>
+    /// <summary>The profile's saved runs, for the Bench tab (read when the tab is built, as <c>/bench</c> reads them).</summary>
+    private IReadOnlyList<BenchRun> BenchRuns() => new BenchHistory(_settings.ProfileDirectory).Runs();
+
+    /// <summary>Your setup for the Bench grid's mark: the connected model at the assistant's level; null with no assistant, so no row is guessed.</summary>
+    private (string? Model, string Reasoning)? BenchCurrent() =>
+        _session.Assistant is { } assistant ? (_session.ShownModelId, BenchText.ReasoningWord(assistant.Reasoning)) : null;
+
+    /// <summary>The Bench tab's Recent runs rule's line at the pane's body width, where <c>/bench history</c> opens the view.</summary>
+    private int? BenchRecentLine(IReadOnlyList<BenchRun> runs) =>
+        UsageText.BenchLayout(_sessions.ModelStats(), runs, BenchCurrent(), _effective().SessionLogging, UsageBodyWidth(), _private.IsPrivate).RecentLine;
+
+    /// <summary><c>/bench</c>'s argument list: each test by id (its name the note), the three group words, <c>all</c> and <c>history</c>.</summary>
+    internal static IReadOnlyList<UI.CompletionItem> BenchChoices() =>
         BenchCatalog.All.Select(t => new UI.CompletionItem(t.Id, t.Name))
             .Concat(BenchCatalog.CategoryWords.Select(g => new UI.CompletionItem(g.Word, BenchText.GroupNote(g.Category))))
             .Append(new UI.CompletionItem(BenchCatalog.AllWord, BenchText.AllNote))
@@ -165,7 +185,7 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary>Markdown written as a reply is, styled per <c>Transcript markdown</c> (the <c>/echo</c> path): <c>/test</c>'s tables. Never spoken, never in the history.</summary>
+    /// <summary>Markdown written as a reply is, styled per <c>Transcript markdown</c> (the <c>/echo</c> path): <c>/bench</c>'s tables. Never spoken, never in the history.</summary>
     private void WriteMarkdownReply(string markdown)
     {
         var effective = _effective();

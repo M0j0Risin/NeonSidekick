@@ -227,10 +227,10 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// A built-in's copy says what was copied, not "edit it, then /theme" (#194), keeps its role words (#98), and a no to the copy says
-    /// unchanged (#195); d with a change asks (#45).
+    /// unchanged (#195); Esc with a change asks (#45; Esc since the d key went, 2026-11-26).
     /// </summary>
     [Fact]
-    public async Task ThemeEdit_ABuiltInsCopy_SaysCopied_KeepsItsWords_AndDAsks()
+    public async Task ThemeEdit_ABuiltInsCopy_SaysCopied_KeepsItsWords_AndEscAsks()
     {
         using var theme = new ThemeScope();
         EditorPane();
@@ -239,9 +239,9 @@ public partial class ChatScreenTests
         PushKeys(Keys.Char('y'));
         PushKeys(Keys.Enter);                    // yes: bauhaus-custom made
         PushKeys(Keys.Right);                    // primary lighter
-        PushKeys(Keys.Char('d'));                // a change: asks
+        PushKeys(Keys.Escape);                   // a change: asks
         PushKeys(Keys.Enter);                    // Keep editing: the editor again
-        PushKeys(Keys.Char('d'));
+        PushKeys(Keys.Escape);
         PushKeys(Keys.Down, 2);
         PushKeys(Keys.Enter);                    // Discard: dropped
         PushLine("/theme edit noir");
@@ -285,9 +285,9 @@ public partial class ChatScreenTests
         Assert.Contains("  · " + BeforePath(ThemeText.EditSavedNotInForce("mine", MineTheme()), MineTheme()), output);
     }
 
-    /// <summary><c>d</c> with changes, Keep editing, then <c>s</c> (2026-11-26): the editor kept the changes through the question.</summary>
+    /// <summary>Esc with changes, Keep editing, then <c>s</c> (2026-11-26): the editor kept the changes through the question.</summary>
     [Fact]
-    public async Task ThemeEdit_DWithChanges_KeepEditing_ThenSSaves()
+    public async Task ThemeEdit_EscWithChanges_KeepEditing_ThenSSaves()
     {
         using var theme = new ThemeScope();
         EditorPane();
@@ -296,7 +296,7 @@ public partial class ChatScreenTests
         PushLine("/theme edit mine");
         PushKeys(Keys.Down, DimRow);
         PushKeys(Keys.Left);                     // dim 4% darker
-        PushKeys(Keys.Char('d'));                // asks
+        PushKeys(Keys.Escape);                   // asks
         PushKeys(Keys.Enter);                    // Keep editing
         PushKeys(Keys.Char('s'));
         PushLine("/exit");
@@ -306,6 +306,33 @@ public partial class ChatScreenTests
         var darker = HslColor.From(ShippedThemes.Synthwave.Dim).WithLightness(-SettingsMenu.EditLightnessStep).ToColor();
         Assert.Equal(Theme.ToHex(darker), ColorIn(MineTheme(), "dim"));
         Assert.Contains(SettingsMenu.LeaveQuestion("mine"), output);
+    }
+
+    /// <summary>
+    /// <c>d</c> does nothing (2026-11-26, the user's ask: Esc's question covers a discard, so the key and its button went): a change, then
+    /// <c>d</c>, then <c>s</c> saves the change, with no question asked and only save and reset on the strip.
+    /// </summary>
+    [Fact]
+    public async Task ThemeEdit_D_DoesNothing()
+    {
+        using var theme = new ThemeScope();
+        EditorPane();
+        WriteMine();
+        _settings.Update(d => { d.TtsOutput = false; d.Theme = "synthwave"; });
+        PushLine("/theme edit mine");
+        PushKeys(Keys.Down, DimRow);
+        PushKeys(Keys.Right);                    // dim 4% lighter
+        PushKeys(Keys.Char('d'));                // nothing
+        PushKeys(Keys.Char('s'));
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        var lighter = HslColor.From(ShippedThemes.Synthwave.Dim).WithLightness(SettingsMenu.EditLightnessStep).ToColor();
+        Assert.Equal(Theme.ToHex(lighter), ColorIn(MineTheme(), "dim"));
+        Assert.DoesNotContain(SettingsMenu.LeaveQuestion("mine"), output);
+        Assert.Contains(ThemeText.SaveButton + " · " + ThemeText.ResetButton, output);
+        Assert.DoesNotContain(ThemeText.ResetButton + " · discard", output);
     }
 
     /// <summary>A name not found is the one tried: the theme in force when none is given (#93).</summary>

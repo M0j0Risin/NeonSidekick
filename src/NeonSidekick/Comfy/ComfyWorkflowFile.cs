@@ -9,9 +9,10 @@ namespace NeonSidekick.Comfy;
 /// The sidecar's values as the wizard writes them (<see cref="ComfyWorkflowFile.Sidecar"/>); <see cref="ImageRoles"/> (later
 /// still on 2026-09-24, the face swap) are the input pictures' roles in slot order, a blank one left out. <see cref="Reinforce"/> false
 /// writes <c>reinforce: false</c>, and <see cref="Tips"/> go under the head (2026-11-25, the shortened wizard). <see cref="LoraWords"/>
-/// (2026-11-26) are the graph's LoRAs' trigger words in its order, one <c>lora.&lt;name&gt;</c> line each that has words.
+/// (2026-11-26) are the graph's LoRAs' trigger words in its order, one <c>lora.&lt;name&gt;</c> line each that has words; <see cref="LoraOff"/>
+/// (2026-11-27) the LoRAs switched off, one <c>lora-off.&lt;name&gt;: yes</c> line each after them.
 /// </summary>
-public sealed record ComfySidecar(string Description, ComfyFamily Family, int? Width, int? Height, int? Steps, double? Cfg, double? Denoise, string Negative, IReadOnlyList<string>? ImageRoles = null, bool Reinforce = true, string Tips = "", IReadOnlyList<(string Lora, string Words)>? LoraWords = null);
+public sealed record ComfySidecar(string Description, ComfyFamily Family, int? Width, int? Height, int? Steps, double? Cfg, double? Denoise, string Negative, IReadOnlyList<string>? ImageRoles = null, bool Reinforce = true, string Tips = "", IReadOnlyList<(string Lora, string Words)>? LoraWords = null, IReadOnlyList<string>? LoraOff = null);
 
 /// <summary>
 /// Writing a new workflow into a <c>comfy</c> folder (later on 2026-09-24, the add-workflow wizard's save): the sidecar
@@ -85,6 +86,14 @@ public static class ComfyWorkflowFile
             if (ComfyWorkflow.LoraWordsKey(lora) is { } key && ComfySidecarEdit.Fold(words).Trim() is { Length: > 0 } folded)
             {
                 sb.Append(key).Append(": ").Append(Skills.SkillFrontmatter.Scalar(folded)).Append('\n');
+            }
+        }
+
+        foreach (string lora in values.LoraOff ?? [])
+        {
+            if (ComfyWorkflow.LoraOffKey(lora) is { } key)
+            {
+                sb.Append(key).Append(": ").Append(ComfyWorkflow.LoraOffValue).Append('\n');
             }
         }
 

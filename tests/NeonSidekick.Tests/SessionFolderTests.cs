@@ -66,7 +66,8 @@ public sealed class SessionFolderTests : IDisposable
         Assert.Null(old.Cwd);
         Assert.Equal(SessionStore.SchemaVersion, store.SchemaStored());
         Assert.Equal(3, SessionStore.SchemaVersion);
-        foreach (var (table, column) in new[] { ("sessions", "cwd"), ("turns", "model"), ("turns", "output_ms"), ("turns", "timed_output"), ("turns", "cwd") })
+        foreach (var (table, column) in new[] { ("sessions", "cwd"), ("turns", "model"), ("turns", "output_ms"), ("turns", "timed_output"), ("turns", "cwd"),
+            ("turns", "context_tokens"), ("turns", "first_token_ms"), ("turns", "reasoning_tokens") })   // /usage's per-reply figures (2026-11-27)
         {
             Assert.True(store.HasColumn(table, column), column);
         }
@@ -224,5 +225,41 @@ public sealed class SessionFolderTests : IDisposable
     {
         Assert.True(FolderMatch.Same("/Users/x/Repo", "/Users/x/Repo/"));
         Assert.False(FolderMatch.Same("/Users/x/Repo", "/users/x/repo"));
+    }
+
+    /// <summary>
+    /// The per-reply figures (2026-11-27, /usage's trend and records): the context, the wait per request (the average, not the sum over a
+    /// reply's requests) and the reasoning are written and read back; a store whose column adds failed restores with them null.
+    /// </summary>
+    [Fact]
+    public void EachTurn_SavesItsContextFirstTokenAndReasoning_AndARestoreReadsThemBack()
+    {
+        using var store = new SessionStore(_dir, _time);
+        long id = store.Begin("t", "m", _dir)!.Value;
+        // Two requests waiting 1 s and 3 s: 2,000 ms a request.
+        var usage = new NeonSidekick.Llm.TokenUsage(100, 40, 140, 2, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(2), Reasoning: 12);
+        store.AppendTurn(id, "q", "r", 0, [], [], 0, 100, 40, false, model: "m", usage: usage, contextTokens: 2_048);
+        store.AppendTurn(id, "q2", "r2", 0, [], [], 0, 0, 0, false, model: "m");
+
+        Assert.Equal(2_048L, RawScalar("SELECT context_tokens FROM turns WHERE ordinal = 1"));
+        Assert.Equal(2_000L, RawScalar("SELECT first_token_ms FROM turns WHERE ordinal = 1"));
+        Assert.Equal(12L, RawScalar("SELECT reasoning_tokens FROM turns WHERE ordinal = 1"));
+        var turns = store.Load(id)!.Turns;
+        Assert.Equal((2_048L, 2_000L, 12L), (turns[0].ContextTokens, turns[0].FirstTokenMs, turns[0].ReasoningTokens));
+        Assert.Equal((2_000L, 40L), (turns[0].OutputMs, turns[0].TimedOutput));
+        Assert.Equal(((long?)null, (long?)null, (long?)null), (turns[1].ContextTokens, turns[1].FirstTokenMs, turns[1].ReasoningTokens));
+    }
+
+    [Fact]
+    public void AStoreWhoseColumnAddsFailed_RestoresASession_WithTheFiguresNull()
+    {
+        OlderFile();
+        using var store = new SessionStore(_dir, _time) { BeforeColumnAdds = () => throw new SqliteException("database is locked", 5) };
+        long id = store.Begin("new", "m", _dir)!.Value;
+        store.AppendTurn(id, "x", "y", 0, [], [], 0, 10, 5, false, model: "m", contextTokens: 99);
+
+        var turn = Assert.Single(store.Load(id)!.Turns);
+        Assert.Equal(((long?)null, (long?)null, (string?)null), (turn.ContextTokens, turn.FirstTokenMs, turn.Model));
+        Assert.Same(ModelBests.None, store.ModelBests("m"));   // no all-time columns without the figures
     }
 }

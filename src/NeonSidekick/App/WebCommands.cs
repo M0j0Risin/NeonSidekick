@@ -94,7 +94,7 @@ public static class WebCommands
         SlashCommand.Timer, SlashCommand.Cwd, SlashCommand.Tree, SlashCommand.Vault, SlashCommand.Browser, SlashCommand.Prompts,
         SlashCommand.Plan, SlashCommand.CodeAudit, SlashCommand.ProjectInit, SlashCommand.Process, SlashCommand.Learn, SlashCommand.Imagine, SlashCommand.Comfy, SlashCommand.HomeAssistant,
         SlashCommand.Docker, SlashCommand.EventLog, SlashCommand.Net, SlashCommand.Services, SlashCommand.Tasks, SlashCommand.Ad, SlashCommand.Monitor, SlashCommand.Camera, SlashCommand.Screen, SlashCommand.Shopping, SlashCommand.Print, SlashCommand.Pdf, SlashCommand.Docx,
-        SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Test, SlashCommand.Avatar, SlashCommand.Loop,
+        SlashCommand.Rename, SlashCommand.Claude, SlashCommand.Advisor, SlashCommand.Bench, SlashCommand.Avatar, SlashCommand.Loop,
         SlashCommand.MsgClear, SlashCommand.Mark,   // /mark (2026-10-18): the PC's rules, set from the page too
         SlashCommand.Private,   // 2026-11-25: the private-conversations plan, its yes and its pictures question raced on the page and the PC
         SlashCommand.Custom,   // 2026-10-30: the user's own commands, a message once expanded
@@ -182,7 +182,7 @@ public static class WebCommands
             SlashCommand.Advisor when Advisors.AdvisorText.ParseSetup(args, settings.AdvisorTemplateIds) is { Kind: Advisors.AdvisorSetupKind.List } =>
                 Pane(word + " " + Advisors.AdvisorText.ListWord, Advisors.AdvisorText.Word),
             SlashCommand.Clear or SlashCommand.New or SlashCommand.Splash or SlashCommand.Compact or SlashCommand.Timer or SlashCommand.Mark or SlashCommand.Private
-                or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Test or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Imagine => WebCommandVerdict.Run,
+                or SlashCommand.Claude or SlashCommand.Advisor or SlashCommand.Bench or SlashCommand.Pdf or SlashCommand.Docx or SlashCommand.Imagine => WebCommandVerdict.Run,
             // 2026-10-16, the user's ask: the page shares the message history now, so it may clear it; the yes is asked on the page and the PC.
             SlashCommand.MsgClear => WebCommandVerdict.Run,
             SlashCommand.Rewind => WebCommandVerdict.Pick,

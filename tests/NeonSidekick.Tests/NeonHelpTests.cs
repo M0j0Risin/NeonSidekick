@@ -149,7 +149,7 @@ public class NeonHelpTests
         var windowsOnly = ToolsText.WindowsOnlyMenus.SelectMany(title => SettingsMenu.ToolsTabFields[ToolsText.MenuIndex(title)]).ToHashSet();
         var mac = HelpLocation.RowsFor(windows: false);
 
-        Assert.Equal(15, windowsOnly.Count);   // seven rows each for Services and Tasks, Monitors' one (2026-10-23)
+        Assert.Equal(13, windowsOnly.Count);   // six rows each for Services and Tasks (their set-password rows went, 2026-11-26), Monitors' one (2026-10-23)
         Assert.Equal(HelpLocation.RowsFor(windows: true).Where(r => !windowsOnly.Contains(r.Field)), mac);
         Assert.DoesNotContain(mac, r => r.Field == SettingsField.ServiceTools || r.Field == SettingsField.TaskTools);
     }

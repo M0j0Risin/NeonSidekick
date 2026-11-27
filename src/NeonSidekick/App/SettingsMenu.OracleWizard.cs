@@ -98,6 +98,10 @@ internal sealed partial class SettingsMenu
         ConnectionStamp(draft.Name, draft.Global, draft.Config, OracleJsonContext.Default.OracleConnectionConfig, x => x.Password = null);
 
     /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
+    private static bool OracleWizardPasswordOnly(OracleDraft draft) =>
+        WizardPasswordOnly(draft.Original, OracleWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
+
     private static bool OracleWizardDirty(OracleDraft draft) =>
         draft.Original is not null && (!string.Equals(OracleWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -705,6 +709,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private bool? OracleWizardSave(OracleDraft draft, bool offer)
     {
+        bool passwordOnly = OracleWizardPasswordOnly(draft);   // before the normalizing below, which can change the stamp
         var c = draft.Config;
         if (OracleWizardMissing(draft) is { } missing)
         {
@@ -719,7 +724,7 @@ internal sealed partial class SettingsMenu
         }
 
         string path = OracleWizardPath(draft.Global);
-        if (!SaveWizardEntry(OracleConfigFile.Family, path, OracleWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget))
+        if (!SaveWizardEntry(OracleConfigFile.Family, path, OracleWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget, passwordOnly))
         {
             return null;
         }

@@ -414,9 +414,12 @@ internal sealed partial class SettingsMenu
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(avatar);
-        string lead = AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face + " " : new string(' ', ProfileAvatarCells + 1);
-        return Markup.Escape(lead + name);
+        return Markup.Escape(AvatarLead(avatar) + name);
     }
+
+    /// <summary>A profile row's lead: the avatar and a space, or blanks of its width for none, so the names stand in one column. Plain text.</summary>
+    public static string AvatarLead(string avatar) =>
+        AvatarRules.Normalize(avatar) is { Length: > 0 } face ? face + " " : new string(' ', ProfileAvatarCells + 1);
 
     /// <summary>The cells an avatar takes in a profile picker's row: one two-cell emoji (<see cref="AvatarRules"/>).</summary>
     public const int ProfileAvatarCells = 2;

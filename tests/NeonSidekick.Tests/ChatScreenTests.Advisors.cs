@@ -353,4 +353,51 @@ public partial class ChatScreenTests
         Assert.Equal(1, opened);
         Assert.Contains(TranscriptRenderer.ToolAnswerIndent + "Index the foreign key.\n", output);
     }
+
+    /// <summary>
+    /// An advisor switched off (2026-11-27, the user's ask): <c>/advisor ops</c> is refused and sends nothing, an active advisor whose
+    /// role holds the same word is still asked, the bare list puts the off one last, marked, and the model isn't offered the tool with
+    /// every advisor off.
+    /// </summary>
+    [Fact]
+    public async Task AdvisorCommand_AnOffAdvisorIsRefused_AnActiveRoleStillWins_AndTheListMarksIt()
+    {
+        AdvisorProfiles(on: true);
+        Profiles.Create(_settings.StorageDirectory, "ops", new AppSettingsData());
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("dba", "database"), new AdvisorEntry("ops", "database ops", Off: true)]);
+        _chat.EnqueueText("Index the foreign key.");   // dba, on the borrowed server
+        PushLine("/advisor");
+        PushLine("/advisor ops q");
+        PushLine("/advisor database q");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(AdvisorText.OffRefusal("ops"), output);
+        Assert.Single(_chat.Requests);   // dba's alone
+        int dbaLine = output.IndexOf("  dba ", StringComparison.Ordinal);
+        int opsLine = output.IndexOf("  ops ", StringComparison.Ordinal);
+        Assert.True(dbaLine >= 0 && opsLine > dbaLine, "the off one comes last");
+        string opsListed = output.Split('\n').First(l => l.Contains("database ops", StringComparison.Ordinal) && l.Contains("  ops", StringComparison.Ordinal));
+        Assert.EndsWith(AdvisorText.OffMark, opsListed.TrimEnd(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AdvisorCommand_EveryAdvisorOff_RefusesBoth_AndTheToolIsNotOffered()
+    {
+        AdvisorProfiles(on: true);
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("dba", "database architect", Off: true)]);
+        _chat.EnqueueText("one");
+        PushLine("/advisor dba q");
+        PushLine("/advisor nobody q");
+        PushLine("hello");
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Contains(AdvisorText.OffRefusal("dba"), output);
+        Assert.Contains(AdvisorText.ForUser(AdvisorText.AllOffError), output);
+        Assert.DoesNotContain(AdvisorText.ForUser(AdvisorText.NoAdvisorsError), output);
+        Assert.DoesNotContain(_chat.Options[0]!.Tools!.Cast<AIFunction>(), t => t.Name == NeonAdvisorTool.ToolName);
+    }
 }

@@ -89,7 +89,8 @@ public sealed record LlmSampling
     /// The sampling for <paramref name="modelId"/> under <paramref name="effective"/>: field by field, the model's entry
     /// (its key compared ignoring case), then <see cref="AnyModel"/>'s; the extra body merged by key, the model's winning.
     /// A saved value out of its field's range, or an extra key <see cref="ExtraProblem"/> refuses — only a hand-edited
-    /// profile holds one — warns and is skipped (the next layer's value, or none, stands); never clamped.
+    /// profile holds one — warns and is skipped (the next layer's value, or none, stands); never clamped. An off model entry is
+    /// <see cref="None"/>, and an off <see cref="AnyModel"/> entry lends nothing (2026-11-27, the off switch).
     /// </summary>
     public static LlmSampling Resolve(AppSettingsData effective, string? modelId)
     {
@@ -101,7 +102,12 @@ public sealed record LlmSampling
 
         string? modelKey = string.IsNullOrWhiteSpace(modelId) ? null : KeyFor(map, modelId);
         var model = modelKey is null || modelKey == AnyModel ? null : map[modelKey];
-        var any = KeyFor(map, AnyModel) is { } anyKey ? map[anyKey] : null;
+        if (model is { Off: true })
+        {
+            return None;   // the server's own defaults, the * values too
+        }
+
+        var any = KeyFor(map, AnyModel) is { } anyKey && map[anyKey] is { Off: false } anyEntry ? anyEntry : null;
         if (model is null && any is null)
         {
             return None;

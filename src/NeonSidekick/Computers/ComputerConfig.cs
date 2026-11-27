@@ -14,7 +14,7 @@ public sealed record ComputerFamilyInfo(
     string FileName,
     string OfferedSetting,
     string MenuPath,
-    string SetPasswordRow,
+    string EditRow,
     string CredentialPrefix,
     IReadOnlyList<string> ActionWords,
     string VisibleKey,

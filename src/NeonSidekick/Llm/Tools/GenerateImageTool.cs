@@ -87,11 +87,18 @@ public sealed class GenerateImageTool : AIFunction, IWrittenCallAliases
     /// their own workflows alone — the two pickers' then, the Botchat limited workflows' set since 2026-10-04): read at every description
     /// and every call; null is every offered workflow, the main chat's tool.
     /// </param>
-    public GenerateImageTool(ComfyStudio studio, Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? narrow = null)
+    /// <param name="track">
+    /// Held around each generation with its input-picture count (2026-11-27, the lower rule's pictures timer: the screen's
+    /// <c>PendingPictures.Begin</c>); null tracks nothing (headless, tests).
+    /// </param>
+    public GenerateImageTool(ComfyStudio studio, Func<IReadOnlyList<ComfyWorkflow>, IReadOnlyList<ComfyWorkflow>>? narrow = null, Func<int, IDisposable>? track = null)
     {
         _studio = studio ?? throw new ArgumentNullException(nameof(studio));
         _narrow = narrow;
+        _track = track;
     }
+
+    private readonly Func<int, IDisposable>? _track;
 
     public override string Name => ToolName;
 
@@ -230,6 +237,7 @@ public sealed class GenerateImageTool : AIFunction, IWrittenCallAliases
         ComfyGeneration generation;
         try
         {
+            using var tracked = _track?.Invoke(request.ImageCount);
             generation = await _studio.GenerateAsync(request, cancellationToken, _narrow).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)

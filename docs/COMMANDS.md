@@ -81,9 +81,9 @@ Elsewhere:
 | `/memory remember [--here] <text>` | Adds a memory, whatever *Memory mode* says. `--here`, before the text, offers it only while working in this folder; on a memory that's turned off it brings it back for this folder only, and one kept everywhere stays everywhere. |
 | `/memory forget\|edit` | Forgets every memory after a yes, or opens `memory.json` in your editor. |
 | `/msgclear` | Clears this profile's message history (what ↑/↓ recall) after a yes; from the Web UI, it asks on the page and the PC. |
-| `/usage` | Token usage and performance, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. |
-| `/usage context` | The Context tab: what fills the window (the system prompt, each tool group, the history, pictures, thinking) and, with the window known, what turning a switchable group off would save. |
-| `/usage models` | The Models tab: each model's turns, sessions, tool calls, error and cancel rates, output and tok/s, from the saved sessions. Turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out. |
+| `/usage` | The Context tab: what fills the window (the prompt, each tool group, the history, pictures, thinking), the replies' trend, the token table and records, with rows for `/claude`, `/botchat` and the advisors; `~` marks an estimate. Space switches a tool group, Enter opens where a row is changed. |
+| `/usage context` | Opens the same tab as `/usage`. |
+| `/usage bench` | The Bench tab (`models` also works): each model in use (turns, sessions, tool calls, error and cancel rates, output, tok/s, from saved sessions), its latest `/bench` verdict per test, and the recent runs. Turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out. |
 | `/usage prompt\|tools\|skills` | The Prompt tab (the system message, less the skills block), the Tools tab (each tool offered) or the Skills tab (the skills block: its directive, then each skill with its scope and file). |
 | `/usage sysprompt [conversation] [to=<path>]` | Writes the system message and every tool offered to a Markdown file here, or at `to=` (a file or a folder), never over a file. `conversation` adds this conversation's messages: mind it before a commit. |
 
@@ -97,8 +97,9 @@ Elsewhere:
 | `/sampling` | Edits the per-model sampling in a pane; see [Sampling per model](SETTINGS.md#sampling-per-model). |
 | `/sampling <field> <value>\|clear` | Sets or clears one of the connected model's values: `temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `frequency_penalty` or `repetition_penalty`. |
 | `/sampling extra <json>\|clear`, `/sampling clear` | Sets or clears the extra request body, or clears every override of the connected model. |
+| `/sampling off\|on` | Switches the connected model's tab off, so it gets the server's own defaults with your values kept, or back on. |
 | `/advisor` | Lists the advisors with their roles, server kinds and models. See [Advisor](#advisor). |
-| `/advisor <name> <question>` | Asks one advisor, by profile name or a word of its role; the answer joins the conversation. |
+| `/advisor <name> <question>` | Asks one advisor, by profile name or a word of its role; the answer joins the conversation. An advisor switched off is refused. |
 | `/advisor list` | Opens *Advisor list* in `/settings`. See [Advisor](#advisor). |
 | `/advisor templates` | Lists the advisor templates, built in and your own. See [Advisor](#advisor). |
 | `/advisor new <template> [<name>]` | Makes a new profile from a template and adds it as an advisor. See [Advisor](#advisor). |
@@ -366,7 +367,7 @@ Run the [Admin](TOOLS.md#admin) tools yourself, the [network checks](TOOLS.md#ne
 | `/botchat [<profile> ...] [--] [<topic>]` | Lets profiles talk to each other until you stop them. See [Bot conversations](#bot-conversations). |
 | `/botchat --resume [<line>]`, `/botchat --kill` | Carries on the last bot conversation, or stops the extra embedded servers the bots started. |
 | `/loop <count>\|infinite [<delay>] <message>`, `/loop <count>\|infinite [<delay>] /imagine\|/read <arguments>` | Sends a message, or runs `/imagine` or `/read`, that many times or until Esc. See [Loops](#loops). |
-| `/test [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. See [Benchmark tests](#benchmark-tests). |
+| `/bench [<id>\|reasoning\|structured\|long\|all\|history]` | Runs benchmark tests against the connected model. See [Benchmark tests](#benchmark-tests). |
 | `/learn [<note>]`, `/learn sessions [<n>\|<search>]` | Writes or improves a skill in the background from the last turn, or stored sessions (the newest 5, *n* up to 20, or a search); *Reflection mode* `update-only` only improves one. Needs *Agent skills* and *LLM offer tools*. |
 | `/timer [<duration> [<name>]]`, `/timer stopwatch [<name>]`, `/timer stop <name>\|all` | Lists or starts timers (`10m`, `1h30m`; a bare number is minutes; up to 24 hours), starts a stopwatch (again, it says its time), or stops one or all. A timer rings *Timer tone*, a stopwatch never; works with *Timer tools* off. |
 
@@ -515,7 +516,7 @@ Settings: `/settings` › [Automation](SETTINGS.md#automation).
 * Your question goes with the conversation's last 10 messages, whatever *Advisor context* says.
 * The pair joins the conversation under its name (`[to dba]`, `[dba]`), and the advisor remembers it.
 * It works with *Advisors enabled* on or off and never asks first. Headless, the answer prints as `dba: …`.
-* A bare `/advisor` shows each one's server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`) and its description; a deleted profile is `(missing)`.
+* A bare `/advisor` shows each one's server kind (`claudecode`, `embedded`, `docker`, `anthropic`, `openai`, `http` or `scan`) and its description; a deleted profile is `(missing)`, and the ones switched off come last, marked `(off)`.
 * `/advisor list` opens *Advisor list* ([SETTINGS.md](SETTINGS.md#advisors)) to add, change or remove advisors; from the Web UI it runs at the PC only.
 * `/advisor templates` lists the templates: the built-in ones and your own in `advisors/` in the home.
 * `/advisor new <template> [<name>]` makes a profile from the template (its persona, role, description and avatar) on this profile's saved server and model, and adds it, with no switch. A taken name is refused.
@@ -567,7 +568,8 @@ Style: $style
 
 ### Benchmark tests
 
-`/test <id>` runs one of nine benchmark tests, each one request graded in code.
+`/bench <id>` runs one of nine benchmark tests, each one request graded in code.
+A run ends with a table by group, the time it took, and what changed since the model's last run at the same reasoning level.
 
 | Id | Test | Passes when |
 |---|---|---|
@@ -579,11 +581,11 @@ Style: $style
 | `state` | State Tracking (Structured Output) | four inventory steps come back as a JSON object with the right counts |
 | `needle` | Needle in a Haystack (Long Context) | a password hidden mid-way through a long context is found |
 | `multihop` | Multi-Hop Synthesis (Long Context) | two facts at 10% and 90% depth are combined into `mangoes1998` |
-| `saturation` | Context Saturation (Long Context) | the server accepts a prompt that fills the whole context window |
+| `saturation` | Context Saturation (Window Capacity) | the server accepts a prompt that fills the whole context window; skipped when the context window is unknown |
 
-* `/test reasoning`, `structured` and `long` run a group; `/test all` runs everything, saturation last. Alone, `/test` lists the tests and their last verdicts.
+* `/bench reasoning`, `structured` and `long` run a group (saturation is in none); `/bench all` runs everything, saturation last. Alone, `/bench` lists the tests and their last verdicts at the current reasoning level.
 * A test sends only its own messages (no system prompt, history or tools); the structured tests are skipped over the Anthropic API. Nothing enters the conversation.
-* The last 50 runs are saved in the profile's `tests.json` (`/test history`).
+* The last 50 runs are saved in the profile's `tests.json`. `/bench history` opens `/usage` › Bench at the recent runs; without the pane, or from the Web UI, it lists the last 15 with their sampling.
 
 ### Imagine options
 

@@ -114,6 +114,10 @@ internal sealed partial class SettingsMenu
         ConnectionStamp(draft.Name, draft.Global, draft.Config, PostgresJsonContext.Default.PostgresConnectionConfig, x => x.Password = null);
 
     /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
+    private static bool PostgresWizardPasswordOnly(PostgresDraft draft) =>
+        WizardPasswordOnly(draft.Original, PostgresWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
+
     private static bool PostgresWizardDirty(PostgresDraft draft) =>
         draft.Original is not null && (!string.Equals(PostgresWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -731,6 +735,7 @@ internal sealed partial class SettingsMenu
     /// <summary>Writes the draft: the entry, then its password to its store, then — when <paramref name="offer"/> — its name there. Null when nothing was written.</summary>
     private bool? PostgresWizardSave(PostgresDraft draft, bool offer)
     {
+        bool passwordOnly = PostgresWizardPasswordOnly(draft);   // before the normalizing below, which can change the stamp
         var c = draft.Config;
         if (PostgresWizardMissing(draft) is { } missing)
         {
@@ -745,7 +750,7 @@ internal sealed partial class SettingsMenu
         }
 
         string path = PostgresWizardPath(draft.Global);
-        if (!SaveWizardEntry(PostgresConfigFile.Family, path, PostgresWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget))
+        if (!SaveWizardEntry(PostgresConfigFile.Family, path, PostgresWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget, passwordOnly))
         {
             return null;
         }

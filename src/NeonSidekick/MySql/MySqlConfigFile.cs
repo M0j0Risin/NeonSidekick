@@ -78,7 +78,7 @@ public sealed class MySqlConfigFile
         "  // },\n" +
         "  //\n" +
         "  // TLS checked against the host name, the password in Windows Credential Manager as NeonSidekick/mysql/<name> — set it\n" +
-        "  // with MySQL set password on /tools › Databases › MySQL, or: cmdkey /generic:NeonSidekick/mysql/billing /user:billing_ro /pass\n" +
+        "  // in MySQL add/edit connection's Password row on /tools › Databases › MySQL, or: cmdkey /generic:NeonSidekick/mysql/billing /user:billing_ro /pass\n" +
         "  // \"billing\": {\n" +
         "  //   \"host\": \"db01.example.com\", \"database\": \"billing\", \"user\": \"billing_ro\", \"passwordStore\": \"credman\",\n" +
         "  //   \"sslMode\": \"verify-full\"\n" +

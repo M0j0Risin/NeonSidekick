@@ -60,10 +60,10 @@ internal sealed partial class SettingsMenu
     public const string ComfyNone = "(none)";
     public const string ComfyLorasTitle = "LoRAs";
     public const string ComfyAddLoraRow = "+ Add LoRA";
-    public const string ComfyLoraKeys = "Enter = strength · t = trigger words · Del = remove · Esc = back";
+    public const string ComfyLoraKeys = "Enter = strength · Space = on/off · t = trigger words · Del = remove · Esc = back";
 
     /// <summary>The LoRAs page's keys for a workflow that takes no prompt, so no trigger words (2026-11-26).</summary>
-    public const string ComfyLoraKeysNoWords = "Enter = strength · Del = remove · Esc = back";
+    public const string ComfyLoraKeysNoWords = "Enter = strength · Space = on/off · Del = remove · Esc = back";
 
     /// <summary>The LoRAs page's title-row button for the cursor's LoRA's trigger words (2026-11-26, the user's ask). Pinned.</summary>
     public const string ComfyTriggerWordsButton = "✎ trigger words";
@@ -77,6 +77,19 @@ internal sealed partial class SettingsMenu
     public const string ComfyTriggerWordsQuestion = "Trigger words, commas between them (put in front of every prompt); empty for none.";
     public const string ComfyNoLoras = "The server lists no LoRAs.";
     public const string ComfySwitchedOffMark = "(switched off)";
+
+    /// <summary>The mark at the end of a LoRA row switched off on the LoRAs page (2026-11-27, the user's ask). Pinned.</summary>
+    public const string ComfyLoraOffMark = "off";
+
+    /// <summary>The notice when Space switches a LoRA off. Pinned.</summary>
+    public static string ComfyLoraOffNotice(string lora) => "LoRA " + UntrustedText.Name(lora) + " off: left out of every run, kept in the file";
+
+    /// <summary>The notice when it is switched back on. Pinned.</summary>
+    public static string ComfyLoraOnNotice(string lora) => "LoRA " + UntrustedText.Name(lora) + " on";
+
+    /// <summary>Without the pane (no Space): the question after Enter's strength and words (2026-11-27). Pinned.</summary>
+    public static string ComfyLoraOffQuestion(string lora, bool off) =>
+        off ? "Switch " + UntrustedText.Name(lora) + " back on?" : "Switch " + UntrustedText.Name(lora) + " off?";
     public const string ComfyStrengthQuestion = "The strength, -100 to 100 (1 is full); empty removes the LoRA.";
     public const string ComfyImageRoleQuestion = "What this picture is for, in your words (the model reads it); empty for nothing said.";
     public const string ComfyTipsQuestion = "Prompt tips the model reads, one line (longer tips: Open the Markdown).";
@@ -158,7 +171,45 @@ internal sealed partial class SettingsMenu
             images > 0 ? draft.ImageRoles.Take(images).ToList() : null,
             draft.Reinforce,
             draft.Tips,
-            holes.Contains(ComfyWorkflow.PromptKey) ? ComfyGraphLoraWords(draft, graphJson) : null));
+            holes.Contains(ComfyWorkflow.PromptKey) ? ComfyGraphLoraWords(draft, graphJson) : null,
+            ComfyGraphLoraOff(draft, graphJson)));   // whatever the holes: leaving a LoRA out is the graph's, not the prompt's (2026-11-27)
+    }
+
+    /// <summary>The LoRAs switched off that <paramref name="graphJson"/> holds, in its order, each once (2026-11-27): <c>both</c>'s two graphs each their own.</summary>
+    private static List<string> ComfyGraphLoraOff(ComfyDraft draft, string graphJson)
+    {
+        var off = new List<string>();
+        if (draft.LoraOff.Count == 0 || JsonNode.Parse(graphJson, documentOptions: ComfyWorkflow.Tolerant) is not JsonObject graph)
+        {
+            return off;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var lora in ComfyGraphEdit.Read(graph).Loras.Loras)
+        {
+            if (lora.Name.Length > 0 && seen.Add(lora.Name) && ComfyLoraOff(draft, lora.Name))
+            {
+                off.Add(lora.Name);
+            }
+        }
+
+        return off;
+    }
+
+    /// <summary>Whether a LoRA is switched off as the draft has it: what the LoRAs page set, else (an Edit) the sidecar's key, else on.</summary>
+    private static bool ComfyLoraOff(ComfyDraft draft, string lora)
+    {
+        if (lora.Length == 0)
+        {
+            return false;
+        }
+
+        if (draft.LoraOff.TryGetValue(lora, out bool set))
+        {
+            return set;
+        }
+
+        return draft.Editing && draft.MdFile is { } md && ComfyWorkflow.LoraOffKey(lora) is { } key && ComfyWorkflow.IsOffValue(ComfySidecarEdit.Get(md.Text, key));
     }
 
     /// <summary>The trigger words of the LoRAs <paramref name="graphJson"/> holds, in its order, each name once (2026-11-26): <c>both</c>'s two graphs each their own.</summary>
@@ -273,7 +324,8 @@ internal sealed partial class SettingsMenu
                     return Dim(draft.GraphWhy ?? ComfyWizardNotNeeded);
                 }
 
-                var on = parts.Loras.Loras.Where(l => !l.SwitchedOff).Select(l => UntrustedText.Name(l.Name) + (l.StrengthModel is { } s ? " " + Fmt(s) : "")).ToList();
+                var on = parts.Loras.Loras.Where(l => !l.SwitchedOff).Select(l => UntrustedText.Name(l.Name) + (l.StrengthModel is { } s ? " " + Fmt(s) : "")
+                    + (ComfyLoraOff(draft, l.Name) ? " (" + ComfyLoraOffMark + ")" : "")).ToList();   // an off LoRA marked (2026-11-27)
                 string text = on.Count == 0 ? ComfyNone : string.Join(", ", on);
                 return parts.Loras.Editable || parts.Loras.Loras.Any(l => l.Editable)
                     ? Plain(text)
@@ -742,7 +794,10 @@ internal sealed partial class SettingsMenu
                 // The words a hand-edited sidecar holds, on one line, cut, and escaped once by DimMarkup (2026-11-26).
                 string said = takesWords && l.Name.Length > 0 ? UntrustedText.OneLine(ComfyLoraWords(draft, l.Name)) : "";
                 string words = said.Length == 0 ? "" : Theme.DimMarkup(new string(' ', strengths - (l.StrengthModel is { } t ? TextCells.Width(Fmt(t)) : 0) + 2) + TextCells.Cell(said, 40));
-                return Markup.Escape(head) + words + (note.Length > 0 ? Theme.DimMarkup("  " + note) : "");
+                // An off LoRA (2026-11-27): its head dim from its plain text, its strength and words kept, "off" at its end.
+                bool off = ComfyLoraOff(draft, l.Name);
+                return (off ? Theme.DimMarkup(head) : Markup.Escape(head)) + words + (note.Length > 0 ? Theme.DimMarkup("  " + note) : "")
+                    + (off ? Theme.DimMarkup("  " + ComfyLoraOffMark) : "");
             }).ToList();
             bool canAdd = build || chain.Editable;
             var ruled = RuledRows.Of([canAdd ? new List<string> { Markup.Escape(ComfyAddLoraRow) } : new List<string>(), rows]);
@@ -752,8 +807,9 @@ internal sealed partial class SettingsMenu
                 Headings = ruled.Headings,
                 Caption = canAdd ? null : chain.Why,
                 Placeholder = ruled.Rows.Count == 0,
+                SpaceToggles = true,
             };
-            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken, takesWords ? ComfyLoraButtons : null).ConfigureAwait(false) is not { } pick)
+            if (await PickListToggleAsync(page, ruled.RowOf(cursor), cancellationToken, takesWords ? ComfyLoraButtons : null).ConfigureAwait(false) is not { } pick)
             {
                 return changed;
             }
@@ -765,6 +821,17 @@ internal sealed partial class SettingsMenu
             }
 
             cursor = item;
+            if (pick.Toggle)
+            {
+                // Space (2026-11-27): off or on, ahead of the strength's gate, since a LoRA whose strength another node sets can still be left
+                // out; nothing on the add row.
+                if (item >= lead)
+                {
+                    changed |= ComfyToggleLoraOff(draft, loras[item - lead]);
+                }
+
+                continue;
+            }
             if (pick.Button == 0)
             {
                 // t on the add row does nothing; on a LoRA it asks the words, whatever its strength's why.
@@ -813,10 +880,15 @@ internal sealed partial class SettingsMenu
                     Sink.Error(why);
                 }
 
-                // Without the pane there is no t: Enter asks the words alone here (2026-11-26).
-                if (!_pane.Enabled && takesWords && !pick.Remove)
+                // Without the pane there is no t: Enter asks the words alone here (2026-11-26), then the off question (2026-11-27).
+                if (!_pane.Enabled && !pick.Remove)
                 {
-                    changed |= await ComfyTriggerWordsAsync(draft, page, pick.Row, lora, cancellationToken).ConfigureAwait(false);
+                    if (takesWords)
+                    {
+                        changed |= await ComfyTriggerWordsAsync(draft, page, pick.Row, lora, cancellationToken).ConfigureAwait(false);
+                    }
+
+                    changed |= await ComfyAskLoraOffAsync(draft, lora, cancellationToken).ConfigureAwait(false);
                 }
 
                 continue;
@@ -859,11 +931,17 @@ internal sealed partial class SettingsMenu
             if (strength is null)
             {
                 changed |= ComfyDropLoraWords(draft, lora.Name);
+                changed |= ComfyDropLoraOff(draft, lora.Name);
             }
-            else if (!_pane.Enabled && takesWords)
+            else if (!_pane.Enabled)
             {
-                // Without the pane there is no t: the strength, then the words (2026-11-26).
-                changed |= await ComfyTriggerWordsAsync(draft, page, pick.Row, lora, cancellationToken).ConfigureAwait(false);
+                // Without the pane there is no t nor Space: the strength, then the words (2026-11-26), then the off question (2026-11-27).
+                if (takesWords)
+                {
+                    changed |= await ComfyTriggerWordsAsync(draft, page, pick.Row, lora, cancellationToken).ConfigureAwait(false);
+                }
+
+                changed |= await ComfyAskLoraOffAsync(draft, lora, cancellationToken).ConfigureAwait(false);
             }
         }
     }
@@ -899,6 +977,97 @@ internal sealed partial class SettingsMenu
         }
 
         draft.LoraWords[lora.Name] = next;
+        return true;
+    }
+
+    /// <summary>
+    /// Why <paramref name="lora"/> can't be switched off or on (2026-11-27), or null: a switch node's unused branch, no literal name, a name
+    /// no key can hold, or (switching off) a graph the splice can't take it out of, tried on a copy for every loader of that name with the
+    /// other off ones out first, so no off mark is ever saved that the load would refuse.
+    /// </summary>
+    private static string? ComfyLoraOffRefusal(ComfyDraft draft, ComfyLora lora)
+    {
+        if (lora.SwitchedOff)
+        {
+            return ComfyText.LoraOffSwitchedOff;
+        }
+
+        if (lora.Name.Length == 0)
+        {
+            return lora.Why ?? ComfyText.EditNotInGraph;
+        }
+
+        if (ComfyWorkflow.LoraOffKey(lora.Name) is null)
+        {
+            return ComfyText.LoraOffBadName;
+        }
+
+        if (ComfyLoraOff(draft, lora.Name))
+        {
+            return null;   // back on: nothing to splice
+        }
+
+        if (ComfyGraphView(draft)?.DeepClone() is not JsonObject copy)
+        {
+            return draft.GraphWhy ?? ComfyText.EditNotInGraph;
+        }
+
+        var names = ComfyGraphEdit.Read(copy).Loras.Loras.Where(l => l.Name.Length > 0 && ComfyLoraOff(draft, l.Name)).Select(l => l.Name)
+            .Append(lora.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return ComfyWorkflow.LeaveOut(copy, names, []) is { } refused ? refused.Why : null;
+    }
+
+    /// <summary>Space on a LoRA (2026-11-27): switched off or on, or the reason it can't be. True when the draft changed.</summary>
+    private bool ComfyToggleLoraOff(ComfyDraft draft, ComfyLora lora)
+    {
+        if (ComfyLoraOffRefusal(draft, lora) is { } why)
+        {
+            Sink.Error(why);
+            return false;
+        }
+
+        bool off = !ComfyLoraOff(draft, lora.Name);
+        draft.LoraOff[lora.Name] = off;
+        Sink.Notice(off ? ComfyLoraOffNotice(lora.Name) : ComfyLoraOnNotice(lora.Name));
+        return true;
+    }
+
+    /// <summary>Without the pane (2026-11-27): the yes/no that switches <paramref name="lora"/> off or back on; a LoRA that can't be says why instead.</summary>
+    private async Task<bool> ComfyAskLoraOffAsync(ComfyDraft draft, ComfyLora lora, CancellationToken cancellationToken)
+    {
+        if (ComfyLoraOffRefusal(draft, lora) is { } why)
+        {
+            Sink.Error(why);
+            return false;
+        }
+
+        return await ConfirmAsync(ComfyLoraOffQuestion(lora.Name, ComfyLoraOff(draft, lora.Name)), cancellationToken, close: false).ConfigureAwait(false)
+            && ComfyToggleLoraOff(draft, lora);
+    }
+
+    /// <summary>A removed LoRA's off mark goes with it, unless another loader in the draft still has that name (2026-11-27). True when that changed the draft.</summary>
+    private static bool ComfyDropLoraOff(ComfyDraft draft, string lora)
+    {
+        if (lora.Length == 0 || ComfyGraphView(draft) is { } view && ComfyGraphEdit.Read(view).Loras.Loras.Any(l => string.Equals(l.Name, lora, StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        if (!ComfyLoraOff(draft, lora))
+        {
+            draft.LoraOff.Remove(lora);
+            return false;
+        }
+
+        if (draft.Editing)
+        {
+            draft.LoraOff[lora] = false;
+        }
+        else
+        {
+            draft.LoraOff.Remove(lora);
+        }
+
         return true;
     }
 
@@ -1111,6 +1280,15 @@ internal sealed partial class SettingsMenu
             if (ComfyWorkflow.LoraWordsKey(lora) is { } key && !string.Equals(words, ComfySidecarEdit.Get(start, key) ?? "", StringComparison.Ordinal))
             {
                 Put(ComfyFieldLabels[(int)ComfyField.Loras], ComfySidecarEdit.Set(md, key, words.Length == 0 ? null : words));
+            }
+        }
+
+        // The LoRAs switched off (2026-11-27): only the keys that changed, yes when off, the key removed when on.
+        foreach (var (lora, off) in draft.LoraOff)
+        {
+            if (ComfyWorkflow.LoraOffKey(lora) is { } key && off != ComfyWorkflow.IsOffValue(ComfySidecarEdit.Get(start, key)))
+            {
+                Put(ComfyFieldLabels[(int)ComfyField.Loras], off ? ComfySidecarEdit.SetWord(md, key, ComfyWorkflow.LoraOffValue) : ComfySidecarEdit.Set(md, key, null));
             }
         }
 

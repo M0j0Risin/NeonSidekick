@@ -59,8 +59,8 @@ public static class DirectoryText
         return "ad_find(" + string.Join(", ", parts) + ")";
     }
 
-    /// <summary>The row a domain's password is set with (2026-10-23, the wizard's unticked save, H9).</summary>
-    public const string SetPasswordRow = "Directory set password";
+    /// <summary>The row a domain's password is set in, its Password row (2026-10-23, the wizard's unticked save, H9; the edit row since the set-password row went, 2026-11-26).</summary>
+    public const string EditRow = "Directory add/edit domain";
 
     public const string Working = "Reading the directory…";
 
@@ -101,7 +101,7 @@ public static class DirectoryText
     /// so a model's retries cannot lock the account. Pinned.
     /// </summary>
     public static string Held(string domain, string account) =>
-        $"Error: {domain} refused the password for {account}, so it is not tried again (repeated tries can lock the account). Set it again with Directory set password on {MenuPath}.";
+        $"Error: {domain} refused the password for {account}, so it is not tried again (repeated tries can lock the account). Set it again with {EditRow} (its Password row) on {MenuPath}.";
 
     /// <summary>
     /// How far this machine's clock is from a KDC's (2026-10-20, the code review), whole minutes rounded up, for <see cref="DirectoryErrors"/>'
@@ -286,10 +286,10 @@ public static class DirectoryText
 
     public const string NoDomainTicked = "Error: no domain is ticked in Directory domains offered (" + MenuPath + ").";
 
-    public static string NoPassword(string name) => $"no password for '{name}'; set it with Directory set password on {MenuPath}";
+    public static string NoPassword(string name) => $"no password for '{name}'; set it with {EditRow} (its Password row) on {MenuPath}";
 
     public static string NoCredential(string target) =>
-        $"no password in {Sql.SqlText.CredentialStore} for {target}; the user can set it with {SetPasswordRow} on {MenuPath}";   // DP1 (2026-10-23, L4): no cmdkey line
+        $"no password in {Sql.SqlText.CredentialStore} for {target}; the user can set it with {EditRow} (its Password row) on {MenuPath}";   // DP1 (2026-10-23, L4): no cmdkey line
 
     /// <remarks>The count's noun agrees (2026-10-23, the admin review's S18: "0 user read").</remarks>
     public static string TestOk(string name, string server, string domain, int users) =>

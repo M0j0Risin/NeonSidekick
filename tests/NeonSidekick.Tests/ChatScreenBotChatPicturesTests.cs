@@ -397,12 +397,12 @@ public partial class ChatScreenTests
             if (_chat.Requests.Count == 3 && i == 0)
             {
                 // Ada answers while the picture renders: the lower rule's 🖼️ double-clicked under the reply (2026-11-23; the strip's until then),
-                // the space after it at the rule's right edge, as the only item there.
+                // at the rule's left end since 2026-11-27, with its time.
                 await polled.Task.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
                 _time.Advance(ScreenPane.Tick);
-                Assert.Contains(" 🖼️ ─\n", Output);
-                Scripted().PushClick(238, 101);
-                Scripted().PushClick(238, 101);
+                Assert.Contains("─ " + NeonSidekick.Comfy.ComfyText.TextToImageLabel + NeonSidekick.App.PendingPictures.Gap, Output);
+                Scripted().PushClick(3, 101);
+                Scripted().PushClick(3, 101);
                 for (int tries = 0; tries < 500 && !drained; tries++)
                 {
                     await Task.Delay(10, CancellationToken.None);

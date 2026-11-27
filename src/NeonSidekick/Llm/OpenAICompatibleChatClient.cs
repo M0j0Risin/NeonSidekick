@@ -420,7 +420,7 @@ public sealed class OpenAICompatibleChatClient : IChatClient
     /// where it drops them by default) and <c>clear_thinking=false</c> (GLM's name for the same switch) to the same object.
     /// <see cref="SamplingKey"/> (later on 2026-09-28, <c>LLM sampling</c>) adds top_k, min_p, the repetition penalty and
     /// the extra body (<see cref="RawFieldsJson"/>). A JSON-schema <see cref="ChatOptions.ResponseFormat"/> (2026-09-28,
-    /// <c>/test</c>'s structured-output tests) goes the same way, written as it came: the adapter's own mapping reshapes the
+    /// <c>/bench</c>'s structured-output tests) goes the same way, written as it came: the adapter's own mapping reshapes the
     /// schema for OpenAI's strict mode (<c>minimum</c> moved into a <c>description</c>, found on the published exe) and sends
     /// no <c>strict</c>, where llama.cpp, vLLM and SGLang compile the schema's keywords into their grammar and LLMTester
     /// sends it verbatim. Servers and templates that know none of these ignore them. A caller-supplied factory is left

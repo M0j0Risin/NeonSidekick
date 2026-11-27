@@ -255,10 +255,10 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal([SettingsField.AskUser, SettingsField.AskRepeatGuard, SettingsField.AskMaxQuestions, SettingsField.AskMaxChoices], TabFields(ToolsText.AskTabTitle));   // Ask repeat guard since 2026-11-24
         Assert.Equal([SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName], TabFields(ToolsText.GitTabTitle));   // the switch first, then the limits, then the identity pair (2026-09-21); the GitLib labels later that day
         Assert.Equal([SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete], TabFields(ToolsText.ObsidianTabTitle));   // the switch, then the vault (2026-09-22), then the delete switch (later that day)
-        Assert.Equal([SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], TabFields(ToolsText.SqlTabTitle));   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the three engines' text cap (2026-10-01), the two edit rows (2026-09-23)
-        Assert.Equal([SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal], TabFields(ToolsText.OracleTabTitle));   // the SQL tab's rows, in its order (2026-09-30)
-        Assert.Equal([SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal], TabFields(ToolsText.MySqlTabTitle));   // the Oracle tab's rows, in its order (later on 2026-09-30)
-        Assert.Equal([SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal], TabFields(ToolsText.UncTabTitle));   // the two switches, the offered list, the default, the password prompt, the wizard, the %-mention switch, the two edit rows (later still on 2026-09-30)
+        Assert.Equal([SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal], TabFields(ToolsText.SqlTabTitle));   // the switch, the offered list (later that day), the default, the password prompt, the add-connection wizard and the %-mention switch (later that day), the two caps, the three engines' text cap (2026-10-01), the two edit rows (2026-09-23)
+        Assert.Equal([SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal], TabFields(ToolsText.OracleTabTitle));   // the SQL tab's rows, in its order (2026-09-30)
+        Assert.Equal([SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal], TabFields(ToolsText.MySqlTabTitle));   // the Oracle tab's rows, in its order (later on 2026-09-30)
+        Assert.Equal([SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal], TabFields(ToolsText.UncTabTitle));   // the two switches, the offered list, the default, the password prompt, the wizard, the %-mention switch, the two edit rows (later still on 2026-09-30)
         Assert.Equal([SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe], TabFields(ToolsText.DockerTabTitle));   // the two switches, the pipe (2026-10-02)
         Assert.Equal(OperatingSystem.IsMacOS() ? 22 : 20, SettingsMenu.LabelWidthOf(TabFields(ToolsText.DockerTabTitle)));   // "Docker engine pipe"; a Mac's "Docker engine socket" (2026-10-11)
         Assert.Equal(Enum.GetValues<SettingsField>().Order(), SettingsMenu.TabFields.Concat(SettingsMenu.SkillsTabFields).Concat(SettingsMenu.ToolsTabFields).Concat(SettingsMenu.McpTabFields).SelectMany(t => t).Order());
@@ -670,65 +670,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains(Strips(ToolsText.AppsTabTitle) + Headed(ToolsText.ObsidianTabTitle, "▸ Obsidian tools                  on\n  Obsidian vault                  (not set)\n  Obsidian allow delete (.trash)  on\n"), Output);
     }
 
-    /// <summary>
-    /// <c>SQL set password</c> (later on 2026-09-23): the connections that take a password with their store, then a masked
-    /// slot under the picked one; the password lands encrypted in the connection's <c>sql.json</c> and never on screen.
-    /// </summary>
-    [WindowsFact]
-    public async Task OnThePane_TheSqlTab_SetsAPassword_Masked_IntoTheConnectionsStore()
-    {
-        string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
-        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "database": "db", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "database": "db", "auth": "windows" } } }""");
-        var (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (right under the offered list since the default row went, 2026-10-09): the pick
-        Push(Keys.Enter);                                               // prod, the one connection that takes a password
-        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Escape);
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        var loaded = NeonSidekick.Sql.SqlConfigFile.Load(path);
-        Assert.StartsWith(NeonSidekick.Sql.WindowsCredentials.ProtectedPrefix, loaded.Connections[0].Config.Password);
-        Assert.Equal("s3cret", NeonSidekick.Sql.SqlSecrets.Resolve(loaded.Connections[0]).Value);
-        Assert.Contains("▸ " + SettingsMenu.SqlPasswordRow(loaded.Connections[0]), Output);
-        Assert.Contains("••••••", Output);
-        Assert.DoesNotContain("s3cret", Output);
-        Assert.Contains("Saved the password of 'prod', encrypted, in ", Output);
-        Assert.Equal("prod  (runas CONTOSO\\svc-test · encrypted in sql.json)", SettingsMenu.SqlPasswordRow(loaded.Connections[0]));
-    }
-
-    /// <summary>The Unix twin of <see cref="OnThePane_TheSqlTab_SetsAPassword_Masked_IntoTheConnectionsStore"/> (2026-10-06, the macOS build): a <c>keychain:</c> value, where Windows writes <c>dpapi:</c>.</summary>
-    [UnixFact]
-    public async Task OnThePane_TheSqlTab_SetsAPassword_Masked_IntoTheConnectionsStore_Unix()
-    {
-        if (!OperatingSystem.IsMacOS())
-        {
-            return;
-        }
-
-        string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
-        File.WriteAllText(path, """{ "connections": { "prod": { "server": "x", "database": "db", "auth": "runas", "user": "CONTOSO\\svc-test" }, "mine": { "server": "y", "database": "db", "auth": "windows" } } }""");
-        var (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row (right under the offered list since the default row went, 2026-10-09): the pick
-        Push(Keys.Enter);                                               // prod, the one connection that takes a password
-        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        var loaded = NeonSidekick.Sql.SqlConfigFile.Load(path);
-        Assert.StartsWith(NeonSidekick.Sql.WindowsCredentials.KeychainPrefix, loaded.Connections[0].Config.Password);
-        Assert.Equal("s3cret", NeonSidekick.Sql.SqlSecrets.Resolve(loaded.Connections[0]).Value);
-        Assert.Contains("▸ " + SettingsMenu.SqlPasswordRow(loaded.Connections[0]), Output);
-        Assert.Contains("••••••", Output);
-        Assert.DoesNotContain("s3cret", Output);
-        Assert.Contains("Saved the password of 'prod', encrypted, in ", Output);
-        Assert.Equal("prod  (runas CONTOSO\\svc-test · encrypted in sql.json)", SettingsMenu.SqlPasswordRow(loaded.Connections[0]));
-    }
-
-    /// <summary>The Oracle tab, row <paramref name="row"/> (2026-09-30): the switch 0, mode 1, statements 2 (2026-10-05), offered 3, password 4, wizard 5 (the default row went 2026-10-09).</summary>
+    /// <summary>The Oracle tab, row <paramref name="row"/> (2026-09-30): the switch 0, mode 1, statements 2 (2026-10-05), offered 3, wizard 4 (the default row went 2026-10-09, the password row 2026-11-26).</summary>
     private void OpenOracleRow(int row) => Push([.. ToTab(ToolsText.OracleTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     /// <summary>
@@ -755,7 +697,7 @@ public partial class ToolsMenuTests : IDisposable
             listed.Add(c);
             return Task.FromResult(new NeonSidekick.Sql.SqlRun(NeonSidekick.Sql.SqlOutcome.Ok, "", c.Name, "NEON", [new NeonSidekick.Sql.SqlGrid(["owner"], [["HR"], ["OE"], ["lab"]], false)], TimeSpan.Zero));
         };
-        OpenOracleRow(5);
+        OpenOracleRow(4);
         Push(Keys.Enter);                         // the profile's file
         Type("free");
         Type("localhost:1521/FREEPDB1");
@@ -818,7 +760,7 @@ public partial class ToolsMenuTests : IDisposable
         string home = NeonSidekick.Oracle.OracleConfigFile.GlobalPath(_settings.StorageDirectory);
         var (menu, _, settings) = PaneMenu(testOracle: (c, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name)));
         settings.ListOracleSchemas = (c, _, _) => Task.FromResult(NeonSidekick.Sql.SqlRun.Refused(NeonSidekick.Sql.SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name));
-        OpenOracleRow(5);
+        OpenOracleRow(4);
         Push(Keys.Escape);                        // the first page: nothing written
         Push(Keys.Enter);                         // again
         Push(Keys.Down, Keys.Enter);              // the home's file
@@ -864,28 +806,6 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task OnThePane_TheOracleTab_SetsAPassword_Masked_IntoTheConnectionsStore()
-    {
-        string path = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
-        File.WriteAllText(path, """{ "connections": { "free": { "dataSource": "x:1521/y", "user": "neon" } } }""");
-        var (menu, _, _) = PaneMenu();
-        OpenOracleRow(4);
-        Push(Keys.Enter);                                               // free
-        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        var loaded = NeonSidekick.Oracle.OracleConfigFile.Load(path);
-        Assert.Equal("s3cret", NeonSidekick.Oracle.OracleSecrets.Resolve(loaded.Connections[0]).Value);
-        Assert.Contains("▸ " + SettingsMenu.OraclePasswordRow(loaded.Connections[0]), Output);
-        Assert.DoesNotContain("s3cret", Output);
-        Assert.Contains("Saved the password of 'free', encrypted, in ", Output);
-        Assert.Equal("free  (user neon · encrypted in oracle.json)", SettingsMenu.OraclePasswordRow(loaded.Connections[0]));
-    }
-
-    [Fact]
     public async Task OnThePane_TheOracleTab_NarrowsTheOfferedConnections()
     {
         string path = NeonSidekick.Oracle.OracleConfigFile.ProfilePath(_settings.ProfileDirectory);
@@ -905,7 +825,7 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Equal("1 of 2", SettingsMenu.OracleOfferedValue(_settings.Current.OracleConnectionsOffered, NeonSidekick.Oracle.OracleConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory)));
     }
 
-    /// <summary>The MySQL tab, row <paramref name="row"/> (later on 2026-09-30): the switch 0, mode 1, statements 2 (2026-10-05), offered 3, password 4, wizard 5 (the default row went 2026-10-09).</summary>
+    /// <summary>The MySQL tab, row <paramref name="row"/> (later on 2026-09-30): the switch 0, mode 1, statements 2 (2026-10-05), offered 3, wizard 4 (the default row went 2026-10-09, the password row 2026-11-26).</summary>
     private void OpenMySqlRow(int row) => Push([.. ToTab(ToolsText.MySqlTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     /// <summary>
@@ -925,7 +845,7 @@ public partial class ToolsMenuTests : IDisposable
                 [new NeonSidekick.Sql.SqlGrid(["user", "database", "version"], [["neon@%", "shop", "8.4.11"]], false),
                  new NeonSidekick.Sql.SqlGrid(["grants"], [["GRANT USAGE ON *.* TO `neon`@`%`"], ["GRANT ALL PRIVILEGES ON `shop`.* TO `neon`@`%`"]], false)], TimeSpan.Zero));
         });
-        OpenMySqlRow(5);
+        OpenMySqlRow(4);
         Push(Keys.Enter);                         // the profile's file
         Type("shop");
         Type("localhost");
@@ -960,24 +880,18 @@ public partial class ToolsMenuTests : IDisposable
     }
 
     [Fact]
-    public async Task OnThePane_TheMySqlTab_SetsAPassword_AndNarrowsTheOfferedConnections()
+    public async Task OnThePane_TheMySqlTab_NarrowsTheOfferedConnections()
     {
         string path = NeonSidekick.MySql.MySqlConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
-        File.WriteAllText(path, """{ "connections": { "shop": { "host": "localhost", "database": "db", "user": "reader" }, "billing": { "host": "db", "database": "db", "user": "ro" } } }""");
+        File.WriteAllText(path, """{ "connections": { "shop": { "host": "localhost", "database": "db", "user": "reader", "password": "s3cret" }, "billing": { "host": "db", "database": "db", "user": "ro" } } }""");
         var (menu, _, _) = PaneMenu();
-        OpenMySqlRow(4);
-        Push(Keys.Down, Keys.Enter);                         // shop, under billing (A to Z since 2026-10-11)
-        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Up, Keys.Enter);                           // the offered row, right above: the checklist
-        Push(Keys.Enter);                                    // billing on, the first row
+        OpenMySqlRow(3);                                     // the offered checklist (its password row went, 2026-11-26)
+        Push(Keys.Enter);                                    // billing on, the first row (A to Z since 2026-10-11)
         Push(Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        var loaded = NeonSidekick.MySql.MySqlConfigFile.Load(path);
-        Assert.Equal("s3cret", NeonSidekick.MySql.MySqlSecrets.Resolve(loaded.Connections[0]).Value);
-        Assert.Equal("shop  (localhost:3306, user reader · encrypted in mysql.json)", SettingsMenu.MySqlPasswordRow(loaded.Connections[0]));
         Assert.Equal(["billing"], _settings.Current.MySqlConnectionsOffered);
         Assert.DoesNotContain("s3cret", Output);
     }
@@ -985,7 +899,7 @@ public partial class ToolsMenuTests : IDisposable
     /// <summary>Types <paramref name="text"/> into the open slot and submits it.</summary>
     private void Type(string text) => Push([.. text.Select(Keys.Char), Keys.Enter]);
 
-    /// <summary>The UNC tab, row <paramref name="row"/> (later still on 2026-09-30): the switch 0, writes 1, offered 2, password 3, wizard 4 (the default row went 2026-10-09).</summary>
+    /// <summary>The UNC tab, row <paramref name="row"/> (later still on 2026-09-30): the switch 0, writes 1, offered 2, wizard 3 (the default row went 2026-10-09, the password row 2026-11-26).</summary>
     private void OpenUncRow(int row) => Push([.. ToTab(ToolsText.UncTabTitle), .. Enumerable.Repeat(Keys.Down, row), Keys.Enter]);
 
     /// <summary>
@@ -1005,7 +919,7 @@ public partial class ToolsMenuTests : IDisposable
             tested.Add(s);
             return Task.FromResult(NeonSidekick.Unc.UncResult<int>.Ok(7));
         });
-        OpenUncRow(4);
+        OpenUncRow(3);
         Push(Keys.Enter);                         // the profile's file
         Type("eng");
         Type(@"specs\only");                      // refused: not a full path
@@ -1041,7 +955,7 @@ public partial class ToolsMenuTests : IDisposable
     {
         string path = NeonSidekick.Unc.UncConfigFile.ProfilePath(_settings.ProfileDirectory);
         var (menu, _, _) = PaneMenu(testUnc: (s, _) => Task.FromResult(NeonSidekick.Unc.UncResult<int>.Failed(NeonSidekick.Unc.UncText.BadAccount(s.Name, s.Config.User!))));
-        OpenUncRow(4);
+        OpenUncRow(3);
         Push(Keys.Enter);                         // the profile's file
         Type("fin");
         Type(@"\\fs02\finance");
@@ -1072,17 +986,14 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Null(_settings.Current.UncSharesOffered);   // saved hidden: nothing offered
     }
 
-    [WindowsFact]
-    public async Task OnThePane_TheUncTab_FlipsWrites_SetsARunAsPassword_AndNarrowsTheOfferedShares()
+    [Fact]
+    public async Task OnThePane_TheUncTab_FlipsWrites_AndNarrowsTheOfferedShares()
     {
         string path = NeonSidekick.Unc.UncConfigFile.ProfilePath(_settings.ProfileDirectory);
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "shares": { "eng": { "path": "//fs01/eng" }, "fin": { "path": "//fs02/fin", "auth": "runas", "user": "CORP\\svc" } } }""");
         var (menu, _, _) = PaneMenu();
-        OpenUncRow(3);                                       // set password: only fin takes one
-        Push(Keys.Enter);                                    // fin
-        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Up, Keys.Enter);                           // the offered row, right above: the checklist
+        OpenUncRow(2);                                       // the offered checklist (its password row went, 2026-11-26)
         Push(Keys.Down, Keys.Enter);                         // fin on (nothing is ticked until the user ticks it, 2026-10-01)
         Push(Keys.Escape);
         Push(Keys.Up, Keys.Enter, Keys.Up, Keys.Enter);      // UNC writes: the page, on picked
@@ -1091,19 +1002,14 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.True(_settings.Current.UncWrites);
-        var fin = NeonSidekick.Unc.UncConfigFile.Load(path).Shares[1];
-        Assert.Equal("s3cret", NeonSidekick.Unc.UncSecrets.Resolve(fin).Value);
-        Assert.Equal(@"fin  (\\fs02\fin, runas CORP\svc · encrypted in unc.json)", SettingsMenu.UncPasswordRow(fin));
         Assert.Equal(["fin"], _settings.Current.UncSharesOffered);
-        Assert.DoesNotContain("s3cret", Output);
         Assert.Equal("1 of 2", SettingsMenu.UncOfferedValue(["fin"], NeonSidekick.Unc.UncConfigFile.Load(path)));
         Assert.Equal("none of 2", SettingsMenu.UncOfferedValue(null, NeonSidekick.Unc.UncConfigFile.Load(path)));
         Assert.Equal("2 shares · Enter edits unc.json", SettingsMenu.UncSharesLabel(path));
-        Assert.Equal("Enter to set password for a runas share", SettingsMenu.UncSetPasswordLabel);
         Assert.Equal("Enter to start share wizard", SettingsMenu.UncAddShareLabel);
     }
 
-    /// <summary><c>UNC shares offered</c> and <c>UNC set password</c> list A to Z (2026-10-11, the user's ask), not the file's order: <c>Alpha</c> first in both.</summary>
+    /// <summary><c>UNC shares offered</c> lists A to Z (2026-10-11, the user's ask), not the file's order: <c>Alpha</c> first.</summary>
     [Fact]
     public async Task OnThePane_TheUncTab_ListsTheSharesAToZ()
     {
@@ -1111,22 +1017,17 @@ public partial class ToolsMenuTests : IDisposable
         Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
         File.WriteAllText(path, """{ "shares": { "zeta": { "path": "//fs01/zeta", "auth": "runas", "user": "CORP\\svc" }, "Alpha": { "path": "//fs02/alpha", "auth": "runas", "user": "CORP\\svc" } } }""");
         var (menu, _, _) = PaneMenu();
-        OpenUncRow(3);                                       // set password: both take one
-        Push(Keys.Down, Keys.Enter);                         // zeta, under Alpha
-        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Up, Keys.Enter);                           // the offered row, right above: the checklist
+        OpenUncRow(2);                                       // the offered checklist
         Push(Keys.Enter);                                    // Alpha on, the first row
         Push(Keys.Escape, Keys.Escape, Keys.Escape);
 
         await menu.ShowAsync(CancellationToken.None);
 
-        var zeta = NeonSidekick.Unc.UncConfigFile.Load(path).Shares.Single(s => s.Name == "zeta");
-        Assert.Equal("s3cret", NeonSidekick.Unc.UncSecrets.Resolve(zeta).Value);
         Assert.Equal(["Alpha"], _settings.Current.UncSharesOffered);
     }
 
-    /// <summary>The SQL tab, the add-connection row (the sixth, under the password prompt; the default row went 2026-10-09): the wizard.</summary>
-    private void OpenSqlWizard() => Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
+    /// <summary>The SQL tab, the add-connection row (the fifth, under the offered list; the default row went 2026-10-09, the password row 2026-11-26): the wizard.</summary>
+    private void OpenSqlWizard() => Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);
 
     /// <summary>
     /// <c>SQL add connection</c> (later on 2026-09-23, the user's ask): a SQL login walked through every page into the profile's
@@ -1563,26 +1464,6 @@ public partial class ToolsMenuTests : IDisposable
         await menu.ShowAsync(CancellationToken.None);
 
         Assert.Equal(["Alpha", "mid", "zeta"], _settings.Current.SqlConnectionsOffered);
-    }
-
-    /// <summary><c>SQL set password</c> lists the connections that take one A to Z (2026-10-11, the user's ask): the second row is <c>zeta</c>.</summary>
-    [Fact]
-    public async Task OnThePane_TheSqlSetPassword_ListsTheConnectionsAToZ()
-    {
-        string path = NeonSidekick.Sql.SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
-        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
-        File.WriteAllText(path, """{ "connections": { "zeta": { "server": "x", "database": "db", "auth": "sql", "user": "z" }, "mine": { "server": "y", "database": "db", "auth": "windows" }, "Alpha": { "server": "w", "database": "db", "auth": "sql", "user": "a" } } }""");
-        var (menu, _, _) = PaneMenu();
-        Push([.. ToTab(ToolsText.SqlTabTitle), Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter]);   // SQL, the set-password row: the pick
-        Push(Keys.Down, Keys.Enter);                         // zeta, under Alpha (mine takes no password)
-        Push([.. "s3cret".Select(Keys.Char), Keys.Enter]);
-        Push(Keys.Escape);
-
-        await menu.ShowAsync(CancellationToken.None);
-
-        var zeta = NeonSidekick.Sql.SqlConfigFile.Load(path).Connections.Single(c => c.Name == "zeta");
-        Assert.Equal("s3cret", NeonSidekick.Sql.SqlSecrets.Resolve(zeta).Value);
-        Assert.Contains("Saved the password of 'zeta', encrypted, in ", Output);
     }
 
     /// <summary>The vault row's folder picker opens on the vault saved (later on 2026-09-22, the user's report: it opened on the working directory every time): empty the first time, the picked vault the next; nothing picked keeps it.</summary>
@@ -2351,7 +2232,7 @@ public partial class ToolsMenuTests : IDisposable
         // 2026-10-01, the user's ask: 1,000 to 1,000,000, 32,000 by default (the file tools' cap until then); the three query tools read it at their next call.
         var (menu, pane, _) = PaneMenu();
         Push(ToTab(ToolsText.SqlTabTitle));   // SQL
-        Push(Enumerable.Repeat(Keys.Down, 9).Append(Keys.Enter).ToArray());   // the tenth row (the mode and the statements above since 2026-10-05, the default row gone 2026-10-09), under the timeout: the typed slot with "32000"
+        Push(Enumerable.Repeat(Keys.Down, 8).Append(Keys.Enter).ToArray());   // the ninth row (the mode and the statements above since 2026-10-05, the default row gone 2026-10-09, the password row 2026-11-26), under the timeout: the typed slot with "32000"
         Push(Enumerable.Repeat(Keys.Backspace, 5).Append(Keys.Char('9')).Append(Keys.Enter).ToArray());   // refused: 9
         Push(new[] { Keys.Enter }.Concat(Enumerable.Repeat(Keys.Backspace, 5)).Concat("200,000".Select(Keys.Char)).Append(Keys.Enter).ToArray());   // 200,000, the separator allowed
         Push(Keys.Escape, Keys.Escape);   // one more for the group menu (2026-10-09)
@@ -2448,9 +2329,9 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  ·   Shell\n  ·     Shell command policy: ask\n", Output);
         Assert.Contains("  · Core\n  ·   Web\n  ·     Web tools: on\n", Output);   // Web first since 2026-10-16 (the user's order; Ask first until then)
         Assert.Contains("  ·     Shell code default timeout (s): 300\n  ·   Clock\n  ·     Clock tools: on\n  ·   Timers\n  ·     Timer tools: on\n  ·     Timer tone: silent\n  ·   Sessions\n  ·     Session tools: on\n  ·     Session search max results: 10 results\n  ·   Ask\n  ·     Ask user: on\n  ·     Ask repeat guard: off\n  ·     Ask max questions: 10 questions\n  ·     Ask max choices per question: 10 choices\n  ·   Help\n  ·     Help tools: on\n  ·   Options\n  ·     $-mention enabled: on\n", Output);   // Clock after Shell and Help after Ask since 2026-10-18 (the user's asks); Ask after Timers since 2026-10-16 (the user's order); Timers between Shell and Options since later on 2026-10-15   // Shopping between them on 2026-10-11 until it went to Home later that day
-        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   Video\n  ·     Video tools: off\n  ·     Video files play in: video-window\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib user email: (not set)\n  ·     GitLib user name: (not set)\n  · Apps\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     Docker engine pipe: \\\\.\\pipe\\docker_engine\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI test connection: Enter to ask the server for its version\n  ·     ComfyUI workflows: none of 0 offered\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max images per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube open links in: youtube-window\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n", Output);   // Admin (EventLog, Services, Tasks, Directory) after Apps later still on 2026-10-15 (the admin-tools plan); Obsidian after YouTube since 2026-10-17 (the user's order)
-        Assert.Contains("  ·   EventLog\n  ·     Event log tools: off\n  ·     Event log computers offered: 1 of 1\n  ·     Event log set password: Enter to set password for a runas computer\n  ·     Event log add/edit computer: Enter to start computer wizard\n  ·     Event log max events: 20\n  ·     Event log scan limit: 20000\n  ·     Event log computers (profile): (none) · Enter edits eventlog.json\n  ·     Event log computers (global): (none) · Enter edits eventlog.json\n  ·   Services\n  ·     Service tools: off\n", Output);
-        Assert.Contains("  · Databases\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: on\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   DuckDB\n  ·     DuckDB tools: off\n  ·     DuckDB mode: read-only\n  ·     DuckDB statements allowed: changing data, creating, reading (used under read-write)\n  ·     DuckDB databases offered: none of 0\n  ·     DuckDB sandbox files: on\n  ·     DuckDB add/edit database: Enter to start database wizard\n  ·     DuckDB %-mention enabled: on\n  ·     DuckDB max rows: 100 rows\n  ·     DuckDB query timeout (s): 30\n  ·     DuckDB databases (profile): (none) · Enter edits duckdb.json\n  ·     DuckDB databases (global): (none) · Enter edits duckdb.json\n  · Devices\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch unprompted: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen tools: off\n  ·     Screen policy: ask\n  ·     Screen preview: on\n  ·     Screen output folder: screen\n  ·     Screen keep in sessions: off\n" + (OperatingSystem.IsWindows() ? "  ·   Monitors\n  ·     Monitor tools: off\n" : "") + "  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: (Windows default)\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  · Home\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   Shopping\n  ·     Shopping tools: off\n  ·     Shopping list: Enter to manage the list\n  ·     Shopping stores: Enter to manage stores\n", Output);
+        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   Video\n  ·     Video tools: off\n  ·     Video files play in: video-window\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib user email: (not set)\n  ·     GitLib user name: (not set)\n  · Apps\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     Docker engine pipe: \\\\.\\pipe\\docker_engine\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI test connection: Enter to ask the server for its version\n  ·     ComfyUI workflows: none of 0 offered\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max images per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube open links in: youtube-window\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n", Output);   // Admin (EventLog, Services, Tasks, Directory) after Apps later still on 2026-10-15 (the admin-tools plan); Obsidian after YouTube since 2026-10-17 (the user's order)
+        Assert.Contains("  ·   EventLog\n  ·     Event log tools: off\n  ·     Event log computers offered: 1 of 1\n  ·     Event log add/edit computer: Enter to start computer wizard\n  ·     Event log max events: 20\n  ·     Event log scan limit: 20000\n  ·     Event log computers (profile): (none) · Enter edits eventlog.json\n  ·     Event log computers (global): (none) · Enter edits eventlog.json\n  ·   Services\n  ·     Service tools: off\n", Output);
+        Assert.Contains("  · Databases\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: on\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   DuckDB\n  ·     DuckDB tools: off\n  ·     DuckDB mode: read-only\n  ·     DuckDB statements allowed: changing data, creating, reading (used under read-write)\n  ·     DuckDB databases offered: none of 0\n  ·     DuckDB sandbox files: on\n  ·     DuckDB add/edit database: Enter to start database wizard\n  ·     DuckDB %-mention enabled: on\n  ·     DuckDB max rows: 100 rows\n  ·     DuckDB query timeout (s): 30\n  ·     DuckDB databases (profile): (none) · Enter edits duckdb.json\n  ·     DuckDB databases (global): (none) · Enter edits duckdb.json\n  · Devices\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch unprompted: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen tools: off\n  ·     Screen policy: ask\n  ·     Screen preview: on\n  ·     Screen output folder: screen\n  ·     Screen keep in sessions: off\n" + (OperatingSystem.IsWindows() ? "  ·   Monitors\n  ·     Monitor tools: off\n" : "") + "  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: (Windows default)\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  · Home\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   Shopping\n  ·     Shopping tools: off\n  ·     Shopping list: Enter to manage the list\n  ·     Shopping stores: Enter to manage stores\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }
@@ -2486,8 +2367,8 @@ public partial class ToolsMenuTests : IDisposable
         Assert.Contains("  ·   Shell\n  ·     Shell command policy: ask\n", Output);
         Assert.Contains("  · Core\n  ·   Web\n  ·     Web tools: on\n", Output);   // Web first since 2026-10-16 (the user's order; Ask first until then)
         Assert.Contains("  ·     Shell code default timeout (s): 300\n  ·   Clock\n  ·     Clock tools: on\n  ·   Timers\n  ·     Timer tools: on\n  ·     Timer tone: silent\n  ·   Sessions\n  ·     Session tools: on\n  ·     Session search max results: 10 results\n  ·   Ask\n  ·     Ask user: on\n  ·     Ask repeat guard: off\n  ·     Ask max questions: 10 questions\n  ·     Ask max choices per question: 10 choices\n  ·   Help\n  ·     Help tools: on\n  ·   Options\n  ·     $-mention enabled: on\n", Output);   // Clock after Shell and Help after Ask since 2026-10-18 (the user's asks); Ask after Timers since 2026-10-16 (the user's order); Timers between Shell and Options since later on 2026-10-15   // Shopping between them on 2026-10-11 until it went to Home later that day
-        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   Video\n  ·     Video tools: off\n  ·     Video files play in: video-window\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC set password: Enter to set password for a runas share\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib user email: (not set)\n  ·     GitLib user name: (not set)\n  · Apps\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     " + SettingsMenu.FieldName(SettingsField.DockerEnginePipe) + ": " + SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, new AppSettingsData(), "") + "\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI test connection: Enter to ask the server for its version\n  ·     ComfyUI workflows: none of 0 offered\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max images per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube open links in: youtube-window\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n  · Admin\n  ·   Network\n  ·     Network tools: off\n", Output);   // Admin after Apps later still on 2026-10-15 (the admin-tools plan); Obsidian after YouTube since 2026-10-17 (the user's order)
-        Assert.Contains("  · Databases\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL set password: Enter to set password for a connection\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL set password: Enter to set password for a connection\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL set password: Enter to set password for a connection\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle set password: Enter to set password for a connection\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: on\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   DuckDB\n  ·     DuckDB tools: off\n  ·     DuckDB mode: read-only\n  ·     DuckDB statements allowed: changing data, creating, reading (used under read-write)\n  ·     DuckDB databases offered: none of 0\n  ·     DuckDB sandbox files: on\n  ·     DuckDB add/edit database: Enter to start database wizard\n  ·     DuckDB %-mention enabled: on\n  ·     DuckDB max rows: 100 rows\n  ·     DuckDB query timeout (s): 30\n  ·     DuckDB databases (profile): (none) · Enter edits duckdb.json\n  ·     DuckDB databases (global): (none) · Enter edits duckdb.json\n  · Devices\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch unprompted: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen tools: off\n  ·     Screen policy: ask\n  ·     Screen preview: on\n  ·     Screen output folder: screen\n  ·     Screen keep in sessions: off\n" + (OperatingSystem.IsWindows() ? "  ·   Monitors\n  ·     Monitor tools: off\n" : "") + "  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: " + SettingsMenu.WindowsDefaultPrinterLabel + "\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  · Home\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   Shopping\n  ·     Shopping tools: off\n  ·     Shopping list: Enter to manage the list\n  ·     Shopping stores: Enter to manage stores\n", Output);
+        Assert.Contains("  ·     File search max results: 200 results\n  ·   Image\n  ·     Image tools: off\n  ·     Image edit quality: 90\n  ·     Image edit metadata: none\n  ·     Image edit mode: beside-original\n  ·     Image edit output folder: (beside the source)\n  ·     Pasted images folder: pasted\n  ·   Video\n  ·     Video tools: off\n  ·     Video files play in: video-window\n  ·   UNC\n  ·     UNC tools: off\n  ·     UNC writes: off\n  ·     UNC shares offered: none of 0\n  ·     UNC add/edit share: Enter to start share wizard\n  ·     UNC *-mention enabled: on\n  ·     UNC shares (profile): (none) · Enter edits unc.json\n  ·     UNC shares (global): (none) · Enter edits unc.json\n  ·   GitLib\n  ·     GitLib tools: on\n  ·     GitLib diff max lines: 500 lines\n  ·     GitLib log max commits: 20 commits\n  ·     GitLib user email: (not set)\n  ·     GitLib user name: (not set)\n  · Apps\n  ·   Docker\n  ·     Docker tools: off\n  ·     Docker writes: off\n  ·     " + SettingsMenu.FieldName(SettingsField.DockerEnginePipe) + ": " + SettingsMenu.FieldValue(SettingsField.DockerEnginePipe, new AppSettingsData(), "") + "\n  ·   ComfyUI\n  ·     ComfyUI tools: on\n  ·     ComfyUI URL: (not set)\n  ·     ComfyUI test connection: Enter to ask the server for its version\n  ·     ComfyUI workflows: none of 0 offered\n  ·     ComfyUI ^-mention enabled: on\n  ·     ComfyUI timeout (s): 300\n  ·     ComfyUI max images per call: 5 pictures\n  ·     ComfyUI reinforce negatives: on\n  ·     ComfyUI show prompts: on\n  ·     ComfyUI picture strip: on\n  ·     ComfyUI output folder: comfy\n  ·   YouTube\n  ·     YouTube tools: off\n  ·     YouTube API key: (none)\n  ·     YouTube search max results: 8 results\n  ·     YouTube search order: relevance\n  ·     YouTube safe search: moderate\n  ·     YouTube region: (any region)\n  ·     YouTube language: (any language)\n  ·     YouTube open links in: youtube-window\n  ·     YouTube autoplay: on\n  ·     YouTube while speaking: pause\n  ·   Obsidian\n  ·     Obsidian tools: on\n  ·     Obsidian vault: (not set)\n  ·     Obsidian allow delete (.trash): on\n  · Admin\n  ·   Network\n  ·     Network tools: off\n", Output);   // Admin after Apps later still on 2026-10-15 (the admin-tools plan); Obsidian after YouTube since 2026-10-17 (the user's order)
+        Assert.Contains("  · Databases\n  ·   SQL\n  ·     SQL tools: on\n  ·     SQL mode: read-only\n  ·     SQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQL connections offered: none of 0\n  ·     SQL add/edit connection: Enter to start the connection wizard\n  ·     SQL %-mention enabled: on\n  ·     SQL max rows: 100 rows\n  ·     SQL query timeout (s): 30\n  ·     SQL query result max chars: 32,000 chars\n  ·     SQL connections (profile): (none) · Enter edits sql.json\n  ·     SQL connections (global): (none) · Enter edits sql.json\n  ·   MySQL\n  ·     MySQL tools: off\n  ·     MySQL mode: read-only\n  ·     MySQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     MySQL connections offered: none of 0\n  ·     MySQL add/edit connection: Enter to start the connection wizard\n  ·     MySQL %-mention enabled: on\n  ·     MySQL max rows: 100 rows\n  ·     MySQL query timeout (s): 30\n  ·     MySQL connections (profile): (none) · Enter edits mysql.json\n  ·     MySQL connections (global): (none) · Enter edits mysql.json\n  ·   PostgreSQL\n  ·     PostgreSQL tools: off\n  ·     PostgreSQL mode: read-only\n  ·     PostgreSQL statements allowed: changing data, creating, reading (used under read-write)\n  ·     PostgreSQL connections offered: none of 0\n  ·     PostgreSQL add/edit connection: Enter to start the connection wizard\n  ·     PostgreSQL %-mention enabled: on\n  ·     PostgreSQL max rows: 100 rows\n  ·     PostgreSQL query timeout (s): 30\n  ·     PostgreSQL connections (profile): (none) · Enter edits postgres.json\n  ·     PostgreSQL connections (global): (none) · Enter edits postgres.json\n  ·   Oracle\n  ·     Oracle tools: off\n  ·     Oracle mode: read-only\n  ·     Oracle statements allowed: changing data, creating, reading (used under read-write)\n  ·     Oracle connections offered: none of 0\n  ·     Oracle add/edit connection: Enter to start the connection wizard\n  ·     Oracle %-mention enabled: on\n  ·     Oracle max rows: 100 rows\n  ·     Oracle query timeout (s): 30\n  ·     Oracle connections (profile): (none) · Enter edits oracle.json\n  ·     Oracle connections (global): (none) · Enter edits oracle.json\n  ·   SQLite\n  ·     SQLite tools: off\n  ·     SQLite mode: read-only\n  ·     SQLite statements allowed: changing data, creating, reading (used under read-write)\n  ·     SQLite databases offered: none of 0\n  ·     SQLite sandbox files: on\n  ·     SQLite add/edit database: Enter to start database wizard\n  ·     SQLite %-mention enabled: on\n  ·     SQLite max rows: 100 rows\n  ·     SQLite query timeout (s): 30\n  ·     SQLite databases (profile): (none) · Enter edits sqlite.json\n  ·     SQLite databases (global): (none) · Enter edits sqlite.json\n  ·   DuckDB\n  ·     DuckDB tools: off\n  ·     DuckDB mode: read-only\n  ·     DuckDB statements allowed: changing data, creating, reading (used under read-write)\n  ·     DuckDB databases offered: none of 0\n  ·     DuckDB sandbox files: on\n  ·     DuckDB add/edit database: Enter to start database wizard\n  ·     DuckDB %-mention enabled: on\n  ·     DuckDB max rows: 100 rows\n  ·     DuckDB query timeout (s): 30\n  ·     DuckDB databases (profile): (none) · Enter edits duckdb.json\n  ·     DuckDB databases (global): (none) · Enter edits duckdb.json\n  · Devices\n  ·   Camera\n  ·     Camera tool: off\n  ·     Camera shutter: user\n  ·     Camera preview: live\n  ·     Camera device: (first camera)\n  ·     Camera resolution: 1280x720\n  ·     Camera output folder: camera\n  ·     Camera keep in sessions: off\n  ·     Camera watch interval (s): 10\n  ·     Camera watch change (%): 8%\n  ·     Camera watch unprompted: off\n  ·     Camera watch min gap (s): 120\n  ·   Screen\n  ·     Screen tools: off\n  ·     Screen policy: ask\n  ·     Screen preview: on\n  ·     Screen output folder: screen\n  ·     Screen keep in sessions: off\n" + (OperatingSystem.IsWindows() ? "  ·   Monitors\n  ·     Monitor tools: off\n" : "") + "  ·   Print\n  ·     Print tools: off\n  ·     Print action policy: ask\n  ·     Print default printer: " + SettingsMenu.WindowsDefaultPrinterLabel + "\n  ·     Print font size (pt): 10 pt\n  ·     PDF engine: auto\n  · Home\n  ·   HomeAssistant\n  ·     Home Assistant tools: on\n  ·     Home Assistant URL: (not set)\n  ·     Home Assistant API key: (none)\n  ·     Home Assistant test connection: Enter to ask the server for its version\n  ·     Home Assistant action policy: ask\n  ·     Home Assistant Assist agent: (Home Assistant's default)\n  ·     Home Assistant timeout (s): 10\n  ·   Shopping\n  ·     Shopping tools: off\n  ·     Shopping list: Enter to manage the list\n  ·     Shopping stores: Enter to manage stores\n", Output);
         Assert.False(pane.OverlayOpen);
         pane.Dispose();
     }

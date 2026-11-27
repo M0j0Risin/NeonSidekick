@@ -108,7 +108,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// A theme handed over at a run's turn end (botchat, <c>/test</c>, an advisor, a custom command) is put in force, and its repaint and saved
+    /// A theme handed over at a run's turn end (botchat, <c>/bench</c>, an advisor, a custom command) is put in force, and its repaint and saved
     /// line wait for the idle line (#76): here they come after the next turn's reply. A main-chat hand-over repaints at once, before it.
     /// </summary>
     [Theory]

@@ -13,11 +13,6 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class SettingsMenu
 {
-    /// <summary>The value column of <c>Event log set password</c>. Pinned.</summary>
-    public const string EventLogSetPasswordLabel = "Enter to set password for a runas computer";
-
-    /// <summary>What <c>Event log set password</c> says with no runas computer. Pinned.</summary>
-    public const string EventLogNoPasswordComputers = "No computer in eventlog.json signs in as another account (runas); this PC and a windows computer need no password.";
 
     /// <summary>
     /// The app's test of a wizard's draft (2026-10-15): the newest System event read under the draft's account, nothing written. Set by the
@@ -65,14 +60,6 @@ internal sealed partial class SettingsMenu
         }
 
         return string.Join(" · ", parts);
-    }
-
-    /// <summary>A runas computer on the <c>Event log set password</c> pick: its name, host, account and store. Pinned.</summary>
-    public static string EventLogPasswordRow(EventLogComputer computer)
-    {
-        ArgumentNullException.ThrowIfNull(computer);
-        string store = computer.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in eventlog.json";
-        return $"{computer.Name}  ({computer.Config.Host?.Trim()}, runas {computer.Config.User?.Trim()} · {store})";
     }
 
     /// <summary>The status line after an edit row opened an <c>eventlog.json</c>. Pinned.</summary>
@@ -132,52 +119,6 @@ internal sealed partial class SettingsMenu
             Apply(SettingsField.EventLogComputersOffered, d => d.EventLogComputersOffered = next);
             changed = true;
         }
-    }
-
-    /// <summary><c>Event log set password</c>: every runas computer with its store, then a masked slot under the picked one, then <see cref="EventLogSecrets.Save"/>.</summary>
-    private async Task<bool> SetEventLogPasswordAsync(CancellationToken cancellationToken)
-    {
-        var computers = ByName(EventLogConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Computers.Where(c => c.Config.NeedsPassword), c => c.Name);
-        if (computers.Count == 0)
-        {
-            Sink.Error(EventLogNoPasswordComputers);
-            return false;
-        }
-
-        var page = new MenuPage(Crumb(FieldName(SettingsField.EventLogSetPassword)), computers.Select(c => Markup.Escape(EventLogPasswordRow(c))).ToList(), PickKeys);
-        if (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } index)
-        {
-            return Unchanged();
-        }
-
-        var computer = computers[index];
-        InputResult result;
-        if (_pane.Enabled)
-        {
-            result = await _pane.EditAsync(page with { Hint = EditKeys }, index, _input, "", allowEmpty: false, cancellationToken, mask: true).ConfigureAwait(false);
-        }
-        else
-        {
-            Flow.Notice(PromptTitle(FieldName(SettingsField.EventLogSetPassword) + " · " + computer.Name, EditKeys));
-            result = await _input.ReadAsync("", remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
-        }
-
-        if (result is not InputResult.Submitted { Text.Length: > 0 } submitted)
-        {
-            return Unchanged();
-        }
-
-        var (saved, notice) = EventLogSecrets.Save(computer, submitted.Text);
-        if (saved)
-        {
-            Sink.Notice(notice);
-        }
-        else
-        {
-            Sink.Error(notice);
-        }
-
-        return false;
     }
 
     /// <summary>Opens one <c>eventlog.json</c> in the editor, made first when missing; without an opener or on an IO failure, the status line says so.</summary>

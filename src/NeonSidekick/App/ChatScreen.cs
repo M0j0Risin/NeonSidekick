@@ -1435,6 +1435,7 @@ internal sealed partial class ChatScreen
         _closeViewer = closeViewer;
         ArgumentNullException.ThrowIfNull(time);
         _time = time;
+        _pendingPictures = new(_time);
         _random = random ?? Random.Shared;
         _splash = splash;
         _setTitle = setTitle;
@@ -1566,7 +1567,7 @@ internal sealed partial class ChatScreen
         // sent yet (2026-10-09, PastedForComfy). The pictures go to the profile's images folder (2026-10-09).
         _comfy = new ComfyStudio(ComfyCatalog(settings), _files, _effective, comfyClient, _random, pasted: PastedForComfy, time: _time, images: _images,
             pastedSource: n => _input?.Pastes.Original(n));
-        _comfyTools = ComfyTools(_comfy);
+        _comfyTools = ComfyTools(_comfy, _pendingPictures.Begin);
         // The Home Assistant tools (2026-09-28): the client made for the URL and token in force; an asked call waits on the pane.
         _ha = new HaSession(_effective, haClient, _time);
         // ha_camera (2026-10-27) keeps its stills in the profile's images folder.
@@ -1709,9 +1710,9 @@ internal sealed partial class ChatScreen
             // from the pool and a flipped setting shows at once. A /botchat shows its cast there instead (2026-09-30).
             RuleTitle = () => UpperRuleTitle(_botChatCast, _sessionTitle, ShowNameDisplay(_effective())),
             // The lower rule's jobs group (2026-11-23, the user's ask): 📦 the update, 🔁/🔎/⟳ the loop, 📥 the download, 🔌 🎙️ 🔈 the setups,
-            // 🖼️ the pictures, 🧠 the reflection, 🧟 the extras, 📷 the camera (those five since 2026-11-25), ⚡n the running processes (since
-            // 2026-10-12; ▶ n until 2026-11-24), each only while it has something to say; 📤 the queued count at its left (2026-11-26, off the
-            // status bar, where it rode the hint row from 2026-09-18).
+            // 🧠 the reflection, 🧟 the extras, 📷 the camera (those since 2026-11-25), ⚡ n the running processes (since 2026-10-12; ▶ n
+            // until 2026-11-24), each only while it has something to say; 🖼️ the pictures' timer and 📤 the queued count at its left
+            // (2026-11-27; the queued count since 2026-11-26, off the status bar, where it rode the hint row from 2026-09-18).
             LowerRuleItems = LowerRuleItemsNow,
             // The model and its mark while the Hint bar's Model is checked (2026-10-12).
             Trailer = () => HintOn(StatusBarItems.Model) ? ModelLabel(_session.ShownModelId) : "",
@@ -1723,9 +1724,9 @@ internal sealed partial class ChatScreen
             // tick, so the estimate moves with the stream and a flipped setting shows at once. TryParse, not Resolve: the
             // draw must not warn on a hand-edited word, the turn's start does. None under a /botchat turn — not tallied.
             BusyUsage = () => _botTurnRunning || !HintOn(StatusBarItems.Usage) ? "" : UsageText.BusyHintPart(_session.Usage, _session.ContextLength, MidTurnUsageMode.TryParse(_effective().LlmMidTurnUsage, out var mode) ? mode : MidTurnUsage.LastKnown, _session.Meter.Read()) ?? "",
-            // A ComfyUI generation's label after the tally (2026-09-25, the user's call): /imagine, a botchat picture and the model's generate_image alike.
-            // Either kind since 2026-09-26: 🖼️ text-to-image, 🎨 image-to-image.
-            LabelAfterUsage = ComfyText.IsGeneratingLabel,
+            // A ComfyUI generation's label leaves the busy row (2026-11-27, the user's call): its time is on the lower rule's left
+            // (PendingPictures.RuleText); after the tally from 2026-09-25 until then.
+            HideLabel = ComfyText.IsGeneratingLabel,
             // "Esc to stop" at the busy row's end while the turn runs (2026-10-04, the UI review), not under a menu's own spinner.
             StopHintShown = () => _turnRunning,
             // The Hints bar (2026-10-14, the user's ask: the keys on a row of their own over the Status bar): the setting, cached as
@@ -2905,7 +2906,7 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// The hint row's strip (2026-09-18): 🏷️ while the model writes the session's title, then <see cref="SpeechGlyphs"/> — each part
     /// only while its job or switch is on, joined by <see cref="GlyphSeparator"/>, empty with nothing. The pending pictures
-    /// (<see cref="PendingPictures.Glyph"/>, here from 2026-09-27) and the embedded download moved to the lower rule on 2026-11-23
+    /// (here from 2026-09-27; <see cref="PendingPictures.RuleText"/> at the rule's left since 2026-11-27) and the embedded download moved to the lower rule on 2026-11-23
     /// (the user's ask, <see cref="LowerRuleItemsNow"/>); the brain and the jobs behind the line (<see cref="BackgroundJobs.Strip"/>) on
     /// 2026-11-25. The speech status lines keep <see cref="SpeechGlyphs"/> (no tag there). Pinned.
     /// </summary>
@@ -3456,18 +3457,26 @@ internal sealed partial class ChatScreen
     /// pane's life went stale over a reply, as <c>/sys</c>' never did). The pane builds a tab only on a switch or a width change, so that is
     /// a few file reads per switch.
     /// </remarks>
-    private IReadOnlyList<InfoTab> UsageTabs()
+    private IReadOnlyList<InfoTab> UsageTabs(ReplyRun reply = default)
     {
-        var context = new Lazy<ContextFacts>(ContextFacts);
+        string? model = TurnModel();
+        var bests = new Lazy<Sessions.ModelBests>(() => _sessions.ModelBests(model));
         return
         [
-            new(UsageText.StatisticsTabTitle, () => UsageText.StatisticsTab(_session.Usage, _session.ContextLength)),
-            new(UsageText.ContextTabTitle, () => UsageText.ContextTab(context.Value)),
+            // The Statistics and Context tabs as one (2026-11-27, the user's calls): the meter, the breakdown, the trend, the tokens and the records,
+            // the breakdown's rows a cursor's stops (Space and Enter, ChatScreen.UsageKeys.cs).
+            new(UsageText.ContextTabTitle, () => UsageContextTab(bests.Value, model))
+            {
+                Stops = () => _usageLayout?.Stops ?? [],
+                StopKey = (stop, key) => UsageStopKeyAsync(stop, key, reply, CancellationToken.None),
+                InitialStop = UsageInitialStop,
+            },
             new(SystemPromptSummary.PromptTabTitle, () => SystemPromptSummary.PromptTab(SystemPromptFacts())),
             new(SystemPromptSummary.ToolsTabTitle, () => SystemPromptSummary.ToolsTab(ToolGroups(), _effective().LlmOfferTools)),
             new(SystemPromptSummary.SkillsTabTitle, () => SystemPromptSummary.SkillsTab(SystemPromptFacts())),
-            // The model scorecard (2026-11-21, feature idea #7): one grouped query when the tab is built, at the width of that build.
-            new(UsageText.ModelsTabTitle, () => UsageText.ModelsTab(_sessions.ModelStats(), _effective().SessionLogging, ModelsBodyWidth(), _private.IsPrivate)),
+            // The model scorecard (2026-11-21, feature idea #7): one grouped query when the tab is built, at the width of that build; the Bench tab
+            // since 2026-11-27, with /bench's saved runs beside it.
+            new(UsageText.BenchTabTitle, () => UsageText.BenchTab(_sessions.ModelStats(), BenchRuns(), BenchCurrent(), _effective().SessionLogging, UsageBodyWidth(), _private.IsPrivate)),
         ];
     }
 
@@ -3479,11 +3488,14 @@ internal sealed partial class ChatScreen
     /// Statistics lines and the Context lines after them, and <c>/usage context</c> the Context lines alone. Since 2026-11-07
     /// <c>/usage prompt</c>, <c>tools</c> and <c>skills</c> print that tab's lines alone.
     /// </summary>
-    private async Task ShowUsageAsync(int tab, CancellationToken cancellationToken)
+    /// <para>Since 2026-11-27 the Context tab is the first and <c>/usage</c> and <c>/usage context</c> both open it: <paramref name="contextOnly"/>
+    /// (the typed <c>context</c>) prints the breakdown alone without the pane, where a bare <c>/usage</c> prints the breakdown, the trend, the
+    /// scopes and the records. The pane ignores it.</para>
+    private async Task ShowUsageAsync(int tab, CancellationToken cancellationToken, int? initialLine = null, bool contextOnly = false)
     {
         if (_pane.Enabled)
         {
-            await _info.ShowAsync(UsageText.Label, UsageTabs(), tab, cancellationToken).ConfigureAwait(false);
+            await ShowUsagePaneAsync(tab, ReplyRun.Idle, cancellationToken, initialLine).ConfigureAwait(false);
             return;
         }
 
@@ -3492,9 +3504,9 @@ internal sealed partial class ChatScreen
             UsageText.PromptTabIndex => SystemPromptSummary.PromptLines(SystemPromptFacts()),
             UsageText.ToolsTabIndex => SystemPromptSummary.ToolLines(ToolGroups(), _effective().LlmOfferTools),
             UsageText.SkillsTabIndex => SystemPromptSummary.SkillsLines(SystemPromptFacts()),
-            UsageText.ContextTabIndex => UsageText.ContextLines(ContextFacts()),
-            UsageText.ModelsTabIndex => UsageText.ModelsLines(_sessions.ModelStats(), _effective().SessionLogging, ModelsBodyWidth(), _private.IsPrivate),
-            _ => UsageText.Lines(_session.Usage, _session.ContextLength).Concat(UsageText.ContextLines(ContextFacts())),
+            UsageText.BenchTabIndex => UsageText.BenchLines(_sessions.ModelStats(), BenchRuns(), BenchCurrent(), _effective().SessionLogging, UsageBodyWidth(), _private.IsPrivate),
+            _ when contextOnly => UsageText.ContextLines(ContextFacts()),
+            _ => UsageLinesInOrder(),
         };
         foreach (var line in lines)
         {
@@ -3815,20 +3827,12 @@ internal sealed partial class ChatScreen
 
             if (hit.Zone == ScreenPane.HintZone.Label)
             {
-                // The ComfyUI generation's 🖼️ / 🎨 and its time on the busy row (2026-09-28, the user's ask; a /botchat picture's moved from
-                // the strip to the lower rule on 2026-11-23): the pair cancels the pictures alone — the reply goes on, Esc still ends it.
                 // The embedded model's spinner and label under its load (2026-10-01, the user's ask; the pane's LabelZone
                 // since the review's finding, the tally beside them staying /usage's): the pair cancels the load as Ctrl+C does.
-                if (_queuedClicks.Second(InputLine.HintPairKey(hit)))
+                // The ComfyUI generation's label left the row on 2026-11-27: its time and its double-click are the lower rule's.
+                if (_queuedClicks.Second(InputLine.HintPairKey(hit)) && _loadCancel is { } load)
                 {
-                    if (hit.Zone == ScreenPane.HintZone.Label && _loadCancel is { } load)
-                    {
-                        VoiceSession.SafeCancel(load);
-                    }
-                    else
-                    {
-                        DrainPictures();
-                    }
+                    VoiceSession.SafeCancel(load);
                 }
 
                 return null;
@@ -5755,7 +5759,9 @@ internal sealed partial class ChatScreen
                 // The field names, then extra and clear (2026-09-28): the value is the user's to type.
                 return MentionCompleter.Matches(SamplingField.All.Select(f => new CompletionItem(f.Wire, SamplingText.CompletionNote(f)))
                     .Append(new CompletionItem(SamplingText.ExtraWord, SamplingText.ExtraCompletionNote))
-                    .Append(new CompletionItem(SamplingText.ClearWord, SamplingText.ClearCompletionNote)).ToList(), argText);
+                    .Append(new CompletionItem(SamplingText.ClearWord, SamplingText.ClearCompletionNote))
+                    .Append(new CompletionItem(SamplingText.OffWord, SamplingText.OffCompletionNote))
+                    .Append(new CompletionItem(SamplingText.OnWord, SamplingText.OnCompletionNote)).ToList(), argText);
             }
 
             case SlashCommand.Comfy:
@@ -5894,7 +5900,7 @@ internal sealed partial class ChatScreen
                     new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote),
                     new CompletionItem(UsageText.ToolsWord, UsageText.ToolsWordNote),
                     new CompletionItem(UsageText.SkillsWord, UsageText.SkillsWordNote),
-                    new CompletionItem(UsageText.ModelsWord, UsageText.ModelsWordNote),   // 2026-11-21, feature idea #7
+                    new CompletionItem(UsageText.BenchWord, UsageText.BenchWordNote),   // 2026-11-27 (the Models tab's models since 2026-11-21, feature idea #7)
                     new CompletionItem(UsageText.SyspromptWord, UsageText.SyspromptWordNote),   // 2026-11-23
                 ], argText);
 
@@ -6210,9 +6216,9 @@ internal sealed partial class ChatScreen
                 // reply for the first word, the options after a target (2026-10-29), never /pdf's edit verbs; the path itself is ArgumentPaths'.
                 return Office.DocxCommand.Complete(argText);
 
-            case SlashCommand.Test:
+            case SlashCommand.Bench:
                 // The test ids, the group words, all and history (2026-09-28): one word, nothing after it.
-                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(TestChoices(), argText);
+                return argText.Contains(' ', StringComparison.Ordinal) ? [] : MentionCompleter.Matches(BenchChoices(), argText);
 
             case SlashCommand.Loop:
                 // The one word; a count and the message are free text (2026-09-21).
@@ -8084,9 +8090,9 @@ internal sealed partial class ChatScreen
     /// <see cref="ComfyOffered"/> says so (headless too). <c>set_splash_image</c> rode here until 2026-10-12, when it went to the picture
     /// tools (<see cref="ImageTools"/>, the user's call): a splash may be any picture, not only a generated one.
     /// </summary>
-    public static IReadOnlyList<AIFunction> ComfyTools(ComfyStudio studio) => new AIFunction[]
+    public static IReadOnlyList<AIFunction> ComfyTools(ComfyStudio studio, Func<int, IDisposable>? track = null) => new AIFunction[]
     {
-        new GenerateImageTool(studio),
+        new GenerateImageTool(studio, track: track),   // the screen's lower-rule timer (2026-11-27); null headless
     };
 
     /// <summary>Whether the image group is offered (2026-09-24): the setting <c>ComfyUI tools</c> on, <c>ComfyUI URL</c> an http(s) URL and at least one workflow in a <c>comfy</c> folder.</summary>
@@ -9342,6 +9348,7 @@ internal sealed partial class ChatScreen
             _lastTrace = null;
             _learnTrace = null;
             _session.Usage.ResetConversation();
+            _session.Usage.SeedReplies(ReplyPointsOf(record));   // /usage's trend from the saved figures (2026-11-27)
             _pictureStrip.Clear();
             _log.Clear();
             ForgetReading();
@@ -10531,7 +10538,51 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>The Models tab's body: the pane's width less its edge and the body's indent, one figure for the pane and the lines (2026-11-22, the review's #109).</summary>
-    private int ModelsBodyWidth() => _pane.Profile.Width - 2 - SystemPromptSummary.BodyIndent;
+    private int UsageBodyWidth() => _pane.Profile.Width - 2 - SystemPromptSummary.BodyIndent;
+
+    /// <summary>
+    /// A bare <c>/usage</c> without the pane (2026-11-27), in the tab's order: the headline, legend, reference and breakdown, the trend, the
+    /// three scope blocks and the records. The old Context line left the scope blocks, so the window and its use read once.
+    /// </summary>
+    private IEnumerable<string> UsageLinesInOrder()
+    {
+        var replies = _session.Usage.Replies;
+        string? model = TurnModel();
+        return UsageText.ContextLines(ContextFacts())
+            .Concat(UsageText.TrendLines(replies))
+            .Concat(UsageText.Lines(_session.Usage))
+            .Concat(UsageText.RecordLines(replies, _sessions.ModelBests(model), model));
+    }
+
+    /// <summary>The Context tab's line width (2026-11-27): the pane's inside, its lines carrying their own indent.</summary>
+    private int UsageLineWidth() => Math.Max(1, _pane.Profile.Width - 2);
+
+    /// <summary>
+    /// A restored session's replies for <c>/usage</c>'s trend (2026-11-27): every saved turn but the ones a command answered (the live list never
+    /// holds those), unmarked (the store keeps no compaction), a turn without a model taking the session's, as <c>ModelStats</c> does, so an
+    /// older stretch draws no false model change. A turn with no tokens reported has every figure null.
+    /// </summary>
+    internal static IEnumerable<ReplyPoint> ReplyPointsOf(SessionRecord record)
+    {
+        foreach (var turn in record.Turns)
+        {
+            if (SessionText.IsSideTurnModel(turn.Model))
+            {
+                continue;
+            }
+
+            string model = string.IsNullOrEmpty(turn.Model) ? record.Summary.Model : turn.Model;
+            if (turn.InputTokens == 0 && turn.OutputTokens == 0)
+            {
+                yield return new ReplyPoint(model, null, null, null, null, null, false);
+                continue;
+            }
+
+            double? speed = turn is { OutputMs: > 0, TimedOutput: > 0 } ? turn.TimedOutput!.Value * 1000.0 / turn.OutputMs!.Value : null;
+            TimeSpan? first = turn.FirstTokenMs is { } ms ? TimeSpan.FromMilliseconds(ms) : null;
+            yield return new ReplyPoint(model, speed, first, turn.ContextTokens, turn.OutputTokens, turn.ReasoningTokens, false);
+        }
+    }
 
     /// <summary>A saved turn's model: the endpoint's, else the configured one (2026-11-22, the review's #140), so the Models tab names it.</summary>
     private string? TurnModel() => _session.Endpoint?.ModelId ?? (_effective().LlmModel is { Length: > 0 } configured ? configured : null);
@@ -13644,7 +13695,7 @@ internal sealed partial class ChatScreen
     public const int ThemeRepaintTurns = 20;
 
     /// <summary>
-    /// A theme change handed over during a run (botchat, <c>/test</c>, an advisor, a custom command; 2026-11-17, #76, the user's call): put in
+    /// A theme change handed over during a run (botchat, <c>/bench</c>, an advisor, a custom command; 2026-11-17, #76, the user's call): put in
     /// force at once, its repaint and lines left for the idle line, which runs them once, in the newest theme. <c>/clear</c> and a profile switch
     /// drop it, each drawing the screen itself.
     /// </summary>
@@ -15763,8 +15814,8 @@ internal sealed partial class ChatScreen
                 await HandleCmdAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
-            case SlashCommand.Test:
-                await HandleTestAsync(args, cancellationToken).ConfigureAwait(false);
+            case SlashCommand.Bench:
+                await HandleBenchAsync(args, cancellationToken).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.HomeAssistant:
@@ -15876,7 +15927,7 @@ internal sealed partial class ChatScreen
                 return false;
 
             case SlashCommand.Usage when UsageTab(args) is { } usageTab:
-                await ShowUsageAsync(usageTab, cancellationToken).ConfigureAwait(false);
+                await ShowUsageAsync(usageTab, cancellationToken, contextOnly: UsageText.IsContextWord(args)).ConfigureAwait(false);
                 return false;
 
             case SlashCommand.Usage:
@@ -17578,12 +17629,16 @@ internal sealed partial class ChatScreen
                 {
                     lines.Add(new BotChatLine(bot.Name, reply));
                     replies++;
+                    string? botModel = (links.Count > 0 ? links[next]?.Endpoint.ModelId : null) ?? _session.Endpoint?.ModelId;
+                    // A point on /usage's trend (2026-11-27, the user's call): a restore can't tell a bot's saved turn from a reply, so the live
+                    // list holds them too, with no context (another view of the chat). Before the row's gate, as LogTurn's.
+                    _session.Usage.RecordReply(botModel, _lastBotTurn.Usage, null);
                     if (sessionId is { } id)
                     {
                         // Its calls and tokens (2026-10-10; 0 and 0 until then, from the days a bot had no tools).
                         var (botTrace, botUsage) = _lastBotTurn;
                         _sessions.AppendTurn(id, turnText, BotChat.Signed(lines[^1]), botTrace.ToolCalls, botTrace.ToolNames, botTrace.LoadedSkills, Math.Max(botTrace.Errors, _lastTurnFailed ? 1 : 0), botUsage.Input, botUsage.Output, _lastTurnCancelled, botTrace.Sources,
-                            model: (links.Count > 0 ? links[next]?.Endpoint.ModelId : null) ?? _session.Endpoint?.ModelId, usage: botUsage, cwd: null);   // no folder: a bot chat isn't the folder's work (2026-11-22, the review's #40)
+                            model: botModel, usage: botUsage, cwd: null);   // no folder: a bot chat isn't the folder's work (2026-11-22, the review's #40)
                         _sessions.SaveHistory(id, SessionHistory.ToJson(BotChat.StoredHistory(starter, lines, castNames, topic)));
                     }
                 }
@@ -17706,8 +17761,8 @@ internal sealed partial class ChatScreen
         }
     }
 
-    /// <summary><c>/botchat</c>'s pictures still rendering with <c>Botchat image async</c> on (2026-09-27): the strip's <see cref="PendingPictures.Glyph"/>.</summary>
-    private readonly PendingPictures _pendingPictures = new();
+    /// <summary>Every ComfyUI picture under way (2026-09-27, <c>/botchat</c>'s async ones; every one since 2026-11-27): the lower rule's <see cref="PendingPictures.RuleText"/>.</summary>
+    private readonly PendingPictures _pendingPictures;   // set in the constructor, on _time (2026-11-27)
 
     /// <summary>The last <c>/botchat</c> of this run, kept when it stopped, for <see cref="BotChat.ResumeSwitch"/> (2026-09-25); null before the first.</summary>
     private BotChatState? _lastBotChat;
@@ -17939,7 +17994,7 @@ internal sealed partial class ChatScreen
             return null;
         }
 
-        return new GenerateImageTool(_comfy, workflows => BotChat.BotWorkflows(workflows, fresh, rework, reworkable));
+        return new GenerateImageTool(_comfy, workflows => BotChat.BotWorkflows(workflows, fresh, rework, reworkable), _pendingPictures.Begin);
     }
 
     /// <summary>
@@ -18267,6 +18322,9 @@ internal sealed partial class ChatScreen
         // A line typed under the spinner is the chat's, as under a reply (2026-09-25): an interjection queued, a command run
         // by the mid-turn policy — its pane here, its act at the wait's end.
         var watcher = StartReplyWatch(cts, stop.Token, cancellationToken, softCancel, spend: BotTalkKey);
+        // A picture waited on here (2026-11-27: a /loop pass's /imagine, a held Botchat picture) is on the lower rule's timer; only its kind
+        // is shown, so 🎨's label stands for one input picture.
+        using var picture = ComfyText.IsGeneratingLabel(label) ? _pendingPictures.Begin(label == ComfyText.GeneratingLabel ? 1 : 0) : null;
         try
         {
             var working = _transcript.WithSpinnerAsync(label, () => work(cts.Token));
@@ -19621,6 +19679,8 @@ internal sealed partial class ChatScreen
     /// </summary>
     private void LogTurn(Assistant assistant, string text, string reply, TurnTrace trace, bool cancelled, AppSettingsData effective, CancellationToken appToken)
     {
+        // /usage's trend (2026-11-27): before the gate, so it grows with Session logging off and while private; nothing in it is written.
+        _session.Usage.RecordReply(TurnModel());
         if (!SavesSession(effective))
         {
             return;
@@ -19651,9 +19711,10 @@ internal sealed partial class ChatScreen
         }
 
         var usage = _session.Usage.LastReply;
-        // The model that answered, the turn's timed output and the folder (2026-11-21, feature ideas #4 and #7).
+        // The model that answered, the turn's timed output and the folder (2026-11-21, feature ideas #4 and #7); the context at its last
+        // request (2026-11-27), none for a reply that reported nothing, whose LastRequest is still the reply before's.
         int? ordinal = _sessions.AppendTurn(id, pass?.Line ?? text, reply, trace.ToolCalls, trace.ToolNames, trace.LoadedSkills, trace.Errors, usage.Input, usage.Output, cancelled, trace.Sources,
-            model: TurnModel(), usage: usage, cwd: _files.Root);
+            model: TurnModel(), usage: usage, cwd: _files.Root, contextTokens: usage.IsEmpty ? null : _session.Usage.LastRequest.Total);
         StampTurn(assistant.History, ordinal);
         SaveSessionHistory();
         if (first && !cancelled && pass is null && SessionNamingMode.Resolve(effective) == SessionNaming.ModelWritten)

@@ -228,8 +228,8 @@ public sealed class DirectoryConfigFile
         "  // A domain read as you, with the Kerberos ticket kinit gives (kinit you@CORP.EXAMPLE); its DCs are found in DNS:\n" +
         "  // \"corp\": { \"domain\": \"corp.example\", \"description\": \"the office\" },\n" +
         "  //\n" +
-        "  // As another account, name@REALM, the password in " + SqlText.CredentialStore + " as NeonSidekick/ad/<name> (set it with\n" +
-        "  // Directory set password on " + DirectoryText.MenuPath + "):\n" +
+        "  // As another account, name@REALM, the password in " + SqlText.CredentialStore + " as NeonSidekick/ad/<name> (set it in\n" +
+        "  // Directory add/edit domain's Password row on " + DirectoryText.MenuPath + "):\n" +
         "  // \"lab\": { \"domain\": \"lab.example\", \"server\": \"dc1.lab.example\", \"auth\": \"runas\", \"user\": \"reader@LAB.EXAMPLE\", \"passwordStore\": \"credman\" },\n" +
         "  //\n" +
         "  // server: a DC (the domain's DCs from DNS when absent). baseDn: where to search (the domain when absent). tls: true for LDAPS on\n" +
@@ -250,7 +250,7 @@ public sealed class DirectoryConfigFile
         "  // \"corp\": { \"domain\": \"corp.example\", \"server\": \"dc01.corp.example\", \"description\": \"the office\" },\n" +
         "  //\n" +
         "  // As another account (from a PC outside the domain this is NTLM inside Negotiate), the password in " + SqlText.CredentialStore + "\n" +
-        "  // as NeonSidekick/ad/<name> — set it with Directory set password on " + DirectoryText.MenuPath + ", or:\n" +
+        "  // as NeonSidekick/ad/<name> — set it in Directory add/edit domain's Password row on " + DirectoryText.MenuPath + ", or:\n" +
         "  // " + SqlText.CredentialCommand("NeonSidekick/ad/lab", "LAB\\reader") + "\n" +
         "  // \"lab\": { \"domain\": \"lab.example\", \"server\": \"localhost\", \"auth\": \"runas\", \"user\": \"LAB\\\\reader\", \"passwordStore\": \"credman\" },\n" +
         "  //\n" +

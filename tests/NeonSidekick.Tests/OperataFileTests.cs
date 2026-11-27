@@ -168,7 +168,8 @@ public class OperataFileTests : IDisposable
             DiagnosticLog.Emitted -= capture;
         }
 
-        Assert.Equal(["Operating rules loaded from operata.md (16 characters).", "operata.md is blank; using the default operating rules."], infos);
+        Assert.Equal(["Operata loaded from operata.md (16 characters).", "operata.md is blank; using the default operating rules."], infos);
+        Assert.Equal("the default operating rules", new OperataFile(_dir).DefaultInUse);   // the plain words, though the label is Operata (2026-11-27)
     }
 
     [Fact]

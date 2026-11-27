@@ -68,10 +68,12 @@ public static class OracleText
 
         return null;
     }
-    public static string NoPassword(string name) => $"'{name}' has no password; set it on /tools › Databases › Oracle (Oracle set password)";
+    /// <summary>The row a password is set in (2026-11-26, the user's ask: the per-family "set password" rows went; an edit's Password row sets it). Pinned.</summary>
+    public const string EditRow = "Oracle add/edit connection";
+
+    public static string NoPassword(string name) => $"'{name}' has no password; set it with {EditRow} (its Password row) on /tools › Databases › Oracle";
     public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on /tools › Databases › Oracle, or: {SqlText.CredentialCommand(target, "<user>")}";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's oracle.json was checked for plain passwords: {detail}";
-    public const string NoPasswordConnections = "No connection in oracle.json yet; add one first (Oracle add connection).";
 
     /// <summary>One connection as <c>oracle_connections</c> lists it: the name, where, the user, the schema, the description — never the password.</summary>
     /// <remarks>A <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>Oracle mode</c> read-write) lets it change.</remarks>

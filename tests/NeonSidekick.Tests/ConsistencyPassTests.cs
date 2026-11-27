@@ -55,6 +55,9 @@ public class ConsistencyPassTests
         SettingsMenu.AdvisorListKeys, SettingsMenu.AdvisorTemplateKeys,   // the advisor list and its template pages (2026-11-22)
         SettingsMenu.AdvisorListCloseKeys,   // the advisor list under /advisor list (2026-11-23)
         SettingsMenu.LeaveKeys,   // the unsaved-changes question (2026-11-26)
+        ThemeText.EditHint, ThemeText.PickerHint,   // the theme editor and its picker (2026-11-26)
+        SamplingText.Keys,   // /sampling, with its Space = on/off (2026-11-27)
+        InfoPane.StopsHintText,   // /usage › Context with its row cursor (2026-11-27)
         SkillsText.ProjectKeys, SkillsText.TrustKeys,   // the /skills project sub-tab and its trust question (2026-11-23)
         NeonSidekick.ProjectInit.ProjectInitText.QuestionKeys, NeonSidekick.ProjectInit.ProjectInitText.NotesKeys, NeonSidekick.ProjectInit.ProjectInitText.FeedbackKeys,   // /project-init's questions, Write pane and Revise slot (2026-11-23)
         .. new[] { SettingsField.FileTools, SettingsField.ImageTools, SettingsField.PrintTools, SettingsField.ScreenTools, SettingsField.ObsidianTools, SettingsField.YouTubeTools }

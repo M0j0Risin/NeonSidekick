@@ -75,7 +75,7 @@ internal sealed partial class ChatScreen
 
         using var cmdCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
-        // The reply's watch (the /test shape): the approval pane opens through it, ESC cancels the line, a line typed meanwhile goes through the mid-turn policy.
+        // The reply's watch (the /bench shape): the approval pane opens through it, ESC cancels the line, a line typed meanwhile goes through the mid-turn policy.
         var watcher = StartReplyWatch(cmdCts, stop.Token, cancellationToken);
         CmdRun? run = null;
         try

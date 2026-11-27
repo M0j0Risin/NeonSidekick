@@ -62,7 +62,7 @@ public static class TaskConfigFile
         FileName,
         "Task computers offered",
         TaskText.MenuPath,
-        "Task set password",
+        "Task add/edit computer",
         "NeonSidekick/tasks/",
         TaskActions.All,
         "folders",
@@ -85,8 +85,8 @@ public static class TaskConfigFile
         "  // \"app01\": { \"host\": \"app01.corp.example\", \"description\": \"app server\", \"folders\": [\"\\\\\", \"\\\\Ops\\\\*\"],\n" +
         "  //   \"access\": \"readwrite\", \"control\": [\"\\\\Ops\\\\*\"], \"privileged\": true, \"detail\": \"full\" },\n" +
         "  //\n" +
-        "  // As another account, the password in " + SqlText.CredentialStore + " as NeonSidekick/tasks/<name> — set it with Task set password\n" +
-        "  // on " + TaskText.MenuPath + ", or:\n" +
+        "  // As another account, the password in " + SqlText.CredentialStore + " as NeonSidekick/tasks/<name> — set it in Task add/edit\n" +
+        "  // computer's Password row on " + TaskText.MenuPath + ", or:\n" +
         "  // " + SqlText.CredentialCommand("NeonSidekick/tasks/app02", "CORP\\svc-ops") + "\n" +
         "  // \"app02\": { \"host\": \"app02\", \"auth\": \"runas\", \"user\": \"CORP\\\\svc-ops\", \"passwordStore\": \"credman\" },\n" +
         "  //\n" +

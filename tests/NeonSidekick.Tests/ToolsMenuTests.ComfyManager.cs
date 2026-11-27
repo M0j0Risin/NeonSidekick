@@ -734,4 +734,171 @@ public partial class ToolsMenuTests
         Assert.True(ComfyWorkflow.TryLoad(Path.Combine(_settings.ProfileComfyDirectory, "model.json"), out var workflow, out string? problem), problem);
         Assert.Contains("{{prompt}}", File.ReadAllText(workflow!.FilePath));
     }
+
+    // ── A LoRA switched off (2026-11-27, the user's ask) ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Space on Edit's LoRAs page switches a LoRA off: the row reads off, Save writes only its key, and the graph keeps the LoRA.</summary>
+    [Fact]
+    public async Task OnThePane_SpaceSwitchesALoraOff_SaveWritesOnlyThatKey_AndTheFileKeepsTheLora()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", "---\nfamily: sdxl\nlora.style.safetensors: xyz_style\n---\n", edit: graph => ComfyGraphEdit.AddLora(graph, "style.safetensors", 0.8));
+        string json = Path.Combine(_settings.ProfileComfyDirectory, "portrait.json");
+        byte[] before = File.ReadAllBytes(json);
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);                                // actions, Edit
+        Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);     // LoRAs
+        Push(Keys.Char(' '));                                        // Space on the add row does nothing
+        Push(Keys.Down, Keys.Char(' '));
+        Push(Keys.Escape);
+        Push([.. Enumerable.Repeat(Keys.Up, 5), Keys.Enter]);       // Save
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        string md = File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md"));
+        Assert.Equal("---\nfamily: sdxl\nlora.style.safetensors: xyz_style\nlora-off.style.safetensors: " + ComfyWorkflow.LoraOffValue + "\n---\n", md);
+        Assert.Equal(before, File.ReadAllBytes(json));
+        Assert.Contains(SettingsMenu.ComfyLoraOffNotice("style.safetensors"), Output);
+        Assert.Contains(SettingsMenu.ComfyLoraKeys, Output);
+        Assert.Contains("style.safetensors 0.8 (" + SettingsMenu.ComfyLoraOffMark + ")", Output);   // the summary's row
+        Assert.True(ComfyWorkflow.TryLoad(json, out var workflow, out _));
+        Assert.Equal(["style.safetensors"], workflow!.LorasOff);
+        Assert.Null(workflow.TriggerWords);
+    }
+
+    /// <summary>Space again on an off LoRA, then Save, removes its key; Del on an off LoRA drops the key with the node.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OnThePane_SpaceOnAnOffLora_OrDel_RemovesItsKey(bool delete)
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", "---\nfamily: sdxl\nlora-off.style.safetensors: yes\n---\n", edit: graph => ComfyGraphEdit.AddLora(graph, "style.safetensors", 1));
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);
+        Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);     // LoRAs
+        Push(Keys.Down, delete ? Keys.Delete : Keys.Char(' '));
+        Push(Keys.Escape);
+        Push([.. Enumerable.Repeat(Keys.Up, 5), Keys.Enter]);       // Save
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal("---\nfamily: sdxl\n---\n", File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+        var loras = ComfyGraphEdit.Read(ComfyGraphEdit.Load(File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.json"))).Graph!).Loras.Loras;
+        Assert.Equal(delete ? 0 : 1, loras.Count);
+        if (!delete)
+        {
+            Assert.Contains(SettingsMenu.ComfyLoraOnNotice("style.safetensors"), Output);
+        }
+    }
+
+    /// <summary>Space on a LoRA another node type loads says why and marks nothing.</summary>
+    [Fact]
+    public async Task OnThePane_SpaceOnALoraTheGraphCantLeaveOut_SaysWhy()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", edit: graph =>
+        {
+            ComfyGraphEdit.AddLora(graph, "style.safetensors", 1);
+            foreach (var (_, node) in graph)
+            {
+                if (node?["class_type"]?.GetValue<string>() is ComfyGraphEdit.LoraLoader or ComfyGraphEdit.LoraLoaderModelOnly)
+                {
+                    node["class_type"] = "LoraLoaderBypass";
+                }
+            }
+        });
+        string md = File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md"));
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);
+        Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);     // LoRAs (read-only: no add row)
+        Push(Keys.Char(' '));
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(ComfyText.EditOtherLoader("LoraLoaderBypass"), Output);
+        Assert.DoesNotContain(SettingsMenu.ComfyLoraOffNotice("style.safetensors"), Output);
+        Assert.Equal(md, File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+    }
+
+    /// <summary>
+    /// Without the pane (no Space), Enter on a LoRA asks its strength and words, then whether to switch it off (2026-11-27): a yes marks it,
+    /// and Save writes its key.
+    /// </summary>
+    [Fact]
+    public async Task WithoutThePane_EnterOnALora_AsksToSwitchItOff_AndAYesSavesTheKey()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", edit: graph => ComfyGraphEdit.AddLora(graph, "style.safetensors", 0.8));
+        var (client, _) = ComfyPictureStub();
+        _paneOn = false;
+        var pane = new ScreenPane(_console, geometry: null, _time);
+        var keys = new KeySource(_console.Input, TimeSpan.FromMilliseconds(1));
+        var settings = new SettingsMenu(_console, _settings, _ => null, new InputLine(_console, keys), new TranscriptRenderer(_console), _speech, new MenuPane(pane, keys), _ => FakeBrowserPath, comfyClient: () => client);
+        Push(Keys.Enter, Keys.Enter);                                // portrait's actions, Edit
+        Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);     // LoRAs
+        Push(Keys.Down, Keys.Enter);                                 // the LoRA
+        Push(Keys.Enter);                                            // the strength kept
+        Push(Keys.Enter);                                            // no words
+        Push(Keys.Down, Keys.Enter);                                 // Yes, switch it off
+        Push(Keys.Escape);                                           // the summary
+        Push([.. Enumerable.Repeat(Keys.Up, 5), Keys.Enter]);       // Save
+        Push(Keys.Escape, Keys.Escape);
+
+        await settings.EditAsync(SettingsField.ComfyWorkflowsOffered, _settings.Current, new MenuPage("Tools", [], ""), 0, CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.ComfyLoraOffQuestion("style.safetensors", off: false), Output);
+        Assert.Contains("lora-off.style.safetensors: " + ComfyWorkflow.LoraOffValue, File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+    }
+
+    /// <summary>The manager's band names an off LoRA after the ones in play, marked (2026-11-27): the run leaves it out, the file keeps it.</summary>
+    [Fact]
+    public async Task OnThePane_TheManagersBand_NamesAnOffLora_Marked()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", "---\nfamily: sdxl\nlora-off.style.safetensors: yes\n---\n", edit: graph => ComfyGraphEdit.AddLora(graph, "style.safetensors", 1));
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains("style.safetensors (" + SettingsMenu.ComfyLoraOffMark + ")", Output);
+    }
+
+    /// <summary>Space on a LoRA a switch node leaves out (its unused branch) says why and marks nothing (2026-11-27).</summary>
+    [Fact]
+    public async Task OnThePane_SpaceOnASwitchedOffLora_SaysWhy()
+    {
+        ComfyBuilt(_settings.ProfileComfyDirectory, "portrait", edit: graph =>
+        {
+            ComfyGraphEdit.AddLora(graph, "style.safetensors", 1);
+            string Id(string type) => graph.First(p => p.Value?["class_type"]?.GetValue<string>() == type).Key;
+            string lora = Id(ComfyGraphEdit.LoraLoader), checkpoint = Id("CheckpointLoaderSimple"), sampler = Id("KSampler");
+            graph["921"] = System.Text.Json.Nodes.JsonNode.Parse("""{ "class_type": "PrimitiveBoolean", "inputs": { "value": false } }""");
+            graph["922"] = System.Text.Json.Nodes.JsonNode.Parse($$"""{ "class_type": "ComfySwitchNode", "inputs": { "switch": ["921", 0], "on_true": ["{{lora}}", 0], "on_false": ["{{checkpoint}}", 0] } }""");
+            // A LoRA in play after the switch, so the summary's LoRAs row opens (one with every LoRA behind it is dim).
+            graph["930"] = System.Text.Json.Nodes.JsonNode.Parse("""{ "class_type": "LoraLoaderModelOnly", "inputs": { "lora_name": "detail.safetensors", "strength_model": 1, "model": ["922", 0] } }""");
+            graph[sampler]!["inputs"]!["model"] = new System.Text.Json.Nodes.JsonArray("930", 0);
+        });
+        string md = File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md"));
+        var (client, _) = ComfyPictureStub();
+        var (menu, _, _) = PaneMenu(comfy: () => client);
+        OpenComfyList();
+        Push(Keys.Enter, Keys.Enter);
+        Push([.. Enumerable.Repeat(Keys.Down, 5), Keys.Enter]);     // LoRAs (behind a switch: no add row)
+        Push(Keys.Down, Keys.Char(' '));                             // detail, then style on the switch's unused branch
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.ComfySwitchedOffMark, Output);
+        Assert.Contains(ComfyText.LoraOffSwitchedOff, Output);
+        Assert.Equal(md, File.ReadAllText(Path.Combine(_settings.ProfileComfyDirectory, "portrait.md")));
+    }
 }

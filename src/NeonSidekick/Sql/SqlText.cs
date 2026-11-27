@@ -116,14 +116,14 @@ public static class SqlText
     /// saved for). Pinned.
     /// </summary>
     public static string CredentialHostMismatch(string target, string recorded, string host, string menu) =>
-        $"the password in {target} was saved for {recorded}, but the connection now points at {host}; set the password again on {menu} (… set password) to send it there";
+        $"the password in {target} was saved for {recorded}, but the connection now points at {host}; set the password again on {menu} (… add/edit, its Password row) to send it there";
 
     /// <summary>
     /// A sign-in the guard holds: the same account and password were refused by this server before (2026-10-24, review K1: every call, and
     /// the boundary's names read, tried the refused password again, which locks an account with a lockout policy). Pinned.
     /// </summary>
     public static string SignInHeld(string user, string where, string menu) =>
-        $"the sign-in for {user} was refused by {where} a moment ago, so it is not sent again for a quarter of an hour; if the password is wrong, set the right one on {menu} (… set password)";
+        $"the sign-in for {user} was refused by {where} a moment ago, so it is not sent again for a quarter of an hour; if the password is wrong, set the right one on {menu} (… add/edit, its Password row)";
 
     // The Keychain's sentences (2026-10-24, review K10: they were inline in MacKeychain).
     public const string KeychainCanceled = "the Keychain prompt was canceled";
@@ -141,7 +141,10 @@ public static class SqlText
         [OperatingSystem.IsMacOS() ? $"file     encrypted (Keychain key) in {file}" : $"file     encrypted (DPAPI) in {file}", "credman  " + CredentialStore];
 
     public static string NoCredential(string target) => $"no password in {CredentialStore} for {target}; set it on /tools › Databases › SQL, or: {CredentialCommand(target, "<account>")}";
-    public static string NoPassword(string name) => $"'{name}' has no password; set it on /tools › Databases › SQL (SQL set password)";
+    /// <summary>The row a password is set in (2026-11-26, the user's ask: the per-family "set password" rows went; an edit's Password row sets it). Pinned.</summary>
+    public const string EditRow = "SQL add/edit connection";
+
+    public static string NoPassword(string name) => $"'{name}' has no password; set it with {EditRow} (its Password row) on {SqlMenuPath}";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's sql.json was checked for plain passwords: {detail}";
     public static string EncryptedLogLine(string name, string path) => $"encrypted the password of '{name}' in {path}";
     public static string EncryptFailedLogLine(string name, string path, string detail) => $"could not encrypt the password of '{name}' in {path}, so it stays plain text there: {detail}";
@@ -160,7 +163,6 @@ public static class SqlText
     public static string ConnectionAddFailed(string name, string detail) => $"Could not add '{name}': {detail}.";
     public static string ConnectionChanged(string name, string path) => $"Saved '{name}' in {path}.";   // 2026-10-05, the wizards' edit
     public static string ConnectionChangeFailed(string name, string detail) => $"Could not save '{name}': {detail}.";
-    public const string NoPasswordConnections ="No connection in sql.json takes a password (sql or runas); add one first.";
     public static string BadEncrypt(string word) => $"\"encrypt\" is '{word}'; it must be strict, mandatory or optional";
     public static string BadConnectTimeout(int seconds, int max) => $"\"connectTimeoutSeconds\" is {Invariant(seconds)}; it must be 1 to {Invariant(max)}";
     public static string UnreadableFile(string detail) => $"the file cannot be read ({detail})";

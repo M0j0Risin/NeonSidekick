@@ -82,7 +82,7 @@ public sealed partial class ActiveDirectoryTests
     {
         string held = DirectoryText.Held("lab.example", "reader@LAB.EXAMPLE");
         Assert.StartsWith("Error: lab.example refused the password for reader@LAB.EXAMPLE", held, StringComparison.Ordinal);
-        Assert.Contains("Directory set password on " + DirectoryText.MenuPath, held, StringComparison.Ordinal);
+        Assert.Contains(DirectoryText.EditRow + " (its Password row) on " + DirectoryText.MenuPath, held, StringComparison.Ordinal);
     }
 
     // ── A Mac's accounts ───────────────────────────────────────────────────

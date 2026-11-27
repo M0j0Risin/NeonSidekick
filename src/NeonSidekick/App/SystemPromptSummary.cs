@@ -157,7 +157,7 @@ public sealed record SystemPromptFacts(
 {
     /// <summary>
     /// These facts with the group <paramref name="group"/> switches turned off (2026-11-02, the review: the <c>/usage</c> Context tab's
-    /// <c>off saves</c> counts the prompt's sentences too): the flag or the list that switch drives cleared, the rest as it was. A group
+    /// share, <c>off saves</c> until 2026-11-27, counts the prompt's sentences too): the flag or the list that switch drives cleared, the rest as it was. A group
     /// with no sentence of its own (ComfyUI, printing, the camera, the screen, YouTube) is these facts unchanged.
     /// </summary>
     public SystemPromptFacts Without(SettingsField group) => group switch
@@ -547,7 +547,7 @@ public static class SystemPromptSummary
         string defaultLabel = !facts.ToolsEnabled ? $"default ({ToolsOffSuffix})" : !facts.FilesEnabled ? $"default ({FilesOffSuffix})" : "default";
         string rules = customRules ? facts.OperatingRules!.Trim() : Assistant.DefaultRules(facts.Markdown, facts.ToolsEnabled, facts.FilesEnabled, web: facts.Web, ask: facts.ToolsEnabled ? facts.Ask : null, sessions: facts.Sessions, download: facts.Download, delete: !facts.Off(DeleteTool.ToolName), mcp: facts.Mcp, timers: facts.Timers, git: facts.Git, shell: facts.Shell, police: facts.Police, obsidian: facts.Obsidian, obsidianDelete: facts.ObsidianDelete, sql: facts.Sql, native: facts.Native, homeAssistant: facts.HomeAssistant, oracle: facts.Oracle, mysql: facts.MySql, unc: facts.Unc, uncFetch: facts.Unc && facts.UncFetch, uncWrite: facts.Unc && facts.UncWrite, docker: facts.Docker, dockerWrite: facts.Docker && facts.DockerWrite, help: facts.Help, sqlite: facts.Sqlite, postgres: facts.Postgres, sqliteWrite: facts.SqliteWriting, serverWrites: facts.ServerWrites, images: facts.Images, advisors: facts.Advisors, shopping: facts.Shopping, eventLog: facts.EventLog, clock: facts.Clock, duckDb: facts.DuckDb, duckDbWrite: facts.DuckDbWriting);
         sections.Add(new(
-            "Operating rules",
+            OperataLabel,
             customRules ? $"{OperataFile.FileName} ({rules.Length.ToString(CultureInfo.InvariantCulture)} chars)" : defaultLabel,
             rules));
 
@@ -742,6 +742,9 @@ public static class SystemPromptSummary
     private const string ProjectNotesLabel = "Project notes";
     private const string MemoryLabel = "Memory";
     private const string SkillsLabel = "Skills";
+
+    /// <summary>The operating rules' section, named after its file as Persona is (2026-11-27, the user's ask; "Operating rules" until then). Pinned.</summary>
+    public const string OperataLabel = "Operata";
 
     /// <summary>
     /// The sections the Prompt tab shows: <see cref="PromptSections"/> without the skills catalog, which has had the Skills tab to itself since

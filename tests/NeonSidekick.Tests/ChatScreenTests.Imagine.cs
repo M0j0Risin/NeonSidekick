@@ -176,8 +176,8 @@ public partial class ChatScreenTests
                 case 1 when Output.Contains(ComfyText.ImagineInBackground, StringComparison.Ordinal):
                     step++;
                     _time.Advance(ScreenPane.Tick);
-                    input.PushClick(238, 101);                // 🖼️ alone on the lower rule: the space after it at the right edge
-                    input.PushClick(238, 101);
+                    input.PushClick(3, 101);                  // 🖼️ and its time at the lower rule's left (2026-11-27)
+                    input.PushClick(5, 101);
                     break;
                 case 2 when Output.Contains("· " + ComfyText.Drained(1), StringComparison.Ordinal):
                     step++;

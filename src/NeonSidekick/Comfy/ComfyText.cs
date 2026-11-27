@@ -568,7 +568,7 @@ public static class ComfyText
         lines.Add(workflows.Count == 0 ? count : count + ", " + shown.Count.ToString(CultureInfo.InvariantCulture) + " offered to the model:");
         foreach (var workflow in workflows)
         {
-            lines.Add("  " + WorkflowLine(workflow) + " · {{" + string.Join("}} {{", workflow.Placeholders.Order(StringComparer.Ordinal)) + "}}" + TriggerWordsPart(workflow, "trigger words") + (shown.Contains(workflow) ? "" : " · hidden"));
+            lines.Add("  " + WorkflowLine(workflow) + " · {{" + string.Join("}} {{", workflow.Placeholders.Order(StringComparer.Ordinal)) + "}}" + TriggerWordsPart(workflow, "trigger words") + LorasOffPart(workflow) + (shown.Contains(workflow) ? "" : " · hidden"));
         }
 
         foreach (var problem in problems)
@@ -647,6 +647,26 @@ public static class ComfyText
     {
         ArgumentNullException.ThrowIfNull(workflow);
         return workflow.TakesPrompt && workflow.TriggerWords is { Count: > 0 } words ? " · " + label + ": " + string.Join(", ", words) : "";
+    }
+
+    /// <summary>A workflow whose sidecar switches off a LoRA the graph can't do without (2026-11-27): it shows under Skipped with this. Pinned.</summary>
+    public static string LoraOffProblem(string name, string why) =>
+        "has LoRA " + Llm.Tools.UntrustedText.Name(name) + " switched off, but it can't be left out (" + why + "); remove lora-off." + Llm.Tools.UntrustedText.Name(name) + " from its .md";
+
+    /// <summary>A LoRA row whose name no sidecar key can hold an off mark for (2026-11-27). Pinned.</summary>
+    public const string LoraOffBadName = "A LoRA name with a colon, a line break or spaces at its ends can't be switched off.";
+
+    /// <summary>A LoRA on a switch node's unused branch (2026-11-27): it never runs, so there is nothing to switch. Pinned.</summary>
+    public const string LoraOffSwitchedOff = "This LoRA is on a branch a switch node leaves unused, so it never runs.";
+
+    /// <summary>
+    /// <c>/comfy status</c>'s part for the LoRAs a workflow leaves out (2026-11-27): <c> · 1 LoRA off</c>, <c> · 2 LoRAs off</c>, "" with none. Pinned.
+    /// </summary>
+    public static string LorasOffPart(ComfyWorkflow workflow)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        int count = workflow.LorasOff?.Count ?? 0;
+        return count == 0 ? "" : " · " + count.ToString(System.Globalization.CultureInfo.InvariantCulture) + (count == 1 ? " LoRA off" : " LoRAs off");
     }
 
     /// <summary>A LoRA row whose name no sidecar key can hold (<see cref="ComfyWorkflow.LoraWordsKey"/>, 2026-11-26). Pinned.</summary>

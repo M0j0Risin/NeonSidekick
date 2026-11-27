@@ -1381,4 +1381,141 @@ public class InfoPaneTests : IDisposable
         Assert.Equal(2, waits);
         Assert.Contains(Titled("/screen list", 30) + "\n \nMonitors:\n" + Rule(30), Output[mark..]);
     }
+
+    /// <summary>
+    /// <c>initialLine</c> (2026-11-27, <c>/bench history</c>): the initial tab's view starts at that content line, clamped to the last full page;
+    /// another tab opens at its top.
+    /// </summary>
+    [Fact]
+    public async Task TheInitialLine_StartsTheFirstTabsView_ClampedNearTheEnd_AnotherTabAtItsTop()
+    {
+        _console.Profile.Width = 120;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        input.Push(Keys.Escape);
+        await new InfoPane(pane, keys).ShowAsync("/usage", [Tab("Long", Numbered(200))], 0, CancellationToken.None, initialLine: 50);
+        Assert.Contains("\nline51\n", Output);
+        Assert.DoesNotContain("\nline50\n", Output);
+
+        int mark = Output.Length;
+        input.Push(Keys.Escape);
+        await new InfoPane(pane, keys).ShowAsync("/usage", [Tab("Long", Numbered(200))], 0, CancellationToken.None, initialLine: 10_000);
+        Assert.Contains("line200", Output[mark..]);   // clamped to the last page
+
+        mark = Output.Length;
+        input.Push(Keys.Right, Keys.Escape);
+        await new InfoPane(pane, keys).ShowAsync("/usage", [Tab("Long", Numbered(200)), Tab("Other", "other1\nother2")], 0, CancellationToken.None, initialLine: 50);
+        Assert.Contains("other1", Output[mark..]);   // the second tab from its top
+    }
+
+    // ── A row cursor (2026-11-27, /usage › Context's rows) ───────────────────
+
+    /// <summary>A tab whose lines 1–3 (of five) are stops, telling each key it gets and answering Close to Enter.</summary>
+    private static InfoTab StopsTab(List<(int Stop, InfoStopKey Key)> told, string content = "  head\n  row1\n  row2\n  row3\n  tail", IReadOnlyList<int>? stops = null) =>
+        new("Rows", () => new Text(content))
+        {
+            Stops = () => stops ?? [1, 2, 3],
+            StopKey = (stop, key) =>
+            {
+                told.Add((stop, key));
+                return Task.FromResult(key == InfoStopKey.Enter ? InfoStopResult.Close : InfoStopResult.Stay);
+            },
+        };
+
+    [Fact]
+    public async Task AStopsTab_TheArrowsMoveTheCursor_SpaceAndEnterReachIt_EnterCloses()
+    {
+        _console.Profile.Width = 140;   // the cursor's hint whole
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<(int, InfoStopKey)>();
+        input.Push(Keys.Down, Keys.Char(' '), Keys.Down, Keys.Enter);
+
+        var info = new InfoPane(pane, keys);
+        await info.ShowAsync("/usage", [StopsTab(told)], 0, CancellationToken.None);
+
+        Assert.Equal([(1, InfoStopKey.Space), (2, InfoStopKey.Enter)], told);
+        Assert.Equal((2, InfoStopKey.Enter), info.ChosenStop);
+        Assert.Equal(2, info.LastStop);
+        Assert.Contains(InfoPane.StopPointer + "row1", Output);   // the first stop at the open
+        Assert.Contains(InfoPane.StopPointer + "row3", Output);
+        Assert.Contains(InfoPane.StopsHintText, Output);
+        Assert.DoesNotContain(InfoPane.StopPointer + "head", Output);
+    }
+
+    [Fact]
+    public async Task OnAStopsTab_SpaceStartsNoFind_AndWithAFindTypedIsFindText()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<(int, InfoStopKey)>();
+        input.Push(Keys.Char(' '), Keys.Char('r'), Keys.Char(' '), Keys.Escape, Keys.Escape);
+
+        var info = new InfoPane(pane, keys);
+        await info.ShowAsync("/usage", [StopsTab(told)], 0, CancellationToken.None);
+
+        Assert.Equal([(0, InfoStopKey.Space)], told);   // the second Space went on the find "r "
+        Assert.Contains(InfoPane.FindHint("r ", 0, 0)[..10], Output);
+        Assert.Null(info.ChosenStop);
+    }
+
+    [Fact]
+    public async Task AClickOnAStopsLine_MovesTheCursor_ASecondIsEnter()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<(int, InfoStopKey)>();
+        input.PushClick(4, 104);                         // row2 (line 2), once: the cursor there
+        input.PushClick(4, 104);                         // twice: Enter
+
+        var info = new InfoPane(pane, keys);
+        await info.ShowAsync("/usage", [StopsTab(told)], 0, CancellationToken.None);
+
+        Assert.Equal([(1, InfoStopKey.Enter)], told);
+        Assert.Equal((1, InfoStopKey.Enter), info.ChosenStop);
+        Assert.Contains(InfoPane.StopPointer + "row2", Output);
+    }
+
+    [Fact]
+    public async Task PastTheLastStop_TheArrowsScroll_TheHintGoesBack_AndUpBringsTheCursorBack()
+    {
+        _console.Profile.Width = 140;
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<(int, InfoStopKey)>();
+        string content = "  row1\n  row2\n" + Numbered(200);   // longer than the pane, so the view scrolls
+        input.Push(Keys.Down);                                       // row2
+        input.Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down);     // past the last stop: the view scrolls by a line
+        input.Push(Keys.Up, Keys.Up, Keys.Up, Keys.Char(' '), Keys.Escape);   // the third brings row2 back into view, the cursor still on it
+
+        var info = new InfoPane(pane, keys);
+        await info.ShowAsync("/usage", [StopsTab(told, content, [0, 1])], 0, CancellationToken.None);
+
+        Assert.Equal([(1, InfoStopKey.Space)], told);   // the last Space, once row2 was back in view under the cursor
+        Assert.Contains(InfoPane.SingleTabHintText, Output);   // the scroll hint (one tab's) while no stop showed
+        Assert.Contains(InfoPane.StopsHintText, Output);
+    }
+
+    [Fact]
+    public async Task TheInitialStop_IsTheTabsOwn_OrTheOneGiven()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<(int, InfoStopKey)>();
+        input.Push(Keys.Char(' '), Keys.Escape);
+        var tab = StopsTab(told) with { InitialStop = () => 2 };
+        await new InfoPane(pane, keys).ShowAsync("/usage", [tab], 0, CancellationToken.None);
+        Assert.Equal([(2, InfoStopKey.Space)], told);
+
+        told.Clear();
+        input.Push(Keys.Char(' '), Keys.Escape);
+        await new InfoPane(pane, keys).ShowAsync("/usage", [tab], 0, CancellationToken.None, initialStop: 1);
+        Assert.Equal([(1, InfoStopKey.Space)], told);
+    }
 }

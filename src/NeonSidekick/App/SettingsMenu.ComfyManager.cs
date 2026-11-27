@@ -325,7 +325,9 @@ internal sealed partial class SettingsMenu
 
         var parts = ComfyGraphEdit.Load(workflow.GraphJson).Graph is { } graph ? ComfyGraphEdit.Read(graph) : null;
         string model = parts?.Model.Value is { Length: > 0 } m ? m : "";
-        string loras = parts is null ? "" : string.Join(", ", parts.Loras.Loras.Where(l => !l.SwitchedOff).Select(l => l.Name));
+        // The ones in play, then the ones switched off, marked (2026-11-27): GraphJson has them spliced out.
+        string loras = parts is null ? "" : string.Join(", ", parts.Loras.Loras.Where(l => !l.SwitchedOff).Select(l => l.Name)
+            .Concat((workflow.LorasOff ?? []).Select(name => name + " (off)")));
         string size = workflow.Placeholders.Contains(ComfyWorkflow.WidthKey) ? Invariant(workflow.Defaults.Width) + "×" + Invariant(workflow.Defaults.Height) : "";
         // The words a run puts in front (2026-11-26): the ones in play, as /comfy says them.
         string words = ComfyText.TriggerWordsPart(workflow, "trigger words") is { Length: > 0 } part ? part[" · ".Length..] : "";

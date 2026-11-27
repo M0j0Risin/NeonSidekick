@@ -29,6 +29,23 @@ public sealed record SessionSummary(long Id, DateTimeOffset StartedAt, DateTimeO
 public sealed record SessionTurn(int Ordinal, DateTimeOffset At, string UserText, string ReplyText, int ToolCalls, IReadOnlyList<string> ToolNames, IReadOnlyList<string> SkillsLoaded, int Errors, long InputTokens, long OutputTokens, bool Cancelled, IReadOnlyList<Web.WebSource>? Sources = null)
 {
     /// <summary>
+    /// The reply's figures for <c>/usage</c>'s trend (2026-11-27, seeded at a restore): the model that answered, its timed output
+    /// (<see cref="OutputMs"/> over <see cref="TimedOutput"/> tokens), the context at its last request, the wait for a first token a
+    /// request, and its reasoning tokens. Null for an older row, or a store whose column adds failed.
+    /// </summary>
+    public string? Model { get; init; }
+
+    public long? OutputMs { get; init; }
+
+    public long? TimedOutput { get; init; }
+
+    public long? ContextTokens { get; init; }
+
+    public long? FirstTokenMs { get; init; }
+
+    public long? ReasoningTokens { get; init; }
+
+    /// <summary>
     /// What the turn took from the web (2026-11-15, the web-tools plan's §2, <see cref="Llm.TurnTrace.Sources"/>), from <c>turn_sources</c>:
     /// the 📚 line a load or a rewind redraws and the export's list. Empty for an older row, or a turn that read nothing.
     /// </summary>
@@ -236,8 +253,13 @@ public sealed partial class SessionStore : IDisposable
     /// answered, the turn's timed output (<see cref="Llm.TokenUsage.Generating"/> and the tokens it covers) for <c>/usage</c> › Models, and
     /// the working folder, which becomes the session's (the folder of its last turn). Null leaves each column empty.
     /// </para>
+    /// <para>
+    /// <paramref name="contextTokens"/> (2026-11-27, <c>/usage</c>'s trend and records): the prompt at the reply's last request; the wait a
+    /// request (<see cref="Llm.TokenUsage.AverageToFirstToken"/>, not the waits summed over the reply's round trips) and the reasoning tokens
+    /// come from <paramref name="usage"/>. Null for another model's context (<c>/claude</c>, a bot) or a reply that reported nothing.
+    /// </para>
     public int? AppendTurn(long id, string userText, string replyText, int toolCalls, IReadOnlyList<string> toolNames, IReadOnlyList<string> skillsLoaded, int errors, long inputTokens, long outputTokens, bool cancelled, IReadOnlyList<Web.WebSource>? sources = null,
-        string? model = null, Llm.TokenUsage? usage = null, string? cwd = null)
+        string? model = null, Llm.TokenUsage? usage = null, string? cwd = null, long? contextTokens = null)
     {
         ArgumentNullException.ThrowIfNull(userText);
         ArgumentNullException.ThrowIfNull(replyText);
@@ -259,13 +281,17 @@ public sealed partial class SessionStore : IDisposable
                 insert.Transaction = transaction;
                 // The new row's id comes back with the insert (2026-11-16, the web-tools review's #93), for its sources.
                 insert.CommandText = _extraColumns
-                    ? "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled, model, output_ms, timed_output, cwd) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled, $model, $ms, $timed, $cwd) RETURNING id"
+                    ? "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled, model, output_ms, timed_output, cwd, context_tokens, first_token_ms, reasoning_tokens) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled, $model, $ms, $timed, $cwd, $context, $first, $reasoning) RETURNING id"
                     : "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled) RETURNING id";
                 var (ms, timed) = Speed(usage);
                 insert.Parameters.AddWithValue("$model", string.IsNullOrEmpty(model) ? DBNull.Value : model);
                 insert.Parameters.AddWithValue("$ms", (object?)ms ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$timed", (object?)timed ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$cwd", (object?)cwd ?? DBNull.Value);   // each turn's folder, for a truncate (#41)
+                long? firstMs = usage?.AverageToFirstToken is { } wait ? (long)Math.Round(wait.TotalMilliseconds) : null;
+                insert.Parameters.AddWithValue("$context", (object?)contextTokens ?? DBNull.Value);   // 2026-11-27, /usage's trend
+                insert.Parameters.AddWithValue("$first", (object?)firstMs ?? DBNull.Value);
+                insert.Parameters.AddWithValue("$reasoning", (object?)usage?.Reasoning ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$id", id);
                 insert.Parameters.AddWithValue("$at", now);
                 insert.Parameters.AddWithValue("$user", userText);
@@ -566,12 +592,24 @@ public sealed partial class SessionStore : IDisposable
                 var turns = new List<SessionTurn>(summary.Turns);
                 using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = "SELECT ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled FROM turns WHERE session_id = $id ORDER BY ordinal";
+                    // The trend's figures (2026-11-27) only when the columns are there; NULL in their places otherwise, as SummaryColumns does for cwd.
+                    command.CommandText = "SELECT ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled, "
+                        + (_extraColumns ? "model, output_ms, timed_output, context_tokens, first_token_ms, reasoning_tokens" : "NULL, NULL, NULL, NULL, NULL, NULL")
+                        + " FROM turns WHERE session_id = $id ORDER BY ordinal";
                     command.Parameters.AddWithValue("$id", id);
                     using var reader = command.ExecuteReader();
+                    long? Long(int i) => reader.IsDBNull(i) ? null : reader.GetInt64(i);
                     while (reader.Read())
                     {
-                        turns.Add(new SessionTurn(reader.GetInt32(0), Parse(reader.GetString(1)), reader.GetString(2), reader.GetString(3), reader.GetInt32(4), SplitNames(reader.GetString(5)), SplitNames(reader.GetString(6)), reader.GetInt32(7), reader.GetInt64(8), reader.GetInt64(9), reader.GetInt32(10) != 0));
+                        turns.Add(new SessionTurn(reader.GetInt32(0), Parse(reader.GetString(1)), reader.GetString(2), reader.GetString(3), reader.GetInt32(4), SplitNames(reader.GetString(5)), SplitNames(reader.GetString(6)), reader.GetInt32(7), reader.GetInt64(8), reader.GetInt64(9), reader.GetInt32(10) != 0)
+                        {
+                            Model = reader.IsDBNull(11) ? null : reader.GetString(11),
+                            OutputMs = Long(12),
+                            TimedOutput = Long(13),
+                            ContextTokens = Long(14),
+                            FirstTokenMs = Long(15),
+                            ReasoningTokens = Long(16),
+                        });
                     }
                 }
 
@@ -1557,10 +1595,14 @@ public sealed partial class SessionStore : IDisposable
         }
     }
 
-    /// <summary>The columns added at the open (2026-11-21; <c>turns.cwd</c> 2026-11-22, the review's #41), each nullable.</summary>
+    /// <summary>
+    /// The columns added at the open (2026-11-21; <c>turns.cwd</c> 2026-11-22, the review's #41; the reply's context, first-token wait and
+    /// reasoning 2026-11-27, for <c>/usage</c>'s trend and records), each nullable.
+    /// </summary>
     private static readonly (string Table, string Column, string Type)[] AddedColumns =
     [
         ("sessions", "cwd", "TEXT"), ("turns", "model", "TEXT"), ("turns", "output_ms", "INTEGER"), ("turns", "timed_output", "INTEGER"), ("turns", "cwd", "TEXT"),
+        ("turns", "context_tokens", "INTEGER"), ("turns", "first_token_ms", "INTEGER"), ("turns", "reasoning_tokens", "INTEGER"),
     ];
 
     /// <summary>

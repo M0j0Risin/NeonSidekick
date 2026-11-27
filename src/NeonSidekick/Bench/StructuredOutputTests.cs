@@ -78,7 +78,7 @@ public sealed class NestedJsonTest : BenchTest
 
     public override string Id => "json";
 
-    public override string Name => "Nested JSON Extraction (Structured Output)";
+    public override string Title => "Nested JSON Extraction";
 
     public override BenchCategory Category => BenchCategory.StructuredOutput;
 
@@ -195,7 +195,7 @@ public sealed class StateTrackingTest : BenchTest
 
     public override string Id => "state";
 
-    public override string Name => "State Tracking (Structured Output)";
+    public override string Title => "State Tracking";
 
     public override BenchCategory Category => BenchCategory.StructuredOutput;
 

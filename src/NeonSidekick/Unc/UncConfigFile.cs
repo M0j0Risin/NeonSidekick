@@ -122,7 +122,7 @@ public sealed class UncConfigFile
         "  // \"eng\": { \"path\": \"smb://fs01/eng\", \"description\": \"engineering specs and drawings\" },\n" +
         "  //\n" +
         "  // As another account, mounted as it, the password in " + Sql.SqlText.CredentialStore + " as NeonSidekick/unc/<name> —\n" +
-        "  // set it with UNC set password on the UNC tab of /tools, or: " + Sql.SqlText.CredentialCommand("NeonSidekick/unc/finance", "svc_reader@CORP.LOCAL") + "\n" +
+        "  // set it in UNC add/edit share's Password row (the UNC tab of /tools), or: " + Sql.SqlText.CredentialCommand("NeonSidekick/unc/finance", "svc_reader@CORP.LOCAL") + "\n" +
         "  // \"finance\": { \"path\": \"smb://fs02.corp.local/finance/reports\", \"auth\": \"runas\", \"user\": \"svc_reader@CORP.LOCAL\",\n" +
         "  //   \"passwordStore\": \"credman\" },\n" +
         "  //\n" +
@@ -147,7 +147,7 @@ public sealed class UncConfigFile
         "  // \"eng\": { \"path\": \"//fs01/eng\", \"description\": \"engineering specs and drawings\" },\n" +
         "  //\n" +
         "  // As another Windows account (like runas /netonly), the password in Windows Credential Manager as NeonSidekick/unc/<name> —\n" +
-        "  // set it with UNC set password on the UNC tab of /tools, or: cmdkey /generic:NeonSidekick/unc/finance /user:CORP\\svc_reader /pass\n" +
+        "  // set it in UNC add/edit share's Password row (the UNC tab of /tools), or: cmdkey /generic:NeonSidekick/unc/finance /user:CORP\\svc_reader /pass\n" +
         "  // \"finance\": { \"path\": \"//fs02.corp.local/finance/reports\", \"auth\": \"runas\", \"user\": \"CORP\\\\svc_reader\",\n" +
         "  //   \"passwordStore\": \"credman\" },\n" +
         "  //\n" +

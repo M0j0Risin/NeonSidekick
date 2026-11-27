@@ -56,7 +56,8 @@ public sealed record ComfyWorkflow(
     string Tips = "",
     bool Reinforce = true,
     IReadOnlyList<string>? ImageRoles = null,
-    IReadOnlyList<string>? TriggerWords = null)
+    IReadOnlyList<string>? TriggerWords = null,
+    IReadOnlyList<string>? LorasOff = null)
 {
     public const string PromptKey = "prompt";
     public const string NegativeKey = "negative";
@@ -73,6 +74,56 @@ public sealed record ComfyWorkflow(
     /// LoRA, the name as the graph's <c>lora_name</c> spells it (case aside). <see cref="TriggerWords"/> is what of them is in play.
     /// </summary>
     public const string LoraWordsPrefix = "lora.";
+
+    /// <summary>
+    /// The sidecar keys switching a LoRA off (2026-11-27, the user's ask): <c>lora-off.&lt;lora_name&gt;: yes</c>. Every loader of that name is
+    /// left out of every run (<see cref="LorasOff"/>), its trigger words with it, while the file keeps it, its strength and its words. A
+    /// prefix of its own, so <see cref="LoraWordsPrefix"/>'s scan never reads it; any value but <see cref="LoraOffValue"/> reads as on.
+    /// </summary>
+    public const string LoraOffPrefix = "lora-off.";
+
+    /// <summary>The value an off key holds. Pinned.</summary>
+    public const string LoraOffValue = "yes";
+
+    /// <summary>The sidecar key for <paramref name="lora"/>'s off mark, or null for a name no key can hold (<see cref="LoraWordsKey"/>'s rule). Pure.</summary>
+    public static string? LoraOffKey(string lora) => LoraWordsKey(lora) is null ? null : LoraOffPrefix + lora;
+
+    /// <summary>Whether a sidecar value switches a LoRA off: <see cref="LoraOffValue"/>, case and spaces aside. Pure.</summary>
+    public static bool IsOffValue(string? value) => string.Equals(value?.Trim(), LoraOffValue, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Splices every loader named in <paramref name="names"/> out of <paramref name="graph"/> (2026-11-27, a LoRA switched off), in place:
+    /// what used its outputs takes its inputs (<see cref="ComfyGraphEdit.RemoveLora"/>). The names left out go into <paramref name="left"/>,
+    /// each once. A loader on a switch's unused branch is skipped (it never runs). Null when done; else the first name that can't be left
+    /// out and why: its own reason when it has one (other than a strength another node sets, which a splice doesn't need), else the splice's.
+    /// </summary>
+    public static (string Name, string Why)? LeaveOut(JsonObject graph, IReadOnlySet<string> names, List<string> left)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(names);
+        ArgumentNullException.ThrowIfNull(left);
+        // Read once: a splice re-reads the chain itself, and the other loaders' node ids stay as they were.
+        foreach (var lora in ComfyGraphEdit.Read(graph).Loras.Loras.ToList())
+        {
+            if (lora.SwitchedOff || lora.Name.Length == 0 || !names.Contains(lora.Name))
+            {
+                continue;
+            }
+
+            string? why = lora.Why is { } own && own != ComfyText.EditStrengthNotLiteral ? own : ComfyGraphEdit.RemoveLora(graph, lora.Node);
+            if (why is not null)
+            {
+                return (lora.Name, why);
+            }
+
+            if (!left.Contains(lora.Name, StringComparer.OrdinalIgnoreCase))
+            {
+                left.Add(lora.Name);
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>The most input pictures a workflow takes (Qwen-Image-Edit-2509's three).</summary>
     public const int MaxInputImages = 3;
@@ -250,6 +301,27 @@ public sealed record ComfyWorkflow(
 
         var head = sidecar is null ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) : ReadSidecar(sidecar);
         string body = sidecar is null ? "" : SidecarBody(sidecar);
+        // The LoRAs switched off (2026-11-27): spliced out of the template every run fills, so none of them runs and none gives words.
+        var offNames = head.Where(p => p.Key.StartsWith(LoraOffPrefix, StringComparison.OrdinalIgnoreCase) && IsOffValue(p.Value))
+            .Select(p => p.Key[LoraOffPrefix.Length..]).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        List<string>? lorasOff = null;
+        if (offNames.Count > 0 && JsonNode.Parse(json, documentOptions: Tolerant) is JsonObject offGraph)
+        {
+            var left = new List<string>();
+            if (LeaveOut(offGraph, offNames, left) is { } refused)
+            {
+                problem = ComfyText.LoraOffProblem(refused.Name, refused.Why);
+                return false;
+            }
+
+            if (left.Count > 0)
+            {
+                json = offGraph.ToJsonString();
+                placeholders = FindPlaceholders(json);
+                lorasOff = left;
+            }
+        }
+
         var family = head.TryGetValue("family", out string? word) && ComfyFamilies.TryParse(word, out var named) ? named : ComfyFamilies.Guess(name);
         workflow = new ComfyWorkflow(
             name,
@@ -268,7 +340,8 @@ public sealed record ComfyWorkflow(
             // reinforce: false (later still on 2026-09-24): this workflow's negative is sent as written, nothing appended.
             !(head.TryGetValue("reinforce", out string? reinforce) && reinforce.Trim().Equals("false", StringComparison.OrdinalIgnoreCase)),
             ImageKeys.Take(images).Select(key => head.TryGetValue(key, out string? role) ? role.Trim() : "").ToList(),
-            placeholders.Contains(PromptKey) ? FindTriggerWords(json, head) : null);
+            placeholders.Contains(PromptKey) ? FindTriggerWords(json, head) : null,
+            lorasOff);
         return true;
     }
 

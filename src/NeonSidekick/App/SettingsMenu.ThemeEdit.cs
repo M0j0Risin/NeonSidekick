@@ -14,7 +14,7 @@ namespace NeonSidekick.App;
 /// hand in its JSON): the theme's fifteen colors as a list, each with its swatch and hex and what it colors, the theme drawn live beside it
 /// (<see cref="ThemePreview"/>, never put in force), and the contrast bars it misses under it (<see cref="ThemeChecks"/>, warnings that never
 /// block a save). ←/→ step the cursor's color lighter or darker; Enter opens the color picker (hue, saturation and lightness bars, and a typed
-/// hex value: the user's pick after the mockup); <c>s</c> saves, <c>r</c> puts the row back, <c>d</c> and Esc with changes ask Keep editing, Save or Discard (2026-11-26, the user's ask). A built-in
+/// hex value: the user's pick after the mockup); <c>s</c> saves, <c>r</c> puts the row back, Esc with changes asks Keep editing, Save or Discard (2026-11-26, the user's ask; the <c>d</c> key and its discard button went the same day, since the question covers them). A built-in
 /// can't be changed: its <c>&lt;name&gt;-custom</c> copy is offered, made by <c>/theme export</c>'s path, or the one already made. A save
 /// changes only the roles changed, in the file's own bytes (<see cref="ThemeFileSplice"/>, 2026-11-17, the admin-themes-render review's #25,
 /// #26, #156, #163: its comments, layout, key spelling and line endings stay), atomically, asking first when the file changed on disk since the
@@ -47,7 +47,7 @@ internal sealed partial class SettingsMenu
     private const int BandNoteRows = 3;
 
     private static readonly IReadOnlyList<MenuButton> EditButtons =
-        [new(ThemeText.SaveButton, 's'), new(ThemeText.ResetButton, 'r'), new(ThemeText.DiscardButton, 'd')];
+        [new(ThemeText.SaveButton, 's'), new(ThemeText.ResetButton, 'r')];
 
     /// <summary>The fallback save's writer: indented, and a <c>&lt;</c> or an accent in a description written as itself.</summary>
     private static readonly JsonSerializerOptions RelaxedIndented = new(SettingsImportFixups.Indented) { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
@@ -102,7 +102,7 @@ internal sealed partial class SettingsMenu
 
     /// <summary>
     /// The editor: true when it saved the theme in force (so <c>/theme</c> repaints the screen in it, as a pick does), false for another
-    /// theme, a discard, a refusal or Esc. Its lines are held (<see cref="PrintHeld"/>).
+    /// theme, Discard on the question, a refusal or Esc. Its lines are held (<see cref="PrintHeld"/>).
     /// </summary>
     private async Task<bool> EditThemeAsync(string args, CancellationToken cancellationToken)
     {
@@ -129,7 +129,7 @@ internal sealed partial class SettingsMenu
     /// The editor on <paramref name="palette"/> (a built-in through its copy), <paramref name="scan"/> the caller's so warnings print once (#2,
     /// #142); true when it saved the theme in force. <paramref name="closeWhenDone"/> (2026-11-20, the memory-remember review's #3, #72): the
     /// pane closed after, as <c>/theme edit</c> leaves it; false for the <c>/theme</c> list, which comes back, and then an unchanged exit (Esc,
-    /// discard, the file gone, a No to the copy) holds nothing, so "unchanged" never leads a later pick's lines. Its other lines are held.
+    /// a Discard, the file gone, a No to the copy) holds nothing, so "unchanged" never leads a later pick's lines. Its other lines are held.
     /// </summary>
     private async Task<bool> EditPaletteAsync(ThemePalette palette, ThemeScan scan, bool closeWhenDone, CancellationToken cancellationToken)
     {
@@ -228,9 +228,9 @@ internal sealed partial class SettingsMenu
     }
 
     /// <summary>
-    /// The editor's list until a save, a discard or Esc: whether the save was of the theme in force, and the line to say (the save's, or
+    /// The editor's list until a save or Esc: whether the save was of the theme in force, and the line to say (the save's, or
     /// <see cref="UnchangedNotice"/>, #195). A pane dismissed by a double-click off it, or the token, leaves at once with the edits dropped (#75).
-    /// Esc and <c>d</c> with changes ask <see cref="AskLeaveAsync"/> (2026-11-26, the user's ask, in place of the yes/no): Save is <c>s</c>'s own.
+    /// Esc with changes asks <see cref="AskLeaveAsync"/> (2026-11-26, the user's ask, in place of the yes/no): Save is <c>s</c>'s own.
     /// </summary>
     private async Task<(bool InForce, string Notice)> EditLoopAsync(OpenedTheme opened, CancellationToken cancellationToken)
     {
@@ -242,7 +242,7 @@ internal sealed partial class SettingsMenu
         var data = ThemeFile.Parse(opened.Text, out _);
         bool Gone() => _pane.Dismissed || cancellationToken.IsCancellationRequested;
         bool Changed() => !working.SequenceEqual(original);
-        // Leaving by Esc or d (2026-11-26): at once without changes or with the pane gone; else the question. Null keeps the editor.
+        // Leaving by Esc (2026-11-26): at once without changes or with the pane gone; else the question. Null keeps the editor.
         async Task<(bool InForce, string Notice)?> LeaveAsync()
         {
             if (Gone() || !Changed())
@@ -331,14 +331,6 @@ internal sealed partial class SettingsMenu
                 case 1:
                     working[cursor] = original[cursor];
                     hsls[cursor] = HslColor.From(original[cursor]);
-                    continue;
-                case 2:
-                    // d asks when there are changes (#45), as Esc does.
-                    if (await LeaveAsync().ConfigureAwait(false) is { } discarded)
-                    {
-                        return discarded;
-                    }
-
                     continue;
             }
 

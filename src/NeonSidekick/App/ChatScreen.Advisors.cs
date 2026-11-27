@@ -57,7 +57,7 @@ internal sealed partial class ChatScreen
     public static bool AdvisorsListed(AppSettingsData effective)
     {
         ArgumentNullException.ThrowIfNull(effective);
-        return AdvisorRoster.Entries(effective.AdvisorList).Count > 0;
+        return AdvisorRoster.Active(effective.AdvisorList).Count > 0;   // one in service (2026-11-27)
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ internal sealed partial class ChatScreen
 
     /// <summary><c>/advisor</c>'s names (2026-10-10): the advisor list as <c>/advisor</c> reads it, each profile with its role as the note.</summary>
     private IReadOnlyList<CompletionItem> AdvisorChoices() =>
-        AdvisorRoster.Entries(_effective().AdvisorList).Select(entry => new CompletionItem(entry.Profile, entry.Role)).ToList();
+        AdvisorRoster.Active(_effective().AdvisorList).Select(entry => new CompletionItem(entry.Profile, entry.Role)).ToList();
 
     /// <summary>
     /// <c>/advisor</c> (2026-10-10, the user's own hand on the profile advisors): bare, the advisors listed; <c>/advisor &lt;name&gt;
@@ -165,7 +165,8 @@ internal sealed partial class ChatScreen
     private async Task HandleAdvisorAsync(string args, CancellationToken cancellationToken)
     {
         var effective = _effective();
-        var advisors = AdvisorRoster.Entries(effective.AdvisorList);
+        // Every advisor, the ones in service first and the off ones after them, marked (2026-11-27).
+        var advisors = AdvisorRoster.Shown(effective.AdvisorList);
         if (args.Trim().Length == 0)
         {
             if (advisors.Count == 0)
@@ -216,10 +217,11 @@ internal sealed partial class ChatScreen
             return;
         }
 
-        var (advisor, candidates) = AdvisorRoster.Find(advisors, words);
-        if (advisor is null)
+        var pick = AdvisorRoster.Pick(advisors, words);
+        if (pick.Found is not { } advisor)
         {
-            _transcript.Error(AdvisorText.ForUser(AdvisorText.UnknownAdvisorError(words, candidates)));
+            _transcript.Error(pick.OffOne is { } off ? AdvisorText.OffRefusal(off.Profile)
+                : AdvisorText.ForUser(pick.AllOff ? AdvisorText.AllOffError : AdvisorText.UnknownAdvisorError(words, pick.Candidates)));
             return;
         }
 
@@ -229,7 +231,7 @@ internal sealed partial class ChatScreen
         using var askCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var stop = new CancellationTokenSource();
         using var killScope = BeginKillScope(askCts);
-        // The reply's watch (2026-10-10, the user's report: the chords and the mouse were dead while an advisor answered; the /test and
+        // The reply's watch (2026-10-10, the user's report: the chords and the mouse were dead while an advisor answered; the /bench and
         // /cmd shape, as /imagine's and the embedded load's fixes): a line typed, a chord or a glyph's word goes through the mid-turn
         // policy — a pane opens at once, a quick act runs while the advisor thinks, a message is queued — never pended for the idle line.
         var watcher = StartReplyWatch(askCts, stop.Token, cancellationToken);

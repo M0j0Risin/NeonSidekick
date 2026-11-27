@@ -46,7 +46,7 @@ public static class ServiceConfigFile
         FileName,
         "Service computers offered",
         ServiceText.MenuPath,
-        "Service set password",
+        "Service add/edit computer",
         "NeonSidekick/services/",
         ActionWords,
         "services",
@@ -69,8 +69,8 @@ public static class ServiceConfigFile
         "  // \"app01\": { \"host\": \"app01.corp.example\", \"description\": \"app server\", \"services\": [\"MSSQL*\", \"W3SVC\", \"MyApp*\"],\n" +
         "  //   \"access\": \"readwrite\", \"control\": [\"MyApp*\"], \"protected\": [\"MSSQL*\"], \"detail\": \"full\" },\n" +
         "  //\n" +
-        "  // As another account, the password in " + SqlText.CredentialStore + " as NeonSidekick/services/<name> — set it with\n" +
-        "  // Service set password on " + ServiceText.MenuPath + ", or:\n" +
+        "  // As another account, the password in " + SqlText.CredentialStore + " as NeonSidekick/services/<name> — set it in\n" +
+        "  // Service add/edit computer's Password row on " + ServiceText.MenuPath + ", or:\n" +
         "  // " + SqlText.CredentialCommand("NeonSidekick/services/app02", "CORP\\svc-ops") + "\n" +
         "  // \"app02\": { \"host\": \"app02\", \"auth\": \"runas\", \"user\": \"CORP\\\\svc-ops\", \"passwordStore\": \"credman\" },\n" +
         "  //\n" +

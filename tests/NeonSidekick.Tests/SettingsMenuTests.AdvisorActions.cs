@@ -575,7 +575,10 @@ public partial class SettingsMenuTests
         Assert.Equal(SettingsMenu.ChangeAdvisorServerChoice, SettingsMenu.AdvisorChoiceOfRow(4));
         Assert.Equal(SettingsMenu.ChangeAdvisorReasoningChoice, SettingsMenu.AdvisorChoiceOfRow(6));
         Assert.Equal(SettingsMenu.SwitchToAdvisorChoice, SettingsMenu.AdvisorChoiceOfRow(8));
-        Assert.Equal(SettingsMenu.RemoveAdvisorChoice, SettingsMenu.AdvisorChoiceOfRow(9));
+        Assert.Equal(SettingsMenu.ToggleAdvisorChoice, SettingsMenu.AdvisorChoiceOfRow(9));   // Turn off (2026-11-27)
+        Assert.Equal(SettingsMenu.RemoveAdvisorChoice, SettingsMenu.AdvisorChoiceOfRow(10));
+        Assert.Equal(Spectre.Console.Markup.Escape("Turn off"), rows[9]);
+        Assert.Equal(SettingsMenu.TurnOnAdvisorRow, SettingsMenu.AdvisorEntryPageRows(off: true)[9]);   // an off advisor's page
         Assert.Equal(2, SettingsMenu.AdvisorChoiceOfRow(2));
         Assert.Equal(-1, SettingsMenu.AdvisorChoiceOfRow(3));
         Assert.Equal(-1, SettingsMenu.AdvisorChoiceOfRow(-1));

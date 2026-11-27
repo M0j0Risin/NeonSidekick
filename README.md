@@ -72,7 +72,7 @@ It's one app for research, IT and admin work (Active Directory, event logs, data
 * **Docker servers (Windows only):** your vLLM or SGLang containers as `/server` choices ([vLLM](docs/DOCKER_VLLM_WIN.md), [SGLang](docs/DOCKER_SGLANG_WIN.md)).
 * **Cloud models:** the Anthropic and OpenAI APIs (your key) or Claude Code as the server (`/claude` sends it one message); off until you turn them on.
 * **Advisors:** any other profile, local or frontier, can be one, with read-only tools only; `/advisor` asks it yourself.
-* **Benchmarks & meters:** `/test` benchmarks the model; the performance bar shows CPU, RAM, GPU, network and context use.
+* **Benchmarks & meters:** `/bench` benchmarks the model; the performance bar shows CPU, RAM, GPU, network and context use.
 
 ### Conversations, memory & skills
 * **Profiles:** each has its own settings, persona, emoji avatar (`/avatar`), memory, sessions and working directory; `/settings export` carries them to another computer.

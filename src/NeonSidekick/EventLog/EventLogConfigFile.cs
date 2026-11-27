@@ -107,7 +107,7 @@ public sealed class EventLogConfigFile
         "  // \"fs01\": { \"host\": \"fs01.corp.example\", \"description\": \"file server\", \"detail\": \"full\" },\n" +
         "  //\n" +
         "  // As another account (it needs the Event Log Readers group there), the password in " + SqlText.CredentialStore + " as\n" +
-        "  // NeonSidekick/eventlog/<name> — set it with Event log set password on /tools › Admin › EventLog, or:\n" +
+        "  // NeonSidekick/eventlog/<name> — set it in Event log add/edit computer's Password row on /tools › Admin › EventLog, or:\n" +
         "  // " + SqlText.CredentialCommand("NeonSidekick/eventlog/dc01", "CORP\\svc-logreader") + "\n" +
         "  // \"dc01\": { \"host\": \"dc01\", \"auth\": \"runas\", \"user\": \"CORP\\\\svc-logreader\", \"passwordStore\": \"credman\",\n" +
         "  //   \"logs\": [\"Security\", \"System\", \"Directory Service\"] },\n" +

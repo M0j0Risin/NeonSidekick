@@ -8,7 +8,7 @@ using NeonSidekick.Tests.Fakes;
 namespace NeonSidekick.Tests;
 
 /// <summary>
-/// <c>/test</c>'s tests (2026-09-28, ported from LLMTester): each judge on the answers LLMTester's own tests use, the
+/// <c>/bench</c>'s tests (2026-09-28, ported from LLMTester): each judge on the answers LLMTester's own tests use, the
 /// requests' shape and sizing, the catalog's words, the runner over a fake client (verdicts, usage, an error, a skip,
 /// cancellation), <c>tests.json</c>, and <c>response_format</c> on the wire.
 /// </summary>
@@ -132,15 +132,22 @@ public sealed class BenchTests : IDisposable
         Assert.Equal((BenchText.ReasoningDefault, ""), (bare.Reasoning, bare.Sampling));
     }
 
+    /// <summary>
+    /// The run's facts under its result (2026-11-27, the tally's successor): the labels lined up with no-break spaces, the server's
+    /// defaults said, and a line whose value an older run lacks left out; the history's table keeps its own words.
+    /// </summary>
     [Fact]
-    public void TheSettings_ShowInTheTallyAndTheHistory_BlankForAnOlderRun()
+    public void TheSettings_ShowInTheRunFactsAndTheHistory_BlankForAnOlderRun()
     {
         var run = new BenchRun { Model = "qwen", Reasoning = "high", Sampling = "temperature 0.6", Results = [new BenchResult { Test = "mind", Verdict = BenchVerdict.Pass }] };
-        Assert.Equal("**1/1 passed** · qwen · reasoning high · temperature 0.6", BenchText.Tally(run));
+        string pad(string label) => label + new string('\u00A0', BenchText.ReasoningLabel.Length + 2 - label.Length);
+        Assert.Equal(pad(BenchText.ModelLabel) + "qwen\n" + pad(BenchText.ReasoningLabel) + "high\n" + pad(BenchText.SamplingLabel) + "temperature 0.6",
+            BenchText.RunFacts(run, null));
         var serverDefaults = new BenchRun { Model = "qwen", Reasoning = "none", Sampling = "", Results = run.Results };
-        Assert.Equal("**1/1 passed** · qwen · reasoning none · server sampling", BenchText.Tally(serverDefaults));
+        Assert.EndsWith(pad(BenchText.SamplingLabel) + BenchText.SamplingServerDefaults, BenchText.RunFacts(serverDefaults, null));
         var older = new BenchRun { Model = "qwen", Results = run.Results };   // saved before the fields were
-        Assert.Equal("**1/1 passed** · qwen", BenchText.Tally(older));
+        Assert.Equal(BenchText.ModelLabel + "\u00A0\u00A0qwen", BenchText.RunFacts(older, null));
+        Assert.DoesNotContain(BenchText.LastRunLabel, BenchText.RunFacts(run, null));   // no earlier run, no line
 
         string history = BenchText.History([older, serverDefaults, run], "tests.json");
         Assert.Contains("| When | Model | Reasoning | Sampling | Passed | Tests |", history);
@@ -158,12 +165,26 @@ public sealed class BenchTests : IDisposable
         Assert.Equal(("high", "temperature 0.6"), (runs[1].Reasoning, runs[1].Sampling));
     }
 
+    /// <summary>
+    /// The window line (2026-11-27, cut): the window, then only the run's window-sized tests, each prompt's estimate; no paragraph
+    /// counts; unknown, each long prompt's fallback and saturation skipped, again only for the tests in the run.
+    /// </summary>
     [Fact]
-    public void TheContextLine_SaysEachPromptsTokens_ThenItsParagraphs()
+    public void TheContextLine_NamesOnlyTheRunsTests_EachPromptsTokens()
     {
-        Assert.Equal("Context window 128,768 tokens: needle/multi-hop prompt ~64.6k tokens (1,463 paragraphs), saturation prompt ~127.7k tokens (2,451 paragraphs).",
-            BenchText.ContextLine(new BenchContext(128768)));
-        Assert.Equal("Context window unknown: every long-context prompt is ~66.3k tokens (1,500 paragraphs).", BenchText.ContextLine(new BenchContext(null)));
+        var known = new BenchContext(128768);
+        string all = BenchText.ContextLine(known, BenchCatalog.All);
+        Assert.StartsWith("Window 128,768 tokens · needle and multihop ~64.6k each · saturation ~127.7k", all);
+        Assert.DoesNotContain("paragraph", all);
+        Assert.Equal("Window 128,768 tokens · needle and multihop ~64.6k each", BenchText.ContextLine(known, BenchCatalog.Resolve("long")));
+        Assert.Equal("Window 128,768 tokens · saturation ~127.7k", BenchText.ContextLine(known, BenchCatalog.Resolve("saturation")));
+        Assert.Equal("Window 128,768 tokens · needle ~64.6k", BenchText.ContextLine(known, BenchCatalog.Resolve("needle")));
+
+        var unknown = new BenchContext(null);
+        Assert.Equal(BenchText.WindowUnknown + " · each long prompt ~66.3k · " + BenchText.SaturationSkippedPart, BenchText.ContextLine(unknown, BenchCatalog.All));
+        string alone = BenchText.ContextLine(unknown, BenchCatalog.Resolve("saturation"));
+        Assert.Equal(BenchText.WindowUnknown + " · " + BenchText.SaturationSkippedPart, alone);
+        Assert.DoesNotContain("each long prompt", alone);
     }
 
     [Fact]
@@ -206,7 +227,9 @@ public sealed class BenchTests : IDisposable
         Assert.Equal(["grid", "rule", "mind", "sycophancy", "json", "state", "needle", "multihop", "saturation"], BenchCatalog.All.Select(t => t.Id));
         Assert.Equal(["grid", "rule", "mind", "sycophancy"], BenchCatalog.Resolve("Reasoning").Select(t => t.Id));
         Assert.Equal(["json", "state"], BenchCatalog.Resolve("structured").Select(t => t.Id));
-        Assert.Equal(["needle", "multihop", "saturation"], BenchCatalog.Resolve("long").Select(t => t.Id));
+        Assert.Equal(["needle", "multihop"], BenchCatalog.Resolve("long").Select(t => t.Id));   // saturation is in no group (2026-11-27)
+        Assert.Empty(BenchCatalog.Resolve("capacity"));
+        Assert.Equal("saturation", BenchCatalog.Resolve("ALL")[^1].Id);
         Assert.Equal(9, BenchCatalog.Resolve("ALL").Count);
         Assert.Equal("mind", Assert.Single(BenchCatalog.Resolve(" MIND ")).Id);
         Assert.Empty(BenchCatalog.Resolve("nonsense"));
@@ -401,20 +424,159 @@ public sealed class BenchTests : IDisposable
     public void Text_TheResultLine_TheAnswerLine_AndTheTable()
     {
         var pass = new BenchResult { Test = "mind", Verdict = BenchVerdict.Pass, Reason = "ok", Seconds = 1.23, CompletionTokens = 14, TokensPerSecond = 11.64 };
-        Assert.Equal("✓ mind — ok · 1.2 s · 14 tok · 11.6 tok/s", BenchText.ResultLine(pass));
+        Assert.Equal("✓ mind — ok", BenchText.ResultLine(pass));   // no figures: the table holds them (2026-11-27)
         Assert.Null(BenchText.AnswerLine(pass));
         var fail = new BenchResult { Test = "grid", Verdict = BenchVerdict.Fail, Reason = "no", Seconds = 12.4, Answer = "The Brit\nlives there" };
-        Assert.Equal("✗ grid — no · 12 s", BenchText.ResultLine(fail));
+        Assert.Equal("✗ grid — no", BenchText.ResultLine(fail));
         Assert.Equal("  answered: The Brit lives there", BenchText.AnswerLine(fail));
         var skip = new BenchResult { Test = "json", Verdict = BenchVerdict.Skipped, Reason = BenchText.SkippedOnClaudeApi };
         Assert.Equal("– json — " + BenchText.SkippedOnClaudeApi, BenchText.ResultLine(skip));
 
         var run = new BenchRun { Model = "qwen", Results = [pass, fail, skip] };
-        string table = BenchText.Summary(run);
-        Assert.Contains("| Theory of Mind (Reasoning) | ✓ pass | 1.2 s |  | 14 | 11.6 |", table);
-        Assert.Contains("| Nested JSON Extraction (Structured Output) | – skipped |  |  |  |  |", table);
-        Assert.EndsWith("**1/2 passed** · qwen", table);
+        string table = BenchText.Summary(run, null);
+        Assert.Contains("| **Reasoning** | | | | | |\n| Theory of Mind | ✓ pass | 1.2 s |  | 14 | 11.6 |\n| Complex Grid | ✗ fail |", table);
+        Assert.Contains("| **Structured Output** | | | | | |\n| Nested JSON Extraction | – skipped |  |  |  |  |", table);
+        Assert.Single(table.Split('\n'), l => l.Contains("**Reasoning**", StringComparison.Ordinal));   // one heading per group
+        Assert.EndsWith(BenchText.ResultSummary(run) + "\n\n" + BenchText.RunFacts(run, null), table);
+        Assert.StartsWith("**1/2 passed** in 14 s", BenchText.ResultSummary(run));
         run.Cancelled = true;
-        Assert.EndsWith("**1/2 passed** · qwen · canceled", BenchText.Summary(run));
+        Assert.EndsWith(" · canceled", BenchText.ResultSummary(run));
+        Assert.Contains(BenchText.ResultSummary(run), BenchText.Summary(run, null));
+    }
+
+    /// <summary>A run of one test still gets its table and its group's heading row (2026-11-27).</summary>
+    [Fact]
+    public void Text_ARunOfOneTest_KeepsTheTable_AndItsHeading()
+    {
+        var run = new BenchRun { Model = "qwen", Results = [new BenchResult { Test = "grid", Verdict = BenchVerdict.Pass, Reason = "ok", Seconds = 12 }] };
+        string table = BenchText.Summary(run, null);
+        Assert.Contains("| **Reasoning** |", table);
+        Assert.Contains("| Complex Grid | ✓ pass |", table);
+    }
+
+    /// <summary>
+    /// The table as the screen draws it (K7): the group's heading on a row of its own, the title on the next, its name without the group.
+    /// Not indented: the pipe-table parser trims a cell's no-break spaces (checked 2026-11-27).
+    /// </summary>
+    [Fact]
+    public void Text_TheTable_Renders_TheHeadingThenTheTitle()
+    {
+        var run = new BenchRun { Model = "qwen", Results = [new BenchResult { Test = "grid", Verdict = BenchVerdict.Pass, Reason = "ok", Seconds = 12 }] };
+        using var console = new Spectre.Console.Testing.TestConsole();
+        console.Profile.Width = 120;
+        var lines = NeonSidekick.UI.ScreenPane.RenderLines(NeonSidekick.UI.Markdown.MarkdownView.Of(BenchText.Summary(run, null)), console, 120)
+            .Select(line => string.Concat(line.Select(s => s.Text))).ToList();
+        int heading = lines.FindIndex(l => l.Contains(BenchText.GroupName(BenchCategory.Reasoning), StringComparison.Ordinal));
+        Assert.True(heading > 0);
+        Assert.Contains("Complex Grid", lines[heading + 1]);
+        Assert.DoesNotContain(lines, l => l.Contains("(Reasoning)", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(49.4, "49 s")]
+    [InlineData(108, "1m 48s")]
+    [InlineData(60, "1m 00s")]
+    [InlineData(0, "0 s")]
+    public void Text_Elapsed(double seconds, string expected) => Assert.Equal(expected, BenchText.Elapsed(seconds));
+
+    private static BenchRun Graded(string reasoning, DateTimeOffset at, params (string Test, BenchVerdict Verdict)[] results)
+    {
+        var run = Run("qwen", at, results);
+        run.Reasoning = reasoning;
+        return run;
+    }
+
+    /// <summary>What changed since the model's last run at its level (2026-11-27): passing, failing, no change, skips ignored, none shared.</summary>
+    [Fact]
+    public void Text_TheChangeLine()
+    {
+        var at = new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero);
+        string date = at.ToLocalTime().ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var before = Graded("xhigh", at, ("grid", BenchVerdict.Pass), ("json", BenchVerdict.Pass), ("multihop", BenchVerdict.Fail), ("state", BenchVerdict.Skipped));
+        var now = Graded("xhigh", at.AddDays(1), ("grid", BenchVerdict.Pass), ("json", BenchVerdict.Error), ("multihop", BenchVerdict.Pass), ("state", BenchVerdict.Fail));
+        Assert.Equal(date + ": 2/3 · now passing: multihop · now failing: json", BenchText.ChangeLine(before, now));
+
+        var same = Graded("xhigh", at.AddDays(1), ("grid", BenchVerdict.Pass), ("json", BenchVerdict.Skipped));
+        Assert.Equal(date + ": 2/3 · no change", BenchText.ChangeLine(before, same));   // the skip ignored
+        Assert.Null(BenchText.ChangeLine(before, Graded("xhigh", at, ("mind", BenchVerdict.Pass))));   // nothing shared
+
+        var canceled = Graded("xhigh", at.AddDays(1), ("multihop", BenchVerdict.Pass));
+        canceled.Cancelled = true;
+        Assert.Equal(date + ": 2/3 · now passing: multihop", BenchText.ChangeLine(before, canceled));   // only what it finished
+        Assert.Contains(BenchText.LastRunLabel, BenchText.RunFacts(now, before));
+    }
+
+    /// <summary>The run compared with is the newest earlier one of the same model at the same level sharing a test; another level's is never used.</summary>
+    [Fact]
+    public void History_Previous_IsTheSameModelAndLevels_NewestSharingATest()
+    {
+        var t0 = new DateTimeOffset(2026, 11, 20, 12, 0, 0, TimeSpan.Zero);
+        var history = new BenchHistory(_dir);
+        var xhigh = Graded("xhigh", t0, ("grid", BenchVerdict.Pass));
+        var none = Graded("none", t0.AddHours(1), ("grid", BenchVerdict.Fail));
+        var other = Graded("XHIGH", t0.AddHours(2), ("mind", BenchVerdict.Pass));   // shares no test
+        history.Append(xhigh);
+        history.Append(none);
+        history.Append(other);
+        var legacy = Run("qwen", t0.AddHours(3), ("grid", BenchVerdict.Pass));   // no level saved
+        history.Append(legacy);
+
+        var now = Graded("XHigh", t0.AddDays(1), ("grid", BenchVerdict.Pass));
+        Assert.Equal(t0, history.Previous(now)?.At);
+        Assert.Equal(t0.AddHours(1), history.Previous(Graded("none", t0.AddDays(1), ("grid", BenchVerdict.Pass)))?.At);
+        Assert.Null(history.Previous(Graded("low", t0.AddDays(1), ("grid", BenchVerdict.Pass))));
+        Assert.Null(history.Previous(Run("qwen", t0.AddDays(1), ("grid", BenchVerdict.Pass))));   // a run with no level matches none
+
+        // Latest per level: each level its own verdicts; null is the runs saved without one.
+        Assert.Equal(BenchVerdict.Fail, history.Latest("QWEN", "none")["grid"].Result.Verdict);
+        Assert.Equal(BenchVerdict.Pass, history.Latest("qwen", "xhigh")["grid"].Result.Verdict);
+        Assert.Equal(t0.AddHours(3), history.Latest("qwen", null)["grid"].At);
+        Assert.Empty(history.Latest("qwen", "low"));
+    }
+
+    /// <summary>Context Saturation stands alone (2026-11-27): its own group, "Window Capacity", in no group word; the long group is two.</summary>
+    [Fact]
+    public void Saturation_IsWindowCapacity_InNoGroup()
+    {
+        var saturation = BenchCatalog.Find("saturation")!;
+        Assert.Equal(BenchCategory.WindowCapacity, saturation.Category);
+        Assert.Equal("Context Saturation (Window Capacity)", saturation.Name);
+        Assert.Equal(saturation.Title + " (" + BenchText.GroupName(BenchCategory.WindowCapacity) + ")", saturation.Name);
+        Assert.True(saturation.SizedToWindow);
+        Assert.DoesNotContain(BenchCatalog.CategoryWords, w => w.Category == BenchCategory.WindowCapacity);
+        Assert.Equal("every long-context test (2)", BenchText.GroupNote(BenchCategory.LongContext));
+        Assert.Equal("Theory of Mind (Reasoning)", BenchCatalog.Find("mind")!.Name);
+    }
+
+    /// <summary>Saturation's line says the server's own count on a pass with the window known (2026-11-27), the estimate otherwise.</summary>
+    [Fact]
+    public void Saturation_TheReason_IsTheServersCount()
+    {
+        var test = new SaturationTest();
+        var context = new BenchContext(151427);
+        var judgement = test.Judge("OK", context);
+        Assert.Equal(BenchText.SaturationTook(144443, 151427), test.Reason(judgement, 144443, context));
+        Assert.Equal("The server took 144,443 tokens, 95% of the window.", BenchText.SaturationTook(144443, 151427));
+        Assert.Equal(judgement.Reason, test.Reason(judgement, null, context));
+        Assert.Equal(judgement.Reason, test.Reason(judgement, 0, context));   // a usage with no prompt count
+        Assert.Equal("ok", new TheoryOfMindTest().Reason(BenchJudgement.Pass("ok"), 99, context));
+    }
+
+    /// <summary>With the window unknown saturation is skipped and nothing is sent (2026-11-27); with a count it says it.</summary>
+    [Fact]
+    public async Task Runner_Saturation_SkippedWithoutAWindow_ItsCountWithOne()
+    {
+        var client = new FakeChatClient();
+        client.Enqueue(FakeChatClient.Text("OK"), FakeChatClient.Usage(30000, 1));
+        var assistant = AssistantOver(client);
+
+        var skipped = await BenchRunner.RunOneAsync(assistant, new SaturationTest(), Unknown, claudeApi: false, TimeProvider.System, CancellationToken.None);
+        Assert.Equal((BenchVerdict.Skipped, BenchText.SaturationNoWindow), (skipped.Verdict, skipped.Reason));
+        Assert.Empty(client.Requests);
+
+        var passed = await BenchRunner.RunOneAsync(assistant, new SaturationTest(), new BenchContext(32768), claudeApi: false, TimeProvider.System, CancellationToken.None);
+        Assert.Equal(BenchText.SaturationTook(30000, 32768), passed.Reason);
+        var run = new BenchRun { Results = [skipped, new BenchResult { Test = "mind", Verdict = BenchVerdict.Pass }] };
+        Assert.Equal((1, 1), (run.Passed, run.Counted));   // the skip is out of the count
     }
 }

@@ -287,7 +287,7 @@ A file opens in its default app (QuickTime Player), or on the Web UI's Video tab
 
 Under *UNC tools*. They reach named network shares (`\\server\share`, or a folder under one) and local folders outside the working directory (`D:\Data`), as you (`windows`) or another account (`runas`, like `runas /netonly`).
 
-* **Setting up:** shares live in `unc.json`, in the home's or profile's `configs` folder like the [database connections](#managing-connections). *UNC add/edit share* adds and tests one, *UNC set password* changes a password, *UNC shares offered* picks what the model sees.
+* **Setting up:** shares live in `unc.json`, in the home's or profile's `configs` folder like the [database connections](#managing-connections). *UNC add/edit share* adds and tests one (its Password row changes a password), *UNC shares offered* picks what the model sees.
 * **Changes need two keys:** *UNC writes* on **and** the share's `access` `readwrite`; only then do the changing tools appear. Changes are logged, even one that failed partway; on a network share they're permanent (no trash). `unc_delete` starts off even then.
 * **Signing in:** `windows` uses what your sign-in has for that server (a mapped drive, a `cmdkey` entry); `runas` signs in fresh each call. Use server names, not IP addresses. The shell can't use a `runas` sign-in: `unc_fetch` the file.
 * **An entry:**
@@ -413,7 +413,7 @@ Under *ComfyUI tools*. `generate_image` runs **your own ComfyUI workflows** on y
 * **Build** makes a text → image workflow, an image → image one, or both, from your server's checkpoints and samplers.
 * **Run** imports one of the server's recent runs; the app's own runs stay hidden until you show them.
 * **File** imports an API export (*Workflow → Export (API)*) or a PNG or WebP picture ComfyUI saved, and puts the placeholders in. For FLUX.2, Krea 2, Z-Image, Qwen Image, Ernie Image, Boogu, LongCat Image, HiDream I1 and Ideogram 4, import ComfyUI's own template.
-* The summary changes the model, VAE, LoRAs and their trigger words, CLIP skip, sampler and defaults. **Test** runs it once at a small size and opens the picture; saving writes `<name>.json` and `<name>.md`.
+* The summary changes the model, VAE, LoRAs and their trigger words, a LoRA switched off, CLIP skip, sampler and defaults. **Test** runs it once at a small size and opens the picture; saving writes `<name>.json` and `<name>.md`.
 
 **By hand:**
 
@@ -443,6 +443,7 @@ negative: score_6, score_5, score_4, blurry
 reinforce: false      # optional: send this negative as written, nothing appended
 image: the picture to restyle   # optional, per input picture: its role, shown to the model (image, image2, image3)
 lora.style.safetensors: xyz_style   # optional, per LoRA: put in front of every prompt
+lora-off.style.safetensors: yes   # optional, per LoRA: left out of every run, kept in the file
 ---
 Prefer source_anime; keep rating_safe unless asked.
 ```
@@ -455,6 +456,7 @@ Prefer source_anime; keep rating_safe unless asked.
 * **Enter** opens one: **Edit** (the wizard's summary, over the installed files), **Test**, **Check against the server**, **Duplicate**, **Rename**, **Move** to the other folder, **Open** the JSON or the Markdown.
 * **Edit** changes only what it can change safely: a part it can't (two samplers, a value another node sets) shows why. Only the keys you change are written.
 * **Trigger words:** on the LoRAs page, `t` sets a LoRA's words. They go in front of every prompt for that workflow, `/imagine` and your own prompts too, never twice, and only while the LoRA is in play.
+* **Off:** Space on the LoRAs page leaves a LoRA out of every run, with no trigger words, while the file keeps it, its strength and its words.
 * **Rename and delete** update the offered and Botchat lists of the loaded profile only. Other profiles lose the tick of a renamed global workflow.
 * **The check** marks a workflow `!` when it uses a node or a model the server doesn't list. A custom node may take more, so nothing is unticked.
 
@@ -589,7 +591,7 @@ Under *Event log tools*. **Read-only:** what Windows recorded (a crash, a failed
 
 #### Event log computers
 
-`local` is the app's computer, built in, and the only one ticked in *Event log computers offered* until you change it (for the model and `/eventlog` alike). *Event log add/edit computer* adds and tests one; *Event log set password* changes a runas password.
+`local` is the app's computer, built in, and the only one ticked in *Event log computers offered* until you change it (for the model and `/eventlog` alike). *Event log add/edit computer* adds and tests one, and its Password row changes a runas password.
 
 * **`host`** (required): the name or address (`localhost` is a loopback session).
 * **`auth`**: `windows` (default, as you) or `runas`, with **`user`** (`DOMAIN\name`, `name@domain`, or `box\admin` for its own account) and **`passwordStore`** `file` or `credman` (`NeonSidekick/eventlog/<name>`). **`authMethod`**: `default`, `negotiate`, `kerberos` or `ntlm`.
@@ -824,10 +826,10 @@ With *File tools* and `convert_to_xlsx` on, each `*_query` takes `to` and writes
 
 * **The file:** `sql.json`, `mysql.json`, `sqlite.json`, `duckdb.json`, `postgres.json` or `oracle.json`. The home's (`%USERPROFILE%\.neonsidekick\configs\`, `~/.neonsidekick/configs/` on a Mac) serves every profile; the profile's (`…\profiles\<profile>\configs\`) wins a name clash. Comments and trailing commas are allowed.
 * **The wizard:** *… add/edit connection* (*SQLite/DuckDB add/edit database*). Its test writes nothing: it signs in, warns when the account could change data, and names what else it could reach.
-* ***… connections offered*** (*SQLite/DuckDB databases offered*) picks what the model sees: **nothing is offered until you tick it**. *… set password* changes a password.
+* ***… connections offered*** (*SQLite/DuckDB databases offered*) picks what the model sees: **nothing is offered until you tick it**. *… add/edit …*'s Password row changes a password.
 * **Every server family's entry** also takes **`connectTimeoutSeconds`** (1–120, default 15), **`access`** (`read`, the default, or `readwrite`), **`passwordStore`** (`file` or `credman`) and **`description`** (for the model).
 * **Passwords:** `passwordStore` `file` (default) encrypts a password typed into the file in place, for your Windows account, at the next read; `credman` keeps it in Windows Credential Manager as `NeonSidekick/<family>/<connection_name>` (`sql`, `mysql`, `postgres`, `oracle`). On a Mac both use the Keychain ([What differs](MAC.md#what-differs)).
-  * A password the app saved goes only to its host: change the host by hand and the connection is refused until you *… set password* again. A custom `credential`, which entries may share, isn't tied to a host; it must start `NeonSidekick/<family>/`, else it's listed as a problem and not offered.
+  * A password the app saved goes only to its host: change the host by hand and the connection is refused until you set it again in *… add/edit …*'s Password row. A custom `credential`, which entries may share, isn't tied to a host; it must start `NeonSidekick/<family>/`, else it's listed as a problem and not offered.
   * After the server refuses a sign-in, that connection doesn't try again for 15 minutes, or until the password or entry changes, so the account isn't locked out.
 * **Unknown keys** are refused, naming the nearest known one, as is a name or section given twice; the entry is listed with its problem and not offered.
 
@@ -1177,7 +1179,7 @@ Under *Advisors enabled*. Advisors are other profiles of this home, each in a ro
 
 | Tool | Arguments | What it does |
 |---|---|---|
-| `neon_advisor` | `advisor, question, context?` | Asks one advisor, by profile or role, on its own server and model; it may use this chat's read-only tools for up to *Advisor max tool iterations* round trips. |
+| `neon_advisor` | `advisor, question, context?` | Asks one advisor that's on, by profile or role, on its own server and model; it may use this chat's read-only tools for up to *Advisor max tool iterations* round trips. |
 
 * Each advisor's description goes into `neon_advisor`'s description, so the model knows when to ask which one.
 * Offered while an advisor is listed; in plan mode the model consults fitting advisors before presenting a plan. Each advisor keeps one thread per conversation; during a gap review or code audit pass it answers without it.

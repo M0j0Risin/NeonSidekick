@@ -7,17 +7,18 @@ namespace NeonSidekick.Tests;
 
 /// <summary>
 /// <c>/usage context</c> (2026-11-01, feature idea #1): the pane opens on the Context tab; without a pane its lines print alone, while a bare
-/// <c>/usage</c> prints them after the Statistics lines; a group switched off leaves the tab and the estimate falls by its tools; any other
+/// <c>/usage</c> prints them before the trend and the scopes (after the Statistics lines until the merge, 2026-11-27); a group switched off leaves the tab and the estimate falls by its tools; any other
 /// word is the usage error; typing <c>/usage </c> offers <c>context</c>.
 /// </summary>
 public partial class ChatScreenTests
 {
     /// <summary>
-    /// The <c>/usage</c> pane's title row: its label, then the six tabs (one tab, the label alone, until the Context tab on 2026-11-01; two until
-    /// /sys' Prompt and Tools tabs and the new Skills tab came on 2026-11-07; five until the Models tab on 2026-11-21).
+    /// The <c>/usage</c> pane's title row: its label, then the five tabs (one tab, the label alone, until the Context tab on 2026-11-01; two until
+    /// /sys' Prompt and Tools tabs and the new Skills tab came on 2026-11-07; five until the Models tab on 2026-11-21; six until Statistics and
+    /// Context merged on 2026-11-27).
     /// </summary>
-    private static string UsagePaneTitle => UsageText.Label + " │ " + UsageText.StatisticsTabTitle + " · " + UsageText.ContextTabTitle + " · "
-        + SystemPromptSummary.PromptTabTitle + " · " + SystemPromptSummary.ToolsTabTitle + " · " + SystemPromptSummary.SkillsTabTitle + " · " + UsageText.ModelsTabTitle + " ";
+    private static string UsagePaneTitle => UsageText.Label + " │ " + UsageText.ContextTabTitle + " · "
+        + SystemPromptSummary.PromptTabTitle + " · " + SystemPromptSummary.ToolsTabTitle + " · " + SystemPromptSummary.SkillsTabTitle + " · " + UsageText.BenchTabTitle + " ";
 
     [Fact]
     public async Task WithGeometry_UsageContext_OpensOnTheContextTab()
@@ -33,7 +34,7 @@ public partial class ChatScreenTests
 
         Assert.Contains(UsageText.PromptLabel, output, StringComparison.Ordinal);
         Assert.Contains(UsageText.NothingSentYet, output, StringComparison.Ordinal);
-        Assert.DoesNotContain(UsageText.NothingCounted, output, StringComparison.Ordinal);   // the Statistics tab is not the one shown
+        Assert.Contains(UsageText.NothingCounted, output, StringComparison.Ordinal);   // one tab since the merge (2026-11-27): the breakdown, then the tokens
     }
 
     [Fact]
@@ -51,7 +52,7 @@ public partial class ChatScreenTests
     }
 
     [Fact]
-    public async Task Usage_WithoutThePane_PrintsTheStatistics_ThenTheContextLines()
+    public async Task Usage_WithoutThePane_PrintsTheBreakdown_ThenTheScopes()
     {
         _settings.Update(d => d.TtsOutput = false);
         PushLine("/usage");
@@ -59,9 +60,10 @@ public partial class ChatScreenTests
 
         string output = await RunAsync();
 
+        // The tab's order since the merge (2026-11-27): the breakdown, then the scopes.
         int statistics = output.IndexOf(UsageText.NothingCounted, StringComparison.Ordinal);
         int context = output.IndexOf("  · system prompt: ~", StringComparison.Ordinal);
-        Assert.True(statistics >= 0 && context > statistics);
+        Assert.True(context >= 0 && statistics > context);
     }
 
     [Fact]
@@ -177,7 +179,7 @@ public partial class ChatScreenTests
             new CompletionItem(UsageText.PromptWord, UsageText.PromptWordNote),   // the three from /sys in tab order (2026-11-07)
             new CompletionItem(UsageText.ToolsWord, UsageText.ToolsWordNote),
             new CompletionItem(UsageText.SkillsWord, UsageText.SkillsWordNote),
-            new CompletionItem(UsageText.ModelsWord, UsageText.ModelsWordNote),   // 2026-11-21
+            new CompletionItem(UsageText.BenchWord, UsageText.BenchWordNote),   // 2026-11-27 (models from 2026-11-21, which still opens the tab)
             new CompletionItem(UsageText.SyspromptWord, UsageText.SyspromptWordNote),   // 2026-11-23
         ], ChatScreen.ArgumentItems("/usage", "", sources));
         Assert.Single(ChatScreen.ArgumentItems("/usage", "co", sources));

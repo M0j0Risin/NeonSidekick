@@ -1,6 +1,20 @@
 namespace NeonSidekick.Llm;
 
 /// <summary>
+/// One reply of the conversation for <c>/usage</c>'s trend and records (2026-11-27, the user's call): the model that answered, its speed,
+/// the wait for a first token a request, the context at its last request, its output and reasoning, and whether a compaction or a
+/// <c>/rewind</c> came before it (<see cref="Marked"/>, drawn <c>┆</c>). A reply the server reported nothing for has every figure null:
+/// a blank cell, never a 0 bar. <see cref="Number"/> is its place in the conversation, from 1, kept when the list's oldest drop off.
+/// </summary>
+public readonly record struct ReplyPoint(string? Model, double? TokensPerSecond, TimeSpan? FirstToken, long? Context, long? Output, long? Reasoning, bool Marked, int Number = 0)
+{
+    /// <summary>A point from one reply's usage; all null when the reply reported nothing.</summary>
+    public static ReplyPoint Of(string? model, TokenUsage usage, long? context, bool marked = false) => usage.IsEmpty
+        ? new ReplyPoint(model, null, null, null, null, null, marked)
+        : new ReplyPoint(model, usage.TokensPerSecond, usage.AverageToFirstToken, context, usage.Output, usage.Reasoning, marked);
+}
+
+/// <summary>
 /// The session's running token counts, three scopes wide: the last reply, the conversation and
 /// the process. Owned by the LLM session next to the history, so it outlives a reconnect
 /// (<c>/server</c>, <c>/model</c>) the way the conversation does — the hint row alone stops
@@ -35,6 +49,64 @@ public sealed class TokenTally
     private int _advisorRequests;
     private int _unreportedReplies;
     private bool _hintHidden;
+
+    // The conversation's replies for /usage's trend (2026-11-27): capped, a compaction or a /rewind marking the next one, cleared with the conversation.
+    private readonly List<ReplyPoint> _replies = [];
+    private bool _nextMarked;
+    private int _replyNumber;
+
+    /// <summary>The most replies <see cref="Replies"/> keeps, the oldest dropped first.</summary>
+    public const int ReplyCap = 200;
+
+    /// <summary>The conversation's replies, oldest first (a snapshot).</summary>
+    public IReadOnlyList<ReplyPoint> Replies { get { lock (_gate) { return [.. _replies]; } } }
+
+    /// <summary>
+    /// The main turn's reply ended (2026-11-27): a point from <see cref="LastReply"/>, its context the last request's when the reply reported
+    /// something (<see cref="BeginTurn"/> keeps the request before, which would read as this reply's). Called whether or not the session is
+    /// saved: nothing in the list is written.
+    /// </summary>
+    public void RecordReply(string? model)
+    {
+        lock (_gate)
+        {
+            Push(ReplyPoint.Of(model, _lastReply, _lastReply.IsEmpty ? null : _lastRequest.Total));
+        }
+    }
+
+    /// <summary>A reply counted elsewhere (2026-11-27, a <c>/botchat</c> bot's): its own model and usage, its context when known.</summary>
+    public void RecordReply(string? model, TokenUsage usage, long? context)
+    {
+        lock (_gate)
+        {
+            Push(ReplyPoint.Of(model, usage, context));
+        }
+    }
+
+    /// <summary>A restored conversation's replies (2026-11-27), after its <see cref="ResetConversation"/>: unmarked, numbered in order.</summary>
+    public void SeedReplies(IEnumerable<ReplyPoint> points)
+    {
+        ArgumentNullException.ThrowIfNull(points);
+        lock (_gate)
+        {
+            foreach (var point in points)
+            {
+                Push(point with { Marked = false });
+            }
+
+            _nextMarked = false;
+        }
+    }
+
+    private void Push(ReplyPoint point)
+    {
+        _replies.Add(point with { Marked = point.Marked || _nextMarked, Number = ++_replyNumber });
+        _nextMarked = false;
+        if (_replies.Count > ReplyCap)
+        {
+            _replies.RemoveAt(0);
+        }
+    }
 
     /// <summary>The turn in progress, or the last one that ran. Zero until the first reply.</summary>
     public TokenUsage LastReply { get { lock (_gate) { return _lastReply; } } }
@@ -150,6 +222,7 @@ public sealed class TokenTally
             }
 
             _lastRequest = TokenUsage.Zero;
+            _nextMarked = true;   // the trend's ┆ before the next reply (2026-11-27)
         }
     }
 
@@ -163,6 +236,7 @@ public sealed class TokenTally
         lock (_gate)
         {
             _lastRequest = TokenUsage.Zero;
+            _nextMarked = true;
         }
     }
 
@@ -263,6 +337,9 @@ public sealed class TokenTally
             _lastRequest = TokenUsage.Zero;
             _unreportedReplies = 0;
             _hintHidden = false;
+            _replies.Clear();
+            _nextMarked = false;
+            _replyNumber = 0;
         }
     }
 }

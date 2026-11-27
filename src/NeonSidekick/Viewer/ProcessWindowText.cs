@@ -17,13 +17,13 @@ public static class ProcessWindowText
     public const string RuleGlyph = "⚡";
 
     /// <summary>
-    /// The title at the right of the rule under the input line (2026-10-12, the user's ask and their mockup: <c>▶ 3</c>; <c>⚡3</c> since 2026-11-24,
-    /// the glyph against the count with no space, as the user wrote it, three cells wide as <c>▶ 3</c> was), where the
+    /// The title at the right of the rule under the input line (2026-10-12, the user's ask and their mockup: <c>▶ 3</c>; <c>⚡3</c> from 2026-11-24,
+    /// glued as the user wrote it; <c>⚡ 3</c> since 2026-11-27, the user's call with the pictures' gap: four cells, ⚡ two, the space, the digit), where the
     /// session's name sits on the rule above): the background processes still running, the model's and <c>/cmd --bg</c>'s, the count PROC shows; empty — the
     /// bare rule — while none run. A double-click on it opens <c>/process</c>. Pinned.
     /// </summary>
     public static string RuleTitle(int running) =>
-        running > 0 ? RuleGlyph + running.ToString(CultureInfo.InvariantCulture) : "";
+        running > 0 ? RuleGlyph + " " + running.ToString(CultureInfo.InvariantCulture) : "";
 
     /// <summary>The longest label a title or a list row carries before it is cut with an ellipsis.</summary>
     public const int LabelCells = 80;

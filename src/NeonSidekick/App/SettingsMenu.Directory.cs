@@ -112,43 +112,6 @@ internal sealed partial class SettingsMenu
         }
     }
 
-    private async Task<bool> SetDirectoryPasswordAsync(CancellationToken cancellationToken)
-    {
-        var domains = ByName(DirectoryLoaded().Domains.Where(d => d.Config.IsRunAs), d => d.Name);
-        if (domains.Count == 0)
-        {
-            Sink.Error(ComputerNoPasswordComputers(DirectoryConfigFile.FileName).Replace("computer", "domain", StringComparison.Ordinal));
-            return false;
-        }
-
-        var rows = domains.Select(d => Markup.Escape($"{d.Name}  ({d.DomainName}, runas {d.Config.User?.Trim()} · {(d.Config.InCredentialManager ? SqlText.CredentialStore : "encrypted in ad.json")})")).ToList();
-        var page = new MenuPage(Crumb(FieldName(SettingsField.DirectorySetPassword)), rows, PickKeys);
-        if (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } index)
-        {
-            return Unchanged();
-        }
-
-        InputResult result = _pane.Enabled
-            ? await _pane.EditAsync(page with { Hint = EditKeys }, index, _input, "", allowEmpty: false, cancellationToken, mask: true).ConfigureAwait(false)
-            : await _input.ReadAsync("", remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
-        if (result is not InputResult.Submitted { Text.Length: > 0 } submitted)
-        {
-            return Unchanged();
-        }
-
-        var (saved, notice) = DirectoryConfigFile.SavePassword(domains[index], submitted.Text);
-        if (saved)
-        {
-            Sink.Notice(notice);
-        }
-        else
-        {
-            Sink.Error(notice);
-        }
-
-        return false;
-    }
-
     // ── The domain wizard ───────────────────────────────────────────────────
 
     private sealed class DirectoryDraft
@@ -176,6 +139,21 @@ internal sealed partial class SettingsMenu
         ConnectionStamp(draft.Name, draft.Global, draft.Config, DirectoryJsonContext.Default.DirectoryDomainConfig, x => x.Password = null);
 
     /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
+    private static bool DirectoryWizardPasswordOnly(DirectoryDraft draft) =>
+        WizardPasswordOnly(draft.Original, DirectoryWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
+
+    /// <summary>
+    /// The step of the first page a draft lacks (2026-11-26, the user's call: an edit opens on it, as the other eight wizards' do; it opened on
+    /// its summary, Password read "—" and Save refused): 1 Name, 2 Domain, 7 User, 9 Password (a runas one's); null when none is missing.
+    /// </summary>
+    private static int? DirectoryWizardMissing(DirectoryDraft draft)
+    {
+        var c = draft.Config;
+        return draft.Name.Length == 0 ? 1 : string.IsNullOrWhiteSpace(c.Domain) ? 2
+            : c.IsRunAs && string.IsNullOrWhiteSpace(c.User) ? 7 : c.IsRunAs && draft.Password.Length == 0 ? 9 : null;
+    }
+
     private static bool DirectoryWizardDirty(DirectoryDraft draft) =>
         draft.Original is not null && (!string.Equals(DirectoryWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -275,7 +253,7 @@ internal sealed partial class SettingsMenu
     private async Task<bool?> RunDirectoryWizardAsync(DirectoryDraft draft, string title, CancellationToken cancellationToken)
     {
         const int summary = 12;
-        int step = draft.Original is null ? 0 : summary;
+        int step = draft.Original is null ? 0 : DirectoryWizardMissing(draft) ?? summary;
         bool fromSummary = draft.Original is not null;
         int? back = null;   // the summary row just changed, for its cursor (2026-11-26, the user's report)
         while (true)
@@ -313,7 +291,7 @@ internal sealed partial class SettingsMenu
 
             if (await DirectoryWizardStepAsync(step, draft, title, cancellationToken).ConfigureAwait(false))
             {
-                step = fromSummary ? summary : step + 1;
+                step = fromSummary ? DirectoryWizardMissing(draft) ?? summary : step + 1;
                 fromSummary = fromSummary && step != summary;
                 continue;
             }
@@ -664,6 +642,7 @@ internal sealed partial class SettingsMenu
 
     private bool? DirectoryWizardSave(DirectoryDraft draft, bool offer)
     {
+        bool passwordOnly = DirectoryWizardPasswordOnly(draft);   // before the normalizing below, which can change the stamp
         var c = draft.Config;
         if (!c.IsRunAs)
         {
@@ -672,8 +651,7 @@ internal sealed partial class SettingsMenu
             c.Auth = null;
         }
 
-        string? missing = draft.Name.Length == 0 ? DirectoryWizardLabels[1] : string.IsNullOrWhiteSpace(c.Domain) ? DirectoryWizardLabels[2]
-            : c.IsRunAs && string.IsNullOrWhiteSpace(c.User) ? DirectoryWizardLabels[7] : c.IsRunAs && draft.Password.Length == 0 ? DirectoryWizardLabels[9] : null;
+        string? missing = DirectoryWizardMissing(draft) is { } step ? DirectoryWizardLabels[step] : null;
         string? problem = missing is not null ? missing + " is not set" : c.Problem(draft.Name);
         if (problem is not null)
         {
@@ -683,6 +661,12 @@ internal sealed partial class SettingsMenu
 
         // The entry, then its password, then the tick (2026-10-23, the admin review's H9), as the computer wizard's.
         string path = DirectoryWizardPath(draft.Global);
+        if (passwordOnly)
+        {
+            return WizardPasswordOnlySave(DirectoryConfigFile.SavePassword(new DirectoryDomain(draft.Name, c, path), draft.Password),
+                () => ApplyOfferedAfterSave(SettingsField.DirectoryDomainsOffered, DirectoryCatalog.OfferedNames(_settings.Current.DirectoryDomainsOffered, JoinedDomain() is not null), draft.Original, draft.Name, offer, (d, next) => d.DirectoryDomainsOffered = next));
+        }
+
         string? sealedPassword = null;
         if (c.IsRunAs && !c.InCredentialManager)
         {
@@ -728,7 +712,7 @@ internal sealed partial class SettingsMenu
         else
         {
             offer = false;
-            Sink.Error(Computers.ComputerText.SavedUnticked(draft.Name, DirectoryText.SetPasswordRow, DirectoryText.MenuPath));
+            Sink.Error(Computers.ComputerText.SavedUnticked(draft.Name, DirectoryText.EditRow, DirectoryText.MenuPath));
         }
 
         return ApplyOfferedAfterSave(SettingsField.DirectoryDomainsOffered, DirectoryCatalog.OfferedNames(_settings.Current.DirectoryDomainsOffered, JoinedDomain() is not null), draft.Original, draft.Name, offer, (d, next) => d.DirectoryDomainsOffered = next);

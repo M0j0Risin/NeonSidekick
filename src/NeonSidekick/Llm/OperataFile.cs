@@ -20,9 +20,12 @@ public sealed class OperataFile : PromptFile
 
     /// <param name="directory">The profile directory; the file is <see cref="FileName"/> under it.</param>
     public OperataFile(string directory)
-        : base(directory, FileName, Assistant.OperatingRules, Category, "Operating rules", MaxLength)
+        : base(directory, FileName, Assistant.OperatingRules, Category, "Operata", MaxLength)
     {
     }
+
+    /// <summary>The plain words for the default in force (2026-11-27: the label became "Operata", which would read "the default operata").</summary>
+    public override string DefaultInUse => "the default operating rules";
 
     /// <summary>The rules text as the prompt carries it: CRLF folded to LF, trimmed, cut at <see cref="MaxLength"/> with an ellipsis. Pure; pinned.</summary>
     public static string Normalize(string raw) => Normalize(raw, out _);

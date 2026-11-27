@@ -494,20 +494,21 @@ public partial class SidekickAppTests : IDisposable
         Assert.Null(SidekickApp.LastReplyText([new(ChatRole.User, "q")]));
     }
 
-    /// <summary><c>/test</c> headless (2026-09-28): a line per test as it finishes, the table as the reply, the run saved; the listing without a server.</summary>
+    /// <summary><c>/bench</c> headless (2026-09-28): a line per test as it finishes, the table as the reply, the run saved; the listing without a server.</summary>
     [Fact]
     public async Task Headless_Test_RunsPrintsAndSaves()
     {
         ServerOn1234("llama");
         _chat.EnqueueText("drawer").EnqueueText("AGREE");
 
-        string output = await Headless("/test mind\n/test sycophancy\n/test nope\n", exitCode: 4);
+        string output = await Headless("/bench mind\n/bench sycophancy\n/bench nope\n", exitCode: 4);
 
         Assert.Contains("[notice] ✓ mind — Answer tracked Alice's belief (drawer), not reality (backpack).", output);
         Assert.Contains("[notice] ✗ sycophancy — ", output);
         Assert.Contains("[notice]   answered: AGREE", output);
         Assert.Contains("Neon: | Test | Verdict |", output);
-        Assert.Contains("**1/1 passed** · llama", output);
+        Assert.Contains("**1/1 passed**", output);   // the result line (2026-11-27), then the facts
+        Assert.Contains(NeonSidekick.Bench.BenchText.ModelLabel + "\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0llama", output);
         Assert.Contains("[error] No test named 'nope'.", output);
         Assert.Equal(2, new NeonSidekick.Bench.BenchHistory(_settings.ProfileDirectory).Runs().Count);
     }
@@ -515,10 +516,29 @@ public partial class SidekickAppTests : IDisposable
     [Fact]
     public async Task Headless_Test_ListsWithoutAServer_ARunNeedsOne()
     {
-        string output = await Headless("/test\n/test mind\n", exitCode: 4);
+        string output = await Headless("/bench\n/bench mind\n", exitCode: 4);
 
         Assert.Contains("| mind | Theory of Mind (Reasoning) |", output);
         Assert.Contains(SidekickApp.HeadlessNoAssistantReply, output);
+    }
+
+    /// <summary>Headless <c>/bench history</c> (2026-11-27): no pane there, so the markdown list as before; with nothing saved, the notice.</summary>
+    [Fact]
+    public async Task Headless_BenchHistory_ListsTheRuns_OrSaysNoneAreSaved()
+    {
+        string none = await Headless("/bench history\n");
+        Assert.Contains("[notice] " + NeonSidekick.Bench.BenchText.NoRuns, none);
+
+        var history = new NeonSidekick.Bench.BenchHistory(_settings.ProfileDirectory);
+        history.Append(new NeonSidekick.Bench.BenchRun
+        {
+            At = DateTimeOffset.UnixEpoch,
+            Model = "llama",
+            Results = [new NeonSidekick.Bench.BenchResult { Test = "grid", Verdict = NeonSidekick.Bench.BenchVerdict.Fail, Reason = "no" }],
+        });
+        string listed = await Headless("/bench history\n");
+        Assert.Contains("1 run saved in ", listed);
+        Assert.Contains("✗grid", listed);
     }
 
     [Fact]
@@ -1593,14 +1613,14 @@ public partial class SidekickAppTests : IDisposable
         }
     }
 
-    /// <summary>A headless <c>/test</c> run starts from a clean slate, as the screen's does (2026-09-30): the turn before it is forgotten.</summary>
+    /// <summary>A headless <c>/bench</c> run starts from a clean slate, as the screen's does (2026-09-30): the turn before it is forgotten.</summary>
     [Fact]
     public async Task Headless_TestRun_ForgetsTheConversationFirst()
     {
         ServerOn1234("llama");
         _chat.EnqueueText("Hi.").EnqueueText("Drawer.").EnqueueText("Ok.");
 
-        string output = await Headless("hello\n/test mind\nafter\n");
+        string output = await Headless("hello\n/bench mind\nafter\n");
 
         Assert.Contains("1/1 passed", output);
         Assert.Equal(3, _chat.Requests.Count);

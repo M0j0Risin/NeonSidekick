@@ -142,7 +142,7 @@ public partial class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The lower rule's title (2026-10-12, the user's ask: the running processes' count, <c>⚡3</c>, at the right of the rule
+    /// The lower rule's title (2026-10-12, the user's ask: the running processes' count, <c>⚡ 3</c>, at the right of the rule
     /// under the draft line): drawn there and nowhere else, repainted on the tick when it moves, bare again when it empties; it
     /// takes a click on its cells and the space either side, not under an overlay.
     /// </summary>
@@ -160,14 +160,15 @@ public partial class ScreenPaneTests : IDisposable
         title = NeonSidekick.Viewer.ProcessWindowText.RuleTitle(3);
         int mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
-        Assert.Equal(Rule(34) + " ⚡3 ─", ScreenPane.RuleWithTitle(title, 40));
-        Assert.Contains(Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(34) + " ⚡3 ─\n", Output[mark..]);   // the upper rule bare
-        foreach (int x in new[] { 34, 35, 37, 38 })
+        Assert.Equal(Rule(33) + " ⚡ 3 ─", ScreenPane.RuleWithTitle(title, 40));   // ⚡ 3 with its space (2026-11-27)
+        Assert.Contains(Rule(33) + " ⚡ 3 ─", Output[mark..]);   // the lower rule's row alone, repainted (2026-11-27)
+        Assert.DoesNotContain(Rule(40), Output[mark..]);          // the upper rule isn't drawn again
+        foreach (int x in new[] { 33, 34, 37, 38 })
         {
             Assert.True(HitsProcesses(pane, x, 101));
         }
 
-        Assert.False(HitsProcesses(pane, 33, 101));
+        Assert.False(HitsProcesses(pane, 32, 101));
         Assert.False(HitsProcesses(pane, 39, 101));
         Assert.False(HitsProcesses(pane, 36, 99));    // the upper rule's row
         Assert.False(pane.TryHitRuleTitle(36, 99));
@@ -183,10 +184,12 @@ public partial class ScreenPaneTests : IDisposable
         pane.CloseOverlay();
         Assert.True(HitsProcesses(pane, 36, 101));
 
-        // The last one ended: the bare rule again, no click.
+        // The last one ended: the bare rule again (its row alone, 2026-11-27), no click.
         title = NeonSidekick.Viewer.ProcessWindowText.RuleTitle(0);
+        mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
-        Assert.EndsWith(Rule(40) + "\n" + InputLine.PromptGlyph + "\n" + Rule(40) + "\n", Output);
+        Assert.EndsWith(Rule(40), Output);
+        Assert.DoesNotContain(ScreenPane.RuleGlyph + " ⚡", Output[mark..]);
         Assert.False(HitsProcesses(pane, 36, 101));
     }
 
@@ -206,19 +209,19 @@ public partial class ScreenPaneTests : IDisposable
         marker = "📦 0.5.7 at quit";
         int mark = Output.Length;
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains(Rule(14) + " 📦 0.5.7 at quit ── ⚡3 ─\n", Output[mark..]);
+        Assert.Contains(Rule(13) + " 📦 0.5.7 at quit ── ⚡ 3 ─", Output[mark..]);
 
-        // 📦 0.5.7 at quit at columns 15–30, ⚡3 at 35–37, the space either side of each included.
-        Assert.False(HitsUpdate(pane, 13, 101));
-        foreach (int x in new[] { 14, 15, 30, 31 })
+        // 📦 0.5.7 at quit at columns 14–29, ⚡ 3 at 34–37, the space either side of each included.
+        Assert.False(HitsUpdate(pane, 12, 101));
+        foreach (int x in new[] { 13, 14, 29, 30 })
         {
             Assert.True(HitsUpdate(pane, x, 101));
             Assert.False(HitsProcesses(pane, x, 101));
         }
 
-        Assert.False(HitsUpdate(pane, 32, 101));
-        Assert.False(HitsProcesses(pane, 33, 101));
-        foreach (int x in new[] { 34, 35, 37, 38 })
+        Assert.False(HitsUpdate(pane, 31, 101));
+        Assert.False(HitsProcesses(pane, 32, 101));
+        foreach (int x in new[] { 33, 34, 37, 38 })
         {
             Assert.True(HitsProcesses(pane, x, 101));
             Assert.False(HitsUpdate(pane, x, 101));
@@ -230,7 +233,7 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal("", Output[mark..]);
         marker = "📦 0.5.7 42%";
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains("📦 0.5.7 42% ── ⚡3 ─\n", Output[mark..]);
+        Assert.Contains("📦 0.5.7 42% ── ⚡ 3 ─", Output[mark..]);
 
         pane.ShowOverlay(new Markup("a"), "Esc closes");
         Assert.False(HitsUpdate(pane, 20, 101));
@@ -294,25 +297,24 @@ public partial class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The jobs group (2026-11-23, the user's ask): every item kept with room, then a narrow window drops the update's marker, the pictures, the
-    /// download and the loop in that order, each whole; <c>▶ n</c> is never dropped, only cut alone as <see cref="ScreenPane.RuleWithTitle"/> cuts it.
+    /// The jobs group (2026-11-23, the user's ask): every item kept with room, then a narrow window drops the update's marker, the download
+    /// and the loop in that order, each whole; <c>⚡ n</c> is never dropped, only cut alone as <see cref="ScreenPane.RuleWithTitle"/> cuts it.
+    /// The pictures left the group on 2026-11-27 (pinned left: <see cref="LowerRuleFit_ThePicturesTimer_StaysLongest_BesideTheCameraItGoes_AloneItIsCut"/>).
     /// </summary>
     [Fact]
-    public void LowerRuleFit_DropsTheUpdateThenThePicturesThenTheDownloadThenTheLoop_NeverTheProcesses()
+    public void LowerRuleFit_DropsTheUpdateThenTheDownloadThenTheLoop_NeverTheProcesses()
     {
         LowerRuleItem update = new(LowerRuleKind.Update, "📦 0.5.9 at quit");
         LowerRuleItem loop = new(LowerRuleKind.Loop, "🔁 step 2/5 · pass 3");
         LowerRuleItem download = new(LowerRuleKind.Download, "📥 ⠋ 42%");
-        LowerRuleItem pictures = new(LowerRuleKind.Pictures, "🖼️ 2");
         LowerRuleItem processes = new(LowerRuleKind.Processes, "▶ 1");
-        LowerRuleItem[] all = [update, loop, download, pictures, processes];
+        LowerRuleItem[] all = [update, loop, download, processes];
         static int Room(params LowerRuleItem[] kept) =>
             kept.Sum(i => TextCells.Width(i.Text)) + ((kept.Length - 1) * (ScreenPane.LowerRuleGap + 2)) + 3 + ScreenPane.RuleTitleMinRule;
 
         Assert.Equal(all, ScreenPane.LowerRuleFit(all, Room(all)).Kept);
         Assert.Equal(ScreenPane.RuleTitleMinRule, ScreenPane.LowerRuleFit(all, Room(all)).Left);
-        Assert.Equal(new[] { loop, download, pictures, processes }, ScreenPane.LowerRuleFit(all, Room(all) - 1).Kept);
-        Assert.Equal(new[] { loop, download, processes }, ScreenPane.LowerRuleFit(all, Room(loop, download, pictures, processes) - 1).Kept);
+        Assert.Equal(new[] { loop, download, processes }, ScreenPane.LowerRuleFit(all, Room(all) - 1).Kept);
         Assert.Equal(new[] { loop, processes }, ScreenPane.LowerRuleFit(all, Room(loop, download, processes) - 1).Kept);
         Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit(all, Room(loop, processes) - 1).Kept);
         Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit(all, Room(processes)).Kept);
@@ -324,8 +326,8 @@ public partial class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The status bar's jobs on the lower rule (2026-11-25, the user's ask): in the rule's order they drop the update, the pictures, the brain, the speech
-    /// and voice setups, the MCP wave, the download, the loop and the extras, each whole; ⚡n goes only once 📷 alone stays with it and the two don't
+    /// The status bar's jobs on the lower rule (2026-11-25, the user's ask; the pictures pinned left since 2026-11-27): in the rule's order they drop the update, the brain, the speech
+    /// and voice setups, the MCP wave, the download, the loop and the extras, each whole; ⚡ n goes only once 📷 alone stays with it and the two don't
     /// fit, 📷 never — either left alone is cut to fit.
     /// </summary>
     [Fact]
@@ -337,17 +339,16 @@ public partial class ScreenPaneTests : IDisposable
         LowerRuleItem mcp = new(LowerRuleKind.Mcp, "🔌 1/3");
         LowerRuleItem voice = new(LowerRuleKind.Voice, "🎙️ 42%");
         LowerRuleItem speech = new(LowerRuleKind.Speech, "🔈");
-        LowerRuleItem pictures = new(LowerRuleKind.Pictures, "🖼️ 2");
         LowerRuleItem brain = new(LowerRuleKind.Learning, "🧠");
         LowerRuleItem extras = new(LowerRuleKind.Extras, "🧟");
         LowerRuleItem camera = new(LowerRuleKind.Camera, "📷");
-        LowerRuleItem processes = new(LowerRuleKind.Processes, "⚡1");
-        LowerRuleItem[] all = [update, loop, download, mcp, voice, speech, pictures, brain, extras, camera, processes];
+        LowerRuleItem processes = new(LowerRuleKind.Processes, "⚡ 1");
+        LowerRuleItem[] all = [update, loop, download, mcp, voice, speech, brain, extras, camera, processes];
         static int Room(params LowerRuleItem[] kept) =>
             kept.Sum(i => TextCells.Width(i.Text)) + ((kept.Length - 1) * (ScreenPane.LowerRuleGap + 2)) + 3 + ScreenPane.RuleTitleMinRule;
 
         Assert.Equal(all, ScreenPane.LowerRuleFit(all, Room(all)).Kept);
-        var order = new[] { update, pictures, brain, speech, voice, mcp, download, loop, extras };
+        var order = new[] { update, brain, speech, voice, mcp, download, loop, extras };
         var kept = all.ToList();
         foreach (var next in order)
         {
@@ -357,10 +358,10 @@ public partial class ScreenPaneTests : IDisposable
         }
 
         Assert.Equal(new[] { camera, processes }, kept);
-        Assert.Equal(new[] { camera }, ScreenPane.LowerRuleFit(all, Room(camera, processes) - 1).Kept);   // ⚡n goes, 📷 stays
+        Assert.Equal(new[] { camera }, ScreenPane.LowerRuleFit(all, Room(camera, processes) - 1).Kept);   // ⚡ n goes, 📷 stays
         Assert.Equal(ScreenPane.RuleWithTitle("📷", 12), new string('─', ScreenPane.LowerRuleFit([camera, processes], 12).Left) + " " + ScreenPane.LowerRuleFit([camera, processes], 12).Kept.Single().Text + " ─");
-        Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit([brain, processes], Room(brain, processes) - 1).Kept);   // ⚡n stays while anything else can go
-        Assert.Equal(LowerRuleKind.Processes, Assert.Single(ScreenPane.LowerRuleFit([processes], 11 + TextCells.Width(processes.Text)).Kept).Kind);   // ⚡n alone is cut, never dropped
+        Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit([brain, processes], Room(brain, processes) - 1).Kept);   // ⚡ n stays while anything else can go
+        Assert.Equal(LowerRuleKind.Processes, Assert.Single(ScreenPane.LowerRuleFit([processes], 11 + TextCells.Width(processes.Text)).Kept).Kind);   // ⚡ n alone is cut, never dropped
         Assert.Null(ScreenPane.LowerRuleDropRank(LowerRuleKind.Camera));
     }
 
@@ -392,7 +393,7 @@ public partial class ScreenPaneTests : IDisposable
         int mark = Output.Length;
         loop = "⟳ 3/10" + LoopText.EndingTail;
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains(" ⟳ 3/10 · ending ── ▶ 1 ─\n", Output[mark..]);
+        Assert.Contains(" ⟳ 3/10 · ending ── ▶ 1 ─", Output[mark..]);
         Assert.Equal(
             new[] { -600_001, -600_002, -600_003, -600_004, -600_005, -600_006, -600_007, -600_008, -600_009, -600_010, -600_011, -600_012 },
             new[] { LowerRuleKind.Processes, LowerRuleKind.Update, LowerRuleKind.Loop, LowerRuleKind.Download, LowerRuleKind.Pictures, LowerRuleKind.Mcp, LowerRuleKind.Voice, LowerRuleKind.Speech, LowerRuleKind.Learning, LowerRuleKind.Extras, LowerRuleKind.Camera, LowerRuleKind.Queued }.Select(InputLine.LowerRulePairKey));
@@ -449,7 +450,7 @@ public partial class ScreenPaneTests : IDisposable
 
         Color secondary = Theme.AccentSecondary.Foreground;
         Assert.Equal(Theme.Secondary, secondary);
-        Assert.Matches(@"38;2;" + secondary.R + ";" + secondary.G + ";" + secondary.B + "m⚡3\e", Output);
+        Assert.Matches(@"38;2;" + secondary.R + ";" + secondary.G + ";" + secondary.B + "m⚡ 3\e", Output);
         Assert.DoesNotMatch(@"38;2;" + secondary.R + ";" + secondary.G + ";" + secondary.B + "m─", Output);
     }
 
@@ -482,7 +483,7 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Contains(Fg(green) + "─", marked);
         Assert.Contains(Fg(rule) + " my-session ", marked);   // the name keeps the theme's rule style
         Color secondary = Theme.AccentSecondary.Foreground;
-        Assert.Contains(Fg(secondary) + "⚡3", marked);       // the lower rule's title keeps its own
+        Assert.Contains(Fg(secondary) + "⚡ 3", marked);       // the lower rule's title keeps its own
         Assert.Equal("green", pane.RuleMark);
 
         // Unchanged: nothing redrawn.
@@ -1548,9 +1549,6 @@ public partial class ScreenPaneTests : IDisposable
         // The tally right after the label (2026-09-25), ahead of the queued part; empty, the row as before.
         Assert.Equal("thinking 00:12 · ~1.7k / 4.1k · ~42% · 📤 2 queued · Esc closes", ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued", "~1.7k / 4.1k · ~42%"));
         Assert.Equal(ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued"), ScreenPane.BusyRow("thinking", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued", ""));
-        // A label after the tally (the ComfyUI generation's, 2026-09-25): the two swap, nothing else moves; no tally, the row as before.
-        Assert.Equal("1.2k / 4.1k · 30% · 🎨 00:12 · 📤 2 queued · Esc closes", ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued", "1.2k / 4.1k · 30%", labelAfterUsage: true));
-        Assert.Equal(ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued"), ScreenPane.BusyRow("🎨", TimeSpan.FromSeconds(12), "Esc closes", "📤 2 queued", "", labelAfterUsage: true));
     }
 
     /// <summary>
@@ -1808,14 +1806,14 @@ public partial class ScreenPaneTests : IDisposable
         queued = "📤 1 queued";
         int after = Output.Length;
         _time.Advance(ScreenPane.Tick);
-        Assert.Contains(Rule(1) + " 📤 1 queued " + Rule(26) + "\n", Output[after..]);
+        Assert.Contains(Rule(1) + " 📤 1 queued " + Rule(26), Output[after..]);
         Assert.Equal(LowerRuleKind.Queued, pane.LowerRuleItemAt(13, 101));
         Assert.Null(pane.LowerRuleItemAt(14, 101));
     }
 
     /// <summary>
-    /// The queued count in the lower rule's fit (2026-11-26): it drops after the botchat's extras and before ⚡n, which still goes only beside 📷;
-    /// alone it is cut to fit, never dropped (as ⚡n and 📷 are). Its width is the left end's, <c>─ </c> before and a space after.
+    /// The queued count in the lower rule's fit (2026-11-26): it drops after the botchat's extras and before ⚡ n, which still goes only beside 📷;
+    /// alone it is cut to fit, never dropped (as ⚡ n and 📷 are). Its width is the left end's, <c>─ </c> before and a space after.
     /// </summary>
     [Fact]
     public void LowerRuleFit_TheQueuedCount_DropsAfterTheExtras_BeforeTheProcesses_AloneIsCut()
@@ -1823,7 +1821,7 @@ public partial class ScreenPaneTests : IDisposable
         LowerRuleItem queued = new(LowerRuleKind.Queued, "📤 2 queued");
         LowerRuleItem extras = new(LowerRuleKind.Extras, "🧟");
         LowerRuleItem camera = new(LowerRuleKind.Camera, "📷");
-        LowerRuleItem processes = new(LowerRuleKind.Processes, "⚡1");
+        LowerRuleItem processes = new(LowerRuleKind.Processes, "⚡ 1");
         static int RoomWithCount(LowerRuleItem count, params LowerRuleItem[] rest) =>
             TextCells.Width(count.Text) + 3
             + (rest.Length == 0 ? 0 : rest.Sum(i => TextCells.Width(i.Text)) + ((rest.Length - 1) * (ScreenPane.LowerRuleGap + 2)) + 3)
@@ -1835,7 +1833,7 @@ public partial class ScreenPaneTests : IDisposable
         Assert.Equal(new[] { queued, camera, processes }, ScreenPane.LowerRuleFit(all, RoomWithCount(queued, extras, camera, processes) - 1).Kept);
         Assert.Equal(new[] { queued, camera, processes }, ScreenPane.LowerRuleFit(all, RoomWithCount(queued, camera, processes)).Kept);
         Assert.Equal(new[] { camera, processes }, ScreenPane.LowerRuleFit(all, RoomWithCount(queued, camera, processes) - 1).Kept);
-        Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit([queued, processes], RoomWithCount(queued, processes) - 1).Kept);   // ⚡n stays beside the count
+        Assert.Equal(new[] { processes }, ScreenPane.LowerRuleFit([queued, processes], RoomWithCount(queued, processes) - 1).Kept);   // ⚡ n stays beside the count
 
         // Alone: kept whole with room, cut by one cell less, the bare rule once not even a cut count fits.
         Assert.Equal(new[] { queued }, ScreenPane.LowerRuleFit([queued], RoomWithCount(queued)).Kept);
@@ -4611,50 +4609,34 @@ public partial class ScreenPaneTests : IDisposable
     }
 
     /// <summary>
-    /// The ComfyUI generation's label (2026-09-28, the user's ask: a double-click there cancels the pictures): a label
-    /// <see cref="ScreenPane.LabelAfterUsage"/> takes is its own zone, <see cref="ScreenPane.HintZone.Label"/>, after the tally
-    /// and its separator, or right after the frame's blank with no tally; the spinner and the tally stay Usage.
+    /// A label <see cref="ScreenPane.HideLabel"/> takes (2026-11-27, the ComfyUI generation's: its time is on the lower rule) leaves the busy
+    /// row, its clock with it: the spinner and the tally alone, and no Label zone; any other label is drawn as before.
     /// </summary>
     [Fact]
-    public void TryHitHint_NamesLabel_OnTheGenerationsGlyphAndTime_AfterTheTallyOrWithout()
+    public void AHiddenLabel_LeavesTheBusyRow_TheSpinnerAndTheTallyStay()
     {
         _cursorTop = 100;
         using var pane = Pane();
-        string tally = "1.2k";
-        pane.Strip = () => "🔊";
-        pane.BusyUsage = () => tally;
-        pane.LabelAfterUsage = label => label == "🎨";
+        pane.BusyUsage = () => "1.2k";
+        pane.HideLabel = label => label == "🎨";
         pane.Show();
         pane.ShowInput("", 0);
 
-        // "🔊 · " (five cells), the frame at 5, a blank, "1.2k" at 7, " · ", then "🎨 00:00" from 14, eight cells.
+        int mark = Output.Length;
         using (pane.BeginBusy("🎨"))
         {
-            Assert.True(pane.TryHitHint(5, 102, out var hit));
-            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Usage, "", 5), hit);
-            Assert.True(pane.TryHitHint(8, 102, out hit));
-            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
-            Assert.True(pane.TryHitHint(14, 102, out hit));
-            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Label, "", 14), hit);
-            Assert.True(pane.TryHitHint(21, 102, out hit));   // the time's last digit
-            Assert.Equal(ScreenPane.HintZone.Label, hit.Zone);
-            Assert.True(pane.TryHitHint(22, 102, out hit));
-            Assert.Equal(ScreenPane.HintZone.Row, hit.Zone);
-
-            // No tally (a /botchat turn): the label right after the frame's blank.
-            tally = "";
-            _time.Advance(ScreenPane.Tick);   // the busy row redrawn on the tick
-            Assert.True(pane.TryHitHint(7, 102, out hit));
-            Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Label, "", 7), hit);
-            Assert.True(pane.TryHitHint(5, 102, out hit));
+            string drawn = Output[mark..];
+            Assert.Contains("1.2k", drawn);
+            Assert.DoesNotContain("🎨", drawn);
+            Assert.DoesNotContain("00:00", drawn);
+            Assert.True(pane.TryHitHint(2, 102, out var hit));
             Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
         }
 
-        // Any other label is no Label zone.
+        mark = Output.Length;
         using (pane.BeginBusy("thinking"))
         {
-            Assert.True(pane.TryHitHint(7, 102, out var hit));
-            Assert.Equal(ScreenPane.HintZone.Usage, hit.Zone);
+            Assert.Contains("thinking 00:00", Output[mark..]);
         }
 
         Assert.Equal(new ScreenPane.HintHit(ScreenPane.HintZone.Label, "", 9), ScreenPane.HintHitAt("", -1, -1, -1, 0, 5, 12, 9, 4, 10));
@@ -6997,5 +6979,79 @@ public partial class ScreenPaneTests : IDisposable
         pane.RefreshHint();
         Assert.Contains("qwen3-30b-a3b ◕ · usage 1,234 tokens", Output[mark..]);
         Assert.DoesNotContain("NeonCompanion", Output[mark..]);
+    }
+
+    // ── The pictures' timer, pinned left (2026-11-27, the user's call) ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The pictures' timer drops last of all, after the queued count and <c>⚡ n</c>; beside 📷, which never goes, it goes; alone it is cut,
+    /// never dropped. Its width is the left end's, and one more cell between it and the queued count.
+    /// </summary>
+    [Fact]
+    public void LowerRuleFit_ThePicturesTimer_StaysLongest_BesideTheCameraItGoes_AloneItIsCut()
+    {
+        LowerRuleItem pictures = new(LowerRuleKind.Pictures, "🖼️  2 · 00:12");
+        LowerRuleItem queued = new(LowerRuleKind.Queued, "📤 2 queued");
+        LowerRuleItem brain = new(LowerRuleKind.Learning, "🧠");
+        LowerRuleItem processes = new(LowerRuleKind.Processes, "⚡ 1");
+        LowerRuleItem camera = new(LowerRuleKind.Camera, "📷");
+        static int W(LowerRuleItem item) => TextCells.Width(item.Text);
+        static int Room(LowerRuleItem[] left, LowerRuleItem[] right) =>
+            left.Sum(i => W(i) + 3) + (Math.Max(0, left.Length - 1) * (ScreenPane.LowerRuleGap - 1))
+            + (right.Length == 0 ? 0 : right.Sum(W) + ((right.Length - 1) * (ScreenPane.LowerRuleGap + 2)) + 3)
+            + ScreenPane.RuleTitleMinRule;
+
+        LowerRuleItem[] all = [pictures, queued, brain, processes];
+        Assert.Equal(all, ScreenPane.LowerRuleFit(all, Room([pictures, queued], [brain, processes])).Kept);
+        Assert.Equal(new[] { pictures, queued, processes }, ScreenPane.LowerRuleFit(all, Room([pictures, queued], [brain, processes]) - 1).Kept);
+        Assert.Equal(new[] { pictures, processes }, ScreenPane.LowerRuleFit(all, Room([pictures, queued], [processes]) - 1).Kept);
+        Assert.Equal(new[] { pictures }, ScreenPane.LowerRuleFit(all, Room([pictures], [processes]) - 1).Kept);
+        Assert.Equal(new[] { camera }, ScreenPane.LowerRuleFit([pictures, camera], Room([pictures], [camera]) - 1).Kept);
+
+        var cut = Assert.Single(ScreenPane.LowerRuleFit([pictures], Room([pictures], []) - 1).Kept);
+        Assert.Equal(LowerRuleKind.Pictures, cut.Kind);
+        Assert.NotEqual(pictures.Text, cut.Text);
+    }
+
+    /// <summary>
+    /// The pictures' timer and the queued count drawn at the left end, in that order, the jobs at the right: the row is exactly the window's
+    /// width, and each left item takes its own click.
+    /// </summary>
+    [Fact]
+    public void TheLowerRule_DrawsThePicturesThenTheQueuedCountAtTheLeft_TheJobsRight()
+    {
+        _cursorTop = 100;
+        LowerRuleItem pictures = new(LowerRuleKind.Pictures, "🖼️  00:12");
+        LowerRuleItem queued = new(LowerRuleKind.Queued, "📤 2 queued");
+        LowerRuleItem processes = new(LowerRuleKind.Processes, "⚡ 1");
+        _console.Profile.Width = 60;
+        using var pane = Pane();
+        pane.LowerRuleItems = () => [pictures, queued, processes];
+        pane.Show();
+
+        int fill = 60 - (TextCells.Width(pictures.Text) + 3 + TextCells.Width(queued.Text) + 3 + (ScreenPane.LowerRuleGap - 1) + TextCells.Width(processes.Text) + 3);
+        string row = Output.Split('\n').Last(l => l.Contains(queued.Text, StringComparison.Ordinal));
+        Assert.Equal("─ " + pictures.Text + " ── " + queued.Text + " " + Rule(fill) + " " + processes.Text + " ─", row);
+        Assert.Equal(LowerRuleKind.Pictures, pane.LowerRuleItemAt(3, 101));
+        Assert.Equal(LowerRuleKind.Queued, pane.LowerRuleItemAt(2 + TextCells.Width(pictures.Text) + 5, 101));
+    }
+
+    /// <summary>The timer's clock moving repaints the lower rule's row alone, not the whole pane (2026-11-27): one row a second.</summary>
+    [Fact]
+    public void ThePicturesClock_RepaintsTheLowerRuleAlone()
+    {
+        _cursorTop = 100;
+        string text = "🖼️  00:01";
+        using var pane = Pane();
+        pane.LowerRuleItems = () => [new(LowerRuleKind.Pictures, text)];
+        pane.Show();
+        pane.ShowInput("", 0);
+
+        int mark = Output.Length;
+        text = "🖼️  00:02";
+        _time.Advance(ScreenPane.Tick);
+        string drawn = Output[mark..];
+        Assert.Contains("─ 🖼️  00:02 ", drawn);
+        Assert.DoesNotContain(Rule(40), drawn);   // the upper rule isn't drawn again
     }
 }

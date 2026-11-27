@@ -18,7 +18,7 @@ public partial class ToolsMenuTests
         File.WriteAllText(path, "{ \"connections\": { \"old\": { \"host\": \"localhost\", \"database\": \"shop\", \"user\": \"neon\", \"password\": \"pw\", \"schemas\": [\"sales\", \"gone\"] } } }");
         var (menu, _, settings) = PaneMenu();
         settings.ListPostgresSchemas = (c, _, _) => Task.FromResult(new SqlRun(SqlOutcome.Ok, "", c.Name, "shop", [new SqlGrid(["nspname"], [["public"], ["sales"]], false)], TimeSpan.Zero));
-        OpenPostgresRow(5);
+        OpenPostgresRow(4);
         Push(Keys.Down, Keys.Enter);                                  // old, under + New
         Push([.. Enumerable.Repeat(Keys.Down, 13), Keys.Enter]);      // from Save hidden to the Schemas row
         Push(Keys.Enter);                                             // sales ✓, gone ✓ (missing), public, Continue (the saved first, #31): sales off
@@ -44,7 +44,7 @@ public partial class ToolsMenuTests
         File.WriteAllText(path, "{ \"connections\": { \"old\": { \"dataSource\": \"localhost:1521/FREEPDB1\", \"user\": \"neon\", \"password\": \"pw\" } } }");
         var (menu, _, settings) = PaneMenu();
         settings.ListOracleSchemas = (c, _, _) => Task.FromResult(SqlRun.Refused(SqlOutcome.ConnectFailed, "ORA-12541: no listener", c.Name));
-        OpenOracleRow(5);
+        OpenOracleRow(4);
         Push(Keys.Down, Keys.Enter);                                  // old, under + New
         Push([.. Enumerable.Repeat(Keys.Down, 10), Keys.Enter]);      // from Save hidden to the Schemas row
         Type("hr, oe, hr");                                           // refused: the same schema twice
@@ -81,7 +81,7 @@ public partial class ToolsMenuTests
             asked = saved;
             return Task.FromResult(new SqlRun(SqlOutcome.Ok, "", c.Name, "SYSTEM", [new SqlGrid(["username"], [["HR"], ["OE"], ["SH"]], false), new SqlGrid(["username", "m"], [["HR", "N"]], false)], TimeSpan.Zero));
         };
-        OpenOracleRow(5);
+        OpenOracleRow(4);
         Push(Keys.Down, Keys.Enter);                                  // old, under + New
         Push([.. Enumerable.Repeat(Keys.Down, 10), Keys.Enter]);      // from Save hidden to the Schemas row
         Push(Keys.Down, Keys.Down, Keys.Enter);                       // HR ✓, GONE ✓ (missing), SYSTEM (not allowed), OE, SH: SYSTEM refused
@@ -116,7 +116,7 @@ public partial class ToolsMenuTests
         var (menu, _, settings) = PaneMenu();
         settings.ListPostgresSchemas = (c, saved, _) => Task.FromResult(new SqlRun(SqlOutcome.Ok, "", c.Name, "shop",
             [new SqlGrid(["nspname"], [["public"], ["sales"]], true), new SqlGrid(["nspname"], [.. saved.Where(s => s == "far").Select(s => new[] { s })], false)], TimeSpan.Zero));
-        OpenPostgresRow(5);
+        OpenPostgresRow(4);
         Push(Keys.Down, Keys.Enter);                                  // old, under + New
         Push([.. Enumerable.Repeat(Keys.Down, 13), Keys.Enter]);      // from Save hidden to the Schemas row
         Push(Keys.Down, Keys.Enter);                                  // far ✓, sales ✓, public: sales off
@@ -147,7 +147,7 @@ public partial class ToolsMenuTests
             users.Add(c.Config.User);
             return Task.FromResult(new SqlRun(SqlOutcome.Ok, "", c.Name, "shop", [new SqlGrid(["nspname"], [["public"], ["sales"]], false)], TimeSpan.Zero));
         };
-        OpenPostgresRow(5);
+        OpenPostgresRow(4);
         Push(Keys.Down, Keys.Enter);                                  // old, under + New
         Push([.. Enumerable.Repeat(Keys.Down, 8), Keys.Enter]);       // from Save hidden to the User row
         Push([.. Enumerable.Repeat(Keys.Backspace, 4)]);

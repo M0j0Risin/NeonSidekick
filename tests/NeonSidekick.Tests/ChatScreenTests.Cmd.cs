@@ -196,7 +196,7 @@ public partial class ChatScreenTests
 
     /// <summary>
     /// ESC kills a line that runs on: the cancelled header as a warning, long before the line would have ended. Pressed from another
-    /// thread on the test console once the line has begun (the /test ESC test's shape: the watcher reads the console as it comes).
+    /// thread on the test console once the line has begun (the /bench ESC test's shape: the watcher reads the console as it comes).
     /// </summary>
     [WindowsFact]
     public async Task Cmd_Esc_KillsTheLine()

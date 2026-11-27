@@ -109,6 +109,10 @@ internal sealed partial class SettingsMenu
         ConnectionStamp(draft.Name, draft.Global, draft.Config, UncJsonContext.Default.UncShareConfig, x => x.Password = null);
 
     /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
+    private static bool UncWizardPasswordOnly(UncDraft draft) =>
+        WizardPasswordOnly(draft.Original, UncWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
+
     private static bool UncWizardDirty(UncDraft draft) =>
         draft.Original is not null && (!string.Equals(UncWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -633,6 +637,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private bool? UncWizardSave(UncDraft draft, bool offer)
     {
+        bool passwordOnly = UncWizardPasswordOnly(draft);   // before the normalizing below (Access dropped for read changes the stamp)
         var c = draft.Config;
         if (!c.NeedsPassword)
         {
@@ -661,6 +666,12 @@ internal sealed partial class SettingsMenu
         }
 
         string path = UncWizardPath(draft.Global);
+        if (passwordOnly)
+        {
+            return WizardPasswordOnlySave(UncSecrets.Save(new UncNamedShare(draft.Name, c, path), draft.Password),
+                () => ApplyOfferedAfterSave(SettingsField.UncSharesOffered, _settings.Current.UncSharesOffered, draft.Original, draft.Name, offer, (d, next) => d.UncSharesOffered = next));
+        }
+
         if ((draft.Original is { } original ? UncConfigFile.ReplaceShare(path, original, draft.Name, c) : UncConfigFile.AddShare(path, draft.Name, c)) is { } error)
         {
             Sink.Error(draft.Original is null ? SqlText.ConnectionAddFailed(draft.Name, error) : SqlText.ConnectionChangeFailed(draft.Name, error));

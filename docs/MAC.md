@@ -161,7 +161,7 @@ kgetcred MSSQLSvc/sqlhost.test.example.edu:1451@TEST.EXAMPLE.EDU             # a
 
 ### Another account (runas)
 
-`"auth": "runas"` signs in as another account, its password in the Keychain (`"passwordStore": "credman"`) or encrypted in `sql.json`. Set it with *SQL set password* or `security add-generic-password -s NeonSidekick/sql/<connection> -a <account> -w`. The app gets that account's Kerberos ticket at each connect, so you never `kinit` for it.
+`"auth": "runas"` signs in as another account, its password in the Keychain (`"passwordStore": "credman"`) or encrypted in `sql.json`. Set it in *SQL add/edit connection*'s Password row or with `security add-generic-password -s NeonSidekick/sql/<connection> -a <account> -w`. The app gets that account's Kerberos ticket at each connect, so you never `kinit` for it.
 
 * **The account is `name@REALM`** (`svc-reader@AD.EXAMPLE.EDU`). `DOMAIN\name` is refused, with the form to use; the app puts the realm in capitals.
 * **It's Kerberos only**, so the realm, trust and server-name rules above apply.

@@ -33,7 +33,7 @@ public sealed class BenchResult
     public double? TokensPerSecond { get; set; }
 }
 
-/// <summary>One <c>/test</c> run as <c>tests.json</c> keeps it (2026-09-28): when, against what, and each test's result in the run's order.</summary>
+/// <summary>One <c>/bench</c> run as <c>tests.json</c> keeps it (2026-09-28): when, against what, and each test's result in the run's order.</summary>
 public sealed class BenchRun
 {
     public DateTimeOffset At { get; set; }

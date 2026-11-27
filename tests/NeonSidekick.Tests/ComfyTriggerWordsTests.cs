@@ -285,4 +285,49 @@ public sealed class ComfyTriggerWordsTests : IDisposable
         // Read back as written: the # inside the words survives.
         Assert.Equal(["xyz_style", "#1 look"], Parse(Graph, text).TriggerWords);
     }
+
+    // ── A LoRA switched off (2026-11-27, the user's ask) ──────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void AnOffLora_IsSplicedOutOfTheTemplate_ItsConsumersRewired_AndGivesNoWords()
+    {
+        var workflow = Parse(Graph, "---\nlora-off.STYLE.safetensors: Yes\n" + Sidecar["---\n".Length..]);
+
+        var graph = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(workflow.GraphJson)!;
+        Assert.Null(graph["10"]);
+        Assert.Equal("4", graph["11"]!["inputs"]!["model"]![0]!.GetValue<string>());   // the next LoRA takes the checkpoint's model
+        Assert.Equal("4", graph["6"]!["inputs"]!["clip"]![0]!.GetValue<string>());     // the encoders the checkpoint's CLIP
+        Assert.Equal(["fine detail"], workflow.TriggerWords);
+        Assert.Equal(["style.safetensors"], workflow.LorasOff);
+        Assert.Equal(" · 1 LoRA off", ComfyText.LorasOffPart(workflow));
+    }
+
+    [Theory]
+    [InlineData("lora-off.style.safetensors: no\n")]
+    [InlineData("lora-off.gone.safetensors: yes\n")]
+    [InlineData("")]
+    public void AnOffKey_ThatIsNotYes_OrNamesNoLoader_KeepsEveryLora(string line)
+    {
+        var workflow = Parse(Graph, "---\n" + line + "family: sdxl\n---\n");
+        Assert.NotNull(System.Text.Json.Nodes.JsonNode.Parse(workflow.GraphJson)!["10"]);
+        Assert.Null(workflow.LorasOff);
+        Assert.Equal("", ComfyText.LorasOffPart(workflow));
+    }
+
+    [Fact]
+    public void AnOffLora_TheGraphCantLeaveOut_FailsTheLoad_WithWhy()
+    {
+        string custom = Graph.Replace("\"LoraLoaderModelOnly\"", "\"LoraLoaderBypass\"", StringComparison.Ordinal);
+        Assert.False(ComfyWorkflow.TryParse("w", "w.json", custom, "---\nlora-off.detail.safetensors: yes\n---\n", out _, out string? problem));
+        Assert.Equal(ComfyText.LoraOffProblem("detail.safetensors", ComfyText.EditOtherLoader("LoraLoaderBypass")), problem);
+    }
+
+    [Fact]
+    public void TheSidecar_WritesAnOffLine_AfterTheWords_AndNoneForANameNoKeyCanHold()
+    {
+        string md = ComfyWorkflowFile.Sidecar(new ComfySidecar("", ComfyFamily.Sdxl, null, null, null, null, null, "", LoraWords: [("style.safetensors", "xyz")], LoraOff: ["style.safetensors", "bad:name"]));
+        Assert.Contains("lora.style.safetensors: xyz\nlora-off.style.safetensors: " + ComfyWorkflow.LoraOffValue + "\n", md, StringComparison.Ordinal);
+        Assert.DoesNotContain("bad:name", md, StringComparison.Ordinal);
+        Assert.Null(ComfyWorkflow.LoraOffKey("bad:name"));
+    }
 }

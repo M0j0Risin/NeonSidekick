@@ -118,12 +118,28 @@ internal sealed partial class SettingsMenu
     /// password sealed first and spliced in with the entry, a <c>credman</c> one written to the store before the entry, so a failed step leaves
     /// the old entry and its password as they were (an edit replaced the entry without its password, then a failed password save left it with
     /// none). Then the old credential of a rename let go (unless another entry in either file still reads it, N12). False when nothing was
-    /// written; each step's notice or error said.
+    /// written; each step's notice or error said. <paramref name="passwordOnly"/> (<see cref="WizardPasswordOnly"/>, 2026-11-26): the
+    /// password alone to its store (<see cref="ConnectionFamily{TConfig, TNamed}.Save"/>: the <c>password</c> token, or the credential), the
+    /// entry untouched; the target is unchanged, so no old credential is let go.
     /// </summary>
-    private bool SaveWizardEntry<TConfig, TNamed>(ConnectionFamily<TConfig, TNamed> family, string path, string otherPath, string? original, string name, TConfig config, string password, string? originalTarget)
+    private bool SaveWizardEntry<TConfig, TNamed>(ConnectionFamily<TConfig, TNamed> family, string path, string otherPath, string? original, string name, TConfig config, string password, string? originalTarget,
+        bool passwordOnly = false)
         where TConfig : class, ISignInConfig
         where TNamed : class, INamedConnection<TConfig>
     {
+        if (passwordOnly)
+        {
+            var (stored, storedNotice) = family.Save(family.Named(name, config, path), password);
+            if (!stored)
+            {
+                Sink.Error(storedNotice);
+                return false;
+            }
+
+            Sink.Notice(storedNotice);
+            return true;
+        }
+
         string? sealedPassword = null;
         string? storeNotice = null;
         if (config.NeedsPassword)
@@ -212,6 +228,31 @@ internal sealed partial class SettingsMenu
     internal static string ConnectionStamp<T>(string name, bool global, T config, JsonTypeInfo<T> info, Action<T> dropPassword)
         where T : class =>
         string.Join('\n', name, global ? "global" : "profile", JsonSerializer.Serialize(CloneEntry(config, info, dropPassword), info));
+
+    /// <summary>
+    /// Whether an edit's one change is a typed password (2026-11-26, the user's call when the per-family "set password" rows went): the entry
+    /// as it would be written equals the one that opened (<see cref="ConnectionStamp"/>: the same name, file and entry, its password dropped),
+    /// and a new password was typed. Such a save writes only the password, the old row's way, so the file's other bytes (comments inside the
+    /// entry, key order) stay as they are. Taken before the save's own normalizing, which can change the stamp.
+    /// </summary>
+    internal static bool WizardPasswordOnly(string? original, string stampNow, string? opened, bool passwordKept, string password) =>
+        original is not null && string.Equals(stampNow, opened, StringComparison.Ordinal) && !passwordKept && password.Length > 0;
+
+    /// <summary>
+    /// A password-only save's end (<see cref="WizardPasswordOnly"/>): the store's own line, or its error with the summary kept (null); then the
+    /// Save row's offered or hidden choice, as after any save. No "changed" line: only the password was written.
+    /// </summary>
+    private bool? WizardPasswordOnlySave((bool Saved, string Notice) stored, Func<bool?> offered)
+    {
+        if (!stored.Saved)
+        {
+            Sink.Error(stored.Notice);
+            return null;
+        }
+
+        Sink.Notice(stored.Notice);
+        return offered();
+    }
 
     /// <summary>What a summary's ESC or Cancel came to (<see cref="ConnectionWizardLeaveAsync"/>): stay, saved (whether a setting changed), or left.</summary>
     private readonly record struct WizardLeave(bool Stay, bool? Saved)

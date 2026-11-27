@@ -471,7 +471,8 @@ public sealed class EnvironmentOverrides
 
     /// <summary>
     /// <paramref name="saved"/> (already the effective copy's own) with <paramref name="over"/>'s fields set on every
-    /// entry and on <see cref="Llm.LlmSampling.AnyModel"/>, made if absent; its extra fields join each entry's, winning a key.
+    /// entry and on <see cref="Llm.LlmSampling.AnyModel"/>, made if absent; its extra fields join each entry's, winning a key. Every
+    /// entry is turned back on (2026-11-27): the variable wins for the launch, an off tab included.
     /// </summary>
     private static Dictionary<string, LlmSamplingEntry> Overlay(Dictionary<string, LlmSamplingEntry>? saved, LlmSamplingEntry over)
     {
@@ -483,6 +484,7 @@ public sealed class EnvironmentOverrides
 
         foreach (var entry in map.Values)
         {
+            entry.Off = false;
             foreach (var field in SamplingField.All)
             {
                 if (field.Get(over) is { } value)

@@ -991,7 +991,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.LlmCompactShowSummary, SettingsField.GitLibEmail, SettingsField.GitLibName, SettingsField.FileBrowserMode, SettingsField.ToolbarItems, SettingsField.ShellPolice,
                 SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount,
                 SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete,
-                SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlSetPassword, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
+                SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal, SettingsField.SqlPercentMention, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.Theme,
                 SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyOutputFolder, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyTest, SettingsField.ImageEditor, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyCaretMention, SettingsField.ComfyPictureStrip,
                 SettingsField.ReflectionYieldsToTurns,
                 SettingsField.BotChatImageMode, SettingsField.BotChatImageAsync,   // BotChatImages and BotChatTxt2ImgWorkflow until later on 2026-10-04
@@ -1025,7 +1025,6 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.ClaudeCodeServer,   // 2026-09-30, the Claude Code server
                 SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed,   // 2026-09-30, the Oracle tab's ten
                 SettingsField.OracleConnectionsOffered,
-                SettingsField.OracleSetPassword,
                 SettingsField.OracleAddConnection,
                 SettingsField.OraclePercentMention,
                 SettingsField.OracleQueryMaxRows,
@@ -1034,7 +1033,6 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.OracleConnectionsGlobal,
                 SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed,   // later on 2026-09-30, the MySQL tab's ten
                 SettingsField.MySqlConnectionsOffered,
-                SettingsField.MySqlSetPassword,
                 SettingsField.MySqlAddConnection,
                 SettingsField.MySqlPercentMention,
                 SettingsField.MySqlQueryMaxRows,
@@ -1044,7 +1042,6 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.UncTools,
                 SettingsField.UncWrites,
                 SettingsField.UncSharesOffered,
-                SettingsField.UncSetPassword,
                 SettingsField.UncAddShare,
                 SettingsField.UncStarMention,
                 SettingsField.UncSharesProfile,
@@ -1068,7 +1065,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.PdfEngine,   // later still on 2026-10-03, /tools' Print tab's last row: what makes a PDF
                 SettingsField.LlmPictureKeep, SettingsField.LlmPictureMegabytes,   // later still on 2026-10-03, the LLM tab after the compact rows: the picture budget
                 SettingsField.OpenAIApi, SettingsField.OpenAIApiKey, SettingsField.OpenAIApiMaxTokens, SettingsField.OpenAIApiOrganization, SettingsField.OpenAIApiProject,   // later still on 2026-10-03, /settings' OpenAI tab
-                SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
+                SettingsField.BotChatLimitedTools, SettingsField.BotChatMemory, SettingsField.BotChatMemoryMode, SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions, SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal, SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal,   // 2026-10-04, the Botchat tab
                 SettingsField.BotChatLimitedComfyWorkflows,   // later on 2026-10-04, the Botchat ComfyUI rows (its BotChatComfy switch retired 2026-10-27, as BotChatSkills was above)
                 SettingsField.DiffCollapseCount,   // later still on 2026-10-04, /tools' Options tab under Diff max lines: the diff's fold
                 SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditOutputFolder,   // later still on 2026-10-04, /tools' Files tab: image_edit's defaults
@@ -1101,7 +1098,7 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.WebUiReach,
                 SettingsField.WebUiCommands,           // later on 2026-10-14, under the reach: commands from the page
                 SettingsField.WebUiConnectionDetails,  // later on 2026-10-14: the % and * notes in the page's dropdown
-                SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogSetPassword, SettingsField.EventLogAddComputer,   // 2026-10-15: the event logs
+                SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogAddComputer,   // 2026-10-15: the event logs
                 SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal,
                 SettingsField.WebUiHomeControls,       // 2026-10-15, the Tabs run under the chat controls since 2026-10-16: the Home tab acts
                 SettingsField.WebUiProfileTheme,       // 2026-10-15: the pages wear the profile's theme (the Tabs run's first since 2026-10-16)
@@ -1112,9 +1109,9 @@ public partial class SettingsMenuTests : IDisposable
                 SettingsField.WebUiSignInMode,    // later on 2026-10-15: how /webui browser signs the default browser in (/tools › Core › Web; /settings › Client › Web UI as Web UI sign in mode since 2026-11-20)
                 // later still on 2026-10-15, the admin-tools plan: the four admin families together (Admin › Network, Services, Tasks, Directory; Network on Core until 2026-10-16)
                 SettingsField.NetworkTools, SettingsField.NetworkToolsReach, SettingsField.NetworkMaxHostsPerTurn, SettingsField.NetworkMaxPortsPerTurn, SettingsField.NetworkAllowedHosts, SettingsField.NetworkDeniedHosts, SettingsField.NetworkCertificateStores,
-                SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal,
-                SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskSetPassword, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal,
-                SettingsField.DirectoryTools, SettingsField.DirectoryDomainsOffered, SettingsField.DirectorySetPassword, SettingsField.DirectoryAddDomain, SettingsField.DirectoryDomainsProfile, SettingsField.DirectoryDomainsGlobal,
+                SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal,
+                SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal,
+                SettingsField.DirectoryTools, SettingsField.DirectoryDomainsOffered, SettingsField.DirectoryAddDomain, SettingsField.DirectoryDomainsProfile, SettingsField.DirectoryDomainsGlobal,
                 SettingsField.YouTubeOpenLinksIn,   // 2026-10-16, /tools › Apps › YouTube first under Playing: where a video goes
                 SettingsField.WebUiYouTubeControls, // 2026-10-16, Client › Web UI under the shopping controls: the Video tab only while on
                 SettingsField.ReflectionMode,       // later on 2026-10-16, /skills › Reflection, What it may change's first row: create-update or update-only

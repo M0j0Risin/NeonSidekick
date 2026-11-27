@@ -450,7 +450,6 @@ public partial class SettingsMenuTests
         Assert.Contains(SettingsMenu.AdvisorReasoningBand("high"), Output);
         Assert.Equal("Reasoning: ◕ high (extensive thinking)", SettingsMenu.AdvisorReasoningBand("high"));
         Assert.Equal("Reasoning: ○ none (thinking off)", SettingsMenu.AdvisorReasoningBand("none"));
-        Assert.Equal("Enter = add, or change the advisor · Esc = close", SettingsMenu.AdvisorListCloseKeys);
         pane.Dispose();
     }
 

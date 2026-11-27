@@ -63,7 +63,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(
             [
                 "Persona — default",
-                "Operating rules — default",
+                SystemPromptSummary.OperataLabel + " — default",
                 NoNotesHeading,
                 "Memory — read-write, directive (the list rides the opening recall_memory call)",
                 NoSkillsHeading,
@@ -162,9 +162,9 @@ public class SystemPromptSummaryTests : IDisposable
         var sections = SystemPromptSummary.PromptSections(Facts(operatingRules: "  Answer in [haiku].\n"));
 
         Assert.Equal("Persona — default", sections[0].Heading);
-        Assert.Equal("Operating rules — operata.md (18 chars)", sections[1].Heading);
+        Assert.Equal(SystemPromptSummary.OperataLabel + " — operata.md (18 chars)", sections[1].Heading);
         Assert.Equal("Answer in [haiku].", sections[1].Body);
-        Assert.Equal("Operating rules — default", Headings(Facts(operatingRules: "  \n "))[1]);
+        Assert.Equal(SystemPromptSummary.OperataLabel + " — default", Headings(Facts(operatingRules: "  \n "))[1]);
         Assert.Equal(Assistant.OperatingRules, SystemPromptSummary.PromptSections(Facts(operatingRules: ""))[1].Body);
     }
 
@@ -200,13 +200,13 @@ public class SystemPromptSummaryTests : IDisposable
     {
         var sections = SystemPromptSummary.PromptSections(Facts(memories: ["Their name is Chris."], files: false));
 
-        Assert.Equal("Operating rules — default (file tools is off)", sections[1].Heading);
+        Assert.Equal(SystemPromptSummary.OperataLabel + " — default (file tools is off)", sections[1].Heading);
         Assert.Equal(Assistant.OperatingRulesWithoutFiles, sections[1].Body);
         Assert.Equal(Assistant.SystemPrompt(false, ["Their name is Chris."], files: false, skills: []), SystemPromptSummary.SystemPrompt(Facts(memories: ["Their name is Chris."], files: false)));
 
         // LLM offer tools off says so first, whatever File tools reads.
         var none = SystemPromptSummary.PromptSections(Facts(tools: false, files: false));
-        Assert.Equal("Operating rules — default (LLM offer tools is off)", none[1].Heading);
+        Assert.Equal(SystemPromptSummary.OperataLabel + " — default (LLM offer tools is off)", none[1].Heading);
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public class SystemPromptSummaryTests : IDisposable
     {
         // delete is off in a fresh profile (2026-09-20): the Prompt tab's rules and the composed prompt both carry FileRuleWithoutDelete, the heading unchanged.
         var sections = SystemPromptSummary.PromptSections(Facts(disabled: ["delete"]));
-        Assert.Equal("Operating rules — default", sections[1].Heading);
+        Assert.Equal(SystemPromptSummary.OperataLabel + " — default", sections[1].Heading);
         Assert.Equal(Assistant.DefaultRules(false, tools: true, delete: false), sections[1].Body);
         Assert.Contains(Assistant.FileRuleWithoutDelete, sections[1].Body, StringComparison.Ordinal);
         Assert.DoesNotContain("delete only moves", sections[1].Body, StringComparison.Ordinal);
@@ -265,7 +265,7 @@ public class SystemPromptSummaryTests : IDisposable
         // The three timer tools off on /tools (2026-09-20): the Prompt tab's rules and the composed prompt both carry ToolRulesWithoutTimers; one off is the tolerated case.
         string[] three = [StartTimerTool.ToolName, StopTimerTool.ToolName, ListTimersTool.ToolName];
         var sections = SystemPromptSummary.PromptSections(Facts(disabled: three));
-        Assert.Equal("Operating rules — default", sections[1].Heading);
+        Assert.Equal(SystemPromptSummary.OperataLabel + " — default", sections[1].Heading);
         Assert.Equal(Assistant.DefaultRules(false, tools: true, timers: false), sections[1].Body);
         Assert.DoesNotContain(Assistant.TimerRule, sections[1].Body, StringComparison.Ordinal);
         Assert.Contains(Assistant.ToolRulesWithoutTimers + " " + Assistant.FileRule, sections[1].Body, StringComparison.Ordinal);
@@ -282,7 +282,7 @@ public class SystemPromptSummaryTests : IDisposable
         // delete offered: the Prompt tab and the composed prompt carry FileRule, whose clause says delete removes for good (since 2026-10-01 the
         // only form, File safe edits gone); delete off still wins its own rule.
         var sections = SystemPromptSummary.PromptSections(Facts());
-        Assert.Equal("Operating rules — default", sections[1].Heading);
+        Assert.Equal(SystemPromptSummary.OperataLabel + " — default", sections[1].Heading);
         Assert.Equal(Assistant.DefaultRules(false, tools: true), sections[1].Body);
         Assert.Contains(Assistant.FileRule, sections[1].Body, StringComparison.Ordinal);
         Assert.Contains("delete removes a file or a folder, with everything in it; its description says whether it goes for good", sections[1].Body, StringComparison.Ordinal);
@@ -481,7 +481,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(
             [
                 "Persona — default",
-                "Operating rules — default (LLM offer tools is off)",
+                SystemPromptSummary.OperataLabel + " — default (LLM offer tools is off)",
                 NoNotesHeading,
                 "Memory — read-write, 1 fact remembered",
                 "Skills — not included (LLM offer tools is off)",
@@ -495,7 +495,7 @@ public class SystemPromptSummaryTests : IDisposable
 
         // A custom file keeps its own heading and text.
         var custom = Headings(Facts(operatingRules: "Answer in haiku.", voiceDirective: "Speak like a pirate.", speechOutput: true, speechReady: true, tools: false));
-        Assert.Equal("Operating rules — operata.md (16 chars)", custom[1]);
+        Assert.Equal(SystemPromptSummary.OperataLabel + " — operata.md (16 chars)", custom[1]);
         Assert.Equal("Voice directive — vocalia.md (20 chars), included (speech output on, TTS ready), always last", custom[5]);
     }
 
@@ -526,7 +526,7 @@ public class SystemPromptSummaryTests : IDisposable
             [
                 "Persona — default",
                 .. Assistant.DefaultPersona.Split('\n').Select(line => "  " + line),   // lines since 2026-10-03
-                "Operating rules — default",
+                SystemPromptSummary.OperataLabel + " — default",
                 "  " + Assistant.OperatingRules,
                 NoNotesHeading,
                 "Memory — read-write, directive (the list rides the opening recall_memory call)",
@@ -550,7 +550,7 @@ public class SystemPromptSummaryTests : IDisposable
         Assert.Equal(RuleLine("── Persona ── persona.md (14 chars)", 2000), lines[0]);
         Assert.Equal("  You are [Rex].", lines[1]);
         Assert.Equal(" ", lines[2]);
-        Assert.Equal(RuleLine("── Operating rules ── default", 2000), lines[3]);
+        Assert.Equal(RuleLine("── " + SystemPromptSummary.OperataLabel + " ── default", 2000), lines[3]);
         Assert.Equal("  " + Assistant.OperatingRules, lines[4]);
         Assert.DoesNotContain(lines, l => l.StartsWith("── Skills", StringComparison.Ordinal));   // on the Skills tab since 2026-11-07
         Assert.DoesNotContain(lines, l => l.StartsWith("Request", StringComparison.Ordinal) || l.StartsWith("Opening", StringComparison.Ordinal) || l.StartsWith("Also sent", StringComparison.Ordinal));

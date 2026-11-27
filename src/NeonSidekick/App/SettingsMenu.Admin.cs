@@ -60,7 +60,6 @@ internal sealed partial class SettingsMenu
             SettingsField.ServiceTools => OnOff(data.ServiceTools),
             SettingsField.ServiceWrites => OnOff(data.ServiceWrites),
             SettingsField.ServiceComputersOffered => ComputersOfferedValue(data.ServiceComputersOffered, ServiceConfigFile.Family.LoadCatalog(profileDirectory, home)),
-            SettingsField.ServiceSetPassword or SettingsField.TaskSetPassword => ComputerSetPasswordLabel,
             SettingsField.ServiceAddComputer or SettingsField.TaskAddComputer => ComputerAddLabel,
             SettingsField.ServiceComputersProfile => ComputersFileLabel(ServiceConfigFile.Family, ServiceConfigFile.Family.ProfilePath(profileDirectory)),
             SettingsField.ServiceComputersGlobal => ComputersFileLabel(ServiceConfigFile.Family, ServiceConfigFile.Family.GlobalPath(home)),
@@ -71,7 +70,6 @@ internal sealed partial class SettingsMenu
             SettingsField.TaskComputersGlobal => ComputersFileLabel(TaskConfigFile.Family, TaskConfigFile.Family.GlobalPath(home)),
             SettingsField.DirectoryTools => OnOff(data.DirectoryTools),
             SettingsField.DirectoryDomainsOffered => DirectoryOfferedValue(data.DirectoryDomainsOffered, DirectoryConfigFile.LoadCatalog(profileDirectory, home, DomainJoin.Current), DomainJoin.Current is not null),
-            SettingsField.DirectorySetPassword => ComputerSetPasswordLabel.Replace("computer", "domain", StringComparison.Ordinal),
             SettingsField.DirectoryAddDomain => DirectoryAddLabel,
             SettingsField.DirectoryDomainsProfile => DirectoryFileLabel(DirectoryConfigFile.ProfilePath(profileDirectory)),
             SettingsField.DirectoryDomainsGlobal => DirectoryFileLabel(DirectoryConfigFile.GlobalPath(home)),
@@ -95,8 +93,6 @@ internal sealed partial class SettingsMenu
                 return await EditHostListAsync(field, d => d.NetworkDeniedHosts, (d, next) => d.NetworkDeniedHosts = next, cancellationToken).ConfigureAwait(false);
             case SettingsField.ServiceComputersOffered:
                 return await EditComputersOfferedAsync(ServiceConfigFile.Family, field, d => d.ServiceComputersOffered, (d, next) => d.ServiceComputersOffered = next, cancellationToken).ConfigureAwait(false);
-            case SettingsField.ServiceSetPassword:
-                return await SetComputerPasswordAsync(ServiceConfigFile.Family, field, cancellationToken).ConfigureAwait(false);
             case SettingsField.ServiceAddComputer:
                 return await AddComputerAsync(ServiceWizard, cancellationToken).ConfigureAwait(false);
             case SettingsField.ServiceComputersProfile:
@@ -106,8 +102,6 @@ internal sealed partial class SettingsMenu
                 return false;
             case SettingsField.TaskComputersOffered:
                 return await EditComputersOfferedAsync(TaskConfigFile.Family, field, d => d.TaskComputersOffered, (d, next) => d.TaskComputersOffered = next, cancellationToken).ConfigureAwait(false);
-            case SettingsField.TaskSetPassword:
-                return await SetComputerPasswordAsync(TaskConfigFile.Family, field, cancellationToken).ConfigureAwait(false);
             case SettingsField.TaskAddComputer:
                 return await AddComputerAsync(TaskWizard, cancellationToken).ConfigureAwait(false);
             case SettingsField.TaskComputersProfile:
@@ -117,8 +111,6 @@ internal sealed partial class SettingsMenu
                 return false;
             case SettingsField.DirectoryDomainsOffered:
                 return await EditDirectoryOfferedAsync(cancellationToken).ConfigureAwait(false);
-            case SettingsField.DirectorySetPassword:
-                return await SetDirectoryPasswordAsync(cancellationToken).ConfigureAwait(false);
             case SettingsField.DirectoryAddDomain:
                 return await AddDirectoryDomainAsync(cancellationToken).ConfigureAwait(false);
             case SettingsField.DirectoryDomainsProfile:

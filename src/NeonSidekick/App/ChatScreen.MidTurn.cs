@@ -251,6 +251,8 @@ internal sealed partial class ChatScreen
         SlashCommand.Private when string.Equals(args.Trim(), PrivateText.NewWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Cancel,
         SlashCommand.Private => MidTurnClass.Deferred,
         SlashCommand.Usage when UsageText.IsSysprompt(args) => MidTurnClass.Deferred,
+        // 2026-11-27: /bench history only reads, so its pane opens over the reply as /usage's does; a run or the listing waits, a run needing the server.
+        SlashCommand.Bench when string.Equals(args.Trim(), Bench.BenchCatalog.HistoryWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Pane,
         // 2026-11-04, review P7-1: it hashes for seconds under a pane Esc can close, and a Quick command runs through Post, which isn't built to read a pane's keys.
         SlashCommand.Update when string.Equals(args.Trim(), Updates.UpdateText.RollbackWord, StringComparison.OrdinalIgnoreCase) => MidTurnClass.Pane,
         SlashCommand.Camera when Camera.CameraCommand.Parse(args).Verb == Camera.CameraVerb.Purge => MidTurnClass.Deferred,
@@ -565,10 +567,22 @@ internal sealed partial class ChatScreen
                 await HandleSysFileAsync(args, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Usage when UsageTab(args) is { } usageTab:
-                await _info.ShowAsync(UsageText.Label, UsageTabs(), usageTab, cancellationToken).ConfigureAwait(false);
+                await ShowUsagePaneAsync(usageTab, Reply, cancellationToken).ConfigureAwait(false);
                 break;
             case SlashCommand.Usage:
                 _flow.Error(UsageText.UsageError);
+                break;
+            case SlashCommand.Bench:
+                // /bench history over a reply (2026-11-27): the Bench tab at its recent runs, or the notice with none saved.
+                if (new Bench.BenchHistory(_settings.ProfileDirectory).Runs() is { Count: > 0 } benchRuns)
+                {
+                    await ShowUsagePaneAsync(UsageText.BenchTabIndex, Reply, cancellationToken, BenchRecentLine(benchRuns)).ConfigureAwait(false);
+                }
+                else
+                {
+                    _flow.Notice(Bench.BenchText.NoRuns);
+                }
+
                 break;
             case SlashCommand.KeyCheck:
                 // /keycheck (2026-10-04): its pane over the reply, as /usage's; an error through the flow sink.
@@ -1181,7 +1195,7 @@ internal sealed partial class ChatScreen
     /// reply's own wait runs them (<see cref="NextEventAsync"/>; 2026-10-01, the review's finding: Ctrl+Alt+E in a pane the
     /// reply ended under toggled nothing until the pane closed, and twice was no change at all) — and the reconnects the
     /// quick switches owe follow, quietly. <paramref name="run"/> (2026-11-17, the admin-themes-render review's #76): the turn is a run's
-    /// (botchat, <c>/test</c>, an advisor, a custom command), whose handed-over theme repaints at the idle line.
+    /// (botchat, <c>/bench</c>, an advisor, a custom command), whose handed-over theme repaints at the idle line.
     /// </summary>
     private async Task EndTurnAsync(bool closePane, CancellationToken cancellationToken, bool run = false)
     {

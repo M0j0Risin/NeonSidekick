@@ -35,7 +35,7 @@ public abstract class PromptFile
     /// <param name="fileName">The file's name, e.g. <c>persona.md</c>.</param>
     /// <param name="defaultText">What the prompt carries without the file, and what <see cref="EnsureExists"/> seeds.</param>
     /// <param name="category">The <see cref="DiagnosticLog"/> category.</param>
-    /// <param name="label">What the file holds, capitalised for a sentence start: <c>Persona</c>, <c>Operating rules</c>.</param>
+    /// <param name="label">What the file holds, capitalised for a sentence start: <c>Persona</c>, <c>Operata</c>.</param>
     /// <param name="maxLength">Characters kept; a longer file is cut with an ellipsis and warned about once.</param>
     protected PromptFile(string directory, string fileName, string defaultText, string category, string label, int maxLength)
         : this(FixedPath(directory, fileName), defaultText, category, label, maxLength)
@@ -45,7 +45,7 @@ public abstract class PromptFile
     /// <param name="filePath">Resolved on every <see cref="Read"/>: a file whose folder moves (<see cref="ProjectFile"/>, under the working directory) reads from where it is now, the cache forgotten when the path changed.</param>
     /// <param name="defaultText">What the prompt carries without the file, and what <see cref="EnsureExists"/> seeds; empty for a file with no default.</param>
     /// <param name="category">The <see cref="DiagnosticLog"/> category.</param>
-    /// <param name="label">What the file holds, capitalised for a sentence start: <c>Persona</c>, <c>Operating rules</c>.</param>
+    /// <param name="label">What the file holds, capitalised for a sentence start: <c>Persona</c>, <c>Operata</c>.</param>
     /// <param name="maxLength">Characters kept; a longer file is cut with an ellipsis and warned about once.</param>
     protected PromptFile(Func<string> filePath, string defaultText, string category, string label, int maxLength)
     {

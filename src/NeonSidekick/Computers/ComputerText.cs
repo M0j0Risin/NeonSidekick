@@ -70,8 +70,8 @@ public static class ComputerText
     /// The entry was written but its password could not be stored (2026-10-23, the admin review's H9): it is left unticked, so nothing signs in
     /// with no password or an old one. Pinned.
     /// </summary>
-    public static string SavedUnticked(string name, string setPasswordRow, string menuPath) =>
-        $"'{name}' was saved but is not ticked, since its password was not stored; set it with {setPasswordRow} on {menuPath}, then tick it.";
+    public static string SavedUnticked(string name, string editRow, string menuPath) =>
+        $"'{name}' was saved but is not ticked, since its password was not stored; set it with {editRow} (its Password row) on {menuPath}, then tick it.";
 
     /// <summary>A name given twice in one file (2026-10-23, the admin review's Q1: <c>UncText.NamedTwice</c>'s rule for every family). Pinned.</summary>
     public const string NamedTwice = "this name is given to more than one entry in the file (names ignore case and spaces), so neither is used; rename or remove one";
@@ -81,12 +81,12 @@ public static class ComputerText
 
     private static string Short(string text) => Files.NameScrub.Display(text.Length <= 40 ? text : Files.TextCut.Safe(text, 40) + "…");
 
-    public static string NoPassword(string name, ComputerFamilyInfo family) => $"no password for '{name}'; set it with {family.SetPasswordRow} on {family.MenuPath}";
+    public static string NoPassword(string name, ComputerFamilyInfo family) => $"no password for '{name}'; set it with {family.EditRow} (its Password row) on {family.MenuPath}";
 
     // DP1 (2026-10-23, the admin review's L4, L5): a refusal never hands the model the key that widens its own access, nor a ready
     // cmdkey line (run_command hung on its prompt, or the model asked for the password in the transcript); it says what the user can do.
     public static string NoCredential(string target, ComputerFamilyInfo family) =>
-        $"no password in {Sql.SqlText.CredentialStore} for {target}; the user can set it with {family.SetPasswordRow} on {family.MenuPath}";
+        $"no password in {Sql.SqlText.CredentialStore} for {target}; the user can set it with {family.EditRow} (its Password row) on {family.MenuPath}";
 
     public static string CannotSignIn(string name, string reason) => $"Error: cannot sign in to '{name}': {reason}.";
 

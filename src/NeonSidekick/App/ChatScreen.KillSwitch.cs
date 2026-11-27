@@ -7,7 +7,7 @@ namespace NeonSidekick.App;
 
 /// <summary>
 /// What a kill scope holds (2026-10-14, the Web UI's Stop): <see cref="Work"/> the model's work or a loop's wait (a reply, a compact, a
-/// botchat, an advisor, <c>/imagine</c>, <c>/test</c>, <c>/loop</c>), which the Web UI's Stop cancels; <see cref="Edit"/> the user's own
+/// botchat, an advisor, <c>/imagine</c>, <c>/bench</c>, <c>/loop</c>), which the Web UI's Stop cancels; <see cref="Edit"/> the user's own
 /// editor (<c>/draft</c>, <c>/prompts</c>); <see cref="Load"/> a connect or a model's load, which only Ctrl+C and the kill switch end.
 /// </summary>
 internal enum KillScopeKind
@@ -26,7 +26,7 @@ internal sealed partial class ChatScreen
     public const string KillSwitchIdleLog = "Ctrl+Alt+X: no embedded model is loaded; nothing to unload.";
 
     /// <summary>
-    /// The work the model is doing now, innermost first (<see cref="KillScope"/>): a reply, a compact, a <c>/test</c> run, a
+    /// The work the model is doing now, innermost first (<see cref="KillScope"/>): a reply, a compact, a <c>/bench</c> run, a
     /// botchat's held reply, a connect or a wait. Written on the owning task, read on whatever task reads the key.
     /// </summary>
     private KillScope? _killScopes;

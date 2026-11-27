@@ -359,16 +359,13 @@ public enum SettingsField
     /// <summary>The same for the home's <c>sql.json</c>, every profile's connections. The SQL tab's last row (2026-09-23).</summary>
     SqlConnectionsGlobal,
 
-    /// <summary>An action row, no setting behind it (later on 2026-09-23): Enter picks a connection that takes a password (<c>sql</c> or <c>runas</c>) and asks for it in a masked slot, saved to the connection's store — DPAPI-encrypted into its <c>sql.json</c>, or Windows Credential Manager (<see cref="Sql.SqlSecrets.Save"/>). The SQL tab's third row.</summary>
-    SqlSetPassword,
-
     /// <summary>A toggle: whether <c>%</c> and part of a name lists the SQL connections on the chat line (<see cref="Settings.AppSettingsData.SqlPercentMention"/>). The SQL tab's fourth row (later on 2026-09-23); no reconnect (read at each keystroke). Last in the enum, as every newcomer.</summary>
     SqlPercentMention,
 
     /// <summary>A checklist: which connections of <c>sql.json</c> this profile offers (<see cref="Settings.AppSettingsData.SqlConnectionsOffered"/>). The SQL tab's second row (later on 2026-09-23); no reconnect (read at each call). Last in the enum, as every newcomer.</summary>
     SqlConnectionsOffered,
 
-    /// <summary>An action row, no setting behind it (later on 2026-09-23, the user's ask): Enter walks a new connection through every choice — the file, the name, the server, the sign-in, the password (masked), the TLS pair — tests it and adds it to that <c>sql.json</c> (<c>SettingsMenu.SqlWizard.cs</c>). The SQL tab's fifth row, under <see cref="SqlSetPassword"/>. Last in the enum, as every newcomer.</summary>
+    /// <summary>An action row, no setting behind it (later on 2026-09-23, the user's ask): Enter walks a new connection through every choice — the file, the name, the server, the sign-in, the password (masked), the TLS pair — tests it and adds it to that <c>sql.json</c> (<c>SettingsMenu.SqlWizard.cs</c>). The SQL tab's fourth row, under the offered checklist (its Password row sets a password, 2026-11-26). Last in the enum, as every newcomer.</summary>
     SqlAddConnection,
 
     /// <summary>A pick among <see cref="UI.ThemeName.Names"/>: the look (<see cref="Settings.AppSettingsData.Theme"/>, 2026-09-23). The Chat tab's screen run's first row, after Copy user prompt (2026-10-01; its last row before); a change puts the theme in force at once (the pane re-colours) and raises <see cref="SettingsChanges.Theme"/>, so the screen is drawn again in it when the pane closes, the conversation kept (2026-11-16; it started over as <c>/splash</c> does until then). No reconnect. Last in the enum, as every newcomer.</summary>
@@ -649,9 +646,6 @@ public enum SettingsField
     OracleConnectionsOffered,
 
 
-    /// <summary>An action row, no setting behind it (2026-09-30): Enter picks a connection and asks for its password in a masked slot, saved to its store (<see cref="Oracle.OracleSecrets.Save"/>). The Oracle tab's fourth row.</summary>
-    OracleSetPassword,
-
     /// <summary>An action row, no setting behind it (2026-09-30, the user's ask: a wizard): Enter walks a new connection through every choice, tests it and adds it to that <c>oracle.json</c> (<c>SettingsMenu.OracleWizard.cs</c>). The Oracle tab's fifth row.</summary>
     OracleAddConnection,
 
@@ -683,9 +677,6 @@ public enum SettingsField
     MySqlConnectionsOffered,
 
 
-    /// <summary>An action row (2026-09-30): Enter picks a connection and asks for its password in a masked slot, saved to its store (<see cref="MySql.MySqlSecrets.Save"/>). The MySQL tab.</summary>
-    MySqlSetPassword,
-
     /// <summary>An action row (2026-09-30): Enter walks a new connection through every choice, tests it and adds it to that <c>mysql.json</c> (<c>SettingsMenu.MySqlWizard.cs</c>). The MySQL tab.</summary>
     MySqlAddConnection,
 
@@ -713,9 +704,6 @@ public enum SettingsField
     /// <summary>A checklist: which shares of <c>unc.json</c> this profile offers (<see cref="Settings.AppSettingsData.UncSharesOffered"/>). The UNC tab (2026-09-30).</summary>
     UncSharesOffered,
 
-
-    /// <summary>An action row (2026-09-30): Enter picks a runas share and asks for its password in a masked slot, saved to its store (<see cref="Unc.UncSecrets.Save"/>). The UNC tab.</summary>
-    UncSetPassword,
 
     /// <summary>An action row (2026-09-30): Enter walks a new share through every choice, tests it and adds it to that <c>unc.json</c> (<c>SettingsMenu.UncWizard.cs</c>). The UNC tab.</summary>
     UncAddShare,
@@ -932,9 +920,6 @@ public enum SettingsField
     PostgresConnectionsOffered,
 
 
-    /// <summary>An action row (2026-10-04): Enter picks a connection and asks for its password in a masked slot, saved to its store (<see cref="Postgres.PostgresSecrets.Save"/>). The PostgreSQL tab.</summary>
-    PostgresSetPassword,
-
     /// <summary>An action row (2026-10-04): Enter walks a new connection through every choice, tests it and adds it to that <c>postgres.json</c> (<c>SettingsMenu.Postgres.cs</c>). The PostgreSQL tab.</summary>
     PostgresAddConnection,
 
@@ -1098,9 +1083,6 @@ public enum SettingsField
     /// <summary>A checklist: which computers the event-log tools and <c>/eventlog</c> may read, <c>local</c> first (<see cref="Settings.AppSettingsData.EventLogComputersOffered"/>). The EventLog menu (2026-10-15).</summary>
     EventLogComputersOffered,
 
-    /// <summary>An action row: the masked password prompt for a <c>runas</c> computer of <c>eventlog.json</c>; nothing saved in the settings. The EventLog menu (2026-10-15).</summary>
-    EventLogSetPassword,
-
     /// <summary>An action row: the computer wizard, a new entry of <c>eventlog.json</c> or an edit of one. The EventLog menu (2026-10-15).</summary>
     EventLogAddComputer,
 
@@ -1169,9 +1151,6 @@ public enum SettingsField
     /// <summary>A checklist: which computers of <c>services.json</c> the services tools and <c>/services</c> may reach, <c>local</c> first.</summary>
     ServiceComputersOffered,
 
-    /// <summary>An action row: the masked password prompt for a runas computer of <c>services.json</c>.</summary>
-    ServiceSetPassword,
-
     /// <summary>An action row: the computer wizard over <c>services.json</c>.</summary>
     ServiceAddComputer,
 
@@ -1190,9 +1169,6 @@ public enum SettingsField
     /// <summary>A checklist: which computers of <c>tasks.json</c> the task tools and <c>/tasks</c> may reach, <c>local</c> first.</summary>
     TaskComputersOffered,
 
-    /// <summary>An action row: the masked password prompt for a runas computer of <c>tasks.json</c>.</summary>
-    TaskSetPassword,
-
     /// <summary>An action row: the computer wizard over <c>tasks.json</c>.</summary>
     TaskAddComputer,
 
@@ -1207,9 +1183,6 @@ public enum SettingsField
 
     /// <summary>A checklist: which domains the directory tools and <c>/ad</c> may read, <c>current</c> first on a joined PC.</summary>
     DirectoryDomainsOffered,
-
-    /// <summary>An action row: the masked password prompt for a runas domain of <c>ad.json</c>.</summary>
-    DirectorySetPassword,
 
     /// <summary>An action row: the domain wizard over <c>ad.json</c>.</summary>
     DirectoryAddDomain,
@@ -2061,16 +2034,16 @@ internal sealed partial class SettingsMenu
         [SettingsField.ShellCommandPolicy, SettingsField.ShellCommandAllowed, SettingsField.ShellPolice, SettingsField.ShellPoliceForbiddenStrings, SettingsField.ShellPreferNative, SettingsField.ShellDefault, SettingsField.ShellTimeoutSeconds, SettingsField.ShellForegroundCapSeconds, SettingsField.ShellOutputMaxChars, SettingsField.ShellCodeLanguages, SettingsField.ShellCodeTimeoutSeconds],
         [SettingsField.FileTools, SettingsField.FileDeletesToRecycleBin, SettingsField.FileCheckpoints, SettingsField.FileCheckpointKeepDays, SettingsField.FileCheckpointMaxMegabytes, SettingsField.FileCheckpointLargestFileMegabytes, SettingsField.FileTreeMaxLength, SettingsField.FileTreeShowSizes, SettingsField.FileMentionFolderMode, SettingsField.FileBrowserMode, SettingsField.FileViewImageMaxPerCall, SettingsField.FileSearchMaxResults],
         [SettingsField.ImageTools, SettingsField.ImageEditQuality, SettingsField.ImageEditMetadata, SettingsField.ImageEditMode, SettingsField.ImageEditOutputFolder, SettingsField.PastedImagesFolder],
-        [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncSetPassword, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
+        [SettingsField.UncTools, SettingsField.UncWrites, SettingsField.UncSharesOffered, SettingsField.UncAddShare, SettingsField.UncStarMention, SettingsField.UncSharesProfile, SettingsField.UncSharesGlobal],
         [SettingsField.PrintTools, SettingsField.PrintActionPolicy, SettingsField.PrintDefaultPrinter, SettingsField.PrintFontSize, SettingsField.PdfEngine],
         [SettingsField.CameraTools, SettingsField.CameraShutter, SettingsField.CameraPreview, SettingsField.CameraDevice, SettingsField.CameraResolution, SettingsField.CameraOutputFolder, SettingsField.CameraKeepInSessions, SettingsField.CameraWatchSeconds, SettingsField.CameraWatchThreshold, SettingsField.CameraWatchUnprompted, SettingsField.CameraWatchMinGapSeconds],
         [SettingsField.ScreenTools, SettingsField.ScreenAsk, SettingsField.ScreenPreview, SettingsField.ScreenOutputFolder, SettingsField.ScreenKeepInSessions],
         [SettingsField.ObsidianTools, SettingsField.ObsidianVault, SettingsField.ObsidianAllowDelete],
-        [SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlSetPassword, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
-        [SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlSetPassword, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
+        [SettingsField.SqlTools, SettingsField.SqlMode, SettingsField.SqlStatementsAllowed, SettingsField.SqlConnectionsOffered, SettingsField.SqlAddConnection, SettingsField.SqlPercentMention, SettingsField.SqlQueryMaxRows, SettingsField.SqlQueryTimeoutSeconds, SettingsField.QueryResultMaxChars, SettingsField.SqlConnectionsProfile, SettingsField.SqlConnectionsGlobal],
+        [SettingsField.MySqlTools, SettingsField.MySqlMode, SettingsField.MySqlStatementsAllowed, SettingsField.MySqlConnectionsOffered, SettingsField.MySqlAddConnection, SettingsField.MySqlPercentMention, SettingsField.MySqlQueryMaxRows, SettingsField.MySqlQueryTimeoutSeconds, SettingsField.MySqlConnectionsProfile, SettingsField.MySqlConnectionsGlobal],
         [SettingsField.SqliteTools, SettingsField.SqliteMode, SettingsField.SqliteStatementsAllowed, SettingsField.SqliteDatabasesOffered, SettingsField.SqliteSandboxFiles, SettingsField.SqliteAddDatabase, SettingsField.SqlitePercentMention, SettingsField.SqliteQueryMaxRows, SettingsField.SqliteQueryTimeoutSeconds, SettingsField.SqliteDatabasesProfile, SettingsField.SqliteDatabasesGlobal],
-        [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresSetPassword, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
-        [SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleSetPassword, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
+        [SettingsField.PostgresTools, SettingsField.PostgresMode, SettingsField.PostgresStatementsAllowed, SettingsField.PostgresConnectionsOffered, SettingsField.PostgresAddConnection, SettingsField.PostgresPercentMention, SettingsField.PostgresQueryMaxRows, SettingsField.PostgresQueryTimeoutSeconds, SettingsField.PostgresConnectionsProfile, SettingsField.PostgresConnectionsGlobal],
+        [SettingsField.OracleTools, SettingsField.OracleMode, SettingsField.OracleStatementsAllowed, SettingsField.OracleConnectionsOffered, SettingsField.OracleAddConnection, SettingsField.OraclePercentMention, SettingsField.OracleQueryMaxRows, SettingsField.OracleQueryTimeoutSeconds, SettingsField.OracleConnectionsProfile, SettingsField.OracleConnectionsGlobal],
         [SettingsField.DockerTools, SettingsField.DockerWrites, SettingsField.DockerEnginePipe],
         [SettingsField.HomeAssistantTools, SettingsField.HomeAssistantUrl, SettingsField.HomeAssistantToken, SettingsField.HomeAssistantTest, SettingsField.HomeAssistantActionPolicy, SettingsField.HomeAssistantAssistAgent, SettingsField.HomeAssistantTimeoutSeconds],
         [SettingsField.ComfyTools, SettingsField.ComfyUrl, SettingsField.ComfyTest, SettingsField.ComfyWorkflowsOffered, SettingsField.ComfyCaretMention, SettingsField.ComfyTimeoutSeconds, SettingsField.ComfyMaxPicturesPerCall, SettingsField.ComfyReinforceNegatives, SettingsField.ComfyShowPrompts, SettingsField.ComfyPictureStrip, SettingsField.ComfyOutputFolder],
@@ -2078,13 +2051,13 @@ internal sealed partial class SettingsMenu
         [SettingsField.GitLibTools, SettingsField.GitLibDiffMaxLines, SettingsField.GitLibLogMaxCommits, SettingsField.GitLibEmail, SettingsField.GitLibName],
         [SettingsField.ToolsDollarMention, SettingsField.ToolCollapseCount, SettingsField.CodeCollapseCount, SettingsField.ShowFileDiffs, SettingsField.DiffMaxLines, SettingsField.DiffCollapseCount],
         [SettingsField.ShoppingTools, SettingsField.ShoppingList, SettingsField.ShoppingStores],
-        [SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogSetPassword, SettingsField.EventLogAddComputer, SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal],
+        [SettingsField.EventLogTools, SettingsField.EventLogComputersOffered, SettingsField.EventLogAddComputer, SettingsField.EventLogMaxEvents, SettingsField.EventLogScanLimit, SettingsField.EventLogComputersProfile, SettingsField.EventLogComputersGlobal],
         [SettingsField.TimerTools, SettingsField.TimerTone],   // the tone under the switch since 2026-10-18
         // The admin families (2026-10-15, the admin-tools plan): Services, Tasks and Directory on Admin after EventLog; Network on Core after Web, on Admin first since 2026-10-16 (the user's order).
         [SettingsField.NetworkTools, SettingsField.NetworkToolsReach, SettingsField.NetworkMaxHostsPerTurn, SettingsField.NetworkMaxPortsPerTurn, SettingsField.NetworkAllowedHosts, SettingsField.NetworkDeniedHosts, SettingsField.NetworkCertificateStores],
-        [SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceSetPassword, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal],
-        [SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskSetPassword, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal],
-        [SettingsField.DirectoryTools, SettingsField.DirectoryDomainsOffered, SettingsField.DirectorySetPassword, SettingsField.DirectoryAddDomain, SettingsField.DirectoryDomainsProfile, SettingsField.DirectoryDomainsGlobal],
+        [SettingsField.ServiceTools, SettingsField.ServiceWrites, SettingsField.ServiceComputersOffered, SettingsField.ServiceAddComputer, SettingsField.ServiceComputersProfile, SettingsField.ServiceComputersGlobal],
+        [SettingsField.TaskTools, SettingsField.TaskWrites, SettingsField.TaskComputersOffered, SettingsField.TaskAddComputer, SettingsField.TaskComputersProfile, SettingsField.TaskComputersGlobal],
+        [SettingsField.DirectoryTools, SettingsField.DirectoryDomainsOffered, SettingsField.DirectoryAddDomain, SettingsField.DirectoryDomainsProfile, SettingsField.DirectoryDomainsGlobal],
         // The standing groups' own switches (2026-10-18, the user's asks): Clock on Core after Shell, Help on Core after Ask.
         [SettingsField.ClockTools],
         [SettingsField.HelpTools],
@@ -2766,7 +2739,6 @@ internal sealed partial class SettingsMenu
         SettingsField.ComfyWorkflowsOffered => "ComfyUI workflows",   // "ComfyUI workflows offered" until 2026-11-25 (the workflow manager)
         SettingsField.ComfyTest => "ComfyUI test connection",
         SettingsField.SqlConnectionsOffered => "SQL connections offered",
-        SettingsField.SqlSetPassword => "SQL set password",
         SettingsField.SqlAddConnection => "SQL add/edit connection",   // "add" alone until 2026-10-05, when the wizards took to editing
         SettingsField.SqlPercentMention => "SQL %-mention enabled",
         SettingsField.SqlQueryMaxRows => "SQL max rows",
@@ -2778,7 +2750,6 @@ internal sealed partial class SettingsMenu
         SettingsField.OracleMode => "Oracle mode",
         SettingsField.OracleStatementsAllowed => "Oracle statements allowed",
         SettingsField.OracleConnectionsOffered => "Oracle connections offered",
-        SettingsField.OracleSetPassword => "Oracle set password",
         SettingsField.OracleAddConnection => "Oracle add/edit connection",
         SettingsField.OraclePercentMention => "Oracle %-mention enabled",
         SettingsField.OracleQueryMaxRows => "Oracle max rows",
@@ -2789,7 +2760,6 @@ internal sealed partial class SettingsMenu
         SettingsField.MySqlMode => "MySQL mode",
         SettingsField.MySqlStatementsAllowed => "MySQL statements allowed",
         SettingsField.MySqlConnectionsOffered => "MySQL connections offered",
-        SettingsField.MySqlSetPassword => "MySQL set password",
         SettingsField.MySqlAddConnection => "MySQL add/edit connection",
         SettingsField.MySqlPercentMention => "MySQL %-mention enabled",
         SettingsField.MySqlQueryMaxRows => "MySQL max rows",
@@ -2822,7 +2792,6 @@ internal sealed partial class SettingsMenu
         SettingsField.PostgresMode => "PostgreSQL mode",
         SettingsField.PostgresStatementsAllowed => "PostgreSQL statements allowed",
         SettingsField.PostgresConnectionsOffered => "PostgreSQL connections offered",
-        SettingsField.PostgresSetPassword => "PostgreSQL set password",
         SettingsField.PostgresAddConnection => "PostgreSQL add/edit connection",
         SettingsField.PostgresPercentMention => "PostgreSQL %-mention enabled",
         SettingsField.PostgresQueryMaxRows => "PostgreSQL max rows",
@@ -2832,7 +2801,6 @@ internal sealed partial class SettingsMenu
         SettingsField.UncTools => "UNC tools",
         SettingsField.UncWrites => "UNC writes",
         SettingsField.UncSharesOffered => "UNC shares offered",
-        SettingsField.UncSetPassword => "UNC set password",
         SettingsField.UncAddShare => "UNC add/edit share",
         SettingsField.UncStarMention => "UNC *-mention enabled",
         SettingsField.UncSharesProfile => "UNC shares (profile)",
@@ -2840,7 +2808,6 @@ internal sealed partial class SettingsMenu
         SettingsField.DockerTools => "Docker tools",
         SettingsField.EventLogTools => "Event log tools",
         SettingsField.EventLogComputersOffered => "Event log computers offered",
-        SettingsField.EventLogSetPassword => "Event log set password",
         SettingsField.EventLogAddComputer => "Event log add/edit computer",
         SettingsField.EventLogMaxEvents => "Event log max events",
         SettingsField.EventLogScanLimit => "Event log scan limit",
@@ -2895,20 +2862,17 @@ internal sealed partial class SettingsMenu
         SettingsField.ServiceTools => "Service tools",
         SettingsField.ServiceWrites => "Service writes",
         SettingsField.ServiceComputersOffered => "Service computers offered",
-        SettingsField.ServiceSetPassword => "Service set password",
         SettingsField.ServiceAddComputer => "Service add/edit computer",
         SettingsField.ServiceComputersProfile => "Service computers (profile)",
         SettingsField.ServiceComputersGlobal => "Service computers (global)",
         SettingsField.TaskTools => "Task tools",
         SettingsField.TaskWrites => "Task writes",
         SettingsField.TaskComputersOffered => "Task computers offered",
-        SettingsField.TaskSetPassword => "Task set password",
         SettingsField.TaskAddComputer => "Task add/edit computer",
         SettingsField.TaskComputersProfile => "Task computers (profile)",
         SettingsField.TaskComputersGlobal => "Task computers (global)",
         SettingsField.DirectoryTools => "Directory tools",
         SettingsField.DirectoryDomainsOffered => "Directory domains offered",
-        SettingsField.DirectorySetPassword => "Directory set password",
         SettingsField.DirectoryAddDomain => "Directory add/edit domain",
         SettingsField.DirectoryDomainsProfile => "Directory domains (profile)",
         SettingsField.DirectoryDomainsGlobal => "Directory domains (global)",
@@ -3228,7 +3192,6 @@ internal sealed partial class SettingsMenu
             SettingsField.ComfyOutputFolder => string.IsNullOrWhiteSpace(data.ComfyOutputFolder) ? ComfyOutputHereLabel : data.ComfyOutputFolder,
             SettingsField.ComfyWorkflowsOffered => ComfyWorkflowsValue(data.ComfyWorkflowsOffered, InstalledComfyWorkflows(profileDirectory)),
             SettingsField.ComfyTest => ComfyTestConnectionLabel,
-            SettingsField.SqlSetPassword => SqlSetPasswordLabel,
             SettingsField.SqlAddConnection => SqlAddConnectionLabel,
             SettingsField.SqlConnectionsOffered => SqlOfferedValue(data.SqlConnectionsOffered, Sql.SqlConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
             SettingsField.SqlPercentMention => OnOff(data.SqlPercentMention),
@@ -3240,7 +3203,6 @@ internal sealed partial class SettingsMenu
             SettingsField.OracleTools => OnOff(data.OracleTools),
             SettingsField.OracleMode => data.OracleMode,
             SettingsField.OracleStatementsAllowed => WriteStatementsValue(data.OracleStatementsAllowed, data.OracleMode),
-            SettingsField.OracleSetPassword => SqlSetPasswordLabel,
             SettingsField.OracleAddConnection => SqlAddConnectionLabel,
             SettingsField.OracleConnectionsOffered => OracleOfferedValue(data.OracleConnectionsOffered, Oracle.OracleConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
             SettingsField.OraclePercentMention => OnOff(data.OraclePercentMention),
@@ -3251,7 +3213,6 @@ internal sealed partial class SettingsMenu
             SettingsField.MySqlTools => OnOff(data.MySqlTools),
             SettingsField.MySqlMode => data.MySqlMode,
             SettingsField.MySqlStatementsAllowed => WriteStatementsValue(data.MySqlStatementsAllowed, data.MySqlMode),
-            SettingsField.MySqlSetPassword => SqlSetPasswordLabel,
             SettingsField.MySqlAddConnection => SqlAddConnectionLabel,
             SettingsField.MySqlConnectionsOffered => MySqlOfferedValue(data.MySqlConnectionsOffered, MySql.MySqlConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
             SettingsField.MySqlPercentMention => OnOff(data.MySqlPercentMention),
@@ -3284,7 +3245,6 @@ internal sealed partial class SettingsMenu
             SettingsField.PostgresTools => OnOff(data.PostgresTools),
             SettingsField.PostgresMode => data.PostgresMode,
             SettingsField.PostgresStatementsAllowed => WriteStatementsValue(data.PostgresStatementsAllowed, data.PostgresMode),
-            SettingsField.PostgresSetPassword => SqlSetPasswordLabel,
             SettingsField.PostgresAddConnection => SqlAddConnectionLabel,
             SettingsField.PostgresConnectionsOffered => PostgresOfferedValue(data.PostgresConnectionsOffered, Postgres.PostgresConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
             SettingsField.PostgresPercentMention => OnOff(data.PostgresPercentMention),
@@ -3295,7 +3255,6 @@ internal sealed partial class SettingsMenu
             SettingsField.UncTools => OnOff(data.UncTools),
             SettingsField.UncWrites => OnOff(data.UncWrites),
             SettingsField.UncSharesOffered => UncOfferedValue(data.UncSharesOffered, Unc.UncConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
-            SettingsField.UncSetPassword => UncSetPasswordLabel,
             SettingsField.UncAddShare => UncAddShareLabel,
             SettingsField.UncStarMention => OnOff(data.UncStarMention),
             SettingsField.UncSharesProfile => UncSharesLabel(Unc.UncConfigFile.ProfilePath(profileDirectory)),
@@ -3303,7 +3262,6 @@ internal sealed partial class SettingsMenu
             SettingsField.DockerTools => OnOff(data.DockerTools),
             SettingsField.EventLogTools => OnOff(data.EventLogTools),
             SettingsField.EventLogComputersOffered => EventLogOfferedValue(data.EventLogComputersOffered, EventLog.EventLogConfigFile.LoadCatalog(profileDirectory, Profiles.HomeOf(profileDirectory))),
-            SettingsField.EventLogSetPassword => EventLogSetPasswordLabel,
             SettingsField.EventLogAddComputer => EventLogAddComputerLabel,
             SettingsField.EventLogMaxEvents => data.EventLogMaxEvents.ToString(CultureInfo.InvariantCulture),
             SettingsField.EventLogScanLimit => data.EventLogScanLimit.ToString(CultureInfo.InvariantCulture),
@@ -3574,18 +3532,6 @@ internal sealed partial class SettingsMenu
     {
         ArgumentNullException.ThrowIfNull(connection);
         return Markup.Escape((offered ? "[x] " : "[ ] ") + connection.Name.PadRight(width)) + Theme.DimMarkup(Sql.SqlText.MentionNote(connection));
-    }
-
-    /// <summary>The value column of the <c>SQL set password</c> action row (later on 2026-09-23). Pinned.</summary>
-    public const string SqlSetPasswordLabel = "Enter to set password for a connection";
-
-    /// <summary>A connection on the <c>SQL set password</c> pick: its name and where its password goes. Pinned.</summary>
-    public static string SqlPasswordRow(Sql.SqlNamedConnection connection)
-    {
-        ArgumentNullException.ThrowIfNull(connection);
-        string store = connection.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in sql.json";
-        string login = connection.Config.IsRunAs ? "runas " + connection.Config.User?.Trim() : "sql login " + connection.Config.User?.Trim();
-        return $"{connection.Name}  ({login} · {store})";
     }
 
     /// <summary>How the menu shows <see cref="AppSettingsData.SqlQueryMaxRows"/>.</summary>
@@ -5163,6 +5109,22 @@ internal sealed partial class SettingsMenu
     /// remove, skipping a row that is no item (an add row). The two wrappers above drop <see cref="MenuPick.Remove"/>, so a Delete on an add
     /// row would come back as Enter on it. Without the pane (the Spectre prompt) there are no buttons and no Delete.
     /// </summary>
+    /// <summary>
+    /// <see cref="PickListAsync"/> with Space's toggle (2026-11-27, the Advisor list's and a workflow's LoRAs page's on/off): on the pane the
+    /// page's <see cref="MenuPage.SpaceToggles"/> returns <see cref="MenuPick.Toggle"/>; without it a pick is Enter, never a toggle.
+    /// </summary>
+    private async Task<(int Row, int Button, bool Remove, bool Toggle)?> PickListToggleAsync(MenuPage page, int cursor, CancellationToken cancellationToken, IReadOnlyList<MenuButton>? buttons = null)
+    {
+        if (_pane.Enabled)
+        {
+            return await _pane.PickAsync(page with { Buttons = buttons ?? page.Buttons, Removes = true }, cursor, cancellationToken).ConfigureAwait(false) is { } picked
+                ? (picked.Row, picked.Button, picked.Remove, picked.Toggle)
+                : null;
+        }
+
+        return await PickAsync(page, cursor, cancellationToken).ConfigureAwait(false) is { } row ? (row, -1, false, false) : null;
+    }
+
     private async Task<(int Row, int Button, bool Remove)?> PickListAsync(MenuPage page, int cursor, CancellationToken cancellationToken, IReadOnlyList<MenuButton>? buttons = null)
     {
         if (_pane.Enabled)
@@ -6439,11 +6401,6 @@ internal sealed partial class SettingsMenu
             return await AddSqlConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.SqlSetPassword)
-        {
-            return await SetSqlPasswordAsync(cancellationToken).ConfigureAwait(false);
-        }
-
         if (field == SettingsField.ComfyWorkflowsOffered)
         {
             return await EditComfyOfferedAsync(cancellationToken).ConfigureAwait(false);
@@ -6463,11 +6420,6 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.PostgresAddConnection)
         {
             return await AddPostgresConnectionAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        if (field == SettingsField.PostgresSetPassword)
-        {
-            return await SetPostgresPasswordAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field is SettingsField.PostgresConnectionsProfile or SettingsField.PostgresConnectionsGlobal)
@@ -6559,11 +6511,6 @@ internal sealed partial class SettingsMenu
             return await AddOracleConnectionAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.OracleSetPassword)
-        {
-            return await SetOraclePasswordAsync(cancellationToken).ConfigureAwait(false);
-        }
-
         if (field is SettingsField.OracleConnectionsProfile or SettingsField.OracleConnectionsGlobal)
         {
             // An edit row (2026-09-30), the SQL tab's: the file in the editor, made with its commented shape first; nothing saved here.
@@ -6582,11 +6529,6 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.MySqlAddConnection)
         {
             return await AddMySqlConnectionAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        if (field == SettingsField.MySqlSetPassword)
-        {
-            return await SetMySqlPasswordAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field is SettingsField.MySqlConnectionsProfile or SettingsField.MySqlConnectionsGlobal)
@@ -6638,11 +6580,6 @@ internal sealed partial class SettingsMenu
             return await AddEventLogComputerAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        if (field == SettingsField.EventLogSetPassword)
-        {
-            return await SetEventLogPasswordAsync(cancellationToken).ConfigureAwait(false);
-        }
-
         if (field is SettingsField.EventLogComputersProfile or SettingsField.EventLogComputersGlobal)
         {
             // An edit row (2026-10-15), the UNC menu's: the file in the editor, made with its commented shape first.
@@ -6655,11 +6592,6 @@ internal sealed partial class SettingsMenu
         if (field == SettingsField.UncAddShare)
         {
             return await AddUncShareAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        if (field == SettingsField.UncSetPassword)
-        {
-            return await SetUncPasswordAsync(cancellationToken).ConfigureAwait(false);
         }
 
         if (field is SettingsField.UncSharesProfile or SettingsField.UncSharesGlobal)
@@ -9907,58 +9839,6 @@ internal sealed partial class SettingsMenu
             Apply(SettingsField.SqlConnectionsOffered, d => d.SqlConnectionsOffered = next);
             changed = true;
         }
-    }
-
-    /// <summary>
-    /// <c>SQL set password</c> (later on 2026-09-23, the user's call: a masked prompt, with auto-encryption as the net
-    /// under a password typed into the file): the connections that take a password, each with its store; then a masked
-    /// slot (<see cref="UI.InputLine"/>'s <c>mask</c>) under the picked one; then <see cref="Sql.SqlSecrets.Save"/> —
-    /// nothing in the settings changes, so the answer is false either way and the status line says what happened.
-    /// ESC or an empty Enter saves nothing.
-    /// </summary>
-    private async Task<bool> SetSqlPasswordAsync(CancellationToken cancellationToken)
-    {
-        var connections = ByName(Sql.SqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Connections.Where(c => c.Config.NeedsPassword), c => c.Name);
-        if (connections.Count == 0)
-        {
-            Sink.Error(Sql.SqlText.NoPasswordConnections);
-            return false;
-        }
-
-        var page = new MenuPage(Crumb(FieldName(SettingsField.SqlSetPassword)), connections.Select(c => Markup.Escape(SqlPasswordRow(c))).ToList(), PickKeys);
-        if (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } index)
-        {
-            return Unchanged();
-        }
-
-        var connection = connections[index];
-        InputResult result;
-        if (_pane.Enabled)
-        {
-            result = await _pane.EditAsync(page with { Hint = EditKeys }, index, _input, "", allowEmpty: false, cancellationToken, mask: true).ConfigureAwait(false);
-        }
-        else
-        {
-            Flow.Notice(PromptTitle(FieldName(SettingsField.SqlSetPassword) + " · " + connection.Name, EditKeys));
-            result = await _input.ReadAsync("", remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
-        }
-
-        if (result is not InputResult.Submitted { Text.Length: > 0 } submitted)
-        {
-            return Unchanged();
-        }
-
-        var (saved, notice) = Sql.SqlSecrets.Save(connection, submitted.Text);
-        if (saved)
-        {
-            Sink.Notice(notice);
-        }
-        else
-        {
-            Sink.Error(notice);
-        }
-
-        return false;
     }
 
     /// <summary>Opens one <c>sql.json</c> in the editor, made first when missing; without an opener (tests, headless) or on an IO failure, the status line says so.</summary>

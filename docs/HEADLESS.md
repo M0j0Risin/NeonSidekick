@@ -134,7 +134,7 @@ They need no server unless the row says so.
 | `/print …`, `/pdf …` | [Print](TOOLS.md#printing) or [make a PDF](TOOLS.md#making-pdfs) of a file, a web page (`/pdf`) or the last reply; `/pdf merge\|extract\|delete\|rotate` [edit PDFs](TOOLS.md#editing-pdfs). *Print action policy* doesn't apply. On a Mac, `/pdf` has only the `browser` engine. |
 | `/settings export [<path>]`, `/settings import [<zip>]` | [Moves settings](COMMANDS.md#moving-settings-to-another-computer) through a zip in Downloads; bare `import` lists the zips there. |
 | `/docx …` | [Makes a Word document](TOOLS.md#writing-office-files) of a Markdown or `.txt` file, or (with a server) of the last reply. |
-| `/test …` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests), a `[notice]` per test. A run needs a server; the listing and `history` don't. |
+| `/bench …` | Runs the [benchmark tests](COMMANDS.md#benchmark-tests), a `[notice]` per test. A run needs a server; the listing and `history` don't. |
 | `/commands`, `/commands new\|save <name> [--global]` | Prints your [custom commands](COMMANDS.md#custom-commands), or writes one and prints its path (no editor). `save` takes the last message you typed, never a custom command's. |
 | `/<name> [<words>]` | Sends a custom command's prompt after a `[notice]` naming its folder. The prompt is a message: a body starting `/plan` isn't run as `/plan`. |
 | `/prompts …`, `/browser save\|list\|unsave …` | Lists, prints, adds (`/browser save` needs the address) or removes saved prompts and links; `list --clear` empties a list without asking. Other `/browser` forms are errors. |

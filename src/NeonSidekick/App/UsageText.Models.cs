@@ -10,19 +10,12 @@ namespace NeonSidekick.App;
 // One row per model over the saved turns (SessionStore.ModelStats), the seven figures right-aligned, each column as wide as its widest figure
 // (2026-11-22, the review's #94), the right-most dropped when even the narrowest model column wouldn't fit; the model column takes what is left, a long id cut in the middle so its size and quant suffix stay, and written whole on a
 // dim line under the table (the pane scrolls text; it has no row to select). The PC's alone: the page's usage card stays the Statistics.
+// Since 2026-11-27 the table is the Bench tab's In use section (UsageText.Bench.cs), the tab named for /bench's results beside it.
 
 public static partial class UsageText
 {
-    /// <summary>The sixth tab's title and index; <c>/usage models</c> opens the pane on it.</summary>
-    public const string ModelsTabTitle = "Models";
-
-    public const int ModelsTabIndex = 5;
-
-    /// <summary>The word <c>/usage models</c> takes. Pinned.</summary>
+    /// <summary>The word <c>/usage models</c> takes. Pinned. It opens the Bench tab (<see cref="BenchWord"/>) since 2026-11-27, with no completion of its own.</summary>
     public const string ModelsWord = "models";
-
-    /// <summary>The argument list's note beside <see cref="ModelsWord"/>.</summary>
-    public const string ModelsWordNote = "each model's figures from the saved sessions";
 
     /// <summary>The tab with nothing saved. Pinned.</summary>
     public const string ModelsEmpty = "No saved turns yet. These figures come from saved sessions.";
@@ -43,9 +36,12 @@ public static partial class UsageText
     /// <summary>Added to <see cref="ModelsEmpty"/> while Session logging is off.</summary>
     public const string ModelsLoggingOff = "Session logging is off, so new turns aren't saved.";
 
-    /// <summary>The caption above the table, word-wrapped to the pane (2026-11-22, the review's #65); Errors are tool calls' (#85).</summary>
-    public const string ModelsCaption = "From the saved sessions: purged or rewound turns drop out. Errors are the share of tool calls that failed; " +
-        "a turn that failed outright isn't counted. They follow the task as much as the model, so compare like with like.";
+    /// <summary>
+    /// The caption above the Bench tab, word-wrapped to the pane (2026-11-22, the review's #65); Errors are tool calls' (#85). Shortened on
+    /// 2026-11-27 (the user's call: it was verbose); what it left out still holds: purged or rewound turns drop out, and a turn that failed
+    /// outright isn't counted.
+    /// </summary>
+    public const string ModelsCaption = "From saved sessions and /bench runs. Errors: failed tool calls. Compare models on similar tasks.";
 
     /// <summary>The note under the table for a model with fewer than <see cref="ModelsFewTurns"/> turns, which shows dim.</summary>
     public static string ModelsFewNote => "Dim rows: fewer than " + ModelsFewTurns.ToString(CultureInfo.InvariantCulture) + " turns, too few to judge by.";
@@ -76,27 +72,9 @@ public static partial class UsageText
     /// <summary>The cells every figure column takes, gaps included.</summary>
     internal static int FiguresWidth(IReadOnlyList<ModelStat> stats) => FigureWidths(stats).Sum(w => w + ModelsGap);
 
-    /// <summary>The pane's tab: the caption, the table and its notes, or <see cref="ModelsEmpty"/>; <paramref name="width"/> the cells the body has, its indent taken off already (#109).</summary>
-    public static IRenderable ModelsTab(IReadOnlyList<ModelStat> stats, bool logging, int width, bool isPrivate = false)
-    {
-        ArgumentNullException.ThrowIfNull(stats);
-        var lines = ModelsRows(stats, logging, width, isPrivate);
-        var parts = new List<IRenderable>();
-        foreach (var (text, dim, rule) in lines)
-        {
-            // A rule row (2026-11-23) is the pane's bare rule; a redirected console's is the run of ─ the row carries.
-            parts.Add(new Indented(rule ? new SectionRule(SectionRule.Bare) : new Text(text, dim ? Theme.DimText : Theme.Body), SystemPromptSummary.BodyIndent));
-        }
-
-        return new Rows(parts);
-    }
-
-    /// <summary>The tab's lines with no pane (a redirected console), at the transcript's width.</summary>
-    public static IEnumerable<string> ModelsLines(IReadOnlyList<ModelStat> stats, bool logging, int width, bool isPrivate = false) =>
-        ModelsRows(stats, logging, width, isPrivate).Select(r => r.Text);
-
     /// <summary>
-    /// The tab's lines, which show dim and which are rules: the caption, the heading, a rule, a row a model (dim under <see cref="ModelsFewTurns"/>),
+    /// The In use section's lines (the Bench tab's since 2026-11-27, its caption above them there), which show dim and which are rules
+    /// (a rule row is the pane's bare rule; a redirected console's the run of ─ the row carries): the heading, a rule, a row a model (dim under <see cref="ModelsFewTurns"/>),
     /// a rule, then the notes and each cut id in full under <see cref="ModelsFullNamesLabel"/>. Every line fits <paramref name="width"/> cells
     /// (2026-11-22, the review's #65): the caption, notes and ids word-wrapped, the table's right-most columns dropped when the model column couldn't
     /// keep <see cref="ModelsModelMin"/>. Since 2026-11-23 (the user's asks) the turns a command answered (<see cref="SessionText.IsSideTurnModel"/>)
@@ -148,8 +126,6 @@ public static partial class UsageText
 
         widths = widths[..columns];
         int modelWidth = Math.Max(ModelsModelMin, width - widths.Sum(w => w + ModelsGap));
-        Wrapped(ModelsCaption);
-        rows.Add(("", false, false));
         string heading = Row(ModelsModelHeading, ModelsHeadings, widths, modelWidth);
         rows.Add((heading, true, false));
         // A rule under the heading and another before the notes (2026-11-23, the user's ask), as wide as the table.

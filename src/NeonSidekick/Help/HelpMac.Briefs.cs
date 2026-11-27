@@ -19,7 +19,6 @@ public static partial class HelpMac
         [SettingsField.NetworkCertificateStores] = "Also offers net_certs, which lists your login keychain or the system's trusted roots (subjects, issuers, end dates). Nothing is exported.",
         [SettingsField.EventLogTools] = "Gives the model read-only tools over this Mac's own logs (the unified log, crash reports, install.log) and .logarchive folders in the working directory.",
         [SettingsField.EventLogComputersOffered] = "What the event log tools may read: local, this Mac's own logs. Untick it and they read only the working directory's .logarchive folders.",
-        [SettingsField.EventLogSetPassword] = "A runas computer's password, for reading a Windows computer's logs. A Mac reads none, so there is nothing to sign in with.",
         [SettingsField.EventLogAddComputer] = "A wizard for an eventlog.json entry. A Mac reads only local's entry, so pick local to choose its logs and detail.",
         [SettingsField.DirectoryDomainsOffered] = "A checklist of the domains the directory tools may read: each domain in both ad.json files. Until you tick one, none is read.",
         [SettingsField.PdfEngine] = "The PDF maker: auto and browser use Edge, Chrome, Brave or Chromium from Applications; printer isn't available on a Mac. Editing PDFs needs the browser.",

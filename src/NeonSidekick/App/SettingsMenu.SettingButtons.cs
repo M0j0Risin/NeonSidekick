@@ -64,8 +64,12 @@ internal sealed partial class SettingsMenu
             case SettingsField.PrintDefaultPrinter when string.IsNullOrWhiteSpace(data.PrintDefaultPrinter):
                 return WindowsDefaultPrinterLabel.Trim('(', ')');
             case SettingsField.AdvisorList:
-                int advisors = NeonSidekick.Advisors.AdvisorRoster.Entries(data.AdvisorList).Count;
-                return advisors == 0 ? "none" : advisors.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                // "2 of 3" with some switched off (2026-11-27); "none" for an empty list only.
+                var listed = NeonSidekick.Advisors.AdvisorRoster.Entries(data.AdvisorList);
+                int active = listed.Count(e => !e.Off);
+                return listed.Count == 0 ? "none"
+                    : active == listed.Count ? active.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    : active.ToString(System.Globalization.CultureInfo.InvariantCulture) + " of " + listed.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
             default:
                 return FieldValue(field, data, profileDirectory);
         }

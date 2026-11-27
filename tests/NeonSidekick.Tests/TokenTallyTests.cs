@@ -301,4 +301,89 @@ public class TokenTallyTests
         Assert.True(tally.Session.IsEmpty);
         Assert.True(tally.LastRequest.IsEmpty);
     }
+
+    // ── The reply list (2026-11-27, /usage's trend and records) ─────────────
+
+    private static void Reply(TokenTally tally, TokenUsage? usage, string model = "m")
+    {
+        tally.BeginTurn();
+        if (usage is { } u)
+        {
+            tally.Add(u);
+        }
+
+        tally.EndTurn();
+        tally.RecordReply(model);
+    }
+
+    [Fact]
+    public void RecordReply_TakesTheReplysFigures_AndAnUnreportedOneIsAllNull_NeverThePreviousContext()
+    {
+        var tally = new TokenTally();
+        Reply(tally, One(100, 40, seconds: 2));
+        Reply(tally, null);
+
+        var replies = tally.Replies;
+        Assert.Equal(2, replies.Count);
+        Assert.Equal(("m", 20.0, 140L, 40L), (replies[0].Model, replies[0].TokensPerSecond, replies[0].Context, replies[0].Output));
+        Assert.Equal(TimeSpan.FromMilliseconds(500), replies[0].FirstToken);
+        Assert.Equal(new ReplyPoint("m", null, null, null, null, null, false, 2), replies[1]);   // not the first's 140
+        Assert.Equal([1, 2], replies.Select(r => r.Number));
+    }
+
+    [Fact]
+    public void ACompaction_OrAForget_MarksTheNextReply_AndAResetClearsTheList()
+    {
+        var tally = new TokenTally();
+        Reply(tally, One(10, 5));
+        tally.AddCompaction(null);
+        Reply(tally, One(10, 5));
+        Reply(tally, One(10, 5));
+        tally.ForgetContext();
+        Reply(tally, One(10, 5));
+
+        Assert.Equal([false, true, false, true], tally.Replies.Select(r => r.Marked));
+
+        tally.ResetConversation();
+        Assert.Empty(tally.Replies);
+    }
+
+    [Fact]
+    public void TheList_KeepsTheNewestUpToItsCap()
+    {
+        var tally = new TokenTally();
+        for (int i = 0; i < TokenTally.ReplyCap + 5; i++)
+        {
+            Reply(tally, One(10, 5));
+        }
+
+        var replies = tally.Replies;
+        Assert.Equal(TokenTally.ReplyCap, replies.Count);
+        Assert.Equal(6, replies[0].Number);   // the five oldest dropped
+    }
+
+    [Fact]
+    public void ASeed_IsUnmarked_AndTheNextLiveReplyFollowsItUnmarked()
+    {
+        var tally = new TokenTally();
+        tally.AddCompaction(null);
+        tally.ResetConversation();
+        tally.SeedReplies([new ReplyPoint("a", 10, null, 100, 5, null, true), new ReplyPoint("b", 12, null, 120, 6, null, false)]);
+        Reply(tally, One(10, 5), "b");
+
+        var replies = tally.Replies;
+        Assert.Equal(["a", "b", "b"], replies.Select(r => r.Model));
+        Assert.All(replies, r => Assert.False(r.Marked));
+        Assert.Equal([1, 2, 3], replies.Select(r => r.Number));
+    }
+
+    [Fact]
+    public void ABotsReply_IsAPointWithItsOwnModel_AndNoContext()
+    {
+        var tally = new TokenTally();
+        tally.RecordReply("bot-model", One(30, 12), null);
+
+        var point = Assert.Single(tally.Replies);
+        Assert.Equal(("bot-model", (long?)null, (long?)12), (point.Model, point.Context, point.Output));
+    }
 }

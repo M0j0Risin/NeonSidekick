@@ -3,7 +3,7 @@ using NeonSidekick.Llm;
 namespace NeonSidekick.Bench;
 
 /// <summary>
-/// Runs <c>/test</c>'s tests one after the other over the connected <see cref="Assistant"/> (2026-09-28). Each is one
+/// Runs <c>/bench</c>'s tests one after the other over the connected <see cref="Assistant"/> (2026-09-28). Each is one
 /// <see cref="Assistant.RequestAsync"/>: the test's own messages (not the conversation, not the system prompt), no tools,
 /// the profile's reasoning and sampling as the chat's (the user's call), the test's <c>response_format</c>. The history is
 /// never touched, and the reply is never shown or spoken — only the verdict. A transport failure (a context-length 400, a
@@ -15,7 +15,7 @@ public static class BenchRunner
     /// <summary>
     /// A run about to start over <paramref name="assistant"/> at <paramref name="endpoint"/>: its time, the model and server,
     /// the window the long-context tests are sized to, and the reasoning and sampling every request of it carries (2026-09-28,
-    /// the user's ask: so runs at different settings compare in <c>/test history</c>). Results are added as tests finish.
+    /// the user's ask: so runs at different settings compare in <c>/bench history</c>). Results are added as tests finish.
     /// </summary>
     public static BenchRun NewRun(Assistant assistant, LlmEndpoint endpoint, BenchContext context, TimeProvider time)
     {
@@ -77,6 +77,12 @@ public static class BenchRunner
             return new BenchResult { Test = test.Id, Verdict = BenchVerdict.Skipped, Reason = BenchText.SkippedOnClaudeApi };
         }
 
+        // No window, no window to fill (2026-11-27): the fallback-sized prompt passed, claiming a full window it never tried.
+        if (test.Category == BenchCategory.WindowCapacity && context.ContextWindowTokens is null)
+        {
+            return new BenchResult { Test = test.Id, Verdict = BenchVerdict.Skipped, Reason = BenchText.SaturationNoWindow };
+        }
+
         var request = test.BuildRequest(context);
         long started = time.GetTimestamp();
         Assistant.SideResponse response;
@@ -106,7 +112,7 @@ public static class BenchRunner
         {
             Test = test.Id,
             Verdict = judgement.Verdict,
-            Reason = judgement.Reason,
+            Reason = test.Reason(judgement, usage?.Input, context),
             Answer = response.Text,
             Seconds = seconds,
             PromptTokens = usage?.Input,

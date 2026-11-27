@@ -302,12 +302,13 @@ public static class EventLogText
     /// <summary>Where a computer's password is set (2026-10-23: named apart for the wizard's unticked save, H9).</summary>
     public const string MenuPath = "/tools › Admin › EventLog";
 
-    public const string SetPasswordRow = "Event log set password";
+    /// <summary>The row a computer's password is set in, its Password row (2026-11-26: the set-password row went).</summary>
+    public const string EditRow = "Event log add/edit computer";
 
-    public static string NoPassword(string name) => $"no password for '{name}'; set it with {SetPasswordRow} on {MenuPath}";
+    public static string NoPassword(string name) => $"no password for '{name}'; set it with {EditRow} (its Password row) on {MenuPath}";
 
     // DP1 (2026-10-23, the admin review's L4): no cmdkey line for the model to run or to ask the password for.
-    public static string NoCredential(string target) => $"no password in {Sql.SqlText.CredentialStore} for {target}; the user can set it with {SetPasswordRow} on {MenuPath}";
+    public static string NoCredential(string target) => $"no password in {Sql.SqlText.CredentialStore} for {target}; the user can set it with {EditRow} (its Password row) on {MenuPath}";
 
     public static string CannotSignIn(string name, string reason) => $"Error: cannot sign in to '{name}': {reason}.";
 

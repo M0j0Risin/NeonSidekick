@@ -74,10 +74,9 @@ public sealed class ModelStatsTests : IDisposable
             var rows = UsageText.ModelsRows(stats, logging: true, width);
             Assert.All(rows, r => Assert.True(TextCells.Width(r.Text) <= width, r.Text));   // every line fits (#65)
             int heading = rows.ToList().FindIndex(r => r.Text.StartsWith(UsageText.ModelsModelHeading, StringComparison.Ordinal));
-            Assert.Equal(UsageText.ModelsCaption, string.Join(" ", rows.Take(heading - 1).Select(r => r.Text)));   // the caption, wrapped
-            Assert.Equal("", rows[heading - 1].Text);
+            Assert.Equal(0, heading);   // the caption is the Bench tab's, above its In use rule (2026-11-27)
             Assert.True(rows[heading + 1].Rule);           // a rule under the heading (2026-11-23)
-            var (longRow, longDim, _) = rows[heading + 2];   // the caption, a gap, the heading, the rule, then a row a model
+            var (longRow, longDim, _) = rows[heading + 2];   // the heading, the rule, then a row a model
             Assert.False(longDim);
             Assert.Contains("50.0", longRow);   // 2000 tokens over 40 s
             Assert.Contains("10%", longRow);    // 5 of 50 calls
@@ -103,7 +102,8 @@ public sealed class ModelStatsTests : IDisposable
     {
         Assert.Equal([UsageText.ModelsEmpty], UsageText.ModelsRows([], logging: true, 120).Select(r => r.Text));
         Assert.Equal([UsageText.ModelsEmpty, UsageText.ModelsLoggingOff], UsageText.ModelsRows([], logging: false, 120).Select(r => r.Text));
-        Assert.Equal(UsageText.ModelsTabIndex, ChatScreen.UsageTab("Models"));
+        Assert.Equal(UsageText.BenchTabIndex, ChatScreen.UsageTab("Models"));   // the Bench tab since 2026-11-27
+        Assert.Equal(UsageText.BenchTabIndex, ChatScreen.UsageTab("bench"));
         Assert.Equal("Qwen…K_XL", UsageText.CutMiddle("Qwen3-Coder-Q4_K_XL", 9));
         Assert.Equal("short", UsageText.CutMiddle("short", 9));
     }
@@ -200,5 +200,52 @@ public sealed class ModelStatsTests : IDisposable
         {
             Assert.False(SessionText.IsSideTurnModel(model), model);
         }
+    }
+
+    // ── Records' all-time bests (2026-11-27) ─────────────────────────────
+
+    private void Best(long id, string? model, long output, double seconds, long? firstMs = null, long? context = null)
+    {
+        var usage = new TokenUsage(1, output, output + 1, 1, TimeSpan.FromMilliseconds(firstMs ?? 0), TimeSpan.FromSeconds(seconds));
+        _store.AppendTurn(id, "q", "r", 0, [], [], 0, 1, output, false, model: model, usage: firstMs is null ? usage with { UnknownWaits = 1 } : usage, contextTokens: context);
+        _time.Advance(TimeSpan.FromMinutes(1));
+    }
+
+    [Fact]
+    public void ModelBests_PerModelAndOverall_TheSlowestStartWithItsOwnContext_AndASideTurnHoldsNone()
+    {
+        long a = _store.Begin("a", "qwen")!.Value;
+        Best(a, "qwen", output: 100, seconds: 2, firstMs: 6_000, context: 4_000);    // 50 tok/s; the slower start, the smaller context
+        Best(a, "qwen", output: 300, seconds: 2, firstMs: 1_000, context: 52_000);   // 150 tok/s
+        Best(a, null, output: 20, seconds: 1);                                       // before the column: the session's model
+        Best(a, "/claude", output: 900, seconds: 1);                                 // a side turn: 900 tok/s, but no record
+        long b = _store.Begin("b", "gemma")!.Value;
+        Best(b, "gemma", output: 400, seconds: 1, firstMs: 9_000, context: 1_000);   // 400 tok/s
+
+        var bests = _store.ModelBests("QWEN");   // matched ignoring case
+        var mine = bests.ThisModel!;
+        Assert.Equal(150, mine.Speed!.Value, 3);
+        Assert.Equal(300L, mine.LongestOutput);
+        Assert.Equal((6_000L, 4_000L), (mine.SlowestStartMs, mine.SlowestStartContext));
+        Assert.Equal(420L, mine.Written);
+        Assert.Equal(("gemma", 400.0), (bests.Speed!.Value.Model, Math.Round(bests.Speed.Value.Value)));   // not /claude's 900
+        Assert.Equal(("gemma", 400L), (bests.LongestOutput!.Value.Model, bests.LongestOutput.Value.Value));
+        Assert.Equal(("gemma", 9_000L), (bests.SlowestStart!.Value.Model, bests.SlowestStart.Value.Ms));
+        Assert.Null(_store.ModelBests("never").ThisModel);
+    }
+
+    [Fact]
+    public void ReplyPointsOf_LeavesOutTheTurnsACommandAnswered_AndAnUnsetModelIsTheSessions()
+    {
+        long a = _store.Begin("a", "qwen")!.Value;
+        Best(a, null, output: 10, seconds: 1);
+        Best(a, "/advisor ops", output: 10, seconds: 1);
+        Best(a, "qwen", output: 20, seconds: 1, firstMs: 500, context: 300);
+
+        var points = ChatScreen.ReplyPointsOf(_store.Load(a)!).ToList();
+
+        Assert.Equal(["qwen", "qwen"], points.Select(p => p.Model));   // no false model change for the turn before the column
+        Assert.Equal((300L, 20.0), (points[1].Context!.Value, points[1].TokensPerSecond!.Value));
+        Assert.Equal(TimeSpan.FromMilliseconds(500), points[1].FirstToken);
     }
 }

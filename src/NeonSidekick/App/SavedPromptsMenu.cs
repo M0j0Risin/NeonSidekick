@@ -123,7 +123,8 @@ internal sealed class SavedPromptsMenu
                     Buttons = Buttons,
                     Filter = empty ? null : filter,
                     Placeholder = shown.Count == 0,
-                    Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, prompts.Count) ?? SavedPromptText.PaneCaption(prompts.Count),
+                    // No count caption (2026-11-27, the user's call): the hint names Enter and d and the rows are numbered; a filter's caption stays.
+                    Caption = empty ? null : MenuFilter.CaptionOrNull(filter, shown.Count, prompts.Count),
                     Footer = (_, row) => !empty && row < shown.Count ? SavedPromptText.Footer(prompts[shown[row]], _zone) : null,
                     Moves = !empty && filter.Length == 0,   // the order is the whole list's: no moves while a filter shows part of it
                     Removes = !empty && shown.Count > 0,     // Delete removes a filtered row too (2026-10-16, the user's ask)

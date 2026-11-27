@@ -302,7 +302,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private long _alertUntil;
     private Func<string> _usage = () => "";
     private Func<string> _busyUsage = () => "";
-    private Func<string, bool> _labelAfterUsage = _ => false;
+    private Func<string, bool> _hideLabel = _ => false;
     private Func<string, bool> _labelZone = _ => false;
 
     // The overlay (the info pane, the menus): drawn where the input row is, the cursor hidden
@@ -361,7 +361,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private int _tallyColumn = -1;
     private int _tallyCells;
 
-    // The busy row's label when LabelAfterUsage or LabelZone takes it (2026-09-28, HintZone.Label): −1 for none.
+    // The busy row's label when LabelZone takes it (2026-09-28, HintZone.Label): −1 for none.
     private int _labelColumn = -1;
     private int _labelCells;
 
@@ -506,11 +506,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         Mark,
 
         /// <summary>
-        /// The busy row's label and its time when <see cref="LabelAfterUsage"/> takes it — the ComfyUI generation's
-        /// <c>🖼️ 00:12</c> / <c>🎨 00:12</c> (2026-09-28, the user's ask: a double-click there cancels the pictures) — ahead
-        /// of <see cref="Usage"/>, which keeps the spinner and the tally. After <see cref="Mark"/>, for the same reason.
-        /// A label <see cref="LabelZone"/> takes (2026-10-01, the embedded model's load: a double-click cancels it) is the
-        /// spinner's frame, its blank and the label in their usual place, ahead of the tally, which stays <see cref="Usage"/>.
+        /// The busy row's label when <see cref="LabelZone"/> takes it (2026-10-01, the embedded model's load: a double-click cancels it):
+        /// the spinner's frame, its blank and the label in their usual place, ahead of the tally, which stays <see cref="Usage"/>. After
+        /// <see cref="Mark"/>, so the pinned numbers stand. The ComfyUI generation's label had it from 2026-09-28 until 2026-11-27, when its
+        /// time moved to the lower rule (<see cref="HideLabel"/>).
         /// </summary>
         Label,
 
@@ -1029,10 +1028,10 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// The items at the right edge of the lower rule — the one under the input row — in every state, left to right (2026-11-23, the user's
-    /// ask: the jobs group, <c>── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🖼️ 2 ── ⚡1 ─</c>; until then the running processes'
+    /// ask: the jobs group, <c>── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── ⚡ 1 ─</c>; until then the running processes'
     /// count, 2026-10-12, and the update's marker, 2026-11-04, each a provider of its own). Read on every draw and on the tick, which repaints
     /// the pane when any text changes; an empty list or empty texts = the bare rule. <see cref="LowerRuleFit"/> lays them out; a lone
-    /// <c>⚡n</c> draws exactly <see cref="RuleWithTitle"/>.
+    /// <c>⚡ n</c> draws exactly <see cref="RuleWithTitle"/>.
     /// </summary>
     public Func<IReadOnlyList<LowerRuleItem>> LowerRuleItems
     {
@@ -1075,21 +1074,21 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// Which busy labels the row draws after the tally rather than before it (2026-09-25, the user's call: the ComfyUI
-    /// generation's <c>🎨</c>, <c>⠹ 1.2k / 4.1k · 30% · 🎨 00:12</c>); asked per draw. None by default.
+    /// Which busy labels the row leaves out, their clocks with them (2026-11-27, the user's call: the ComfyUI generation's time went to the
+    /// lower rule's left, so the row is the spinner and the tally, <c>⠹ 1.2k / 4.1k · 30%</c>; after the tally from 2026-09-25 until then);
+    /// asked per draw. None by default.
     /// </summary>
-    public Func<string, bool> LabelAfterUsage
+    public Func<string, bool> HideLabel
     {
-        get => _labelAfterUsage;
-        set => _labelAfterUsage = value ?? throw new ArgumentNullException(nameof(value));
+        get => _hideLabel;
+        set => _hideLabel = value ?? throw new ArgumentNullException(nameof(value));
     }
 
     /// <summary>
     /// Which busy labels are their own click zone where they stand, ahead of the tally (2026-10-01, the review's finding: the
     /// embedded model's load took a double-click anywhere on <see cref="HintZone.Usage"/> as its cancel, the tally beside
     /// it included): <see cref="HintZone.Label"/> is then the spinner's frame, its blank and the label with its time, and the
-    /// tally keeps <see cref="HintZone.Usage"/>. A label <see cref="LabelAfterUsage"/> takes is its own zone already. Asked
-    /// per draw; none by default.
+    /// tally keeps <see cref="HintZone.Usage"/>. Asked per draw; none by default.
     /// </summary>
     public Func<string, bool> LabelZone
     {
@@ -4928,23 +4927,16 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <see cref="BusyUsage"/>): <c>thinking 00:12 · ~5.1k / 151.4k · ~3% · ~41 tok/s · 📤 2 queued</c> — beside the
     /// spinner, so the two make one zone; empty = the row as before. Pinned.
     /// </summary>
-    public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued, string usage) => BusyRow(label, elapsed, overlayHint, queued, usage, labelAfterUsage: false);
-
-    /// <summary>
-    /// <see cref="BusyRow(string, TimeSpan, string, string, string)"/> with the label and its count after the tally when
-    /// <paramref name="labelAfterUsage"/> (<see cref="LabelAfterUsage"/>, 2026-09-25): <c>1.2k / 4.1k · 30% · 🎨 00:12 · 📤 2 queued</c>. Pinned.
-    /// </summary>
-    public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued, string usage, bool labelAfterUsage)
+    public static string BusyRow(string label, TimeSpan elapsed, string overlayHint, string queued, string usage)
     {
         ArgumentNullException.ThrowIfNull(overlayHint);
         ArgumentNullException.ThrowIfNull(queued);
         ArgumentNullException.ThrowIfNull(usage);
-        return HintRow(HintRow(Labelled(BusyText(label, elapsed), usage, labelAfterUsage), queued), overlayHint);
+        return HintRow(HintRow(Labelled(BusyText(label, elapsed), usage), queued), overlayHint);
     }
 
-    /// <summary>The spinner's label beside the tally, in the order <paramref name="labelAfterUsage"/> says.</summary>
-    private static string Labelled(string busyText, string usage, bool labelAfterUsage) =>
-        labelAfterUsage ? HintRow(usage, busyText) : HintRow(busyText, usage);
+    /// <summary>The spinner's label, then the tally (the label after it from 2026-09-25 to 2026-11-27, the ComfyUI generation's).</summary>
+    private static string Labelled(string busyText, string usage) => HintRow(busyText, usage);
 
     /// <summary>
     /// The hint row's whole text while a picture is dragged off the strip or the transcript toward the chat line
@@ -7660,9 +7652,20 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <see cref="LowerRuleItemAt"/>. The items are in the upper rule's ⤡ style, <see cref="Theme.AccentSecondary"/> (2026-10-12, the user's
     /// ask), the rule around them in <see cref="Theme.PaneRule"/>, two rule glyphs (<see cref="LowerRuleGap"/>) between each two. The queued
     /// count (<see cref="LowerRuleKind.Queued"/>, 2026-11-26, the user's ask) is pinned at the left end instead, <c>─ 📤 2 queued </c>, the
-    /// fill after it, in the same styles.
+    /// fill after it, in the same styles; since 2026-11-27 the pictures' timer (<see cref="LowerRuleKind.Pictures"/>) before it,
+    /// <c>─ 🖼️  00:38 ── 📤 2 queued </c>, the two as the right items are spaced.
     /// </summary>
     private void WriteLowerRule(int width)
+    {
+        WriteLowerRuleRow(width);
+        _inner.WriteLine();
+    }
+
+    /// <summary>The kinds pinned at the lower rule's left end, in their order (2026-11-27): the pictures' timer, then the queued count.</summary>
+    private static bool IsLowerRuleLeft(LowerRuleKind kind) => kind is LowerRuleKind.Pictures or LowerRuleKind.Queued;
+
+    /// <summary><see cref="WriteLowerRule"/>'s row with no line break (2026-11-27), so <see cref="RedrawLowerRule"/> writes it in place.</summary>
+    private void WriteLowerRuleRow(int width)
     {
         var items = _lowerRuleItems() ?? [];
         _drawnLowerRuleKey = LowerRuleKey(items);
@@ -7673,27 +7676,44 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             _lowerItemSpans = [];
             WriteRuleText(new string(RuleGlyph, Math.Max(0, width)), 0, width, rule);
-            _inner.WriteLine();
             return;
         }
 
         var spans = new List<(LowerRuleKind, int, int)>(kept.Count);
         int at = 0;
         var right = kept;
-        if (kept[0].Kind == LowerRuleKind.Queued)
+        int lead = 0;
+        while (lead < kept.Count && IsLowerRuleLeft(kept[lead].Kind))
         {
-            // The queued count at the left end (2026-11-26): a glyph and a space, the count, a space, then the fill.
+            lead++;
+        }
+
+        if (lead > 0)
+        {
+            // The left run (2026-11-26, the queued count; the pictures' timer before it since 2026-11-27): a glyph and a space, each item
+            // with the gap between two, a space, then the fill.
             WriteRuleText(RuleGlyph + " ", 0, width, rule);
-            int queuedCells = TextCells.Width(kept[0].Text);
-            spans.Add((LowerRuleKind.Queued, 2, queuedCells));
-            _inner.Write(new RawText(kept[0].Text, Theme.AccentSecondary));
-            at = 2 + queuedCells;
-            right = kept.Skip(1).ToList();
+            at = 2;
+            for (int i = 0; i < lead; i++)
+            {
+                if (i > 0)
+                {
+                    string between = " " + new string(RuleGlyph, LowerRuleGap) + " ";
+                    WriteRuleText(between, at, width, rule);
+                    at += between.Length;
+                }
+
+                int cells = TextCells.Width(kept[i].Text);
+                spans.Add((kept[i].Kind, at, cells));
+                _inner.Write(new RawText(kept[i].Text, Theme.AccentSecondary));
+                at += cells;
+            }
+
+            right = kept.Skip(lead).ToList();
             if (right.Count == 0)
             {
                 WriteRuleText(" " + new string(RuleGlyph, left), at, width, rule);
                 _lowerItemSpans = [.. spans];
-                _inner.WriteLine();
                 return;
             }
 
@@ -7720,8 +7740,36 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
         _lowerItemSpans = [.. spans];
         WriteRuleText(" " + RuleGlyph, at, width, rule);
-        _inner.WriteLine();
     }
+
+    /// <summary>The lower rule's row, under the input rows and over the first bar.</summary>
+    private int LowerRuleRowBelowCursor => FirstBarRowBelowCursor - 1;
+
+    /// <summary>
+    /// The lower rule again, in place (2026-11-27, the pictures' timer): only its row, when only its items' texts moved, so a picture's
+    /// clock costs one row a second, not the whole pane, as <see cref="RedrawHint"/> does for the hint row. Its click spans follow.
+    /// </summary>
+    private void RedrawLowerRule()
+    {
+        if (!_drawn || _batch > 0 || _modal > 0)
+        {
+            return;
+        }
+
+        int width = Width;
+        RedrawRow(LowerRuleRowBelowCursor, () => WriteLowerRuleRow(width));
+    }
+
+    /// <summary>Whether the lower rule's items moved while the upper rule, the mark, the gradient and the buttons stayed as drawn (2026-11-27).</summary>
+    private bool OnlyLowerRuleChanged() =>
+        string.Equals(_ruleTitle(), _drawnRuleTitle, StringComparison.Ordinal)
+        && Equals(RuleMarks.StyleFor(_ruleMark, Theme.PageGround, Theme.PageInk), _drawnRuleMark)
+        && ReferenceEquals(Theme.RuleStops, _drawnRuleStops)
+        && !RuleButtonsChanged()
+        && LowerRuleMoved();
+
+    /// <summary>Whether <see cref="LowerRuleItems"/>' texts aren't the drawn lower rule's.</summary>
+    private bool LowerRuleMoved() => !string.Equals(LowerRuleKey(_lowerRuleItems() ?? []), _drawnLowerRuleKey, StringComparison.Ordinal);
 
     /// <summary>The rule glyphs between two items on the lower rule.</summary>
     public const int LowerRuleGap = 2;
@@ -7732,14 +7780,15 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
 
     /// <summary>
     /// Which kinds a narrow lower rule drops first (2026-11-23, the user's ask; the status bar's jobs joined on 2026-11-25): the update's
-    /// marker, the pictures, the reflection, the speech and voice setups, the MCP wave, the download, the loop, the botchat's extras, the
-    /// queued count (2026-11-26), and last the processes' count — that one only beside the camera when the two don't fit
-    /// (<see cref="LowerRuleFit"/>); the camera never. Lower drops sooner; null is never dropped.
+    /// marker, the reflection, the speech and voice setups, the MCP wave, the download, the loop, the botchat's extras, the queued count
+    /// (2026-11-26), the processes' count, and last the pictures' timer (2026-11-27, the user's call: the one sign a picture is under way,
+    /// now that it's off the hint row) — those three only beside another item (<see cref="LowerRuleFit"/>); the camera never. Lower drops
+    /// sooner; null is never dropped.
     /// </summary>
     public static int? LowerRuleDropRank(LowerRuleKind kind) => kind switch
     {
         LowerRuleKind.Update => 0,
-        LowerRuleKind.Pictures => 1,
+        LowerRuleKind.Pictures => 11,
         LowerRuleKind.Learning => 2,
         LowerRuleKind.Speech => 3,
         LowerRuleKind.Voice => 4,
@@ -7755,8 +7804,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The lower rule's layout over <paramref name="width"/> cells (2026-11-23, the jobs group; <c>MarkerFit</c> until then): the items kept,
     /// in their order, and the rule glyphs at their left. Items are dropped whole by <see cref="LowerRuleDropRank"/> until
-    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>⚡n</c>, <c>📷</c> or <c>📤</c> left alone, which is
-    /// <see cref="RuleWithTitle"/>'s fit as before. <c>⚡n</c> goes only with another item beside it (2026-11-25: the camera, which is
+    /// <see cref="RuleTitleMinRule"/> glyphs stay at the left; an item is never cut, except <c>⚡ n</c>, <c>📷</c>, <c>📤</c> or the pictures' timer left alone, which is
+    /// <see cref="RuleWithTitle"/>'s fit as before. <c>⚡ n</c> goes only with another item beside it (2026-11-25: the camera, which is
     /// never dropped; else two that don't fit would leave the bare rule). Empty texts are skipped; nothing kept = the bare rule. The queued
     /// count (2026-11-26) is weighed with the rest, then drawn at the left end: <c>─ </c>, its text and a space, the fill (the returned
     /// <c>Left</c>) between it and the others, and the fill at least <see cref="RuleTitleMinRule"/> either way. Pure, pinned.
@@ -7776,7 +7825,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             int drop = -1;
             for (int i = 0; i < kept.Count; i++)
             {
-                if (LowerRuleDropRank(kept[i].Kind) is int rank && (kept.Count > 1 || kept[i].Kind is not (LowerRuleKind.Processes or LowerRuleKind.Queued)) && (drop < 0 || rank < LowerRuleDropRank(kept[drop].Kind)))
+                if (LowerRuleDropRank(kept[i].Kind) is int rank && (kept.Count > 1 || kept[i].Kind is not (LowerRuleKind.Processes or LowerRuleKind.Queued or LowerRuleKind.Pictures)) && (drop < 0 || rank < LowerRuleDropRank(kept[drop].Kind)))
                 {
                     drop = i;
                 }
@@ -7796,19 +7845,21 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     }
 
     /// <summary>
-    /// The cells the lower rule's <paramref name="kept"/> items take beside the fill: the queued count at the left end (2026-11-26) its text
-    /// and three (<c>─ </c> before, a space after); the others their texts, the gaps between them, a space either side and the last glyph.
+    /// The cells the lower rule's <paramref name="kept"/> items take beside the fill: each at the left end (the queued count, 2026-11-26; the
+    /// pictures' timer, 2026-11-27) its text and three (<c>─ </c> before, a space after), and one more cell between two of them (the gap's
+    /// <c> ── </c>); the others their texts, the gaps between them, a space either side and the last glyph.
     /// </summary>
     private static int LowerRuleUsed(List<LowerRuleItem> kept)
     {
         int used = 0;
         int rest = 0;
         int restCells = 0;
+        int lefts = 0;
         foreach (var item in kept)
         {
-            if (item.Kind == LowerRuleKind.Queued)
+            if (IsLowerRuleLeft(item.Kind))
             {
-                used += TextCells.Width(item.Text) + 3;
+                used += TextCells.Width(item.Text) + 3 + (lefts++ > 0 ? LowerRuleGap - 1 : 0);
             }
             else
             {
@@ -8149,13 +8200,14 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             string usage = !OverlayOnStatus ? _busyUsage() : "";
             var elapsed = _time.GetElapsedTime(_busySince);
             TimeSpan? step = _stageSince != _busySince && _stepClockShown() ? _time.GetElapsedTime(_stageSince) : null;
-            // A label that trails the tally (LabelAfterUsage, the ComfyUI generation's) swaps the two; nothing else moves.
-            bool after = usage.Length > 0 && _labelAfterUsage(label);
+            // A label HideLabel takes (the ComfyUI generation's, 2026-11-27: its time is on the lower rule) goes, its clocks with it.
+            bool hidden = _hideLabel(label);
+            string shownBusy = hidden ? "" : BusyText(label, elapsed, step);
             // The way out named at the row's end (2026-10-04) while the screen's turn runs and no pane's keys stand there instead
             // (a pane's keys are the Hints bar's while it has a row, 2026-10-14).
             string hint = Spaced((OverlayOnStatus ? _overlay!.Hint : null) ?? (_stopHintShown() ? StopHint : ""));
-            string unfitted = " " + HintRow(Labelled(BusyText(label, elapsed, step), usage, after), hint);
-            string labelled = " " + Labelled(BusyText(label, elapsed, step), usage, after);
+            string unfitted = " " + HintRow(Labelled(shownBusy, usage), hint);
+            string labelled = " " + Labelled(shownBusy, usage);
             // Read once (2026-10-01): an embedded download's strip turns with the clock, and two reads astride a frame
             // would leave _hintStrip blank below — its 📥 dead to a click for the draw.
             string glyphs = _strip();
@@ -8182,19 +8234,16 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             // whole. A tally the fit cut leaves the frame and whichever comes first — the label, or the tally
             // ahead of a trailing one.
             int zoneCells = restMax + TextCells.Width(frame);
-            string zone = TextCells.Width(frame + unfitted) <= zoneCells || TextCells.Width(frame + labelled) < zoneCells ? frame + labelled : frame + " " + (after ? usage : BusyText(label, elapsed));
+            string zone = TextCells.Width(frame + unfitted) <= zoneCells || TextCells.Width(frame + labelled) < zoneCells ? frame + labelled : frame + " " + (hidden ? usage : BusyText(label, elapsed));
             RecordUsage(zone, TextCells.Width(prefix), 0, frame + unfitted, zoneCells);
-            // The label's own place (2026-09-28, HintZone.Label): a label LabelAfterUsage takes — after the tally and its
-            // separator, or right after the frame's blank with none — when the fit kept it whole.
-            // A label LabelZone takes (2026-10-01) stays where it stands, and its zone takes the frame and the blank before it.
+            // The label's own place (2026-09-28, HintZone.Label): a label LabelZone takes (2026-10-01) stays where it stands, and its zone
+            // takes the frame and the blank before it, when the fit kept it whole.
             string busyText = BusyText(label, elapsed);
-            bool trailing = _labelAfterUsage(label);
-            bool leading = !trailing && _labelZone(label);
-            int labelAhead = after ? TextCells.Width(" " + usage + HintSeparator) : 1;
+            bool leading = !hidden && _labelZone(label);
             int labelWidth = TextCells.Width(busyText);
-            bool labelWhole = (trailing || leading) && (TextCells.Width(unfitted) <= restMax || labelAhead + labelWidth <= restMax);
-            _labelColumn = !labelWhole ? -1 : leading ? TextCells.Width(prefix) : TextCells.Width(prefix) + TextCells.Width(frame) + labelAhead;
-            _labelCells = !labelWhole ? 0 : leading ? TextCells.Width(frame) + labelAhead + labelWidth : labelWidth;
+            bool labelWhole = leading && (TextCells.Width(unfitted) <= restMax || 1 + labelWidth <= restMax);
+            _labelColumn = labelWhole ? TextCells.Width(prefix) : -1;
+            _labelCells = labelWhole ? TextCells.Width(frame) + 1 + labelWidth : 0;
         }
         else
         {
@@ -8556,8 +8605,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// <summary>
     /// The busy row's parts in their two groups (2026-10-13, the user's pick: the busy row follows the sides): each slot of
     /// <paramref name="layout"/> the busy row draws (the strip, the tally, the model, the working directory) on its side
-    /// in its order. The spinner's frame and its label — the tally with them, the label after it, while the label trails the tally
-    /// (<see cref="LabelAfterUsage"/>) — stand where the <see cref="HintSlotKind.Spinner"/> slot does (later that day, the user's ask: the
+    /// in its order. The spinner's frame and its label (none for a label <see cref="HideLabel"/> takes, 2026-11-27) stand where the
+    /// <see cref="HintSlotKind.Spinner"/> slot does (later that day, the user's ask: the
     /// spinner a section of its own, movable), the way out (the overlay's keys or the stop hint) right after them (the user's pick); a
     /// layout without that slot has them lead the left, as before.
     /// </summary>
@@ -8566,9 +8615,9 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         string usage = !OverlayOnStatus ? _busyUsage() : "";
         var elapsed = _time.GetElapsedTime(_busySince);
         TimeSpan? step = _stageSince != _busySince && _stepClockShown() ? _time.GetElapsedTime(_stageSince) : null;
-        bool after = usage.Length > 0 && _labelAfterUsage(label);
-        string busyText = BusyText(label, elapsed, step);
-        string unit = frame + " " + Labelled(busyText, after ? usage : "", after);
+        bool after = false;   // the label after the tally (the ComfyUI generation's) went on 2026-11-27
+        string busyText = _hideLabel(label) ? "" : BusyText(label, elapsed, step);
+        string unit = busyText.Length == 0 ? frame : frame + " " + busyText;
         var spinner = new HintPart(HintPartKind.Spinner, unit);
         // An open pane's keys while the Hints bar has no row; the stop hint otherwise (2026-10-14: the keys are the bar's).
         var hint = new HintPart(HintPartKind.Text, Spaced((OverlayOnStatus ? _overlay!.Hint : null) ?? (_stopHintShown() ? StopHint : "")));
@@ -8640,8 +8689,8 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             _usageColumn = spinner.Column;
             _usageCells = spinner.Cells;
-            bool trailing = _labelAfterUsage(label);
-            bool leading = !trailing && _labelZone(label);
+            bool trailing = false;
+            bool leading = !_hideLabel(label) && _labelZone(label);
             if (trailing)
             {
                 // The label after the tally and its separator, or right after the frame's blank with none.
@@ -9294,6 +9343,11 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                         RedrawHint();
                     }
 
+                    if (OnlyLowerRuleChanged())
+                    {
+                        RedrawLowerRule();   // the pictures' clock goes on while the user reads back (2026-11-27)
+                    }
+
                     return;
                 }
 
@@ -9303,6 +9357,12 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
                 Overpaint();
                 EndSync();
                 return;
+            }
+
+            if (OnlyLowerRuleChanged())
+            {
+                // Only the lower rule's items moved (2026-11-27, the pictures' clock each second): that row alone, then the tick goes on.
+                RedrawLowerRule();
             }
 
             if (RuleTitleChanged() || RuleButtonsChanged())

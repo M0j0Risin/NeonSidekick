@@ -57,6 +57,10 @@ public static class HelpCommands
             new("/avatar user <emoji>|<words>", "Set your avatar to that emoji, or open the picker searching for the words (headless: set the best match)."),
             new("/avatar user clear", "Clear your avatar: your lines open with › again."),
         ]),
+        new("/bench",
+        [
+            new("/bench [<id>|reasoning|structured|long|all|history]", "Run benchmark tests against the connected model and save the results: one test by its id, a group (`reasoning`, `structured`, or `long` for the needle and multi-hop tests; saturation is in none) or `all`. A run ends with a table by group, its time and what changed since the model's last run at the same reasoning level. `history` opens `/usage` › Bench at the recent runs (without the pane, or from the Web UI, it lists them). Alone, it lists the tests with their last verdicts at the current reasoning level. The ids are `grid`, `rule`, `mind`, `sycophancy`, `json`, `state`, `needle`, `multihop` and `saturation`."),
+        ]),
         new("/botchat",
         [
             new("/botchat [<profile> ...] [--] [<topic>]", "Let profiles talk to each other, each in its own persona, until you stop them. Leading words that name profiles are the cast (every profile when none is named; the loaded one speaks first); the first other word starts the topic, and `--` makes everything after it the topic. Its settings are on `/settings` › Client › Botchat."),
@@ -447,6 +451,7 @@ public static class HelpCommands
             new("/sampling <field> <value>|clear", "Set or clear one of the connected model's values: `temperature`, `top_p`, `top_k`, `min_p`, `presence_penalty`, `frequency_penalty` or `repetition_penalty` (`repeat_penalty` too)."),
             new("/sampling extra <json>|clear", "Set the extra request body as a JSON object, or clear it (`{}` clears it too)."),
             new("/sampling clear", "Clear every override of the connected model."),
+            new("/sampling off|on", "Switch the connected model's tab off, so it gets the server's own defaults with your values kept, or back on."),
         ]),
         new("/screen",
         [
@@ -538,10 +543,6 @@ public static class HelpCommands
         [
             new("/terminal [<folder>]", "Open a terminal window in the working directory, or in a folder under it (Tab completes the folder): Windows Terminal, or a console window without it. Ctrl+. runs it too."),
         ]),
-        new("/test",
-        [
-            new("/test [<id>|reasoning|structured|long|all|history]", "Run benchmark tests against the connected model and save the results: one test by its id, a group (`reasoning`, `structured`, `long`) or `all`; `history` shows the results so far. Alone, it lists the tests with their last verdicts. The ids are `grid`, `rule`, `mind`, `sycophancy`, `json`, `state`, `needle`, `multihop` and `saturation`."),
-        ]),
         new("/theme",
         [
             new("/theme [<name>]", "Switch the color theme (*Theme*), built-in or your own. Alone, it lists the themes, previewing the highlighted one beside the list when the window is wide enough. On the pane, a typed letter jumps to the next theme starting with it, → edits the highlighted theme (the list comes back after) and Del deletes one of yours (after a yes). The theme changes on Enter, or, when a Del took the one in force, as the list closes. During a reply, it runs when the reply ends; Ctrl+Z runs it too."),
@@ -589,9 +590,9 @@ public static class HelpCommands
         ]),
         new("/usage",
         [
-            new("/usage", "Show token usage and performance statistics; a `~` marks a reasoning count the app estimated (*LLM reasoning estimate*). Its other tabs show what fills the context, the system prompt, the tools, the skills and each model's figures, and `/usage sysprompt` writes the system prompt to a file. Ctrl+U runs it too."),
-            new("/usage context", "Open it on the Context tab: what fills the context window (the system prompt, each tool group, the history, pictures and thinking) and, with the window known, what turning a switchable group off would save."),
-            new("/usage models", "Open it on the Models tab: each model's turns, sessions, tool calls a turn, error and cancel rates, output a turn and speed, from the saved sessions, most turns first. Few-turn rows show dim; turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out and counted in a note."),
+            new("/usage", "Open the Context tab: what fills the window, with Space and Enter on its rows, then the replies' trend, the token table and records; a `~` marks an estimate (*LLM reasoning estimate*). Its other tabs show the system prompt, the tools, the skills and the Bench, and `/usage sysprompt` writes the system prompt to a file. Ctrl+U runs it too."),
+            new("/usage context", "Open the same tab as `/usage`: what fills the context window (the system prompt, each tool group, the history, pictures and thinking), each group's share of it."),
+            new("/usage bench", "Open it on the Bench tab (`models` also works): each model in use (turns, sessions, tool calls a turn, error and cancel rates, output a turn and speed, from the saved sessions), its latest `/bench` verdict per test at each reasoning level, your setup marked, and the recent runs. Turns a command answered (`/cmd`, `/advisor`, `/claude`) are left out."),
             new("/usage sysprompt [conversation] [to=<path>]", "Write the system message and every tool offered to `neon-sysprompt-<timestamp>.md` in the working folder, or at `to=` (a file or a folder in it), never over a file. With `conversation`, this conversation's messages too (pictures as placeholders): mind it before a commit."),
             new("/usage prompt|tools|skills", "Open it on the Prompt tab (the system message the next turn sends, apart from the skills block: persona, rules, project notes, memory, plan mode and the voice directive), the Tools tab (each tool it offers, grouped) or the Skills tab (the skills block's directive, then each skill it offers with its scope, description and `SKILL.md` file, or why the skills are off)."),
         ]),

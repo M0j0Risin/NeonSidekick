@@ -242,6 +242,12 @@ internal sealed partial class SettingsMenu
         /// </summary>
         public Dictionary<string, string> LoraWords { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// The LoRAs switched off or on on the LoRAs page (2026-11-27), by name, any case: for an Edit only what changed over the sidecar's,
+        /// which <see cref="ComfyLoraOff"/> reads for the rest; false removes a key.
+        /// </summary>
+        public Dictionary<string, bool> LoraOff { get; } = new(StringComparer.OrdinalIgnoreCase);
+
         // An Edit's files as read, and the workflow they made.
         public ComfyFileText? JsonFile { get; init; }
 

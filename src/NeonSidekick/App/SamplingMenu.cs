@@ -59,11 +59,21 @@ internal sealed class SamplingMenu
     /// <summary>The row of the extra body on every tab, after the fields.</summary>
     public static int ExtraRow => SamplingField.All.Count;
 
-    /// <summary>The bare rule before the clear row (2026-11-24, the user's ask): a heading, never a stop.</summary>
+    /// <summary>The bare rule before the toggle and clear rows (2026-11-24, the user's ask): a heading, never a stop.</summary>
     public static int ClearRuleRow => ExtraRow + 1;
 
-    /// <summary>The clear row, last, under its rule.</summary>
-    public static int ClearRow => ExtraRow + 2;
+    /// <summary>The tab's on/off row (2026-11-27, the user's ask), under the rule: Enter on it does what Space does anywhere on the tab.</summary>
+    public static int ToggleRow => ExtraRow + 2;
+
+    /// <summary>The clear row, last.</summary>
+    public static int ClearRow => ExtraRow + 3;
+
+    /// <summary>
+    /// The entry <paramref name="key"/>'s tab inherits from (2026-11-27): <c>*</c>'s, unless this tab is <c>*</c>, this tab is off (it
+    /// sends nothing) or <c>*</c> is off (it lends nothing). So the rows show what is sent.
+    /// </summary>
+    private static LlmSamplingEntry? Inherited(Dictionary<string, LlmSamplingEntry>? map, string key, LlmSamplingEntry? entry) =>
+        key == LlmSampling.AnyModel || entry is { Off: true } ? null : Entry(map, LlmSampling.AnyModel) is { Off: false } any ? any : null;
 
     /// <summary>
     /// The tabs' keys in order: <paramref name="connectedModel"/> (as the map stores it, when it does), <c>*</c>, then every
@@ -95,15 +105,17 @@ internal sealed class SamplingMenu
         ArgumentNullException.ThrowIfNull(key);
         bool anyTab = key == LlmSampling.AnyModel;
         var entry = Entry(map, key);
-        var any = anyTab ? null : Entry(map, LlmSampling.AnyModel);
+        var any = Inherited(map, key, entry);
+        bool off = entry is { Off: true };   // its own values dim, as the inherited ones are (2026-11-27)
         var rows = new List<string>(ClearRow + 1);
         foreach (var field in SamplingField.All)
         {
-            rows.Add(Row(field.Wire, SamplingText.FieldValue(field, entry, any, anyTab, server), own: field.Get(entry) is not null));
+            rows.Add(Row(field.Wire, SamplingText.FieldValue(field, entry, any, anyTab, server), own: !off && field.Get(entry) is not null));
         }
 
-        rows.Add(Row(SamplingText.ExtraRowName, SamplingText.ExtraValue(entry, any, anyTab), own: entry?.Extra is { Count: > 0 }));
+        rows.Add(Row(SamplingText.ExtraRowName, SamplingText.ExtraValue(entry, any, anyTab), own: !off && entry?.Extra is { Count: > 0 }));
         rows.Add(SectionRule.Bare);
+        rows.Add(Theme.DimMarkup(off ? SamplingText.TurnOnRowName : SamplingText.TurnOffRowName));
         rows.Add(Theme.DimMarkup(SamplingText.ClearRowName));
         return rows;
     }
@@ -122,10 +134,13 @@ internal sealed class SamplingMenu
         var tabs = keys.Select((k, i) =>
         {
             var reported = i == 0 && k != LlmSampling.AnyModel ? server : null;
-            string? caption = claudeApi ? SamplingText.ClaudeApiCaption : openAIApi ? SamplingText.OpenAIApiCaption : reported is null ? null : SamplingText.SourceCaption(reported);
-            return new MenuTab(SamplingText.TabTitle(k), Rows(map, k, reported)) { Caption = caption, Headings = new HashSet<int> { ClearRuleRow } };
+            bool off = Entry(map, k) is { Off: true };
+            string? caption = claudeApi ? SamplingText.ClaudeApiCaption : openAIApi ? SamplingText.OpenAIApiCaption
+                : off ? SamplingText.OffCaption(k == LlmSampling.AnyModel)
+                : reported is null ? null : SamplingText.SourceCaption(reported);
+            return new MenuTab(SamplingText.TabTitle(k) + (off ? SamplingText.OffMark : ""), Rows(map, k, reported)) { Caption = caption, Headings = new HashSet<int> { ClearRuleRow } };
         }).ToList();
-        return MenuPage.Tabbed(SamplingText.Label, tabs, tab, SamplingText.Keys);
+        return MenuPage.Tabbed(SamplingText.Label, tabs, tab, SamplingText.Keys) with { SpaceToggles = true };
     }
 
     /// <summary>The tabs as plain lines, for a console without the pane: each tab's title as a heading, its rows indented; the connected model's with the server's values and their source.</summary>
@@ -138,9 +153,14 @@ internal sealed class SamplingMenu
             bool anyTab = key == LlmSampling.AnyModel;
             var reported = i == 0 && !anyTab ? server : null;
             var entry = Entry(map, key);
-            var any = anyTab ? null : Entry(map, LlmSampling.AnyModel);
-            yield return SamplingText.TabTitle(key);
-            if (reported is not null)
+            var any = Inherited(map, key, entry);
+            bool off = entry is { Off: true };
+            yield return SamplingText.TabTitle(key) + (off ? SamplingText.OffMark : "");
+            if (off)
+            {
+                yield return "  " + SamplingText.OffCaption(anyTab);
+            }
+            else if (reported is not null)
             {
                 yield return "  " + SamplingText.SourceCaption(reported);
             }
@@ -244,7 +264,7 @@ internal sealed class SamplingMenu
         return true;
     }
 
-    /// <summary>Removes <paramref name="key"/>'s whole entry.</summary>
+    /// <summary>Removes <paramref name="key"/>'s whole entry, its off switch too (2026-11-27), so the tab reads on.</summary>
     public void ClearAll(string key) => Save(key, e =>
     {
         foreach (var field in SamplingField.All)
@@ -253,7 +273,15 @@ internal sealed class SamplingMenu
         }
 
         e.Extra = null;
+        e.Off = false;
     }, SamplingText.ClearedAllNotice(key));
+
+    /// <summary>
+    /// Switches <paramref name="key"/>'s tab off or on (2026-11-27, the user's ask): Space, the toggle row and <c>/sampling off|on</c>
+    /// alike, through the one save, so the override reminder warns while the variable turns it back on for the launch.
+    /// </summary>
+    public void SetOff(string key, bool off) =>
+        Save(key, e => e.Off = off, off ? SamplingText.OffNotice(key) : SamplingText.OnNotice(key));
 
     /// <summary>
     /// <c>/sampling</c> with arguments, for the connected model: <c>&lt;field&gt; &lt;value&gt;</c>, <c>&lt;field&gt; clear</c>,
@@ -277,6 +305,20 @@ internal sealed class SamplingMenu
         if (string.Equals(word, SamplingText.ClearWord, StringComparison.OrdinalIgnoreCase) && rest.Length == 0)
         {
             ClearAll(model);
+            return true;
+        }
+
+        // off and on alone (2026-11-27); a word after them is a usage error, never a field lookup.
+        bool offWord = string.Equals(word, SamplingText.OffWord, StringComparison.OrdinalIgnoreCase);
+        if (offWord || string.Equals(word, SamplingText.OnWord, StringComparison.OrdinalIgnoreCase))
+        {
+            if (rest.Length > 0)
+            {
+                _transcript.Error(SamplingText.UsageError);
+                return false;
+            }
+
+            SetOff(model, offWord);
             return true;
         }
 
@@ -337,6 +379,13 @@ internal sealed class SamplingMenu
                 cursor = pick.Row;
                 string key = keys[tab];
                 var shown = pick.Tab == page.Tab ? page : Page(map, keys, tab, claudeApi, server, openAIApi);
+                if (pick.Toggle || cursor == ToggleRow)
+                {
+                    // Space on any row of the tab, or Enter on its toggle row (2026-11-27); an edit while off leaves it off.
+                    SetOff(key, Entry(map, key) is not { Off: true });
+                    continue;
+                }
+
                 if (cursor == ClearRow)
                 {
                     if (Entry(map, key) is { IsEmpty: false } && await _menu.ConfirmAsync(SamplingText.ClearQuestion(key), cancellationToken, close: false).ConfigureAwait(false))

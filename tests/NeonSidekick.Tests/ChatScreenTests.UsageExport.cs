@@ -72,7 +72,6 @@ public partial class ChatScreenTests
         Assert.Equal(MidTurnClass.Deferred, ChatScreen.MidTurnPolicy(SlashCommand.Usage, "sysprompt conversation"));
         Assert.Equal(ChatScreen.MidTurnPolicy(SlashCommand.Usage, hasArgs: true), ChatScreen.MidTurnPolicy(SlashCommand.Usage, "prompt"));
         Assert.Equal(ChatScreen.MidTurnPolicy(SlashCommand.Usage, hasArgs: false), ChatScreen.MidTurnPolicy(SlashCommand.Usage, ""));
-        Assert.Equal("/usage takes context, prompt, tools, skills, models or sysprompt, or nothing for the pane.", UsageText.UsageError);
     }
 
     [Fact]

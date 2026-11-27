@@ -30,7 +30,42 @@ public static class SamplingText
     public const string ClearRowName = "clear all on this tab";
 
     /// <summary>The hint of the pane, which edits every row by typing. Pinned.</summary>
-    public const string Keys = "Enter = edit · blank = server default · ←/→ tabs · Esc = close";
+    public const string Keys = "Enter = edit · Space = on/off · blank = server default · ←/→ tabs · Esc = close";
+
+    /// <summary>The toggle row of an on tab (2026-11-27, the off switch), above the clear row. Pinned.</summary>
+    public const string TurnOffRowName = "turn this tab off";
+
+    /// <summary>The toggle row of an off tab. Pinned.</summary>
+    public const string TurnOnRowName = "turn this tab on";
+
+    /// <summary>An off tab's title ends with this, and so does its key in <see cref="Summary"/>. Pinned.</summary>
+    public const string OffMark = " (off)";
+
+    /// <summary>
+    /// An off tab's caption (2026-11-27), in place of the source caption: a model's gets the server's defaults, the <c>*</c> tab lends
+    /// nothing. Pinned.
+    /// </summary>
+    public static string OffCaption(bool anyTab) => anyTab
+        ? "Off: no model falls back to these; your values are kept."
+        : "Off: this model gets the server's own defaults; your values are kept.";
+
+    /// <summary>The status line after a tab is switched off. Pinned.</summary>
+    public static string OffNotice(string key) => $"{NoticeGlyphs.Llm}Sampling: {key} off";
+
+    /// <summary>The status line after a tab is switched back on. Pinned.</summary>
+    public static string OnNotice(string key) => $"{NoticeGlyphs.Llm}Sampling: {key} on";
+
+    /// <summary><c>/sampling off</c>: the connected model's tab off (2026-11-27). Pinned.</summary>
+    public const string OffWord = "off";
+
+    /// <summary><c>/sampling on</c>: back on. Pinned.</summary>
+    public const string OnWord = "on";
+
+    /// <summary>The note beside <see cref="OffWord"/> in the completion.</summary>
+    public const string OffCompletionNote = "the server's own defaults for the connected model, your values kept";
+
+    /// <summary>The note beside <see cref="OnWord"/> in the completion.</summary>
+    public const string OnCompletionNote = "the connected model's overrides back on";
 
     /// <summary>The caption while the Anthropic API is connected: its requests carry none of this. Pinned.</summary>
     public const string ClaudeApiCaption = "The Anthropic API ignores sampling; these apply to OpenAI-compatible servers.";
@@ -99,16 +134,20 @@ public static class SamplingText
         : !anyTab && any?.Extra is { Count: > 0 } inherited ? ExtraJson(inherited) + " (from *)"
         : "(none)";
 
-    /// <summary>The <c>LLM sampling</c> settings row: the keys that have an entry (<c>*</c> first), or <see cref="ServerDefaults"/>. Pinned.</summary>
+    /// <summary>
+    /// The <c>LLM sampling</c> settings row: the keys that have an entry (<c>*</c> first), an off one marked <see cref="OffMark"/>
+    /// (2026-11-27), or <see cref="ServerDefaults"/>. Pinned.
+    /// </summary>
     public static string Summary(Dictionary<string, LlmSamplingEntry>? map)
     {
-        var keys = map?.Where(p => p.Value is { IsEmpty: false }).Select(p => p.Key).ToList() ?? [];
+        var keys = map?.Where(p => p.Value is { IsEmpty: false }).ToList() ?? [];
         if (keys.Count == 0)
         {
             return ServerDefaults;
         }
 
-        return string.Join(", ", keys.OrderBy(k => k == LlmSampling.AnyModel ? 0 : 1).ThenBy(k => k, StringComparer.OrdinalIgnoreCase));
+        return string.Join(", ", keys.OrderBy(p => p.Key == LlmSampling.AnyModel ? 0 : 1).ThenBy(p => p.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(p => p.Key + (p.Value.Off ? OffMark : "")));
     }
 
     /// <summary>The status line after a save: <c>🖥️ Sampling for qwen3-8b: temperature 0.6</c>. Pinned.</summary>
@@ -138,7 +177,7 @@ public static class SamplingText
 
     /// <summary>What <c>/sampling</c> answers to arguments it cannot read. Pinned.</summary>
     public static readonly string UsageError =
-        "/sampling takes nothing (the pane), <field> <value>, <field> clear, extra <json> or clear; <field> is one of "
+        "/sampling takes nothing (the pane), <field> <value>, <field> clear, extra <json>, clear, off or on; <field> is one of "
         + string.Join(", ", SamplingField.All.Select(f => f.Wire)) + ".";
 
     /// <summary>The word that clears a field, or the whole entry alone. Pinned.</summary>

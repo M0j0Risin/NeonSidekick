@@ -45,13 +45,14 @@ From top to bottom:
 * **The picture strip**, while there are ComfyUI pictures: × closes it. The [picture viewer](#the-picture-viewer) opens from the toolbar's 🎞️.
 * **The upper rule:** the session's name (a double-click renames it), **⤡** (a click folds or unfolds everything, like Ctrl+O), 🎞️ (a click closes or opens the picture strip), and 🕶️ while the conversation is [private](#private-conversations).
 * **[The input line](#the-input-line).** A dim ☺ at its right end opens the emoji picker (*Emoji picker*).
-* **The lower rule** shows the queued count at its left and the running jobs at its right, whatever the Status section shows: `─ 📤 2 queued ── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🔌 1/3 ── 🎙️ 42% ── 🔈 ── 🖼️ 2 ── 🧠 ── 🧟 ── 📷 ── ⚡1 ─`.
+* **The lower rule** shows the pictures under way and the queued count at its left and the running jobs at its right, whatever the Status section shows: `─ 🖼️  00:38 ── 📤 2 queued ── 📦 0.5.9 at quit ── 🔁 step 2/5 · pass 3 ── 📥 ⠋ 42% ── 🔌 1/3 ── 🎙️ 42% ── 🔈 ── 🧠 ── 🧟 ── 📷 ── ⚡ 1 ─`.
+  * **🖼️** (🎨 for a rework) ComfyUI pictures under way, with the oldest one's time (`🖼️  00:38`, or `🖼️  2 · 00:38` for two).
   * **📤** your messages waiting to be sent (`📤 2 queued`), shown while any wait.
   * **📦** a new version and how its [update](COMMANDS.md#updating) stands (`📦 0.5.7`, `42%`, `checking`, `at quit`, `back to 0.5.6 at quit`); *Check for updates at start* off hides the plain `📦 0.5.7`.
   * **The loop:** 🔁 a [Ralph loop](COMMANDS.md#ralph-loop) (`🔁 step 2/5 · pass 3`), 🔎 a [code audit](COMMANDS.md#code-audit) (`🔎 2/5`), ⟳ a [`/loop`](COMMANDS.md#loops) (`⟳ 3/10`). A double-click ends it after the pass in progress (`· ending`).
-  * **📥** an embedded model's download; **🔌**, **🎙️**, **🔈** the MCP servers, voice input and speech output setting up; **🖼️** (🎨 for a rework) ComfyUI pictures still rendering.
-  * **🧠** background learning, **🧟** a botchat's extra embedded servers left running, **📷** the camera on, **⚡n** the background processes running.
-  * **A narrow window** drops 📦, 🖼️, 🧠, 🔈, 🎙️, 🔌, 📥, the loop, 🧟, then 📤; ⚡n goes only to make room for 📷, which always stays. Each is shown whole, except one left alone, which is cut to fit.
+  * **📥** an embedded model's download; **🔌**, **🎙️**, **🔈** the MCP servers, voice input and speech output setting up.
+  * **🧠** background learning, **🧟** a botchat's extra embedded servers left running, **📷** the camera on, **⚡ n** the background processes running.
+  * **A narrow window** drops 📦, 🧠, 🔈, 🎙️, 🔌, 📥, the loop, 🧟, 📤, then ⚡ n; 🖼️ stays longest, and 📷 always stays. Each is shown whole, except one left alone, which is cut to fit.
 
 | Double-click on the lower rule | Does |
 |---|---|
@@ -65,7 +66,7 @@ From top to bottom:
 | 🧠 | cancels the learning, like Ctrl+L |
 | 🧟 | `/botchat --kill` (after a reply, if one is running) |
 | 📷 | `/camera off` |
-| ⚡n | `/process` |
+| ⚡ n | `/process` |
 | 📤 n queued | `/queue` |
 * **A mark:** `/mark <color>` colors both rules for the conversation, kept with its session; `/mark default` takes it off.
 * **Five bars**, in *Toolbar order*: [hints](#the-hints-bar) (while there is a hint), [status](#the-status-bar), [toolbar](#the-toolbar), [performance](#the-performance-bar), [home](#the-home-bar).
@@ -146,6 +147,9 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | A code audit's done pane | `p` fix via plan (with a finding open) · `g` more passes… · `k` keep the report · `d` discard it · Esc keeps |
 | `/find` | type to find (a paste or right-click adds a first line) · Enter or F3 older · Shift+Enter or Shift+F3 newer · PgUp/PgDn scroll · Ctrl+↑/↓ previous or next message · Esc, Ctrl+F or a double-click outside done |
 | Info panes (`/help`, `/usage`, `/about`, `/tree`…) | ↑/↓, PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
+| `/usage` › Context | ↑/↓ move between the rows, then scroll on past them · Space switches a tool group or an MCP server · Enter opens where the row is changed · PgUp/PgDn scroll · ←/→ or Tab switch tabs · type to find · Esc closes |
+| Advisor list | Enter add or change · Space on/off · Del remove (asks) · Esc back |
+| `/sampling` | Enter edits · Space switches the tab off or on · ←/→ tabs · Esc closes |
 | `/update` | `i` install · `l` later · ↑/↓, PgUp/PgDn scroll · a double-click on the release link opens it · Esc is later. Typing finds nothing here. |
 | `/update`, with one under way | `c` cancel update · `k` keep · Esc keeps. Typing finds nothing here. |
 | `/update` or `/update rollback` checking, under a reply | Esc stops it. |
@@ -172,6 +176,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/tools` › Files › Video | `p` *Video files play in* |
 | `/tools camera` | `w` watch · `l` live · `s` snap · `c` screen |
 | *ComfyUI workflows* | Space offers or hides · `a` all · `n` none · `c` checks against the server · Enter opens a workflow's actions · Del deletes (asks) · the top row adds one |
+| A ComfyUI workflow's LoRAs page | Enter strength · Space on/off · `t` trigger words · Del removes · Esc back |
 | A ComfyUI test or check under way | Esc cancels it |
 | A wizard's summary, a ComfyUI workflow's Edit | Enter on a row changes it, the cursor coming back to it · Esc or Cancel with unsaved changes asks: Save (offered or hidden as it was), Discard or Keep editing · Cancel on a new one asks first |
 | The camera pane | Space takes · `r` retake · Enter attaches · Esc drops |
@@ -202,7 +207,7 @@ A list opens over the input line as you type `/` at the start, a command's argum
 | `/settings changed` | Enter edits · `r` back to default |
 | `/profile` | `+` goes to **+ Add a profile…** · a letter jumps to a profile |
 | `/theme` | a letter jumps to the next theme with it · → edit (as `/theme edit`), then back to the list · Del deletes one of yours (asks) |
-| `/theme edit` | ←/→ lighter or darker (Shift ×5) · Enter opens the color picker · `s` save · `r` the row back · `d` discard · Esc close; with changes, both offer Save, Discard or Keep editing |
+| `/theme edit` | ←/→ lighter or darker (Shift ×5) · Enter opens the color picker · `s` save · `r` the row back · Esc close, asking Save, Discard or Keep editing when there are changes |
 | `/theme edit`'s color picker | ↑/↓ a bar · ←/→ move it (Shift ×5) · Enter uses the color, or on *Hex value* types one · Esc back, unchanged |
 | The Oracle and PostgreSQL wizards' *Schemas* page | Enter or Space ticks · `a` all · `n` none · Shift+↑/↓, Shift+Home/End move: the first ticked is current (Oracle) or first on the search path · Continue goes on · Esc back |
 | `/toolbar edit`, `/perfbar edit`, *Status bar* | [Bar checklists](#bar-checklists) |
@@ -327,7 +332,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
 ## Commands typed during a reply
 
 * **Open their pane over the reply:**
-  * Info: `/help`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/about`, `/usage`, `/keycheck`, `/tree`, `/vault`, `/browse`
+  * Info: `/help`, `/sys persona`, `/sys operata`, `/sys vocalia`, `/about`, `/usage`, `/bench history`, `/keycheck`, `/tree`, `/vault`, `/browse`
   * Settings: `/settings`, `/tools`, `/mcp`, `/skills`, `/commands`, `/comfy`, `/reasoning`, `/sampling`, `/webui`, `/toolbar edit`, `/perfbar edit`, `/homebar edit`, a home bar chip's pane
   * Conversation: `/memory`, `/queue`, `/sessions`, `/sessions here`, `/sessions title`, `/rename`, `/msgclear`, `/prompts`
   * Lists: `/docker`, `/eventlog`, `/net`, `/services`, `/tasks`, `/monitor`, `/midi` (and `learn`), `/ad`, `/youtube`, `/shopping`, `/browser list`, `/camera list`, `/ha states`, `/process`, `/update`, `/update rollback`
@@ -335,7 +340,7 @@ Each runs its command as if typed and keeps your draft. The last column says wha
   * Display: `/mark`, `/header`, `/toolbar`, `/perfbar`, `/homebar` (and `on`, `off`), `/expand`, `/collapse`, `/window`, `/log`, `/terminal`, `/shortcut`, `/explore`, `/open`, `/cwd`
   * Voice and camera: `/tts`, `/stt` (and `wake`, `interrupt`), `/camera live`, `watch`, `off`, `use`, `view` and `thumbs`, `/screen view` and `thumbs`
   * Pictures: `/view <path>` (and `--thumbs`), and `view` or `thumbs` after `/comfy`, `/splash`, `/pasted` or `/ha stills`
-  * The reply's settings: `/reasoning <level>`, `/sampling <field> <value>`, `/queue clear`, `/queue send`, `/queue mode <word>`, `/queue cancel <word>`
+  * The reply's settings: `/reasoning <level>`, `/sampling <field> <value>`, `/sampling off|on`, `/queue clear`, `/queue send`, `/queue mode <word>`, `/queue cancel <word>`
   * Others: `/update notes` and `cancel`, `/copy`, `/memory remember`, `/timer`, `/ha`, `/webui copy`, `/webui browser`, `/browser <url>`, `/prompts <n>`, `/process <id>`, `/docker logs <container>`, `/monitor list`, `/midi list`, `on`, `off` and `forget`, `/commands save <name>` (saves the message the reply answers)
 * **Stop the reply first:** `/clear`, `/new`, `/splash`, `/rewind`, `/undo` (`/undo purge` waits instead), `/exit`
 * **Everything else** waits for the reply, queued behind earlier messages (*Queue cancel mode* applies).
@@ -613,7 +618,7 @@ A private conversation leaves nothing in the session history. `/private` makes t
 
 * **Going private:** a saved conversation asks first, then its session and its input lines are deleted from `sessions.db`, with its file checkpoints. An unsaved one with file checkpoints asks too.
 * **Every conversation:** `--private`, `NEONSIDEKICK_PRIVATE` or [Private at start](SETTINGS.md#sessions). Under the flag or variable `/private off` is refused; `/new` starts a fresh private one.
-* **It ends** with `/private off`, `/new`, `/clear`, `/splash`, `/test`, a profile switch, restoring a session (it asks first) or the exit.
+* **It ends** with `/private off`, `/new`, `/clear`, `/splash`, `/bench`, a profile switch, restoring a session (it asks first) or the exit.
 * **What goes at the end:** its screen, ↑ lines, pastes, `/log` lines, the shell's cut-output logs in `.neon/shell`, and its file checkpoints (`/undo` of a private turn works only until then).
 * **Pictures:** under *Private pictures* `ask` (the default), the end asks whether to keep or delete this conversation's pictures and phone PDFs, from before the switch too. A delete is permanent.
 * **Under the flag,** restoring a session opens a private copy: the stored session isn't changed.
@@ -711,7 +716,7 @@ The page is plain HTTP. Tailscale Serve puts HTTPS in front of it with a real ce
 * **Queued:** a message goes after the PC's queue. During a reply it waits (in Queued and on the [Queue tab](#queue-prompts-history-and-memory), not in `/queue`) and goes when the reply ends, even under *Queue mode* `manual`. At most 20 wait, 48 KB each.
 * **After a cancel** under *Queue cancel mode* `hold`, waiting messages are held under a **Resume** banner; a new message runs first.
 * **Dropped** by `/clear`, `/new`, a resume, a rewind, a profile switch or *Queue cancel mode* `empty`. Their text and attachments go back to the page, except on a profile switch; `/queue clear` leaves them.
-* **Stop** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/test` or a `/loop`, and stops speech (after the reply, only this page's voice); before the reply's first word it takes the message back. It never stops a model loading (Esc or Ctrl+C at the PC) or your editor under `/draft`.
+* **Stop** ends a reply, a compact, a botchat, an advisor, `/imagine`, `/bench` or a `/loop`, and stops speech (after the reply, only this page's voice); before the reply's first word it takes the message back. It never stops a model loading (Esc or Ctrl+C at the PC) or your editor under `/draft`.
 
 #### What the page shows
 
@@ -831,7 +836,7 @@ With *Web UI commands* on (off by default), the page sends slash commands too. T
 
 | Kind | Commands | On the page |
 |---|---|---|
-| Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/project-init [<focus> ...]`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/test …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/timer …`, `/rename <name>`, `/sessions <id>`, `/sessions title <text>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/memory remember <text>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills` or `camera`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
+| Run | Your [custom commands](COMMANDS.md#custom-commands), `/update notes`, `/new`, `/clear`, `/splash`, `/compact`, `/plan …` (`/plan ralph` too), `/mark <color>`, `/code-audit …`, `/project-init [<focus> ...]`, `/claude`, `/advisor`, `/help <words>`, `/imagine`, `/loop …`, `/botchat …`, `/learn [<note>]`, `/bench …`, `/pdf …`, `/docx …`, `/print <file\|reply>`, `/avatar <emoji>\|clear`, `/timer …`, `/rename <name>`, `/sessions <id>`, `/sessions title <text>`, `/tts on\|off`, `/stt on\|off`, `/memory <mode>`, `/memory remember <text>`, `/cwd`, `/model <id>`, `/reasoning <level>`, `/ha …` (not `stills` or `camera`), `/docker …`, `/shopping …`, `/prompts list\|save\|remove\|<n>`, `/browser save\|unsave`, `/msgclear`, `/undo [<n>]` | Their lines; the status row shows its spinner while it runs |
 | Pick | `/model`, `/reasoning`, `/rewind [<n>]`, `/plan open [--chat]` | A card with the choices, the one in use marked, a filter for a long list |
 | List | `/ha states`, `/docker logs`, `/eventlog …`, `/net …`, `/services …`, `/tasks …`, `/ad …`, `/code-audit open`, `/print`, `/print printers`, `/camera list`, `/screen list`, `/tree` (needs *File tools*), `/vault` (needs *Obsidian tools*), `/process`, `/comfy status`, `/comfy offered` | A card with the lines; Close |
 | Never | `/exit`, `/webui`, `/cmd`, `/profile`, `/plan edit`, `/cwd <path>`, `/advisor new`, `/sessions purge\|export`, `/skills`, `/commands`, `/youtube` (bare and `list` point at the tab), `/video`, `/queue clear`, `/sampling`, `/server`, `/usage`, `/midi`, `/settings export\|import` | Refused: they run at the PC only |

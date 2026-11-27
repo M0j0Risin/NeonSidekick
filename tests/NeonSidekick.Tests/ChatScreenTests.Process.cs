@@ -200,7 +200,7 @@ public partial class ChatScreenTests
     }
 
     /// <summary>
-    /// The running processes' count on the lower rule (2026-10-12, the user's ask): no title before the model starts one, <c>⚡1</c>
+    /// The running processes' count on the lower rule (2026-10-12, the user's ask): no title before the model starts one, <c>⚡ 1</c>
     /// at the right of the rule under the draft line while it runs, and a double-click there opens <c>/process</c>'s pane.
     /// </summary>
     [WindowsFact]
@@ -218,7 +218,7 @@ public partial class ChatScreenTests
         var steps = new (Func<bool> Ready, Action<ScriptedInput> Act)[]
         {
             (() => true, i => { bareFirst = !Output.Contains(" " + ProcessWindowText.RuleTitle(1) + " ", StringComparison.Ordinal); PushLine(i, "start it"); }),
-            (() => Output.Contains(counted, StringComparison.Ordinal), i => { i.PushClick(76, 101); i.PushClick(76, 101); }),   // ⚡1 at columns 75–77
+            (() => Output.Contains(counted, StringComparison.Ordinal), i => { i.PushClick(76, 101); i.PushClick(76, 101); }),   // ⚡ 1 at columns 74–77
             (() => Output.Contains(ProcessMenu.Title, StringComparison.Ordinal), Key(Keys.Escape)),
             (() => true, Line("/exit")),
         };
@@ -235,11 +235,11 @@ public partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.True(bareFirst);
-        Assert.Equal(Rule80() + " ⚡1 ─", counted);
+        Assert.Equal(Rule80() + " ⚡ 1 ─", counted);
         Assert.Contains(ProcessMenu.Title, output);
         Assert.Contains("1 process (1 running)", output);
 
-        static string Rule80() => new('─', 74);
+        static string Rule80() => new('─', 73);
     }
 
     /// <summary>The Unix twin of <see cref="Process_WithThePane_EnterOpens_TheKillKeyAsks_YesStops"/> (2026-10-06, the macOS build): a zsh child, not cmd.exe.</summary>

@@ -102,8 +102,8 @@ public sealed class SqlConfigFile
         "  //   \"auth\": \"windows\"\n" +
         "  // },\n" +
         "  //\n" +
-        "  // A SQL login with the password in " + SqlText.CredentialStore + " as NeonSidekick/sql/<name> — set it with SQL set password\n" +
-        "  // on /tools › Databases › SQL, or: " + SqlText.CredentialCommand("NeonSidekick/sql/reports-reader", "reader") + "\n" +
+        "  // A SQL login with the password in " + SqlText.CredentialStore + " as NeonSidekick/sql/<name> — set it in SQL add/edit\n" +
+        "  // connection's Password row on /tools › Databases › SQL, or: " + SqlText.CredentialCommand("NeonSidekick/sql/reports-reader", "reader") + "\n" +
         "  // \"reports-reader\": {\n" +
         "  //   \"server\": \"sqlhost01.example.com,1453\", \"database\": \"Reports\",\n" +
         "  //   \"auth\": \"sql\", \"user\": \"reader\", \"passwordStore\": \"credman\"\n" +
@@ -111,7 +111,7 @@ public sealed class SqlConfigFile
         "  //\n" +
         "  // Kerberos sign-in as another account (auth runas, the account as name@REALM): the app gets that account's ticket\n" +
         "  // with its password at each connect, and macOS keeps it in a credential cache of its own beside yours (klist -l).\n" +
-        "  // The password in " + SqlText.CredentialStore + " as NeonSidekick/sql/<name> (SQL set password, as above), or:\n" +
+        "  // The password in " + SqlText.CredentialStore + " as NeonSidekick/sql/<name> (its Password row, as above), or:\n" +
         "  // " + SqlText.CredentialCommand("NeonSidekick/sql/reports-admin", "svc-reader@AD.EXAMPLE.EDU") + "\n" +
         "  // \"reports-admin\": {\n" +
         "  //   \"server\": \"sqlhost01.example.com,1453\", \"database\": \"Reports\",\n" +
@@ -150,7 +150,7 @@ public sealed class SqlConfigFile
         "  // },\n" +
         "  //\n" +
         "  // Windows sign-in as another account (auth runas: runas /netonly's way, remote servers only), the password in\n" +
-        "  // Windows Credential Manager as NeonSidekick/sql/<name> — set it with SQL set password on /tools › Databases › SQL,\n" +
+        "  // Windows Credential Manager as NeonSidekick/sql/<name> — set it in SQL add/edit connection's Password row on /tools › Databases › SQL,\n" +
         "  // or: cmdkey /generic:NeonSidekick/sql/reports-admin /user:CONTOSO\\svc-reader /pass\n" +
         "  // \"reports-admin\": {\n" +
         "  //   \"server\": \"sqlhost01.example.com,1453\", \"database\": \"Reports\",\n" +

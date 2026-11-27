@@ -17,10 +17,12 @@ public static class PostgresText
     public const string NoUser = "no \"user\" is given";
     public static string BadPort(int port) => $"\"port\" is {Invariant(port)}; it must be 1 to 65535";
     public static string BadSslMode(string word) => $"\"sslMode\" is '{word}'; it must be prefer, require, verify-ca, verify-full or disable";
-    public static string NoPassword(string name) => $"'{name}' has no password; set it on /tools › Databases › PostgreSQL (PostgreSQL set password)";
+    /// <summary>The row a password is set in (2026-11-26, the user's ask: the per-family "set password" rows went; an edit's Password row sets it). Pinned.</summary>
+    public const string EditRow = "PostgreSQL add/edit connection";
+
+    public static string NoPassword(string name) => $"'{name}' has no password; set it with {EditRow} (its Password row) on /tools › Databases › PostgreSQL";
     public static string NoCredential(string target) => $"no password in {SqlText.CredentialStore} for {target}; set it on /tools › Databases › PostgreSQL, or: {SqlText.CredentialCommand(target, "<user>")}";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's postgres.json was checked for plain passwords: {detail}";
-    public const string NoPasswordConnections = "No connection in postgres.json yet; add one first (PostgreSQL add connection).";
 
     /// <summary>One connection as <c>postgres_connections</c> lists it; a <c>readwrite</c> one says so (2026-10-05), and whether <paramref name="writes"/> (<c>PostgreSQL mode</c> read-write) lets it change.</summary>
     public static string ConnectionLine(PostgresNamedConnection connection, bool writes = false)

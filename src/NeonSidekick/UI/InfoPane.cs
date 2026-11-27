@@ -25,6 +25,35 @@ public sealed record InfoTab(string Title, Func<IRenderable> Content)
     /// keeps it open. Tried before <see cref="LineDoubleClicked"/>.
     /// </summary>
     public Func<int, string, bool>? LineChosen { get; init; }
+
+    /// <summary>
+    /// The content lines a row cursor visits (2026-11-27, <c>/usage</c> › Context's rows), read each time the content is built; null for no cursor,
+    /// as every other tab. ↑/↓ move it, scrolling to keep it shown and handing on to the line scroll past either end.
+    /// </summary>
+    public Func<IReadOnlyList<int>>? Stops { get; init; }
+
+    /// <summary>
+    /// Told Space or Enter on the cursor's stop (its index among <see cref="Stops"/>), awaited with the pane still shown (a flip saves, an MCP
+    /// server connects): <see cref="InfoStopResult.Stay"/> rebuilds the content in place.
+    /// </summary>
+    public Func<int, InfoStopKey, Task<InfoStopResult>>? StopKey { get; init; }
+
+    /// <summary>The stop the cursor starts on when the tab is shown without one given; null for the first.</summary>
+    public Func<int>? InitialStop { get; init; }
+}
+
+/// <summary>A key on an <see cref="InfoTab"/>'s stop (2026-11-27).</summary>
+public enum InfoStopKey
+{
+    Space,
+    Enter,
+}
+
+/// <summary>What a stop's key did: the pane stays, its content rebuilt with the cursor kept, or closes for the host to act and reopen.</summary>
+public enum InfoStopResult
+{
+    Stay,
+    Close,
 }
 
 /// <summary>
@@ -98,6 +127,12 @@ public sealed class InfoPane
 
     /// <summary>The hint row under the pane (the find and PgUp/PgDn since 2026-10-07, in the <c>key = what</c> form of the menus' hints). Pinned.</summary>
     public const string HintText = "↑/↓ PgUp/PgDn = scroll · ←/→ = tabs · type = find · Esc = close";
+
+    /// <summary>The hint row while a tab's row cursor is in view (2026-11-27, <c>/usage</c> › Context). Pinned.</summary>
+    public const string StopsHintText = "↑/↓ = move · Space = on/off · Enter = open · PgUp/PgDn = scroll · ←/→ = tabs · type = find · Esc = close";
+
+    /// <summary>The cursor's mark in the margin of its row (2026-11-27): one cell and a space, where the row's indent was.</summary>
+    public const string StopPointer = "▶ ";
 
     /// <summary>The hint row under a pane of one tab (2026-10-04): no tabs to switch. Pinned.</summary>
     public const string SingleTabHintText = "↑/↓ PgUp/PgDn = scroll · type = find · Esc = close";
@@ -595,6 +630,16 @@ public sealed class InfoPane
     /// <summary>The content line a tab's <see cref="InfoTab.LineChosen"/> closed the last visit on (its text), or null when it closed otherwise.</summary>
     public string? ChosenLine { get; private set; }
 
+    /// <summary>The stop and key that closed the pane (2026-11-27, <see cref="InfoStopResult.Close"/>); null otherwise.</summary>
+    public (int Stop, InfoStopKey Key)? ChosenStop { get; private set; }
+
+    /// <summary>The cursor's stop when the pane closed (-1 for none), for a host that reopens it on the same row.</summary>
+    public int LastStop { get; private set; } = -1;
+
+    // The row cursor (2026-11-27): the shown tab's stop lines, and the stop it is on (-1: the tab's own start).
+    private List<int> _stopLines = [];
+    private int _stop = -1;
+
     /// <summary>The tab shown when the pane last closed (later on 2026-10-15): a host that opens it again after a button keeps the user's tab.</summary>
     public int LastTab { get; private set; }
 
@@ -613,13 +658,19 @@ public sealed class InfoPane
     /// <summary>Told the pane's label as it opens (later on 2026-10-14, as <see cref="MenuPane.Opening"/>).</summary>
     public Action<string>? Opening { get; set; }
 
-    public async Task ShowAsync(string label, IReadOnlyList<InfoTab> tabs, int initial, CancellationToken cancellationToken, IReadOnlyList<InfoAction>? actions = null, bool noFind = false)
+    /// <param name="initialLine">The content line the initial tab's view starts at (2026-11-27, <c>/bench history</c> at the Bench tab's recent
+    /// runs), clamped to the last full page; other tabs open at their top as always.</param>
+    /// <param name="initialStop">The initial tab's cursor stop (2026-11-27, a host reopening on the row it left); -1 for the tab's own start.</param>
+    public async Task ShowAsync(string label, IReadOnlyList<InfoTab> tabs, int initial, CancellationToken cancellationToken, IReadOnlyList<InfoAction>? actions = null, bool noFind = false, int? initialLine = null, int initialStop = -1)
     {
         Opening?.Invoke(label);
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(tabs);
         Pressed = null;
         ChosenLine = null;
+        ChosenStop = null;
+        _stop = initialStop;
+        _stopLines = [];
         _actions = actions ?? [];
         _noFind = noFind;
         if (tabs.Count == 0)
@@ -634,7 +685,7 @@ public sealed class InfoPane
 
         int active = Math.Clamp(initial, 0, tabs.Count - 1);
         LastTab = active;
-        _first = 0;
+        _first = Math.Max(0, initialLine ?? 0);
         _tallestWidth = -1;
         _content = null;
         _contentTab = -1;
@@ -695,6 +746,26 @@ public sealed class InfoPane
                             return;
                         }
 
+                        continue;
+                    }
+
+                    // A click on a stop's line moves the cursor there (2026-11-27); a second one within the interval is Enter on it.
+                    if (click.Button == MouseButton.Left && StopsShown(tabs, active)
+                        && _pane.TryHitOverlay(click.X, click.Y, out int stopRow) && stopRow > _stripRows && stopRow <= _stripRows + _shown
+                        && _stopLines.IndexOf(_first + stopRow - _stripRows - 1) is int clickedStop and >= 0)
+                    {
+                        if (_pane.DropsStaleClick(click, stopRow, _clicks))
+                        {
+                            continue;
+                        }
+
+                        _stop = clickedStop;
+                        if (_clicks.Second(ContentClickBase + _stopLines[clickedStop]) && await PressStopAsync(tabs, active, InfoStopKey.Enter).ConfigureAwait(false))
+                        {
+                            return;
+                        }
+
+                        Show(label, tabs, active);
                         continue;
                     }
 
@@ -827,6 +898,19 @@ public sealed class InfoPane
                     _clicks.Reset();
                     flip = true;
                 }
+                else if (_find.Length == 0 && StopInView(tabs, active) && (k.KeyChar == ' ' || k.Key == ConsoleKey.Enter)
+                    && (k.Modifiers & (ConsoleModifiers.Control | ConsoleModifiers.Alt | ConsoleModifiers.Shift)) == 0)
+                {
+                    // The row cursor's keys (2026-11-27) while no find is typed and its stop is in view; else Enter steps a find and Space starts one.
+                    // Space by its character, as the menus read it: a scripted key carries the one without ConsoleKey.Spacebar.
+                    _clicks.Reset();
+                    if (await PressStopAsync(tabs, active, k.KeyChar == ' ' ? InfoStopKey.Space : InfoStopKey.Enter).ConfigureAwait(false))
+                    {
+                        return;
+                    }
+
+                    redraw = true;
+                }
                 else if (FindStep(k) is int along)
                 {
                     // Enter or F3 the next match, with Shift the one before, wrapping; nothing until something is found.
@@ -863,6 +947,16 @@ public sealed class InfoPane
                     _findMoved = true;
                     redraw = true;
                 }
+                else if (k.Modifiers == 0 && k.Key is ConsoleKey.DownArrow or ConsoleKey.UpArrow && StopInView(tabs, active)
+                    && _stop + (k.Key == ConsoleKey.DownArrow ? 1 : -1) is int target && target >= 0 && target < _stopLines.Count)
+                {
+                    // The cursor to the next or previous stop (2026-11-27), the view following it; past the last or the first the line scroll takes over.
+                    _clicks.Reset();
+                    _stop = target;
+                    int line = _stopLines[target];
+                    first = line < _first ? line : line >= _first + _shown ? line - _shown + 1 : _first;
+                    redraw = true;
+                }
                 else
                 {
                     _clicks.Reset();
@@ -876,8 +970,9 @@ public sealed class InfoPane
 
                     // A held arrow's queued presses (2026-10-03, the user's ask): folded into this one move and drawn once, so
                     // the pane stops where the key was let go instead of working off a backlog of redraws. Only bare keys are
-                    // taken: a chord stays for the pane read, which knows the command chords.
-                    if (ScrollStep(k) is not null)
+                    // taken: a chord stays for the pane read, which knows the command chords. Not on a tab with stops (2026-11-27): an
+                    // arrow there may bring a row back under the cursor, so each press is its own.
+                    if (ScrollStep(k) is not null && !StopsShown(tabs, active))
                     {
                         while (_keys.TakeQueued(e => e is InputEvent.Key { Info: var q } && q.Modifiers == 0 && ScrollStep(q) is not null) is InputEvent.Key { Info: var more })
                         {
@@ -901,6 +996,7 @@ public sealed class InfoPane
                 {
                     active = next;
                     LastTab = active;
+                    _stop = -1;   // the new tab's own start (2026-11-27)
                     _first = 0;
                     _findMoved = _find.Length > 0;
                 }
@@ -922,9 +1018,74 @@ public sealed class InfoPane
         }
         finally
         {
+            LastStop = _stopLines.Count > 0 ? _stop : -1;
             _pane.RestoreOverlay(under);
             _mouse?.Invoke(false);
         }
+    }
+
+    /// <summary>Whether the shown tab has a row cursor now: stops, a key handler, and not toggled to other content.</summary>
+    private bool StopsShown(IReadOnlyList<InfoTab> tabs, int active) =>
+        _stopLines.Count > 0 && tabs[active].StopKey is not null && !_toggled.Contains(active);
+
+    /// <summary>Whether the cursor's stop is in the view: its keys answer only then.</summary>
+    private bool StopInView(IReadOnlyList<InfoTab> tabs, int active) =>
+        StopsShown(tabs, active) && _stop >= 0 && _stop < _stopLines.Count && _stopLines[_stop] >= _first && _stopLines[_stop] < _first + _shown;
+
+    /// <summary>
+    /// Space or Enter on the cursor's stop: the tab's handler. True when it closed the pane (<see cref="ChosenStop"/> set); a stay rebuilds the
+    /// content at the next draw, every tab measured again, the cursor kept.
+    /// </summary>
+    private async Task<bool> PressStopAsync(IReadOnlyList<InfoTab> tabs, int active, InfoStopKey key)
+    {
+        if (tabs[active].StopKey is not { } onStop || _stop < 0)
+        {
+            return false;
+        }
+
+        if (await onStop(_stop, key).ConfigureAwait(false) == InfoStopResult.Close)
+        {
+            ChosenStop = (_stop, key);
+            return true;
+        }
+
+        _content = null;
+        _tallestWidth = -1;
+        return false;
+    }
+
+    /// <summary>
+    /// The cursor's row as drawn (2026-11-27): <see cref="StopPointer"/> in the margin, over the row's indent, and the row on the cursor's
+    /// background as a menu's cursor row is, each segment keeping its color.
+    /// </summary>
+    internal static List<Segment> Pointed(IReadOnlyList<Segment> line)
+    {
+        var background = Theme.MenuHighlight.Background;
+        var result = new List<Segment>(line.Count + 1) { new(StopPointer, new Style(Theme.Accent.Foreground, background, Decoration.Bold)) };
+        int skip = TextCells.Width(StopPointer);
+        foreach (var segment in line)
+        {
+            if (segment.IsLineBreak || segment.IsControlCode)
+            {
+                result.Add(segment);
+                continue;
+            }
+
+            string text = segment.Text;
+            while (skip > 0 && text.Length > 0 && text[0] == ' ')
+            {
+                text = text[1..];
+                skip--;
+            }
+
+            if (text.Length > 0)
+            {
+                skip = 0;
+                result.Add(new Segment(text, new Style(segment.Style.Foreground, background, segment.Style.Decoration)));
+            }
+        }
+
+        return result;
     }
 
     /// <summary>A letter typed with Shift: always the find's, never a button's (2026-10-15, the menus' rule, MenuPane's shiftedLetter).</summary>
@@ -981,6 +1142,43 @@ public sealed class InfoPane
     /// <summary>The titles the strip draws: none for a pane of one tab, whose label says it all (2026-10-04).</summary>
     private static string[] Shown(IReadOnlyList<InfoTab> tabs) => tabs.Count == 1 ? [] : Titles(tabs);
 
+    /// <summary>
+    /// The cursor after a draw's viewport (2026-11-27): a tab's own start when it has none, clamped to the stops; off the view, the stop in view
+    /// nearest its line takes it (so ↑ from below lands on the last row); with none in view it waits where it was.
+    /// </summary>
+    private void SettleStop(InfoTab tab)
+    {
+        if (_stopLines.Count == 0)
+        {
+            return;
+        }
+
+        if (_stop < 0 || _stop >= _stopLines.Count)
+        {
+            _stop = Math.Clamp(_stop < 0 ? tab.InitialStop?.Invoke() ?? 0 : _stop, 0, _stopLines.Count - 1);
+        }
+
+        int line = _stopLines[_stop];
+        if (line >= _first && line < _first + _shown)
+        {
+            return;
+        }
+
+        int best = -1;
+        for (int i = 0; i < _stopLines.Count; i++)
+        {
+            if (_stopLines[i] >= _first && _stopLines[i] < _first + _shown && (best < 0 || Math.Abs(_stopLines[i] - line) < Math.Abs(_stopLines[best] - line)))
+            {
+                best = i;
+            }
+        }
+
+        if (best >= 0)
+        {
+            _stop = best;
+        }
+    }
+
     private void Show(string label, IReadOnlyList<InfoTab> tabs, int active)
     {
         var titles = Shown(tabs);
@@ -1001,6 +1199,7 @@ public sealed class InfoPane
         if (_content is null || _contentTab != active || _contentWidth != width || _contentToggled != toggled)
         {
             _content = ScreenPane.RenderLines(toggled ? toggle!.Content() : tabs[active].Content(), _pane, width);
+            _stopLines = toggled || tabs[active].Stops is not { } stops ? [] : [.. stops()];   // read after the content: the same build's
             _contentTab = active;
             _contentWidth = width;
             _contentToggled = toggled;
@@ -1009,6 +1208,7 @@ public sealed class InfoPane
         var content = _content;
         _count = content.Count;
         (_first, _shown) = Viewport(_count, capacity, _first);
+        SettleStop(tabs[active]);
         if (_find.Length == 0)
         {
             _hits = [];
@@ -1066,6 +1266,7 @@ public sealed class InfoPane
         lines.AddRange(stripLines);
         lines.Add(new Text(" "));
         int h = _hits.FindIndex(hit => hit.Line >= _first);
+        int cursorLine = StopInView(tabs, active) ? _stopLines[_stop] : -1;
         for (int i = 0; i < _shown; i++)
         {
             int at = _first + i;
@@ -1080,7 +1281,8 @@ public sealed class InfoPane
                 }
             }
 
-            lines.Add(new SegmentLines(starts.Count == 0 ? content[at] : TextFind.Mark(content[at], starts, _find.Length, current)));
+            IReadOnlyList<Segment> drawn = starts.Count == 0 ? content[at] : TextFind.Mark(content[at], starts, _find.Length, current);
+            lines.Add(new SegmentLines(cursorLine == at ? Pointed(drawn) : drawn));
         }
 
         if (more)
@@ -1094,6 +1296,7 @@ public sealed class InfoPane
         }
 
         string hint = _find.Length > 0 ? FindHint(_find, _hit, _hits.Count)
+            : cursorLine >= 0 ? StopsHintText   // only while the cursor's row is in view (2026-11-27): else the scroll hint
             : _actions.Count > 0 ? ButtonsHint([.. _actions.Select(a => (a.Key, a.Word)), .. toggle is null ? Array.Empty<(char, string)>() : [(toggle.Key, toggle.Word)]], tabs: tabs.Count > 1, cells: width - 1, find: !_noFind)
             : toggle is not null ? ToggleHint(toggle.Key, toggle.Word, tabs: tabs.Count > 1, cells: width - 1)
             : tabs.Count == 1 ? SingleTabHintText : HintText;

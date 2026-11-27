@@ -49,7 +49,10 @@ public static class UncText
     public const string CredmanWithWindows = "\"passwordStore\": \"credman\" needs a password to keep; windows sign-in has none (use runas to sign in as another account)";
     public static string UnreadableFile(string detail) => $"the file cannot be read ({detail}); a backslash in JSON is written \\\\ (or use /)";
     public static string ProfilesUnlistedLogLine(string root, string detail) => $"could not list the profiles in {root}, so only the home's unc.json was checked for plain passwords: {detail}";
-    public static string NoPassword(string name) => $"'{name}' has no password; set it on the UNC tab of /tools (UNC set password)";
+    /// <summary>The row a password is set in (2026-11-26, the user's ask: the per-family "set password" rows went; an edit's Password row sets it). Pinned.</summary>
+    public const string EditRow = "UNC add/edit share";
+
+    public static string NoPassword(string name) => $"'{name}' has no password; set it with {EditRow} (its Password row) on the UNC tab of /tools";
     /// <summary>No stored password for a runas share: the store and the command by the OS (<see cref="Sql.SqlText.CredentialStore"/>, <see cref="Sql.SqlText.CredentialCommand"/>; 2026-10-06, the macOS build — Windows' sentence unchanged). Pinned.</summary>
     public static string NoCredential(string target) => $"no password in {Sql.SqlText.CredentialStore} for {target}; set it on the UNC tab of /tools, or: {Sql.SqlText.CredentialCommand(target, "<DOMAIN\\name>")}";
 
@@ -110,7 +113,7 @@ public static class UncText
     public static string NotAFolder(string name, string root) => $"Error: share '{name}' points at {root}, which is a file, not a folder";
     public static string RootMissing(string name, string root) => $"Error: share '{name}' points at {root}, which does not exist";
     public static string AccessDenied(string name, string root, string account) => $"Error: share '{name}' ({root}) refused {account}: access denied";
-    public static string BadAccount(string name, string account) => $"Error: share '{name}' refused the sign-in as {account}: unknown account or wrong password (UNC set password on the UNC tab of /tools)";
+    public static string BadAccount(string name, string account) => $"Error: share '{name}' refused the sign-in as {account}: unknown account or wrong password (UNC add/edit share, its Password row, on the UNC tab of /tools)";
     public static string NoLogonServer(string name) => $"Error: share '{name}': no domain controller answered to check the account";
     public static string AccountRefused(string name, string account, string detail) => $"Error: share '{name}' refused the sign-in as {account}: {detail}";
     public static string ReachFailed(string name, string root, string detail) => $"Error: share '{name}' ({root}): {detail}";

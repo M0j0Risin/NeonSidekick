@@ -109,7 +109,16 @@ public static class AdvisorText
     /// model ends on its reasoning disc (<see cref="ReasoningMark"/>), <c>· docker · Qwen3-32B ◕</c>. What
     /// <c>Advisor list</c>'s band and a bare <c>/advisor</c> print. Pinned.
     /// </summary>
-    public static string Detail(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists, AdvisorColumns? columns = null)
+    public static string Detail(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists, AdvisorColumns? columns = null) =>
+        DetailCore(advisor, facts, exists, columns) + OffTail(advisor);
+
+    /// <summary>An off advisor's line ends <see cref="OffMark"/> (2026-11-27): plain text, so the mark, not a style, sets it apart.</summary>
+    private static string OffTail(AdvisorEntry advisor) => advisor.Off ? OffMark : "";
+
+    /// <summary>The mark that ends an off advisor's line in a bare <c>/advisor</c> and the Advisor list's band (2026-11-27). Pinned.</summary>
+    public const string OffMark = " (off)";
+
+    private static string DetailCore(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists, AdvisorColumns? columns)
     {
         ArgumentNullException.ThrowIfNull(advisor);
         if (columns is null)
@@ -178,6 +187,15 @@ public static class AdvisorText
 
     /// <summary>No advisor is listed. Pinned.</summary>
     public const string NoAdvisorsError = "Error: no advisors are set up (Advisor list in /settings › Advisors). Carry on without one.";
+
+    /// <summary>The model's call named an advisor switched off (2026-11-27): said so, so it neither retries it nor picks a near name. Pinned.</summary>
+    public static string OffError(string profile) => $"Error: {profile} is switched off in the Advisor list; ask another advisor.";
+
+    /// <summary><c>/advisor</c> named an advisor switched off (2026-11-27). Nothing is sent. Pinned.</summary>
+    public static string OffRefusal(string profile) => $"{profile} is off; turn it on in /advisor list (Space on its row)";
+
+    /// <summary>Every listed advisor is switched off (2026-11-27). Pinned.</summary>
+    public const string AllOffError = "Error: every advisor is switched off; turn one on in /advisor list (Space on its row).";
 
     /// <summary>The words named none, or several. Pinned.</summary>
     public static string UnknownAdvisorError(string words, IReadOnlyList<AdvisorEntry> candidates) =>
@@ -253,15 +271,15 @@ public static class AdvisorText
     public static string ListLine(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists, AdvisorColumns? columns = null)
     {
         ArgumentNullException.ThrowIfNull(advisor);
-        string line = "  " + Detail(advisor, facts, exists, columns);
+        string line = "  " + DetailCore(advisor, facts, exists, columns);
         if (advisor.Description.Length == 0)
         {
-            return line;   // no trailing spaces
+            return line + OffTail(advisor);   // no trailing spaces
         }
 
         // In columns, the model padded so the descriptions start in one column (2026-11-22).
         string pad = columns is not null && exists && facts is not null ? new string(' ', Math.Max(0, columns.Model - TextCells.Width(facts.Model))) : "";
-        return line + pad + " · " + advisor.Description;
+        return line + pad + " · " + advisor.Description + OffTail(advisor);
     }
 
     /// <summary>A bare <c>/advisor</c>'s lines, the screen's and headless's (2026-11-22): <see cref="ListLine"/> each, in the list's <see cref="Columns"/>. Pure.</summary>

@@ -141,7 +141,7 @@ public static class OpenAIRequest
         writer.WriteEndArray();
     }
 
-    /// <summary>A JSON response format (<c>/test</c>'s structured tests) as <c>text.format</c>: the schema as it came, not strict, or plain JSON.</summary>
+    /// <summary>A JSON response format (<c>/bench</c>'s structured tests) as <c>text.format</c>: the schema as it came, not strict, or plain JSON.</summary>
     private static void WriteFormat(Utf8JsonWriter writer, ChatResponseFormat? format)
     {
         if (format is not ChatResponseFormatJson json)

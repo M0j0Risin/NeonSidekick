@@ -84,8 +84,10 @@ internal sealed partial class ChatScreen
                 ? promptFacts.WithoutMcpServer(label[SystemPromptSummary.McpGroupPrefix.Length..])
                 : promptFacts.Without(field);
         var groups = ToolGroups(effective, disabled)
-            .Select(g => new ContextToolGroup(g.Label, g.Tools.Count, g.Tools.Sum(ToolTokens), g.Switch is not null,
-                g.Switch is { } field ? Math.Max(0, promptTokens - PromptParts(Off(g.Label, field)).Sum(p => p.Tokens)) : 0))
+            .Select(g => new ContextToolGroup(g.Label, g.Tools.Count, g.Tools.Sum(ToolTokens), g.Switch,
+                g.Switch is { } field ? Math.Max(0, promptTokens - PromptParts(Off(g.Label, field)).Sum(p => p.Tokens)) : 0,
+                // The server an MCP row is (2026-11-27): Space switches that server alone, never the shared McpServers.
+                g.Label.StartsWith(SystemPromptSummary.McpGroupPrefix, StringComparison.Ordinal) ? g.Label[SystemPromptSummary.McpGroupPrefix.Length..] : null))
             .ToList();
         string? noTools = groups.Count == 0 ? SystemPromptSummary.NoToolsLine(effective.LlmOfferTools) : null;
         ConversationCompactor.TokenEstimate? history = null;
@@ -123,7 +125,7 @@ internal sealed partial class ChatScreen
             .ToList();
 
     /// <summary>
-    /// The tab <c>/usage</c>'s argument names: 0 for none (Statistics), <see cref="UsageText.ContextTabIndex"/> for <c>context</c>, and since
+    /// The tab <c>/usage</c>'s argument names: 0 for none (Context since the merge, 2026-11-27), <see cref="UsageText.ContextTabIndex"/> (0 too) for <c>context</c>, and since
     /// 2026-11-07 (the user's ask: /sys' tabs folded in) the Prompt, Tools and Skills tabs for <c>prompt</c>, <c>tools</c> and <c>skills</c>;
     /// null for anything else.
     /// </summary>
@@ -135,7 +137,8 @@ internal sealed partial class ChatScreen
             : string.Equals(word, UsageText.PromptWord, StringComparison.OrdinalIgnoreCase) ? UsageText.PromptTabIndex
             : string.Equals(word, UsageText.ToolsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.ToolsTabIndex
             : string.Equals(word, UsageText.SkillsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.SkillsTabIndex
-            : string.Equals(word, UsageText.ModelsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.ModelsTabIndex   // 2026-11-21
+            : string.Equals(word, UsageText.BenchWord, StringComparison.OrdinalIgnoreCase) ? UsageText.BenchTabIndex   // 2026-11-27
+            : string.Equals(word, UsageText.ModelsWord, StringComparison.OrdinalIgnoreCase) ? UsageText.BenchTabIndex   // 2026-11-21, the Bench tab since 2026-11-27
             : null;
     }
 }

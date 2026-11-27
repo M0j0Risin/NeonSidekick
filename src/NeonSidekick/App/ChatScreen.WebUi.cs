@@ -876,7 +876,7 @@ internal sealed partial class ChatScreen
 
     /// <summary>
     /// The page's Stop (a Kestrel thread): speech stopped and the model's work cancelled — a reply, a compact, a botchat, an advisor,
-    /// <c>/imagine</c>, <c>/test</c>, <c>/loop</c>'s wait — never the user's own editor and never a model's load (Ctrl+C's at the PC).
+    /// <c>/imagine</c>, <c>/bench</c>, <c>/loop</c>'s wait — never the user's own editor and never a model's load (Ctrl+C's at the PC).
     /// Before the reply's first event it withdraws the message, as ESC does.
     /// The scopes to cancel are taken here, on the request's thread, and only those are cancelled on the pool (2026-10-19, the review: the
     /// pool's cancel read the scopes again after <c>_speech.Stop()</c>, by when the stopped turn could have ended and a queued message's

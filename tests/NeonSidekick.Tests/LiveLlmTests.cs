@@ -117,7 +117,7 @@ public class LiveLlmTests
     }
 
     /// <summary>
-    /// <c>/test</c>'s reasoning and structured-output tests against the real server (2026-09-28): every one asked and
+    /// <c>/bench</c>'s reasoning and structured-output tests against the real server (2026-09-28): every one asked and
     /// judged, none an error — the verdicts are the model's, so not asserted — and the schema tests' <c>response_format</c>
     /// taken by the server.
     /// </summary>
@@ -127,7 +127,7 @@ public class LiveLlmTests
         var endpoint = LiveLlmServer.Endpoint!;
         using var client = new OpenAICompatibleChatClient(endpoint, TimeSpan.FromSeconds(180));
         var assistant = new Assistant(client, new ConversationHistory(Assistant.DefaultSystemPrompt), new LlmTimeouts(TimeSpan.FromSeconds(180), TimeSpan.FromSeconds(240)));
-        var tests = Bench.BenchCatalog.All.Where(t => t.Category != Bench.BenchCategory.LongContext).ToList();
+        var tests = Bench.BenchCatalog.All.Where(t => !t.SizedToWindow).ToList();   // no window-filling prompt (WindowCapacity since 2026-11-27)
 
         var results = await Bench.BenchRunner.RunAsync(assistant, tests, new Bench.BenchContext(null), claudeApi: false, TimeProvider.System, null, null, CancellationToken.None);
 

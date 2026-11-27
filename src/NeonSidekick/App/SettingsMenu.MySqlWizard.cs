@@ -99,6 +99,10 @@ internal sealed partial class SettingsMenu
         ConnectionStamp(draft.Name, draft.Global, draft.Config, MySqlJsonContext.Default.MySqlConnectionConfig, x => x.Password = null);
 
     /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
+    private static bool MySqlWizardPasswordOnly(MySqlDraft draft) =>
+        WizardPasswordOnly(draft.Original, MySqlWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
+
     private static bool MySqlWizardDirty(MySqlDraft draft) =>
         draft.Original is not null && (!string.Equals(MySqlWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -633,6 +637,7 @@ internal sealed partial class SettingsMenu
     /// <summary>Writes the draft: the entry, then its password to its store, then — when <paramref name="offer"/> — its name there. Null when nothing was written.</summary>
     private bool? MySqlWizardSave(MySqlDraft draft, bool offer)
     {
+        bool passwordOnly = MySqlWizardPasswordOnly(draft);   // before the normalizing below, which can change the stamp
         var c = draft.Config;
         if (MySqlWizardMissing(draft) is { } missing)
         {
@@ -647,7 +652,7 @@ internal sealed partial class SettingsMenu
         }
 
         string path = MySqlWizardPath(draft.Global);
-        if (!SaveWizardEntry(MySqlConfigFile.Family, path, MySqlWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget))
+        if (!SaveWizardEntry(MySqlConfigFile.Family, path, MySqlWizardPath(!draft.Global), draft.Original, draft.Name, c, draft.Password, draft.OriginalTarget, passwordOnly))
         {
             return null;
         }

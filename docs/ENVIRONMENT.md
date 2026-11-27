@@ -43,7 +43,7 @@ Each starts with `NEONSIDEKICK_`, overrides a setting for one launch and is neve
 | `NEONSIDEKICK_LLM_REQUEST_TIMEOUT` | *LLM request timeout (s)* | Seconds, above 0 and up to 3600. |
 | `NEONSIDEKICK_LLM_TURN_TIMEOUT` | *LLM turn timeout (s)* | Seconds, above 0 and up to 21600. |
 | `NEONSIDEKICK_LLM_CONTEXT` | *LLM context length* | Tokens, a whole number above 0; used in place of the server's own figure. |
-| `NEONSIDEKICK_LLM_SAMPLING` | *LLM sampling*, for every model | A JSON object (`{"temperature":0.6,"top_k":20,"typical_p":0.9}`). Known fields must be in range; other keys pass through; saved values fill in the rest. |
+| `NEONSIDEKICK_LLM_SAMPLING` | *LLM sampling*, for every model | A JSON object (`{"temperature":0.6,"top_k":20,"typical_p":0.9}`). Known fields must be in range; other keys pass through; saved values fill in the rest. It turns an off tab back on for the launch. |
 
 ## Embedded LLM
 

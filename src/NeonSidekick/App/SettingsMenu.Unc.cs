@@ -14,8 +14,6 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class SettingsMenu
 {
-    /// <summary>The value column of the <c>UNC set password</c> action row: only a runas share takes one. Pinned.</summary>
-    public const string UncSetPasswordLabel = "Enter to set password for a runas share";
 
 
     /// <summary>The value of an edit row over one <c>unc.json</c>: how many shares it holds and how many entries it skips, or <c>(none)</c>.</summary>
@@ -41,19 +39,8 @@ internal sealed partial class SettingsMenu
         return Markup.Escape((offered ? "[x] " : "[ ] ") + share.Name.PadRight(width)) + Theme.DimMarkup(UncText.MentionNote(share));
     }
 
-    /// <summary>A runas share on the <c>UNC set password</c> pick: its name, its account and where its password goes. Pinned.</summary>
-    public static string UncPasswordRow(UncNamedShare share)
-    {
-        ArgumentNullException.ThrowIfNull(share);
-        string store = share.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in unc.json";
-        return $"{share.Name}  ({share.Config.Root}, runas {share.Config.User?.Trim()} · {store})";
-    }
-
     /// <summary>The status line after an edit row opened an <c>unc.json</c>. Pinned.</summary>
     public static string UncEditingNotice(string path) => $"Opened {path} in the editor; the UNC tools read it at their next call.";
-
-    /// <summary>What <c>UNC set password</c> says with no runas share to set one for. Pinned.</summary>
-    public const string UncNoPasswordShares = "No share in unc.json signs in as another account (runas); a windows share needs no password.";
 
     /// <summary>
     /// <c>UNC shares offered</c>, <see cref="EditSqlOfferedAsync"/>'s twin: every share the two files hold, ticked or not, Enter or
@@ -113,56 +100,6 @@ internal sealed partial class SettingsMenu
             Apply(SettingsField.UncSharesOffered, d => d.UncSharesOffered = next);
             changed = true;
         }
-    }
-
-    /// <summary>
-    /// <c>UNC set password</c>, <see cref="SetSqlPasswordAsync"/>'s twin: every runas share with its store, then a masked slot under
-    /// the picked one, then <see cref="UncSecrets.Save"/>. Nothing in the settings changes; the status line says what happened. ESC
-    /// or an empty Enter saves nothing.
-    /// </summary>
-    private async Task<bool> SetUncPasswordAsync(CancellationToken cancellationToken)
-    {
-        var shares = ByName(UncConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Shares.Where(s => s.Config.NeedsPassword), s => s.Name);
-        if (shares.Count == 0)
-        {
-            Sink.Error(UncNoPasswordShares);
-            return false;
-        }
-
-        var page = new MenuPage(Crumb(FieldName(SettingsField.UncSetPassword)), shares.Select(s => Markup.Escape(UncPasswordRow(s))).ToList(), PickKeys);
-        if (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } index)
-        {
-            return Unchanged();
-        }
-
-        var share = shares[index];
-        InputResult result;
-        if (_pane.Enabled)
-        {
-            result = await _pane.EditAsync(page with { Hint = EditKeys }, index, _input, "", allowEmpty: false, cancellationToken, mask: true).ConfigureAwait(false);
-        }
-        else
-        {
-            Flow.Notice(PromptTitle(FieldName(SettingsField.UncSetPassword) + " · " + share.Name, EditKeys));
-            result = await _input.ReadAsync("", remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
-        }
-
-        if (result is not InputResult.Submitted { Text.Length: > 0 } submitted)
-        {
-            return Unchanged();
-        }
-
-        var (saved, notice) = UncSecrets.Save(share, submitted.Text);
-        if (saved)
-        {
-            Sink.Notice(notice);
-        }
-        else
-        {
-            Sink.Error(notice);
-        }
-
-        return false;
     }
 
     /// <summary>Opens one <c>unc.json</c> in the editor, made first when missing; without an opener or on an IO failure, the status line says so.</summary>

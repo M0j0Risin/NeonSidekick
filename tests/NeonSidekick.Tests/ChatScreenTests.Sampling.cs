@@ -36,7 +36,7 @@ public partial class ChatScreenTests
     public void Sampling_CompletesTheFieldNames_ThenExtraAndClear()
     {
         var items = ChatScreen.ArgumentItems("/sampling", "", Sources());
-        Assert.Equal([.. SamplingField.All.Select(f => f.Wire), SamplingText.ExtraWord, SamplingText.ClearWord], items.Select(i => i.Text));
+        Assert.Equal([.. SamplingField.All.Select(f => f.Wire), SamplingText.ExtraWord, SamplingText.ClearWord, SamplingText.OffWord, SamplingText.OnWord], items.Select(i => i.Text));   // off and on (2026-11-27)
         Assert.Equal([new CompletionItem("top_p", "above 0, up to 1"), new CompletionItem("top_k", "a whole number from -1 to 100000")], ChatScreen.ArgumentItems("/sampling", "top", Sources()));
     }
 }

@@ -5,6 +5,12 @@ using NeonSidekick.UI;
 namespace NeonSidekick.Advisors;
 
 /// <summary>
+/// What <see cref="AdvisorRoster.Pick"/> found (2026-11-27): the advisor to ask, else the off one the words name, else whether every advisor
+/// is off, with the active candidates for the "names no single advisor" error.
+/// </summary>
+public readonly record struct AdvisorPick(AdvisorEntry? Found, IReadOnlyList<AdvisorEntry> Candidates, AdvisorEntry? OffOne, bool AllOff);
+
+/// <summary>
 /// The profile advisors' list (2026-10-10, <see cref="AppSettingsData.AdvisorList"/>): read clean, changed by copy, and an advisor
 /// found by the words a call or <c>/advisor</c> names it with. One entry per profile, compared without case as profile names are;
 /// a blank profile is no entry. Pure.
@@ -26,11 +32,48 @@ public static class AdvisorRoster
                 continue;
             }
 
-            entries.Add(new AdvisorEntry(profile, (entry!.Role ?? "").Trim(), CleanDescription(entry.Description)));
+            entries.Add(new AdvisorEntry(profile, (entry!.Role ?? "").Trim(), CleanDescription(entry.Description), entry.Off));
         }
 
         return entries.OrderBy(e => e.Profile, StringComparer.OrdinalIgnoreCase).ToList();
     }
+
+    /// <summary>The advisors in service (2026-11-27): <see cref="Entries"/> without the ones switched off.</summary>
+    public static IReadOnlyList<AdvisorEntry> Active(IReadOnlyList<AdvisorEntry>? saved) => Entries(saved).Where(e => !e.Off).ToList();
+
+    /// <summary>The advisors switched off, A to Z (2026-11-27).</summary>
+    public static IReadOnlyList<AdvisorEntry> OffEntries(IReadOnlyList<AdvisorEntry>? saved) => Entries(saved).Where(e => e.Off).ToList();
+
+    /// <summary>
+    /// The off advisor <paramref name="words"/> names, by <see cref="Find"/>'s rules run over the off ones alone (2026-11-27), for a refusal
+    /// that names it; asked only after <see cref="Find"/> over <see cref="Active"/> found nothing, so an active advisor's role always wins.
+    /// </summary>
+    public static AdvisorEntry? Off(IReadOnlyList<AdvisorEntry>? saved, string? words) => Find(OffEntries(saved), words).Found;
+
+    /// <summary>The list in the order every list shows it (2026-11-27): the advisors in service A to Z, then the ones switched off A to Z.</summary>
+    public static IReadOnlyList<AdvisorEntry> Shown(IReadOnlyList<AdvisorEntry>? saved) => [.. Active(saved), .. OffEntries(saved)];
+
+    /// <summary>
+    /// The advisor a call or <c>/advisor</c> names (2026-11-27, the off switch), in one order for all three askers: <see cref="Find"/> over
+    /// the ones in service first (so an active advisor's role always wins), then an off one the words name (<see cref="AdvisorPick.OffOne"/>),
+    /// then <see cref="AdvisorPick.AllOff"/> when none is in service; otherwise the active candidates. Callers say "no advisors" first when
+    /// the list is empty.
+    /// </summary>
+    public static AdvisorPick Pick(IReadOnlyList<AdvisorEntry>? saved, string? words)
+    {
+        var active = Active(saved);
+        var (found, candidates) = Find(active, words);
+        if (found is not null)
+        {
+            return new AdvisorPick(found, candidates, null, false);
+        }
+
+        return Off(saved, words) is { } off ? new AdvisorPick(null, candidates, off, false) : new AdvisorPick(null, candidates, null, active.Count == 0);
+    }
+
+    /// <summary><paramref name="saved"/> with <paramref name="profile"/> switched off or on (2026-11-27); unchanged when it is not there.</summary>
+    public static List<AdvisorEntry> WithOff(IReadOnlyList<AdvisorEntry>? saved, string profile, bool off) =>
+        Entries(saved).Select(e => SameProfile(e.Profile, profile) ? e with { Off = off } : e).ToList();
 
     /// <summary>
     /// The most characters an advisor's description keeps (2026-11-22, the advisor templates): it lands in <c>neon_advisor</c>'s description
@@ -54,7 +97,7 @@ public static class AdvisorRoster
 
     /// <summary>
     /// <paramref name="saved"/> with <paramref name="entry"/> last (shown by name all the same, <see cref="Entries"/>); a profile already there (a <c>(missing)</c> one whose name a new advisor
-    /// takes again) keeps its place and takes the new role and description.
+    /// takes again) keeps its place and takes the new role and description, and is on again (2026-11-27: adding is a deliberate act).
     /// </summary>
     public static List<AdvisorEntry> Add(IReadOnlyList<AdvisorEntry>? saved, AdvisorEntry entry)
     {
@@ -64,7 +107,7 @@ public static class AdvisorRoster
         int at = entries.FindIndex(e => SameProfile(e.Profile, clean.Profile));
         if (at >= 0)
         {
-            entries[at] = entries[at] with { Role = clean.Role, Description = clean.Description };
+            entries[at] = entries[at] with { Role = clean.Role, Description = clean.Description, Off = false };
         }
         else
         {
@@ -135,7 +178,10 @@ public static class AdvisorRoster
         return entry.Description.Length == 0 ? Label(entry) : Label(entry) + ": " + entry.Description;
     }
 
-    /// <summary>The settings row's value: <c>none</c>, or how many and their labels, cut at <paramref name="width"/>. Pinned.</summary>
+    /// <summary>
+    /// The settings row's value: <c>none</c>, or how many are in service and their labels, cut at <paramref name="width"/>, then
+    /// <c> · 1 off</c> when some are switched off (2026-11-27), never cut; <c>2 off</c> alone when every one is. Pinned.
+    /// </summary>
     public static string Value(IReadOnlyList<AdvisorEntry>? saved, int width = 70)
     {
         var entries = Entries(saved);
@@ -144,8 +190,17 @@ public static class AdvisorRoster
             return "none";
         }
 
-        string text = entries.Count.ToString(CultureInfo.InvariantCulture) + ": " + string.Join(", ", entries.Select(Label));
+        var active = entries.Where(e => !e.Off).ToList();
+        int off = entries.Count - active.Count;
+        string offPart = off.ToString(CultureInfo.InvariantCulture) + " off";
+        if (active.Count == 0)
+        {
+            return offPart;
+        }
+
+        string tail = off == 0 ? "" : " · " + offPart;
+        string text = active.Count.ToString(CultureInfo.InvariantCulture) + ": " + string.Join(", ", active.Select(Label));
         // Cut by cells (2026-11-24, the last-7 review's #56): an emoji or CJK role is two cells a character, and a cut by length could split a pair.
-        return TextCells.Cut(text, width);
+        return TextCells.Cut(text, Math.Max(1, width - TextCells.Width(tail))) + tail;
     }
 }

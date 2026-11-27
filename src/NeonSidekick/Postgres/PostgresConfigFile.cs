@@ -78,7 +78,7 @@ public sealed class PostgresConfigFile
         "  // },\n" +
         "  //\n" +
         "  // TLS checked against the host name, the password in Windows Credential Manager as NeonSidekick/postgres/<name> — set it\n" +
-        "  // with PostgreSQL set password on /tools › Databases › PostgreSQL, or: cmdkey /generic:NeonSidekick/postgres/billing /user:billing_ro /pass\n" +
+        "  // in PostgreSQL add/edit connection's Password row on /tools › Databases › PostgreSQL, or: cmdkey /generic:NeonSidekick/postgres/billing /user:billing_ro /pass\n" +
         "  // \"billing\": {\n" +
         "  //   \"host\": \"db01.example.com\", \"database\": \"billing\", \"schema\": \"invoices\", \"user\": \"billing_ro\",\n" +
         "  //   \"passwordStore\": \"credman\", \"sslMode\": \"verify-full\"\n" +

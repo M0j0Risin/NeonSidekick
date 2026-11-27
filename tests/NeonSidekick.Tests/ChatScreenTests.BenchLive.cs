@@ -6,7 +6,7 @@ using NeonSidekick.UI;
 
 namespace NeonSidekick.Tests;
 
-/// <summary><c>/test</c>'s clean slate and its live row (2026-09-30, the user's asks).</summary>
+/// <summary><c>/bench</c>'s clean slate and its live row (2026-09-30, the user's asks).</summary>
 public partial class ChatScreenTests
 {
     /// <summary>A run starts as <c>/clear</c> leaves things: the next message opens a new conversation and a new session row.</summary>
@@ -16,7 +16,7 @@ public partial class ChatScreenTests
         _settings.Update(d => d.TtsOutput = false);
         _geometry = new ScreenGeometry(() => null);
         _chat.Enqueue(FakeChatClient.Text("Hi."), FakeChatClient.Usage(50, 5)).EnqueueText("Drawer.").EnqueueText("Ok.");
-        LinesWhenIdle("hello", "/test mind", "after", "/exit");
+        LinesWhenIdle("hello", "/bench mind", "after", "/exit");
 
         string output = await RunAsync();
 
@@ -53,7 +53,7 @@ public partial class ChatScreenTests
                 await Task.Delay(40, CancellationToken.None);
             }
         };
-        LinesWhenIdle("/test mind", "/exit");
+        LinesWhenIdle("/bench mind", "/exit");
 
         string output = await RunAsync();
 
@@ -82,7 +82,7 @@ public partial class ChatScreenTests
                 }
             }
         };
-        LinesWhenIdle("/test reasoning", "/exit");
+        LinesWhenIdle("/bench reasoning", "/exit");
 
         string output = await RunAsync();
 

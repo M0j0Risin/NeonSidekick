@@ -3162,7 +3162,7 @@ public sealed class Assistant
     /// the clock and the <see cref="Sampling"/> reference — so it is safe while <see cref="RunTurnAsync"/> streams. The transport's
     /// failures and cancellation propagate; the caller explains them. A null <paramref name="effort"/> sends none, as the turn
     /// does for a reasoning left unset, and <paramref name="format"/> is the request's <c>response_format</c> (2026-09-28, for
-    /// <c>/test</c>'s structured-output tests: a JSON schema the adapter writes as <c>json_schema</c>); null asks for none.
+    /// <c>/bench</c>'s structured-output tests: a JSON schema the adapter writes as <c>json_schema</c>); null asks for none.
     /// <para><paramref name="textToolCalls"/> (2026-09-30, code review: the <c>/botchat</c> picture writer had its own copy of the
     /// turn's handling, already short of it) is <see cref="TextToolCalls"/> for a side loop: the tools whose calls written out as
     /// text are caught, each its name and parameter names (<see cref="WrittenCallFilter"/>, <see cref="WrittenCallNames"/>; null,

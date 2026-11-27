@@ -99,6 +99,10 @@ internal sealed partial class SettingsMenu
         ConnectionStamp(draft.Name, draft.Global, draft.Config, EventLogJsonContext.Default.EventLogComputerConfig, x => x.Password = null);
 
     /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
+    private static bool EventLogWizardPasswordOnly(EventLogDraft draft) =>
+        WizardPasswordOnly(draft.Original, EventLogWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
+
     private static bool EventLogWizardDirty(EventLogDraft draft) =>
         draft.Original is not null && (!string.Equals(EventLogWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -628,6 +632,7 @@ internal sealed partial class SettingsMenu
     /// <summary>Writes the draft: the entry, then under runas its password, then the offered list. Whether a setting changed; null when nothing was written.</summary>
     private bool? EventLogWizardSave(EventLogDraft draft, bool offer)
     {
+        bool passwordOnly = EventLogWizardPasswordOnly(draft);   // before the normalizing below, which can change the stamp
         var c = draft.Config;
         if (draft.IsLocal)
         {
@@ -655,6 +660,12 @@ internal sealed partial class SettingsMenu
 
         // The entry, then its password, then the tick (2026-10-23, the admin review's H9), as the computer wizard's.
         string path = EventLogWizardPath(draft.Global);
+        if (passwordOnly)
+        {
+            return WizardPasswordOnlySave(EventLogSecrets.Save(new EventLogComputer(draft.Name, c, path), draft.Password),
+                () => ApplyOfferedAfterSave(SettingsField.EventLogComputersOffered, EventLogCatalog.OfferedNames(_settings.Current.EventLogComputersOffered), draft.Original, draft.Name, offer, (d, next) => d.EventLogComputersOffered = next));
+        }
+
         string? sealedPassword = null;
         if (c.NeedsPassword && !c.InCredentialManager)
         {
@@ -700,7 +711,7 @@ internal sealed partial class SettingsMenu
         else
         {
             offer = false;
-            Sink.Error(NeonSidekick.Computers.ComputerText.SavedUnticked(draft.Name, EventLogText.SetPasswordRow, EventLogText.MenuPath));
+            Sink.Error(NeonSidekick.Computers.ComputerText.SavedUnticked(draft.Name, EventLogText.EditRow, EventLogText.MenuPath));
         }
 
         return ApplyOfferedAfterSave(SettingsField.EventLogComputersOffered, EventLogCatalog.OfferedNames(_settings.Current.EventLogComputersOffered), draft.Original, draft.Name, offer, (d, next) => d.EventLogComputersOffered = next);

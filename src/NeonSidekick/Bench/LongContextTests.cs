@@ -18,7 +18,7 @@ public sealed class NeedleTest : BenchTest
 
     public override string Id => "needle";
 
-    public override string Name => "Needle in a Haystack (Long Context)";
+    public override string Title => "Needle in a Haystack";
 
     public override BenchCategory Category => BenchCategory.LongContext;
 
@@ -57,7 +57,7 @@ public sealed class MultiHopTest : BenchTest
 
     public override string Id => "multihop";
 
-    public override string Name => "Multi-Hop Synthesis (Long Context)";
+    public override string Title => "Multi-Hop Synthesis";
 
     public override BenchCategory Category => BenchCategory.LongContext;
 
@@ -96,9 +96,9 @@ public sealed class SaturationTest : BenchTest
 
     public override string Id => "saturation";
 
-    public override string Name => "Context Saturation (Long Context)";
+    public override string Title => "Context Saturation";
 
-    public override BenchCategory Category => BenchCategory.LongContext;
+    public override BenchCategory Category => BenchCategory.WindowCapacity;   // its own group, no group word (2026-11-27, the user's call)
 
     public override string Expected => "the server accepts a prompt filling the whole context window";
 
@@ -113,4 +113,13 @@ public sealed class SaturationTest : BenchTest
     public override BenchJudgement Judge(string answer, BenchContext context) =>
         BenchJudgement.Pass(string.Create(CultureInfo.InvariantCulture,
             $"Accepted a prompt sized to fill the context window ({ContextBudget.SaturationEstimate(context.SaturationUnits):N0} estimated tokens)."));
+
+    /// <summary>
+    /// The server's own count on a pass with the window known (2026-11-27, the user's ask: the line gave the estimate while the table gave
+    /// the real count): <c>The server took 144,443 tokens, 95% of the window.</c>; otherwise the judgement's estimate.
+    /// </summary>
+    public override string Reason(BenchJudgement judgement, long? promptTokens, BenchContext context) =>
+        judgement.Verdict == BenchVerdict.Pass && promptTokens is > 0 and { } took && context.ContextWindowTokens is > 0 and { } window
+            ? BenchText.SaturationTook(took, window)
+            : judgement.Reason;
 }

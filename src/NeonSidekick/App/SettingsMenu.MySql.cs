@@ -37,14 +37,6 @@ internal sealed partial class SettingsMenu
         return Markup.Escape((offered ? "[x] " : "[ ] ") + connection.Name.PadRight(width)) + Theme.DimMarkup(MySqlText.MentionNote(connection));
     }
 
-    /// <summary>A connection on the <c>MySQL set password</c> pick: its name, its user and where its password goes. Pinned.</summary>
-    public static string MySqlPasswordRow(MySqlNamedConnection connection)
-    {
-        ArgumentNullException.ThrowIfNull(connection);
-        string store = connection.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in mysql.json";
-        return $"{connection.Name}  ({connection.Config.Endpoint}, user {connection.Config.User?.Trim()} · {store})";
-    }
-
     /// <summary>The status line after an edit row opened an <c>mysql.json</c>. Pinned.</summary>
     public static string MySqlEditingNotice(string path) => $"Opened {path} in the editor; the MySQL tools read it at their next call.";
 
@@ -106,57 +98,6 @@ internal sealed partial class SettingsMenu
             Apply(SettingsField.MySqlConnectionsOffered, d => d.MySqlConnectionsOffered = next);
             changed = true;
         }
-    }
-
-    /// <summary>
-    /// <c>MySQL set password</c>, <see cref="SetSqlPasswordAsync"/>'s twin (the user's ask: "the function to set the password
-    /// is also nice"): every connection with its store, then a masked slot under the picked one, then
-    /// <see cref="MySqlSecrets.Save"/>. Nothing in the settings changes; the status line says what happened. ESC or an empty
-    /// Enter saves nothing.
-    /// </summary>
-    private async Task<bool> SetMySqlPasswordAsync(CancellationToken cancellationToken)
-    {
-        var connections = ByName(MySqlConfigFile.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Connections, c => c.Name);
-        if (connections.Count == 0)
-        {
-            Sink.Error(MySqlText.NoPasswordConnections);
-            return false;
-        }
-
-        var page = new MenuPage(Crumb(FieldName(SettingsField.MySqlSetPassword)), connections.Select(c => Markup.Escape(MySqlPasswordRow(c))).ToList(), PickKeys);
-        if (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } index)
-        {
-            return Unchanged();
-        }
-
-        var connection = connections[index];
-        InputResult result;
-        if (_pane.Enabled)
-        {
-            result = await _pane.EditAsync(page with { Hint = EditKeys }, index, _input, "", allowEmpty: false, cancellationToken, mask: true).ConfigureAwait(false);
-        }
-        else
-        {
-            Flow.Notice(PromptTitle(FieldName(SettingsField.MySqlSetPassword) + " · " + connection.Name, EditKeys));
-            result = await _input.ReadAsync("", remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
-        }
-
-        if (result is not InputResult.Submitted { Text.Length: > 0 } submitted)
-        {
-            return Unchanged();
-        }
-
-        var (saved, notice) = MySqlSecrets.Save(connection, submitted.Text);
-        if (saved)
-        {
-            Sink.Notice(notice);
-        }
-        else
-        {
-            Sink.Error(notice);
-        }
-
-        return false;
     }
 
     /// <summary>Opens one <c>mysql.json</c> in the editor, made first when missing; without an opener or on an IO failure, the status line says so.</summary>

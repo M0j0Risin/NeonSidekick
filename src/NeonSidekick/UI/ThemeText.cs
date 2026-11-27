@@ -175,12 +175,11 @@ public static class ThemeText
     public static string EditTitle(string name) => $"Edit theme · {name}";
 
     /// <summary>The editor's hint row.</summary>
-    public const string EditHint = "↑↓ = color · ←→ = lighter/darker (Shift ×5) · Enter = picker · s = save · r = reset · d = discard · Esc = close";
+    public const string EditHint = "↑↓ = color · ←→ = lighter/darker (Shift ×5) · Enter = picker · s = save · r = reset · Esc = close";
 
     /// <summary>The editor's buttons, with their keys.</summary>
     public const string SaveButton = "save";
     public const string ResetButton = "reset";
-    public const string DiscardButton = "discard";
 
     /// <summary>
     /// What each color role colors, in <see cref="ThemeColorSlot"/> order: <c>COMMANDS.md</c>'s table in the editor's rows (2026-11-17, #119: the

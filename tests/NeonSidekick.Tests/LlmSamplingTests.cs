@@ -456,7 +456,7 @@ public sealed class LlmSamplingTests : IDisposable
         rig.Push(Keys.Enter);
         rig.Type("""{"seed":7}""");
         rig.Push(Keys.Enter);                                      // saved
-        rig.Push(Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // clear, yes
+        rig.Push(Keys.Down, Keys.Down, Keys.Enter, Keys.Char('y'), Keys.Enter);   // past the turn-off row: clear, yes
         rig.Push(Keys.Escape);
 
         await rig.Menu.ShowAsync(CancellationToken.None);
@@ -507,5 +507,110 @@ public sealed class LlmSamplingTests : IDisposable
         Assert.Equal(MidTurnClass.Quick, ChatScreen.MidTurnPolicy(SlashCommand.Sampling, hasArgs: true));
         Assert.Equal(MidTurnClass.Pane, ChatScreen.MidTurnPolicy(SlashCommand.Sampling, hasArgs: false));
         Assert.Contains("/sampling", SlashCommands.Words);
+    }
+
+    // ── Off (2026-11-27, the user's ask) ───────────────────────────────────
+
+    [Fact]
+    public void Resolve_AnOffModelEntry_IsNone_AndAnOffAnyLendsNothing()
+    {
+        var off = With(("qwen3", new() { Temperature = 0.6, Off = true }), ("*", new() { TopK = 20 }));
+        Assert.Same(LlmSampling.None, LlmSampling.Resolve(off, "qwen3"));          // not even *'s
+        Assert.Equal(20, LlmSampling.Resolve(off, "gemma").TopK);                  // another model still gets *
+
+        var anyOff = With(("qwen3", new() { Temperature = 0.6 }), ("*", new() { TopK = 20, Off = true }));
+        var sampling = LlmSampling.Resolve(anyOff, "qwen3");
+        Assert.Equal(0.6, sampling.Temperature);
+        Assert.Null(sampling.TopK);
+        Assert.Same(LlmSampling.None, LlmSampling.Resolve(anyOff, "gemma"));
+    }
+
+    [Fact]
+    public void TheVariable_TurnsAnOffEntryBackOnForTheLaunch()
+    {
+        var env = new EnvironmentOverrides(name => name == EnvironmentOverrides.LlmSamplingVariable ? """{"temperature":0.2}""" : null);
+        var saved = With(("qwen3", new() { TopK = 20, Off = true }));
+
+        var effective = env.ApplyTo(saved);
+        Assert.Equal(0.2, LlmSampling.Resolve(effective, "qwen3").Temperature);
+        Assert.Equal(20, LlmSampling.Resolve(effective, "qwen3").TopK);
+        Assert.True(saved.LlmSampling!["qwen3"].Off);   // the saved snapshot keeps it
+    }
+
+    [Fact]
+    public void Off_IsWrittenOnlyWhenTrue_CopyKeepsIt_AndAnOffEntryIsNotEmpty()
+    {
+        string on = JsonSerializer.Serialize(With(("qwen3", new() { Temperature = 0.6 })), SettingsJsonContext.Default.AppSettingsData);
+        Assert.DoesNotContain('"' + nameof(LlmSamplingEntry.Off) + '"', on, StringComparison.Ordinal);
+        string off = JsonSerializer.Serialize(With(("qwen3", new() { Off = true })), SettingsJsonContext.Default.AppSettingsData);
+        Assert.True(JsonSerializer.Deserialize(off, SettingsJsonContext.Default.AppSettingsData)!.LlmSampling!["qwen3"].Off);
+        Assert.True(new LlmSamplingEntry { Off = true }.Copy().Off);
+        Assert.False(new LlmSamplingEntry { Off = true }.IsEmpty);
+        Assert.True(new LlmSamplingEntry().IsEmpty);
+        Assert.Equal("*, qwen3" + SamplingText.OffMark, SamplingText.Summary(new() { ["qwen3"] = new() { Off = true }, ["*"] = new() { TopK = 1 } }));
+    }
+
+    [Fact]
+    public void TheRows_UnderAnOffAny_ShowTheServerDefault_AndAnOffModelTab_ShowsNoInheritedValue()
+    {
+        var anyOff = With(("*", new() { Temperature = 0.7, Off = true }));
+        Assert.Contains(SamplingText.ServerDefault, SamplingMenu.Rows(anyOff.LlmSampling, "qwen3")[0], StringComparison.Ordinal);
+        var modelOff = With(("qwen3", new() { Off = true }), ("*", new() { Temperature = 0.7 }));
+        Assert.DoesNotContain("(from *)", SamplingMenu.Rows(modelOff.LlmSampling, "qwen3")[0], StringComparison.Ordinal);
+        Assert.Contains(SamplingText.TurnOnRowName, SamplingMenu.Rows(modelOff.LlmSampling, "qwen3")[SamplingMenu.ToggleRow], StringComparison.Ordinal);
+        Assert.Contains(SamplingText.TurnOffRowName, SamplingMenu.Rows(null, "qwen3")[SamplingMenu.ToggleRow], StringComparison.Ordinal);
+
+        var lines = SamplingMenu.Lines(modelOff.LlmSampling, "qwen3").ToList();
+        Assert.Equal(SamplingText.TabTitle("qwen3") + SamplingText.OffMark, lines[0]);
+        Assert.Equal("  " + SamplingText.OffCaption(anyTab: false), lines[1]);
+    }
+
+    [Fact]
+    public async Task OnThePane_SpaceSwitchesTheTabOff_EnterOnTheToggleRowBackOn_AndAnEditKeepsItOff()
+    {
+        using var rig = new Rig(_dir, Qwen);
+        rig.Push(Keys.Char(' '));                                    // off, from the first row
+        rig.Push(Keys.Enter);
+        rig.Type("0.6");
+        rig.Push(Keys.Enter);                                        // temperature edited while off
+        rig.Push(Keys.Escape);
+
+        await rig.Menu.ShowAsync(CancellationToken.None);
+
+        var entry = rig.Settings.Current.LlmSampling!["qwen3-8b"];
+        Assert.True(entry.Off);
+        Assert.Equal(0.6, entry.Temperature);
+        Assert.Contains(SamplingText.OffNotice("qwen3-8b"), rig.Console.Output);
+        Assert.Contains(SamplingText.TabTitle("qwen3-8b") + SamplingText.OffMark, rig.Console.Output);
+        Assert.Contains(SamplingText.OffCaption(anyTab: false), rig.Console.Output);
+
+        rig.Push([.. Enumerable.Repeat(Keys.Down, SamplingMenu.ExtraRow + 1), Keys.Enter]);   // past the rule: the toggle row
+        rig.Push(Keys.Escape);
+        await rig.Menu.ShowAsync(CancellationToken.None);
+
+        Assert.False(rig.Settings.Current.LlmSampling!["qwen3-8b"].Off);
+        Assert.Contains(SamplingText.OnNotice("qwen3-8b"), rig.Console.Output);
+    }
+
+    [Fact]
+    public void Quick_OffAndOn_SwitchTheConnectedModel_AWordAfterThemIsAUsageError()
+    {
+        using var rig = new Rig(_dir, Qwen, overriddenBy: EnvironmentOverrides.LlmSamplingVariable);
+        Assert.True(rig.Menu.Quick("OFF"));
+        Assert.True(rig.Settings.Current.LlmSampling!["qwen3-8b"].Off);   // an off-only entry is kept
+        Assert.Contains(SettingsMenu.OverrideNotice(EnvironmentOverrides.LlmSamplingVariable), rig.Console.Output);
+        Assert.True(rig.Menu.Quick("on"));
+        Assert.Null(rig.Settings.Current.LlmSampling);                    // the empty entry dropped
+        Assert.Contains(SamplingText.OnNotice("qwen3-8b"), rig.Console.Output);
+        Assert.False(rig.Menu.Quick("off now"));
+        Assert.Null(rig.Settings.Current.LlmSampling);
+
+        Assert.True(rig.Menu.Quick("off"));
+        Assert.True(rig.Menu.Quick("clear"));                              // clear all drops the off too
+        Assert.Null(rig.Settings.Current.LlmSampling);
+
+        using var none = new Rig(Path.Combine(_dir, "none"), endpoint: null);
+        Assert.False(none.Menu.Quick("off"));
+        Assert.Contains(SamplingText.NoModelError, none.Console.Output);
     }
 }

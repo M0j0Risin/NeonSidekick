@@ -138,7 +138,7 @@ internal static class HelpFiles
         rows.AddRange(families.Select(f => new HelpFile(HelpFileScope.Profile, configs + f.File, "this profile's own " + f.Holds, Edit(f.Word))));
         rows.AddRange(
         [
-            new(HelpFileScope.Profile, configs + Bench.BenchHistory.FileName, "the `/test` runs", "`/test`"),
+            new(HelpFileScope.Profile, configs + Bench.BenchHistory.FileName, "the `/bench` runs", "`/bench`"),
             new(HelpFileScope.Profile, configs + YouTube.YouTubeLibrary.FileName, "the saved YouTube videos and playlists and where each was left", "`/youtube`"),
             new(HelpFileScope.Profile, configs + Midi.MidiBindings.FileName, "the MIDI bindings: each learned button and the command it runs", "`/midi`"),
             new(HelpFileScope.Profile, configs + Prompts.SavedPrompts.FileName, "the saved prompts", "`/prompts`"),

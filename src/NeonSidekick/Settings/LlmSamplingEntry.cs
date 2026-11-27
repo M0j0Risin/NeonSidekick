@@ -48,10 +48,21 @@ public sealed class LlmSamplingEntry
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Dictionary<string, JsonElement>? Extra { get; set; }
 
-    /// <summary>True when nothing is set: an entry that says nothing is removed rather than saved.</summary>
+    /// <summary>
+    /// Switched off (2026-11-27, the user's ask): the server's own defaults for this model, its values kept. An off model entry sends
+    /// nothing, not even the <c>*</c> entry's; an off <c>*</c> entry lends nothing to any model. Written only when true, so an older
+    /// <c>profile.json</c> reads as on.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Off { get; set; }
+
+    /// <summary>
+    /// True when nothing is set: an entry that says nothing is removed rather than saved. An off entry says something with no values
+    /// of its own (2026-11-27): the connected model's tab off drops the <c>*</c> values.
+    /// </summary>
     [JsonIgnore]
     public bool IsEmpty =>
-        Temperature is null && TopP is null && TopK is null && MinP is null && PresencePenalty is null
+        !Off && Temperature is null && TopP is null && TopK is null && MinP is null && PresencePenalty is null
         && FrequencyPenalty is null && RepetitionPenalty is null && Extra is not { Count: > 0 };
 
     /// <summary>A deep copy: <see cref="JsonElement"/>s are cloned so the copy outlives any document.</summary>
@@ -65,6 +76,7 @@ public sealed class LlmSamplingEntry
         FrequencyPenalty = FrequencyPenalty,
         RepetitionPenalty = RepetitionPenalty,
         Extra = Extra?.ToDictionary(p => p.Key, p => p.Value.Clone(), StringComparer.Ordinal),
+        Off = Off,
     };
 
     /// <summary>A deep copy of a whole <see cref="AppSettingsData.LlmSampling"/> map, or null.</summary>

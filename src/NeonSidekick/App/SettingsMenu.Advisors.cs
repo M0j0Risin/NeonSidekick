@@ -17,13 +17,13 @@ internal sealed partial class SettingsMenu
     public const string AddAdvisorRow = "+ Add an advisor…";
 
     /// <summary>The list editor's keys. Pinned.</summary>
-    public const string AdvisorListKeys = "Enter = add, or change the advisor · Esc = back";
+    public const string AdvisorListKeys = "Enter = add, or change the advisor · Space = on/off · Esc = back";
 
     /// <summary>
     /// The list editor's keys when <c>/advisor list</c> opened it alone (2026-11-23, the user's pick: one Esc closes the pane, so the
     /// hint says close, not back). Pinned.
     /// </summary>
-    public const string AdvisorListCloseKeys = "Enter = add, or change the advisor · Esc = close";
+    public const string AdvisorListCloseKeys = "Enter = add, or change the advisor · Space = on/off · Esc = close";
 
     /// <summary>The list editor's second row (2026-11-22, the advisor templates). Pinned.</summary>
     public const string NewAdvisorRow = "+ New advisor from a template…";
@@ -40,13 +40,35 @@ internal sealed partial class SettingsMenu
     /// <summary>
     /// An entry's choices, in order (the description and the persona since 2026-11-22; the server and the switch later that day, from UI
     /// testing: <see cref="ChangeAdvisorServerChoice"/>, <see cref="SwitchToAdvisorChoice"/>; then the model and the reasoning alone, the
-    /// user's ask: <see cref="ChangeAdvisorModelChoice"/>, <see cref="ChangeAdvisorReasoningChoice"/>). <see cref="RemoveAdvisorChoice"/> is Delete's. Pinned.
+    /// user's ask: <see cref="ChangeAdvisorModelChoice"/>, <see cref="ChangeAdvisorReasoningChoice"/>; the off switch on 2026-11-27,
+    /// <see cref="ToggleAdvisorChoice"/>, named <see cref="TurnOnAdvisorRow"/> while the advisor is off). <see cref="RemoveAdvisorChoice"/> is Delete's. Pinned.
     /// </summary>
     public static readonly IReadOnlyList<string> AdvisorEntryRows =
-        ["Change the role", "Change the description", "Change the persona", "Change the server", "Change the model", "Change the reasoning", "Switch to profile", "Remove"];
+        ["Change the role", "Change the description", "Change the persona", "Change the server", "Change the model", "Change the reasoning", "Switch to profile", "Turn off", "Remove"];
+
+    /// <summary>The row of <see cref="AdvisorEntryRows"/> that switches the advisor off or on (2026-11-27, the user's ask), as Space on its list row does.</summary>
+    public const int ToggleAdvisorChoice = 7;
+
+    /// <summary>The toggle row's name while the advisor is off. Pinned.</summary>
+    public const string TurnOnAdvisorRow = "Turn on";
 
     /// <summary>The row of <see cref="AdvisorEntryRows"/> a Delete on an advisor goes to.</summary>
-    public const int RemoveAdvisorChoice = 7;
+    public const int RemoveAdvisorChoice = 8;
+
+    /// <summary>The Advisor list's rule over the advisors switched off (2026-11-27). Pinned.</summary>
+    public const string AdvisorOffHeading = "Off";
+
+    /// <summary>An off advisor's page crumb ends with this (2026-11-27): every row still works while it's off. Pinned.</summary>
+    public const string AdvisorOffCrumbMark = " (off)";
+
+    /// <summary>An off advisor's band opens with this line (2026-11-27). Pinned.</summary>
+    public const string AdvisorOffBand = "Off: neon_advisor and /advisor skip it.";
+
+    /// <summary>The notice when Space or the page's row switches an advisor off. Pinned.</summary>
+    public static string AdvisorOffNotice(string profile) => FieldName(SettingsField.AdvisorList) + ": " + profile + " off";
+
+    /// <summary>The notice when it is switched back on. Pinned.</summary>
+    public static string AdvisorOnNotice(string profile) => FieldName(SettingsField.AdvisorList) + ": " + profile + " on";
 
     /// <summary>
     /// The choices a bare rule follows on an advisor's page (2026-11-23, the user's ask): who it is (role, description, persona), how it
@@ -54,13 +76,16 @@ internal sealed partial class SettingsMenu
     /// </summary>
     public static readonly IReadOnlyList<int> AdvisorEntryRuleAfter = [2, ChangeAdvisorReasoningChoice];
 
-    /// <summary>The page's rows: <see cref="AdvisorEntryRows"/> escaped, a <see cref="SectionRule.Bare"/> after each of <see cref="AdvisorEntryRuleAfter"/>. Pure.</summary>
-    public static IReadOnlyList<string> AdvisorEntryPageRows()
+    /// <summary>
+    /// The page's rows: <see cref="AdvisorEntryRows"/> escaped, a <see cref="SectionRule.Bare"/> after each of <see cref="AdvisorEntryRuleAfter"/>;
+    /// with <paramref name="off"/> the toggle row reads <see cref="TurnOnAdvisorRow"/> (2026-11-27). Pure.
+    /// </summary>
+    public static IReadOnlyList<string> AdvisorEntryPageRows(bool off = false)
     {
         var rows = new List<string>();
         for (int i = 0; i < AdvisorEntryRows.Count; i++)
         {
-            rows.Add(Markup.Escape(AdvisorEntryRows[i]));
+            rows.Add(Markup.Escape(off && i == ToggleAdvisorChoice ? TurnOnAdvisorRow : AdvisorEntryRows[i]));
             if (AdvisorEntryRuleAfter.Contains(i))
             {
                 rows.Add(SectionRule.Bare);
@@ -145,7 +170,11 @@ internal sealed partial class SettingsMenu
         ArgumentNullException.ThrowIfNull(entry);
         string role = entry.Role.Length == 0 ? "(no role)" : entry.Role;
         string padded = AdvisorText.PadCells(entry.Profile, width);
-        string name = avatar is null ? Markup.Escape(padded) : ProfilePickerRow(padded, avatar);
+        // An off advisor's name is dim too (2026-11-27), built from its plain parts: the avatar in full color, the name through DimMarkup,
+        // which escapes, so it never wraps the finished markup.
+        string name = entry.Off
+            ? (avatar is null ? "" : Markup.Escape(AvatarLead(avatar))) + Theme.DimMarkup(padded)
+            : avatar is null ? Markup.Escape(padded) : ProfilePickerRow(padded, avatar);
         if (!exists)
         {
             return name + Theme.DimMarkup(Markup.Escape(role + "  " + MissingAdvisorMark));
@@ -236,7 +265,7 @@ internal sealed partial class SettingsMenu
     /// </summary>
     private MenuFooter? AdvisorListFooter(AppSettingsData saved)
     {
-        var entries = AdvisorRoster.Entries(saved.AdvisorList);
+        var entries = AdvisorRoster.Shown(saved.AdvisorList);   // the off ones last, marked (2026-11-27)
         if (entries.Count == 0)
         {
             return null;
@@ -291,20 +320,29 @@ internal sealed partial class SettingsMenu
         string title = FieldName(SettingsField.AdvisorList);
         while (true)
         {
-            var entries = AdvisorRoster.Entries(_settings.Current.AdvisorList);
+            // The ones in service, then the ones switched off under an Off rule (2026-11-27, the user's ask), each A to Z; one list, so both
+            // groups share one set of columns, and the rows split at the active count.
+            var entries = AdvisorRoster.Shown(_settings.Current.AdvisorList);
+            int activeCount = entries.Count(e => !e.Off);
             int width = entries.Count == 0 ? 0 : Math.Min(24, entries.Max(e => TextCells.Width(e.Profile)) + 2);
             int roleWidth = AdvisorRoleColumn(entries);
             var (lines, columns) = AdvisorLines(entries);
+            // Each advisor's avatar ahead of its name (later on 2026-10-10, the user's ask), as the profile pickers show theirs; a
+            // missing profile none (its file would read as the defaults, the robot). The kind padded so the models line up (2026-11-22).
+            var rows = lines.Select(l => AdvisorRow(l.Advisor, l.Exists, width, l.Facts, roleWidth, AdvisorMark(l.Advisor),
+                l.Exists ? ProfileAvatar(l.Advisor.Profile) : "", columns.Kind)).ToList();
             // A rule between the two add rows and the advisors (2026-11-24, the user's ask); the cursor and the picks stay items.
-            var ruled = RuledRows.Of([[Markup.Escape(AddAdvisorRow), Markup.Escape(NewAdvisorRow)], lines.Select(l =>
-                // Each advisor's avatar ahead of its name (later on 2026-10-10, the user's ask), as the profile pickers show theirs; a
-                // missing profile none (its file would read as the defaults, the robot). The kind padded so the models line up (2026-11-22).
-                AdvisorRow(l.Advisor, l.Exists, width, l.Facts, roleWidth, AdvisorMark(l.Advisor),
-                    l.Exists ? ProfileAvatar(l.Advisor.Profile) : "", columns.Kind)).ToList()]);
+            var ruled = RuledRows.Of([[Markup.Escape(AddAdvisorRow), Markup.Escape(NewAdvisorRow)], rows.Take(activeCount).ToList(), rows.Skip(activeCount).ToList()],
+                [null, null, AdvisorOffHeading]);
             // Each row's band (2026-11-22): what the two add rows do, an advisor's description (or how to give it one).
             // Under /advisor list's lone visit one Esc closes the pane, and the hint says so (2026-11-23).
-            var page = new MenuPage(Crumb(title), ruled.Rows, _openOnly ? AdvisorListCloseKeys : AdvisorListKeys) { Headings = ruled.Headings, Footer = (_, row) => AdvisorRowBand(entries, ruled.ItemOf(row)) };
-            if (await PickListAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { Row: var pickedRow } pick)
+            var page = new MenuPage(Crumb(title), ruled.Rows, _openOnly ? AdvisorListCloseKeys : AdvisorListKeys)
+            {
+                Headings = ruled.Headings,
+                SpaceToggles = true,
+                Footer = (_, row) => AdvisorRowBand(entries, ruled.ItemOf(row)),
+            };
+            if (await PickListToggleAsync(page, ruled.RowOf(cursor), cancellationToken).ConfigureAwait(false) is not { Row: var pickedRow } pick)
             {
                 if (!changed)
                 {
@@ -323,7 +361,7 @@ internal sealed partial class SettingsMenu
             cursor = index;
             if (index < AdvisorListLead)
             {
-                if (!pick.Remove)   // Delete on an add row: nothing to remove
+                if (!pick.Remove && !pick.Toggle)   // Delete or Space on an add row: nothing to do
                 {
                     changed |= index == 0
                         ? await AddAdvisorAsync(entries, page, cancellationToken).ConfigureAwait(false)
@@ -335,9 +373,19 @@ internal sealed partial class SettingsMenu
 
             var entry = entries[index - AdvisorListLead];
             // Two bare rules split the choices into who, how and the rest (2026-11-23, the user's ask); the switch runs on the choice the row stands for.
-            var choice = new MenuPage(Crumb(title + " › " + entry.Profile), AdvisorEntryPageRows(), PickKeys) { Headings = AdvisorEntryRuleRows() };
-            switch (pick.Remove ? RemoveAdvisorChoice : (await PickAsync(choice, 0, cancellationToken).ConfigureAwait(false) is int row ? AdvisorChoiceOfRow(row) : (int?)null))   // Delete is the removal, asked as ever
+            var choice = new MenuPage(Crumb(title + " › " + entry.Profile + (entry.Off ? AdvisorOffCrumbMark : "")), AdvisorEntryPageRows(entry.Off), PickKeys) { Headings = AdvisorEntryRuleRows() };
+            switch (pick.Remove ? RemoveAdvisorChoice : pick.Toggle ? ToggleAdvisorChoice
+                : (await PickAsync(choice, 0, cancellationToken).ConfigureAwait(false) is int row ? AdvisorChoiceOfRow(row) : (int?)null))   // Delete is the removal, asked as ever; Space the switch
             {
+                case ToggleAdvisorChoice:
+                    // Off keeps the role, description and threads (2026-11-27, the user's ask); the cursor follows the advisor to its new place.
+                    bool off = !entry.Off;
+                    _settings.Update(d => d.AdvisorList = AdvisorRoster.WithOff(d.AdvisorList, entry.Profile, off));
+                    Sink.Notice(off ? AdvisorOffNotice(entry.Profile) : AdvisorOnNotice(entry.Profile));
+                    cursor = AdvisorListLead + AdvisorRoster.Shown(_settings.Current.AdvisorList).ToList().FindIndex(e => AdvisorRoster.SameProfile(e.Profile, entry.Profile));
+                    changed = true;
+                    break;
+
                 case 0:
                     if (await ReadAdvisorRoleAsync(page, entry.Profile, entry.Role, cancellationToken).ConfigureAwait(false) is { } role && role != entry.Role)
                     {

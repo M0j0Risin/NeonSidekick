@@ -116,12 +116,12 @@ public sealed class NeonAdvisorTool : AIFunction
 
     public override string Name => ToolName;
 
-    public override string Description => AdvisorText.Description(AdvisorRoster.Entries(_effective().AdvisorList));
+    public override string Description => AdvisorText.Description(AdvisorRoster.Active(_effective().AdvisorList));   // the ones in service (2026-11-27)
 
     public override JsonElement JsonSchema => Schema;
 
     /// <summary>The advisors as they are now (2026-10-10): plan mode's directive names them.</summary>
-    public IReadOnlyList<AdvisorEntry> Advisors => AdvisorRoster.Entries(_effective().AdvisorList);
+    public IReadOnlyList<AdvisorEntry> Advisors => AdvisorRoster.Active(_effective().AdvisorList);
 
     /// <summary>A turn starts (<c>PrepareTurn</c>): the per-turn count starts over.</summary>
     public void BeginTurn() => Interlocked.Exchange(ref _calls, 0);
@@ -153,10 +153,14 @@ public sealed class NeonAdvisorTool : AIFunction
         }
 
         string words = ToolArguments.ReadString(arguments, AdvisorArgument);
-        var (advisor, candidates) = AdvisorRoster.Find(advisors, words);
-        if (advisor is null)
+        // The ones in service first, then an off one named, then every one off (2026-11-27): a call already in flight when the last was
+        // switched off still gets a reason, never an advisor that is off.
+        var pick = AdvisorRoster.Pick(advisors, words);
+        if (pick.Found is not { } advisor)
         {
-            return AdvisorText.UnknownAdvisorError(words, candidates);
+            return pick.OffOne is { } off ? AdvisorText.OffError(off.Profile)
+                : pick.AllOff ? AdvisorText.AllOffError
+                : AdvisorText.UnknownAdvisorError(words, pick.Candidates);
         }
 
         int cap = Math.Clamp(effective.AdvisorCallsPerTurn, AppSettingsData.MinAdvisorCallsPerTurn, AppSettingsData.MaxAdvisorCallsPerTurn);

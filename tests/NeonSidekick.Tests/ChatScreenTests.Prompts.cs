@@ -49,10 +49,31 @@ public sealed partial class ChatScreenTests
         string output = await RunAsync();
 
         Assert.Contains(SavedPromptText.PaneTitle, output);
-        Assert.Contains(SavedPromptText.PaneCaption(2), output);
+        Assert.DoesNotContain("saved prompts;", output);   // no count caption over the rows (2026-11-27)
         Assert.Contains("2. Review the diff +1 line", output);
         Assert.Single(_chat.Requests);
         Assert.Equal("Review the diff\nfor bugs", UserText(_chat.Requests[0]));
+    }
+
+    /// <summary>A filter typed in the pane still shows its caption, though the count caption is gone (2026-11-27).</summary>
+    [Fact]
+    public async Task Prompts_ThePane_AFilter_StillShowsItsCaption()
+    {
+        _settings.Update(d => d.TtsOutput = false);
+        _console.Profile.Height = 40;
+        _console.Profile.Width = 160;
+        _geometry = new ScreenGeometry(() => null);
+        SavePrompts("Summarize this.", "Review the diff\nfor bugs");
+        StepsWhenIdle(
+            Line("/prompts"),
+            Key(Keys.Char('z')),   // "Summarize" alone
+            Key(Keys.Escape),
+            Key(Keys.Escape),
+            Line("/exit"));
+
+        string output = await RunAsync();
+
+        Assert.Contains(UI.MenuFilter.Caption("z", 1, 2), output);
     }
 
     /// <summary>The pane's <c>d</c> (2026-10-16): the old pick, the prompt on the draft (drawn on the input row), and Enter sends it as it is.</summary>

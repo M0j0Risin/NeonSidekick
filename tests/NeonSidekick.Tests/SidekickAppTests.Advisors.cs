@@ -132,4 +132,19 @@ public partial class SidekickAppTests
         Assert.StartsWith("Question: Which index?\n\nIts conversation so far", prompt, StringComparison.Ordinal);
         Assert.Contains("\nassistant: Postgres 16.", prompt, StringComparison.Ordinal);
     }
+
+    /// <summary>Headless <c>/advisor</c> with the advisor switched off (2026-11-27): refused, exit 4, nothing asked.</summary>
+    [Fact]
+    public async Task Headless_AdvisorCommand_AnOffAdvisorIsRefused()
+    {
+        ServerOn1234("llama");
+        HeadlessAdvisor();
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("dba", "database architect", Off: true)]);
+
+        string output = await Headless("/advisor\n/advisor dba Which index?\n", exitCode: 4);
+
+        Assert.Contains("[error] " + AdvisorText.OffRefusal("dba"), output);
+        Assert.Contains(AdvisorText.OffMark, output);
+        Assert.Empty(_chat.Requests);
+    }
 }

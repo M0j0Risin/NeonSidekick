@@ -1,6 +1,7 @@
 using NeonSidekick.App;
 using NeonSidekick.UI;
 using NeonSidekick.Llm;
+using NeonSidekick.Sessions;
 using Spectre.Console.Testing;
 
 namespace NeonSidekick.Tests;
@@ -91,7 +92,7 @@ public class UsageTextTests
         tally.BeginTurn();
         tally.Add(new TokenUsage(1_300, 200, 1_500, 1, TimeSpan.FromSeconds(0.5), TimeSpan.FromMilliseconds(4)).Judged(shown: 1));
         Assert.Equal("1.5k / 4.1k · 37% · 46 tok/s", UsageText.HintPart(tally, Window));
-        Assert.DoesNotContain("tok/s", UsageText.Lines(tally, Window)[1], StringComparison.Ordinal);   // /usage's last reply stays exact: no speed
+        Assert.DoesNotContain("tok/s", UsageText.Lines(tally)[0], StringComparison.Ordinal);   // /usage's last reply stays exact: no speed
 
         // A cleared conversation shows nothing until the next reply, whatever the session holds.
         tally.ResetConversation();
@@ -110,33 +111,18 @@ public class UsageTextTests
     }
 
     [Fact]
-    public void ContextLine_IsPinned_InItsFourShapes()
-    {
-        Assert.Equal("Context: window unknown", UsageText.ContextLine(new TokenTally(), null));
-        Assert.Equal("Context: window 4,096 tokens (max_model_len on /v1/models); nothing sent yet", UsageText.ContextLine(new TokenTally(), Window));
-        Assert.Equal("Context: 1,240 tokens; window unknown", UsageText.ContextLine(Filled(), null));
-        Assert.Equal("Context: 1,240 of 4,096 tokens (30%, max_model_len on /v1/models)", UsageText.ContextLine(Filled(), Window));
-        Assert.Equal("Context: 1,240 of 32,768 tokens (4%, configured)", UsageText.ContextLine(Filled(), ContextLength.Configured(32_768)));
-    }
-
-    [Fact]
     public void Lines_ArePinned()
     {
-        Assert.Equal(["(no tokens counted yet)"], UsageText.Lines(new TokenTally(), null));
-        Assert.Equal(
-        [
-            "Context: window 4,096 tokens (max_model_len on /v1/models); nothing sent yet",
-            "(no tokens counted yet)",
-        ], UsageText.Lines(new TokenTally(), Window));
+        // The context line left them (2026-11-27): ContextLines' headline covers it.
+        Assert.Equal([UsageText.NothingCounted], UsageText.Lines(new TokenTally()));
 
         Assert.Equal(
         [
-            "Context: 1,240 of 4,096 tokens (30%, max_model_len on /v1/models)",
             "Tokens — last reply: 1,240 (1,102 in, 138 out, 120 reasoning, 2 requests) · 0.8 s to first token · 46.0 tok/s",
             // The aggregates' wait is per request (4.8 s over 9, 9.8 s over 21), their speed over every request's streaming.
             "Tokens — this conversation (every request summed): 12,480 (11,900 in, 580 out, 120 reasoning, 9 requests) · 0.5 s to first token · 40.0 tok/s",
             "Tokens — since launch (every request summed): 30,112 (28,700 in, 1,412 out, 120 reasoning, 21 requests) · 0.5 s to first token · 40.0 tok/s",
-        ], UsageText.Lines(Filled(), Window));
+        ], UsageText.Lines(Filled()));
     }
 
     [Fact]
@@ -151,18 +137,17 @@ public class UsageTextTests
 
         Assert.Equal(
         [
-            "Context: 120 tokens; window unknown",
             "(last reply: no usage reported)",
             "Tokens — this conversation (every request summed): 120 (100 in, 20 out, 1 request) · 0.5 s to first token · 20.0 tok/s",
             "Tokens — since launch (every request summed): 120 (100 in, 20 out, 1 request) · 0.5 s to first token · 20.0 tok/s",
             "(1 reply reported no usage)",
-        ], UsageText.Lines(tally, null));
+        ], UsageText.Lines(tally));
 
         tally.BeginTurn();
         tally.EndTurn();
         tally.BeginTurn();
         tally.EndTurn();
-        Assert.Equal("(3 replies reported no usage)", UsageText.Lines(tally, null)[^1]);
+        Assert.Equal("(3 replies reported no usage)", UsageText.Lines(tally)[^1]);
     }
 
     [Fact]
@@ -172,19 +157,18 @@ public class UsageTextTests
         tally.BeginTurn();
         tally.Add(Usage(100, 20, 1, 0.5, 1));
         tally.EndTurn();
-        Assert.DoesNotContain(UsageText.Lines(tally, null), l => l.StartsWith("skill learning", StringComparison.Ordinal));
+        Assert.DoesNotContain(UsageText.Lines(tally), l => l.StartsWith("skill learning", StringComparison.Ordinal));
 
         tally.AddLearning(Usage(3000, 120, 2, 0.5, 1), requests: 2);
 
         Assert.Equal("2 requests · 3,120 tokens", UsageText.LearningValue(tally));
-        Assert.Equal("skill learning: 2 requests · 3,120 tokens", UsageText.Lines(tally, null)[^1]);
-        Assert.StartsWith("Tokens — since launch (every request summed): 3,240 (3,100 in, 140 out, 3 requests)", UsageText.Lines(tally, null)[3], StringComparison.Ordinal);
+        Assert.Equal("skill learning: 2 requests · 3,120 tokens", UsageText.Lines(tally)[^1]);
+        Assert.StartsWith("Tokens — since launch (every request summed): 3,240 (3,100 in, 140 out, 3 requests)", UsageText.Lines(tally)[2], StringComparison.Ordinal);
 
-        using var console = new TestConsole();
-        console.Profile.Width = 2000;
-        console.Write(UsageText.StatisticsTab(tally, null));
-        string[] lines = Lines(console);
-        Assert.Equal("  Skill learning       2 requests · 3,120 tokens", lines.Last(l => l.Length > 0));   // the launch section's last row
+        string[] lines = Tab(tally);
+        // The Other runs section's row (2026-11-27; the launch section's until then), the tab's last.
+        Assert.Equal(Head(UsageText.OtherRunsHeading, width: 100), lines[^3]);
+        Assert.Equal("  " + UsageText.LearningLabel + new string(' ', SlashCommands.HelpColumnGap) + "2 requests · 3,120 tokens", lines.Last(l => l.Length > 0));
 
         var one = new TokenTally();
         one.AddLearning(TokenUsage.Zero, requests: 1);
@@ -240,60 +224,53 @@ public class UsageTextTests
         return text + " " + new string(ScreenPane.RuleGlyph, width - TextCells.Width(text) - 1);
     }
 
+    /// <summary>
+    /// The Tokens section (2026-11-27, plan C4): one table of the three scopes, matched by label, each scope's value right-aligned under its head,
+    /// one label width.
+    /// </summary>
     [Fact]
-    public void StatisticsTab_RendersAHeadingPerScope_OverItsRows()
+    public void TheTokensTable_HasAColumnPerScope_ARowPerLabel()
     {
-        using var console = new TestConsole();
-        console.Profile.Width = 80;
-        console.Write(UsageText.StatisticsTab(Filled(), Window));
+        var tally = Filled();
+        string[] lines = Tab(tally);
+        int rule = Array.IndexOf(lines, Head(UsageText.TokensHeading, width: 100));
+        Assert.True(rule > 0);
 
-        string[] lines = Lines(console);
-        // The Context section first, its source dim on its rule (2026-10-10; in the value column until then), the rows two cells in under it.
-        Assert.Equal(Head(UsageText.ContextHeading, "max_model_len on /v1/models"), lines[0]);
-        Assert.Equal("  Window               4,096", lines[1]);
-        Assert.Equal("  In use               1,240", lines[2]);
-        Assert.Equal("  Used                 30%", lines[3]);
-        Assert.Equal("", lines[4]);
-        Assert.Equal(Head(UsageText.LastReplyHeading), lines[5]);
-        Assert.Equal("  Total                1,240", lines[6]);
-        Assert.Equal("  Prompt               1,102", lines[7]);
-        Assert.Equal("  Completion           138", lines[8]);
-        Assert.Equal("  Reasoning            120", lines[9]);
-        Assert.Equal("  Requests             2", lines[10]);
-        Assert.Equal("  Time to first token  0.8 s", lines[11]);
-        Assert.Equal("  Speed                46.0 tok/s", lines[12]);
-        Assert.Equal("", lines[13]);
-        // One label width for the four sections: the value column stays where the widest label put it.
-        Assert.Equal(Head(UsageText.ConversationHeading), lines[14]);
-        Assert.Equal("  Total                12,480", lines[15]);
-        Assert.Equal("  Reasoning            120", lines[18]);   // the one request that reported a count
-        Assert.Equal("  Time to first token  0.5 s", lines[20]);   // per request: 4.8 s over 9
-        Assert.Equal("  Speed                40.0 tok/s", lines[21]);
-        Assert.Equal("", lines[22]);
-        Assert.Equal(Head(UsageText.SessionHeading), lines[23]);
-        Assert.Equal("  Total                30,112", lines[24]);
-        Assert.Equal("  Requests             21", lines[28]);
-        Assert.Equal("  Time to first token  0.5 s", lines[29]);   // 9.8 s over 21
-        Assert.Equal("  Speed                40.0 tok/s", lines[30]);
-        Assert.Equal(19, UsageText.LabelWidth([("Time to first token", ""), ("Total", "")]));
+        string heads = lines[rule + 1];
+        int last = heads.IndexOf(UsageText.LastReplyColumn, StringComparison.Ordinal);
+        int conversation = heads.IndexOf(UsageText.ConversationColumn, StringComparison.Ordinal);
+        int launch = heads.IndexOf(UsageText.SinceLaunchColumn, StringComparison.Ordinal);
+        Assert.True(last > 0 && conversation > last && launch > conversation, heads);
+
+        var labels = UsageText.Rows(tally.Session, averaged: true).Select(r => r.Label).ToList();
+        for (int i = 0; i < labels.Count; i++)
+        {
+            string row = lines[rule + 2 + i];
+            Assert.StartsWith("  " + labels[i], row, StringComparison.Ordinal);
+            string session = UsageText.Rows(tally.Session, averaged: true)[i].Value;
+            Assert.EndsWith(session, row, StringComparison.Ordinal);
+            Assert.Equal(launch + UsageText.SinceLaunchColumn.Length, row.Length);   // right-aligned under its head
+        }
+
+        string total = lines[rule + 2];
+        Assert.True(total.IndexOf("1,240", StringComparison.Ordinal) < total.IndexOf("12,480", StringComparison.Ordinal));
+        Assert.True(total.IndexOf("12,480", StringComparison.Ordinal) < total.IndexOf("30,112", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// With nothing counted the top and the breakdown show, then the Tokens rule over <see cref="UsageText.NothingCounted"/>, no Trend or Records
+    /// (2026-11-27); an unreported last reply leaves its column blank and says so under the table, as the conversation's count of them.
+    /// </summary>
     [Fact]
-    public void StatisticsTab_NamesTheRepliesWithoutAReport_AndTheEmptyTally()
+    public void TheTab_SaysNothingCounted_AndNamesTheRepliesWithoutAReport()
     {
-        using var empty = new TestConsole();
-        empty.Write(UsageText.StatisticsTab(new TokenTally(), null));
-        Assert.Equal(UsageText.NothingCounted, empty.Output);
-
-        // A known window before the first reply: the Context section, then the empty note under it.
-        using var known = new TestConsole();
-        known.Profile.Width = 80;
-        known.Write(UsageText.StatisticsTab(new TokenTally(), Window));
-        string[] before = Lines(known);
-        Assert.Equal(Head(UsageText.ContextHeading, "max_model_len on /v1/models"), before[0]);
-        Assert.Equal("  Window  4,096", before[1]);
-        Assert.Equal("", before[2]);
-        Assert.Equal("  " + UsageText.NothingCounted, before[3]);
+        string[] empty = Tab(new TokenTally());
+        int rule = Array.IndexOf(empty, Head(UsageText.TokensHeading, width: 100));
+        Assert.True(rule > 0);
+        Assert.Equal("  " + UsageText.NothingCounted, empty[rule + 1]);
+        Assert.DoesNotContain(empty, l => l.StartsWith("── " + UsageText.TrendHeading, StringComparison.Ordinal));
+        Assert.DoesNotContain(empty, l => l.StartsWith("── " + UsageText.RecordsHeading, StringComparison.Ordinal));
+        Assert.StartsWith("  " + UsageText.MeterFull, empty[0], StringComparison.Ordinal);   // the meter first, no rule
 
         var tally = new TokenTally();
         tally.BeginTurn();
@@ -302,23 +279,114 @@ public class UsageTextTests
         tally.BeginTurn();
         tally.EndTurn();
 
-        using var console = new TestConsole();
-        console.Profile.Width = 80;
-        console.Write(UsageText.StatisticsTab(tally, null));
+        string[] lines = Tab(tally);
+        Assert.Contains("  " + UsageText.ScopeNote(UsageText.LastReplyColumn, UsageText.NoReportNote), lines);
+        Assert.Contains("  " + UsageText.ScopeNote(UsageText.ConversationColumn, "1 reply reported no usage"), lines);
+        int tokens = Array.IndexOf(lines, Head(UsageText.TokensHeading, width: 100));
+        string heads = lines[tokens + 1];
+        string total = lines[tokens + 2];
+        int lastEnd = heads.IndexOf(UsageText.LastReplyColumn, StringComparison.Ordinal) + UsageText.LastReplyColumn.Length;
+        Assert.True(string.IsNullOrWhiteSpace(total[(lastEnd - UsageText.LastReplyColumn.Length)..lastEnd]), total);   // the last reply's cell blank
+        Assert.Contains("  Reasoning", lines.Skip(tokens).First(l => l.StartsWith("  Reasoning", StringComparison.Ordinal)), StringComparison.Ordinal);
+        Assert.EndsWith("—", lines.Skip(tokens).First(l => l.StartsWith("  Reasoning", StringComparison.Ordinal)), StringComparison.Ordinal);   // no request counted its thinking
+    }
 
-        string[] lines = Lines(console);
-        // The aggregates carry the Time to first token row now (2026-09-17), the widest label of the tab.
-        Assert.Equal(Head(UsageText.ContextHeading, UsageText.WindowUnknown), lines[0]);
-        Assert.Equal("  Window               unknown", lines[1]);
-        Assert.Equal("  In use               120", lines[2]);
-        Assert.Equal("", lines[3]);
-        // The notes sit on the rules.
-        Assert.Equal(Head(UsageText.LastReplyHeading, UsageText.NoReportNote), lines[4]);
-        Assert.Equal("", lines[5]);   // no rows under an empty scope
-        Assert.Equal(Head(UsageText.ConversationHeading, "1 reply reported no usage"), lines[6]);
-        Assert.Equal("  Total                120", lines[7]);
-        Assert.Equal("  Reasoning            —", lines[10]);   // no request counted its thinking: the row stays, with a dash
-        Assert.Equal("  Time to first token  0.5 s", lines[12]);
+    /// <summary>The merged tab at <paramref name="width"/> on the shared facts, its lines' padding trimmed.</summary>
+    private static string[] Tab(TokenTally tally, IReadOnlyList<ReplyPoint>? replies = null, ModelBests? bests = null, string? model = null, int width = 100)
+    {
+        using var console = new TestConsole();
+        console.Profile.Width = width;
+        console.Write(UsageText.StatisticsTab(tally, UsageContextTests.Facts(UsageContextTests.Window), replies ?? tally.Replies, bests ?? ModelBests.None, model, width));
+        return Lines(console);
+    }
+
+    private static ReplyPoint Point(int number, double? speed = 100, double? first = 0.5, long? context = 1_000, long? output = 200, string? model = "qwen", bool marked = false) =>
+        new(model, speed, first is { } s ? TimeSpan.FromSeconds(s) : null, context, output, null, marked, number);
+
+    /// <summary>A measure's cell (2026-11-27): its level between the lowest and highest shown, the middle when all are one, a gap for none.</summary>
+    [Fact]
+    public void ASparkCell_ScalesBetweenTheLowestAndHighest()
+    {
+        Assert.Equal('▁', UsageText.SparkCell(10, 10, 20));
+        Assert.Equal('█', UsageText.SparkCell(20, 10, 20));
+        Assert.Equal('▄', UsageText.SparkCell(5, 5, 5));   // equal values: the middle
+        Assert.Equal(' ', UsageText.SparkCell(null, 10, 20));
+    }
+
+    /// <summary>The trend (2026-11-27): none under two replies; a line a measure; │ at a model change, ┆ before a compaction; the newest that fit.</summary>
+    [Fact]
+    public void TheTrend_MarksAModelChangeAndACompaction_AndKeepsTheNewestThatFit()
+    {
+        Assert.Empty(UsageText.TrendLines([Point(1)]));
+        var replies = new List<ReplyPoint> { Point(1, speed: 100), Point(2, speed: 120), Point(3, speed: 90, marked: true), Point(4, speed: 80, model: "other"), Point(5, speed: null) };
+        var lines = UsageText.TrendLines(replies);
+
+        Assert.Equal(4, lines.Count);
+        Assert.StartsWith(UsageText.TrendSpeedLabel.ToLowerInvariant() + ": ", lines[0], StringComparison.Ordinal);
+        string cells = lines[0][(lines[0].IndexOf(": ", StringComparison.Ordinal) + 2)..lines[0].IndexOf(" (", StringComparison.Ordinal)];
+        Assert.Equal("▅█" + UsageText.CompactedMark + "▃" + UsageText.ModelChangeMark + "▁" + UsageText.ModelChangeMark + " ", cells);   // back to qwen; a gap for the untimed one
+        Assert.EndsWith("(100 → 80 tok/s)", lines[0], StringComparison.Ordinal);
+        Assert.EndsWith("(200 · 200 avg)", lines[3], StringComparison.Ordinal);
+
+        // At a narrow width the pane keeps the newest and says how many of how many.
+        var many = Enumerable.Range(1, 100).Select(i => Point(i, speed: i)).ToList();
+        var tally = new TokenTally();
+        tally.BeginTurn();
+        tally.Add(Usage(100, 20, 1, 0.5, 1));
+        tally.EndTurn();
+        string[] tab = Tab(tally, replies: many, width: 60);
+        string rule = tab.Single(l => l.StartsWith("── " + UsageText.TrendHeading, StringComparison.Ordinal));
+        Assert.Contains("last ", rule, StringComparison.Ordinal);
+        Assert.Contains(" of 100", rule, StringComparison.Ordinal);
+        Assert.All(tab, l => Assert.True(TextCells.Width(l) <= 60, l));
+        Assert.Equal(UsageText.Plural(31, "reply", "replies"), UsageText.TrendCount(31, 31));
+    }
+
+    /// <summary>
+    /// Records (2026-11-27): this conversation's bests beside the model's and any model's; ★ when the conversation holds the model's best, "★ new"
+    /// in its column; the any-model column only when it says something else; two columns when narrow.
+    /// </summary>
+    [Fact]
+    public void TheRecords_StarTheModelsBest_AndShowAnyModelOnlyWhenItDiffers()
+    {
+        var replies = new List<ReplyPoint> { Point(1, speed: 120, output: 300), Point(2, speed: 187, output: 2_914, first: 6.2, context: 52_000) };
+        var mine = new ModelBest("qwen", 150, 6_120, 14_800, 128_000, 1_200_000);
+        var bests = new ModelBests(mine, (412, "tiny"), (6_120, "qwen"), (14_800, 128_000, "qwen"), 1_500_000);
+        var cells = UsageText.RecordCells(replies, bests, "qwen");
+
+        var fastest = cells.Single(c => c.Label == UsageText.FastestLabel);
+        Assert.EndsWith(UsageText.ReplyRef(2) + " " + UsageText.RecordStar, fastest.Conversation, StringComparison.Ordinal);
+        Assert.EndsWith(UsageText.NewRecord, fastest.Model, StringComparison.Ordinal);
+        Assert.EndsWith("tiny", fastest.Any, StringComparison.Ordinal);
+        var longest = cells.Single(c => c.Label == UsageText.LongestLabel);
+        Assert.DoesNotContain(UsageText.RecordStar, longest.Conversation, StringComparison.Ordinal);   // 2,914 short of the model's 6,120
+        Assert.Contains(UsageText.Pages(3_214), cells.Single(c => c.Label == UsageText.WrittenLabel).Conversation, StringComparison.Ordinal);
+        Assert.Equal("≈ 5 pages", UsageText.Pages(3_214));
+
+        var tally = new TokenTally();
+        tally.BeginTurn();
+        tally.Add(Usage(100, 20, 1, 0.5, 1));
+        tally.EndTurn();
+        string[] wide = Tab(tally, replies, bests, "qwen", 140);
+        string heads = wide[Array.FindIndex(wide, l => l.StartsWith("── " + UsageText.RecordsHeading, StringComparison.Ordinal)) + 1];
+        Assert.Contains(UsageText.ModelEverColumn("qwen"), heads, StringComparison.Ordinal);
+        Assert.Contains(UsageText.AnyModelColumn, heads, StringComparison.Ordinal);
+
+        // Every best this model's, the written sums one: the any-model column says nothing new.
+        var same = new ModelBests(mine, (150, "qwen"), (6_120, "qwen"), (14_800, 128_000, "qwen"), 1_200_000);
+        string[] alone = Tab(tally, replies, same, "qwen", 140);
+        Assert.DoesNotContain(UsageText.AnyModelColumn, alone[Array.FindIndex(alone, l => l.StartsWith("── " + UsageText.RecordsHeading, StringComparison.Ordinal)) + 1], StringComparison.Ordinal);
+
+        // Narrow: fewer columns, the conversation's kept.
+        string[] narrow = Tab(tally, replies, bests, "qwen", 70);
+        string narrowHeads = narrow[Array.FindIndex(narrow, l => l.StartsWith("── " + UsageText.RecordsHeading, StringComparison.Ordinal)) + 1];
+        Assert.Contains(UsageText.ThisConversationColumn, narrowHeads, StringComparison.Ordinal);
+        Assert.DoesNotContain(UsageText.AnyModelColumn, narrowHeads, StringComparison.Ordinal);
+
+        // The plain lines: the all-time parts only with saved figures.
+        Assert.Contains(UsageText.ModelEverColumn("qwen"), UsageText.RecordLines(replies, bests, "qwen")[0], StringComparison.Ordinal);
+        Assert.DoesNotContain(" ever ", UsageText.RecordLines(replies, ModelBests.None, "qwen")[0], StringComparison.Ordinal);
+        Assert.Empty(UsageText.RecordLines([], ModelBests.None, "qwen"));
     }
 
     /// <summary>The rendered rows with the grid's column padding trimmed off.</summary>
@@ -334,11 +402,10 @@ public class UsageTextTests
 
         Assert.Equal(
         [
-            "Context: 100 tokens; window unknown",
             "Tokens — last reply: 100 (100 in, 0 out, 1 request) · 0.5 s to first token",
             "Tokens — this conversation (every request summed): 100 (100 in, 0 out, 1 request) · 0.5 s to first token",
             "Tokens — since launch (every request summed): 100 (100 in, 0 out, 1 request) · 0.5 s to first token",
-        ], UsageText.Lines(tally, null));
+        ], UsageText.Lines(tally));
     }
 
     [Fact]
@@ -434,7 +501,8 @@ public class UsageTextTests
         Assert.Null(UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, StreamMeter.Reading.Idle));
         Assert.Equal("~1.7k / 4.1k · ~42% · ~40 tok/s", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 500, 40)));
         Assert.Equal("~1.7k / 4.1k · ~42%", UsageText.BusyHintPart(tally, Window, MidTurnUsage.Estimate, new StreamMeter.Reading(true, 500, null)));   // no old speed before the rate
-        Assert.Equal("Context: 1,240 of 4,096 tokens (30%, max_model_len on /v1/models)", UsageText.ContextLine(tally, Window));   // /usage keeps them
+        Assert.StartsWith("Tokens — last reply: 1,240 ", UsageText.Lines(tally)[0], StringComparison.Ordinal);   // /usage keeps them
+        Assert.Equal(1_240, tally.LastRequest.Total);   // and the headline's count is the same figure
 
         tally.BeginTurn();
         tally.Add(Usage(1_300, 20, 1, 0.5, 1));
@@ -450,17 +518,14 @@ public class UsageTextTests
         tally.AddAdvisors(Usage(300, 40, 1, 0.5, 1), 1);
 
         Assert.Equal("3 requests · 1,000 in · 50 out", UsageText.ApartValue(3, tally.Bots));
-        Assert.Equal([UsageText.NothingCounted, "botchat: 3 requests · 1,000 in · 50 out", "advisors: 1 request · 300 in · 40 out"], UsageText.Lines(tally, null));
+        Assert.Equal([UsageText.NothingCounted, "botchat: 3 requests · 1,000 in · 50 out", "advisors: 1 request · 300 in · 40 out"], UsageText.Lines(tally));
 
-        using var console = new TestConsole();
-        console.Profile.Width = 80;
-        console.Write(UsageText.StatisticsTab(tally, null));
-        string[] lines = Lines(console);
-        Assert.Contains("  " + UsageText.BotsLabel + "   3 requests · 1,000 in · 50 out", lines);
-        Assert.Contains("  " + UsageText.AdvisorsLabel + "  1 request · 300 in · 40 out", lines);
+        string[] lines = Tab(tally);
+        Assert.Contains(lines, l => l.StartsWith("  " + UsageText.BotsLabel, StringComparison.Ordinal) && l.EndsWith("3 requests · 1,000 in · 50 out", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.StartsWith("  " + UsageText.AdvisorsLabel, StringComparison.Ordinal) && l.EndsWith("1 request · 300 in · 40 out", StringComparison.Ordinal));
 
         tally.Add(Usage(100, 20, 1, 0.5, 1));
-        Assert.Contains("advisors: 1 request · 300 in · 40 out", UsageText.Lines(tally, null));
+        Assert.Contains("advisors: 1 request · 300 in · 40 out", UsageText.Lines(tally));
     }
 
     // ── The sections, shared with the Web UI's card (2026-10-16) ──

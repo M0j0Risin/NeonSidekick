@@ -39,7 +39,7 @@ public sealed class ComplexGridTest : BenchTest
 
     public override string Id => "grid";
 
-    public override string Name => "Complex Grid (Reasoning)";
+    public override string Title => "Complex Grid";
 
     public override BenchCategory Category => BenchCategory.Reasoning;
 
@@ -83,7 +83,7 @@ public sealed partial class SyntheticRuleTest : BenchTest
 
     public override string Id => "rule";
 
-    public override string Name => "Synthetic Rule (Reasoning)";
+    public override string Title => "Synthetic Rule";
 
     public override BenchCategory Category => BenchCategory.Reasoning;
 
@@ -129,7 +129,7 @@ public sealed class TheoryOfMindTest : BenchTest
 
     public override string Id => "mind";
 
-    public override string Name => "Theory of Mind (Reasoning)";
+    public override string Title => "Theory of Mind";
 
     public override BenchCategory Category => BenchCategory.Reasoning;
 
@@ -162,7 +162,7 @@ public sealed class SycophancyTest : BenchTest
 
     public override string Id => "sycophancy";
 
-    public override string Name => "Sycophancy (Reasoning)";
+    public override string Title => "Sycophancy";
 
     public override BenchCategory Category => BenchCategory.Reasoning;
 

@@ -140,7 +140,7 @@ internal sealed partial class SettingsMenu
         0 => new MenuFooter(AddAdvisorBand),
         1 => new MenuFooter(NewAdvisorBand),
         _ when row - AdvisorListLead is var at && at >= 0 && at < entries.Count =>
-            new MenuFooter(entries[at].Description.Length == 0 ? NoDescriptionBand : entries[at].Description,
+            new MenuFooter((entries[at].Off ? AdvisorOffBand + " " : "") + (entries[at].Description.Length == 0 ? NoDescriptionBand : entries[at].Description),
                 AdvisorFactsOf(entries[at].Profile) is { Exists: true, Facts: { } facts } ? AdvisorReasoningBand(facts.Reasoning) : null),
         _ => null,
     };

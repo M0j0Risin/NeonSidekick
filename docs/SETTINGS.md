@@ -67,7 +67,7 @@ Every setting on the `/settings`, `/skills`, `/tools` and `/mcp` panes, its defa
 
 | Setting | What it does | Default |
 |---|---|---|
-| Session logging | Saves every turn to the profile's `sessions.db`, for `/sessions` to list, search and restore; never a [private conversation](INTERFACE.md#private-conversations)'s. | on |
+| Session logging | Saves every turn to the profile's `sessions.db`, for `/sessions` to list, search and restore; never a [private conversation](INTERFACE.md#private-conversations)'s. Each reply's figures go with it, for `/usage`'s all-time records and a restored conversation's trend. | on |
 | Session save thinking | Saves each reply's thinking, so a resumed session can send it back under *LLM preserve thinking*. | off |
 | Session retention (days) | Deletes older sessions at startup (0–3650; 0 keeps them forever), with their file checkpoints, so those turns can't be undone. | 0 (forever) |
 | Session naming mode | `model-written` asks the model for a title after the first turn; `first-line` uses your first line. | `model-written` |
@@ -189,6 +189,7 @@ Until you set something, sampling is left to the server and the model.
 
 * `/sampling` (or *LLM sampling*) has a tab per model: the connected one, **any model (`*`)**, then each model you've set something for.
 * Each field comes from the model's tab, else `*`, else isn't sent. Changes apply next turn; a blank value clears a field, an out-of-range one is refused.
+* **Off:** Space, or a tab's turn-off row, switches a tab off. That model gets the server's own defaults, an off `*` lends nothing, and your values are kept.
 
 | Field | Accepts | Sent as | Servers that honor it |
 |---|---|---|---|
@@ -334,7 +335,7 @@ Other profiles this one consults, each in a role you give it: `neon_advisor` for
 | Setting | What it does | Default |
 |---|---|---|
 | Advisors enabled | Offers the model `neon_advisor` while the list holds an advisor. `/advisor` works either way. | off |
-| Advisor list | The advisors: profiles the model can ask, each with a role and when to ask it. *+ Add an advisor…* adds a profile, *+ New advisor from a template…* makes one; Enter on one changes it, switches to it or removes it. | empty |
+| Advisor list | The advisors: profiles the model can ask, each with a role and when to ask it. *+ Add an advisor…* adds a profile, *+ New advisor from a template…* makes one; Enter on one changes it, switches to it or removes it; Space switches one off, keeping it, until it's back on. | empty |
 | Advisor context | What the model's calls send: `brief` (the question and context) or `recent` (the last 10 messages too). `/advisor` always sends the last 10. A gap review or code audit pass sends only the question and context. | `brief` |
 | Advisor max calls per turn | The most advisor calls one reply may make (1–10). | 2 |
 | Advisor max tool iterations | Tool round trips an advisor may make before answering (0–10; 0 is text only). | 4 |
@@ -690,7 +691,6 @@ Network shares and folders outside the working directory ([UNC shares](TOOLS.md#
 | UNC tools | Offers `unc_shares`, `unc_search`, `unc_info`, `unc_read`, plus `unc_fetch` while *File tools* is on. | off |
 | UNC writes | The master switch for changes: a share with `access: readwrite` also gets the write, move, copy and delete tools. Changes are permanent. | off |
 | UNC shares offered | As *SQL connections offered*. | empty |
-| UNC set password | As *SQL set password*, for runas shares. | — |
 | UNC add/edit share | The wizard for a new or saved share; its test lists the root under its account. | — |
 | UNC *-mention enabled | `*` and part of a name lists the offered shares; a pick writes `*name`. | on |
 | UNC shares (profile) | As *SQL connections (profile)*. | — |
@@ -783,7 +783,6 @@ See [Event logs](TOOLS.md#event-logs). On a Mac only *Event log tools*, `local` 
 |---|---|---|
 | Event log tools | Offers `eventlog_logs`, `eventlog_search`, `eventlog_summary` and `eventlog_event`, read-only, over the ticked computers and the working directory's `.evtx` files. `/eventlog` works either way; the on/off page's `o` opens *Event log computers offered*. | off |
 | Event log computers offered | A checklist: `local` (the computer running NeonSidekick), then the computers of both `eventlog.json` files. With none ticked, the tools read `.evtx` files alone. | `local` |
-| Event log set password | Pick a runas computer and type its password, masked; stored encrypted in `eventlog.json` or Windows Credential Manager. | — |
 | Event log add/edit computer | A wizard for a new or saved computer; its test reads the newest System event. For `local`, only the logs, detail and description. | — |
 | Event log max events | Events a search lists when the model names no `limit`, and a page of `/eventlog` (1–100). | 20 |
 | Event log scan limit | The most events one search reads before it stops and says how far back it got (1,000–30,000); a quarter of it on a remote computer. | 20,000 |
@@ -799,7 +798,6 @@ See [Services](TOOLS.md#services). The computer rows work like EventLog's, over 
 | Service tools | Offers `service_list` and `service_info`, read-only, over the ticked computers; with *Service writes* also `service_control` and `service_start_type`. `/services` works either way. | off |
 | Service writes | The master switch for start, stop, restart and start type. Each call asks first, only on a `readwrite` computer within its `control` and `controlActions`; never a driver or protected service, never headless. | off |
 | Service computers offered | A checklist: `local` (the computer running NeonSidekick), then the computers of both `services.json` files. | `local` |
-| Service set password | As *Event log set password*, for runas computers. | — |
 | Service add/edit computer | A wizard: host, sign-in, access, the services visible, and under `readwrite` what may change, the actions allowed and its own protected list. Its test lists the services under its account. | — |
 | Service computers (profile) | Enter opens this profile's `services.json` (made with commented examples when missing). | — |
 | Service computers (global) | Enter opens the home's `services.json`, which every profile reads. | — |
@@ -813,7 +811,6 @@ See [Scheduled tasks](TOOLS.md#scheduled-tasks). The same rows over `tasks.json`
 | Task tools | Offers `task_list` and `task_info`, read-only; with *Task writes* also `task_control`. `/tasks` works either way. | off |
 | Task writes | The master switch for `task_control` (run, end, enable, disable). Each call asks first, only on a `readwrite` computer within its `control` and `controlActions`, never headless; a privileged task's run, end or enable needs `privileged` in the entry. | off |
 | Task computers offered | As *Service computers offered*. | `local` |
-| Task set password | As *Event log set password*. | — |
 | Task add/edit computer | The wizard, with the folders visible in place of services and *Privileged* in place of the protected list; its test lists the tasks. | — |
 | Task computers (profile) | Enter opens this profile's `tasks.json`. | — |
 | Task computers (global) | Enter opens the home's `tasks.json`. | — |
@@ -826,7 +823,6 @@ See [Active Directory](TOOLS.md#active-directory). Always read-only. On a Mac: K
 |---|---|---|
 | Directory tools | Offers `ad_user`, `ad_group`, `ad_memberof`, `ad_computer`, `ad_find`, `ad_ou` and `ad_domain` over the ticked domains; the directory is never written. A list's `to` writes a CSV, only with *File tools* on and not in plan mode. `/ad` works either way. | off |
 | Directory domains offered | A checklist: `current` (the domain this computer is joined to, if any), then the domains of both `ad.json` files. | `current` when joined, else none |
-| Directory set password | As *Event log set password*, for runas domains. | — |
 | Directory add/edit domain | A wizard: name, server, base, LDAPS, sign-in and detail. Its test binds, reads the domain's root object and finds a user. | — |
 | Directory domains (profile) | Enter opens this profile's `ad.json`. | — |
 | Directory domains (global) | Enter opens the home's `ad.json`. | — |
@@ -846,8 +842,7 @@ The six database families, each read-only unless you choose `read-write` and the
 | SQL mode | `read-only`: the tools only read. `read-write`: `sql_execute` too, on connections marked `"access": "readwrite"`, each change asking you ([Read-write mode](TOOLS.md#read-write-mode)). | `read-only` |
 | SQL statements allowed | Under `read-write`, the kinds of statement `sql_execute` may run (a checklist). | changing data, creating, reading |
 | SQL connections offered | A checklist of both `sql.json` files' connections; none until you tick one. A hidden connection is invisible to every tool. | empty |
-| SQL set password | Pick a connection and type its password, masked; stored encrypted. | — |
-| SQL add/edit connection | A wizard for a new or saved connection, which can **test** it before saving; the database is required ([Managing connections](TOOLS.md#managing-connections)). | — |
+| SQL add/edit connection | A wizard for a new or saved connection, which can **test** it before saving; the database is required ([Managing connections](TOOLS.md#managing-connections)). Change a password in its Password row; alone, only the password is written. | — |
 | SQL %-mention enabled | `%` and part of a name lists the connections; a pick writes `%name`. | on |
 | SQL max rows | Rows `sql_query` returns unless the call says otherwise (1–100000). | 100 |
 | SQL query timeout (s) | How long one batch may run on the server (1–600). A profile's passes share it. | 30 |
@@ -865,7 +860,6 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | MySQL mode | As *SQL mode*, with `mysql_execute`. | `read-only` |
 | MySQL statements allowed | As *SQL statements allowed*, for `mysql_execute`. | changing data, creating, reading |
 | MySQL connections offered | As *SQL connections offered*. | empty |
-| MySQL set password | As *SQL set password*. | — |
 | MySQL add/edit connection | The wizard; its test warns when the account could change data. See [MySQL and MariaDB](TOOLS.md#mysql-and-mariadb). | — |
 | MySQL %-mention enabled | Lists the MySQL connections in the `%` list too. | on |
 | MySQL max rows | As *SQL max rows*, for `mysql_query`. | 100 |
@@ -881,7 +875,6 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | PostgreSQL mode | As *SQL mode*, with `postgres_execute`. | `read-only` |
 | PostgreSQL statements allowed | As *SQL statements allowed*, for `postgres_execute`. | changing data, creating, reading |
 | PostgreSQL connections offered | As *SQL connections offered*. | empty |
-| PostgreSQL set password | As *SQL set password*. | — |
 | PostgreSQL add/edit connection | The wizard; the database is required, *Schemas* optional (none: every schema), the first ticked first on the search path ([keys](INTERFACE.md#pane-keys)). Its test warns when the role could change data. See [PostgreSQL](TOOLS.md#postgresql). | — |
 | PostgreSQL %-mention enabled | Lists the PostgreSQL connections in the `%` list too. | on |
 | PostgreSQL max rows | As *SQL max rows*, for `postgres_query`. | 100 |
@@ -897,7 +890,6 @@ The other database tabs work like this one, over `mysql.json`, `sqlite.json`, `d
 | Oracle mode | As *SQL mode*, with `oracle_execute`. | `read-only` |
 | Oracle statements allowed | As *SQL statements allowed*, for `oracle_execute`. | changing data, creating, reading |
 | Oracle connections offered | As *SQL connections offered*. | empty |
-| Oracle set password | As *SQL set password*. | — |
 | Oracle add/edit connection | The wizard; *Schemas* ticks the ones the connection may reach (none: the user's own), the first ticked current ([keys](INTERFACE.md#pane-keys)). Its test warns when the account could change data. See [Oracle](TOOLS.md#oracle). | — |
 | Oracle %-mention enabled | Lists the Oracle connections in the `%` list too. | on |
 | Oracle max rows | As *SQL max rows*, for `oracle_query`. | 100 |
@@ -1042,7 +1034,7 @@ The Prompt, Tools and Skills tabs of `/usage` (`/usage prompt`, `tools`, `skills
 The system prompt section by section, each with its status:
 
 * **Persona** (built in, or `persona.md`)
-* **Operating rules** (built in, or `operata.md`)
+* **Operata** (built in, or `operata.md`)
 * **Project notes** (`NEON.md`, else `AGENTS.md`, else `CLAUDE.md`; see *Project file*)
 * **Memory**
 * **MCP server notes** (what connected servers say about their tools; a server's `"instructions": false` leaves its notes out)

@@ -15,11 +15,6 @@ namespace NeonSidekick.App;
 /// </summary>
 internal sealed partial class SettingsMenu
 {
-    /// <summary>The value column of a <c>… set password</c> row. Pinned.</summary>
-    public const string ComputerSetPasswordLabel = "Enter to set password for a runas computer";
-
-    /// <summary>What a <c>… set password</c> row says with no runas computer. Pinned.</summary>
-    public static string ComputerNoPasswordComputers(string file) => $"No computer in {file} signs in as another account (runas); this PC and a windows computer need no password.";
 
     /// <summary>The wizards' tests (the screen sets them; null where there is no system, and the wizard says so).</summary>
     public Func<Computer<ServiceComputerConfig>, CancellationToken, Task<(bool Ok, string Text)>>? TestServiceComputer { get; set; }
@@ -123,52 +118,6 @@ internal sealed partial class SettingsMenu
             Apply(field, d => set(d, next));
             changed = true;
         }
-    }
-
-    /// <summary>A <c>… set password</c> row: every runas computer with its store, a masked slot under the picked one, then the family's save.</summary>
-    private async Task<bool> SetComputerPasswordAsync<TConfig>(ComputerFamily<TConfig> family, SettingsField field, CancellationToken cancellationToken) where TConfig : ComputerConfig, new()
-    {
-        var computers = ByName(family.LoadCatalog(_settings.ProfileDirectory, _settings.StorageDirectory).Computers.Where(c => c.Config.NeedsPassword), c => c.Name);
-        if (computers.Count == 0)
-        {
-            Sink.Error(ComputerNoPasswordComputers(family.Info.FileName));
-            return false;
-        }
-
-        var rows = computers.Select(c => Markup.Escape($"{c.Name}  ({c.Config.Host?.Trim()}, runas {c.Config.User?.Trim()} · {(c.Config.InCredentialManager ? Sql.SqlText.CredentialStore : "encrypted in " + family.Info.FileName)})")).ToList();
-        var page = new MenuPage(Crumb(FieldName(field)), rows, PickKeys);
-        if (await PickAsync(page, 0, cancellationToken).ConfigureAwait(false) is not { } index)
-        {
-            return Unchanged();
-        }
-
-        InputResult result;
-        if (_pane.Enabled)
-        {
-            result = await _pane.EditAsync(page with { Hint = EditKeys }, index, _input, "", allowEmpty: false, cancellationToken, mask: true).ConfigureAwait(false);
-        }
-        else
-        {
-            Flow.Notice(PromptTitle(FieldName(field) + " · " + computers[index].Name, EditKeys));
-            result = await _input.ReadAsync("", remember: false, allowEmpty: false, cancellationToken: cancellationToken, escapeCancels: true, mask: true).ConfigureAwait(false);
-        }
-
-        if (result is not InputResult.Submitted { Text.Length: > 0 } submitted)
-        {
-            return Unchanged();
-        }
-
-        var (saved, notice) = family.SavePassword(computers[index], submitted.Text);
-        if (saved)
-        {
-            Sink.Notice(notice);
-        }
-        else
-        {
-            Sink.Error(notice);
-        }
-
-        return false;
     }
 
     /// <summary>Opens a family's file in the editor, made with its commented shape first; the status line says so, or why not.</summary>

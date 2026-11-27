@@ -71,10 +71,6 @@ public static class SavedPromptText
     /// <summary>The count over the printed list (<c>/prompts list</c>, the pane off, headless): the count alone (2026-10-16; it named Enter too, a key nobody there can press).</summary>
     public static string Caption(int count) => Prompts(count);
 
-    /// <summary>The count over the pane's rows, with what Enter and <c>d</c> do (2026-10-16, the user's ask: Enter sends).</summary>
-    public static string PaneCaption(int count) =>
-        $"{Prompts(count)}; Enter sends one, d puts it on the draft line.";
-
     /// <summary>The widest a row's first line is drawn before it is cut with an ellipsis; the footer shows more.</summary>
     public const int RowWidth = 100;
 

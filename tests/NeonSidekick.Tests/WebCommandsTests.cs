@@ -82,7 +82,7 @@ public sealed class WebCommandsTests
     [InlineData("/help keys", WebCommandKind.Run)]
     [InlineData("/imagine a cat", WebCommandKind.Run)]
     [InlineData("/learn keep the steps", WebCommandKind.Run)]
-    [InlineData("/test grid", WebCommandKind.Run)]
+    [InlineData("/bench grid", WebCommandKind.Run)]
     [InlineData("/pdf notes.md", WebCommandKind.Run)]
     [InlineData("/pdf merge a.pdf b.pdf", WebCommandKind.Run)]
     [InlineData("/docx notes.md", WebCommandKind.Run)]   // 2026-10-30, review F99

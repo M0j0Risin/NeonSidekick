@@ -1515,7 +1515,7 @@ public sealed partial class SidekickApp
                 resumedMadeFiles = Files.MadeFiles.Kept(resume.Stored.MadeFiles, resume.Turns);   // as the screen's restore (#69)
             }
 
-            // The conversation forgotten (/clear, /new, /splash, and a /test run's clean slate since 2026-09-30): the history, the
+            // The conversation forgotten (/clear, /new, /splash, and a /bench run's clean slate since 2026-09-30): the history, the
             // usage, the session row and the Claude threads; plan mode left with its notice.
             async Task ForgetConversationAsync()
             {
@@ -2159,10 +2159,10 @@ public sealed partial class SidekickApp
                     continue;
                 }
 
-                // /test (2026-09-28): ahead of the server check, since the listing and the saved runs need no LLM; a run refuses without one.
-                if (LineParse(text) is (SlashCommand.Test, var testArgs))
+                // /bench (2026-09-28): ahead of the server check, since the listing and the saved runs need no LLM; a run refuses without one.
+                if (LineParse(text) is (SlashCommand.Bench, var testArgs))
                 {
-                    await HeadlessTestAsync(session, testArgs, ForgetConversationAsync, cancellationToken).ConfigureAwait(false);
+                    await HeadlessBenchAsync(session, testArgs, ForgetConversationAsync, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -2508,7 +2508,8 @@ public sealed partial class SidekickApp
                     {
                         var usage = session.Usage.LastReply;
                         ChatScreen.StampTurn(assistant.History, sessions.AppendTurn(id, inPass?.Line ?? rowText, turn.Reply, turn.Trace.ToolCalls, turn.Trace.ToolNames, turn.Trace.LoadedSkills, turn.Trace.Errors, usage.Input, usage.Output, turn.Cancelled, turn.Trace.Sources,
-                            model: session.Endpoint?.ModelId ?? (EffectiveSettings.LlmModel is { Length: > 0 } configured ? configured : null), usage: usage, cwd: files.Root));   // #140
+                            model: session.Endpoint?.ModelId ?? (EffectiveSettings.LlmModel is { Length: > 0 } configured ? configured : null), usage: usage, cwd: files.Root,   // #140
+                            contextTokens: usage.IsEmpty ? null : session.Usage.LastRequest.Total));   // 2026-11-27: the all-time records read headless replies too
                         SaveHeadlessHistory(id, assistant.History.Messages);
                     }
                 }
@@ -3308,24 +3309,20 @@ public sealed partial class SidekickApp
     }
 
     /// <summary>
-    /// <c>/compact</c> headless, and the automatic one: the same <see cref="ConversationCompactor"/>
-    /// as the screen, no spinner, Ctrl+C the only cancel; the outcome as one line of
-    /// <see cref="CompactionText"/>, the failure line included, and — under <c>LLM compact show
-    /// summary</c> (2026-09-21) — the detail lines the screen prints under its notice
-    /// (<see cref="CompactionText.DetailLines"/>), empty otherwise.
-    /// </summary>
-    /// <summary>
-    /// <c>/test</c> headless (2026-09-28): the screen's words — the listing, the saved runs, or a run with a <c>[notice]</c>
+    /// <c>/bench</c> headless (2026-09-28): the screen's words — the listing, the saved runs, or a run with a <c>[notice]</c>
     /// line per test as it finishes (a fail's answer under it) and the table after as plain markdown — saved to the
     /// profile's <c>tests.json</c> as the screen saves it. Ctrl+C stops a run; what finished is shown and saved.
     /// </summary>
-    private async Task HeadlessTestAsync(LlmSession session, string args, Func<Task> forgetConversation, CancellationToken cancellationToken)
+    private async Task HeadlessBenchAsync(LlmSession session, string args, Func<Task> forgetConversation, CancellationToken cancellationToken)
     {
         var history = new Bench.BenchHistory(_settings.ProfileDirectory);
         if (args.Length == 0)
         {
             string? model = session.Endpoint?.ModelId;
-            await HeadlessLineAsync(Bench.BenchText.Listing(model is null ? new Dictionary<string, (Bench.BenchResult, DateTimeOffset)>() : history.Latest(model), model)).ConfigureAwait(false);
+            string? level = session.Assistant is { } shown ? Bench.BenchText.ReasoningWord(shown.Reasoning) : null;   // the next run's level (2026-11-27)
+            var latest = model is null ? new Dictionary<string, (Bench.BenchResult, DateTimeOffset)>()
+                : level is null ? history.Latest(model) : history.Latest(model, level);
+            await HeadlessLineAsync(Bench.BenchText.Listing(latest, model, level)).ConfigureAwait(false);
             return;
         }
 
@@ -3353,9 +3350,9 @@ public sealed partial class SidekickApp
         await forgetConversation().ConfigureAwait(false);
         var context = new Bench.BenchContext(session.ContextLength?.Tokens);
         bool claudeApi = Llm.Anthropic.ClaudeApi.IsClaudeApi(endpoint.BaseUrl);
-        if (tests.Any(t => t.Category == Bench.BenchCategory.LongContext))
+        if (tests.Any(t => t.SizedToWindow))
         {
-            await HeadlessNoticeLineAsync("[notice] " + Bench.BenchText.ContextLine(context)).ConfigureAwait(false);
+            await HeadlessNoticeLineAsync("[notice] " + Bench.BenchText.ContextLine(context, tests)).ConfigureAwait(false);
         }
 
         var run = Bench.BenchRunner.NewRun(assistant, endpoint, context, _time);
@@ -3381,16 +3378,23 @@ public sealed partial class SidekickApp
 
         if (run.Results.Count > 0)
         {
-            await HeadlessLineAsync(HeadlessReplyPrefix + Bench.BenchText.Summary(run)).ConfigureAwait(false);
+            await HeadlessLineAsync(HeadlessReplyPrefix + Bench.BenchText.Summary(run, history.Previous(run))).ConfigureAwait(false);
             if (!history.Append(run))
             {
                 await HeadlessNoticeLineAsync("[notice] " + Bench.BenchText.NotSaved).ConfigureAwait(false);
             }
         }
 
-        DiagnosticLog.Info("Test", $"/test {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", canceled" : "")}.");
+        DiagnosticLog.Info(Bench.BenchText.LogCategory, $"/bench {args}: {run.Passed}/{run.Counted} passed on {run.Model}{(run.Cancelled ? ", canceled" : "")}.");
     }
 
+    /// <summary>
+    /// <c>/compact</c> headless, and the automatic one: the same <see cref="ConversationCompactor"/>
+    /// as the screen, no spinner, Ctrl+C the only cancel; the outcome as one line of
+    /// <see cref="CompactionText"/>, the failure line included, and — under <c>LLM compact show
+    /// summary</c> (2026-09-21) — the detail lines the screen prints under its notice
+    /// (<see cref="CompactionText.DetailLines"/>), empty otherwise.
+    /// </summary>
     private async Task<(string Outcome, IReadOnlyList<string> Details)> CompactHeadlessAsync(LlmSession session, Assistant assistant, string? focus, int? autoPercent, CancellationToken cancellationToken)
     {
         string outcome;
@@ -3770,7 +3774,7 @@ public sealed partial class SidekickApp
     private async Task<string?> HeadlessAdvisorAsync(Llm.Tools.NeonAdvisorTool tool, LlmSession session, string args, CancellationToken cancellationToken)
     {
         var effective = EffectiveSettings;
-        var advisors = Advisors.AdvisorRoster.Entries(effective.AdvisorList);
+        var advisors = Advisors.AdvisorRoster.Shown(effective.AdvisorList);   // the off ones last, marked (2026-11-27)
         if (args.Trim().Length == 0)
         {
             if (advisors.Count == 0)
@@ -3841,9 +3845,12 @@ public sealed partial class SidekickApp
         string? problem = question.Length == 0 ? Advisors.AdvisorText.UsageError
             : advisors.Count == 0 ? Advisors.AdvisorText.ForUser(Advisors.AdvisorText.NoAdvisorsError)
             : null;
-        var (advisor, candidates) = Advisors.AdvisorRoster.Find(advisors, words);
-        problem ??= advisor is null ? Advisors.AdvisorText.ForUser(Advisors.AdvisorText.UnknownAdvisorError(words, candidates)) : null;
-        if (problem is not null)
+        var pick = Advisors.AdvisorRoster.Pick(advisors, words);
+        var advisor = pick.Found;
+        problem ??= advisor is not null ? null
+            : pick.OffOne is { } off ? Advisors.AdvisorText.OffRefusal(off.Profile)
+            : Advisors.AdvisorText.ForUser(pick.AllOff ? Advisors.AdvisorText.AllOffError : Advisors.AdvisorText.UnknownAdvisorError(words, pick.Candidates));
+        if (problem is not null || advisor is null)
         {
             await HeadlessNoticeLineAsync("[error] " + problem).ConfigureAwait(false);
             return null;

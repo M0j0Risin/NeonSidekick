@@ -145,6 +145,10 @@ internal sealed partial class SettingsMenu
         ConnectionStamp(draft.Name, draft.Global, draft.Config, spec.Info, x => x.Password = null);
 
     /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
+    /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
+    private static bool ComputerWizardPasswordOnly<TConfig>(ComputerWizardSpec<TConfig> spec, ComputerDraft<TConfig> draft) where TConfig : ComputerConfig, new() =>
+        WizardPasswordOnly(draft.Original, ComputerWizardStamp(spec, draft), draft.Opened, draft.PasswordKept, draft.Password);
+
     private static bool ComputerWizardDirty<TConfig>(ComputerWizardSpec<TConfig> spec, ComputerDraft<TConfig> draft) where TConfig : ComputerConfig, new() =>
         draft.Original is not null && (!string.Equals(ComputerWizardStamp(spec, draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -734,6 +738,7 @@ internal sealed partial class SettingsMenu
     /// <summary>Writes the draft: the entry, then under runas its password, then the offered list. Whether a setting changed; null when nothing was written.</summary>
     private bool? ComputerWizardSave<TConfig>(ComputerWizardSpec<TConfig> spec, ComputerDraft<TConfig> draft, bool offer) where TConfig : ComputerConfig, new()
     {
+        bool passwordOnly = ComputerWizardPasswordOnly(spec, draft);   // before the normalizing below, which can change the stamp
         var c = draft.Config;
         if (draft.IsLocal)
         {
@@ -769,6 +774,12 @@ internal sealed partial class SettingsMenu
         // The entry, then its password, then the tick (2026-10-23, the admin review's H9): a file-store password is sealed first and written with
         // the entry in one splice, so a failure loses no old one; a Credential Manager password that will not store leaves the entry unticked.
         string path = ComputerWizardPath(spec, draft.Global);
+        if (passwordOnly)
+        {
+            return WizardPasswordOnlySave(spec.Family.SavePassword(new Computer<TConfig>(draft.Name, c, path), draft.Password),
+                () => ApplyOfferedAfterSave(spec.OfferedField, ComputerCatalog<TConfig>.OfferedNames(spec.Offered(_settings.Current)), draft.Original, draft.Name, offer, spec.SetOffered));
+        }
+
         string? sealedPassword = null;
         if (c.NeedsPassword && !c.InCredentialManager)
         {
@@ -814,7 +825,7 @@ internal sealed partial class SettingsMenu
         else
         {
             offer = false;
-            Sink.Error(ComputerText.SavedUnticked(draft.Name, spec.Family.Info.SetPasswordRow, spec.Family.Info.MenuPath));
+            Sink.Error(ComputerText.SavedUnticked(draft.Name, spec.Family.Info.EditRow, spec.Family.Info.MenuPath));
         }
 
         return ApplyOfferedAfterSave(spec.OfferedField, ComputerCatalog<TConfig>.OfferedNames(spec.Offered(_settings.Current)), draft.Original, draft.Name, offer, spec.SetOffered);

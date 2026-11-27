@@ -71,13 +71,19 @@ internal sealed partial class ChatScreen
     }
 
     /// <summary>
-    /// The lower rule's items now, left to right, each only while it has something to say. Any thread (the pane's draw and tick). The queued
-    /// count first (2026-11-26, the user's ask: off the status bar, pinned at the rule's left): the queue, the Web UI's waiting lines and a PC line
+    /// The lower rule's items now, left to right, each only while it has something to say. Any thread (the pane's draw and tick). The pictures'
+    /// timer first (2026-11-27), then the queued count (2026-11-26, the user's ask: off the status bar, pinned at the rule's left): the queue, the Web UI's waiting lines and a PC line
     /// sent now that waits, as the status bar's count read them.
     /// </summary>
     private IReadOnlyList<LowerRuleItem> LowerRuleItemsNow()
     {
         var items = new List<LowerRuleItem>(12);
+        // The pictures under way first (2026-11-27, the user's call: the timer off the hint row, pinned left before the queued count).
+        if (_pendingPictures.RuleText is { Length: > 0 } pictures)
+        {
+            items.Add(new(LowerRuleKind.Pictures, pictures));
+        }
+
         if (_queue.Count + _webUi.WaitingCount + PendedPcLines().Count is > 0 and var queued)
         {
             items.Add(new(LowerRuleKind.Queued, QueuedRulePart(queued)));
@@ -104,11 +110,6 @@ internal sealed partial class ChatScreen
             {
                 items.Add(new(kind, setup));
             }
-        }
-
-        if (_pendingPictures.Glyph is { Length: > 0 } pictures)
-        {
-            items.Add(new(LowerRuleKind.Pictures, pictures));
         }
 
         if (_session.IsLearning)

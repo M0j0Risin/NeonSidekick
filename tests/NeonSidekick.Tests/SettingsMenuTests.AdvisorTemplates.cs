@@ -183,7 +183,7 @@ public partial class SettingsMenuTests
         Assert.Equal([new AdvisorEntry("dba", "architect", "schema, indexes")], _settings.Current.AdvisorList);
         Assert.Contains(SettingsMenu.AdvisorDescriptionNotice(new AdvisorEntry("dba", "architect", "schema, indexes")), Output);
         Assert.Contains(SettingsMenu.NoDescriptionBand, Output);   // the row's band before
-        Assert.Equal(7, SettingsMenu.RemoveAdvisorChoice);
+        Assert.Equal(8, SettingsMenu.RemoveAdvisorChoice);   // under Turn off (2026-11-27)
         Assert.Equal("Remove", SettingsMenu.AdvisorEntryRows[SettingsMenu.RemoveAdvisorChoice]);
         pane.Dispose();
     }
@@ -350,7 +350,7 @@ public partial class SettingsMenuTests
     public void TheAdvisorTexts_ArePinned()
     {
         Assert.Equal("+ New advisor from a template…", SettingsMenu.NewAdvisorRow);
-        Assert.Equal(["Change the role", "Change the description", "Change the persona", "Change the server", "Change the model", "Change the reasoning", "Switch to profile", "Remove"], SettingsMenu.AdvisorEntryRows);
+        Assert.Equal(["Change the role", "Change the description", "Change the persona", "Change the server", "Change the model", "Change the reasoning", "Switch to profile", "Turn off", "Remove"], SettingsMenu.AdvisorEntryRows);
         Assert.Equal("Advisor list: dba has no description", SettingsMenu.AdvisorDescriptionNotice(new AdvisorEntry("dba", "x")));
         Assert.Equal("Advisor list: dba: schema", SettingsMenu.AdvisorDescriptionNotice(new AdvisorEntry("dba", "x", "schema")));
         Assert.Equal("(moved your qa template to the " + Files.FileText.RecycleBinName + "; the built-in one is back)", SettingsMenu.TemplateDeletedNotice("qa", Files.DeleteWay.Recycled, builtInBack: true));

@@ -6,7 +6,7 @@ namespace NeonSidekick.UI;
 /// </summary>
 public enum LowerRuleKind
 {
-    /// <summary>The running processes' count, <c>⚡n</c> (<c>▶ n</c> until 2026-11-24): <c>/process</c>. Never dropped.</summary>
+    /// <summary>The running processes' count, <c>⚡ n</c> (<c>▶ n</c> until 2026-11-24, <c>⚡n</c> until 2026-11-27): <c>/process</c>. Never dropped.</summary>
     Processes = 1,
 
     /// <summary>The update's marker, <c>📦 0.5.9 at quit</c>: <c>/update</c>. Dropped first.</summary>
@@ -18,7 +18,10 @@ public enum LowerRuleKind
     /// <summary>An embedded model's download, <c>📥 ⠋ 42%</c>: a double-click cancels it.</summary>
     Download = 4,
 
-    /// <summary>ComfyUI pictures still rendering, <c>🖼️ 2</c> / <c>🎨</c>: a double-click cancels them.</summary>
+    /// <summary>
+    /// ComfyUI pictures under way, <c>🖼️  00:38</c> / <c>🖼️  2 · 00:38</c> (🎨 for a rework; <c>🖼️ 2</c> at the right until 2026-11-27): pinned left,
+    /// before the queued count. A double-click cancels them.
+    /// </summary>
     Pictures = 5,
 
     /// <summary>The MCP servers connecting behind the line, <c>🔌 1/3</c> (the status bar's until 2026-11-25): a double-click cancels the wave.</summary>

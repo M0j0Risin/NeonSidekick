@@ -406,6 +406,6 @@ public class ClaudeTests
         Assert.Equal(0.03m, tally.ClaudeCostUsd);
         Assert.True(tally.Conversation.IsEmpty);   // another model's tokens: never the local context's
         Assert.Equal("2 runs · 3,000 in · 75 out · $0.0300", UsageText.ClaudeValue(tally));
-        Assert.Contains("claude: 2 runs · 3,000 in · 75 out · $0.0300", UsageText.Lines(tally, null));
+        Assert.Contains("claude: 2 runs · 3,000 in · 75 out · $0.0300", UsageText.Lines(tally));
     }
 }
