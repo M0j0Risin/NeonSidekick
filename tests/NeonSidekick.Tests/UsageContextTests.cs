@@ -112,7 +112,7 @@ public class UsageContextTests
         string meter = lines[0].TrimEnd();
         Assert.StartsWith(new string(' ', SystemPromptSummary.BodyIndent) + UsageText.MeterFull, meter, StringComparison.Ordinal);
         Assert.EndsWith(new string(' ', UsageText.MeterGap) + UsageText.ContextHeadline(facts), meter, StringComparison.Ordinal);
-        Assert.Equal(80 - SystemPromptSummary.BodyIndent, NeonSidekick.UI.TextCells.Width(meter));
+        Assert.Equal(80, NeonSidekick.UI.TextCells.Width(meter));   // the indent taken off once (2026-11-27, the last-3 review's #11)
         Assert.Contains(UsageText.MeterEmpty, meter);
         Assert.Contains(UsageText.LegendFree, lines[1], StringComparison.Ordinal);
         Assert.Equal(UsageText.ContextReference(facts), lines[2].Trim());
@@ -120,6 +120,31 @@ public class UsageContextTests
         Assert.StartsWith("  " + UsageText.PromptLabel, lines[4], StringComparison.Ordinal);
         Assert.Contains("Databases", output, StringComparison.Ordinal);
         Assert.Contains(UsageText.GroupShare(4), output, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A line too narrow for <see cref="UsageText.MeterMinCells"/> beside the headline (2026-11-27, the last-3 review's #30): the headline
+    /// alone, cut to the line, still one line.
+    /// </summary>
+    [Fact]
+    public void ANarrowTab_DrawsTheHeadlineAlone_CutToTheLine()
+    {
+        var facts = Facts(Window);
+        string headline = UsageText.ContextHeadline(facts);
+        int width = SystemPromptSummary.BodyIndent + UsageText.MeterGap + NeonSidekick.UI.TextCells.Width(headline) + UsageText.MeterMinCells - 1;
+        using var console = new TestConsole();
+        console.Profile.Width = width;
+        console.Write(new ContextMeter(UsageText.BarPieces(facts), Window.Tokens, headline, SystemPromptSummary.BodyIndent));
+        string line = console.Output.Split('\n')[0].TrimEnd();
+        Assert.Equal(new string(' ', SystemPromptSummary.BodyIndent) + headline, line);
+        Assert.DoesNotContain(UsageText.MeterFull, line);
+
+        using var tiny = new TestConsole();
+        tiny.Profile.Width = 12;
+        tiny.Write(new ContextMeter(UsageText.BarPieces(facts), Window.Tokens, headline, SystemPromptSummary.BodyIndent));
+        string cut = tiny.Output.Split('\n')[0].TrimEnd();
+        Assert.True(NeonSidekick.UI.TextCells.Width(cut) <= 12, cut);
+        Assert.Single(tiny.Output.TrimEnd('\n').Split('\n'));
     }
 
     [Fact]

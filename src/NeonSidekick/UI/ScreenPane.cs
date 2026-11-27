@@ -8608,14 +8608,14 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     /// in its order. The spinner's frame and its label (none for a label <see cref="HideLabel"/> takes, 2026-11-27) stand where the
     /// <see cref="HintSlotKind.Spinner"/> slot does (later that day, the user's ask: the
     /// spinner a section of its own, movable), the way out (the overlay's keys or the stop hint) right after them (the user's pick); a
-    /// layout without that slot has them lead the left, as before.
+    /// layout without that slot has them lead the left, as before. The two groups alone since 2026-11-27 (the last-3 review's #44): the label
+    /// after the tally went that day, and with it the parts its zone needed.
     /// </summary>
-    private (List<HintPart> Left, List<HintPart> Right, string Unit, bool After, string Usage, string BusyLabel) BusyParts(string label, Func<IReadOnlyList<HintSlot>> layout, string frame)
+    private (List<HintPart> Left, List<HintPart> Right) BusyParts(string label, Func<IReadOnlyList<HintSlot>> layout, string frame)
     {
         string usage = !OverlayOnStatus ? _busyUsage() : "";
         var elapsed = _time.GetElapsedTime(_busySince);
         TimeSpan? step = _stageSince != _busySince && _stepClockShown() ? _time.GetElapsedTime(_stageSince) : null;
-        bool after = false;   // the label after the tally (the ComfyUI generation's) went on 2026-11-27
         string busyText = _hideLabel(label) ? "" : BusyText(label, elapsed, step);
         string unit = busyText.Length == 0 ? frame : frame + " " + busyText;
         var spinner = new HintPart(HintPartKind.Spinner, unit);
@@ -8639,7 +8639,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             HintPart? part = slot.Kind switch
             {
                 HintSlotKind.Strip => new HintPart(HintPartKind.Strip, _strip()),
-                HintSlotKind.Usage when !after => new HintPart(HintPartKind.Usage, usage),
+                HintSlotKind.Usage => new HintPart(HintPartKind.Usage, usage),
                 HintSlotKind.Model => model,
                 HintSlotKind.Path => new HintPart(HintPartKind.Path, slot.Text ?? ""),
                 _ => null,
@@ -8660,7 +8660,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
             left.InsertRange(0, [spinner, hint]);
         }
 
-        return (left, right, unit, after, usage, busyText);
+        return (left, right);
     }
 
     /// <summary>
@@ -8672,7 +8672,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
     private void WriteBusySided(string label, Func<IReadOnlyList<HintSlot>> layout, int max, string mark)
     {
         string frame = Theme.SpinnerFrames[_frame % Theme.SpinnerFrames.Length];
-        var (left, right, unit, after, usage, busyText) = BusyParts(label, layout, frame);
+        var (left, right) = BusyParts(label, layout, frame);
         var laid = LayParts(left, right, max);
         WriteHintText(laid, frame);
         _shownHint = laid.Text;
@@ -8689,15 +8689,7 @@ public sealed partial class ScreenPane : IAnsiConsole, IDisposable
         {
             _usageColumn = spinner.Column;
             _usageCells = spinner.Cells;
-            bool trailing = false;
-            bool leading = !_hideLabel(label) && _labelZone(label);
-            if (trailing)
-            {
-                // The label after the tally and its separator, or right after the frame's blank with none.
-                _labelColumn = spinner.Column + TextCells.Width(frame + " " + (after ? usage + HintSeparator : ""));
-                _labelCells = TextCells.Width(busyText);
-            }
-            else if (leading)
+            if (!_hideLabel(label) && _labelZone(label))
             {
                 _labelColumn = spinner.Column;
                 _labelCells = spinner.Cells;

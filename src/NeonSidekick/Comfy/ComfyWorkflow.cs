@@ -416,7 +416,8 @@ public sealed record ComfyWorkflow(
 
                 break;
             case JsonValue value when value.GetValueKind() == JsonValueKind.String && FindPlaceholders(value.GetValue<string>()).Contains(PromptKey):
-                into.Add(value.GetValue<string>());
+                // The placeholders blanked (2026-11-27, the last-3 review's #20): a trigger word "prompt" isn't already in "{{prompt}}".
+                into.Add(WithoutPlaceholders(value.GetValue<string>()));
                 break;
         }
     }
@@ -466,25 +467,55 @@ public sealed record ComfyWorkflow(
     {
         ArgumentNullException.ThrowIfNull(text);
         var found = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (_, _, name) in PlaceholderSpans(text))
+        {
+            found.Add(name);
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The text with each <c>{{name}}</c> a space (2026-11-27, the last-3 review's #20), for the trigger words' already-there check; a
+    /// <c>{{ odd text }}</c> that is no placeholder stays, searchable as text. Pure.
+    /// </summary>
+    internal static string WithoutPlaceholders(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var sb = new StringBuilder(text.Length);
+        int from = 0;
+        foreach (var (start, end, _) in PlaceholderSpans(text))
+        {
+            sb.Append(text, from, start - from).Append(' ');
+            from = end;
+        }
+
+        return sb.Append(text, from, text.Length - from).ToString();
+    }
+
+    /// <summary>
+    /// Each placeholder's span (its start, the index past its <c>}}</c>) and lower-cased name: one scanner for <see cref="FindPlaceholders"/>
+    /// and <see cref="WithoutPlaceholders"/> (2026-11-27).
+    /// </summary>
+    private static IEnumerable<(int Start, int End, string Name)> PlaceholderSpans(string text)
+    {
         int at = 0;
         while ((at = text.IndexOf("{{", at, StringComparison.Ordinal)) >= 0)
         {
             int end = text.IndexOf("}}", at + 2, StringComparison.Ordinal);
             if (end < 0)
             {
-                break;
+                yield break;
             }
 
             string name = text[(at + 2)..end].Trim();
             if (name.Length > 0 && name.All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
             {
-                found.Add(name.ToLowerInvariant());
+                yield return (at, end + 2, name.ToLowerInvariant());
             }
 
             at = end + 2;
         }
-
-        return found;
     }
 
     /// <summary>

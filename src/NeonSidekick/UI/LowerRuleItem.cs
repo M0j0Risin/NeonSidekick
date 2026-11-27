@@ -6,7 +6,11 @@ namespace NeonSidekick.UI;
 /// </summary>
 public enum LowerRuleKind
 {
-    /// <summary>The running processes' count, <c>⚡ n</c> (<c>▶ n</c> until 2026-11-24, <c>⚡n</c> until 2026-11-27): <c>/process</c>. Never dropped.</summary>
+    /// <summary>
+    /// The running processes' count, <c>⚡ n</c> (<c>▶ n</c> until 2026-11-24, <c>⚡n</c> until 2026-11-27): <c>/process</c>. Dropped beside another
+    /// item, after the queued count and before the pictures' timer; alone it is cut, never dropped (2026-11-27, the last-3 review's #42: the
+    /// doc said never dropped).
+    /// </summary>
     Processes = 1,
 
     /// <summary>The update's marker, <c>📦 0.5.9 at quit</c>: <c>/update</c>. Dropped first.</summary>

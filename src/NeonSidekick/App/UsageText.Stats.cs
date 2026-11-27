@@ -24,6 +24,12 @@ public static partial class UsageText
     /// <summary>The cells between the meter and the headline at its right.</summary>
     public const int MeterGap = 3;
 
+    /// <summary>
+    /// The fewest meter cells worth drawing (2026-11-27, the last-3 review's #30): with less room beside the headline the meter is left out and
+    /// the headline drawn alone, cut to the line.
+    /// </summary>
+    public const int MeterMinCells = 8;
+
     /// <summary>The legend's words, in the meter's order.</summary>
     public const string LegendPrompt = "prompt";
     public const string LegendTools = "tools";
@@ -99,6 +105,12 @@ public static partial class UsageText
 
     /// <summary>The sparkline's levels, lowest first.</summary>
     public const string SparkCells = "▁▂▃▄▅▆▇█";
+
+    /// <summary>
+    /// The conversation's reply count for the rule (2026-11-27, the last-3 review's #6): the newest point's number, which counts the replies
+    /// dropped off <see cref="TokenTally.ReplyCap"/> too; the list's length when the points carry no number.
+    /// </summary>
+    private static int TrendTotal(IReadOnlyList<ReplyPoint> replies) => Math.Max(replies.Count, replies[^1].Number);
 
     /// <summary>The rule's count: <c>31 replies</c>, or <c>last 40 of 80</c> when only the newest fit.</summary>
     public static string TrendCount(int shown, int total) => shown < total
@@ -178,7 +190,11 @@ public static partial class UsageText
 
     private static Color Blend(Color a, Color b) => new((byte)((a.R + b.R) / 2), (byte)((a.G + b.G) / 2), (byte)((a.B + b.B) / 2));
 
-    /// <summary>The Trend section's lines (2026-11-27): none with fewer than 2 replies.</summary>
+    /// <summary>
+    /// The Trend section's lines (2026-11-27): none with fewer than 2 replies. Since the last-3 review's #1 and #6 (2026-11-27) the cells'
+    /// room takes off the line's indent too, and each right-hand figure is the shown replies' (first chosen with all the replies' widths,
+    /// once more if the shown ones' are wider), so the figures match the cells beside them.
+    /// </summary>
     private static List<IRenderable> TrendSection(IReadOnlyList<ReplyPoint> replies, int width)
     {
         var lines = new List<IRenderable>();
@@ -189,10 +205,17 @@ public static partial class UsageText
 
         var measures = Measures();
         int labelWidth = measures.Max(m => m.Label.Length);
-        var rights = measures.Select(m => m.Right([.. replies.Select(m.Value).OfType<double>()])).ToList();
-        int rightWidth = rights.Max(TextCells.Width);
-        int room = Math.Max(2, width - labelWidth - 2 * SlashCommands.HelpColumnGap - rightWidth);
-        int first = FirstShown(replies, room);
+        List<string> RightsOf(IEnumerable<ReplyPoint> points) => [.. measures.Select(m => m.Right([.. points.Select(m.Value).OfType<double>()]))];
+        int RoomFor(int rightWidth) => Math.Max(2, width - SystemPromptSummary.BodyIndent - labelWidth - 2 * SlashCommands.HelpColumnGap - rightWidth);
+        int allWidth = RightsOf(replies).Max(TextCells.Width);
+        int first = FirstShown(replies, RoomFor(allWidth));
+        var rights = RightsOf(replies.Skip(first));
+        if (rights.Max(TextCells.Width) > allWidth)
+        {
+            first = FirstShown(replies, RoomFor(rights.Max(TextCells.Width)));
+            rights = RightsOf(replies.Skip(first));
+        }
+
         var shown = replies.Skip(first).ToList();
         var marks = Enumerable.Range(first, replies.Count - first).Select(i => i == first ? null : MarkBefore(replies, i)).ToList();
         var notes = new List<string>(2);
@@ -206,7 +229,7 @@ public static partial class UsageText
             notes.Add(CompactedNote);
         }
 
-        lines.Add(new SectionRule(SectionRule.Markup(TrendHeading, TrendCount(shown.Count, replies.Count), notes.Count > 0 ? string.Join(Sep, notes) : null)));
+        lines.Add(new SectionRule(SectionRule.Markup(TrendHeading, TrendCount(shown.Count, TrendTotal(replies)), notes.Count > 0 ? string.Join(Sep, notes) : null)));
         string gap = new(' ', SlashCommands.HelpColumnGap);
         string dimMarkup = Theme.DimText.ToMarkup();
         for (int m = 0; m < measures.Count; m++)
@@ -269,7 +292,8 @@ public static partial class UsageText
                 cells.Append(SparkCell(values[i], low, high));
             }
 
-            lines.Add(measure.Label.ToLowerInvariant() + ": " + cells + " (" + measure.Right([.. replies.Select(measure.Value).OfType<double>()]) + ")");
+            // The shown replies' figures (2026-11-27, the last-3 review's #6), as the pane's.
+            lines.Add(measure.Label.ToLowerInvariant() + ": " + cells + " (" + measure.Right([.. replies.Skip(first).Select(measure.Value).OfType<double>()]) + ")");
         }
 
         return lines;
@@ -399,44 +423,158 @@ public static partial class UsageText
 
     private static string Secs(long ms) => (ms / 1000d).ToString("F1", CultureInfo.InvariantCulture) + " s";
 
+    /// <summary>A conversation column with no figure in the plain lines (2026-11-27, the last-3 review's #39). Pinned.</summary>
+    public const string NoRecordYet = "none yet";
+
     /// <summary>
-    /// The Records' cells (2026-11-27): a row each, this conversation's, the model's and any model's (null where there is none). Pure.
+    /// The replies the conversation column counts (2026-11-27, the last-3 review's #8 and #38): the ones <paramref name="model"/> answered
+    /// (ignoring case), so another model's reply or a bot on another model never holds the model's record; all of them with no model.
+    /// </summary>
+    private static List<ReplyPoint> OwnReplies(IReadOnlyList<ReplyPoint> replies, string? model) => model is null
+        ? [.. replies]
+        : [.. replies.Where(r => string.Equals(r.Model, model, StringComparison.OrdinalIgnoreCase))];
+
+    /// <summary>
+    /// The saved bests with this conversation's replies folded in (2026-11-27, the last-3 review's #10 and #15): the store holds only what
+    /// it saved, so a reply it won't hold (<see cref="ReplyPoint.Unsaved"/>) or a model with no saved best yet would show a record short of
+    /// the conversation's. Speed, longest and slowest start are the higher of the two; Written adds the unsaved replies' output (the saved
+    /// ones are in the store's sum already). The model's column from the replies <paramref name="model"/> answered, a new best when the
+    /// store has none; any model's from every reply, each its own model as holder. <see cref="ModelBests.None"/> (no store) stays as it is,
+    /// so the all-time columns still show only with saved figures. Pure.
+    /// </summary>
+    internal static ModelBests Merged(IReadOnlyList<ReplyPoint> replies, ModelBests bests, string? model)
+    {
+        ArgumentNullException.ThrowIfNull(replies);
+        ArgumentNullException.ThrowIfNull(bests);
+        if (!bests.Any)
+        {
+            return bests;
+        }
+
+        var mine = bests.ThisModel;
+        if (model is not null)
+        {
+            var own = OwnReplies(replies, model);
+            if (own.Count > 0)
+            {
+                mine = Folded(mine ?? new ModelBest(model, null, null, null, null, 0), own);
+            }
+        }
+
+        var speed = bests.Speed;
+        var longest = bests.LongestOutput;
+        var slowest = bests.SlowestStart;
+        long written = bests.Written;
+        foreach (var r in replies)
+        {
+            if (r.Model is not { } holder || SessionText.IsSideTurnModel(holder))
+            {
+                continue;
+            }
+
+            if (r.TokensPerSecond is { } tps && (speed is null || tps > speed.Value.Value))
+            {
+                speed = (tps, holder);
+            }
+
+            if (r.Output is { } output and > 0 && (longest is null || output > longest.Value.Value))
+            {
+                longest = (output, holder);
+            }
+
+            if (r.FirstToken is { } wait && (slowest is null || (long)wait.TotalMilliseconds > slowest.Value.Ms))
+            {
+                slowest = ((long)wait.TotalMilliseconds, r.Context, holder);
+            }
+
+            if (r.Unsaved)
+            {
+                written += r.Output ?? 0;
+            }
+        }
+
+        return new ModelBests(mine, speed, longest, slowest, written);
+    }
+
+    /// <summary>One model's saved best with its replies in this conversation folded in (<see cref="Merged"/>'s model column).</summary>
+    private static ModelBest Folded(ModelBest best, IReadOnlyList<ReplyPoint> own)
+    {
+        double? speed = best.Speed;
+        long? longest = best.LongestOutput;
+        long? slowestMs = best.SlowestStartMs;
+        long? slowestContext = best.SlowestStartContext;
+        long written = best.Written;
+        foreach (var r in own)
+        {
+            if (r.TokensPerSecond is { } tps && (speed is null || tps > speed))
+            {
+                speed = tps;
+            }
+
+            if (r.Output is { } output and > 0 && (longest is null || output > longest))
+            {
+                longest = output;
+            }
+
+            if (r.FirstToken is { } wait && (slowestMs is null || (long)wait.TotalMilliseconds > slowestMs))
+            {
+                (slowestMs, slowestContext) = ((long)wait.TotalMilliseconds, r.Context);
+            }
+
+            if (r.Unsaved)
+            {
+                written += r.Output ?? 0;
+            }
+        }
+
+        return best with { Speed = speed, LongestOutput = longest, SlowestStartMs = slowestMs, SlowestStartContext = slowestContext, Written = written };
+    }
+
+    /// <summary>
+    /// The Records' cells (2026-11-27): a row each, this conversation's, the model's and any model's (null where there is none). Pure. Since
+    /// the last-3 review (2026-11-27): the conversation's from the replies the model answered (#8, #38), the model's and any model's from
+    /// <see cref="Merged"/> (#10, #15), and "★ new" only for a best this run made, not one a restored conversation brought back (#36).
     /// </summary>
     internal static IReadOnlyList<(string Label, string? Conversation, string? Model, string? Any)> RecordCells(IReadOnlyList<ReplyPoint> replies, ModelBests bests, string? model)
     {
         ArgumentNullException.ThrowIfNull(replies);
         ArgumentNullException.ThrowIfNull(bests);
-        var mine = bests.ThisModel;
+        return Cells(OwnReplies(replies, model), Merged(replies, bests, model));
+    }
+
+    private static List<(string Label, string? Conversation, string? Model, string? Any)> Cells(List<ReplyPoint> own, ModelBests merged)
+    {
+        var mine = merged.ThisModel;
         const double Tolerance = 0.05;
         var rows = new List<(string, string?, string?, string?)>(4);
 
-        ReplyPoint? fastest = Best(replies, r => r.TokensPerSecond);
-        double? modelSpeed = mine?.Speed is { } s ? Math.Max(s, fastest?.TokensPerSecond ?? 0) : null;
-        bool speedNew = fastest?.TokensPerSecond is { } f && modelSpeed is { } ms && f >= ms - Tolerance;
+        ReplyPoint? fastest = Best(own, r => r.TokensPerSecond);
+        bool speedBest = fastest?.TokensPerSecond is { } f && mine?.Speed is { } ms && f >= ms - Tolerance;
+        bool speedNew = speedBest && !fastest!.Value.Seeded;
         rows.Add((FastestLabel,
-            fastest is { TokensPerSecond: { } fs } ? Tps(fs) + Sep + ReplyRef(fastest.Value.Number) + (speedNew ? " " + RecordStar : "") : null,
-            modelSpeed is { } msp ? Tps(msp) + (speedNew ? Sep + NewRecord : "") : null,
-            bests.Speed is { } any ? Tps(any.Value) + Sep + CutMiddle(any.Model, RecordModelCap) : null));
+            fastest is { TokensPerSecond: { } fs } ? Tps(fs) + Sep + ReplyRef(fastest.Value.Number) + (speedBest ? " " + RecordStar : "") : null,
+            mine?.Speed is { } msp ? Tps(msp) + (speedNew ? Sep + NewRecord : "") : null,
+            merged.Speed is { } any ? Tps(any.Value) + Sep + CutMiddle(any.Model, RecordModelCap) : null));
 
-        ReplyPoint? longest = Best(replies, r => r.Output is > 0 ? r.Output : null);
-        long? modelLongest = mine?.LongestOutput is { } l ? Math.Max(l, longest?.Output ?? 0) : null;
-        bool longNew = longest?.Output is { } lo && modelLongest is { } ml && lo >= ml;
+        ReplyPoint? longest = Best(own, r => r.Output is > 0 ? r.Output : null);
+        bool longBest = longest?.Output is { } lo && mine?.LongestOutput is { } ml && lo >= ml;
+        bool longNew = longBest && !longest!.Value.Seeded;
         rows.Add((LongestLabel,
-            longest is { Output: { } lt } ? Tokens(lt) + Sep + ReplyRef(longest.Value.Number) + (longNew ? " " + RecordStar : "") : null,
-            modelLongest is { } mlg ? Tokens(mlg) + (longNew ? Sep + NewRecord : "") : null,
-            bests.LongestOutput is { } anyLong ? Tokens(anyLong.Value) + Sep + CutMiddle(anyLong.Model, RecordModelCap) : null));
+            longest is { Output: { } lt } ? Tokens(lt) + Sep + ReplyRef(longest.Value.Number) + (longBest ? " " + RecordStar : "") : null,
+            mine?.LongestOutput is { } mlg ? Tokens(mlg) + (longNew ? Sep + NewRecord : "") : null,
+            merged.LongestOutput is { } anyLong ? Tokens(anyLong.Value) + Sep + CutMiddle(anyLong.Model, RecordModelCap) : null));
 
-        ReplyPoint? slowest = Best(replies, r => r.FirstToken?.TotalMilliseconds);
+        ReplyPoint? slowest = Best(own, r => r.FirstToken?.TotalMilliseconds);
         rows.Add((SlowestLabel,
             slowest is { FirstToken: { } st } ? Secs((long)st.TotalMilliseconds) + Sep + ReplyRef(slowest.Value.Number) + (slowest.Value.Context is { } c ? Sep + CompactNumber(c) : "") : null,
             mine?.SlowestStartMs is { } sm ? Secs(sm) + (mine.SlowestStartContext is { } sc ? Sep + CompactNumber(sc) : "") : null,
-            bests.SlowestStart is { } anySlow ? Secs(anySlow.Ms) + Sep + CutMiddle(anySlow.Model, RecordModelCap) : null));
+            merged.SlowestStart is { } anySlow ? Secs(anySlow.Ms) + Sep + CutMiddle(anySlow.Model, RecordModelCap) : null));
 
-        long written = replies.Sum(r => r.Output ?? 0);
+        long written = own.Sum(r => r.Output ?? 0);
         rows.Add((WrittenLabel,
             written > 0 ? Tokens(written) + Sep + Pages(written) : null,
             mine is { Written: > 0 } ? CompactNumber(mine.Written) + " tokens" + Sep + Pages(mine.Written) : null,
-            bests.Written > 0 ? CompactNumber(bests.Written) + " tokens" + Sep + Pages(bests.Written) : null));
+            merged.Written > 0 ? CompactNumber(merged.Written) + " tokens" + Sep + Pages(merged.Written) : null));
         return rows;
     }
 
@@ -463,24 +601,29 @@ public static partial class UsageText
         || (bests.SlowestStart is { } w && (!string.Equals(w.Model, model, StringComparison.OrdinalIgnoreCase)))
         || (bests.ThisModel is { } mine && bests.Written != mine.Written);
 
-    /// <summary>The Records section's lines (2026-11-27): three columns, two when narrow or the any-model column says nothing new; none with nothing to show.</summary>
+    /// <summary>
+    /// The Records section's lines (2026-11-27): three columns, two when narrow or the any-model column says nothing new; none with nothing to
+    /// show. The columns read <see cref="Merged"/>'s bests (the last-3 review's #18: a model with no saved best gets its column from this
+    /// conversation's replies).
+    /// </summary>
     private static List<IRenderable> RecordsSection(IReadOnlyList<ReplyPoint> replies, ModelBests bests, string? model, int width)
     {
         var lines = new List<IRenderable>();
-        var cells = RecordCells(replies, bests, model);
+        var merged = Merged(replies, bests, model);
+        var cells = Cells(OwnReplies(replies, model), merged);
         if (cells.All(c => c.Conversation is null && c.Model is null))
         {
             return lines;
         }
 
         var heads = new List<string> { ThisConversationColumn };
-        bool withModel = bests.ThisModel is not null && model is not null;
+        bool withModel = model is not null && merged.ThisModel is not null;
         if (withModel)
         {
             heads.Add(ModelEverColumn(CutMiddle(model!, RecordModelCap)));
         }
 
-        bool withAny = withModel && bests.Any && AnyDiffers(bests, model);
+        bool withAny = withModel && merged.Any && AnyDiffers(merged, model);
         if (withAny)
         {
             heads.Add(AnyModelColumn);
@@ -528,13 +671,16 @@ public static partial class UsageText
     /// </summary>
     public static IReadOnlyList<string> RecordLines(IReadOnlyList<ReplyPoint> replies, ModelBests bests, string? model)
     {
-        var cells = RecordCells(replies, bests, model);
+        ArgumentNullException.ThrowIfNull(replies);
+        ArgumentNullException.ThrowIfNull(bests);
+        var merged = Merged(replies, bests, model);
+        var cells = Cells(OwnReplies(replies, model), merged);
         if (cells.All(c => c.Conversation is null && c.Model is null))
         {
             return [];
         }
 
-        bool withAny = bests.Any && AnyDiffers(bests, model);
+        bool withAny = merged.Any && AnyDiffers(merged, model);
         var lines = new List<string>(4);
         foreach (var c in cells)
         {
@@ -549,7 +695,7 @@ public static partial class UsageText
                 extra.Add(AnyModelColumn.ToLowerInvariant() + " " + a);
             }
 
-            lines.Add(c.Label.ToLowerInvariant() + ": " + (c.Conversation ?? NoReasoningReport) + (extra.Count > 0 ? " (" + string.Join(Sep, extra) + ")" : ""));
+            lines.Add(c.Label.ToLowerInvariant() + ": " + (c.Conversation ?? NoRecordYet) + (extra.Count > 0 ? " (" + string.Join(Sep, extra) + ")" : ""));
         }
 
         return lines;
@@ -585,8 +731,9 @@ public static partial class UsageText
         StatisticsLayout(tally, facts, replies, bests, model, width).Content;
 
     /// <summary>
-    /// The merged tab (2026-11-27, G7): the top and the breakdown (<see cref="ContextParts"/>) with no rule, then, once anything was counted,
-    /// Trend, Tokens and Records; with nothing counted the Tokens rule over <see cref="NothingCounted"/>; Other runs last when any ran.
+    /// The merged tab (2026-11-27, G7): the top and the breakdown (<see cref="ContextParts"/>) with no rule, then, once anything was counted
+    /// or a restored conversation brought replies, Trend, Tokens and Records; with nothing counted the Tokens rule over <see cref="NothingCounted"/>
+    /// (alone with no replies either); Other runs last when any ran.
     /// <paramref name="width"/> is the body's cells, its indent included.
     /// </summary>
     public static StatisticsLayoutResult StatisticsLayout(TokenTally tally, ContextFacts facts, IReadOnlyList<ReplyPoint> replies, ModelBests bests, string? model, int width)
@@ -605,14 +752,17 @@ public static partial class UsageText
             }
         }
 
-        if (tally.Session.IsEmpty)
+        // A restored conversation brings its replies with nothing counted since launch (2026-11-27, the last-3 review's #27): its trend and
+        // records still show, the Tokens rule over "nothing counted" between them.
+        var nothing = new List<IRenderable> { new SectionRule(SectionRule.Markup(TokensHeading)), new FittedMarkup(new string(' ', SystemPromptSummary.BodyIndent) + Theme.DimMarkup(NothingCounted)) };
+        if (tally.Session.IsEmpty && replies.Count == 0)
         {
-            Section([new SectionRule(SectionRule.Markup(TokensHeading)), new FittedMarkup(new string(' ', SystemPromptSummary.BodyIndent) + Theme.DimMarkup(NothingCounted))]);
+            Section(nothing);
         }
         else
         {
             Section(TrendSection(replies, width));
-            Section(TokensSection(tally));
+            Section(tally.Session.IsEmpty ? nothing : TokensSection(tally));
             Section(RecordsSection(replies, bests, model, width));
         }
 
@@ -753,8 +903,15 @@ internal sealed class ContextMeter(IReadOnlyList<(ContextPiece Piece, long Token
 
     public IEnumerable<Segment> Render(RenderOptions options, int maxWidth)
     {
+        // The indent taken off once (2026-11-27, the last-3 review's #11: twice left the meter short of the line); with too little room the
+        // headline alone, still one line (#30: the Context tab's stops count a line a renderable).
         int headWidth = TextCells.Width(headline);
-        int width = Math.Max(4, maxWidth - 2 * indent - UsageText.MeterGap - headWidth);
+        int width = maxWidth - indent - UsageText.MeterGap - headWidth;
+        if (width < UsageText.MeterMinCells)
+        {
+            return [new Segment(new string(' ', Math.Min(indent, maxWidth))), new Segment(TextCells.Cut(headline, Math.Max(0, maxWidth - indent)), Theme.Body)];
+        }
+
         var cells = UsageText.BarCells(pieces, window, width);
         bool over = pieces.Sum(p => p.Tokens) > window;
         bool noColor = !Theme.HasBackgrounds(options);
@@ -781,11 +938,7 @@ internal sealed class ContextMeter(IReadOnlyList<(ContextPiece Piece, long Token
             segments.Add(new Segment(new string(noColor ? '░' : UsageText.MeterEmpty, width - used), new Style(Theme.Dimmer)));
         }
 
-        if (indent + width + UsageText.MeterGap + headWidth <= maxWidth)
-        {
-            segments.Add(new Segment(new string(' ', UsageText.MeterGap) + headline, Theme.Body));
-        }
-
+        segments.Add(new Segment(new string(' ', UsageText.MeterGap) + headline, Theme.Body));
         return segments;
     }
 }

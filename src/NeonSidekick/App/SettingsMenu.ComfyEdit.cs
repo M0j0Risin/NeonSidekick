@@ -81,6 +81,12 @@ internal sealed partial class SettingsMenu
     /// <summary>The mark at the end of a LoRA row switched off on the LoRAs page (2026-11-27, the user's ask). Pinned.</summary>
     public const string ComfyLoraOffMark = "off";
 
+    /// <summary>
+    /// A LoRA switched off as a list names it, <c>detail (off)</c> (2026-11-27, the last-3 review's #14): one helper for Edit's LoRAs row and
+    /// the manager's facts line.
+    /// </summary>
+    public static string ComfyLoraOffLabel(string name) => name + " (" + ComfyLoraOffMark + ")";
+
     /// <summary>The notice when Space switches a LoRA off. Pinned.</summary>
     public static string ComfyLoraOffNotice(string lora) => "LoRA " + UntrustedText.Name(lora) + " off: left out of every run, kept in the file";
 
@@ -324,8 +330,11 @@ internal sealed partial class SettingsMenu
                     return Dim(draft.GraphWhy ?? ComfyWizardNotNeeded);
                 }
 
-                var on = parts.Loras.Loras.Where(l => !l.SwitchedOff).Select(l => UntrustedText.Name(l.Name) + (l.StrengthModel is { } s ? " " + Fmt(s) : "")
-                    + (ComfyLoraOff(draft, l.Name) ? " (" + ComfyLoraOffMark + ")" : "")).ToList();   // an off LoRA marked (2026-11-27)
+                var on = parts.Loras.Loras.Where(l => !l.SwitchedOff).Select(l =>
+                {
+                    string named = UntrustedText.Name(l.Name) + (l.StrengthModel is { } s ? " " + Fmt(s) : "");
+                    return ComfyLoraOff(draft, l.Name) ? ComfyLoraOffLabel(named) : named;   // an off LoRA marked (2026-11-27)
+                }).ToList();
                 string text = on.Count == 0 ? ComfyNone : string.Join(", ", on);
                 return parts.Loras.Editable || parts.Loras.Loras.Any(l => l.Editable)
                     ? Plain(text)

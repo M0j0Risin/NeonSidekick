@@ -640,6 +640,10 @@ public sealed class InfoPane
     private List<int> _stopLines = [];
     private int _stop = -1;
 
+    // Whether the stop was just seeded (2026-11-27, the last-3 review's #26): by the pane's open (its initialStop, or the tab's own) or a tab
+    // change, until the first settle. A seeded stop off the view brings the view to it; later settles keep the nearest-visible rule.
+    private bool _stopSeeded;
+
     /// <summary>The tab shown when the pane last closed (later on 2026-10-15): a host that opens it again after a button keeps the user's tab.</summary>
     public int LastTab { get; private set; }
 
@@ -670,6 +674,7 @@ public sealed class InfoPane
         ChosenLine = null;
         ChosenStop = null;
         _stop = initialStop;
+        _stopSeeded = true;
         _stopLines = [];
         _actions = actions ?? [];
         _noFind = noFind;
@@ -997,6 +1002,7 @@ public sealed class InfoPane
                     active = next;
                     LastTab = active;
                     _stop = -1;   // the new tab's own start (2026-11-27)
+                    _stopSeeded = true;
                     _first = 0;
                     _findMoved = _find.Length > 0;
                 }
@@ -1144,15 +1150,19 @@ public sealed class InfoPane
 
     /// <summary>
     /// The cursor after a draw's viewport (2026-11-27): a tab's own start when it has none, clamped to the stops; off the view, the stop in view
-    /// nearest its line takes it (so ↑ from below lands on the last row); with none in view it waits where it was.
+    /// nearest its line takes it (so ↑ from below lands on the last row); with none in view it waits where it was. A stop just seeded (the
+    /// open's or a tab change's, 2026-11-27, the last-3 review's #26: a return to a row below the first page) brings the view to it instead,
+    /// as ↑/↓ do, at <paramref name="capacity"/>.
     /// </summary>
-    private void SettleStop(InfoTab tab)
+    private void SettleStop(InfoTab tab, int capacity)
     {
         if (_stopLines.Count == 0)
         {
             return;
         }
 
+        bool seeded = _stopSeeded;
+        _stopSeeded = false;
         if (_stop < 0 || _stop >= _stopLines.Count)
         {
             _stop = Math.Clamp(_stop < 0 ? tab.InitialStop?.Invoke() ?? 0 : _stop, 0, _stopLines.Count - 1);
@@ -1162,6 +1172,15 @@ public sealed class InfoPane
         if (line >= _first && line < _first + _shown)
         {
             return;
+        }
+
+        if (seeded)
+        {
+            (_first, _shown) = Viewport(_count, capacity, line < _first ? line : line - _shown + 1);
+            if (line >= _first && line < _first + _shown)
+            {
+                return;
+            }
         }
 
         int best = -1;
@@ -1208,7 +1227,7 @@ public sealed class InfoPane
         var content = _content;
         _count = content.Count;
         (_first, _shown) = Viewport(_count, capacity, _first);
-        SettleStop(tabs[active]);
+        SettleStop(tabs[active], capacity);
         if (_find.Length == 0)
         {
             _hits = [];

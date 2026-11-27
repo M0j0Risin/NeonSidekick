@@ -568,7 +568,7 @@ public static class ComfyText
         lines.Add(workflows.Count == 0 ? count : count + ", " + shown.Count.ToString(CultureInfo.InvariantCulture) + " offered to the model:");
         foreach (var workflow in workflows)
         {
-            lines.Add("  " + WorkflowLine(workflow) + " · {{" + string.Join("}} {{", workflow.Placeholders.Order(StringComparer.Ordinal)) + "}}" + TriggerWordsPart(workflow, "trigger words") + LorasOffPart(workflow) + (shown.Contains(workflow) ? "" : " · hidden"));
+            lines.Add("  " + WorkflowLine(workflow) + " · {{" + string.Join("}} {{", workflow.Placeholders.Order(StringComparer.Ordinal)) + "}}" + TriggerWordsPart(workflow, TriggerWordsLabel) + LorasOffPart(workflow) + (shown.Contains(workflow) ? "" : " · hidden"));
         }
 
         foreach (var problem in problems)
@@ -643,11 +643,24 @@ public static class ComfyText
     /// A workflow's trigger words after its line (2026-11-26): <c> · &lt;label&gt;: a, b</c>, or "" for none or a workflow without a prompt.
     /// One helper for the model's line (<c>trigger words added</c>) and <c>/comfy</c>'s (<c>trigger words</c>). Pure.
     /// </summary>
-    public static string TriggerWordsPart(ComfyWorkflow workflow, string label)
+    public static string TriggerWordsPart(ComfyWorkflow workflow, string label) =>
+        TriggerWordsFact(workflow, label) is { Length: > 0 } fact ? " · " + fact : "";
+
+    /// <summary>
+    /// <see cref="TriggerWordsPart"/> without its leading separator (2026-11-27, the last-3 review's #24): <c>&lt;label&gt;: a, b</c>, or "",
+    /// for the workflow manager's facts line, which joins its own. Pure.
+    /// </summary>
+    public static string TriggerWordsFact(ComfyWorkflow workflow, string label)
     {
         ArgumentNullException.ThrowIfNull(workflow);
-        return workflow.TakesPrompt && workflow.TriggerWords is { Count: > 0 } words ? " · " + label + ": " + string.Join(", ", words) : "";
+        return workflow.TakesPrompt && workflow.TriggerWords is { Count: > 0 } words ? label + ": " + string.Join(", ", words) : "";
     }
+
+    /// <summary><c>/comfy</c>'s and the workflow manager's label for a workflow's trigger words (2026-11-27, the last-3 review's #24). Pinned.</summary>
+    public const string TriggerWordsLabel = "trigger words";
+
+    /// <summary>The workflow manager's lead for a workflow's LoRAs, <c>LoRAs: a, b (off)</c> (2026-11-27, the last-3 review's #24). Pinned.</summary>
+    public const string LorasLabel = "LoRAs: ";
 
     /// <summary>A workflow whose sidecar switches off a LoRA the graph can't do without (2026-11-27): it shows under Skipped with this. Pinned.</summary>
     public static string LoraOffProblem(string name, string why) =>

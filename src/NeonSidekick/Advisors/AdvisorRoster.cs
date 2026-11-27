@@ -46,7 +46,8 @@ public static class AdvisorRoster
 
     /// <summary>
     /// The off advisor <paramref name="words"/> names, by <see cref="Find"/>'s rules run over the off ones alone (2026-11-27), for a refusal
-    /// that names it; asked only after <see cref="Find"/> over <see cref="Active"/> found nothing, so an active advisor's role always wins.
+    /// that names it; asked only after <see cref="Find"/> over <see cref="Active"/> found nothing, so an active advisor's partial role match
+    /// wins over an off one's (an off advisor named whole is <see cref="Pick"/>'s first step).
     /// </summary>
     public static AdvisorEntry? Off(IReadOnlyList<AdvisorEntry>? saved, string? words) => Find(OffEntries(saved), words).Found;
 
@@ -54,14 +55,27 @@ public static class AdvisorRoster
     public static IReadOnlyList<AdvisorEntry> Shown(IReadOnlyList<AdvisorEntry>? saved) => [.. Active(saved), .. OffEntries(saved)];
 
     /// <summary>
-    /// The advisor a call or <c>/advisor</c> names (2026-11-27, the off switch), in one order for all three askers: <see cref="Find"/> over
-    /// the ones in service first (so an active advisor's role always wins), then an off one the words name (<see cref="AdvisorPick.OffOne"/>),
-    /// then <see cref="AdvisorPick.AllOff"/> when none is in service; otherwise the active candidates. Callers say "no advisors" first when
-    /// the list is empty.
+    /// The advisor a call or <c>/advisor</c> names (2026-11-27, the off switch), in one order for all three askers. First the words matched
+    /// whole over every advisor (2026-11-27, the last-3 review's #5): an off advisor named by its profile name, or the one holding the role
+    /// whole, is <see cref="AdvisorPick.OffOne"/>, never an active one whose role merely holds the words. Then <see cref="Find"/> over the ones
+    /// in service, then an off one the words name in part, then <see cref="AdvisorPick.AllOff"/> when none is in service; otherwise the active
+    /// candidates. Callers say "no advisors" first when the list is empty.
     /// </summary>
     public static AdvisorPick Pick(IReadOnlyList<AdvisorEntry>? saved, string? words)
     {
         var active = Active(saved);
+        string wanted = (words ?? "").Trim();
+        if (wanted.Length > 0)
+        {
+            var all = Entries(saved);
+            var byRole = all.Where(e => string.Equals(e.Role, wanted, StringComparison.OrdinalIgnoreCase)).ToList();
+            var named = all.FirstOrDefault(e => SameProfile(e.Profile, wanted)) ?? (byRole.Count == 1 ? byRole[0] : null);
+            if (named is { Off: true })
+            {
+                return new AdvisorPick(null, Find(active, words).Candidates, named, false);
+            }
+        }
+
         var (found, candidates) = Find(active, words);
         if (found is not null)
         {
@@ -187,12 +201,12 @@ public static class AdvisorRoster
         var entries = Entries(saved);
         if (entries.Count == 0)
         {
-            return "none";
+            return AdvisorText.NoneValue;
         }
 
         var active = entries.Where(e => !e.Off).ToList();
         int off = entries.Count - active.Count;
-        string offPart = off.ToString(CultureInfo.InvariantCulture) + " off";
+        string offPart = AdvisorText.OffCount(off);
         if (active.Count == 0)
         {
             return offPart;

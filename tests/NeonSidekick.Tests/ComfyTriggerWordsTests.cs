@@ -142,6 +142,21 @@ public sealed class ComfyTriggerWordsTests : IDisposable
         Assert.Equal(["xyz_style", "glowing eyes", "fine detail"], Parse(two).TriggerWords);
     }
 
+    /// <summary>
+    /// The placeholder itself is no phrase the template has (2026-11-27, the last-3 review's #20): trigger words "prompt" go in; a
+    /// <c>{{ odd text }}</c> that is no placeholder stays searchable.
+    /// </summary>
+    [Fact]
+    public void AWordNamedLikeThePlaceholder_IsStillAdded()
+    {
+        string md = "---\nlora.style.safetensors: prompt\n---\n";
+        Assert.Equal(["prompt"], Parse(Graph, md).TriggerWords);
+
+        Assert.Equal("a  , b", ComfyWorkflow.WithoutPlaceholders("a {{prompt}}, b"));
+        Assert.Equal("x {{ odd text }} y", ComfyWorkflow.WithoutPlaceholders("x {{ odd text }} y"));
+        Assert.Equal("  and  ", ComfyWorkflow.WithoutPlaceholders("{{a}} and {{B_2}}"));
+    }
+
     [Fact]
     public void AWorkflowWithNoPrompt_GetsNoWords()
     {

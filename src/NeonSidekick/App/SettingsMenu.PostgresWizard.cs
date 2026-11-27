@@ -113,11 +113,11 @@ internal sealed partial class SettingsMenu
     private static string PostgresWizardStamp(PostgresDraft draft) =>
         ConnectionStamp(draft.Name, draft.Global, draft.Config, PostgresJsonContext.Default.PostgresConnectionConfig, x => x.Password = null);
 
-    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
     private static bool PostgresWizardPasswordOnly(PostgresDraft draft) =>
         WizardPasswordOnly(draft.Original, PostgresWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
 
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     private static bool PostgresWizardDirty(PostgresDraft draft) =>
         draft.Original is not null && (!string.Equals(PostgresWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 

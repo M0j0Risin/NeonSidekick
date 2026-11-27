@@ -141,6 +141,38 @@ public partial class ToolsMenuTests
         Assert.DoesNotContain(SettingsMenu.ConnectionWizardDiscardedNotice, Output);
     }
 
+    /// <summary>
+    /// A refused save leaves the draft as it was (2026-11-27, the last-3 review's #21): aw's stale user under integrated sign-in, cleared by
+    /// the save's normalizing, stays in the draft, so a rename undone after the refusal leaves without asking.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_TheSqlWizard_ARefusedSave_ThenTheChangeUndone_LeavesWithoutAsking()
+    {
+        const string Two = """{ "connections": { "aw": { "server": "x", "database": "db", "auth": "windows", "user": "stale" }, "bw": { "server": "x", "database": "db2", "auth": "windows" } } }""";
+        string path = SqlConfigFile.ProfilePath(_settings.ProfileDirectory);
+        Directory.CreateDirectory(NeonSidekick.Settings.Profiles.ConfigsDirectory(_settings.ProfileDirectory));
+        File.WriteAllText(path, Two);
+        var (menu, _, _) = PaneMenu();
+        OpenSqlWizard();
+        Push(Keys.Down, Keys.Enter);                                  // aw, under + New connection
+        Push(Keys.Down, Keys.Down, Keys.Down, Keys.Down, Keys.Enter); // the Name row
+        Push(Keys.Backspace, Keys.Backspace);
+        Type("bw");                                                   // bw is taken
+        Push(Keys.Escape, Keys.Down, Keys.Enter);                     // asks; Save: refused, the editor stays
+        Push(Keys.Enter);                                             // Name again (the cursor stayed on it)
+        Push(Keys.Backspace, Keys.Backspace);
+        Type("aw");
+        Push(Keys.Escape);                                            // nothing changed: no question, back to the list
+        Push(Keys.Escape);
+        Push(Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Equal(Two, File.ReadAllText(path));
+        Assert.Contains("'bw' is already in ", Output);                    // the refusal (the line wraps at the window)
+        Assert.DoesNotContain(SettingsMenu.ConnectionWizardDiscardedNotice, Output);
+    }
+
     /// <summary>Enter on a row and the change made, the cursor is back on that row (2026-11-26, the user's report: it jumped to a save row).</summary>
     [Fact]
     public async Task OnThePane_TheSqlWizard_AfterARowsChange_TheCursorStaysOnIt()

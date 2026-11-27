@@ -248,4 +248,34 @@ public sealed class ModelStatsTests : IDisposable
         Assert.Equal((300L, 20.0), (points[1].Context!.Value, points[1].TokensPerSecond!.Value));
         Assert.Equal(TimeSpan.FromMilliseconds(500), points[1].FirstToken);
     }
+
+    /// <summary>A restored speed past the plausible cap reads as none (2026-11-27, the last-3 review's #19), as the store's records leave it out.</summary>
+    [Fact]
+    public void ReplyPointsOf_LeavesOutAnImplausibleSpeed()
+    {
+        long a = _store.Begin("a", "qwen")!.Value;
+        Best(a, "qwen", output: 20_000, seconds: 1);   // 20,000 tok/s
+        Best(a, "qwen", output: 100, seconds: 1);
+
+        var points = ChatScreen.ReplyPointsOf(_store.Load(a)!).ToList();
+
+        Assert.Null(points[0].TokensPerSecond);
+        Assert.Equal(20_000L, points[0].Output);
+        Assert.Equal(100, points[1].TokensPerSecond!.Value, 3);
+    }
+
+    /// <summary>One model's turns under two spellings are one model's figures (2026-11-27, the last-3 review's #12): records and the In use rows.</summary>
+    [Fact]
+    public void AModelsName_GroupsWithoutRegardToCase()
+    {
+        long a = _store.Begin("a", "Qwen3")!.Value;
+        Best(a, "Qwen3", output: 100, seconds: 1, firstMs: 500, context: 10);
+        Best(a, "qwen3", output: 300, seconds: 1, firstMs: 2_000, context: 20);
+
+        var best = Assert.Single(_store.ModelBestsByModel());
+        Assert.Equal((300L, 400L, 2_000L, 20L), (best.LongestOutput!.Value, best.Written, best.SlowestStartMs!.Value, best.SlowestStartContext!.Value));
+        var stat = Assert.Single(_store.ModelStats());
+        Assert.Equal(2, stat.Turns);
+        Assert.Equal(300, _store.ModelBests("QWEN3").ThisModel!.Speed!.Value, 3);
+    }
 }

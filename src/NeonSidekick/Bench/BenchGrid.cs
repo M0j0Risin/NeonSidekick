@@ -48,7 +48,7 @@ public static class BenchGrid
         string list = string.Join(", ", ids);
         if (run.Cancelled)
         {
-            return list + " " + CanceledMark;
+            return list + " " + BenchText.CanceledMark;
         }
 
         bool Same(IEnumerable<BenchTest> tests) => tests.Select(t => t.Id).ToHashSet(StringComparer.OrdinalIgnoreCase).SetEquals(ids) && ids.Count == tests.Count();
@@ -65,9 +65,12 @@ public static class BenchGrid
             }
         }
 
+        // A run from before saturation stood alone as Window Capacity (2026-11-27, the last-3 review's #40): its long group held it.
+        if (Same(BenchCatalog.All.Where(t => t.Category is BenchCategory.LongContext or BenchCategory.WindowCapacity)))
+        {
+            return BenchCatalog.CategoryWords.First(c => c.Category == BenchCategory.LongContext).Word;
+        }
+
         return list;
     }
-
-    /// <summary>After a canceled run's ids.</summary>
-    public const string CanceledMark = "(canceled)";
 }

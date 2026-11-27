@@ -327,11 +327,11 @@ internal sealed partial class SettingsMenu
         string model = parts?.Model.Value is { Length: > 0 } m ? m : "";
         // The ones in play, then the ones switched off, marked (2026-11-27): GraphJson has them spliced out.
         string loras = parts is null ? "" : string.Join(", ", parts.Loras.Loras.Where(l => !l.SwitchedOff).Select(l => l.Name)
-            .Concat((workflow.LorasOff ?? []).Select(name => name + " (off)")));
+            .Concat((workflow.LorasOff ?? []).Select(ComfyLoraOffLabel)));   // one helper with Edit's (2026-11-27, the last-3 review's #14)
         string size = workflow.Placeholders.Contains(ComfyWorkflow.WidthKey) ? Invariant(workflow.Defaults.Width) + "×" + Invariant(workflow.Defaults.Height) : "";
         // The words a run puts in front (2026-11-26): the ones in play, as /comfy says them.
-        string words = ComfyText.TriggerWordsPart(workflow, "trigger words") is { Length: > 0 } part ? part[" · ".Length..] : "";
-        string facts = string.Join(" · ", new[] { model, loras.Length > 0 ? "LoRAs: " + loras : "", words, size }.Where(s => s.Length > 0));
+        string words = ComfyText.TriggerWordsFact(workflow, ComfyText.TriggerWordsLabel);
+        string facts = string.Join(" · ", new[] { model, loras.Length > 0 ? ComfyText.LorasLabel + loras : "", words, size }.Where(s => s.Length > 0));
         if (facts.Length > 0)
         {
             lines.Add(UntrustedText.OneLine(facts));
@@ -385,8 +385,10 @@ internal sealed partial class SettingsMenu
             string name = workflow?.Name ?? Path.GetFileNameWithoutExtension(item.Problem!.FilePath);
             bool offered = workflow is not null && ComfyWorkflowCatalog.Offered([workflow], _settings.Current.ComfyWorkflowsOffered).Count > 0;
             bool global = workflow is not null && !InProfileFolder(workflow.FilePath);
+            // A skipped workflow with a sidecar offers it too (2026-11-27, the last-3 review's #2): a lora-off mark it can't keep is fixed there.
+            bool skippedMarkdown = workflow is null && File.Exists(Path.ChangeExtension(item.Problem!.FilePath, ".md"));
             List<List<string>> groups = workflow is null
-                ? [[ComfyOpenJsonAction], [ComfyDeleteAction]]
+                ? skippedMarkdown ? [[ComfyOpenJsonAction, ComfyOpenMarkdownAction], [ComfyDeleteAction]] : [[ComfyOpenJsonAction], [ComfyDeleteAction]]
                 : [[ComfyEditAction, ComfyTestAction, ComfyCheckAction, offered ? ComfyHideAction : ComfyOfferAction],
                    [ComfyDuplicateAction, ComfyRenameAction, global ? ComfyMoveToProfileAction : ComfyMoveToGlobalAction],
                    [ComfyOpenJsonAction, ComfyOpenMarkdownAction],
@@ -442,10 +444,11 @@ internal sealed partial class SettingsMenu
 
                 case ComfyOpenMarkdownAction:
                 {
-                    var (md, _, error) = ComfyWorkflowFile.EnsureSidecar(workflow!.FilePath, workflow.Family);
+                    string jsonPath = workflow?.FilePath ?? item.Problem!.FilePath;
+                    var (md, _, error) = ComfyWorkflowFile.EnsureSidecar(jsonPath, workflow?.Family ?? ComfyFamilies.Guess(name));
                     if (error is not null)
                     {
-                        Sink.Error(ComfyOpenFailed(Path.ChangeExtension(workflow.FilePath, ".md"), error));
+                        Sink.Error(ComfyOpenFailed(Path.ChangeExtension(jsonPath, ".md"), error));
                     }
                     else
                     {

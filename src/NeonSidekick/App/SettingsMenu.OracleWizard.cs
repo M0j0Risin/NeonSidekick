@@ -97,11 +97,11 @@ internal sealed partial class SettingsMenu
     private static string OracleWizardStamp(OracleDraft draft) =>
         ConnectionStamp(draft.Name, draft.Global, draft.Config, OracleJsonContext.Default.OracleConnectionConfig, x => x.Password = null);
 
-    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
     private static bool OracleWizardPasswordOnly(OracleDraft draft) =>
         WizardPasswordOnly(draft.Original, OracleWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
 
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     private static bool OracleWizardDirty(OracleDraft draft) =>
         draft.Original is not null && (!string.Equals(OracleWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 

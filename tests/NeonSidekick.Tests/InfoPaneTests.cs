@@ -1518,4 +1518,25 @@ public class InfoPaneTests : IDisposable
         await new InfoPane(pane, keys).ShowAsync("/usage", [tab], 0, CancellationToken.None, initialStop: 1);
         Assert.Equal([(1, InfoStopKey.Space)], told);
     }
+
+    /// <summary>
+    /// A stop given below the first page (2026-11-27, the last-3 review's #26: /usage coming back to a row far down) brings the view to it,
+    /// so Space reaches that stop, not the nearest one on the first page.
+    /// </summary>
+    [Fact]
+    public async Task AGivenStopBelowTheFirstPage_BringsTheViewToIt()
+    {
+        var (pane, input, keys) = ClickablePane(cursorTop: 100);
+        using var _ = pane;
+        pane.Show();
+        var told = new List<(int, InfoStopKey)>();
+        string content = string.Join("\n", Enumerable.Range(0, 200).Select(i => "  line" + i));
+        var tab = StopsTab(told, content, [5, 150]);
+        input.Push(Keys.Char(' '), Keys.Escape);
+
+        await new InfoPane(pane, keys).ShowAsync("/usage", [tab], 0, CancellationToken.None, initialStop: 1);
+
+        Assert.Equal([(1, InfoStopKey.Space)], told);
+        Assert.Contains(InfoPane.StopPointer + "line150", Output);
+    }
 }

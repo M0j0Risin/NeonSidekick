@@ -3457,7 +3457,11 @@ internal sealed partial class ChatScreen
     /// pane's life went stale over a reply, as <c>/sys</c>' never did). The pane builds a tab only on a switch or a width change, so that is
     /// a few file reads per switch.
     /// </remarks>
-    private IReadOnlyList<InfoTab> UsageTabs(ReplyRun reply = default)
+    /// <para>
+    /// <paramref name="paneToken"/> (2026-11-27, the last-3 review's #3 and #41): the pane's own token, passed to the Context tab's Space so an
+    /// MCP connect or a question it asks ends with the pane.
+    /// </para>
+    private IReadOnlyList<InfoTab> UsageTabs(ReplyRun reply, CancellationToken paneToken)
     {
         string? model = TurnModel();
         var bests = new Lazy<Sessions.ModelBests>(() => _sessions.ModelBests(model));
@@ -3468,7 +3472,7 @@ internal sealed partial class ChatScreen
             new(UsageText.ContextTabTitle, () => UsageContextTab(bests.Value, model))
             {
                 Stops = () => _usageLayout?.Stops ?? [],
-                StopKey = (stop, key) => UsageStopKeyAsync(stop, key, reply, CancellationToken.None),
+                StopKey = (stop, key) => UsageStopKeyAsync(stop, key, reply, paneToken),
                 InitialStop = UsageInitialStop,
             },
             new(SystemPromptSummary.PromptTabTitle, () => SystemPromptSummary.PromptTab(SystemPromptFacts())),
@@ -10560,7 +10564,8 @@ internal sealed partial class ChatScreen
     /// <summary>
     /// A restored session's replies for <c>/usage</c>'s trend (2026-11-27): every saved turn but the ones a command answered (the live list never
     /// holds those), unmarked (the store keeps no compaction), a turn without a model taking the session's, as <c>ModelStats</c> does, so an
-    /// older stretch draws no false model change. A turn with no tokens reported has every figure null.
+    /// older stretch draws no false model change. A turn with no tokens reported has every figure null. A speed past
+    /// <see cref="TokenUsage.MaxPlausibleTokensPerSecond"/> is left out (2026-11-27, the last-3 review's #19), as the store's own records leave it.
     /// </summary>
     internal static IEnumerable<ReplyPoint> ReplyPointsOf(SessionRecord record)
     {
@@ -10579,6 +10584,11 @@ internal sealed partial class ChatScreen
             }
 
             double? speed = turn is { OutputMs: > 0, TimedOutput: > 0 } ? turn.TimedOutput!.Value * 1000.0 / turn.OutputMs!.Value : null;
+            if (speed > TokenUsage.MaxPlausibleTokensPerSecond)
+            {
+                speed = null;
+            }
+
             TimeSpan? first = turn.FirstTokenMs is { } ms ? TimeSpan.FromMilliseconds(ms) : null;
             yield return new ReplyPoint(model, speed, first, turn.ContextTokens, turn.OutputTokens, turn.ReasoningTokens, false);
         }
@@ -15993,11 +16003,10 @@ internal sealed partial class ChatScreen
                 }
                 else if (ToolsText.SwitchFieldHere(args) is { } switchField)
                 {
-                    if ((await _toolsMenu.ShowSwitchAsync(switchField, cancellationToken).ConfigureAwait(false)).HasFlag(SettingsChanges.Profile))
-                    {
-                        // The Advisors page's list switched profiles (2026-11-22): as after /profile <name>.
-                        await AfterProfileSwitchAsync(cancellationToken).ConfigureAwait(false);
-                    }
+                    // Everything the switch owes (2026-11-27, the last-3 review's #9): a reconnect row's change, and the Advisors page's
+                    // profile switch (2026-11-22), which ApplyMenuChangesAsync carries out as after /profile <name>.
+                    var switched = await _toolsMenu.ShowSwitchAsync(switchField, cancellationToken).ConfigureAwait(false);
+                    await ApplyMenuChangesAsync(switched, null, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
@@ -17632,7 +17641,7 @@ internal sealed partial class ChatScreen
                     string? botModel = (links.Count > 0 ? links[next]?.Endpoint.ModelId : null) ?? _session.Endpoint?.ModelId;
                     // A point on /usage's trend (2026-11-27, the user's call): a restore can't tell a bot's saved turn from a reply, so the live
                     // list holds them too, with no context (another view of the chat). Before the row's gate, as LogTurn's.
-                    _session.Usage.RecordReply(botModel, _lastBotTurn.Usage, null);
+                    _session.Usage.RecordReply(botModel, _lastBotTurn.Usage, null, unsaved: sessionId is null);   // #10: no row, not in the store
                     if (sessionId is { } id)
                     {
                         // Its calls and tokens (2026-10-10; 0 and 0 until then, from the days a bot had no tools).
@@ -19680,7 +19689,8 @@ internal sealed partial class ChatScreen
     private void LogTurn(Assistant assistant, string text, string reply, TurnTrace trace, bool cancelled, AppSettingsData effective, CancellationToken appToken)
     {
         // /usage's trend (2026-11-27): before the gate, so it grows with Session logging off and while private; nothing in it is written.
-        _session.Usage.RecordReply(TurnModel());
+        // Marked unsaved past the gate (the last-3 review's #10), so the model's written record counts what the store won't hold.
+        _session.Usage.RecordReply(TurnModel(), unsaved: !SavesSession(effective));
         if (!SavesSession(effective))
         {
             return;
@@ -20551,6 +20561,11 @@ internal sealed partial class ChatScreen
         if (compacted.Result.Summarised || compacted.Result.Usage is not null)
         {
             _session.Usage.AddCompaction(compacted.Result.Usage);
+        }
+        else
+        {
+            // The guard's prune still marks the trend's ┆ (2026-11-27, the last-3 review's #33), the tally's figures left alone as above.
+            _session.Usage.MarkNextReply();
         }
 
         string notice = compacted.ThisTurn ? CompactionText.TurnNotice(compacted.Result, compacted.Percent) : CompactionText.Notice(compacted.Result, compacted.Percent);

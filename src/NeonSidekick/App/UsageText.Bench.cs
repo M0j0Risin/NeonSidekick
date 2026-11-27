@@ -17,7 +17,8 @@ public static partial class UsageText
     /// <summary>The tab's title and index; <c>/usage bench</c> (and <c>/usage models</c>) opens the pane on it.</summary>
     public const string BenchTabTitle = "Bench";
 
-    public const int BenchTabIndex = 5;
+    /// <summary>The Bench tab's index, after Skills (2026-11-27, the last-3 review's #4: 5 pointed past the last tab).</summary>
+    public const int BenchTabIndex = SkillsTabIndex + 1;
 
     /// <summary>The word <c>/usage bench</c> takes (2026-11-27); <see cref="ModelsWord"/> still opens the tab.</summary>
     public const string BenchWord = "bench";

@@ -144,11 +144,11 @@ internal sealed partial class SettingsMenu
     private static string ComputerWizardStamp<TConfig>(ComputerWizardSpec<TConfig> spec, ComputerDraft<TConfig> draft) where TConfig : ComputerConfig, new() =>
         ConnectionStamp(draft.Name, draft.Global, draft.Config, spec.Info, x => x.Password = null);
 
-    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
     private static bool ComputerWizardPasswordOnly<TConfig>(ComputerWizardSpec<TConfig> spec, ComputerDraft<TConfig> draft) where TConfig : ComputerConfig, new() =>
         WizardPasswordOnly(draft.Original, ComputerWizardStamp(spec, draft), draft.Opened, draft.PasswordKept, draft.Password);
 
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     private static bool ComputerWizardDirty<TConfig>(ComputerWizardSpec<TConfig> spec, ComputerDraft<TConfig> draft) where TConfig : ComputerConfig, new() =>
         draft.Original is not null && (!string.Equals(ComputerWizardStamp(spec, draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -739,7 +739,8 @@ internal sealed partial class SettingsMenu
     private bool? ComputerWizardSave<TConfig>(ComputerWizardSpec<TConfig> spec, ComputerDraft<TConfig> draft, bool offer) where TConfig : ComputerConfig, new()
     {
         bool passwordOnly = ComputerWizardPasswordOnly(spec, draft);   // before the normalizing below, which can change the stamp
-        var c = draft.Config;
+        // A copy normalized and written (2026-11-27, the last-3 review's #21): a refused save leaves the draft, and so its stamp, as it was.
+        var c = CloneEntry(draft.Config, spec.Info, _ => { });
         if (draft.IsLocal)
         {
             c.Host = c.Auth = c.User = c.PasswordStore = c.Credential = null;

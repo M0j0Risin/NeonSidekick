@@ -81,13 +81,14 @@ public sealed partial class SessionStore
     /// Each model's bests over the saved turns (2026-11-27), grouped by <see cref="ModelStats"/>' model (a turn's own, else its session's): two
     /// statements in one command, the second the slowest start's own context through <c>ROW_NUMBER()</c>, since SQLite takes a bare column from
     /// the max row only when a query has one <c>max()</c>. A speed past <see cref="Llm.TokenUsage.MaxPlausibleTokensPerSecond"/> is left out.
-    /// Empty without the per-reply columns or while the store is unavailable.
+    /// Empty without the per-reply columns or while the store is unavailable. A model's name is grouped without regard to case (2026-11-27,
+    /// the last-3 review's #12: "Qwen3" and "qwen3" are one model's records), and both column parts must be there (#43).
     /// </summary>
     public IReadOnlyList<ModelBest> ModelBestsByModel()
     {
         lock (_gate)
         {
-            if (!_extraColumns || Open() is not { } connection)
+            if (!_extraColumns || !_replyColumns || Open() is not { } connection)
             {
                 return [];
             }
@@ -101,16 +102,16 @@ public sealed partial class SessionStore
                              CASE WHEN t.output_ms > 0 AND t.timed_output > 0 AND t.timed_output * 1000.0 / t.output_ms <= $cap
                                   THEN t.timed_output * 1000.0 / t.output_ms END AS speed
                       FROM turns t JOIN sessions s ON s.id = t.session_id)
-                    GROUP BY m;
+                    GROUP BY m COLLATE NOCASE;
                     SELECT m, context_tokens FROM (
                       SELECT COALESCE(NULLIF(t.model, ''), s.model) AS m, t.context_tokens,
-                             ROW_NUMBER() OVER (PARTITION BY COALESCE(NULLIF(t.model, ''), s.model) ORDER BY t.first_token_ms DESC, t.id DESC) AS rn
+                             ROW_NUMBER() OVER (PARTITION BY COALESCE(NULLIF(t.model, ''), s.model) COLLATE NOCASE ORDER BY t.first_token_ms DESC, t.id DESC) AS rn
                       FROM turns t JOIN sessions s ON s.id = t.session_id WHERE t.first_token_ms IS NOT NULL)
                     WHERE rn = 1;
                     """;
                 command.Parameters.AddWithValue("$cap", Llm.TokenUsage.MaxPlausibleTokensPerSecond);
                 using var reader = command.ExecuteReader();
-                var bests = new Dictionary<string, ModelBest>(StringComparer.Ordinal);
+                var bests = new Dictionary<string, ModelBest>(StringComparer.OrdinalIgnoreCase);
                 while (reader.Read())
                 {
                     string m = reader.GetString(0);
@@ -144,7 +145,7 @@ public sealed partial class SessionStore
     /// <summary>
     /// The saved turns grouped by the model that answered (2026-11-21, feature idea #7), newest-used first: a turn's own model, else its
     /// session's (a turn from before the column). One grouped query; while the added columns are missing for this run, by the session's
-    /// model alone with no speed. Empty while the store is unavailable.
+    /// model alone with no speed. Empty while the store is unavailable. Names grouped without regard to case (2026-11-27, the last-3 review's #12).
     /// </summary>
     public IReadOnlyList<ModelStat> ModelStats()
     {
@@ -165,12 +166,12 @@ public sealed partial class SessionStore
                              sum(CASE WHEN t.output_ms > 0 AND t.timed_output > 0 THEN t.timed_output ELSE 0 END),
                              sum(CASE WHEN t.output_ms > 0 AND t.timed_output > 0 THEN t.output_ms ELSE 0 END),
                              max(t.at), sum(CASE WHEN t.model IS NULL OR t.model = '' THEN 1 ELSE 0 END)
-                      FROM turns t JOIN sessions s ON s.id = t.session_id GROUP BY m ORDER BY max(t.at) DESC, m
+                      FROM turns t JOIN sessions s ON s.id = t.session_id GROUP BY m COLLATE NOCASE ORDER BY max(t.at) DESC, m
                       """
                     : """
                       SELECT s.model AS m, count(*), count(DISTINCT t.session_id), sum(t.tool_calls), sum(min(t.errors, t.tool_calls)),
                              sum(t.cancelled), sum(t.output_tokens), 0, 0, max(t.at), count(*)
-                      FROM turns t JOIN sessions s ON s.id = t.session_id GROUP BY m ORDER BY max(t.at) DESC, m
+                      FROM turns t JOIN sessions s ON s.id = t.session_id GROUP BY m COLLATE NOCASE ORDER BY max(t.at) DESC, m
                       """;
                 using var reader = command.ExecuteReader();
                 var stats = new List<ModelStat>();

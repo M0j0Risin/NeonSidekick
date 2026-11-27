@@ -385,5 +385,46 @@ public class TokenTallyTests
 
         var point = Assert.Single(tally.Replies);
         Assert.Equal(("bot-model", (long?)null, (long?)12), (point.Model, point.Context, point.Output));
+        Assert.False(point.Unsaved);
+        tally.RecordReply("bot-model", One(30, 12), null, unsaved: true);
+        Assert.True(tally.Replies[^1].Unsaved);
+    }
+
+    /// <summary>
+    /// A seed is the store's (2026-11-27, the last-3 review's #36): every point <see cref="ReplyPoint.Seeded"/> and none unsaved; a live reply
+    /// after it is neither seeded nor, unless said, unsaved (#10).
+    /// </summary>
+    [Fact]
+    public void ASeed_IsSeeded_AndALiveReplyCarriesItsUnsavedFlag()
+    {
+        var tally = new TokenTally();
+        tally.SeedReplies([new ReplyPoint("a", 10, null, 100, 5, null, false, Unsaved: true)]);
+        Reply(tally, One(10, 5), "a");
+        tally.BeginTurn();
+        tally.Add(One(10, 5));
+        tally.EndTurn();
+        tally.RecordReply("a", unsaved: true);
+
+        var replies = tally.Replies;
+        Assert.Equal([true, false, false], replies.Select(r => r.Seeded));
+        Assert.Equal([false, false, true], replies.Select(r => r.Unsaved));
+    }
+
+    /// <summary>
+    /// A mid-turn prune marks the next reply (2026-11-27, the last-3 review's #33) and leaves every figure alone: the context in use is the
+    /// next request's to report.
+    /// </summary>
+    [Fact]
+    public void MarkNextReply_MarksTheNextReplyOnly_AndKeepsTheContext()
+    {
+        var tally = new TokenTally();
+        Reply(tally, One(100, 40));
+        var before = tally.LastRequest;
+        tally.MarkNextReply();
+        Assert.Equal(before, tally.LastRequest);
+        Reply(tally, One(10, 5));
+        Reply(tally, One(10, 5));
+
+        Assert.Equal([false, true, false], tally.Replies.Select(r => r.Marked));
     }
 }

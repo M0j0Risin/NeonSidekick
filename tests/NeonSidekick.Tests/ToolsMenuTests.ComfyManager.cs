@@ -109,6 +109,27 @@ public partial class ToolsMenuTests
         Assert.Null(_settings.Current.ComfyWorkflowsOffered);
     }
 
+    /// <summary>
+    /// A skipped workflow with a sidecar offers Open the Markdown (2026-11-27, the last-3 review's #2): a lora-off mark it can't keep is removed
+    /// there; one without a sidecar offers the JSON alone.
+    /// </summary>
+    [Fact]
+    public async Task OnThePane_ASkippedWorkflowWithASidecar_OffersItsMarkdown()
+    {
+        Directory.CreateDirectory(_settings.ProfileComfyDirectory);
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "broken.json"), "{ not json");
+        File.WriteAllText(Path.Combine(_settings.ProfileComfyDirectory, "broken.md"), "---\nfamily: sdxl\n---\n");
+        var (menu, _, _) = PaneMenu();
+        OpenComfyList();
+        Push(Keys.Enter);   // the skipped row's actions
+        Push(Keys.Escape, Keys.Escape, Keys.Escape, Keys.Escape);
+
+        await menu.ShowAsync(CancellationToken.None);
+
+        Assert.Contains(SettingsMenu.ComfyOpenJsonAction, Output);
+        Assert.Contains(SettingsMenu.ComfyOpenMarkdownAction, Output);
+    }
+
     /// <summary>Rename moves both files, follows the output name, and keeps the loaded profile's lists in step where the name stood.</summary>
     [Fact]
     public async Task OnThePane_TheComfyList_Rename_FollowsTheFilesAndTheLists()

@@ -22,7 +22,11 @@ public static class BenchText
     public const string NoRuns = "No saved test runs yet: /bench <name> runs one.";
 
     /// <summary>The line under the listing: how to run them.</summary>
-    public const string ListingHint = "Run one with /bench <id>, a group with /bench reasoning | structured | long, or every test with /bench all; /bench history lists the saved runs.";
+    /// <remarks>Since 2026-11-27 (the last-3 review's #32) it says where saturation runs: it is in no group, so alone or with all.</remarks>
+    public const string ListingHint = "Run one with /bench <id>, a group with /bench reasoning | structured | long, or every test with /bench all; saturation (Window Capacity) is in no group. /bench history lists the saved runs.";
+
+    /// <summary>After a canceled run's ids and figures (moved here from BenchGrid on 2026-11-27, the last-3 review's #45: one home for both uses).</summary>
+    public const string CanceledMark = "(canceled)";
 
     /// <summary>
     /// The argument list's note on a group word: <c>every reasoning test (4)</c>. <see cref="BenchCategory.WindowCapacity"/> has no group
@@ -414,7 +418,7 @@ public static class BenchText
                 .Append(" | ").Append(Cell(run.Model))
                 .Append(" | ").Append(run.Reasoning ?? "")
                 .Append(" | ").Append(run.Sampling is { } sampling ? Cell(sampling.Length > 0 ? sampling : ServerSampling) : "")
-                .Append(" | ").Append(string.Create(CultureInfo.InvariantCulture, $"{run.Passed}/{run.Counted}")).Append(run.Cancelled ? " (canceled)" : "")
+                .Append(" | ").Append(string.Create(CultureInfo.InvariantCulture, $"{run.Passed}/{run.Counted}")).Append(run.Cancelled ? " " + CanceledMark : "")
                 .Append(" | ").Append(tests)
                 .Append(" |\n");
         }

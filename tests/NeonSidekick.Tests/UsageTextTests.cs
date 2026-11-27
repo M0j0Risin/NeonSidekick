@@ -300,8 +300,9 @@ public class UsageTextTests
         return Lines(console);
     }
 
-    private static ReplyPoint Point(int number, double? speed = 100, double? first = 0.5, long? context = 1_000, long? output = 200, string? model = "qwen", bool marked = false) =>
-        new(model, speed, first is { } s ? TimeSpan.FromSeconds(s) : null, context, output, null, marked, number);
+    private static ReplyPoint Point(int number, double? speed = 100, double? first = 0.5, long? context = 1_000, long? output = 200, string? model = "qwen", bool marked = false,
+        bool seeded = false, bool unsaved = false) =>
+        new(model, speed, first is { } s ? TimeSpan.FromSeconds(s) : null, context, output, null, marked, number, seeded, unsaved);
 
     /// <summary>A measure's cell (2026-11-27): its level between the lowest and highest shown, the middle when all are one, a gap for none.</summary>
     [Fact]
@@ -340,6 +341,87 @@ public class UsageTextTests
         Assert.Contains(" of 100", rule, StringComparison.Ordinal);
         Assert.All(tab, l => Assert.True(TextCells.Width(l) <= 60, l));
         Assert.Equal(UsageText.Plural(31, "reply", "replies"), UsageText.TrendCount(31, 31));
+        // The right-hand figure whole and the shown replies' (2026-11-27, the last-3 review's #1 and #6): the cells' room takes off the indent.
+        string speed = tab.Skip(Array.IndexOf(tab, rule)).First(l => l.StartsWith("  " + UsageText.TrendSpeedLabel, StringComparison.Ordinal));
+        Assert.EndsWith(" tok/s", speed, StringComparison.Ordinal);
+        Assert.DoesNotContain(" 1 → ", speed, StringComparison.Ordinal);   // not the first reply's, which isn't shown
+
+        // The count is the conversation's, past the points the cap dropped.
+        var dropped = Enumerable.Range(51, 50).Select(i => Point(i, speed: i)).ToList();
+        string droppedRule = Tab(tally, replies: dropped, width: 60).Single(l => l.StartsWith("── " + UsageText.TrendHeading, StringComparison.Ordinal));
+        Assert.Contains(" of 100", droppedRule, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Records over this conversation's replies (2026-11-27, the last-3 review's #8, #10, #15, #18, #36, #38, #39): another model's reply (or a
+    /// bot's) holds no record in the conversation column; an unsaved reply's output adds to the model's written total; a reply past the
+    /// saved any-model best takes it; a model with no saved best gets its column; a restored record is starred, never "new"; a plain line with
+    /// no figure says "none yet".
+    /// </summary>
+    [Fact]
+    public void TheRecords_FoldInThisConversation_AndCountOnlyTheModelsOwnReplies()
+    {
+        var mine = new ModelBest("qwen", 150, 6_120, 14_800, 128_000, 5_000);
+        var bests = new ModelBests(mine, (412, "tiny"), (6_120, "qwen"), (14_800, 128_000, "qwen"), 9_000);
+
+        // Another model's faster reply isn't the conversation's record for qwen.
+        var cells = UsageText.RecordCells([Point(1, speed: 100), Point(2, speed: 500, model: "bot")], bests, "qwen");
+        var fastest = cells.Single(c => c.Label == UsageText.FastestLabel);
+        Assert.StartsWith("100 tok/s", fastest.Conversation, StringComparison.Ordinal);
+        Assert.DoesNotContain(UsageText.RecordStar, fastest.Conversation, StringComparison.Ordinal);
+        Assert.Equal("500 tok/s · bot", fastest.Any);   // any model's from every reply, its own model holding it
+
+        // An unsaved reply's output is added to the model's and any model's written; a saved one's is in the store's sums already.
+        var written = UsageText.RecordCells([Point(1, output: 1_000, unsaved: true), Point(2, output: 500)], bests, "qwen").Single(c => c.Label == UsageText.WrittenLabel);
+        Assert.StartsWith(UsageText.CompactNumber(6_000) + " tokens", written.Model, StringComparison.Ordinal);
+        Assert.StartsWith(UsageText.CompactNumber(10_000) + " tokens", written.Any, StringComparison.Ordinal);
+
+        // A restored best is starred, never new; a live one is new.
+        var seeded = UsageText.RecordCells([Point(1, speed: 187, seeded: true)], bests, "qwen").Single(c => c.Label == UsageText.FastestLabel);
+        Assert.EndsWith(UsageText.RecordStar, seeded.Conversation, StringComparison.Ordinal);
+        Assert.Equal("187 tok/s", seeded.Model);
+        var live = UsageText.RecordCells([Point(1, speed: 187)], bests, "qwen").Single(c => c.Label == UsageText.FastestLabel);
+        Assert.EndsWith(UsageText.NewRecord, live.Model, StringComparison.Ordinal);
+
+        // A model with no saved best yet gets its column from the conversation.
+        var others = ModelBests.Of([new ModelBest("tiny", 412, 100, 10, null, 100)], "qwen");
+        Assert.Null(others.ThisModel);
+        var tally = new TokenTally();
+        tally.BeginTurn();
+        tally.Add(Usage(100, 20, 1, 0.5, 1));
+        tally.EndTurn();
+        string[] tab = Tab(tally, [Point(1, speed: 90), Point(2, speed: 95)], others, "qwen", 140);
+        string heads = tab[Array.FindIndex(tab, l => l.StartsWith("── " + UsageText.RecordsHeading, StringComparison.Ordinal)) + 1];
+        Assert.Contains(UsageText.ModelEverColumn("qwen"), heads, StringComparison.Ordinal);
+
+        // A plain line with no figure for the conversation.
+        var lines = UsageText.RecordLines([Point(1, speed: null)], bests, "qwen");
+        Assert.StartsWith(UsageText.FastestLabel.ToLowerInvariant() + ": " + UsageText.NoRecordYet, lines[0], StringComparison.Ordinal);
+        Assert.Equal("none yet", UsageText.NoRecordYet);
+        // No store: nothing folded in.
+        Assert.Same(ModelBests.None, UsageText.Merged([Point(1)], ModelBests.None, "qwen"));
+    }
+
+    /// <summary>
+    /// A restored conversation with nothing counted since launch (2026-11-27, the last-3 review's #27): its trend and records show, the Tokens
+    /// rule over "nothing counted" between them; with no replies either, "nothing counted" alone.
+    /// </summary>
+    [Fact]
+    public void ARestoredConversation_ShowsItsTrendAndRecords_BeforeAnythingIsCounted()
+    {
+        var tally = new TokenTally();
+        tally.SeedReplies([Point(1, speed: 100), Point(2, speed: 120)]);
+        var bests = new ModelBests(new ModelBest("qwen", 150, 6_120, 14_800, 128_000, 5_000), (150, "qwen"), (6_120, "qwen"), (14_800, 128_000, "qwen"), 5_000);
+
+        string[] tab = Tab(tally, bests: bests, model: "qwen");
+
+        Assert.Contains(tab, l => l.StartsWith("── " + UsageText.TrendHeading, StringComparison.Ordinal));
+        Assert.Contains(tab, l => l.StartsWith("── " + UsageText.RecordsHeading, StringComparison.Ordinal));
+        Assert.Contains(tab, l => l.Trim() == UsageText.NothingCounted);
+
+        string[] empty = Tab(new TokenTally());
+        Assert.DoesNotContain(empty, l => l.StartsWith("── " + UsageText.TrendHeading, StringComparison.Ordinal) || l.StartsWith("── " + UsageText.RecordsHeading, StringComparison.Ordinal));
+        Assert.Contains(empty, l => l.Trim() == UsageText.NothingCounted);
     }
 
     /// <summary>

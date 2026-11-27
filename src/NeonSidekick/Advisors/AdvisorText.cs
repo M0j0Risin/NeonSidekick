@@ -118,6 +118,12 @@ public static class AdvisorText
     /// <summary>The mark that ends an off advisor's line in a bare <c>/advisor</c> and the Advisor list's band (2026-11-27). Pinned.</summary>
     public const string OffMark = " (off)";
 
+    /// <summary>The Advisor list row's value with no advisors (2026-11-27, the last-3 review's #45: out of <see cref="AdvisorRoster.Value"/>). Pinned.</summary>
+    public const string NoneValue = "none";
+
+    /// <summary>The Advisor list row's count of the ones switched off, <c>2 off</c> (2026-11-27, the last-3 review's #45). Pinned.</summary>
+    public static string OffCount(int off) => off.ToString(CultureInfo.InvariantCulture) + " off";
+
     private static string DetailCore(AdvisorEntry advisor, AdvisorServerFacts? facts, bool exists, AdvisorColumns? columns)
     {
         ArgumentNullException.ThrowIfNull(advisor);

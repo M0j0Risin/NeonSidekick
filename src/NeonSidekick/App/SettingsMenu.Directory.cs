@@ -138,7 +138,6 @@ internal sealed partial class SettingsMenu
     private static string DirectoryWizardStamp(DirectoryDraft draft) =>
         ConnectionStamp(draft.Name, draft.Global, draft.Config, DirectoryJsonContext.Default.DirectoryDomainConfig, x => x.Password = null);
 
-    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
     private static bool DirectoryWizardPasswordOnly(DirectoryDraft draft) =>
         WizardPasswordOnly(draft.Original, DirectoryWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
@@ -154,6 +153,7 @@ internal sealed partial class SettingsMenu
             : c.IsRunAs && string.IsNullOrWhiteSpace(c.User) ? 7 : c.IsRunAs && draft.Password.Length == 0 ? 9 : null;
     }
 
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     private static bool DirectoryWizardDirty(DirectoryDraft draft) =>
         draft.Original is not null && (!string.Equals(DirectoryWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -643,7 +643,8 @@ internal sealed partial class SettingsMenu
     private bool? DirectoryWizardSave(DirectoryDraft draft, bool offer)
     {
         bool passwordOnly = DirectoryWizardPasswordOnly(draft);   // before the normalizing below, which can change the stamp
-        var c = draft.Config;
+        // A copy normalized and written (2026-11-27, the last-3 review's #21): a refused save leaves the draft, and so its stamp, as it was.
+        var c = CloneEntry(draft.Config, DirectoryJsonContext.Default.DirectoryDomainConfig, _ => { });
         if (!c.IsRunAs)
         {
             c.User = null;

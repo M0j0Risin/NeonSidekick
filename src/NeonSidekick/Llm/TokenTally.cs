@@ -5,13 +5,17 @@ namespace NeonSidekick.Llm;
 /// the wait for a first token a request, the context at its last request, its output and reasoning, and whether a compaction or a
 /// <c>/rewind</c> came before it (<see cref="Marked"/>, drawn <c>┆</c>). A reply the server reported nothing for has every figure null:
 /// a blank cell, never a 0 bar. <see cref="Number"/> is its place in the conversation, from 1, kept when the list's oldest drop off.
+/// <see cref="Seeded"/> (2026-11-27, the last-3 review's #36): restored from the store, so a record it holds is never "new";
+/// <see cref="Unsaved"/> (#10): its output isn't in the store (Session logging off, private, a bot outside a session), so the model's
+/// written total adds it. Both last with false defaults, so a positional point and record equality keep their meaning.
 /// </summary>
-public readonly record struct ReplyPoint(string? Model, double? TokensPerSecond, TimeSpan? FirstToken, long? Context, long? Output, long? Reasoning, bool Marked, int Number = 0)
+public readonly record struct ReplyPoint(string? Model, double? TokensPerSecond, TimeSpan? FirstToken, long? Context, long? Output, long? Reasoning, bool Marked, int Number = 0,
+    bool Seeded = false, bool Unsaved = false)
 {
     /// <summary>A point from one reply's usage; all null when the reply reported nothing.</summary>
-    public static ReplyPoint Of(string? model, TokenUsage usage, long? context, bool marked = false) => usage.IsEmpty
-        ? new ReplyPoint(model, null, null, null, null, null, marked)
-        : new ReplyPoint(model, usage.TokensPerSecond, usage.AverageToFirstToken, context, usage.Output, usage.Reasoning, marked);
+    public static ReplyPoint Of(string? model, TokenUsage usage, long? context, bool marked = false, bool unsaved = false) => usage.IsEmpty
+        ? new ReplyPoint(model, null, null, null, null, null, marked, Unsaved: unsaved)
+        : new ReplyPoint(model, usage.TokensPerSecond, usage.AverageToFirstToken, context, usage.Output, usage.Reasoning, marked, Unsaved: unsaved);
 }
 
 /// <summary>
@@ -64,26 +68,33 @@ public sealed class TokenTally
     /// <summary>
     /// The main turn's reply ended (2026-11-27): a point from <see cref="LastReply"/>, its context the last request's when the reply reported
     /// something (<see cref="BeginTurn"/> keeps the request before, which would read as this reply's). Called whether or not the session is
-    /// saved: nothing in the list is written.
+    /// saved: nothing in the list is written. <paramref name="unsaved"/> (2026-11-27, the last-3 review's #10): the store won't hold this
+    /// reply's turn, so the model's written record counts it from here.
     /// </summary>
-    public void RecordReply(string? model)
+    public void RecordReply(string? model, bool unsaved = false)
     {
         lock (_gate)
         {
-            Push(ReplyPoint.Of(model, _lastReply, _lastReply.IsEmpty ? null : _lastRequest.Total));
+            Push(ReplyPoint.Of(model, _lastReply, _lastReply.IsEmpty ? null : _lastRequest.Total, unsaved: unsaved));
         }
     }
 
-    /// <summary>A reply counted elsewhere (2026-11-27, a <c>/botchat</c> bot's): its own model and usage, its context when known.</summary>
-    public void RecordReply(string? model, TokenUsage usage, long? context)
+    /// <summary>
+    /// A reply counted elsewhere (2026-11-27, a <c>/botchat</c> bot's): its own model and usage, its context when known; <paramref name="unsaved"/>
+    /// as <see cref="RecordReply(string?, bool)"/>'s.
+    /// </summary>
+    public void RecordReply(string? model, TokenUsage usage, long? context, bool unsaved = false)
     {
         lock (_gate)
         {
-            Push(ReplyPoint.Of(model, usage, context));
+            Push(ReplyPoint.Of(model, usage, context, unsaved: unsaved));
         }
     }
 
-    /// <summary>A restored conversation's replies (2026-11-27), after its <see cref="ResetConversation"/>: unmarked, numbered in order.</summary>
+    /// <summary>
+    /// A restored conversation's replies (2026-11-27), after its <see cref="ResetConversation"/>: unmarked, numbered in order, and
+    /// <see cref="ReplyPoint.Seeded"/> (the last-3 review's #36), the store's already.
+    /// </summary>
     public void SeedReplies(IEnumerable<ReplyPoint> points)
     {
         ArgumentNullException.ThrowIfNull(points);
@@ -91,7 +102,7 @@ public sealed class TokenTally
         {
             foreach (var point in points)
             {
-                Push(point with { Marked = false });
+                Push(point with { Marked = false, Seeded = true, Unsaved = false });
             }
 
             _nextMarked = false;
@@ -236,6 +247,19 @@ public sealed class TokenTally
         lock (_gate)
         {
             _lastRequest = TokenUsage.Zero;
+            _nextMarked = true;
+        }
+    }
+
+    /// <summary>
+    /// The trend's <c>┆</c> before the next reply (2026-11-27, the last-3 review's #33), with nothing else touched: a mid-turn prune of the
+    /// history (the turn guard's, built without the compactor) changed what the model sees, but the turn's context in use is the next
+    /// request's to report.
+    /// </summary>
+    public void MarkNextReply()
+    {
+        lock (_gate)
+        {
             _nextMarked = true;
         }
     }

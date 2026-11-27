@@ -133,6 +133,27 @@ public partial class SidekickAppTests
         Assert.Contains("\nassistant: Postgres 16.", prompt, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The saved turn's stamp names the advisor that answered (2026-11-27, the last-3 review's #35): two holding the role whole, one off, so
+    /// the pick is the active one where a Find over every advisor found none.
+    /// </summary>
+    [Fact]
+    public async Task Headless_AdvisorCommand_StampsTheTurn_WithThePickedAdvisor()
+    {
+        ServerOn1234("llama");
+        HeadlessAdvisor();
+        Profiles.Create(_dir, "dbx", new AppSettingsData());
+        _settings.Update(d => d.AdvisorList = [new AdvisorEntry("dba", "database"), new AdvisorEntry("dbx", "database", Off: true)]);
+        _chat.EnqueueText("The foreign key.");
+
+        string output = await Headless("/advisor database Which index?\n");
+
+        Assert.Contains("dba: The foreign key.", output);
+        using var store = new NeonSidekick.Sessions.SessionStore(_settings.ProfileDirectory);
+        var turn = Assert.Single(store.Load(Assert.Single(store.List(0)).Id)!.Turns);
+        Assert.Equal(NeonSidekick.Sessions.SessionText.SideTurnModel(NeonSidekick.Sessions.SessionText.AdvisorSideTurn, "dba"), turn.Model);
+    }
+
     /// <summary>Headless <c>/advisor</c> with the advisor switched off (2026-11-27): refused, exit 4, nothing asked.</summary>
     [Fact]
     public async Task Headless_AdvisorCommand_AnOffAdvisorIsRefused()

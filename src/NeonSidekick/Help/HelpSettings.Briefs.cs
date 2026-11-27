@@ -128,7 +128,7 @@ public static partial class HelpSettings
         SettingsField.LlmApiKey => "The bearer token the server expects, saved encrypted. Leave it empty for a local server that needs none.",
         SettingsField.LlmPreserveThinking => "Sends the model's thinking from earlier turns back to a local server and asks the chat template to keep it. It costs context.",
         SettingsField.LlmReasoningEstimate => "Fills in /usage's Reasoning count when the server doesn't count thinking: chars estimates from its length, tokenize asks llama.cpp for the exact count, off shows —.",
-        SettingsField.LlmSampling => "Sampling overrides per model (temperature, top_p, top_k and more). The row lists the models that have some; Enter opens the /sampling pane. Space switches a model's off, keeping its values.",
+        SettingsField.LlmSampling => "Sampling overrides per model (temperature, top_p, top_k and more). The row lists the models that have some; Enter opens the /sampling pane, where Space switches a model's off, keeping its values.",
         SettingsField.LlmSamplingFromHuggingFace => "Shows a model's recommended sampling from its Hugging Face model card when the server reports none. For display only; your API key is never sent.",
 
         // /settings › Servers › Embedded
@@ -174,7 +174,7 @@ public static partial class HelpSettings
 
         // /settings › Advisors
         SettingsField.Advisors => "Lets the model ask an advisor (another profile, on its own server and model) for advice. /advisor asks one yourself either way.",
-        SettingsField.AdvisorList => "The advisors: other profiles, each with a role and a line on when to ask it. Enter adds one, from a profile or a template, or changes one; Space switches one off.",
+        SettingsField.AdvisorList => "The advisors: other profiles, each with a role and a line on when to ask it. Enter opens the list: add one, from a profile or a template, or change one; Space there switches one off.",
         SettingsField.AdvisorContext => "What an advisor call sends: brief, the model's question and context; recent, also the last 10 messages. /advisor always sends them. A review pass sends only the question and context.",
         SettingsField.AdvisorCallsPerTurn => "The most advisor calls one reply may make, all advisors together (1–10).",
         SettingsField.AdvisorMaxToolIterations => "The tool round trips an advisor may make before it answers (0–10; 0 = no tools, text only).",

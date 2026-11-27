@@ -495,7 +495,10 @@ internal sealed class ToolsMenu
     /// 2026-10-13) and opens the Browser window (O).
     /// </summary>
     /// <param name="reply">The reply under the pane (2026-11-22): the Advisors page's list refuses its Switch to profile while it runs.</param>
-    /// <returns><see cref="SettingsChanges.Profile"/> when the Advisors page's list switched profiles (2026-11-22), else none.</returns>
+    /// <returns>
+    /// <see cref="SettingsChanges.Profile"/> when the Advisors page's list switched profiles (2026-11-22); since 2026-11-27 (the last-3 review's
+    /// #9) also what the switch owes, <see cref="SettingsChanges.Llm"/> for a reconnect row that saved, as <see cref="RowAsync"/> says it.
+    /// </returns>
     public async Task<SettingsChanges> ShowSwitchAsync(SettingsField field, CancellationToken cancellationToken, ReplyRun reply = default)
     {
         if (!_pane.Enabled)
@@ -511,10 +514,11 @@ internal sealed class ToolsMenu
         _menu.TakeProfileSwitched();   // never one left from another visit
         try
         {
-            _ = field == SettingsField.ShellCommandPolicy
+            bool done = field == SettingsField.ShellCommandPolicy
                 ? await _menu.EditCommandPolicyAsync(cancellationToken).ConfigureAwait(false)
                 : await _menu.EditToggleAsync(field, cancellationToken).ConfigureAwait(false);
-            return _menu.TakeProfileSwitched() ? SettingsChanges.Profile : SettingsChanges.None;
+            var changes = done && SettingsMenu.IsLlmField(field) ? SettingsChanges.Llm : SettingsChanges.None;
+            return _menu.TakeProfileSwitched() ? changes | SettingsChanges.Profile : changes;
         }
         finally
         {

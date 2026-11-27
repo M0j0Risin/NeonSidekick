@@ -98,11 +98,11 @@ internal sealed partial class SettingsMenu
     private static string EventLogWizardStamp(EventLogDraft draft) =>
         ConnectionStamp(draft.Name, draft.Global, draft.Config, EventLogJsonContext.Default.EventLogComputerConfig, x => x.Password = null);
 
-    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     /// <summary>Whether the edit's one change is a typed password (<see cref="WizardPasswordOnly"/>, 2026-11-26).</summary>
     private static bool EventLogWizardPasswordOnly(EventLogDraft draft) =>
         WizardPasswordOnly(draft.Original, EventLogWizardStamp(draft), draft.Opened, draft.PasswordKept, draft.Password);
 
+    /// <summary>Whether an edit has changes Save would write (2026-11-26, the unsaved-changes question), a typed password among them. A new entry never is.</summary>
     private static bool EventLogWizardDirty(EventLogDraft draft) =>
         draft.Original is not null && (!string.Equals(EventLogWizardStamp(draft), draft.Opened, StringComparison.Ordinal) || (!draft.PasswordKept && draft.Password.Length > 0));
 
@@ -633,7 +633,8 @@ internal sealed partial class SettingsMenu
     private bool? EventLogWizardSave(EventLogDraft draft, bool offer)
     {
         bool passwordOnly = EventLogWizardPasswordOnly(draft);   // before the normalizing below, which can change the stamp
-        var c = draft.Config;
+        // A copy normalized and written (2026-11-27, the last-3 review's #21): a refused save leaves the draft, and so its stamp, as it was.
+        var c = CloneEntry(draft.Config, EventLogJsonContext.Default.EventLogComputerConfig, _ => { });
         if (draft.IsLocal)
         {
             c.Host = c.Auth = c.User = c.PasswordStore = c.Credential = c.AuthMethod = null;

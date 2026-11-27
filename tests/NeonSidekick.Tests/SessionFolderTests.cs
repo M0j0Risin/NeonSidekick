@@ -254,6 +254,7 @@ public sealed class SessionFolderTests : IDisposable
     public void AStoreWhoseColumnAddsFailed_RestoresASession_WithTheFiguresNull()
     {
         OlderFile();
+        Raw(DropReplyColumns);   // every added column missing (OlderFile drops only the folder part)
         using var store = new SessionStore(_dir, _time) { BeforeColumnAdds = () => throw new SqliteException("database is locked", 5) };
         long id = store.Begin("new", "m", _dir)!.Value;
         store.AppendTurn(id, "x", "y", 0, [], [], 0, 10, 5, false, model: "m", contextTokens: 99);
@@ -261,5 +262,47 @@ public sealed class SessionFolderTests : IDisposable
         var turn = Assert.Single(store.Load(id)!.Turns);
         Assert.Equal(((long?)null, (long?)null, (string?)null), (turn.ContextTokens, turn.FirstTokenMs, turn.Model));
         Assert.Same(ModelBests.None, store.ModelBests("m"));   // no all-time columns without the figures
+    }
+
+    private const string DropReplyColumns = "ALTER TABLE turns DROP COLUMN context_tokens; ALTER TABLE turns DROP COLUMN first_token_ms; ALTER TABLE turns DROP COLUMN reasoning_tokens;";
+
+    /// <summary>
+    /// A file with the folder columns but not the reply figures, whose adds fail busy (2026-11-27, the last-3 review's #43): each turn's model
+    /// and folder are still saved, the figures left out, and the warning names the reply figures, not the folder.
+    /// </summary>
+    [Fact]
+    public void AFailedAddOfTheReplyColumns_StillSavesTheModelAndFolder()
+    {
+        using (var setup = new SessionStore(_dir, _time))
+        {
+            setup.Begin("older", "llama");
+        }
+
+        Raw(DropReplyColumns);
+        var warnings = new List<DiagnosticEvent>();
+        Action<DiagnosticEvent> capture = e => { if (e.Category == "Sessions" && e.Level >= DiagnosticLevel.Warning) { warnings.Add(e); } };
+        DiagnosticLog.Emitted += capture;
+        try
+        {
+            using var store = new SessionStore(_dir, _time) { BeforeColumnAdds = () => throw new SqliteException("database is locked", 5) };
+            long id = store.Begin("new", "m", _dir)!.Value;
+            var usage = new TokenUsage(100, 40, 140, 1, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2));
+            Assert.Equal(1, store.AppendTurn(id, "x", "y", 0, [], [], 0, 100, 40, false, model: "qwen", usage: usage, cwd: _dir, contextTokens: 99));
+
+            var turn = Assert.Single(store.Load(id)!.Turns);
+            Assert.Equal("qwen", turn.Model);
+            Assert.Equal(2_000L, turn.OutputMs);
+            Assert.Equal(((long?)null, (long?)null), (turn.ContextTokens, turn.FirstTokenMs));
+            Assert.Equal(_dir, store.Summary(id)!.Cwd);
+            Assert.Same(ModelBests.None, store.ModelBests("qwen"));   // the records need both parts
+        }
+        finally
+        {
+            DiagnosticLog.Emitted -= capture;
+        }
+
+        var warned = Assert.Single(warnings);
+        Assert.StartsWith(SessionStore.ReplyColumnsFailedWarning(""), warned.Message);
+        Assert.StartsWith("Could not add the reply figure columns in sessions.db: ", warned.Message);
     }
 }

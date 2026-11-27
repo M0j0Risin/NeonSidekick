@@ -251,9 +251,15 @@ internal sealed partial class SettingsMenu
             }
 
             var choice = await AskLeaveAsync(palette.Name, cancellationToken).ConfigureAwait(false);
-            if (Gone() || choice == LeaveChoice.Discard)
+            if (Gone())
             {
-                return (false, UnchangedNotice);
+                return (false, UnchangedNotice);   // the pane dismissed or cancelled: quiet
+            }
+
+            if (choice == LeaveChoice.Discard)
+            {
+                // Said, as the wizards' and the workflow Edit's Discard is (2026-11-27, the last-3 review's #13): the quiet notice read as no change.
+                return (false, ComfyEditDiscardedNotice);
             }
 
             if (choice == LeaveChoice.Save)

@@ -1767,7 +1767,8 @@ public sealed partial class SidekickApp
                         sessionId ??= sessions.Begin(Sessions.SessionText.FirstLineTitle(text), session.Endpoint?.ModelId ?? "", files.Root);
                         if (sessionId is { } advisorRow)
                         {
-                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(advisorRow, text, advisorReply, 0, [], [], 0, 0, 0, false, model: Sessions.SessionText.SideTurnModel(Sessions.SessionText.AdvisorSideTurn, Advisors.AdvisorRoster.Find(Advisors.AdvisorRoster.Entries(EffectiveSettings.AdvisorList), Advisors.AdvisorText.Split(advisorArgs).Item1).Item1?.Profile), cwd: files.Root));
+                            // The stamp names the advisor that answered (2026-11-27, the last-3 review's #35), as the screen's, not a second Find.
+                            ChatScreen.StampTurn(session.History, sessions.AppendTurn(advisorRow, text, advisorReply.Answer, 0, [], [], 0, 0, 0, false, model: Sessions.SessionText.SideTurnModel(Sessions.SessionText.AdvisorSideTurn, advisorReply.Advisor.Profile), cwd: files.Root));
                             SaveHeadlessHistory(advisorRow, session.History.Messages);
                         }
                     }
@@ -3769,9 +3770,10 @@ public sealed partial class SidekickApp
 
     /// <summary>
     /// <c>/advisor</c> headless (2026-10-10): bare, the advisors as <c>[notice]</c> lines; with a name and a question, the answer under the
-    /// advisor's name (<c>dba: …</c>) and the pair into the history, tagged, as the screen's. The answer, or null when there is none.
+    /// advisor's name (<c>dba: …</c>) and the pair into the history, tagged, as the screen's. The answer with the advisor that gave it
+    /// (2026-11-27, the last-3 review's #35, for the saved turn's stamp), or null when there is none.
     /// </summary>
-    private async Task<string?> HeadlessAdvisorAsync(Llm.Tools.NeonAdvisorTool tool, LlmSession session, string args, CancellationToken cancellationToken)
+    private async Task<(string Answer, AdvisorEntry Advisor)?> HeadlessAdvisorAsync(Llm.Tools.NeonAdvisorTool tool, LlmSession session, string args, CancellationToken cancellationToken)
     {
         var effective = EffectiveSettings;
         var advisors = Advisors.AdvisorRoster.Shown(effective.AdvisorList);   // the off ones last, marked (2026-11-27)
@@ -3867,7 +3869,7 @@ public sealed partial class SidekickApp
         await HeadlessNoticeLineAsync(advisor!.Profile + ": " + answer).ConfigureAwait(false);
         session.History.AddUser(Advisors.AdvisorText.HistoryUser(advisor.Profile, question));
         session.History.AddAssistant(Advisors.AdvisorText.HistoryReply(advisor.Profile, answer));
-        return answer;
+        return (answer, advisor);
     }
 
     /// <summary>

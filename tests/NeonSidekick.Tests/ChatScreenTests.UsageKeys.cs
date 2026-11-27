@@ -198,6 +198,42 @@ public partial class ChatScreenTests
         Assert.True(_settings.Current.McpServers);
     }
 
+    /// <summary>
+    /// Space on a server's row that fails to connect (2026-11-27, the last-3 review's #41): the server is saved off again, so the row stays
+    /// dimmed under the cursor true to the setting, and the failure says why.
+    /// </summary>
+    [Fact]
+    public async Task UsagePane_SpaceOnAServerThatFailsToConnect_LeavesItOff()
+    {
+        UsagePane();
+        _mcpServers.ReadOnly("pipe", "echo", "fail");
+        McpServer();
+        _settings.Changed += d =>
+        {
+            if (d.McpServersDisabled.Contains("pipe"))
+            {
+                _mcpServers.Failing.Add("pipe");   // switched off: the next connect fails
+            }
+        };
+        PushLine("/usage");
+        for (int i = 0; i < 11; i++)
+        {
+            _console.Input.PushKey(Keys.Down);
+        }
+
+        _console.Input.PushKey(Keys.Char(' '));   // off
+        _console.Input.PushKey(Keys.Char(' '));   // on again: the connect fails
+        _console.Input.PushKey(Keys.Escape);
+        PushLine("/exit");
+
+        string output = await RunAsync();
+
+        Assert.Equal(["pipe"], _settings.Current.McpServersDisabled);
+        Assert.Contains(McpText.ConnectingNotice("pipe"), output, StringComparison.Ordinal);
+        Assert.Contains(McpText.FailedNotice("pipe", ""), output, StringComparison.Ordinal);
+        Assert.Contains(CursorOn(SystemPromptSummary.McpGroupPrefix + "pipe"), output, StringComparison.Ordinal);
+    }
+
     /// <summary>A restored conversation's trend is seeded from its saved turns (2026-11-27): <c>/usage</c> without the pane prints it at once.</summary>
     [Fact]
     public async Task Usage_ARestoredConversation_SeedsTheTrend_FromItsSavedTurns()

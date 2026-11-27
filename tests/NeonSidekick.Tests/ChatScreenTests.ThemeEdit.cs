@@ -178,6 +178,7 @@ public partial class ChatScreenTests
         Assert.Equal(json, File.ReadAllText(MineTheme()));
         Assert.Contains(ThemeText.EditUnchanged, output);
         Assert.Contains(SettingsMenu.LeaveQuestion("mine"), output);
+        Assert.Contains(SettingsMenu.ComfyEditDiscardedNotice, output);   // Discard says so (2026-11-27, the last-3 review's #13)
     }
 
     [Fact]

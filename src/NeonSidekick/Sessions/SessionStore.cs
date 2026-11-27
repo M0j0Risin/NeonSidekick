@@ -151,6 +151,13 @@ public sealed partial class SessionStore : IDisposable
     private bool _extraColumns;
 
     /// <summary>
+    /// Whether the reply figure columns (<see cref="ReplyColumns"/>: context, first-token wait, reasoning) are there for this run (2026-11-27,
+    /// the last-3 review's #43): apart from <see cref="_extraColumns"/>, so a store that has the five older columns but couldn't add these
+    /// three still saves each turn's model and folder.
+    /// </summary>
+    private bool _replyColumns;
+
+    /// <summary>
     /// Run inside the column adds' guard, before them: a test throws a <see cref="SqliteException"/> here to stand for another copy holding
     /// the write lock past the busy wait, which no file can be made to do on cue. Null in the app.
     /// </summary>
@@ -280,9 +287,14 @@ public sealed partial class SessionStore : IDisposable
                 using var insert = connection.CreateCommand();
                 insert.Transaction = transaction;
                 // The new row's id comes back with the insert (2026-11-16, the web-tools review's #93), for its sources.
-                insert.CommandText = _extraColumns
-                    ? "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled, model, output_ms, timed_output, cwd, context_tokens, first_token_ms, reasoning_tokens) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled, $model, $ms, $timed, $cwd, $context, $first, $reasoning) RETURNING id"
-                    : "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled) VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled) RETURNING id";
+                // In parts behind each flag (2026-11-27, the last-3 review's #43): only the columns this run has.
+                insert.CommandText = "INSERT INTO turns(session_id, ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled"
+                    + (_extraColumns ? ", model, output_ms, timed_output, cwd" : "")
+                    + (_replyColumns ? ", context_tokens, first_token_ms, reasoning_tokens" : "")
+                    + ") VALUES ($id, (SELECT turns + 1 FROM sessions WHERE id = $id), $at, $user, $reply, $tools, $names, $skills, $errors, $input, $output, $cancelled"
+                    + (_extraColumns ? ", $model, $ms, $timed, $cwd" : "")
+                    + (_replyColumns ? ", $context, $first, $reasoning" : "")
+                    + ") RETURNING id";
                 var (ms, timed) = Speed(usage);
                 insert.Parameters.AddWithValue("$model", string.IsNullOrEmpty(model) ? DBNull.Value : model);
                 insert.Parameters.AddWithValue("$ms", (object?)ms ?? DBNull.Value);
@@ -594,7 +606,8 @@ public sealed partial class SessionStore : IDisposable
                 {
                     // The trend's figures (2026-11-27) only when the columns are there; NULL in their places otherwise, as SummaryColumns does for cwd.
                     command.CommandText = "SELECT ordinal, at, user_text, reply_text, tool_calls, tool_names, skills_loaded, errors, input_tokens, output_tokens, cancelled, "
-                        + (_extraColumns ? "model, output_ms, timed_output, context_tokens, first_token_ms, reasoning_tokens" : "NULL, NULL, NULL, NULL, NULL, NULL")
+                        + (_extraColumns ? "model, output_ms, timed_output, " : "NULL, NULL, NULL, ")
+                        + (_replyColumns ? "context_tokens, first_token_ms, reasoning_tokens" : "NULL, NULL, NULL")   // each part apart (#43), the ordinals fixed
                         + " FROM turns WHERE session_id = $id ORDER BY ordinal";
                     command.Parameters.AddWithValue("$id", id);
                     using var reader = command.ExecuteReader();
@@ -1570,7 +1583,10 @@ public sealed partial class SessionStore : IDisposable
             // The added columns (2026-11-21, feature ideas #4 and #7), best effort as the trim below: another copy holding the write lock
             // past the busy wait fails the add, and sessions must not go off over it. Without them the writes and reads leave them out for
             // this run, and the next open tries again.
-            _extraColumns = AddColumns(connection, BeforeColumnAdds);
+            // Each part's flag apart (2026-11-27, the last-3 review's #43): a failed add of the newer columns leaves the older ones in use.
+            bool added = AddColumns(connection, BeforeColumnAdds);
+            _extraColumns = added || HasAll(connection, FolderColumns);
+            _replyColumns = added || HasAll(connection, ReplyColumns);
 
             // A history longer than the cap (a file from before 2026-10-17, when the cap went from 1,000 to 100) cut at the open, so the
             // counts, the reads and a profile copy see the cap at once. Best effort: a failed trim never turns sessions off.
@@ -1596,14 +1612,25 @@ public sealed partial class SessionStore : IDisposable
     }
 
     /// <summary>
-    /// The columns added at the open (2026-11-21; <c>turns.cwd</c> 2026-11-22, the review's #41; the reply's context, first-token wait and
-    /// reasoning 2026-11-27, for <c>/usage</c>'s trend and records), each nullable.
+    /// The folder and model columns added at the open (2026-11-21; <c>turns.cwd</c> 2026-11-22, the review's #41), each nullable; behind
+    /// <see cref="_extraColumns"/>.
     /// </summary>
-    private static readonly (string Table, string Column, string Type)[] AddedColumns =
+    private static readonly (string Table, string Column, string Type)[] FolderColumns =
     [
         ("sessions", "cwd", "TEXT"), ("turns", "model", "TEXT"), ("turns", "output_ms", "INTEGER"), ("turns", "timed_output", "INTEGER"), ("turns", "cwd", "TEXT"),
+    ];
+
+    /// <summary>
+    /// The reply's context, first-token wait and reasoning (2026-11-27, for <c>/usage</c>'s trend and records), each nullable; behind
+    /// <see cref="_replyColumns"/>, apart from <see cref="FolderColumns"/> since the last-3 review's #43.
+    /// </summary>
+    private static readonly (string Table, string Column, string Type)[] ReplyColumns =
+    [
         ("turns", "context_tokens", "INTEGER"), ("turns", "first_token_ms", "INTEGER"), ("turns", "reasoning_tokens", "INTEGER"),
     ];
+
+    /// <summary>Every added column, the adds' one list: <see cref="FolderColumns"/> then <see cref="ReplyColumns"/>.</summary>
+    private static readonly (string Table, string Column, string Type)[] AddedColumns = [.. FolderColumns, .. ReplyColumns];
 
     /// <summary>
     /// <see cref="AddedColumns"/>, each added when missing, in one transaction (the store's first column adds, 2026-11-21). Since 2026-11-22 (the
@@ -1648,20 +1675,31 @@ public sealed partial class SessionStore : IDisposable
                     continue;
                 }
 
-                DiagnosticLog.Warn(Category, ColumnsFailedWarning(ex.Message), ex);
+                // The warning names what is lost (2026-11-27, the last-3 review's #43): the folder columns when one of them is missing,
+                // else only the reply figures.
+                DiagnosticLog.Warn(Category, HasAll(connection, FolderColumns) ? ReplyColumnsFailedWarning(ex.Message) : ColumnsFailedWarning(ex.Message), ex);
                 return false;
             }
         }
     }
 
-    /// <summary>Logged (Warn, once an open) when the columns couldn't be added (#102). Pinned.</summary>
+    /// <summary>Logged (Warn, once an open) when a folder or model column couldn't be added (#102). Pinned.</summary>
     public static string ColumnsFailedWarning(string reason) => $"Could not add the folder and model columns in {FileName}: {reason}";
 
-    private static bool AllAdded(SqliteConnection connection)
+    /// <summary>
+    /// Logged (Warn, once an open) when the folder columns are there but the reply figure columns couldn't be added (2026-11-27, the last-3
+    /// review's #43): <c>/usage</c>'s trend and records for a restored conversation go without them. Pinned.
+    /// </summary>
+    public static string ReplyColumnsFailedWarning(string reason) => $"Could not add the reply figure columns in {FileName}: {reason}";
+
+    private static bool AllAdded(SqliteConnection connection) => HasAll(connection, AddedColumns);
+
+    /// <summary>Whether every one of <paramref name="columns"/> is there; false on a failed read.</summary>
+    private static bool HasAll(SqliteConnection connection, (string Table, string Column, string Type)[] columns)
     {
         try
         {
-            return AddedColumns.All(c => Has(connection, c.Table, c.Column));
+            return columns.All(c => Has(connection, c.Table, c.Column));
         }
         catch (SqliteException)
         {

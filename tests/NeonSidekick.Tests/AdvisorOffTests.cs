@@ -61,6 +61,14 @@ public class AdvisorOffTests
         var unknown = AdvisorRoster.Pick(saved, "nobody");
         Assert.False(unknown.AllOff);
         Assert.Equal(["dba"], unknown.Candidates.Select(e => e.Profile));   // the active candidates only
+
+        // An off advisor named whole wins over an active role that merely holds the words (2026-11-27, the last-3 review's #5).
+        var named = new List<AdvisorEntry> { new("dbx", "database admin"), new("database", "schemas", Off: true) };
+        Assert.Null(AdvisorRoster.Pick(named, "database").Found);
+        Assert.Equal("database", AdvisorRoster.Pick(named, "database").OffOne?.Profile);
+        var roles = new List<AdvisorEntry> { new("dbx", "sql admin"), new("ops", "sql", Off: true) };
+        Assert.Equal("ops", AdvisorRoster.Pick(roles, "sql").OffOne?.Profile);   // its role whole
+        Assert.Equal("dbx", AdvisorRoster.Pick(roles, "admin").Found?.Profile);    // a partial role stays the active one's
     }
 
     [Fact]
